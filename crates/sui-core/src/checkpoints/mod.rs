@@ -55,6 +55,7 @@ use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::Weak;
 use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime};
@@ -334,6 +335,7 @@ pub struct CheckpointStore {
     pub(crate) tables: CheckpointStoreTables,
     synced_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, VerifiedCheckpoint>,
     executed_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, VerifiedCheckpoint>,
+    transaction_cache_reader: OnceLock<Arc<dyn TransactionCacheRead>>,
 }
 
 impl CheckpointStore {
@@ -343,6 +345,7 @@ impl CheckpointStore {
             tables,
             synced_checkpoint_notify_read: NotifyRead::new(),
             executed_checkpoint_notify_read: NotifyRead::new(),
+            transaction_cache_reader: OnceLock::new(),
         })
     }
 
@@ -361,6 +364,7 @@ impl CheckpointStore {
             tables,
             synced_checkpoint_notify_read: NotifyRead::new(),
             executed_checkpoint_notify_read: NotifyRead::new(),
+            transaction_cache_reader: OnceLock::new(),
         })
     }
 
@@ -721,6 +725,21 @@ impl CheckpointStore {
                 "Local checkpoint fork detected!",
             );
 
+            if let Some(cache_reader) = self.transaction_cache_reader.get() {
+                self.dump_checkpoint_fork_transactions(
+                    "local",
+                    *local_checkpoint.sequence_number(),
+                    &local_checkpoint.content_digest,
+                    cache_reader.as_ref(),
+                );
+                self.dump_checkpoint_fork_transactions(
+                    "verified",
+                    *verified_checkpoint.sequence_number(),
+                    &verified_checkpoint.content_digest,
+                    cache_reader.as_ref(),
+                );
+            }
+
             // Record the fork in the database before crashing
             if let Err(e) = self.record_checkpoint_fork_detected(
                 *local_checkpoint.sequence_number(),
@@ -758,6 +777,33 @@ impl CheckpointStore {
                 local_checkpoint.sequence_number()
             );
         }
+    }
+
+    pub fn set_transaction_cache_reader(&self, cache_reader: Arc<dyn TransactionCacheRead>) {
+        let _ = self.transaction_cache_reader.set(cache_reader);
+    }
+
+    fn dump_checkpoint_fork_transactions(
+        &self,
+        side: &str,
+        sequence_number: CheckpointSequenceNumber,
+        content_digest: &CheckpointContentsDigest,
+        cache_reader: &dyn TransactionCacheRead,
+    ) {
+        let Some(contents) = self.get_checkpoint_contents(content_digest).ok().flatten() else {
+            return;
+        };
+        let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
+        let transactions = cache_reader.multi_get_transaction_blocks(&tx_digests);
+        let effects = cache_reader.multi_get_executed_effects(&tx_digests);
+        error!(
+            side,
+            sequence_number,
+            ?tx_digests,
+            ?transactions,
+            ?effects,
+            "checkpoint fork: dumping full transaction data"
+        );
     }
 
     // Called by consensus (ConsensusAggregator).

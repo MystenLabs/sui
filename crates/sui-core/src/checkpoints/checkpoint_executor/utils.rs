@@ -11,8 +11,12 @@ use std::time::Duration;
 use strum::VariantNames;
 use sui_types::{
     base_types::{TransactionDigest, TransactionEffectsDigest},
+    effects::TransactionEffects,
+    executable_transaction::VerifiedExecutableTransaction,
     message_envelope::Message,
-    messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary, VerifiedCheckpoint},
+    messages_checkpoint::{
+        CheckpointContents, CheckpointSequenceNumber, CheckpointSummary, VerifiedCheckpoint,
+    },
 };
 use tokio::sync::watch;
 use tracing::{debug, error, instrument, warn};
@@ -153,6 +157,8 @@ pub(super) fn assert_not_forked(
     tx_digest: &TransactionDigest,
     expected_digest: &TransactionEffectsDigest,
     actual_effects_digest: &TransactionEffectsDigest,
+    transaction: &VerifiedExecutableTransaction,
+    expected_effects: &TransactionEffects,
     cache_reader: &dyn TransactionCacheRead,
 ) {
     if *expected_digest != *actual_effects_digest {
@@ -165,8 +171,11 @@ pub(super) fn assert_not_forked(
             ?checkpoint,
             ?tx_digest,
             ?expected_digest,
+            ?actual_effects_digest,
+            ?transaction,
+            ?expected_effects,
             ?actual_effects,
-            "fork detected!"
+            "transaction fork detected!"
         );
         panic!(
             "When executing checkpoint {}, transaction {} \
@@ -183,6 +192,7 @@ pub(super) fn assert_checkpoint_not_forked(
     locally_built_checkpoint: &CheckpointSummary,
     verified_checkpoint: &VerifiedCheckpoint,
     checkpoint_store: &CheckpointStore,
+    cache_reader: &dyn TransactionCacheRead,
 ) {
     assert_eq!(
         locally_built_checkpoint.sequence_number(),
@@ -195,9 +205,16 @@ pub(super) fn assert_checkpoint_not_forked(
     }
 
     let verified_checkpoint_summary = verified_checkpoint.data();
+    let sequence_number = *locally_built_checkpoint.sequence_number();
 
     if locally_built_checkpoint.content_digest == verified_checkpoint_summary.content_digest {
         // fork is in the checkpoint header
+        if let Some(local_contents) = checkpoint_store
+            .get_checkpoint_contents(&locally_built_checkpoint.content_digest)
+            .expect("db error")
+        {
+            dump_checkpoint_transactions("local", sequence_number, &local_contents, cache_reader);
+        }
         fatal!(
             "Checkpoint fork detected in header! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
             locally_built_checkpoint,
@@ -215,6 +232,14 @@ pub(super) fn assert_checkpoint_not_forked(
             .expect("contents must exist if checkpoint has been synced!");
 
         // fork is in the checkpoint contents
+        dump_checkpoint_transactions("local", sequence_number, &local_contents, cache_reader);
+        dump_checkpoint_transactions(
+            "verified",
+            sequence_number,
+            &verified_contents,
+            cache_reader,
+        );
+
         let mut local_contents_iter = local_contents.iter();
         let mut verified_contents_iter = verified_contents.iter();
         let mut pos = 0;
@@ -251,6 +276,25 @@ pub(super) fn assert_checkpoint_not_forked(
             verified_checkpoint
         );
     }
+}
+
+fn dump_checkpoint_transactions(
+    side: &str,
+    sequence_number: CheckpointSequenceNumber,
+    contents: &CheckpointContents,
+    cache_reader: &dyn TransactionCacheRead,
+) {
+    let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
+    let transactions = cache_reader.multi_get_transaction_blocks(&tx_digests);
+    let effects = cache_reader.multi_get_executed_effects(&tx_digests);
+    error!(
+        side,
+        sequence_number,
+        ?tx_digests,
+        ?transactions,
+        ?effects,
+        "checkpoint fork: dumping full transaction data"
+    );
 }
 
 /// SequenceWatch is just a wrapper around a tokio::watch that can wait for a

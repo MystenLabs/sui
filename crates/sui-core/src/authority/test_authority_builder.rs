@@ -302,6 +302,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             &authority_store,
             backpressure_manager.clone(),
         );
+        checkpoint_store
+            .set_transaction_cache_reader(cache_traits.transaction_cache_reader.clone());
 
         let chain_id = ChainIdentifier::from(*genesis.checkpoint().digest());
         let chain = match self.chain_override {
