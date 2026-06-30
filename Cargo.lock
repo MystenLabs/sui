@@ -9102,6 +9102,7 @@ dependencies = [
  "indoc",
  "itertools 0.10.5",
  "jsonrpc",
+ "move-binary-format",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
@@ -16421,7 +16422,10 @@ dependencies = [
  "serde",
  "sui-package-management",
  "sui-protocol-config",
+<<<<<<< HEAD
  "sui-rpc-api",
+=======
+>>>>>>> 4c71b0615b ([move] Add stub generation from bytecode for on-chain dependencies)
  "sui-sdk",
  "tempfile",
  "tokio",
