@@ -698,10 +698,16 @@ pub trait RpcIndexes: Send + Sync {
         cursor: Option<OwnedObjectInfo>,
     ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>;
 
+    /// Iterate the dynamic fields owned by `parent`. Dynamic-field objects live
+    /// in the same owned-object index as address-owned objects (under the
+    /// object-owner key, sorted by `(type, object id)`), so the [`DynamicFieldKey`]
+    /// cursor carries the field's type alongside its id -- the full sort
+    /// position -- letting the scan seek straight to it, as in
+    /// [`owned_objects_iter`](Self::owned_objects_iter).
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
-        cursor: Option<ObjectID>,
+        cursor: Option<DynamicFieldKey>,
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>>;
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
@@ -769,17 +775,22 @@ pub struct OwnedObjectInfo {
     pub version: SequenceNumber,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct DynamicFieldKey {
     pub parent: ObjectID,
     pub field_id: ObjectID,
+    /// The dynamic field object's Move type. The owned-object index sorts by
+    /// `(type, object id)`, so this is needed -- together with `field_id` -- to
+    /// resume a paginated scan at this entry.
+    pub object_type: StructTag,
 }
 
 impl DynamicFieldKey {
-    pub fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID) -> Self {
+    pub fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID, object_type: StructTag) -> Self {
         Self {
             parent: parent.into(),
             field_id,
+            object_type,
         }
     }
 }

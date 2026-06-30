@@ -869,7 +869,7 @@ impl RpcIndexes for RpcStoreReadStore {
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
-        cursor: Option<ObjectID>,
+        cursor: Option<DynamicFieldKey>,
     ) -> Result<Box<dyn Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_>> {
         self.reader.dynamic_field_iter(parent, cursor)
     }
