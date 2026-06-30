@@ -38,13 +38,9 @@ fn bootstrap() {
     // Sort files by name to have deterministic codegen output
     fds.file.sort_by(|a, b| a.name.cmp(&b.name));
 
-    // No gRPC services in this crate's protos, so client/server stub generation is off and no
-    // FileDescriptorSet is emitted — these messages are only ever serialized as opaque cursor
-    // bytes.
-    if let Err(error) = tonic_prost_build::configure()
-        .build_client(false)
-        .build_server(false)
-        .bytes(".")
+    // This crate's protos define no gRPC services — only message types serialized as opaque cursor
+    // bytes — so plain prost-build (no tonic) is all that's needed.
+    if let Err(error) = prost_build::Config::new()
         .out_dir(&out_dir)
         .compile_fds(fds)
     {

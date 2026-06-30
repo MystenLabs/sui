@@ -15,6 +15,6 @@ bytes.workspace = true
 prost.workspace = true
 
 [dev-dependencies]
+prost-build.workspace = true
 protox.workspace = true
-tonic-prost-build.workspace = true
 walkdir.workspace = true

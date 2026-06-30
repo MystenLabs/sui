@@ -16836,8 +16836,8 @@ dependencies = [
  "anyhow",
  "bytes",
  "prost 0.14.1",
+ "prost-build",
  "protox",
- "tonic-prost-build",
  "walkdir",
 ]
 
