@@ -106,15 +106,18 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
                     version: sui_types::base_types::SequenceNumber::from_u64(value.0),
                 })
             })
-            // Skip-past-cursor: drop while the row's object_id is
-            // <= the cursor's. Inexact relative to the natural
-            // (type, balance, id) ordering of the index, but
-            // matches the validator-store contract for opaque
-            // cursors.
+            // Skip-past-cursor: the page token is the first object of the
+            // next page (see the `list_owned_objects` handler), so drop rows
+            // until we reach it -- identified by its globally unique object id
+            // -- and then resume inclusively. The iteration restarts from the
+            // start of the owner's objects each page, so a `==` predicate here
+            // would skip nothing (the first row is never the cursor) and every
+            // page would re-yield from the beginning, duplicating objects
+            // across pages.
             .skip_while(
                 move |entry: &Result<OwnedObjectInfo, TypedStoreError>| match entry {
                     Ok(info) => cursor_object_id
-                        .map(|c| info.object_id == c)
+                        .map(|c| info.object_id != c)
                         .unwrap_or(false),
                     Err(_) => false,
                 },
