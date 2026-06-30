@@ -2736,13 +2736,6 @@ impl ProtocolConfig {
             .deprecate_global_storage_ops_during_deserialization
     }
 
-    pub fn enable_observation_chunking(&self) -> bool {
-        matches!(self.feature_flags.per_object_congestion_control_mode,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate(ref params)
-                if params.observations_chunk_size.is_some()
-        )
-    }
-
     pub fn deprecate_global_storage_ops(&self) -> bool {
         self.feature_flags.deprecate_global_storage_ops
     }

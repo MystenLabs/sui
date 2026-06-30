@@ -927,7 +927,7 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
-                        observations_chunk_size: None,
+                        observations_chunk_size: Some(18),
                     },
                 ),
             );
@@ -1062,7 +1062,7 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
-                        observations_chunk_size: None,
+                        observations_chunk_size: Some(18),
                     },
                 ),
             );
@@ -1155,7 +1155,7 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
-                        observations_chunk_size: None,
+                        observations_chunk_size: Some(18),
                     },
                 ),
             );
@@ -1252,7 +1252,7 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
-                        observations_chunk_size: None,
+                        observations_chunk_size: Some(18),
                     },
                 ),
             );
@@ -1395,7 +1395,7 @@ mod tests {
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
-                        observations_chunk_size: None,
+                        observations_chunk_size: Some(18),
                     },
                 ),
             );
@@ -1674,7 +1674,7 @@ mod tests {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: true,
-                observations_chunk_size: None,
+                observations_chunk_size: Some(18),
             },
             std::iter::empty(),
         );

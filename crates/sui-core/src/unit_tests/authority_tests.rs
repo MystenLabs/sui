@@ -5905,7 +5905,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
         stored_observations_limit: u64::MAX,
         stake_weighted_median_threshold: 0,
         default_none_duration_for_new_keys: false,
-        observations_chunk_size: None,
+        observations_chunk_size: Some(18),
     };
 
     let mut protocol_config =
@@ -6177,7 +6177,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         stored_observations_limit: u64::MAX,
         stake_weighted_median_threshold: 0,
         default_none_duration_for_new_keys: false,
-        observations_chunk_size: None,
+        observations_chunk_size: Some(18),
     };
 
     let mut protocol_config =
