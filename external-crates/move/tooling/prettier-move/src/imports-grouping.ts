@@ -10,7 +10,7 @@
 import { Doc, doc } from 'prettier';
 import { Node } from './';
 import { UseDeclaration } from './cst/use_declaration';
-const { join, softline, indent, line, group } = doc.builders;
+const { join, softline, indent, line, group, ifBreak } = doc.builders;
 
 // === Import Grouping ===
 
@@ -119,6 +119,7 @@ function printModule(mod: string, members: Member[]): Doc {
                   '{',
                   indent(softline),
                   indent(join([',', line], members.map(printMember))),
+                  ifBreak(','), // trailing comma
                   softline,
                   '}',
               ]),

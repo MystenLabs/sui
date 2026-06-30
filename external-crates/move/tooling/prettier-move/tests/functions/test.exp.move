@@ -2,6 +2,10 @@ module test::functions {
     /// Comment for a function.
     fun empty() {}
 
+    fun commented() {
+        // empty comments are kept
+    }
+
     public fun pub() {}
 
     public entry fun pub_entry() {}
