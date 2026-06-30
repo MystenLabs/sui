@@ -3715,7 +3715,6 @@ mod tests {
 
         let state = TestAuthorityBuilder::new()
             .with_starting_objects(&all_objects)
-            .skip_rpc_index_init()
             .skip_genesis_owner_index()
             .build()
             .await;

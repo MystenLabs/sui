@@ -466,11 +466,10 @@ fn retract_object_version_by_checkpoint(
 ///
 /// `pruned_checkpoint_watermark` is the highest checkpoint the
 /// perpetual store has pruned (inclusive); `pruned_tx_seq_exclusive` is
-/// the first still-retained `tx_seq`. These mirror
-/// `sui_core::rpc_index::RpcIndexStore::prune`'s parameters so the
-/// embedded rpc-store and the legacy index prune in lockstep on the
-/// same floor. Idempotent: a re-run with the same or a lower floor is a
-/// no-op.
+/// the first still-retained `tx_seq`. The pruner consumes the same floor
+/// the perpetual store prunes to, so the embedded rpc-store's history
+/// cohort stays in lockstep with it. Idempotent: a re-run with the same
+/// or a lower floor is a no-op.
 pub fn prune_history_cohort(
     db: &Db,
     schema: &RpcStoreSchema,

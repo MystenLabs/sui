@@ -20,7 +20,6 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_core::jsonrpc_index::IndexStoreTables;
-use sui_core::rpc_index::RpcIndexStore;
 use sui_types::base_types::EpochId;
 use tracing::info;
 use typed_store::rocks::{MetricConf, default_db_options};
@@ -179,7 +178,6 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
         &db_path.join("checkpoints"),
         Arc::new(PrunerWatermarks::default()),
     );
-    let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let highest_pruned_checkpoint = checkpoint_store
         .get_highest_pruned_checkpoint_seq_number()?
         .unwrap_or(0);
@@ -199,7 +197,6 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_objects_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
-        Some(&rpc_index),
         None,
         pruning_config,
         metrics,
@@ -219,7 +216,6 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         &db_path.join("checkpoints"),
         Arc::new(PrunerWatermarks::default()),
     );
-    let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
     info!("Pruning setup for db at path: {:?}", db_path.display());
     let pruning_config = AuthorityStorePruningConfig {
@@ -232,7 +228,6 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
-        Some(&rpc_index),
         None,
         pruning_config,
         metrics,

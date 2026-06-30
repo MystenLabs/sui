@@ -2844,7 +2844,6 @@ async fn create_validator_fullnode(
         .with_starting_objects(objects)
         .with_shared_network_config(&network_config)
         .insert_genesis_checkpoint()
-        .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
         .await;
@@ -2856,7 +2855,6 @@ async fn create_validator_fullnode(
         .with_shared_network_config(&network_config)
         .with_keypair(&fullnode_key_pair)
         .insert_genesis_checkpoint()
-        .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
         .await;
