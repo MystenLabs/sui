@@ -159,7 +159,7 @@ impl ResolvingTable {
         gp
     }
 
-    /// Chase links from the assignent at index `ix` until a non-link `Assignment` is found, and
+    /// Chase links from the assignment at index `ix` until a non-link `Assignment` is found, and
     /// return a reference to that.
     fn parent(&self, mut ix: usize) -> &Option<AccountAddress> {
         loop {
