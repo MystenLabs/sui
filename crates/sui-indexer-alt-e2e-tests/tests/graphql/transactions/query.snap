@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 18 tasks
+processed 14 tasks
 
 init:
 A: object(0,0)
@@ -70,14 +70,14 @@ Response: {
   "data": {
     "transactions": {
       "pageInfo": {
-        "startCursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
-        "endCursor": "AQAAAAAAAAAAAAkAAAAAAAAA",
+        "startCursor": "CAIQAQ==",
+        "endCursor": "CAIQASAJ",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "CAIQAQ==",
           "node": {
             "digest": "85r5mfnut7T1NNBmbL7RpGMf9caJe5VEnpiCJxkz7eDE",
             "effects": {
@@ -89,7 +89,7 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAEAAAAAAAAA",
+          "cursor": "CAIQASAB",
           "node": {
             "digest": "Behwp65YPJaMaHg9qgpz5aReNug7U3YEhkLW4ukcZjfc",
             "effects": {
@@ -101,7 +101,7 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
+          "cursor": "CAIQASAC",
           "node": {
             "digest": "H9Up8TXVvbtdLpCB5QzUGwbQG6kMk3z3n1HZsc4ZMa5o",
             "effects": {
@@ -113,7 +113,7 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAMAAAAAAAAA",
+          "cursor": "CAIQASAD",
           "node": {
             "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
             "effects": {
@@ -125,7 +125,7 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
+          "cursor": "CAIQASAE",
           "node": {
             "digest": "4SyyecAZacr3hX5fB5eeTZrUsPjbgf4cFi1E2azPMoQN",
             "effects": {
@@ -137,7 +137,7 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
+          "cursor": "CAIQASAF",
           "node": {
             "digest": "DJZzBdgo7HSUrtdE8k41y43WPHTw3gDDXUc2V4EdNi1m",
             "effects": {
@@ -149,7 +149,7 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
+          "cursor": "CAIQASAG",
           "node": {
             "digest": "DKkZzc9QZeYigRNaEofwDKTuuZ5KeSkyWq6gWjyojZSV",
             "effects": {
@@ -161,7 +161,7 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAcAAAAAAAAA",
+          "cursor": "CAIQASAH",
           "node": {
             "digest": "BLWiR4XPz5tRWXHQRUba5FK15DgseQkPM8ZnvSBZEN3s",
             "effects": {
@@ -173,7 +173,7 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAgAAAAAAAAA",
+          "cursor": "CAIQASAI",
           "node": {
             "digest": "9KqKTy3nFQLpzfJyTks7MrrKi5xXZ3ejctEmjvnisaF9",
             "effects": {
@@ -185,189 +185,13 @@ Response: {
           }
         },
         {
-          "cursor": "AQAAAAAAAAAAAAkAAAAAAAAA",
+          "cursor": "CAIQASAJ",
           "node": {
             "digest": "DyvEoKxh9cgtdtNTBRPEUbq8XzDBnEr5PePbZMeVHgun",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 5,
                 "digest": "FGrysEQPCG5ba3CKBkcn1VBgjxmv2idSjndUN9zHxUes"
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 14, lines 74-98:
-//# run-graphql --cursors bcs(1u8,0u8,0u64,0u64) bcs(1u8,0u8,0u64,3u64)
-Response: {
-  "data": {
-    "transactions": {
-      "pageInfo": {
-        "startCursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
-        "endCursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
-        "hasPreviousPage": false,
-        "hasNextPage": true
-      },
-      "edges": [
-        {
-          "cursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
-          "node": {
-            "digest": "85r5mfnut7T1NNBmbL7RpGMf9caJe5VEnpiCJxkz7eDE",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 0,
-                "digest": "CKjFRsvNLMhfTKYRc67g1tY5KjYkzrTRo9yu4rhW9nr1"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "AQAAAAAAAAAAAAEAAAAAAAAA",
-          "node": {
-            "digest": "Behwp65YPJaMaHg9qgpz5aReNug7U3YEhkLW4ukcZjfc",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 1,
-                "digest": "DnYcjz2dzzZ8xRQgqqpXk1EVFTKEDqhqWCj5FBQ1kEbK"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
-          "node": {
-            "digest": "H9Up8TXVvbtdLpCB5QzUGwbQG6kMk3z3n1HZsc4ZMa5o",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 1,
-                "digest": "DnYcjz2dzzZ8xRQgqqpXk1EVFTKEDqhqWCj5FBQ1kEbK"
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 15, lines 100-123:
-//# run-graphql --cursors bcs(1u8,0u8,0u64,0u64) bcs(1u8,0u8,0u64,4u64)
-Response: {
-  "data": {
-    "transactions": {
-      "pageInfo": {
-        "startCursor": "AQAAAAAAAAAAAAEAAAAAAAAA",
-        "endCursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
-        "hasPreviousPage": true,
-        "hasNextPage": true
-      },
-      "edges": [
-        {
-          "cursor": "AQAAAAAAAAAAAAEAAAAAAAAA",
-          "node": {
-            "digest": "Behwp65YPJaMaHg9qgpz5aReNug7U3YEhkLW4ukcZjfc",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 1,
-                "digest": "DnYcjz2dzzZ8xRQgqqpXk1EVFTKEDqhqWCj5FBQ1kEbK"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
-          "node": {
-            "digest": "H9Up8TXVvbtdLpCB5QzUGwbQG6kMk3z3n1HZsc4ZMa5o",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 1,
-                "digest": "DnYcjz2dzzZ8xRQgqqpXk1EVFTKEDqhqWCj5FBQ1kEbK"
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 16, lines 125-148:
-//# run-graphql --cursors bcs(1u8,0u8,0u64,0u64) bcs(1u8,0u8,0u64,6u64)
-Response: {
-  "data": {
-    "transactions": {
-      "pageInfo": {
-        "startCursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
-        "endCursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
-        "hasPreviousPage": true,
-        "hasNextPage": true
-      },
-      "edges": [
-        {
-          "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
-          "node": {
-            "digest": "4SyyecAZacr3hX5fB5eeTZrUsPjbgf4cFi1E2azPMoQN",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 2,
-                "digest": "CcMBWvRDk5iBTCJtEguTB6ubzijVNFLYc5VvHLVZM5jg"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
-          "node": {
-            "digest": "DJZzBdgo7HSUrtdE8k41y43WPHTw3gDDXUc2V4EdNi1m",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 3,
-                "digest": "EnBKNDTqfa25okqSxVvDK2H1LoDbAEq3qqzovMPq4gZs"
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 17, lines 150-173:
-//# run-graphql --cursors bcs(1u8,0u8,0u64,0u64)
-Response: {
-  "data": {
-    "transactions": {
-      "pageInfo": {
-        "startCursor": "AQAAAAAAAAAAAAsAAAAAAAAA",
-        "endCursor": "AQAAAAAAAAAAAAwAAAAAAAAA",
-        "hasPreviousPage": true,
-        "hasNextPage": false
-      },
-      "edges": [
-        {
-          "cursor": "AQAAAAAAAAAAAAsAAAAAAAAA",
-          "node": {
-            "digest": "CJaRZ1VUAU1KEubfVHssT9Xvskp7taCuqQNkx81naqL6",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 7,
-                "digest": "4c75DPbx3kquBFkXwHpAmw4TXwRXm5m124YZULZxcDV9"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "AQAAAAAAAAAAAAwAAAAAAAAA",
-          "node": {
-            "digest": "BtmWtGWha5V9dXBzw3cpXjkUk8qza37a79Z4s2NEZaQu",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 7,
-                "digest": "4c75DPbx3kquBFkXwHpAmw4TXwRXm5m124YZULZxcDV9"
               }
             }
           }

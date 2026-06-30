@@ -15346,6 +15346,7 @@ dependencies = [
  "sui-pg-db",
  "sui-protocol-config",
  "sui-rpc",
+ "sui-rpc-cursor",
  "sui-sdk",
  "sui-simulator",
  "sui-swarm-config",
@@ -16843,9 +16844,12 @@ dependencies = [
 name = "sui-rpc-cursor"
 version = "0.1.0"
 dependencies = [
- "bcs",
+ "anyhow",
  "bytes",
- "serde",
+ "prost 0.14.1",
+ "prost-build",
+ "protox",
+ "walkdir",
 ]
 
 [[package]]

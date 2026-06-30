@@ -94,12 +94,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
-          "endCursor": "AQAAAAAAAAAAAAEAAAAAAAAA"
+          "startCursor": "CAIQAQ==",
+          "endCursor": "CAIQASAB"
         },
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
+            "cursor": "CAIQAQ==",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -109,7 +109,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAEAAAAAAAAA",
+            "cursor": "CAIQASAB",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -135,12 +135,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
-          "endCursor": "AQAAAAAAAAAAAAoAAAAAAAAA"
+          "startCursor": "CAIQASAC",
+          "endCursor": "CAIQASAK"
         },
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
+            "cursor": "CAIQASAC",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -150,7 +150,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAMAAAAAAAAA",
+            "cursor": "CAIQASAD",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -160,7 +160,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
+            "cursor": "CAIQASAE",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -170,7 +170,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
+            "cursor": "CAIQASAF",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -180,7 +180,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
+            "cursor": "CAIQASAG",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -190,7 +190,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAcAAAAAAAAA",
+            "cursor": "CAIQASAH",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -200,7 +200,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAgAAAAAAAAA",
+            "cursor": "CAIQASAI",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -210,7 +210,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAkAAAAAAAAA",
+            "cursor": "CAIQASAJ",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -220,7 +220,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAoAAAAAAAAA",
+            "cursor": "CAIQASAK",
             "node": {
               "effects": {
                 "checkpoint": {
