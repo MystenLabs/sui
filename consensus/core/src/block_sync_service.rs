@@ -120,7 +120,7 @@ impl BlockSyncService {
                 // fetch_after_rounds will only be used to filter out already accepted blocks.
                 let missing_ancestors = blocks
                     .iter()
-                    .flat_map(|block| block.ancestors().to_vec())
+                    .flat_map(|block| block.ancestors().iter().copied())
                     .filter(|block_ref| fetch_after_rounds[block_ref.author] < block_ref.round)
                     .collect::<BTreeSet<_>>()
                     .into_iter()
