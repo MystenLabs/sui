@@ -668,6 +668,67 @@ impl<'backing> TemporaryStore<'backing> {
         self.invariants.clear();
     }
 
+    /// Consume this (post-execution) store and return the "recorded no-op" store used by a BumpOnly bail:
+    /// keep the input-derived state it already computed, discard everything execution produced, then bump
+    /// the mutable inputs. Its effects then record ONLY those input version bumps and the input
+    /// dependencies — nothing the (now-discarded) execution touched.
+    ///
+    /// The exhaustive destructure + rebuild (no `..`) forces the compiler to classify every field as
+    /// input-derived (reused) or execution-derived (reset), so a newly added execution field can't silently
+    /// leak into the no-op effects. We reuse the dropped store's fields rather than calling
+    /// `TemporaryStore::new`, which would re-derive from the rich `InputObjects` the store no longer holds.
+    pub(crate) fn into_recorded_noop(self) -> Self {
+        let Self {
+            // Input-derived — reused verbatim.
+            store,
+            tx_digest,
+            input_objects,
+            non_exclusive_input_original_versions,
+            stream_ended_consensus_objects,
+            lamport_timestamp,
+            mutable_input_refs,
+            receiving_objects,
+            cur_epoch,
+            protocol_config,
+            system_object_versions,
+            // Execution-derived — discarded.
+            execution_results: _,
+            loaded_runtime_objects: _,
+            wrapped_object_containers: _,
+            runtime_packages_loaded_from_db: _,
+            generated_runtime_ids: _,
+            loaded_per_epoch_config_objects: _,
+            invariants: _,
+            loaded_system_objects: _,
+            retry_request: _,
+        } = self;
+        let mut noop = Self {
+            store,
+            tx_digest,
+            input_objects,
+            non_exclusive_input_original_versions,
+            stream_ended_consensus_objects,
+            lamport_timestamp,
+            mutable_input_refs,
+            receiving_objects,
+            cur_epoch,
+            protocol_config,
+            system_object_versions,
+            execution_results: ExecutionResultsV2::default(),
+            loaded_runtime_objects: BTreeMap::new(),
+            wrapped_object_containers: BTreeMap::new(),
+            runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
+            generated_runtime_ids: BTreeSet::new(),
+            loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
+            invariants: InvariantChecker::new(),
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
+            retry_request: OnceCell::new(),
+        };
+        // The only "writes" a no-op has: bump the versions of the mutable inputs it locked.
+        noop.ensure_active_inputs_mutated();
+        noop
+    }
+
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
         debug_assert!(!self.execution_results.deleted_object_ids.contains(id));
@@ -946,15 +1007,15 @@ impl<'backing> TemporaryStore<'backing> {
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
         gas_charger: &GasCharger,
-        mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
+        // DEVIATION FROM #27051 (#2b): we drop the caller-passed `mutable_inputs` arg; the
+        // InvariantChecker derives the mutable-input set from the store instead (behavior-identical).
         self.invariants.check_ownership_invariants(
             self,
             sender,
             sponsor,
             gas_charger,
-            mutable_inputs,
             is_epoch_change,
         )
     }
@@ -967,7 +1028,10 @@ impl TemporaryStore<'_> {
     /// All objects will be updated with their new (current) storage rebate/cost.
     /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
     /// overall storage rebate and cost.
-    pub(crate) fn collect_storage_and_rebate(&mut self, gas_charger: &mut GasCharger) {
+    pub(crate) fn collect_storage_and_rebate(
+        &mut self,
+        gas_charger: &mut GasCharger,
+    ) -> Result<(), ExecutionError> {
         // Use two loops because we cannot mut iterate written while calling get_object_modified_at.
         let old_storage_rebates: Vec<_> = self
             .execution_results
@@ -988,18 +1052,19 @@ impl TemporaryStore<'_> {
             // new object size
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
-            let new_storage_rebate = gas_charger.track_storage_mutation(
-                object.id(),
-                new_object_size,
-                old_storage_rebate,
-            );
+            let new_storage_rebate = gas_charger
+                .track_storage_mutation(object.id(), new_object_size, old_storage_rebate)
+                .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation))?;
             object.storage_rebate = new_storage_rebate;
         }
 
-        self.collect_rebate(gas_charger);
+        self.collect_rebate(gas_charger)
     }
 
-    pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) {
+    pub(crate) fn collect_rebate(
+        &self,
+        gas_charger: &mut GasCharger,
+    ) -> Result<(), ExecutionError> {
         for object_id in &self.execution_results.modified_objects {
             if self
                 .execution_results
@@ -1014,8 +1079,11 @@ impl TemporaryStore<'_> {
                 // Unwrap is safe because this loop iterates through all modified objects.
                 .unwrap()
                 .storage_rebate;
-            gas_charger.track_storage_mutation(*object_id, 0, storage_rebate);
+            gas_charger
+                .track_storage_mutation(*object_id, 0, storage_rebate)
+                .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation))?;
         }
+        Ok(())
     }
 
     pub fn check_execution_results_consistency<Mode: ExecutionMode>(
