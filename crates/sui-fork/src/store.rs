@@ -48,6 +48,7 @@ use sui_types::storage::BalanceIterator;
 use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIteratorItem;
+use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
@@ -1351,7 +1352,7 @@ impl RpcIndexes for DataStore {
     fn dynamic_field_iter(
         &self,
         _parent: ObjectID,
-        _cursor: Option<ObjectID>,
+        _cursor: Option<DynamicFieldKey>,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
         todo!("not supported yet")
     }
