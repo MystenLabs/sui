@@ -8,9 +8,10 @@ use sui_types::accumulator_root::{EventCommitment, EventStreamHead, build_event_
 const U256_ZERO: U256 = U256::zero();
 
 fn hash_two_to_one_u256(left: U256, right: U256) -> U256 {
-    let mut concatenated = bcs::to_bytes(&left).expect("Failed to serialize left U256");
-    concatenated.extend_from_slice(&bcs::to_bytes(&right).expect("Failed to serialize right U256"));
-    let hash = Blake2b256::digest(&concatenated);
+    let mut hasher = Blake2b256::new();
+    bcs::serialize_into(&mut hasher, &left).expect("Failed to serialize left U256");
+    bcs::serialize_into(&mut hasher, &right).expect("Failed to serialize right U256");
+    let hash = hasher.finalize();
     U256::from_le_bytes(&hash.digest)
 }
 
