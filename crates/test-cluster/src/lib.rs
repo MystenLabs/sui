@@ -759,25 +759,14 @@ impl TestCluster {
             }
         }
 
-        // Effects were already obtained from the validator above; this call is a
-        // synchronization barrier so callers that query the fullnode (e.g. RPC)
-        // after this returns see the transactions' effects.
-        self.fullnode_handle
-            .sui_node
-            .with_async(|node| {
-                let digests = digests.clone();
-                async move {
-                    let state = node.state();
-                    let transaction_cache_reader = state.get_transaction_cache_reader();
-                    transaction_cache_reader
-                        .notify_read_executed_effects_digests(
-                            "sign_and_execute_txns_in_soft_bundle",
-                            &digests,
-                        )
-                        .await
-                }
-            })
-            .await;
+        // Effects were already obtained from the validator above. Wait for the
+        // rpc fullnode to settle the transactions in an executed checkpoint and
+        // for its embedded rpc-store index to catch up, so callers that query
+        // the fullnode (e.g. RPC for owned objects or balances) after this
+        // returns observe these transactions. The embedded indexer follows the
+        // tip asynchronously and is not a blocker for execution, so the index
+        // wait is required for read-after-write consistency.
+        self.wait_for_tx_settlement(&digests).await;
 
         executed_results
             .into_iter()
@@ -900,25 +889,81 @@ impl TestCluster {
         handles: &[SuiNodeHandle],
         digests: &[TransactionDigest],
     ) {
-        let waits = handles.iter().map(|handle| {
-            handle.with_async(|node| async move {
-                let state = node.state();
-                // wait until the transactions are in checkpoints on this node
-                let checkpoint_seqs = state
-                    .epoch_store_for_testing()
-                    .transactions_executed_in_checkpoint_notify(digests.to_vec())
-                    .await
-                    .unwrap();
+        let waits = handles.iter().map(|handle| async move {
+            let max_checkpoint_seq = handle
+                .with_async(|node| async move {
+                    let state = node.state();
+                    // wait until the transactions are in checkpoints on this node
+                    let checkpoint_seqs = state
+                        .epoch_store_for_testing()
+                        .transactions_executed_in_checkpoint_notify(digests.to_vec())
+                        .await
+                        .unwrap();
 
-                // then wait until the highest of those checkpoints is executed on this node
-                let max_checkpoint_seq = checkpoint_seqs.into_iter().max().unwrap();
-                state
-                    .checkpoint_store
-                    .notify_read_executed_checkpoint(max_checkpoint_seq)
-                    .await;
-            })
+                    // then wait until the highest of those checkpoints is executed on this node
+                    let max_checkpoint_seq = checkpoint_seqs.into_iter().max().unwrap();
+                    state
+                        .checkpoint_store
+                        .notify_read_executed_checkpoint(max_checkpoint_seq)
+                        .await;
+                    max_checkpoint_seq
+                })
+                .await;
+
+            // The embedded rpc-store indexes asynchronously, decoupled from
+            // checkpoint execution, so a settled transaction is not yet visible
+            // through the index surface (owned objects, balances). Wait for the
+            // live cohort to catch up so a subsequent index read observes it.
+            Self::wait_for_rpc_index_on_handle(handle, max_checkpoint_seq).await;
         });
         join_all(waits).await;
+    }
+
+    /// Wait until the embedded rpc-store on `handle` has indexed (live cohort)
+    /// through `checkpoint`. No-op for a node without an embedded store (a
+    /// validator, or a fullnode with indexing disabled).
+    ///
+    /// Unlike the legacy synchronous `rpc-index`, the embedded indexer follows
+    /// the tip asynchronously and is not a blocker for checkpoint execution, so
+    /// reads of the index surface must wait for it explicitly.
+    async fn wait_for_rpc_index_on_handle(handle: &SuiNodeHandle, checkpoint: u64) {
+        // Skip nodes without an embedded index; there is nothing to wait for.
+        if handle.with(|node| node.embedded_rpc_store().is_none()) {
+            return;
+        }
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            let committed = handle.with(|node| {
+                node.embedded_rpc_store()
+                    .and_then(|embedded| embedded.live_committed_checkpoint())
+            });
+            if committed.is_some_and(|c| c >= checkpoint) {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for the embedded rpc-store to index checkpoint \
+                 {checkpoint} (live committed = {committed:?})",
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    /// Wait until the rpc fullnode's embedded rpc-store has indexed through its
+    /// current highest executed checkpoint. Call after building the cluster so
+    /// the genesis-funded object set is queryable through the index surface
+    /// before tests issue their first index reads (e.g. listing owned gas
+    /// objects). No-op when the fullnode has indexing disabled.
+    pub async fn wait_for_rpc_index_ready(&self) {
+        let handle = &self.fullnode_handle.sui_node;
+        let highest_executed = handle.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("db error")
+                .unwrap_or(0)
+        });
+        Self::wait_for_rpc_index_on_handle(handle, highest_executed).await;
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
@@ -1564,11 +1609,19 @@ impl TestClusterBuilder {
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
         let wallet = WalletContext::new(&wallet_conf).unwrap();
 
-        TestCluster {
+        let cluster = TestCluster {
             swarm,
             wallet,
             fullnode_handle,
-        }
+        };
+
+        // The embedded rpc-store indexes the tip asynchronously, so the genesis
+        // object set is not queryable through the index surface the instant the
+        // node is up. Wait for it before handing the cluster to tests, whose
+        // first reads typically list owned gas objects through the index.
+        cluster.wait_for_rpc_index_ready().await;
+
+        cluster
     }
 
     /// Start a Swarm and set up WalletConfig
