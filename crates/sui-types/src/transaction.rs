@@ -1252,7 +1252,7 @@ impl ProgrammableMoveCall {
             fp_ensure!(
                 identifier::is_valid(&self.function),
                 UserInputError::InvalidIdentifier {
-                    error: self.module.clone()
+                    error: self.function.clone()
                 }
             );
         }
