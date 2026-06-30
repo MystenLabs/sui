@@ -3,19 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    abilities,
     abstract_state::{AbstractState, BorrowState, CallGraph, InstantiableModule},
     config::{
-        CALL_STACK_LIMIT, INHABITATION_INSTRUCTION_LIMIT, MAX_CFG_BLOCKS, MUTATION_TOLERANCE,
-        NEGATE_PRECONDITIONS, NEGATION_PROBABILITY, VALUE_STACK_LIMIT,
+        BLOCK_INSTRUCTION_LIMIT, CALL_STACK_LIMIT, INHABITATION_INSTRUCTION_LIMIT, MAX_CFG_BLOCKS,
+        MUTATION_TOLERANCE, NEGATE_PRECONDITIONS, NEGATION_PROBABILITY, VALUE_STACK_LIMIT,
     },
     control_flow_graph::CFG,
     substitute, summaries,
 };
 use move_binary_format::file_format::{
-    Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
+    AbilitySet, Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
     FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
-    FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
-    StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
+    FunctionInstantiationIndex, LocalIndex, Signature, SignatureIndex, SignatureToken,
+    StructDefInstantiation, StructDefInstantiationIndex, StructDefinitionIndex,
+    StructFieldInformation, TableIndex,
 };
 use move_core_types::u256::U256;
 use rand::{Rng, rngs::StdRng};
@@ -332,11 +334,15 @@ impl<'a> BytecodeGenerator<'a> {
     fn candidate_instructions(
         &mut self,
         fn_context: &FunctionGenerationContext,
-        state: AbstractState,
-        module: CompiledModule,
+        state: &AbstractState,
+        module: &CompiledModule,
     ) -> Vec<(StackEffect, Bytecode)> {
         let mut matches: Vec<(StackEffect, Bytecode)> = Vec::new();
         let instructions = &self.instructions;
+        // The set of callable functions is the same for every candidate in this state, and
+        // computing it is relatively expensive (recursive call-depth checks), so compute it once
+        // and reuse it for both the `Call` and `CallGeneric` candidate paths.
+        let callable_fns = state.call_graph.can_call(fn_context.function_handle_index);
         for (stack_effect, instruction) in instructions.iter() {
             let instruction: Option<Bytecode> = match instruction {
                 BytecodeType::NoArg(instruction) => Some(instruction.clone()),
@@ -397,11 +403,10 @@ impl<'a> BytecodeGenerator<'a> {
                 }
                 BytecodeType::FunctionIndex(instruction) => {
                     // Select a random function handle and local signature
-                    let callable_fns = &state.call_graph.can_call(fn_context.function_handle_index);
-                    Self::index_or_none(callable_fns, self.rng)
+                    Self::index_or_none(&callable_fns, self.rng)
                         .and_then(|handle_idx| {
                             Self::call_stack_backpressure(
-                                &state,
+                                state,
                                 fn_context,
                                 callable_fns[handle_idx as usize],
                             )
@@ -414,9 +419,23 @@ impl<'a> BytecodeGenerator<'a> {
                         .map(|x| instruction(StructDefInstantiationIndex::new(x)))
                 }
                 BytecodeType::FunctionInstantiationIndex(instruction) => {
-                    // Select a field definition from the module's field definitions
-                    Self::index_or_none(&module.function_instantiations, self.rng)
-                        .map(|x| instruction(FunctionInstantiationIndex::new(x)))
+                    // Select a generic call target the same way `Call` does: only function
+                    // instantiations whose function is callable without creating a recursive or
+                    // over-deep call graph.
+                    let callable_insts: Vec<TableIndex> = module
+                        .function_instantiations
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, fi)| {
+                            callable_fns.contains(&fi.handle)
+                                && Self::call_stack_backpressure(state, fn_context, fi.handle)
+                                    .is_some()
+                        })
+                        .map(|(idx, _)| idx as TableIndex)
+                        .collect();
+                    Self::index_or_none(&callable_insts, self.rng).map(|x| {
+                        instruction(FunctionInstantiationIndex::new(callable_insts[x as usize]))
+                    })
                 }
                 BytecodeType::FieldInstantiationIndex(instruction) => {
                     // Select a field definition from the module's field definitions
@@ -429,7 +448,7 @@ impl<'a> BytecodeGenerator<'a> {
                 let unsatisfied_preconditions = summary
                     .preconditions
                     .iter()
-                    .filter(|precondition| !precondition(&state))
+                    .filter(|precondition| !precondition(state))
                     .count();
                 if (NEGATE_PRECONDITIONS
                     && !summary.preconditions.is_empty()
@@ -603,8 +622,18 @@ impl<'a> BytecodeGenerator<'a> {
         let mut bytecode: Vec<Bytecode> = Vec::new();
         let mut state = abstract_state_in.clone();
         // Generate block body
+        let mut instructions_generated = 0usize;
         loop {
-            let candidates = self.candidate_instructions(fn_context, state.clone(), module.clone());
+            // A block reaches its final state once the stack is empty. For some randomly generated
+            // (block, state) combinations the stack never drains within a reasonable number of
+            // steps (for example a non-droppable value gets stranded on the stack), and generation
+            // would otherwise grind toward the per-function instruction cap. Bound the block body
+            // and trigger a fresh module/bytecode generation when the bound is exceeded.
+            if instructions_generated >= BLOCK_INSTRUCTION_LIMIT {
+                return None;
+            }
+            instructions_generated += 1;
+            let candidates = self.candidate_instructions(fn_context, &state, module);
             if candidates.is_empty() {
                 warn!("No candidates found for state: [{:?}]", state);
                 break;
@@ -721,9 +750,18 @@ impl<'a> BytecodeGenerator<'a> {
         // The number of basic blocks must be at least one based on the
         // generation range.
         debug_assert!(number_of_blocks > 0);
+        // Compute the abilities of each local from its type (and the function's type-parameter
+        // constraints) so the abstract model matches what the verifier computes; otherwise locals
+        // of non-primitive type would carry incorrect abilities and never match correctly-typed
+        // stack values.
+        let local_abilities: Vec<AbilitySet> = locals
+            .iter()
+            .map(|tok| abilities(module, tok, &fh.type_parameters))
+            .collect();
         let mut cfg = CFG::new(
             self.rng,
             locals,
+            &local_abilities,
             &module.signatures[fh.parameters.0 as usize],
             number_of_blocks,
         );
@@ -812,6 +850,26 @@ impl<'a> BytecodeGenerator<'a> {
                 } else {
                     state_f
                 };
+            } else if !matches!(bytecode.last(), Some(Bytecode::Abort)) {
+                // The state aborted during the local-availability fixup that runs after the main
+                // generation loop. Unlike the main loop, that phase does not emit a terminating
+                // `Abort`, so the block can end in an arbitrary instruction (e.g. `StLoc`). Append
+                // the abort terminator here so the block has a valid terminator regardless of how
+                // many CFG successors it has.
+                state_f = self.apply_instruction(
+                    fn_context,
+                    state_f,
+                    &mut bytecode,
+                    Bytecode::LdU64(0),
+                    true,
+                )?;
+                state_f = self.apply_instruction(
+                    fn_context,
+                    state_f,
+                    &mut bytecode,
+                    Bytecode::Abort,
+                    true,
+                )?;
             }
             block.set_instructions(bytecode);
             *module = state_f.module.instantiate();
@@ -823,13 +881,61 @@ impl<'a> BytecodeGenerator<'a> {
         Some(cfg.serialize())
     }
 
+    /// Seed `function_instantiations` with one entry per generic function so that `CallGeneric` can
+    /// be generated. Nothing else populates this table (unlike struct instantiations, which
+    /// inhabitation seeds), so without this generic functions are defined but never called. The
+    /// seeded type arguments are all `U64` (which satisfies every non-`key` constraint generated
+    /// when resources are disabled); they only need to be present and well-typed for candidate
+    /// selection and the precondition. When a `CallGeneric` is actually emitted, its `TyParamsCall`
+    /// effect recomputes the real instantiation from the stack.
+    fn seed_generic_function_instantiations(module: &mut CompiledModule) {
+        for i in 0..module.function_handles.len() {
+            let handle = FunctionHandleIndex(i as TableIndex);
+            let arity = module.function_handle_at(handle).type_parameters.len();
+            if arity == 0 {
+                continue;
+            }
+            if module
+                .function_instantiations
+                .iter()
+                .any(|fi| fi.handle == handle)
+            {
+                continue;
+            }
+            let sig = vec![SignatureToken::U64; arity];
+            let type_parameters = match module.signatures.iter().position(|s| s.0 == sig) {
+                Some(idx) => SignatureIndex(idx as TableIndex),
+                None => {
+                    let idx = SignatureIndex(module.signatures.len() as TableIndex);
+                    module.signatures.push(Signature(sig));
+                    idx
+                }
+            };
+            module.function_instantiations.push(FunctionInstantiation {
+                handle,
+                type_parameters,
+            });
+        }
+    }
+
     pub fn generate_module(&mut self, mut module: CompiledModule) -> Option<CompiledModule> {
+        Self::seed_generic_function_instantiations(&mut module);
         let mut fdefs = module.function_defs.clone();
         let mut call_graph = CallGraph::new(module.function_handles.len());
         for fdef in fdefs.iter_mut() {
             if let Some(code) = &mut fdef.code {
                 let f_handle = &module.function_handles[fdef.function.0 as usize].clone();
-                let locals_sigs = module.signatures[code.locals.0 as usize].0.clone();
+                // In Move bytecode the local index space is `[parameters ++ declared locals]`:
+                // parameters occupy indices `0..params_len` and the declared locals (`code.locals`)
+                // follow. The abstract model must use the same combined list so that generated
+                // local indices and their types line up with what the verifier sees.
+                let params = module.signatures[f_handle.parameters.0 as usize].0.clone();
+                let declared_locals = module.signatures[code.locals.0 as usize].0.clone();
+                let locals_sigs: Vec<_> = params
+                    .iter()
+                    .chain(declared_locals.iter())
+                    .cloned()
+                    .collect();
                 let mut fn_context = FunctionGenerationContext::new(
                     fdef.function,
                     call_graph.max_calling_depth(fdef.function),
@@ -858,7 +964,7 @@ impl<'a> BytecodeGenerator<'a> {
         token: &SignatureToken,
     ) -> Vec<Bytecode> {
         match token {
-            SignatureToken::Address => vec![Bytecode::LdConst(ConstantPoolIndex(0))],
+            SignatureToken::Address => vec![Bytecode::LdConst(module.add_address_constant())],
             SignatureToken::U64 => vec![Bytecode::LdU64(0)],
             SignatureToken::U8 => vec![Bytecode::LdU8(0)],
             SignatureToken::U128 => vec![Bytecode::LdU128(Box::new(0))],

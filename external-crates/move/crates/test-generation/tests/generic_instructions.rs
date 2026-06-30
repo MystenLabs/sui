@@ -19,7 +19,7 @@ fn unify_no_subst() {
             let should_unify = tok1.clone() == tok2.clone();
             let mut s = Subst::new();
             assert!(s.check_and_add(tok1.clone(), tok2.clone()) == should_unify);
-            assert!(s.instantiation().is_empty());
+            assert!(s.subst.is_empty());
         }
     }
 }
@@ -36,7 +36,7 @@ fn unify_ty_param_empty_subst1() {
     // Even if a type parameter can map to an instantiantion (due to a ground type on the stack) a
     // non-grounded type on the stack cannot be unified with a particular instantiation.
     assert!(!subst.check_and_add(TypeParameter(1), U64));
-    assert!(subst.instantiation().len() == 2);
+    assert!(subst.subst.len() == 2);
 }
 
 #[test]
@@ -62,7 +62,7 @@ fn unify_ty_param_empty_subst2() {
 
     assert!(!subst.check_and_add(TypeParameter(2), TypeParameter(0)));
     assert!(!subst.check_and_add(TypeParameter(2), TypeParameter(1)));
-    assert!(subst.instantiation().len() == 3);
+    assert!(subst.subst.len() == 3);
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn unify_ty_param_empty_subst3() {
     use SignatureToken::*;
     let mut subst = Subst::new();
     assert!(subst.check_and_add(TypeParameter(1), TypeParameter(0)));
-    assert!(subst.instantiation().len() == 1);
+    assert!(subst.subst.len() == 1);
 }
 
 #[test]

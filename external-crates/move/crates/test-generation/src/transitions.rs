@@ -16,7 +16,7 @@ use move_binary_format::file_format::{
 };
 
 use move_binary_format::file_format::TableIndex;
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::HashMap;
 
 //---------------------------------------------------------------------------
 // Type Instantiations from Unification with the Abstract Stack
@@ -78,11 +78,16 @@ impl Subst {
         }
     }
 
-    /// Return the instantiation from the substitution that has been built.
-    pub fn instantiation(self) -> Vec<SignatureToken> {
-        let mut vec = self.subst.into_iter().collect::<Vec<_>>();
-        vec.sort_by(|a, b| a.0.cmp(&b.0));
-        vec.into_iter().map(|x| x.1).collect()
+    /// Return the instantiation (a type argument per type parameter) from the substitution that
+    /// has been built. `arity` is the number of type parameters being instantiated; any type
+    /// parameter for which the substitution has no entry (i.e. it was unconstrained by the values
+    /// on the stack) defaults to `U64`. Building the result by index rather than from the map's
+    /// entries guarantees a full-length, correctly-aligned vector even when the substitution has
+    /// gaps.
+    pub fn instantiation(self, arity: usize) -> Vec<SignatureToken> {
+        (0..arity)
+            .map(|i| self.subst.get(&i).cloned().unwrap_or(SignatureToken::U64))
+            .collect()
     }
 }
 
@@ -451,7 +456,7 @@ pub fn stack_satisfies_struct_instantiation(
     struct_index: StructDefInstantiationIndex,
     exact: bool,
 ) -> (bool, Subst) {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
     if exact {
         stack_satisfies_struct_signature(state, struct_inst.def, Some(struct_inst.type_parameters))
     } else {
@@ -476,6 +481,13 @@ pub fn stack_satisfies_struct_signature(
         .datatype_handle_at(struct_def.struct_handle);
     // Get the type formals for the struct, and the kinds that they expect.
     let type_parameters = shandle.type_parameters.clone();
+    // A non-generic `Pack`/`Unpack` (no instantiation) can only be applied to a non-generic
+    // struct. A generic struct must go through `PackGeneric`/`UnpackGeneric`; constructing it
+    // without an instantiation would produce an ill-formed `Datatype` value whose generic fields
+    // have no type arguments.
+    if instantiation.is_none() && !type_parameters.is_empty() {
+        return (false, Subst::new());
+    }
     let field_tokens = struct_def
         .fields()
         .into_iter()
@@ -534,23 +546,14 @@ pub fn get_struct_instantiation_for_state(
         );
     }
     let struct_index = struct_inst.def;
-    let mut partial_instantiation = stack_satisfies_struct_signature(state, struct_index, None).1;
+    let partial_instantiation = stack_satisfies_struct_signature(state, struct_index, None).1;
     let struct_def = state.module.module.struct_def_at(struct_index);
     let shandle = state
         .module
         .module
         .datatype_handle_at(struct_def.struct_handle);
-    let typs = &shandle.type_parameters;
-    for (index, type_param) in typs.iter().enumerate() {
-        if let Entry::Vacant(e) = partial_instantiation.subst.entry(index) {
-            if type_param.constraints.has_key() {
-                unimplemented!("[Struct Instantiation] Need to fill in resource type params");
-            } else {
-                e.insert(SignatureToken::U64);
-            }
-        }
-    }
-    (struct_index, partial_instantiation.instantiation())
+    let arity = shandle.type_parameters.len();
+    (struct_index, partial_instantiation.instantiation(arity))
 }
 
 /// Determine if a struct (of the given signature) is at the top of the stack
@@ -563,14 +566,20 @@ pub fn stack_has_struct(state: &AbstractState, struct_index: StructDefinitionInd
         match struct_value.token {
             SignatureToken::Datatype(struct_handle) => {
                 let struct_def = state.module.module.struct_def_at(struct_index);
-                return struct_handle == struct_def.struct_handle;
+                // Non-generic `Unpack` only applies to non-generic structs; a generic struct must
+                // be unpacked with `UnpackGeneric`.
+                let is_generic = !state
+                    .module
+                    .module
+                    .datatype_handle_at(struct_def.struct_handle)
+                    .type_parameters
+                    .is_empty();
+                return !is_generic && struct_handle == struct_def.struct_handle;
             }
-            SignatureToken::DatatypeInstantiation(struct_inst) => {
-                let (struct_handle, _) = *struct_inst;
-                let struct_def = state.module.module.struct_def_at(struct_index);
-                return struct_handle == struct_def.struct_handle;
-            }
-            SignatureToken::Bool
+            // A `DatatypeInstantiation` is a *generic* struct instance; it can only be unpacked
+            // with `UnpackGeneric`, not the non-generic `Unpack` this predicate guards.
+            SignatureToken::DatatypeInstantiation(_)
+            | SignatureToken::Bool
             | SignatureToken::U8
             | SignatureToken::U64
             | SignatureToken::U128
@@ -592,8 +601,19 @@ pub fn stack_has_struct_inst(
     state: &AbstractState,
     struct_index: StructDefInstantiationIndex,
 ) -> bool {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
-    stack_has_struct(state, struct_inst.def)
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
+    let def = struct_inst.def;
+    // `UnpackGeneric` requires a generic struct *instance* on top of the stack (a
+    // `DatatypeInstantiation`); a plain `Datatype` cannot be unpacked generically.
+    if state.stack_len() > 0
+        && let Some(struct_value) = state.stack_peek(0)
+        && let SignatureToken::DatatypeInstantiation(inst) = &struct_value.token
+    {
+        let (struct_handle, _) = &**inst;
+        let struct_def = state.module.module.struct_def_at(def);
+        return *struct_handle == struct_def.struct_handle;
+    }
+    false
 }
 
 /// Determine if a struct at the given index is a resource
@@ -624,7 +644,7 @@ pub fn struct_inst_abilities(
     state: &AbstractState,
     struct_index: StructDefInstantiationIndex,
 ) -> AbilitySet {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
     let type_args = state
         .module
         .module
@@ -636,17 +656,39 @@ pub fn stack_struct_has_field_inst(
     state: &AbstractState,
     field_index: FieldInstantiationIndex,
 ) -> bool {
-    let field_inst = state.module.module.field_instantiation_at(field_index);
-    stack_struct_has_field(state, field_inst.handle)
+    let field_inst = state.module.field_instantiantiation_at(field_index);
+    stack_struct_has_field_impl(state, field_inst.handle, true)
 }
 
 pub fn stack_struct_has_field(state: &AbstractState, field_index: FieldHandleIndex) -> bool {
+    stack_struct_has_field_impl(state, field_index, false)
+}
+
+/// Determine whether the reference on top of the stack is to a struct that owns the field at
+/// `field_index`. The `generic` flag selects which field-borrow opcode is being checked: the
+/// non-generic opcodes (`MutBorrowField`/`ImmBorrowField`) require a non-generic owner struct, and
+/// the generic opcodes (`*FieldGeneric`) require a generic owner. Mixing them up is rejected by the
+/// verifier with `GENERIC_MEMBER_OPCODE_MISMATCH`.
+fn stack_struct_has_field_impl(
+    state: &AbstractState,
+    field_index: FieldHandleIndex,
+    generic: bool,
+) -> bool {
     let field_handle = state.module.module.field_handle_at(field_index);
+    let struct_def = state.module.module.struct_def_at(field_handle.owner);
+    let owner_is_generic = !state
+        .module
+        .module
+        .datatype_handle_at(struct_def.struct_handle)
+        .type_parameters
+        .is_empty();
+    if owner_is_generic != generic {
+        return false;
+    }
     if let Some(struct_handle_index) = state
         .stack_peek(0)
         .and_then(|abstract_value| get_struct_handle_from_reference(&abstract_value.token))
     {
-        let struct_def = state.module.module.struct_def_at(field_handle.owner);
         return struct_handle_index == struct_def.struct_handle;
     }
     false
@@ -691,10 +733,7 @@ pub fn stack_struct_inst_popn(
     state: &AbstractState,
     struct_inst_index: StructDefInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let struct_inst = state
-        .module
-        .module
-        .struct_instantiation_at(struct_inst_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_inst_index);
     stack_struct_popn(state, struct_inst.def)
 }
 
@@ -717,7 +756,7 @@ pub fn create_struct_from_inst(
     state: &AbstractState,
     struct_index: StructDefInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
     create_struct(state, struct_inst.def, Some(struct_inst.type_parameters))
 }
 
@@ -793,7 +832,7 @@ pub fn stack_unpack_struct_inst(
     state: &AbstractState,
     struct_index: StructDefInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
     stack_unpack_struct(state, struct_inst.def, Some(struct_inst.type_parameters))
 }
 
@@ -871,7 +910,7 @@ pub fn stack_struct_borrow_field_inst(
     state: &AbstractState,
     field_index: FieldInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let field_inst = state.module.module.field_instantiation_at(field_index);
+    let field_inst = state.module.field_instantiantiation_at(field_index);
     stack_struct_borrow_field(state, field_inst.handle)
 }
 
@@ -956,12 +995,11 @@ pub fn stack_satisfies_function_signature(
     state: &AbstractState,
     function_index: FunctionHandleIndex,
 ) -> (bool, Subst) {
-    let state_copy = state.clone();
-    let function_handle = state_copy.module.module.function_handle_at(function_index);
+    let function_handle = state.module.module.function_handle_at(function_index);
     let type_parameters = &function_handle.type_parameters;
     let mut satisfied = true;
     let mut substitution = Subst::new();
-    let parameters = &state_copy.module.module.signatures()[function_handle.parameters.0 as usize];
+    let parameters = &state.module.module.signatures()[function_handle.parameters.0 as usize];
     for (i, parameter) in parameters.0.iter().rev().enumerate() {
         let has = if let SignatureToken::TypeParameter(idx) = parameter {
             if stack_has_all_abilities(state, i, type_parameters[*idx as usize]) {
@@ -989,11 +1027,29 @@ pub fn stack_satisfies_function_inst_signature(
     state: &AbstractState,
     function_index: FunctionInstantiationIndex,
 ) -> (bool, Subst) {
-    let func_inst = state
-        .module
-        .module
-        .function_instantiation_at(function_index);
+    let func_inst = state.module.function_instantiantiation_at(function_index);
     stack_satisfies_function_signature(state, func_inst.handle)
+}
+
+/// Whether the function at `function_index` is generic (declares type parameters). The non-generic
+/// `Call` opcode requires a non-generic function and `CallGeneric` requires a generic one;
+/// otherwise the verifier rejects with `GENERIC_MEMBER_OPCODE_MISMATCH`.
+pub fn function_is_generic(state: &AbstractState, function_index: FunctionHandleIndex) -> bool {
+    !state
+        .module
+        .module
+        .function_handle_at(function_index)
+        .type_parameters
+        .is_empty()
+}
+
+/// Whether the function referenced by the instantiation at `function_index` is generic.
+pub fn function_inst_is_generic(
+    state: &AbstractState,
+    function_index: FunctionInstantiationIndex,
+) -> bool {
+    let func_inst = state.module.function_instantiantiation_at(function_index);
+    function_is_generic(state, func_inst.handle)
 }
 
 /// Whether the function acquires any global resources or not
@@ -1030,10 +1086,7 @@ pub fn stack_function_inst_call(
     state: &AbstractState,
     function_index: FunctionInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let func_inst = state
-        .module
-        .module
-        .function_instantiation_at(function_index);
+    let func_inst = state.module.function_instantiantiation_at(function_index);
     stack_function_call(state, func_inst.handle, Some(func_inst.type_parameters))
 }
 
@@ -1041,23 +1094,11 @@ pub fn get_function_instantiation_for_state(
     state: &AbstractState,
     function_index: FunctionInstantiationIndex,
 ) -> (FunctionHandleIndex, Vec<SignatureToken>) {
-    let func_inst = state
-        .module
-        .module
-        .function_instantiation_at(function_index);
-    let mut partial_instantiation = stack_satisfies_function_signature(state, func_inst.handle).1;
+    let func_inst = state.module.function_instantiantiation_at(function_index);
+    let partial_instantiation = stack_satisfies_function_signature(state, func_inst.handle).1;
     let function_handle = state.module.module.function_handle_at(func_inst.handle);
-    let typs = &function_handle.type_parameters;
-    for (index, abilities) in typs.iter().enumerate() {
-        if let Entry::Vacant(e) = partial_instantiation.subst.entry(index) {
-            if abilities.has_key() {
-                unimplemented!("[Struct Instantiation] Need to fill in resource type params");
-            } else {
-                e.insert(SignatureToken::U64);
-            }
-        }
-    }
-    (func_inst.handle, partial_instantiation.instantiation())
+    let arity = function_handle.type_parameters.len();
+    (func_inst.handle, partial_instantiation.instantiation(arity))
 }
 
 /// Pop the number of stack values required to call the function
@@ -1081,10 +1122,7 @@ pub fn stack_function_inst_popn(
     state: &AbstractState,
     function_index: FunctionInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let func_inst = state
-        .module
-        .module
-        .function_instantiation_at(function_index);
+    let func_inst = state.module.function_instantiantiation_at(function_index);
     stack_function_popn(state, func_inst.handle)
 }
 
@@ -1436,6 +1474,20 @@ macro_rules! state_stack_satisfies_function_signature {
 macro_rules! state_stack_satisfies_function_inst_signature {
     ($e: expr) => {
         Box::new(move |state| stack_satisfies_function_inst_signature(state, $e).0)
+    };
+}
+
+#[macro_export]
+macro_rules! state_function_is_not_generic {
+    ($e: expr) => {
+        Box::new(move |state| !function_is_generic(state, $e))
+    };
+}
+
+#[macro_export]
+macro_rules! state_function_inst_is_generic {
+    ($e: expr) => {
+        Box::new(move |state| function_inst_is_generic(state, $e))
     };
 }
 
