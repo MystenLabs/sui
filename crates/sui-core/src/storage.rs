@@ -659,7 +659,25 @@ impl ReadStore for RpcStoreReadStore {
     }
 
     fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint> {
-        self.rocks.get_latest_checkpoint()
+        let latest = self.rocks.get_latest_checkpoint()?;
+        // Bound the reported tip to what the live-object index has committed.
+        // The embedded indexer follows the tip asynchronously, so without this
+        // the rpc-api could surface a checkpoint -- and the transactions in it
+        // -- whose indexed state (owned objects, balances, coins) is not yet
+        // readable, breaking read-after-write consistency. The history cohort
+        // backfills independently and bounds the ledger-history APIs
+        // separately, so it does not constrain this tip.
+        match self.reader.highest_live_committed_checkpoint()? {
+            Some(indexed) if indexed < latest.sequence_number => self
+                .rocks
+                .get_checkpoint_by_sequence_number(indexed)
+                .ok_or_else(|| {
+                    StorageError::missing(format!(
+                        "live-indexed checkpoint {indexed} missing from the checkpoint store"
+                    ))
+                }),
+            _ => Ok(latest),
+        }
     }
 
     fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint> {
