@@ -6,7 +6,7 @@ services:
     container_name: validator
     image: mysten/sui-node:${SUI_SHA} # UPDATE HERE
     environment:
-      - RUST_BACKTRACE=1
+      - RUST_BACKTRACE=full
       - RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
     labels:
       org.label-schema.name: "validator"
