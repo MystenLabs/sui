@@ -69,6 +69,46 @@ public fun exists_with_type<K: copy + drop, V: drop>(_: Permit<K>, key: K, _: &T
     exists_with_type_impl<V>(hash_type_and_key(key))
 }
 
+// === Macro Functions ===
+
+/// A wrapper for `add` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryAlreadyExists` if there is already an entry for `$key`, regardless of its
+/// value type.
+public macro fun internal_add<$K: copy + drop, $V: drop>(
+    $key: $K,
+    $value: $V,
+    $ctx: &mut TxContext,
+) {
+    add(permit(internal::permit<$K>()), $key, $value, $ctx)
+}
+
+/// A wrapper for `read` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryDoesNotExist` if there is no entry for `$key`.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_read<$K: copy + drop, $V: drop>($key: $K, $ctx: &TxContext): $V {
+    read<$K, $V>(permit(internal::permit<$K>()), $key, $ctx)
+}
+
+/// A wrapper for `remove` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryDoesNotExist` if there is no entry for `$key`.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_remove<$K: copy + drop, $V: drop>($key: $K, $ctx: &mut TxContext): $V {
+    remove<$K, $V>(permit(internal::permit<$K>()), $key, $ctx)
+}
+
+/// A wrapper for `exists` that constructs the `Permit<$K>` directly.
+public macro fun internal_exists<$K: copy + drop>($key: $K, $ctx: &TxContext): bool {
+    exists(permit(internal::permit<$K>()), $key, $ctx)
+}
+
+/// A wrapper for `exists_with_type` that constructs the `Permit<$K>` directly.
+public macro fun internal_exists_with_type<$K: copy + drop, $V: drop>(
+    $key: $K,
+    $ctx: &TxContext,
+): bool {
+    exists_with_type<$K, $V>(permit(internal::permit<$K>()), $key, $ctx)
+}
+
 /// Hashes the type and value of `k` against `DUMMY_ROOT` to produce the address identifying its
 /// scratch entry.
 fun hash_type_and_key<K: copy + drop>(k: K): address {
