@@ -3,7 +3,7 @@
 
 //! Adapter that exposes [`RpcStoreSchema`] through the trait stack
 //! `sui-rpc-api` consumes — [`ObjectStore`], [`ReadStore`],
-//! [`ChildObjectResolver`], [`RpcStateReader`], and [`RpcIndexes`].
+//! [`RuntimeObjectResolver`], [`RpcStateReader`], and [`RpcIndexes`].
 //!
 //! The adapter type, [`RpcStoreReader`], is generic over a
 //! [`Reader`] so a single struct serves both tip reads (`R = Db`)
@@ -15,7 +15,7 @@
 //!
 //! [`ObjectStore`]: sui_types::storage::ObjectStore
 //! [`ReadStore`]: sui_types::storage::ReadStore
-//! [`ChildObjectResolver`]: sui_types::storage::ChildObjectResolver
+//! [`RuntimeObjectResolver`]: sui_types::storage::RuntimeObjectResolver
 //! [`RpcStateReader`]: sui_types::storage::RpcStateReader
 //! [`RpcIndexes`]: sui_types::storage::RpcIndexes
 //! [`Reader`]: sui_consistent_store::reader::Reader

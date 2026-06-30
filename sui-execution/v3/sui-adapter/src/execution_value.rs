@@ -14,7 +14,7 @@ use sui_types::{
     execution_status::{CommandArgumentError, ExecutionErrorKind},
     funds_accumulator::Withdrawal,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, StorageView},
+    storage::{BackingPackageStore, RuntimeObjectResolver, StorageView},
     transfer::Receiving,
 };
 
@@ -34,7 +34,7 @@ where
 /// Interface with the store necessary to execute a programmable transaction
 pub trait ExecutionState: StorageView + SuiResolver {
     fn as_sui_resolver(&self) -> &dyn SuiResolver;
-    fn as_child_resolver(&self) -> &dyn ChildObjectResolver;
+    fn as_child_resolver(&self) -> &dyn RuntimeObjectResolver;
 }
 
 impl<T> ExecutionState for T
@@ -46,7 +46,7 @@ where
         self
     }
 
-    fn as_child_resolver(&self) -> &dyn ChildObjectResolver {
+    fn as_child_resolver(&self) -> &dyn RuntimeObjectResolver {
         self
     }
 }

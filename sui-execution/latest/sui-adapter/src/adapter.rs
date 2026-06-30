@@ -34,7 +34,7 @@ mod checked {
         error::{ExecutionError, SuiError},
         execution_status::ExecutionErrorKind,
         metrics::ExecutionMetrics,
-        storage::ChildObjectResolver,
+        storage::RuntimeObjectResolver,
     };
     use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
 
@@ -77,7 +77,7 @@ mod checked {
     }
 
     pub fn new_native_extensions<'r>(
-        child_resolver: &'r dyn ChildObjectResolver,
+        child_resolver: &'r dyn RuntimeObjectResolver,
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
         is_metered: bool,
         protocol_config: &'r ProtocolConfig,
