@@ -24,7 +24,7 @@ use sui_types::{
     object::Owner,
     object::{Data, Object},
     storage::{
-        BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage, WriteKind,
+        BackingPackageStore, ObjectChange, ParentSync, RuntimeObjectResolver, Storage, WriteKind,
     },
     transaction::InputObjects,
     TypeTag,
@@ -960,7 +960,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

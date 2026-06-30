@@ -321,13 +321,13 @@ async fn test_deposits() {
     test_env.cluster.fullnode_handle.sui_node.with(|node| {
 
         let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        let runtime_object_resolver = state.get_runtime_object_resolver().as_ref();
 
         // Ensure that the accumulator root object is considered a read-only InputConsensusObject
         // by the settlement transaction.
         let sui_coin_type = Balance::type_tag(GAS::type_tag());
         let accumulator_object =
-            AccumulatorValue::load_object(child_object_resolver, None, recipient, &sui_coin_type)
+            AccumulatorValue::load_object(runtime_object_resolver, None, recipient, &sui_coin_type)
                 .expect("read cannot fail")
                 .expect("accumulator should exist");
         let settlement_digest = accumulator_object.previous_transaction;
@@ -3001,9 +3001,10 @@ async fn test_get_all_balances() {
     test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let indexes = state.indexes.clone().unwrap();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        let runtime_object_resolver = state.get_runtime_object_resolver().as_ref();
 
-        let balances = get_all_balances_for_owner(sender, child_object_resolver, &indexes).unwrap();
+        let balances =
+            get_all_balances_for_owner(sender, runtime_object_resolver, &indexes).unwrap();
 
         assert_eq!(balances.len(), 2);
         assert!(

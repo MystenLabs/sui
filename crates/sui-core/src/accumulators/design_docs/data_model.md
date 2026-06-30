@@ -118,7 +118,7 @@ Three things to internalize:
 The per-account accumulator object itself is also versioned. Reads can be **version-bounded**:
 
 ```rust
-AccumulatorValue::load(child_object_resolver, version_bound, owner, type_) -> Option<Self>
+AccumulatorValue::load(runtime_object_resolver, version_bound, owner, type_) -> Option<Self>
 ```
 
 This is how `AccountFundsRead::get_account_amount_at_version` works. Version-bounded reads use

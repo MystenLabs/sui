@@ -41,7 +41,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, Storage},
+    storage::{BackingPackageStore, RuntimeObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -113,7 +113,7 @@ pub struct TemporaryStore<'backing> {
     /// digest) at which they were read. Recorded by `check_system_object_available` and
     /// emitted into the transaction effects as read-only consensus objects so the read can be
     /// reproduced on replay. Interior-mutable because reads happen behind `&self`
-    /// (`ChildObjectResolver`).
+    /// (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
     /// Recorded when execution determines the transaction must be retried later rather than
@@ -122,7 +122,7 @@ pub struct TemporaryStore<'backing> {
     /// still runs to completion and produces effects; this signal is carried out on
     /// `InnerTemporaryStore` so the authority can discard those effects and re-enqueue. A
     /// `OnceCell` rather than a lock: execution is single-threaded, and the condition is detected
-    /// behind `&self` (`ChildObjectResolver`), so the field must be interior-mutable; it is
+    /// behind `&self` (`RuntimeObjectResolver`), so the field must be interior-mutable; it is
     /// recorded at most once (the first detection, after which execution unwinds), which
     /// `OnceCell` enforces.
     retry_request: OnceCell<ExecutionRetryError>,
@@ -1058,7 +1058,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

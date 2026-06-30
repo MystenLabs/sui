@@ -22,7 +22,7 @@ use sui_types::{
     base_types::{FullObjectRef, SuiAddress, random_object_ref},
     crypto::{AccountKeyPair, deterministic_random_account_key, get_key_pair_from_rng},
     object::{MoveObject, OBJECT_START_VERSION, Owner},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
 };
 use sui_types::{
     effects::{TestEffectsBuilder, TransactionEffectsAPI},
