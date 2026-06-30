@@ -170,7 +170,7 @@ pub fn reached_range_end(reason: QueryEndReason) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger_history::query_options::QueryType;
+    use sui_rpc_cursor::QueryType;
 
     fn options(ascending: bool) -> QueryOptions {
         let mut request = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();

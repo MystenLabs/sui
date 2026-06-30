@@ -28,6 +28,7 @@ use crate::api::types::checkpoint::filter::cp_by_epoch;
 use crate::api::types::checkpoint::filter::cp_unfiltered;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas::GasCostSummary;
+use crate::api::types::transaction;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::TransactionConnection;
@@ -35,6 +36,7 @@ use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
 use crate::error::RpcError;
+use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
@@ -222,7 +224,7 @@ impl CheckpointContents {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError<transaction::Error>>> {
         async {
             let Some((summary, _, _)) = &self.contents else {
                 return Ok(None);
@@ -249,7 +251,9 @@ impl CheckpointContents {
             }
 
             Ok(Some(
-                Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+                Transaction::paginate(ctx, self.scope.clone(), page, filter)
+                    .await
+                    .map_err(upcast)?,
             ))
         }
         .await

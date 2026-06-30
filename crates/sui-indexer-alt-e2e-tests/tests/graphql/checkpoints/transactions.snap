@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 17 tasks
+processed 12 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -17,12 +17,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "MA==",
-          "endCursor": "MA=="
+          "startCursor": "CAIQARgAIAA=",
+          "endCursor": "CAIQARgAIAA="
         },
         "edges": [
           {
-            "cursor": "MA==",
+            "cursor": "CAIQARgAIAA=",
             "node": {
               "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
               "sender": null
@@ -97,12 +97,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "MQ==",
-          "endCursor": "NQ=="
+          "startCursor": "CAIQARgAIAE=",
+          "endCursor": "CAIQARgAIAU="
         },
         "edges": [
           {
-            "cursor": "MQ==",
+            "cursor": "CAIQARgAIAE=",
             "node": {
               "digest": "5iUmf7DhkKHzsVFoCdD241kkwpeBDBSnq7ThaayXcxk1",
               "sender": {
@@ -111,7 +111,7 @@ Response: {
             }
           },
           {
-            "cursor": "Mg==",
+            "cursor": "CAIQARgAIAI=",
             "node": {
               "digest": "HpVFGU6ushMZyioAfD2eyoRWEPrEGaMsGAdSJCuPbV3y",
               "sender": {
@@ -120,7 +120,7 @@ Response: {
             }
           },
           {
-            "cursor": "Mw==",
+            "cursor": "CAIQARgAIAM=",
             "node": {
               "digest": "3q6y5zRegeqFGYcS267FFFBE18QhFs6sMMmk8R4JShBk",
               "sender": {
@@ -129,7 +129,7 @@ Response: {
             }
           },
           {
-            "cursor": "NA==",
+            "cursor": "CAIQARgAIAQ=",
             "node": {
               "digest": "2zRFPLtJs5ben5iuDUsSYRpf8iLBsMfTg2c8SAQMe51H",
               "sender": {
@@ -138,7 +138,7 @@ Response: {
             }
           },
           {
-            "cursor": "NQ==",
+            "cursor": "CAIQARgAIAU=",
             "node": {
               "digest": "Gy3Fx1BSSCcaW2fEgFxdRq1BiqhebnvfkanGdecRf3eu",
               "sender": {
@@ -152,12 +152,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "MQ==",
-          "endCursor": "Ng=="
+          "startCursor": "CAIQARgAIAE=",
+          "endCursor": "CAIQARgAIAY="
         },
         "edges": [
           {
-            "cursor": "MQ==",
+            "cursor": "CAIQARgAIAE=",
             "node": {
               "digest": "5iUmf7DhkKHzsVFoCdD241kkwpeBDBSnq7ThaayXcxk1",
               "sender": {
@@ -166,7 +166,7 @@ Response: {
             }
           },
           {
-            "cursor": "Mg==",
+            "cursor": "CAIQARgAIAI=",
             "node": {
               "digest": "HpVFGU6ushMZyioAfD2eyoRWEPrEGaMsGAdSJCuPbV3y",
               "sender": {
@@ -175,7 +175,7 @@ Response: {
             }
           },
           {
-            "cursor": "Mw==",
+            "cursor": "CAIQARgAIAM=",
             "node": {
               "digest": "3q6y5zRegeqFGYcS267FFFBE18QhFs6sMMmk8R4JShBk",
               "sender": {
@@ -184,7 +184,7 @@ Response: {
             }
           },
           {
-            "cursor": "NA==",
+            "cursor": "CAIQARgAIAQ=",
             "node": {
               "digest": "2zRFPLtJs5ben5iuDUsSYRpf8iLBsMfTg2c8SAQMe51H",
               "sender": {
@@ -193,7 +193,7 @@ Response: {
             }
           },
           {
-            "cursor": "NQ==",
+            "cursor": "CAIQARgAIAU=",
             "node": {
               "digest": "Gy3Fx1BSSCcaW2fEgFxdRq1BiqhebnvfkanGdecRf3eu",
               "sender": {
@@ -202,7 +202,7 @@ Response: {
             }
           },
           {
-            "cursor": "Ng==",
+            "cursor": "CAIQARgAIAY=",
             "node": {
               "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
               "sender": null
@@ -215,173 +215,6 @@ Response: {
 }
 
 task 11, lines 77-92:
-//# run-graphql --cursors 1
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "Fu4fFRc6qhFANg2jCMnYvBJTyZox9qt59Gf7Qw29oTC7",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": true,
-          "hasNextPage": true,
-          "startCursor": "Mg==",
-          "endCursor": "NA=="
-        },
-        "edges": [
-          {
-            "cursor": "Mg=="
-          },
-          {
-            "cursor": "Mw=="
-          },
-          {
-            "cursor": "NA=="
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 12, lines 94-109:
-//# run-graphql --cursors 1 5
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "Fu4fFRc6qhFANg2jCMnYvBJTyZox9qt59Gf7Qw29oTC7",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": true,
-          "hasNextPage": true,
-          "startCursor": "Mg==",
-          "endCursor": "Mw=="
-        },
-        "edges": [
-          {
-            "cursor": "Mg==",
-            "node": {
-              "digest": "HpVFGU6ushMZyioAfD2eyoRWEPrEGaMsGAdSJCuPbV3y",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          },
-          {
-            "cursor": "Mw==",
-            "node": {
-              "digest": "3q6y5zRegeqFGYcS267FFFBE18QhFs6sMMmk8R4JShBk",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 13, lines 111-126:
-//# run-graphql --cursors 1 5
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "Fu4fFRc6qhFANg2jCMnYvBJTyZox9qt59Gf7Qw29oTC7",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": true,
-          "hasNextPage": true,
-          "startCursor": "Mw==",
-          "endCursor": "NA=="
-        },
-        "edges": [
-          {
-            "cursor": "Mw==",
-            "node": {
-              "digest": "3q6y5zRegeqFGYcS267FFFBE18QhFs6sMMmk8R4JShBk",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          },
-          {
-            "cursor": "NA==",
-            "node": {
-              "digest": "2zRFPLtJs5ben5iuDUsSYRpf8iLBsMfTg2c8SAQMe51H",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 14, lines 128-143:
-//# run-graphql --cursors 3
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "Fu4fFRc6qhFANg2jCMnYvBJTyZox9qt59Gf7Qw29oTC7",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": false,
-          "hasNextPage": true,
-          "startCursor": "MQ==",
-          "endCursor": "Mg=="
-        },
-        "edges": [
-          {
-            "cursor": "MQ==",
-            "node": {
-              "digest": "5iUmf7DhkKHzsVFoCdD241kkwpeBDBSnq7ThaayXcxk1",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          },
-          {
-            "cursor": "Mg==",
-            "node": {
-              "digest": "HpVFGU6ushMZyioAfD2eyoRWEPrEGaMsGAdSJCuPbV3y",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 15, lines 145-160:
-//# run-graphql --cursors 6
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "Fu4fFRc6qhFANg2jCMnYvBJTyZox9qt59Gf7Qw29oTC7",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": false,
-          "hasNextPage": false,
-          "startCursor": null,
-          "endCursor": null
-        },
-        "edges": []
-      }
-    }
-  }
-}
-
-task 16, lines 162-177:
 //# run-graphql
 Response: {
   "data": {
