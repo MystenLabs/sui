@@ -1243,6 +1243,23 @@ type BundleResults = Vec<(
     anyhow::Result<Vec<(TransactionDigest, BundleItemResponse)>>,
 )>;
 
+/// Whether a reject vote should be retried rather than counted as a permanent failure.
+///
+/// `InvalidWithdrawReservation` on the (un-sequenced) signing/voting path is transient: a validator
+/// can vote before a freshly credited address balance has settled on its local view, so the
+/// withdraw reservation check sees a stale amount. The reservation check is best-effort and clients
+/// are expected to retry (the fullnode execute path treats it as retryable in `is_retryable_sdk_error`).
+fn rejection_is_retriable(error: &sui_types::error::SuiError) -> bool {
+    use sui_types::error::{SuiErrorKind, UserInputError};
+    error.individual_error_indicates_epoch_change()
+        || matches!(
+            error.as_inner(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::InvalidWithdrawReservation { .. }
+            }
+        )
+}
+
 fn process_bundle_results(
     num_txs: usize,
     mut payload: Box<dyn Payload>,
@@ -1300,8 +1317,7 @@ fn process_bundle_results(
                             }
                             WaitForEffectsResponse::Rejected { error } => {
                                 if let Some(error) = error {
-                                    let is_retriable =
-                                        error.individual_error_indicates_epoch_change();
+                                    let is_retriable = rejection_is_retriable(&error);
                                     let error_str = format!("{:?}", error);
                                     if is_retriable {
                                         BatchedTransactionStatus::RetriableFailure {
