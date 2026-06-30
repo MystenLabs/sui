@@ -120,38 +120,37 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
-        cursor: Option<ObjectID>,
+        cursor: Option<DynamicFieldKey>,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
-        // Dynamic fields are `Field<Name, Value>` objects whose
-        // owner is `Owner::ObjectOwner(parent_id_as_address)`. A
-        // prefix scan on `object_by_owner` with
-        // `(ObjectOwner, parent)` enumerates them.
-        let iter = self
-            .schema()
-            .iter_objects_owned_by_object(parent.into())
-            .map_err(sui_types::storage::error::Error::custom)?;
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        // Dynamic fields are `Field<Name, Value>` objects owned (in the
+        // object-owner sense) by `parent`, so they share the `object_by_owner`
+        // index with address-owned objects. The cursor carries the field's
+        // type and id -- its full sort position -- so the scan seeks straight
+        // to it. Field objects are never coins, so the balance component is
+        // always absent.
+        let map = &self.schema().object_by_owner;
+        let kind = OwnerKind::ObjectOwner(parent.into());
+        let from = cursor.map(|c| Key {
+            kind,
+            type_: c.object_type,
+            inverted_balance: None,
+            object_id: c.field_id,
+        });
+        let iter = match &from {
+            Some(from) => map.iter_prefix_from(&kind, from),
+            None => map.iter_prefix(&kind),
+        }
+        .map_err(sui_types::storage::error::Error::custom)?;
 
-        let mapped = iter
-            .map(move |row| {
-                let (key, _value) = row.map_err(to_typed_store_err)?;
-                Ok(DynamicFieldKey {
-                    parent,
-                    field_id: key.object_id,
-                })
+        let mapped = iter.map(move |row| {
+            let (key, _value) = row.map_err(to_typed_store_err)?;
+            Ok(DynamicFieldKey {
+                parent,
+                field_id: key.object_id,
+                object_type: key.type_,
             })
-            // Skip-past-cursor: the page token is the first field of the next
-            // page (see the `list_dynamic_fields` handler), so drop rows until
-            // we reach it -- identified by its globally unique field (object)
-            // id -- and then resume inclusively. The scan restarts from the
-            // start of the parent's fields each page, so a `==` predicate would
-            // skip nothing and every page would re-yield from the beginning,
-            // duplicating fields across pages.
-            .skip_while(
-                move |entry: &Result<DynamicFieldKey, TypedStoreError>| match entry {
-                    Ok(info) => cursor.map(|c| info.field_id != c).unwrap_or(false),
-                    Err(_) => false,
-                },
-            );
+        });
 
         Ok(Box::new(mapped))
     }
@@ -802,7 +801,7 @@ mod tests {
                     None => break,
                 }
             }
-            cursor = iter.next().transpose().unwrap().map(|k| k.field_id);
+            cursor = iter.next().transpose().unwrap();
             if cursor.is_none() {
                 break;
             }
