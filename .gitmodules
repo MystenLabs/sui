@@ -1,0 +1,18 @@
+[submodule "ethereum/bridge/lib/chainlink-brownie-contracts"]
+	path = ethereum/bridge/lib/chainlink-brownie-contracts
+	url = https://github.com/smartcontractkit/chainlink-brownie-contracts
+[submodule "ethereum/bridge/lib/solmate"]
+	path = ethereum/bridge/lib/solmate
+	url = https://github.com/rari-capital/solmate
+[submodule "ethereum/bridge/lib/forge-std"]
+	path = ethereum/bridge/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "ethereum/bridge/lib/ds-test"]
+	path = ethereum/bridge/lib/ds-test
+	url = https://github.com/dapphub/ds-test
+[submodule "ethereum/bridge/lib/openzeppelin-contracts"]
+	path = ethereum/bridge/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "ethereum/bridge/lib/openzeppelin-upgrades"]
+	path = ethereum/bridge/lib/openzeppelin-upgrades
+	url = https://github.com/OpenZeppelin/openzeppelin-upgrades
