@@ -38,15 +38,16 @@ pub(crate) type ResolvedCp = (u64, CheckpointData, Vec<TransactionData>, ObjectM
 /// and deduplicated by a request-scoped `ObjectCache`, overlapping with the
 /// still-arriving upstream. The cache is owned by the returned stream, so its
 /// in-flight dispatches abort if the consumer drops the stream.
-pub(crate) fn with_object_maps<I>(
-    upstream: BoxStream<'static, Result<Watermarked<I>, anyhow::Error>>,
+pub(crate) fn with_object_maps<I, E>(
+    upstream: BoxStream<'static, Result<Watermarked<I>, E>>,
     client: BigTableClient,
     objects_stage: ResolvedStageConfig,
     needs_objects: bool,
     keys_of: impl Fn(&I) -> Vec<ObjectKey> + Send + 'static,
-) -> BoxStream<'static, Result<Watermarked<(I, ObjectMap)>, anyhow::Error>>
+) -> BoxStream<'static, Result<Watermarked<(I, ObjectMap)>, E>>
 where
     I: Send + 'static,
+    E: From<anyhow::Error> + Send + 'static,
 {
     if needs_objects {
         let object_cache = ObjectCache::new(Arc::new(BigTableObjectFetcher::new(client)));
@@ -69,7 +70,7 @@ where
                     object_cache
                         .get_many(keys)
                         .await
-                        .map_err(anyhow::Error::new)
+                        .map_err(|e| E::from(anyhow::Error::new(e)))
                 }
             },
         )
@@ -88,14 +89,16 @@ where
 /// Resolve a stream of `(cp_seq, CheckpointData)` into
 /// `(cp_seq, cp_data, txs, objects)`. Stage C fetches each chunk's
 /// transactions; stage D attaches their objects. Shared by `get_checkpoint`
-/// (single lookup) and the list-checkpoints handler (range scan).
-pub(crate) fn resolve_checkpoints(
+pub(crate) fn resolve_checkpoints<E>(
     client: BigTableClient,
     read_mask: &FieldMaskTree,
     transactions_stage: ResolvedStageConfig,
     objects_stage: ResolvedStageConfig,
-    cp_data_stream: BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, anyhow::Error>>,
-) -> BoxStream<'static, Result<Watermarked<ResolvedCp>, anyhow::Error>> {
+    cp_data_stream: BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, E>>,
+) -> BoxStream<'static, Result<Watermarked<ResolvedCp>, E>>
+where
+    E: From<anyhow::Error> + Send + 'static,
+{
     let tx_columns: Arc<[&'static str]> = list_transactions_columns(read_mask).into();
     let needs_objects = read_mask.contains(Checkpoint::OBJECTS_FIELD);
 
@@ -110,7 +113,16 @@ pub(crate) fn resolve_checkpoints(
         {
             let client = client.clone();
             let columns = tx_columns.clone();
-            move |items| fetch_transactions_for_cps(client.clone(), columns.clone(), items)
+            move |items| {
+                let client = client.clone();
+                let columns = columns.clone();
+                async move {
+                    fetch_transactions_for_cps(client, columns, items)
+                        .await
+                        .map(|s| s.map_err(E::from).boxed())
+                        .map_err(E::from)
+                }
+            }
         },
     );
 

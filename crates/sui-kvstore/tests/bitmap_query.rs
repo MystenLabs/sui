@@ -69,12 +69,14 @@ fn bitmap_query_stream(
         |_| {},
     );
     use futures::TryStreamExt;
-    stream.try_filter_map(|m| async move {
-        Ok(match m {
-            Watermarked::Item(v) => Some(v),
-            Watermarked::Watermark(_) => None,
+    stream
+        .map_err(anyhow::Error::new)
+        .try_filter_map(|m| async move {
+            Ok(match m {
+                Watermarked::Item(v) => Some(v),
+                Watermarked::Watermark(_) => None,
+            })
         })
-    })
 }
 
 /// Write a bitmap index entry directly. Serializes a RoaringBitmap containing
