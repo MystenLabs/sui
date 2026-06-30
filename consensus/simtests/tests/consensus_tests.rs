@@ -340,6 +340,219 @@ mod consensus_tests {
         );
     }
 
+    /// Multi-node test for the `enforce_transaction_vote_dependencies` feature with the flag ON.
+    ///
+    /// When the flag is ON, a block's transaction-vote targets become additional acceptance
+    /// dependencies in `BlockManager`. In honest operation a block's vote targets are always within
+    /// its causal history (votes are derived from `link_causal_history` of the block's ancestors),
+    /// so the targets are present by the time the voting block is accepted and the enforcement is a
+    /// no-op for liveness. This test stands up a live, all-honest committee and asserts:
+    ///   (a) consensus stays LIVE: commits advance well past genesis on every authority;
+    ///   (b) blocks carrying transaction-votes on present targets are accepted, and the enforcement
+    ///       processes real vote targets (not a trivially-empty set): the deterministic verifier
+    ///       rejects half the transactions, so finalized commits carry reject votes -- the V2
+    ///       transaction-votes whose targets BlockManager treats as acceptance dependencies;
+    ///   (d) parity: the flag-ON run commits the SAME set of transactions as an identical flag-OFF
+    ///       control run (the enforcement neither drops nor stalls any transaction).
+    ///
+    /// The deterministic suspend -> arrive -> unsuspend path (c) is covered by the
+    /// `enforce_transaction_vote_dependencies_suspends_then_unsuspends` unit test in
+    /// `consensus/core/src/block_manager.rs`, which can withhold a specific vote target; in a live
+    /// honest committee a vote target is never absent (see above), so that path cannot be forced
+    /// here without injecting Byzantine behavior.
+    #[sim_test(config = "test_config()")]
+    async fn test_enforce_transaction_vote_dependencies_liveness_and_parity() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+
+        // A fixed, deterministic workload so the committed transaction set is well-defined and can
+        // be compared across the flag-OFF and flag-ON runs.
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const NUM_TRANSACTIONS: u16 = 400;
+
+        // Control run with the flag OFF, then the run under test with the flag ON.
+        let (off_committed, off_reject_voted_blocks) =
+            run_vote_dependency_workload(NUM_OF_AUTHORITIES, NUM_TRANSACTIONS, false).await;
+        let (on_committed, on_reject_voted_blocks) =
+            run_vote_dependency_workload(NUM_OF_AUTHORITIES, NUM_TRANSACTIONS, true).await;
+
+        // (d) Parity: both runs commit the full submitted transaction set, and the two committed
+        // sets are identical. Enforcement neither drops nor stalls any transaction.
+        let expected: std::collections::BTreeSet<Vec<u8>> = (0..NUM_TRANSACTIONS)
+            .map(vote_dependency_transaction)
+            .collect();
+        assert_eq!(
+            off_committed, expected,
+            "flag-OFF control should commit every submitted transaction"
+        );
+        assert_eq!(
+            on_committed, expected,
+            "flag-ON run should commit every submitted transaction"
+        );
+        assert_eq!(
+            on_committed, off_committed,
+            "flag-ON and flag-OFF runs must commit the same transaction set (parity)"
+        );
+
+        // (b) The enforcement path is exercised on real targets, not trivially bypassed: the
+        // deterministic verifier rejects half the transactions, so finalized commits carry reject
+        // votes. Reject votes are the V2 transaction-votes whose targets BlockManager treats as
+        // acceptance dependencies under the flag; a positive count proves the flag-ON run processed
+        // real, present vote targets end-to-end rather than an empty vote set.
+        assert!(
+            on_reject_voted_blocks > 0,
+            "flag-ON run should commit blocks with reject votes so the enforcement path processes \
+             real vote targets"
+        );
+        // Sanity: the control run also produced reject votes, confirming the workload exercises V2
+        // transaction-voting in both configurations.
+        assert!(
+            off_reject_voted_blocks > 0,
+            "flag-OFF control should also produce reject votes"
+        );
+    }
+
+    /// The deterministic payload for transaction `i` in the vote-dependency workload.
+    fn vote_dependency_transaction(i: u16) -> Vec<u8> {
+        let mut txn = vec![0u8; 16];
+        txn[0..2].copy_from_slice(&i.to_le_bytes());
+        txn
+    }
+
+    /// Runs a live committee with `enforce_transaction_vote_dependencies` set to `enforce`, submits
+    /// a fixed deterministic set of `num_transactions`, and drains finalized commits until all of
+    /// them are committed.
+    ///
+    /// Returns the set of committed transaction payloads and the number of committed blocks whose
+    /// transactions received reject votes. (a) Liveness is asserted internally: every authority must
+    /// advance commits, and the drain must complete within the timeout.
+    async fn run_vote_dependency_workload(
+        num_of_authorities: usize,
+        num_transactions: u16,
+        enforce: bool,
+    ) -> (std::collections::BTreeSet<Vec<u8>>, usize) {
+        // Each transaction whose first byte is odd is deterministically rejected, so V2 blocks carry
+        // reject votes on real, present targets in both the flag-ON and flag-OFF runs.
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_of_authorities]);
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        // Use a generous GC depth and pace submissions (below) so that, in this all-honest
+        // committee, every submitted transaction is committed on a finalized subdag rather than
+        // garbage-collected. This makes the "commit the full submitted set" parity check reliable.
+        protocol_config.set_gc_depth_for_testing(30);
+        // transaction_voting_enabled is already true in for_testing(), so V2 transaction-votes are
+        // produced. Opt this run into the enforcement under test.
+        protocol_config.set_enforce_transaction_vote_dependencies_for_testing(enforce);
+        assert_eq!(
+            protocol_config.enforce_transaction_vote_dependencies(),
+            enforce
+        );
+        assert!(
+            protocol_config.transaction_voting_enabled(),
+            "V2 transaction-votes must be enabled for this test"
+        );
+
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut transaction_clients = Vec::with_capacity(committee.size());
+
+        for (authority_index, _authority_info) in committee.authorities() {
+            let db_dir = Arc::new(TempDir::new().unwrap());
+            let mut params = default_parameters();
+            params.db_path = db_dir.path().to_path_buf();
+
+            let config = Config {
+                authority_index,
+                db_dir,
+                committee: committee.clone(),
+                keypairs: keypairs.clone(),
+                boot_counter: 0,
+                protocol_config: protocol_config.clone(),
+                clock_drift: 0,
+                transaction_verifier: Arc::new(DeterministicRejectVerifier {}),
+                parameters: params,
+                observer_network_keypair: None,
+                observer_ip: None,
+            };
+            let node = AuthorityNode::new(config);
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+            transaction_clients.push(node.transaction_client());
+            authorities.push(node);
+        }
+
+        let mut commit_consumer_receivers = vec![];
+        for authority in &authorities {
+            commit_consumer_receivers.push(authority.commit_consumer_receiver());
+        }
+
+        // Submit the fixed deterministic workload, round-robin across authorities.
+        let transaction_clients_clone = transaction_clients.clone();
+        let submit_handle = tokio::spawn(async move {
+            for i in 0..num_transactions {
+                let txn = vote_dependency_transaction(i);
+                transaction_clients_clone[i as usize % transaction_clients_clone.len()]
+                    .submit(vec![txn])
+                    .await
+                    .unwrap();
+                // Pace submissions so blocks are committed before they age out of the GC window.
+                if i % 8 == 0 {
+                    sleep(Duration::from_millis(50)).await;
+                }
+            }
+        });
+        submit_handle.await.unwrap();
+
+        // Drain finalized commits from every authority until all submitted transactions are
+        // committed, cross-checking that authorities agree on the commit sequence (safety) as we go.
+        let mut committed: std::collections::BTreeSet<Vec<u8>> = std::collections::BTreeSet::new();
+        // Count blocks whose transactions received reject votes. Reject votes are exactly the V2
+        // transaction-votes whose targets the enforcement path treats as acceptance dependencies, so
+        // a positive count proves the enforcement processed real, present vote targets end-to-end
+        // (and was not trivially bypassed). We read the public `rejected_transactions_by_block`
+        // rather than the (crate-private) `transaction_votes()` slice type.
+        let mut reject_voted_blocks = 0usize;
+        let mut highest_commit_index = 0u32;
+        while committed.len() < num_transactions as usize {
+            let mut last_sub_dag_commit_ref = None;
+            for receiver in commit_consumer_receivers.iter_mut() {
+                let sub_dag = timeout(Duration::from_secs(90), receiver.recv())
+                    .await
+                    .expect("Timeout waiting for subdag draining commits")
+                    .expect("Commit consumer closed unexpectedly");
+
+                // Safety: all authorities must output the same commit at each index.
+                if let Some(expected_ref) = last_sub_dag_commit_ref {
+                    assert_eq!(expected_ref, sub_dag.commit_ref);
+                } else {
+                    last_sub_dag_commit_ref = Some(sub_dag.commit_ref);
+                    highest_commit_index = sub_dag.commit_ref.index;
+                    reject_voted_blocks += sub_dag
+                        .rejected_transactions_by_block
+                        .values()
+                        .filter(|rejected| !rejected.is_empty())
+                        .count();
+                    for block in &sub_dag.blocks {
+                        for txn in block.transactions() {
+                            committed.insert(txn.data().to_vec());
+                        }
+                    }
+                }
+            }
+        }
+
+        // (a) Liveness: commits advanced well past genesis.
+        assert!(
+            highest_commit_index > 1,
+            "consensus should advance commits beyond genesis (highest index {highest_commit_index})"
+        );
+
+        for authority in authorities {
+            authority.stop();
+        }
+
+        (committed, reject_voted_blocks)
+    }
+
     // Test with multiple Observer nodes in a chain
     #[sim_test(config = "test_config()")]
     async fn test_observer_chain_connectivity() {
@@ -598,6 +811,31 @@ mod consensus_tests {
                     .unwrap())
             }
             _ => Err(format!("Unsupported multiaddr format: {}", addr)),
+        }
+    }
+
+    // Transaction verifier that votes deterministically by transaction content: a transaction is
+    // rejected iff its first byte is odd. Determinism keeps the produced reject votes identical
+    // across the flag-OFF and flag-ON runs, which is required for the parity assertion.
+    struct DeterministicRejectVerifier {}
+
+    impl TransactionVerifier for DeterministicRejectVerifier {
+        fn verify_batch(&self, _transactions: &[&[u8]]) -> Result<(), ValidationError> {
+            Ok(())
+        }
+
+        fn verify_and_vote_batch(
+            &self,
+            _block_ref: &BlockRef,
+            batch: &[&[u8]],
+        ) -> Result<Vec<TransactionIndex>, ValidationError> {
+            let mut rejected_indices = vec![];
+            for (index, transaction) in batch.iter().enumerate() {
+                if transaction.first().is_some_and(|b| b % 2 == 1) {
+                    rejected_indices.push(index as TransactionIndex);
+                }
+            }
+            Ok(rejected_indices)
         }
     }
 

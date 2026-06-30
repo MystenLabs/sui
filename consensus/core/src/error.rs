@@ -128,6 +128,14 @@ pub enum ConsensusError {
     #[error("Insufficient stake from parents: {parent_stakes} < {quorum}")]
     InsufficientParentStakes { parent_stakes: Stake, quorum: Stake },
 
+    #[error("Block contains too many transaction vote entries: {count} > {limit}")]
+    TooManyTransactionVotes { count: usize, limit: usize },
+
+    #[error(
+        "Transaction vote target round ({target}) should be lower than the block's round ({block})"
+    )]
+    InvalidTransactionVoteRound { target: Round, block: Round },
+
     #[error("Invalid transaction: {0}")]
     InvalidTransaction(String),
 

@@ -146,9 +146,62 @@ impl SignedBlockVerifier {
             });
         }
 
+        // When enabled, perform stateless well-formedness checks on transaction votes. These
+        // mirror the ancestor checks: each voted-on target must have a valid author index and a
+        // round strictly below the block's round, and a target at the genesis round must be a
+        // known genesis block ref. Presence of the target block itself is enforced later as an
+        // acceptance dependency in BlockManager.
+        if self
+            .context
+            .protocol_config
+            .enforce_transaction_vote_dependencies()
+        {
+            self.check_transaction_votes(block)?;
+        }
+
         let batch: Vec<_> = block.transactions().iter().map(|t| t.data()).collect();
 
         self.check_transactions(&batch)
+    }
+
+    /// Stateless validation of a block's `transaction_votes`. Always safe to call: it uses
+    /// `transaction_votes()` (which returns `&[]` on V1) and never `transaction_votes_cutoff_round()`
+    /// (which panics on V1/V2).
+    fn check_transaction_votes(&self, block: &SignedBlock) -> ConsensusResult<()> {
+        let committee = &self.context.committee;
+        let votes = block.transaction_votes();
+
+        // Cap the number of vote entries. Each ancestor can be voted on at most once, and the
+        // number of ancestors is itself bounded by the committee size, so use that as the bound.
+        let max_vote_entries = committee.size();
+        if votes.len() > max_vote_entries {
+            return Err(ConsensusError::TooManyTransactionVotes {
+                count: votes.len(),
+                limit: max_vote_entries,
+            });
+        }
+
+        for vote in votes {
+            let target = &vote.block_ref;
+            if !committee.is_valid_index(target.author) {
+                return Err(ConsensusError::InvalidAuthorityIndex {
+                    index: target.author,
+                    max: committee.size() - 1,
+                });
+            }
+            if target.round >= block.round() {
+                return Err(ConsensusError::InvalidTransactionVoteRound {
+                    target: target.round,
+                    block: block.round(),
+                });
+            }
+            // Mirror the ancestor genesis check: a target at the genesis round must be a known
+            // genesis block ref.
+            if target.round == GENESIS_ROUND && !self.genesis.contains(target) {
+                return Err(ConsensusError::InvalidGenesisAncestor(*target));
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn check_transactions(&self, batch: &[&[u8]]) -> ConsensusResult<()> {
@@ -246,7 +299,7 @@ mod test {
 
     use super::*;
     use crate::{
-        block::{TestBlock, Transaction},
+        block::{BlockTransactionVotes, TestBlock, Transaction},
         context::Context,
         transaction::{TransactionVerifier, ValidationError},
     };
@@ -653,5 +706,174 @@ mod test {
                 Err(ConsensusError::InvalidTransaction(_))
             ));
         }
+    }
+
+    // When `enforce_transaction_vote_dependencies` is ON, malformed transaction-vote refs (invalid
+    // author index, round >= block round, fake genesis ref) and too many vote entries must be
+    // rejected by the verifier. Also verifies that a V2 block carrying transaction_votes never
+    // triggers the cutoff-round panic.
+    #[tokio::test]
+    async fn test_verify_transaction_votes_enforced() {
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_enforce_transaction_vote_dependencies_for_testing(true);
+
+        let (context, keypairs) = Context::new_for_test(4);
+        let context = Arc::new(context.with_protocol_config(protocol_config));
+
+        const AUTHOR: u32 = 2;
+        let author_protocol_keypair = &keypairs[AUTHOR as usize].1;
+        let verifier = SignedBlockVerifier::new(context.clone(), Arc::new(TxnSizeVerifier {}));
+
+        let base_block = TestBlock::new(10, AUTHOR)
+            .set_ancestors_raw(vec![
+                BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
+                BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+                BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+                BlockRef::new(7, AuthorityIndex::new_for_test(3), BlockDigest::MIN),
+            ])
+            .set_transactions(vec![Transaction::new(vec![4; 8])]);
+
+        // A well-formed transaction vote on an earlier-round target passes verification. This is a
+        // V2 block with transaction_votes, exercising the safe `transaction_votes()` path (no
+        // cutoff-round panic).
+        {
+            let block = base_block
+                .clone()
+                .set_transaction_votes(vec![BlockTransactionVotes {
+                    block_ref: BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+                    rejects: vec![0],
+                }])
+                .build();
+            let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            verifier.verify_block(&signed_block).unwrap();
+        }
+
+        // Vote target with an invalid author index is rejected.
+        {
+            let block = base_block
+                .clone()
+                .set_transaction_votes(vec![BlockTransactionVotes {
+                    block_ref: BlockRef::new(9, AuthorityIndex::new_for_test(4), BlockDigest::MIN),
+                    rejects: vec![],
+                }])
+                .build();
+            let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            assert!(matches!(
+                verifier.verify_block(&signed_block),
+                Err(ConsensusError::InvalidAuthorityIndex { index: _, max: _ })
+            ));
+        }
+
+        // Vote target with round equal to the block's round is rejected.
+        {
+            let block = base_block
+                .clone()
+                .set_transaction_votes(vec![BlockTransactionVotes {
+                    block_ref: BlockRef::new(10, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+                    rejects: vec![],
+                }])
+                .build();
+            let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            assert!(matches!(
+                verifier.verify_block(&signed_block),
+                Err(ConsensusError::InvalidTransactionVoteRound {
+                    target: _,
+                    block: _
+                })
+            ));
+        }
+
+        // Too many vote entries (> committee size) are rejected.
+        {
+            let votes = (0..context.committee.size() + 1)
+                .map(|i| BlockTransactionVotes {
+                    block_ref: BlockRef::new(
+                        9,
+                        AuthorityIndex::new_for_test((i % 4) as u32),
+                        BlockDigest::MIN,
+                    ),
+                    rejects: vec![],
+                })
+                .collect();
+            let block = base_block.clone().set_transaction_votes(votes).build();
+            let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            assert!(matches!(
+                verifier.verify_block(&signed_block),
+                Err(ConsensusError::TooManyTransactionVotes { count: _, limit: _ })
+            ));
+        }
+
+        // A vote target at the genesis round that is not a known genesis block ref is rejected.
+        {
+            let block = base_block
+                .clone()
+                .set_transaction_votes(vec![BlockTransactionVotes {
+                    block_ref: BlockRef::new(
+                        GENESIS_ROUND,
+                        AuthorityIndex::new_for_test(1),
+                        BlockDigest::MIN,
+                    ),
+                    rejects: vec![],
+                }])
+                .build();
+            let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            assert!(matches!(
+                verifier.verify_block(&signed_block),
+                Err(ConsensusError::InvalidGenesisAncestor(_))
+            ));
+        }
+
+        // A vote target that is a known genesis block ref is accepted.
+        {
+            let genesis_ref = genesis_blocks(&context)
+                .into_iter()
+                .map(|b| b.reference())
+                .next()
+                .expect("at least one genesis block");
+            let block = base_block
+                .clone()
+                .set_transaction_votes(vec![BlockTransactionVotes {
+                    block_ref: genesis_ref,
+                    rejects: vec![],
+                }])
+                .build();
+            let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+            verifier.verify_block(&signed_block).unwrap();
+        }
+    }
+
+    // When the flag is OFF (default), malformed transaction-vote refs do NOT cause verifier
+    // rejection. This pins behavior-neutrality of the default-off path.
+    #[tokio::test]
+    async fn test_verify_transaction_votes_not_enforced_by_default() {
+        let (context, keypairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        assert!(
+            !context
+                .protocol_config
+                .enforce_transaction_vote_dependencies()
+        );
+
+        const AUTHOR: u32 = 2;
+        let author_protocol_keypair = &keypairs[AUTHOR as usize].1;
+        let verifier = SignedBlockVerifier::new(context.clone(), Arc::new(TxnSizeVerifier {}));
+
+        // A malformed vote target (invalid author, round >= block round) would be rejected with the
+        // flag ON, but is ignored by the verifier with the flag OFF.
+        let block = TestBlock::new(10, AUTHOR)
+            .set_ancestors_raw(vec![
+                BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
+                BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+                BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+                BlockRef::new(7, AuthorityIndex::new_for_test(3), BlockDigest::MIN),
+            ])
+            .set_transactions(vec![Transaction::new(vec![4; 8])])
+            .set_transaction_votes(vec![BlockTransactionVotes {
+                block_ref: BlockRef::new(11, AuthorityIndex::new_for_test(4), BlockDigest::MIN),
+                rejects: vec![],
+            }])
+            .build();
+        let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
+        verifier.verify_block(&signed_block).unwrap();
     }
 }
