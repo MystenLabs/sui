@@ -147,7 +147,7 @@ impl AccountAddress {
             .map(Self)
     }
 
-    /// TODO (ade): use macro to enfornce determinism
+    /// TODO (ade): use macro to enforce determinism
     pub fn abstract_size_for_gas_metering(&self) -> AbstractMemorySize {
         AbstractMemorySize::new(Self::LENGTH as u64)
     }
