@@ -10,6 +10,7 @@ use crate::{
     execution_mode::ExecutionMode,
     static_programmable_transactions::{
         execution::context::{Context, CtxValue},
+        loading::ast::DeserializedPackage,
         typing::ast::{Command__, Commands, Type},
     },
 };
@@ -117,8 +118,11 @@ pub fn trace_ptb_summary<Mode: ExecutionMode>(
                     events.push(PTBCommandInfo::ExternalEvent("Publish".to_string()));
                     // Not ideal but it only runs when tracing is enabled so overhead
                     // should be insignificant
-                    let (modules, _) = context.package_payload_modules(payload.clone(), dep_ids)?;
-                    events.extend(modules.into_iter().find_map(|m| {
+                    let DeserializedPackage {
+                        deserialized_modules,
+                        ..
+                    } = context.deserialize_package(payload.clone(), dep_ids)?;
+                    events.extend(deserialized_modules.into_iter().find_map(|m| {
                         for fdef in &m.function_defs {
                             let fhandle = m.function_handle_at(fdef.function);
                             let fname = m.identifier_at(fhandle.name);

@@ -141,15 +141,19 @@ pub enum Command {
 #[derive(Debug, Clone)]
 pub enum PackagePayload {
     Serialized(Vec<Vec<u8>>),
-    Deserialized {
-        // NB: Modules are deserialized but not yet verified.
-        modules: Vec<CompiledModule>,
-        // Sum of the sizes of all modules in (serialized) bytes, used for metering
-        total_bytes: usize,
-        // The computed digest of the package --
-        // `MovePackage::compute_digest_for_modules_and_deps` with `hash_modules` set to `true`.
-        computed_digest: [u8; 32],
-    },
+    Deserialized(DeserializedPackage),
+}
+
+// A Deserialized but not yet verified package created as part of loading.
+#[derive(Debug, Clone)]
+pub struct DeserializedPackage {
+    // NB: Modules are deserialized but not yet verified. They _are_ bounds checked though.
+    pub deserialized_modules: Vec<CompiledModule>,
+    // Sum of the sizes of all modules in (serialized) bytes, used for metering
+    pub total_bytes: usize,
+    // The computed digest of the package --
+    // `MovePackage::compute_digest_for_modules_and_deps` with `hash_modules` set to `true`.
+    pub computed_digest: [u8; 32],
 }
 
 #[derive(Debug)]

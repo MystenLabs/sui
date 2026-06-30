@@ -12,7 +12,10 @@ use crate::{
     static_programmable_transactions::{
         execution::context::subst_signature,
         linkage::{analysis::LinkageAnalyzer, resolved_linkage::ExecutableLinkage},
-        loading::ast::{self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type},
+        loading::ast::{
+            self as L, Datatype, DeserializedPackage, LoadedFunction, LoadedFunctionInstantiation,
+            Type,
+        },
     },
 };
 use move_binary_format::{
@@ -602,11 +605,11 @@ where
         self.load_vm_type_from_type_tag(Some(type_arg_idx), &tag)
     }
 
-    pub fn deserialize_modules(
+    pub fn deserialize_package(
         &self,
         module_bytes: &[Vec<u8>],
         dep_ids: &[ObjectID],
-    ) -> Result<(Vec<CompiledModule>, usize, [u8; 32]), Mode::Error> {
+    ) -> Result<DeserializedPackage, Mode::Error> {
         assert_invariant!(
             !module_bytes.is_empty(),
             "empty package is checked in transaction input checker"
@@ -615,7 +618,7 @@ where
         let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
 
         let binary_config = self.protocol_config.binary_config(None);
-        let modules = module_bytes
+        let deserialized_modules = module_bytes
             .iter()
             .map(|b| {
                 CompiledModule::deserialize_with_config(b, &binary_config)
@@ -628,7 +631,11 @@ where
             dep_ids,
             /* hash_modules */ true,
         );
-        Ok((modules, total_bytes, computed_digest))
+        Ok(DeserializedPackage {
+            deserialized_modules,
+            total_bytes,
+            computed_digest,
+        })
     }
 }
 

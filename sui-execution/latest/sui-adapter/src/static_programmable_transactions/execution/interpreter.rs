@@ -11,6 +11,7 @@ use crate::{
             context::{Context, CtxValue, GasCoinTransfer},
             trace_utils,
         },
+        loading::ast::DeserializedPackage,
         typing::{ast as T, verify::input_arguments::is_coin_send_funds},
     },
 };
@@ -348,10 +349,17 @@ fn execute_command<Mode: ExecutionMode>(
         }
         T::Command__::Publish(payload, dep_ids, linkage) => {
             trace_utils::trace_publish_event(trace_builder_opt)?;
-            let (modules, _) = context.package_payload_modules(payload, &dep_ids)?;
+            let DeserializedPackage {
+                deserialized_modules,
+                ..
+            } = context.deserialize_package(payload, &dep_ids)?;
 
-            let original_id =
-                context.publish_and_init_package(modules, &dep_ids, linkage, trace_builder_opt)?;
+            let original_id = context.publish_and_init_package(
+                deserialized_modules,
+                &dep_ids,
+                linkage,
+                trace_builder_opt,
+            )?;
 
             if <Mode>::packages_are_predefined() {
                 // no upgrade cap for genesis modules
@@ -377,7 +385,11 @@ fn execute_command<Mode: ExecutionMode>(
                 ));
             }
             // deserialize modules and charge gas
-            let (modules, computed_digest) = context.package_payload_modules(payload, &dep_ids)?;
+            let DeserializedPackage {
+                deserialized_modules,
+                computed_digest,
+                ..
+            } = context.deserialize_package(payload, &dep_ids)?;
             let computed_digest = computed_digest.to_vec();
 
             if computed_digest != upgrade_ticket.digest {
@@ -391,7 +403,7 @@ fn execute_command<Mode: ExecutionMode>(
             }
 
             let upgraded_package_id = context.upgrade(
-                modules,
+                deserialized_modules,
                 &dep_ids,
                 current_package_id,
                 upgrade_ticket.policy,
