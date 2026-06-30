@@ -4018,9 +4018,9 @@ async fn test_list_transactions_resume_from_standalone_watermark() {
 // tests in `sui-kv-rpc`.
 
 /// Execute `n` self-transfers from `sender` (each matched by a sender filter on
-/// `sender`) and seal them into a single checkpoint. Returns the sealed
+/// `sender`), then create a single checkpoint containing them. Returns that
 /// checkpoint's sequence number and the updated gas ref.
-async fn seal_matching_checkpoint(
+async fn checkpoint_matching_txns(
     cluster: &mut FullCluster,
     sender: SuiAddress,
     kp: &AccountKeyPair,
@@ -4158,19 +4158,19 @@ async fn test_list_checkpoints_dense_bucket_matches_transactions() {
     // trailing so the scan crosses empty checkpoint regions and reaches the tip
     // on a non-matching checkpoint.
     let (cp_lo, gas) =
-        seal_matching_checkpoint(&mut cluster, match_sender, &match_kp, match_gas, 3).await;
+        checkpoint_matching_txns(&mut cluster, match_sender, &match_kp, match_gas, 3).await;
     match_gas = gas;
     noise_gas = transfer_in_own_checkpoint(&mut cluster, noise_sender, &noise_kp, noise_gas).await;
     let (cp_m1, gas) =
-        seal_matching_checkpoint(&mut cluster, match_sender, &match_kp, match_gas, 1).await;
+        checkpoint_matching_txns(&mut cluster, match_sender, &match_kp, match_gas, 1).await;
     match_gas = gas;
     noise_gas = transfer_in_own_checkpoint(&mut cluster, noise_sender, &noise_kp, noise_gas).await;
     let (cp_m2, gas) =
-        seal_matching_checkpoint(&mut cluster, match_sender, &match_kp, match_gas, 1).await;
+        checkpoint_matching_txns(&mut cluster, match_sender, &match_kp, match_gas, 1).await;
     match_gas = gas;
     noise_gas = transfer_in_own_checkpoint(&mut cluster, noise_sender, &noise_kp, noise_gas).await;
     let (cp_hi, gas) =
-        seal_matching_checkpoint(&mut cluster, match_sender, &match_kp, match_gas, 3).await;
+        checkpoint_matching_txns(&mut cluster, match_sender, &match_kp, match_gas, 3).await;
     match_gas = gas;
     noise_gas = transfer_in_own_checkpoint(&mut cluster, noise_sender, &noise_kp, noise_gas).await;
     let _ = (match_gas, noise_gas);

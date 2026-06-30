@@ -163,14 +163,18 @@ pub(crate) async fn list_checkpoints(
             scan_budget,
             ctx.bitmap_scan_observer(),
         );
-        let ascending = direction.is_ascending();
+        // Stage A2: resolve tx_seq -> cp_seq, streaming each cp as soon as the
+        // scan-order prefix is contiguous, then collapse each checkpoint's
+        // (contiguous) transactions to a single cp_seq. Dedup is its own stage
+        // rather than a per-chunk mapper because it carries state across chunk
+        // boundaries.
         let cp_seq_stream = pipelined_chunks(
             tx_seq_stream,
             tx_seq_digest_stage.chunk_size,
             tx_seq_digest_stage.concurrency,
             {
                 let client = client.clone();
-                move |tx_seqs| resolve_checkpoint_seqs(client.clone(), tx_seqs, ascending)
+                move |tx_seqs| resolve_checkpoint_seqs(client.clone(), tx_seqs)
             },
         );
         let cp_seq_stream = take_items(dedup_consecutive(cp_seq_stream), limit_items);
@@ -434,29 +438,38 @@ async fn fetch_checkpoint_data(
     .boxed())
 }
 
-/// Resolve a batch of `tx_sequence_number`s to their checkpoint sequence
-/// numbers, restoring scan order (multi-get responses are unordered) and
-/// dropping the tx_seq. Consecutive duplicates — the multiple transactions of
-/// one checkpoint — are collapsed downstream by `dedup_consecutive`.
+/// Resolve a chunk of `tx_sequence_number`s (already in scan order) to their
+/// checkpoint sequence numbers, streaming each cp_seq as soon as the scan-order
+/// prefix is contiguously available rather than buffering the whole batch.
+/// BigTable multi-get rows arrive unordered, so `InputOrderEmitter` (keyed by
+/// the input scan order) releases the contiguous front as rows fill in — the
+/// same ordering trick as `fetch_checkpoint_data`. Consecutive duplicates (one
+/// checkpoint's multiple transactions) are collapsed downstream by
+/// `dedup_consecutive`.
 async fn resolve_checkpoint_seqs(
     client: BigTableClient,
     tx_seqs: Vec<u64>,
-    ascending: bool,
 ) -> Result<BoxStream<'static, Result<u64, anyhow::Error>>, anyhow::Error> {
     if tx_seqs.is_empty() {
         return Ok(stream::empty().boxed());
     }
-    let mut tx_checkpoints = client.resolve_tx_checkpoints(&tx_seqs).await?;
-    if ascending {
-        tx_checkpoints.sort_by_key(|(tx_seq, _)| *tx_seq);
-    } else {
-        tx_checkpoints.sort_by_key(|(tx_seq, _)| std::cmp::Reverse(*tx_seq));
+    let rows = client
+        .resolve_tx_checkpoints_stream(tx_seqs.clone())
+        .await?;
+    Ok(async_stream::try_stream! {
+        let mut emitter: InputOrderEmitter<u64, u64> = InputOrderEmitter::new(tx_seqs);
+        futures::pin_mut!(rows);
+        while let Some(row) = rows.next().await {
+            let (tx_seq, cp_seq) = row?;
+            for cp in emitter.push(tx_seq, cp_seq, "list_checkpoints: tx -> checkpoint resolution")? {
+                yield cp;
+            }
+        }
+        for cp in emitter.finish("list_checkpoints: missing tx -> checkpoint row")? {
+            yield cp;
+        }
     }
-    let cp_seqs: Vec<u64> = tx_checkpoints
-        .into_iter()
-        .map(|(_, cp_seq)| cp_seq)
-        .collect();
-    Ok(stream::iter(cp_seqs.into_iter().map(Ok)).boxed())
+    .boxed())
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {

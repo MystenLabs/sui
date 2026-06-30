@@ -161,8 +161,6 @@ pub struct OffchainClusterConfig {
     pub jsonrpc_node_args: JsonRpcNodeArgs,
     pub graphql_config: GraphQlConfig,
     pub bootstrap_genesis: Option<BootstrapGenesis>,
-    /// Configuration for the archival kv-rpc (LedgerService) server. Lets tests
-    /// tune ledger-history budgets and per-stage chunk sizes.
     pub kv_rpc_config: KvRpcConfig,
 }
 
