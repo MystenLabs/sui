@@ -260,39 +260,34 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         original_id: ObjectID,
         cursor: Option<u64>,
     ) -> StorageResult<PackageVersionsIterator<'_>> {
-        let iter = self
-            .schema()
-            .iter_package_versions(original_id)
-            .map_err(sui_types::storage::error::Error::custom)?;
-        let mapped = iter
-            .map(move |row| {
-                let (key, value) = row.map_err(to_typed_store_err)?;
-                // Decode storage_id (32 bytes).
-                let storage_id_bytes: [u8; 32] = (&value.into_inner().storage_id[..])
-                    .try_into()
-                    .map_err(|_| {
-                        TypedStoreError::SerializationError(
-                            "package_versions storage_id length".into(),
-                        )
-                    })?;
-                Ok((key.version, ObjectID::new(storage_id_bytes)))
-            })
-            // The cursor passed in by `list_package_versions` is
-            // the version of the first row that should appear on
-            // the next page — the previous page popped its
-            // `page_size + 1`th row to derive this token, so we
-            // want to resume *at* it (inclusive). `filter` (not
-            // `skip_while`) is correct here because the
-            // underlying iterator yields versions in ascending
-            // order but `skip_while` would only suppress a leading
-            // run that matches, leaving every earlier row in the
-            // output.
-            .filter(
-                move |entry: &Result<(u64, ObjectID), TypedStoreError>| match entry {
-                    Ok((v, _)) => cursor.map(|c| *v >= c).unwrap_or(true),
-                    Err(_) => true,
+        use crate::schema::package_versions::{Key, OriginalIdPrefix};
+        // The cursor passed in by `list_package_versions` is the version of the
+        // first row of the next page (the previous page popped its
+        // `page_size + 1`th row to derive it), so seek straight to it and
+        // resume inclusively. Versions sort ascending within a package, so the
+        // seek lands on the first row with `version >= cursor`.
+        let map = &self.schema().package_versions;
+        let iter = match cursor {
+            Some(version) => map.iter_prefix_from(
+                &OriginalIdPrefix(original_id),
+                &Key {
+                    original_id,
+                    version,
                 },
-            );
+            ),
+            None => map.iter_prefix(&OriginalIdPrefix(original_id)),
+        }
+        .map_err(sui_types::storage::error::Error::custom)?;
+        let mapped = iter.map(move |row| {
+            let (key, value) = row.map_err(to_typed_store_err)?;
+            // Decode storage_id (32 bytes).
+            let storage_id_bytes: [u8; 32] = (&value.into_inner().storage_id[..])
+                .try_into()
+                .map_err(|_| {
+                    TypedStoreError::SerializationError("package_versions storage_id length".into())
+                })?;
+            Ok((key.version, ObjectID::new(storage_id_bytes)))
+        });
         Ok(Box::new(mapped))
     }
 
@@ -869,5 +864,54 @@ mod tests {
         unique.sort();
         unique.dedup();
         assert_eq!(unique.len(), names.len(), "no duplicate coin types");
+    }
+
+    #[test]
+    fn package_versions_iter_paginates_each_version_once() {
+        let (_dir, db, reader) = setup();
+        let original = ObjectID::from_single_byte(0xBB);
+        let versions: Vec<u64> = (1..=5).collect();
+
+        let mut batch = db.batch();
+        for &version in &versions {
+            let (k, v) = crate::schema::package_versions::store(
+                original,
+                version,
+                ObjectID::from_single_byte(version as u8),
+                version,
+            );
+            batch
+                .put(&reader.schema().package_versions, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut seen: Vec<u64> = Vec::new();
+        let mut cursor: Option<u64> = None;
+        for _ in 0..versions.len() + 2 {
+            let mut iter = reader
+                .package_versions_iter(original, cursor.take())
+                .unwrap();
+            for _ in 0..2 {
+                match iter.next() {
+                    Some(res) => seen.push(res.unwrap().0),
+                    None => break,
+                }
+            }
+            cursor = iter.next().transpose().unwrap().map(|(v, _)| v);
+            if cursor.is_none() {
+                break;
+            }
+        }
+
+        assert_eq!(
+            seen.len(),
+            versions.len(),
+            "each version yielded exactly once"
+        );
+        let mut unique = seen.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique, versions, "every version, no gaps or duplicates");
     }
 }
