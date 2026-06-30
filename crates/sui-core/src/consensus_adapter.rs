@@ -41,7 +41,7 @@ use tokio::sync::{Notify, Semaphore, SemaphorePermit, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::time::{self};
-use tracing::{Instrument, debug, debug_span, info, instrument, trace, warn};
+use tracing::{Instrument, debug, debug_span, info, instrument, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointStore;
@@ -503,10 +503,7 @@ impl ConsensusAdapter {
                 .unwrap_or_default();
             SuiErrorKind::TransactionProcessing {
                 digest,
-                status: match method {
-                    ProcessedMethod::Consensus => "sequenced by consensus".to_string(),
-                    ProcessedMethod::Checkpoint => "executed via checkpoint".to_string(),
-                },
+                status: format!("processed via {}", method.processed_via()),
             }
             .into()
         };
@@ -599,7 +596,7 @@ impl ConsensusAdapter {
                                 .with_label_values(&[tx_type, "sequenced"])
                                 .inc();
                             // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
-                            trace!(
+                            debug!(
                                 "Transaction {transaction_keys:?} has been sequenced by consensus."
                             );
                             break;
@@ -663,7 +660,10 @@ impl ConsensusAdapter {
                     tx_consensus_positions.send(Err(make_processing_error(guard.processed_method)));
             }
         }
-        debug!("{transaction_keys:?} processed by consensus");
+        debug!(
+            "{transaction_keys:?} processed via {}",
+            guard.processed_method.processed_via()
+        );
 
         // After a user transaction or soft bundle submission,
         // send EndOfPublish if the epoch is closing.
@@ -979,6 +979,22 @@ enum ProcessedMethod {
     Checkpoint,
 }
 
+impl ProcessedMethod {
+    fn processed_via(self) -> &'static str {
+        match self {
+            ProcessedMethod::Consensus => "consensus output",
+            ProcessedMethod::Checkpoint => "checkpoint execution",
+        }
+    }
+
+    fn latency_metric_label(self) -> &'static str {
+        match self {
+            ProcessedMethod::Consensus => "processed_via_consensus",
+            ProcessedMethod::Checkpoint => "processed_via_checkpoint",
+        }
+    }
+}
+
 impl<'a> InflightDropGuard<'a> {
     pub fn acquire(
         adapter: &'a ConsensusAdapter,
@@ -1023,10 +1039,6 @@ impl Drop for InflightDropGuard<'_> {
         self.adapter.inflight_slot_freed_notify.notify_one();
 
         let latency = self.start.elapsed();
-        let processed_method = match self.processed_method {
-            ProcessedMethod::Consensus => "processed_via_consensus",
-            ProcessedMethod::Checkpoint => "processed_via_checkpoint",
-        };
         let submitted = if self.submitted {
             "submitted"
         } else {
@@ -1036,7 +1048,11 @@ impl Drop for InflightDropGuard<'_> {
         self.adapter
             .metrics
             .sequencing_certificate_latency
-            .with_label_values(&[submitted, self.tx_type, processed_method])
+            .with_label_values(&[
+                submitted,
+                self.tx_type,
+                self.processed_method.latency_metric_label(),
+            ])
             .observe(latency.as_secs_f64());
     }
 }
