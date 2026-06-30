@@ -396,6 +396,39 @@ where
     .boxed()
 }
 
+/// Collapse runs of equal `Watermarked::Item` values into one, forwarding
+/// `Watermarked::Watermark` frames and errors unchanged. Items must already be
+/// in scan order. Used by `ListCheckpoints` to turn the per-transaction
+/// checkpoint ids of a filtered scan (a checkpoint's txs are contiguous in scan
+/// order) into a single id per checkpoint. Unlike a per-chunk mapper this
+/// carries its dedup state across the whole stream, so duplicates split across
+/// chunk boundaries still collapse.
+pub(crate) fn dedup_consecutive<T, E>(
+    stream: BoxStream<'static, Result<Watermarked<T>, E>>,
+) -> BoxStream<'static, Result<Watermarked<T>, E>>
+where
+    T: PartialEq + Clone + Send + 'static,
+    E: Send + 'static,
+{
+    async_stream::try_stream! {
+        futures::pin_mut!(stream);
+        let mut last: Option<T> = None;
+        while let Some(item) = stream.next().await {
+            match item? {
+                Watermarked::Item(t) => {
+                    if last.as_ref() == Some(&t) {
+                        continue;
+                    }
+                    last = Some(t.clone());
+                    yield Watermarked::Item(t);
+                }
+                Watermarked::Watermark(p) => yield Watermarked::Watermark(p),
+            }
+        }
+    }
+    .boxed()
+}
+
 /// Buffers values arriving keyed-but-out-of-input-order and emits them in
 /// input order as their slots become contiguous. Used by chunk fetch stages
 /// to translate BigTable's arrival-order multi_get responses into the
