@@ -5059,6 +5059,9 @@ reverse
 append
 	public fun
 	0x1::vector
+append_ref
+	public fun
+	0x1::vector
 is_empty
 	public fun
 	0x1::vector
