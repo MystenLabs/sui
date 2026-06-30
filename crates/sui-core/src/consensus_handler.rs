@@ -70,7 +70,6 @@ use crate::{
         backpressure::{BackpressureManager, BackpressureSubscriber},
         congestion_log::CongestionCommitLogger,
         consensus_tx_status_cache::ConsensusTxStatus,
-        epoch_start_configuration::EpochStartConfigTrait,
         execution_time_estimator::ExecutionTimeEstimator,
         shared_object_congestion_tracker::SharedObjectCongestionTracker,
         shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions, Schedulable},
