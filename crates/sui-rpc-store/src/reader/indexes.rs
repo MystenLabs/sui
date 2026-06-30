@@ -148,9 +148,16 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
                     field_id: key.object_id,
                 })
             })
+            // Skip-past-cursor: the page token is the first field of the next
+            // page (see the `list_dynamic_fields` handler), so drop rows until
+            // we reach it -- identified by its globally unique field (object)
+            // id -- and then resume inclusively. The scan restarts from the
+            // start of the parent's fields each page, so a `==` predicate would
+            // skip nothing and every page would re-yield from the beginning,
+            // duplicating fields across pages.
             .skip_while(
                 move |entry: &Result<DynamicFieldKey, TypedStoreError>| match entry {
-                    Ok(info) => cursor.map(|c| info.field_id == c).unwrap_or(false),
+                    Ok(info) => cursor.map(|c| info.field_id != c).unwrap_or(false),
                     Err(_) => false,
                 },
             );
@@ -220,38 +227,48 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             .iter_balances_owned_by(*owner)
             .map_err(sui_types::storage::error::Error::custom)?;
 
-        let mapped = iter.filter_map(move |row| {
-            let (key, value) = match row {
-                Ok(pair) => pair,
-                Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
-            };
-            // Project the merged proto value back into the typed
-            // `Balance` view through the same decoder `get_balance`
-            // uses, so a malformed payload surfaces as an error here
-            // too rather than being silently read as zero.
-            let balance = match crate::schema::balance::Balance::from_delta(&value.into_inner()) {
-                Ok(b) => b,
-                Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
-            };
-            // Report the coin and address halves independently; the caller
-            // sums them for the total (reporting the total here would
-            // double-count the address half).
-            let info = BalanceInfo {
-                coin_balance: balance.coin.clamp(0, u64::MAX as i128) as u64,
-                address_balance: balance.address.clamp(0, u64::MAX as i128) as u64,
-            };
-            // Skip-past-cursor.
-            if let Some(c) = cursor_coin_type.as_ref()
-                && key.coin_type == *c
-            {
-                return None;
-            }
-            let struct_tag = match key.coin_type {
-                move_core_types::language_storage::TypeTag::Struct(b) => *b,
-                _ => return None,
-            };
-            Some(Ok((struct_tag, info)))
-        });
+        let mapped = iter
+            // Skip-past-cursor: the page token is the first coin type of the
+            // next page (see the `list_balances` handler), so drop the leading
+            // run of rows that precede it and resume inclusively at the exact
+            // match. As in `owned_objects_iter`, a `==`/`filter`-style predicate
+            // would not advance -- the scan restarts from the start each page,
+            // so it would re-yield earlier rows and never reach the cursor,
+            // looping forever.
+            .skip_while(move |row| match row {
+                Ok((key, _value)) => cursor_coin_type
+                    .as_ref()
+                    .map(|c| key.coin_type != *c)
+                    .unwrap_or(false),
+                Err(_) => false,
+            })
+            .filter_map(move |row| {
+                let (key, value) = match row {
+                    Ok(pair) => pair,
+                    Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
+                };
+                // Project the merged proto value back into the typed
+                // `Balance` view through the same decoder `get_balance`
+                // uses, so a malformed payload surfaces as an error here
+                // too rather than being silently read as zero.
+                let balance = match crate::schema::balance::Balance::from_delta(&value.into_inner())
+                {
+                    Ok(b) => b,
+                    Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
+                };
+                // Report the coin and address halves independently; the caller
+                // sums them for the total (reporting the total here would
+                // double-count the address half).
+                let info = BalanceInfo {
+                    coin_balance: balance.coin.clamp(0, u64::MAX as i128) as u64,
+                    address_balance: balance.address.clamp(0, u64::MAX as i128) as u64,
+                };
+                let struct_tag = match key.coin_type {
+                    move_core_types::language_storage::TypeTag::Struct(b) => *b,
+                    _ => return None,
+                };
+                Some(Ok((struct_tag, info)))
+            });
 
         Ok(Box::new(mapped))
     }
@@ -695,5 +712,180 @@ mod tests {
             .unwrap();
         let bits: Vec<u32> = first.bitmap.iter().collect();
         assert_eq!(bits, vec![1, 17, 256]);
+    }
+
+    // Pagination regression coverage for the cursor-skip iterators. The
+    // `list_*` handlers page by taking `page_size` rows and then peeking the
+    // next row as the opaque page token; a broken skip-past-cursor predicate
+    // re-yields earlier rows on every page (duplicates, and a cursor that never
+    // advances). Each test walks every page and asserts each row appears once.
+
+    fn a_type() -> move_core_types::language_storage::StructTag {
+        move_core_types::language_storage::StructTag {
+            address: move_core_types::account_address::AccountAddress::TWO,
+            module: move_core_types::identifier::Identifier::new("m").unwrap(),
+            name: move_core_types::identifier::Identifier::new("T").unwrap(),
+            type_params: vec![],
+        }
+    }
+
+    #[test]
+    fn owned_objects_iter_paginates_each_object_once() {
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        use crate::schema::primitives::U64Varint;
+        use sui_types::base_types::SuiAddress;
+
+        let (_dir, db, reader) = setup();
+        let owner = SuiAddress::ZERO;
+        let ids: Vec<ObjectID> = (1u8..=5).map(ObjectID::from_single_byte).collect();
+
+        let mut batch = db.batch();
+        for id in &ids {
+            batch
+                .put(
+                    &reader.schema().object_by_owner,
+                    &Key {
+                        kind: OwnerKind::AddressOwner(owner),
+                        type_: a_type(),
+                        inverted_balance: None,
+                        object_id: *id,
+                    },
+                    &U64Varint(1),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut seen = Vec::new();
+        let mut cursor = None;
+        // Bounded so a non-advancing cursor surfaces as a failed assertion
+        // rather than an infinite loop.
+        for _ in 0..ids.len() + 2 {
+            let mut iter = reader
+                .owned_objects_iter(owner, None, cursor.take())
+                .unwrap();
+            for _ in 0..2 {
+                match iter.next() {
+                    Some(res) => seen.push(res.unwrap().object_id),
+                    None => break,
+                }
+            }
+            cursor = iter.next().transpose().unwrap();
+            if cursor.is_none() {
+                break;
+            }
+        }
+
+        assert_eq!(seen.len(), ids.len(), "each object yielded exactly once");
+        let mut unique = seen.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique, ids, "every object, no gaps or duplicates");
+    }
+
+    #[test]
+    fn dynamic_field_iter_paginates_each_field_once() {
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        use crate::schema::primitives::U64Varint;
+
+        let (_dir, db, reader) = setup();
+        let parent = ObjectID::from_single_byte(0xAA);
+        let fields: Vec<ObjectID> = (1u8..=5).map(ObjectID::from_single_byte).collect();
+
+        let mut batch = db.batch();
+        for id in &fields {
+            batch
+                .put(
+                    &reader.schema().object_by_owner,
+                    &Key {
+                        kind: OwnerKind::ObjectOwner(parent.into()),
+                        type_: a_type(),
+                        inverted_balance: None,
+                        object_id: *id,
+                    },
+                    &U64Varint(1),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut seen = Vec::new();
+        let mut cursor = None;
+        for _ in 0..fields.len() + 2 {
+            let mut iter = reader.dynamic_field_iter(parent, cursor.take()).unwrap();
+            for _ in 0..2 {
+                match iter.next() {
+                    Some(res) => seen.push(res.unwrap().field_id),
+                    None => break,
+                }
+            }
+            cursor = iter.next().transpose().unwrap().map(|k| k.field_id);
+            if cursor.is_none() {
+                break;
+            }
+        }
+
+        assert_eq!(seen.len(), fields.len(), "each field yielded exactly once");
+        let mut unique = seen.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique, fields, "every field, no gaps or duplicates");
+    }
+
+    #[test]
+    fn balance_iter_paginates_each_coin_type_once() {
+        use crate::schema::balance::coin_delta;
+        use move_core_types::language_storage::{StructTag, TypeTag};
+        use sui_types::base_types::SuiAddress;
+
+        let coin_type = |name: &str| -> TypeTag {
+            TypeTag::Struct(Box::new(StructTag {
+                address: move_core_types::account_address::AccountAddress::TWO,
+                module: move_core_types::identifier::Identifier::new("coin").unwrap(),
+                name: move_core_types::identifier::Identifier::new(name).unwrap(),
+                type_params: vec![],
+            }))
+        };
+
+        let (_dir, db, reader) = setup();
+        let owner = SuiAddress::ZERO;
+        let names = ["c0", "c1", "c2", "c3", "c4"];
+
+        let mut batch = db.batch();
+        for name in names {
+            let (k, v) = coin_delta(owner, coin_type(name), 100);
+            batch.merge(&reader.schema().balance, &k, &v).unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut seen: Vec<StructTag> = Vec::new();
+        let mut cursor: Option<(SuiAddress, StructTag)> = None;
+        for _ in 0..names.len() + 2 {
+            let mut iter = reader.balance_iter(&owner, cursor.take()).unwrap();
+            for _ in 0..2 {
+                match iter.next() {
+                    Some(res) => seen.push(res.unwrap().0),
+                    None => break,
+                }
+            }
+            cursor = iter
+                .next()
+                .transpose()
+                .unwrap()
+                .map(|(tag, _)| (owner, tag));
+            if cursor.is_none() {
+                break;
+            }
+        }
+
+        assert_eq!(
+            seen.len(),
+            names.len(),
+            "each coin type yielded exactly once"
+        );
+        let mut unique = seen.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len(), "no duplicate coin types");
     }
 }
