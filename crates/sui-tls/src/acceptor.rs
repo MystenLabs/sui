@@ -67,7 +67,7 @@ where
             let server_conn = stream.get_ref().1;
 
             let public_key = if let Some([peer_certificate, ..]) = server_conn.peer_certificates() {
-                crate::certgen::public_key_from_certificate(peer_certificate).ok()
+                crate::public_key_from_certificate(peer_certificate).ok()
             } else {
                 None
             };

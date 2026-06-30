@@ -62,21 +62,3 @@ fn generate_cert(keypair: &KeyPair, server_name: &str) -> rcgen::Certificate {
             "unreachable! from_params should only fail if the key is incompatible with params.algo",
         )
 }
-
-pub(crate) fn public_key_from_certificate(
-    certificate: &CertificateDer,
-) -> Result<Ed25519PublicKey, anyhow::Error> {
-    use fastcrypto::traits::ToFromBytes;
-    use x509_parser::{certificate::X509Certificate, prelude::FromDer};
-
-    let cert = X509Certificate::from_der(certificate.as_ref())
-        .map_err(|e| rustls::Error::General(e.to_string()))?;
-    let spki = cert.1.public_key();
-    let public_key_bytes =
-        <ed25519::pkcs8::PublicKeyBytes as pkcs8::DecodePublicKey>::from_public_key_der(spki.raw)
-            .map_err(|e| rustls::Error::General(format!("invalid ed25519 public key: {e}")))?;
-
-    let public_key = Ed25519PublicKey::from_bytes(public_key_bytes.as_ref())?;
-
-    Ok(public_key)
-}
