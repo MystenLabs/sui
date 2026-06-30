@@ -4126,11 +4126,13 @@ async fn test_list_checkpoints_dense_bucket_matches_transactions() {
     // multi-chunk-within-one-bucket scan. Every matching tx in a feasible
     // dataset shares bitmap bucket 0 (BUCKET_SIZE = 65_536), so the chunk
     // boundary — not a bucket boundary — is what drives the loop.
-    let mut stages = StagesConfig::default();
-    stages.tx_seq_digest = Some(StageConfig {
-        chunk_size: Some(2),
-        concurrency: None,
-    });
+    let stages = StagesConfig {
+        tx_seq_digest: Some(StageConfig {
+            chunk_size: Some(2),
+            concurrency: None,
+        }),
+        ..Default::default()
+    };
     let kv_rpc_config = KvRpcConfig {
         stages: Some(stages),
         ..Default::default()
