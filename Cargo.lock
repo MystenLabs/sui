@@ -1048,12 +1048,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.86"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
-dependencies = [
- "backtrace",
-]
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "append-only-vec"
@@ -5539,7 +5536,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.9"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=1fb0b10a32a726f440704241e031eeed96fdd5ff#1fb0b10a32a726f440704241e031eeed96fdd5ff"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5600,7 +5597,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=1fb0b10a32a726f440704241e031eeed96fdd5ff#1fb0b10a32a726f440704241e031eeed96fdd5ff"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -5609,7 +5606,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=1fb0b10a32a726f440704241e031eeed96fdd5ff#1fb0b10a32a726f440704241e031eeed96fdd5ff"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -5629,7 +5626,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=1fb0b10a32a726f440704241e031eeed96fdd5ff#1fb0b10a32a726f440704241e031eeed96fdd5ff"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5646,7 +5643,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=1fb0b10a32a726f440704241e031eeed96fdd5ff#1fb0b10a32a726f440704241e031eeed96fdd5ff"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -5671,6 +5668,7 @@ dependencies = [
  "schemars 0.8.21",
  "serde",
  "serde_json",
+ "tracing",
  "typenum",
 ]
 
@@ -6063,9 +6061,9 @@ checksum = "f90f7dce0722e95104fcb095585910c0977252f286e354b5e3bd38902cd99988"
 
 [[package]]
 name = "futures-timer"
-version = "3.0.3"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
+checksum = "af43fadb8a98512d547e37b4e92e0ced13e205c061b87b4623eff01d918d6968"
 
 [[package]]
 name = "futures-util"
@@ -7895,7 +7893,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.0",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -9932,7 +9930,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -14865,6 +14863,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
+ "im",
  "indexmap 2.8.0",
  "insta",
  "itertools 0.13.0",
@@ -14874,6 +14873,7 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
+ "num-bigint 0.4.6",
  "p256",
  "passkey-authenticator",
  "passkey-client",
@@ -14918,6 +14918,7 @@ dependencies = [
  "tokio-stream",
  "tonic 0.14.6",
  "tracing",
+ "tracing-subscriber",
  "url",
 ]
 

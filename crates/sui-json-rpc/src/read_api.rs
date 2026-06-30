@@ -1211,6 +1211,7 @@ impl ReadApiServer for ReadApi {
             oidc_provider_jwks,
             vec![],
             zklogin_env_native,
+            epoch_store.protocol_config().zklogin_auth_v2(),
             true,
             true,
             true,

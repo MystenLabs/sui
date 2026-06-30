@@ -45,26 +45,28 @@ struct ZkLoginCachingParams {
     inputs: ZkLoginInputs,
     max_epoch: EpochId,
     extended_pk_bytes: Vec<u8>,
+    zklogin_auth_v2: bool,
 }
 
 impl ZkLoginAuthenticator {
     /// The caching key for zklogin signature, it is the hash of bcs bytes of
-    /// ZkLoginInputs || max_epoch || flagged_pk_bytes. If any of these fields
+    /// ZkLoginInputs || max_epoch || flagged_pk_bytes || zklogin_auth_v2. If any of these fields
     /// change, zklogin signature is re-verified without using the caching result.
-    fn get_caching_params(&self) -> ZkLoginCachingParams {
+    fn get_caching_params(&self, zklogin_auth_v2: bool) -> ZkLoginCachingParams {
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
         extended_pk_bytes.extend(self.user_signature.public_key_bytes());
         ZkLoginCachingParams {
             inputs: self.inputs.clone(),
             max_epoch: self.max_epoch,
             extended_pk_bytes,
+            zklogin_auth_v2,
         }
     }
 
-    pub fn hash_inputs(&self) -> ZKLoginInputsDigest {
+    pub fn hash_inputs(&self, zklogin_auth_v2: bool) -> ZKLoginInputsDigest {
         use fastcrypto::hash::HashFunction;
         let mut hasher = DefaultHash::default();
-        bcs::serialize_into(&mut hasher, &self.get_caching_params())
+        bcs::serialize_into(&mut hasher, &self.get_caching_params(zklogin_auth_v2))
             .expect("serde should not fail");
         ZKLoginInputsDigest::new(hasher.finalize().into())
     }
@@ -200,7 +202,8 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             SignatureScheme::ZkLoginAuthenticator,
         )?;
 
-        if zklogin_inputs_cache.is_cached(&self.hash_inputs()) {
+        let zklogin_auth_v2 = aux_verify_data.zklogin_auth_v2;
+        if zklogin_inputs_cache.is_cached(&self.hash_inputs(zklogin_auth_v2)) {
             // If the zklogin inputs hits the cache, we don't need to verify the zklogin
             // again that contains the heavy computation.
             Ok(())
@@ -210,7 +213,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
             extended_pk_bytes.extend(self.user_signature.public_key_bytes());
             let res = verify_zklogin_inputs_wrapper(
-                self.get_caching_params(),
+                self.get_caching_params(zklogin_auth_v2),
                 &aux_verify_data.oidc_provider_jwks,
                 &aux_verify_data.zk_login_env,
             )
@@ -223,7 +226,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             match res {
                 Ok(_) => {
                     // If it's verified ok, we cache the digest.
-                    zklogin_inputs_cache.cache_digest(self.hash_inputs());
+                    zklogin_inputs_cache.cache_digest(self.hash_inputs(zklogin_auth_v2));
                     Ok(())
                 }
                 Err(e) => Err(e),
@@ -243,6 +246,7 @@ fn verify_zklogin_inputs_wrapper(
         &params.extended_pk_bytes,
         all_jwk,
         env,
+        params.zklogin_auth_v2,
     )
     .map_err(|e| {
         SuiErrorKind::InvalidSignature {
