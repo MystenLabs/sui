@@ -133,6 +133,7 @@ impl ConsensusCommitAPI for TestConsensusCommit {
 pub struct TestConsensusHandlerSetup<C> {
     pub consensus_handler: ConsensusHandler<C>,
     pub captured_transactions: CapturedTransactions,
+    pub metrics: Arc<AuthorityMetrics>,
 }
 
 pub fn make_consensus_adapter_for_test(
@@ -332,7 +333,7 @@ where
         consensus_adapter,
         authority.get_object_cache_reader().clone(),
         consensus_committee,
-        metrics,
+        metrics.clone(),
         Arc::new(throughput_calculator),
         backpressure_manager.subscribe(),
         authority.traffic_controller.clone(),
@@ -342,6 +343,7 @@ where
     TestConsensusHandlerSetup {
         consensus_handler,
         captured_transactions,
+        metrics,
     }
 }
 
