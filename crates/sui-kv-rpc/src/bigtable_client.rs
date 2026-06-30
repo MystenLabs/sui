@@ -294,6 +294,23 @@ impl BigTableClient {
             .map_err(RpcError::from)
     }
 
+    /// Streaming variant of `resolve_tx_checkpoints`. The permit is held for the
+    /// stream's lifetime (see `gate_stream`); rows arrive in BigTable order.
+    pub(crate) async fn resolve_tx_checkpoints_stream(
+        &self,
+        tx_sequence_numbers: Vec<u64>,
+    ) -> Result<BoxStream<'static, Result<(u64, CheckpointSequenceNumber), anyhow::Error>>, RpcError>
+    {
+        let permit = self.acquire(stage::CHECKPOINTS).await?;
+        let inner = self
+            .inner
+            .clone()
+            .resolve_tx_checkpoints_stream(tx_sequence_numbers)
+            .await
+            .map_err(RpcError::from)?;
+        Ok(gate_stream(permit, inner.boxed()))
+    }
+
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
     /// semaphore; their concurrency is bounded by `max_bitmap_filter_literals`
     /// during filter validation.

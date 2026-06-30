@@ -1194,7 +1194,24 @@ impl BigTableClient {
         if tx_sequence_numbers.is_empty() {
             return Ok(Vec::new());
         }
+        let rows = self
+            .resolve_tx_checkpoints_stream(tx_sequence_numbers.to_vec())
+            .await?;
+        futures::pin_mut!(rows);
+        let mut result = Vec::with_capacity(tx_sequence_numbers.len());
+        while let Some(row) = rows.next().await {
+            result.push(row?);
+        }
+        Ok(result)
+    }
 
+    /// Streaming variant of `resolve_tx_checkpoints`. Yields
+    /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (arrival
+    /// order, not key order — callers needing a stable order must reorder).
+    pub async fn resolve_tx_checkpoints_stream(
+        &mut self,
+        tx_sequence_numbers: Vec<u64>,
+    ) -> Result<impl futures::Stream<Item = Result<(u64, CheckpointSequenceNumber)>> + use<>> {
         let keys: Vec<Vec<u8>> = tx_sequence_numbers
             .iter()
             .map(|s| tx_seq_digest::encode_key(*s))
@@ -1202,16 +1219,19 @@ impl BigTableClient {
         let filter = Some(Self::column_filter(&[
             tx_seq_digest::col::CHECKPOINT_NUMBER,
         ]));
-        let rows = self.multi_get(tx_seq_digest::NAME, keys, filter).await?;
+        let rows = self
+            .multi_get_stream(tx_seq_digest::NAME, keys, filter)
+            .await?;
 
-        let mut result = Vec::with_capacity(rows.len());
-        for (row_key, cells) in &rows {
-            let tx_seq = tx_seq_digest::decode_key(row_key.as_ref())?;
-            let checkpoint_number = tx_seq_digest::decode_checkpoint_number(cells)?;
-            result.push((tx_seq, checkpoint_number));
-        }
-
-        Ok(result)
+        Ok(async_stream::try_stream! {
+            futures::pin_mut!(rows);
+            while let Some(row) = rows.next().await {
+                let (key, cells) = row?;
+                let tx_seq = tx_seq_digest::decode_key(key.as_ref())?;
+                let checkpoint_number = tx_seq_digest::decode_checkpoint_number(&cells)?;
+                yield (tx_seq, checkpoint_number);
+            }
+        })
     }
 
     /// Streaming variant of `get_transactions_filtered`. Yields

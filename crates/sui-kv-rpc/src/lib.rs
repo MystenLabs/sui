@@ -209,6 +209,29 @@ impl KvRpcServer {
         instance_id: String,
         server_version: Option<ServerVersion>,
     ) -> anyhow::Result<Self> {
+        Self::new_local_with_config(
+            host,
+            instance_id,
+            server_version,
+            LedgerHistoryConfig::default(),
+            KvRpcConfig::default().request_bigtable_concurrency(),
+            StagesConfig::default(),
+        )
+        .await
+    }
+
+    /// Construct a KvRpcServer backed by a local BigTable emulator with explicit
+    /// ledger-history and per-stage configuration. Tests use this to exercise
+    /// scan-budget / chunk-size behaviour (e.g. a small `tx_seq_digest` chunk
+    /// size) against a modest synthetic dataset.
+    pub async fn new_local_with_config(
+        host: String,
+        instance_id: String,
+        server_version: Option<ServerVersion>,
+        ledger_history: LedgerHistoryConfig,
+        request_bigtable_concurrency: usize,
+        stages: StagesConfig,
+    ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
         // request-scoped BigTable wrapper still expects a handle.
@@ -219,9 +242,9 @@ impl KvRpcServer {
             server_version,
             default_service_info_watermark_pipelines(false),
             metrics,
-            LedgerHistoryConfig::default(),
-            KvRpcConfig::default().request_bigtable_concurrency(),
-            StagesConfig::default(),
+            ledger_history,
+            request_bigtable_concurrency,
+            stages,
         )
     }
 
