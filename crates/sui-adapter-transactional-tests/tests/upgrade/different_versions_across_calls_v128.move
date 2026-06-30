@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Port of `test_different_versions_across_calls` from move_package_upgrade_tests, pinned to
-// protocol version 126 (before unified linkage). With per-call linkage each MoveCall resolves
+// protocol version 128 (before unified linkage). With per-call linkage each MoveCall resolves
 // its own package version independently, so calling `return_0` from two versions of the same
 // package within a single PTB succeeds.
 
-//# init --protocol-version 126 --addresses Test_V1=0x0 Test_V2=0x0 --accounts A
+//# init --protocol-version 128 --addresses Test_V1=0x0 Test_V2=0x0 --accounts A
 
 //# publish --upgradeable --sender A
 module Test_V1::base {

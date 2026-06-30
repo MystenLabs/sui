@@ -360,6 +360,7 @@ const MAINNET_USDB: &str =
 //              Enable timestamp_based_epoch_close on mainnet.
 // Version 128: Make some additional bounds to binary tables explicit.
 // Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
+//              Enable unified linkage in PTBs
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5060,9 +5061,6 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.timestamp_based_epoch_close = true;
-                    // TODO: Place this in the correct protocol version once we have a better idea
-                    // on rollout date.
-                    cfg.feature_flags.enable_unified_linkage = true;
                 }
                 128 => {
                     cfg.max_generic_instantiation_type_nodes_per_function = Some(10_000);
@@ -5070,7 +5068,9 @@ impl ProtocolConfig {
                     cfg.binary_enum_defs = Some(200);
                     cfg.binary_enum_def_instantiations = Some(100);
                 }
-                129 => {}
+                129 => {
+                    cfg.feature_flags.enable_unified_linkage = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
