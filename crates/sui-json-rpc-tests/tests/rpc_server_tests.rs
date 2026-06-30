@@ -611,17 +611,8 @@ async fn test_sorted_get_coin_response() {
     let amounts = [1, 2, 3, 4, 5];
     for amount in amounts {
         let tx = make_transfer_sui_transaction(&cluster.wallet, Some(address), Some(amount)).await;
-        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
-        http_client
-            .execute_transaction_block(
-                tx_bytes,
-                signatures,
-                None,
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await
-            .unwrap();
+        cluster.execute_transaction(tx).await;
     }
 
     let coins: CoinPage = http_client

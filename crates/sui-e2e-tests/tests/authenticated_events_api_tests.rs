@@ -427,7 +427,11 @@ async fn list_authenticated_events(
             .with_filter(filter.clone())
             .with_options(options);
 
-        let (events, last_cursor) = fetch_list_events_page(&mut client, request).await.unwrap();
+        let (events, last_cursor) = match fetch_list_events_page(&mut client, request).await {
+            Ok((events, last_cursor)) => (events, last_cursor),
+            Err(status) if status.code() == tonic::Code::Unavailable => return vec![],
+            Err(status) => panic!("{status}"),
+        };
         let event_count = events.len();
         let last_checkpoint = events.last().map(|e| e.checkpoint);
         all_events.extend(events);

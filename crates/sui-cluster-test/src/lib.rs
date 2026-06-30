@@ -19,7 +19,6 @@ use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::base_types::TransactionDigest;
 use sui_types::object::Owner;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
-use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
@@ -153,17 +152,22 @@ impl TestContext {
         desc: &str,
     ) -> SuiTransactionBlockResponse {
         let signature = self.get_context().sign(&txn_data, desc).await;
+        let tx = Transaction::from_data(txn_data, vec![signature]);
+        let tx_digest = *tx.digest();
+        self.get_context()
+            .get_wallet()
+            .execute_transaction_must_succeed(tx)
+            .await;
         let resp = self
             .get_fullnode_client()
-            .quorum_driver_api()
-            .execute_transaction_block(
-                Transaction::from_data(txn_data, vec![signature]),
+            .read_api()
+            .get_transaction_with_options(
+                tx_digest,
                 SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_balance_changes()
                     .with_effects()
                     .with_events(),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
             .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e));
