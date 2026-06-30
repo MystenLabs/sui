@@ -1243,10 +1243,7 @@ async fn test_access_old_object_pruned() {
                 let state = node.state();
                 state
                     .database_for_testing()
-                    .prune_objects_and_compact_for_testing(
-                        state.get_checkpoint_store(),
-                        state.rpc_index.as_deref(),
-                    )
+                    .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
                     .await;
                 // Make sure the old version of the object is already pruned.
                 assert!(

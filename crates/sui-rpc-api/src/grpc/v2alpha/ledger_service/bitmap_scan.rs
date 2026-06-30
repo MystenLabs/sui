@@ -25,8 +25,9 @@ use super::chunked_scan::cancelled;
 use super::ledger_read::remaining_range_after;
 
 pub(super) const TX_BITMAP_BUCKET_SIZE: u64 = 65_536;
-// Must match the writer's `EVENT_BUCKET_SIZE` in sui-core's rpc_index and
-// sui-kvstore's `event_bitmap_index::BUCKET_SIZE` (2^28).
+// Must match the writer's `EVENT_BUCKET_SIZE` in sui-rpc-store's
+// `schema::event_bitmap` and sui-kvstore's `event_bitmap_index::BUCKET_SIZE`
+// (2^28).
 pub(super) const EVENT_BITMAP_BUCKET_SIZE: u64 = 268_435_456;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

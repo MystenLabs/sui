@@ -4,10 +4,7 @@
 //! Sequential pipeline that populates the
 //! [`schema::event_bitmap`](crate::schema::event_bitmap) CF.
 //!
-//! Mirrors the event-space half of
-//! `write_ledger_history_rows_for_checkpoint` in
-//! `sui-core::rpc_index`. For every event in every transaction
-//! the pipeline:
+//! For every event in every transaction the pipeline:
 //!
 //! 1. Visits dimension candidates via
 //!    [`sui_inverted_index::for_each_event_dimension`].

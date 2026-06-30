@@ -798,9 +798,6 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
-            // The embedded rpc-store is the node's index backend; the legacy
-            // `rpc-index` is no longer built here.
-            None,
             embedded_rpc_store.as_ref().map(|embedded| embedded.store()),
             checkpoint_store.clone(),
             &prometheus_registry,
@@ -2673,8 +2670,8 @@ async fn build_http_servers(
         SubscriptionService::build(prometheus_registry, indexed_checkpoint);
     let rpc_router = {
         // Serve the index read paths from the embedded rpc-store when it
-        // is enabled, otherwise from the legacy `rpc-index`. Raw chain
-        // data comes from the perpetual / checkpoint stores either way.
+        // is enabled. Raw chain data comes from the perpetual / checkpoint
+        // stores either way.
         let reader: Arc<dyn RpcStateReader> = match embedded_rpc_store {
             Some(embedded) => Arc::new(RpcStoreReadStore::new(
                 state.clone(),
