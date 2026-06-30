@@ -501,6 +501,8 @@ fn parse_remote_store_header(header: &str) -> Result<(HeaderName, HeaderValue), 
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use clap::Parser;
@@ -543,14 +545,15 @@ pub(crate) mod tests {
     ///   in the map return `CheckpointError::NotFound`.
     /// - `not_found_failures` / `fetch_failures` / `decode_failures`: number of times to
     ///   return the corresponding error for a given sequence number before succeeding.
-    /// - `latest_checkpoint`: value returned by `latest_checkpoint_number()`.
+    /// - `latest_checkpoint`: value returned by `latest_checkpoint_number()`. Interior-mutable so
+    ///   tests can advance the network tip while the client is shared behind an `Arc`.
     #[derive(Default)]
     pub(crate) struct MockIngestionClient {
         pub checkpoints: DashMap<u64, Checkpoint>,
         pub not_found_failures: DashMap<u64, usize>,
         pub fetch_failures: DashMap<u64, usize>,
         pub decode_failures: DashMap<u64, usize>,
-        pub latest_checkpoint: u64,
+        pub latest_checkpoint: AtomicU64,
     }
 
     impl MockIngestionClient {
@@ -605,7 +608,7 @@ pub(crate) mod tests {
         }
 
         async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-            Ok(self.latest_checkpoint)
+            Ok(self.latest_checkpoint.load(Ordering::Relaxed))
         }
     }
 

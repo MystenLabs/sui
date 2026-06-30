@@ -34,6 +34,7 @@ use crate::metrics::IngestionMetrics;
 /// [`IngestionService`] is held across threads.
 pub type BoxedStreamingClient = Box<dyn CheckpointStreamingClient + Send + Sync>;
 
+pub(crate) mod backfill;
 mod broadcaster;
 mod byte_count;
 pub(crate) mod decode;
@@ -324,7 +325,7 @@ mod tests {
     fn mock_ingestion_client(latest_checkpoint: u64) -> IngestionClient {
         let metrics = IngestionMetrics::new(None, &Registry::new());
         let mock = MockIngestionClient {
-            latest_checkpoint,
+            latest_checkpoint: latest_checkpoint.into(),
             ..Default::default()
         };
         IngestionClient::from_trait(Arc::new(mock), metrics)
@@ -616,7 +617,7 @@ mod tests {
         let mut service = IngestionService::with_clients(
             IngestionClient::from_trait(
                 Arc::new(MockIngestionClient {
-                    latest_checkpoint: FALLBACK,
+                    latest_checkpoint: FALLBACK.into(),
                     ..Default::default()
                 }),
                 metrics.clone(),
@@ -639,7 +640,7 @@ mod tests {
         let mut service = IngestionService::with_clients(
             IngestionClient::from_trait(
                 Arc::new(MockIngestionClient {
-                    latest_checkpoint: FALLBACK,
+                    latest_checkpoint: FALLBACK.into(),
                     ..Default::default()
                 }),
                 metrics.clone(),
