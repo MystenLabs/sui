@@ -30,6 +30,6 @@ message CursorToken {
     // Whether `position` is a matched row or a scan frontier.
     CursorKind kind = 2;
 
-    uint64 checkpoint = 3;
-    uint64 position = 4;
+    optional uint64 checkpoint = 3;
+    optional uint64 position = 4;
 }

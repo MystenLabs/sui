@@ -8,10 +8,10 @@ pub struct CursorToken {
     /// Whether `position` is a matched row or a scan frontier.
     #[prost(enumeration = "CursorKind", tag = "2")]
     pub kind: i32,
-    #[prost(uint64, tag = "3")]
-    pub checkpoint: u64,
-    #[prost(uint64, tag = "4")]
-    pub position: u64,
+    #[prost(uint64, optional, tag = "3")]
+    pub checkpoint: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "4")]
+    pub position: ::core::option::Option<u64>,
 }
 /// Ledger-history query a cursor was minted for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

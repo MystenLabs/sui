@@ -119,8 +119,8 @@ impl From<&CursorToken> for ProtoCursorToken {
         Self {
             query_type: cursor.query_type.to_proto() as i32,
             kind: cursor.kind.to_proto() as i32,
-            checkpoint: cursor.checkpoint,
-            position: cursor.position,
+            checkpoint: Some(cursor.checkpoint),
+            position: Some(cursor.position),
         }
     }
 }
@@ -137,11 +137,13 @@ impl TryFrom<ProtoCursorToken> for CursorToken {
             .ok()
             .and_then(CursorKind::from_proto)
             .with_context(|| format!("unknown cursor kind: {}", proto.kind))?;
+        let checkpoint = proto.checkpoint.context("cursor missing checkpoint")?;
+        let position = proto.position.context("cursor missing position")?;
         Ok(Self {
             query_type,
             kind,
-            checkpoint: proto.checkpoint,
-            position: proto.position,
+            checkpoint,
+            position,
         })
     }
 }
