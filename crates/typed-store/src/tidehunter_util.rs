@@ -112,12 +112,14 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
     // The perpetual DB is value-read-bound under sustained high load: object/tx/
     // effects value fetches dominate, and once their record-WAL frags age out of
     // the mmap window the reads fall back to `pread` syscalls (see
-    // docs/tidehunter-pt-load-investigation.md). Double the record-WAL mmap window
-    // for perpetual only — the index is in memory and the index-WAL window
-    // (`max_index_maps`) is deliberately left unchanged — so more recent values
-    // stay mapped instead of spilling to syscall reads.
+    // docs/tidehunter-pt-load-investigation.md, Windows 3 and 4). Enlarge the
+    // record-WAL mmap window for perpetual only — the index is in memory and the
+    // index-WAL window (`max_index_maps`) is deliberately left unchanged — so more
+    // recent values stay mapped instead of spilling to syscall reads. An earlier 2x
+    // still spilled to syscall after ~2.6h at 16k TPS (the working set outgrew the
+    // window), so widen it to 4x.
     let max_maps = if metric_conf.db_name.starts_with("perpetual") {
-        max_maps * 2
+        max_maps * 4
     } else {
         max_maps
     };
