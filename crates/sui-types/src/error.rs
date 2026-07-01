@@ -831,6 +831,12 @@ pub enum SuiErrorKind {
     },
 }
 
+/// The one non-durable [`SuiErrorKind::TransactionProcessing`] status: a per-validator dedup hit,
+/// not evidence the transaction reached consensus. Producer (validator) and consumer
+/// ([`SuiError::durable_transaction_processing_digest`]) must agree on this exact string, so it is
+/// defined here once.
+pub const TX_PROCESSING_RECENTLY_SUBMITTED: &str = "recently submitted";
+
 #[repr(u64)]
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -1000,6 +1006,26 @@ impl SuiError {
 
     pub fn into_inner(self) -> SuiErrorKind {
         *self.0
+    }
+
+    /// Returns the digest of a `TransactionProcessing` rejection whose outcome is already finalized
+    /// by consensus (sequenced, or executed via a checkpoint). Waiting for that outcome by digest is
+    /// guaranteed to resolve — to effects or a certified rejection — so the driver waits instead of
+    /// resubmitting.
+    ///
+    /// Returns `None` for the sole non-durable status ([`TX_PROCESSING_RECENTLY_SUBMITTED`], a
+    /// per-validator dedup hit) and for any other error, so the driver keeps resubmitting. Treating
+    /// every other processing status as durable is deliberate: new durable states are handled
+    /// automatically, with only the one non-durable status pinned by a constant.
+    pub fn durable_transaction_processing_digest(&self) -> Option<TransactionDigest> {
+        match self.as_inner() {
+            SuiErrorKind::TransactionProcessing { digest, status }
+                if status != TX_PROCESSING_RECENTLY_SUBMITTED =>
+            {
+                Some(*digest)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -1483,5 +1509,51 @@ impl ErrorCategory {
                 | ErrorCategory::ValidatorOverloaded
                 | ErrorCategory::Unavailable
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SuiError, SuiErrorKind, TX_PROCESSING_RECENTLY_SUBMITTED};
+    use crate::base_types::TransactionDigest;
+
+    #[test]
+    fn durable_transaction_processing_digest_classification() {
+        let digest = TransactionDigest::random();
+
+        // Any status other than the one non-durable dedup status is durable (a finalized outcome),
+        // so the digest is returned and the driver waits instead of resubmitting.
+        for status in [
+            "sequenced by consensus",
+            "processed via consensus output",
+            "processed via checkpoint execution",
+            "some future durable status",
+        ] {
+            let error: SuiError = SuiErrorKind::TransactionProcessing {
+                digest,
+                status: status.to_string(),
+            }
+            .into();
+            assert_eq!(
+                error.durable_transaction_processing_digest(),
+                Some(digest),
+                "status {status:?} should be treated as durable"
+            );
+        }
+
+        // The one non-durable status stays retriable so the driver resubmits elsewhere.
+        let recently_submitted: SuiError = SuiErrorKind::TransactionProcessing {
+            digest,
+            status: TX_PROCESSING_RECENTLY_SUBMITTED.to_string(),
+        }
+        .into();
+        assert_eq!(
+            recently_submitted.durable_transaction_processing_digest(),
+            None
+        );
+
+        // Non-`TransactionProcessing` errors are never durable-processing.
+        let other: SuiError = SuiErrorKind::TooManyRequests.into();
+        assert_eq!(other.durable_transaction_processing_digest(), None);
     }
 }
