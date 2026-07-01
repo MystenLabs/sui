@@ -882,12 +882,13 @@ fn open_th_map(name: &str) -> DBMap<u64, String> {
     let mut builder = KeyShapeBuilder::new();
     // u64 keys serialize to 8 fixed bytes via `be_fix_int_ser`.
     let config = ThConfig::new(8, 16, KeyType::uniform(1));
-    let ks = add_key_space(&mut builder, name, &config);
+    add_key_space(&mut builder, name, &config);
     let key_shape = builder.build();
     let metric_conf = MetricConf::new("test_snapshot_iter");
     let (inner_db, registry_id) = open(temp_dir().as_path(), key_shape, &metric_conf);
+    let ks = inner_db.ks(name);
     let db = Arc::new(Database::new(
-        Storage::TideHunter(inner_db),
+        Storage::TideHunter(inner_db.clone()),
         metric_conf,
         Some(registry_id),
     ));

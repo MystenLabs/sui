@@ -367,24 +367,21 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     cf_configs: std::collections::BTreeMap<String, typed_store::tidehunter_util::ThConfig>,
                 ) -> Self {
                     let mut builder = typed_store::tidehunter_util::KeyShapeBuilder::new();
-                    let (
-                        #(
-                            #field_names,
-                        )*
-                    ) = (
-                        #(
-                            typed_store::tidehunter_util::add_key_space(
-                                &mut builder,
-                                stringify!(#cf_names),
-                                cf_configs.get(stringify!(#cf_names))
-                                    .unwrap_or_else(|| panic!("Missing tidehunter configuration for table {} from database {}", stringify!(#cf_names), stringify!(#name))),
-                            ),
-                        )*
-                    );
+                    // Declare each column family by name; the canonical handle
+                    // is resolved from `keyspaces` (returned by `open`) below,
+                    // not from declaration order.
+                    #(
+                        typed_store::tidehunter_util::add_key_space(
+                            &mut builder,
+                            stringify!(#cf_names),
+                            cf_configs.get(stringify!(#cf_names))
+                                .unwrap_or_else(|| panic!("Missing tidehunter configuration for table {} from database {}", stringify!(#cf_names), stringify!(#name))),
+                        );
+                    )*
                     let key_shape = builder.build();
                     let (inner_db, registry_id) = typed_store::tidehunter_util::open(path.as_path(), key_shape, &metric_conf);
                     let db = std::sync::Arc::new(typed_store::rocks::Database::new(
-                        typed_store::rocks::Storage::TideHunter(inner_db),
+                        typed_store::rocks::Storage::TideHunter(inner_db.clone()),
                         metric_conf,
                         Some(registry_id)));
                     let (
@@ -393,7 +390,8 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         ),*
                     ) = (#(
                         DBMap::#inner_types::reopen_th(
-                            db.clone(), stringify!(#cf_names), #field_names,
+                            db.clone(), stringify!(#cf_names),
+                            inner_db.ks(stringify!(#cf_names)),
                             cf_configs[stringify!(#cf_names)].prefix.clone()
                         )
                     ),*);
