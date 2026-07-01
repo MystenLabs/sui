@@ -1,0 +1,86 @@
+[
+    {
+        "TIER": "bursty",
+        "V": "0xb64953f3b985d4868aa8605a19437c40f75151e8d6675d92bf327230f5c380bb::proof_of_existence::nft_mint",
+        "CNT": 2903090,
+        "LO": 6232766,
+        "HI": 6264524
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xe802635a57ebaeee17efa558904b63ee6b33eaafc6c9affea5adb92f16c99ed8::game::tap",
+        "CNT": 2500035,
+        "LO": 41959110,
+        "HI": 42281327
+    },
+    {
+        "TIER": "bursty",
+        "V": "0x2bd6faaa9cd5ab1c970bff3c0b831b29d2b59c7e0abd80007bde17fa48023940::fomo::xiexieniwoxuehuileQQ3199418686",
+        "CNT": 2153303,
+        "LO": 70498322,
+        "HI": 70768287
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x5306f64e312b581766351c07af79c72fcb1cd25147157fdc2f8ad76de9a3fb6a::vaa::parse_and_verify",
+        "CNT": 444517587,
+        "LO": 1448801,
+        "HI": 287999967
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::zero",
+        "CNT": 217127532,
+        "LO": 1905939,
+        "HI": 287999979
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::into_balance",
+        "CNT": 162956127,
+        "LO": 2050243,
+        "HI": 287999991
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x346bb9d384d96735c6f0262aa11012349d66e2247698c08faa5d132b08a495f6::h0d1a7::he605f",
+        "CNT": 1268027,
+        "LO": 278087990,
+        "HI": 287999986
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xeb216569044c4265d5f0c3f949acaba568cff4dd4452a3db2b518dc607aba094::h34126::hb453b",
+        "CNT": 750214,
+        "LO": 278018948,
+        "HI": 287774385
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xe0c4073e91d9de558c376be616c446c8c138408e9e38eed41d0ad04eb01ab328::para::tr",
+        "CNT": 402491,
+        "LO": 281709964,
+        "HI": 287999135
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xf74aa26054e5db492f93d88bce836466a799b70eae200bc254b5e3c9ed0cea8b::factory::upgrade_nft",
+        "CNT": 500,
+        "LO": 60694041,
+        "HI": 60694055
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xce617be993279c6cbaefbe1aa9ac83edeab5bf1b6d5c2385e3c5824ac6d88795::router::turbos_b",
+        "CNT": 500,
+        "LO": 274762847,
+        "HI": 276059347
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x10709498be018fd7766529d7c4de719bab78eaf840484212bbd2f57b70397073::blub_ambassador::collect_salary",
+        "CNT": 500,
+        "LO": 79125065,
+        "HI": 206936210
+    }
+]

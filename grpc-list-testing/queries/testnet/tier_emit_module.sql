@@ -1,0 +1,21 @@
+WITH agg AS (
+  SELECT PACKAGE || '::' || MODULE v, COUNT(*) cnt, MIN(CHECKPOINT) lo, MAX(CHECKPOINT) hi
+  FROM CHAINDATA_TESTNET.EVENT
+  WHERE CHECKPOINT < 344000000 AND PACKAGE IS NOT NULL AND MODULE IS NOT NULL
+  GROUP BY 1
+),
+tiered AS (
+  SELECT v, cnt, lo, hi,
+    CASE
+      WHEN lo < 5000000 AND hi >= 339000000 THEN 'dense_everywhere'
+      WHEN lo >= 334000000                                      THEN 'recent_only'
+      WHEN cnt > 5000 AND (hi - lo) < 500000                      THEN 'bursty'
+      WHEN cnt BETWEEN 20 AND 500                                 THEN 'sparse'
+      ELSE 'other'
+    END tier
+  FROM agg
+)
+SELECT tier, v, cnt, lo, hi
+FROM (SELECT tiered.*, ROW_NUMBER() OVER (PARTITION BY tier ORDER BY cnt DESC) rn FROM tiered)
+WHERE tier <> 'other' AND rn <= 3
+ORDER BY tier, cnt DESC;

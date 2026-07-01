@@ -1,0 +1,296 @@
+corpus=../corpus.mainnet.jsonl cases=152 (+0 pulled components)
+plan: full-drain=85  partial(>80,000)=63  single-probe=4
+protojson: parsed 152/152 requests against proto rev
+  08:31:34 [1/152] cp.affected_object.na.dense_everywhere.archival_only.expensive.asc.6640a7: 400 items, 4 pg [CAP] | elapsed 0.0m eta ~1.0m
+  08:31:35 [2/152] cp.affected_object.na.dense_everywhere.shared.expensive.asc.6640a7: 400 items, 4 pg [CAP] | elapsed 0.0m eta ~0.8m
+  08:31:35 [3/152] cp.affected_object.na.dense_everywhere.shared.expensive.desc.6640a7: 400 items, 4 pg [CAP] | elapsed 0.0m eta ~0.7m
+  08:31:35 [4/152] cp.affected_object.na.recent_only.shared.cheap.asc.b06c81: 400 items, 4 pg [CAP] | elapsed 0.0m eta ~0.7m
+  08:31:35 [5/152] cp.affected_object.na.recent_only.shared.cheap.desc.b06c81: 400 items, 4 pg [CAP] | elapsed 0.0m eta ~0.7m
+  08:31:35 [6/152] cp.affected_object.na.sparse.archival_only.cheap.asc.2d1a49: 18 items, 1 pg [ok] | elapsed 0.0m eta ~0.6m
+  08:31:35 [7/152] cp.emit_module.full.bursty.archival_only.cheap.asc.7d6100: 0 items, 1 pg [ok] | elapsed 0.0m eta ~0.5m
+  08:31:37 [8/152] cp.emit_module.full.dense_everywhere.archival_only.expensive.asc.e40589: 1,236 items, 13 pg [ok] | elapsed 0.1m eta ~1.0m
+  08:31:38 [9/152] cp.emit_module.full.dense_everywhere.shared.expensive.asc.e40589: 1,236 items, 13 pg [ok] | elapsed 0.1m eta ~1.1m
+  08:31:39 [10/152] cp.emit_module.full.dense_everywhere.shared.expensive.desc.e40589: 1,236 items, 13 pg [ok] | elapsed 0.1m eta ~1.2m
+  08:32:18 [11/152] cp.emit_module.full.recent_only.shared.cheap.asc.6ef8ec: 28,649 items, 287 pg [ok] | elapsed 0.7m eta ~9.5m
+  08:32:36 [12/152] cp.emit_module.full.recent_only.shared.cheap.desc.6ef8ec: 28,649 items, 287 pg [ok] | elapsed 1.0m eta ~12.0m
+  08:32:36 [13/152] cp.emit_module.full.sparse.archival_only.cheap.asc.a2f08d: 0 items, 1 pg [ok] | elapsed 1.0m eta ~11.1m
+  08:32:37 [14/152] cp.emit_module.module.dense_everywhere.archival_only.expensive.asc.e40589: 1,236 items, 13 pg [ok] | elapsed 1.0m eta ~10.3m
+  08:32:37 [15/152] cp.emit_module.package.dense_everywhere.archival_only.expensive.asc.388930: 1,236 items, 13 pg [ok] | elapsed 1.1m eta ~9.7m
+  08:32:38 [16/152] cp.event_type.address.dense_everywhere.archival_only.expensive.asc.209b7e: 546 items, 6 pg [ok] | elapsed 1.1m eta ~9.1m
+  08:32:38 [17/152] cp.event_type.full.bursty.archival_only.cheap.asc.fbab87: 0 items, 1 pg [ok] | elapsed 1.1m eta ~8.5m
+  08:32:39 [18/152] cp.event_type.full.dense_everywhere.archival_only.expensive.asc.d39257: 543 items, 6 pg [ok] | elapsed 1.1m eta ~8.0m
+  08:32:39 [19/152] cp.event_type.full.dense_everywhere.shared.expensive.asc.d39257: 543 items, 6 pg [ok] | elapsed 1.1m eta ~7.6m
+  08:32:39 [20/152] cp.event_type.full.dense_everywhere.shared.expensive.desc.d39257: 543 items, 6 pg [ok] | elapsed 1.1m eta ~7.2m
+  08:32:40 [21/152] cp.event_type.full.recent_only.shared.cheap.asc.24484c: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~6.9m
+  08:32:40 [22/152] cp.event_type.full.recent_only.shared.cheap.desc.24484c: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~6.5m
+  08:32:40 [23/152] cp.event_type.generic.sparse.archival_only.cheap.asc.70c9a4: 0 items, 1 pg [ok] | elapsed 1.1m eta ~6.2m
+  08:32:40 [24/152] cp.event_type.module.dense_everywhere.archival_only.expensive.asc.b8ec37: 546 items, 6 pg [ok] | elapsed 1.1m eta ~5.9m
+  08:32:41 [25/152] cp.event_type.name.dense_everywhere.archival_only.expensive.asc.d39257: 543 items, 6 pg [ok] | elapsed 1.1m eta ~5.7m
+  08:32:41 [26/152] cp.move_call.full.bursty.archival_only.cheap.asc.a093ee: 0 items, 1 pg [ok] | elapsed 1.1m eta ~5.4m
+  08:32:41 [27/152] cp.move_call.full.dense_everywhere.archival_only.expensive.asc.1737f7: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~5.2m
+  08:32:41 [28/152] cp.move_call.full.dense_everywhere.shared.expensive.asc.1737f7: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~5.0m
+  08:32:42 [29/152] cp.move_call.full.dense_everywhere.shared.expensive.desc.1737f7: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~4.8m
+  08:32:42 [30/152] cp.move_call.full.recent_only.shared.cheap.asc.7a8013: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~4.6m
+  08:32:42 [31/152] cp.move_call.full.recent_only.shared.cheap.desc.7a8013: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~4.4m
+  08:32:42 [32/152] cp.move_call.full.sparse.archival_only.cheap.asc.1e5c8d: 0 items, 1 pg [ok] | elapsed 1.1m eta ~4.3m
+  08:32:42 [33/152] cp.move_call.function.dense_everywhere.archival_only.expensive.asc.1737f7: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~4.1m
+  08:32:43 [34/152] cp.move_call.module.dense_everywhere.archival_only.expensive.asc.1cb99b: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~4.0m
+  08:32:43 [35/152] cp.move_call.package.dense_everywhere.archival_only.expensive.asc.f53e2d: 400 items, 4 pg [CAP] | elapsed 1.1m eta ~3.8m
+  08:32:44 [36/152] cp.package_write.na.dense_everywhere.archival_only: 786 items, 8 pg [ok] | elapsed 1.2m eta ~3.8m
+  08:32:44 [37/152] cp.package_write.na.dense_everywhere.shared: 786 items, 8 pg [ok] | elapsed 1.2m eta ~3.7m
+  08:32:44 [38/152] cp.sender.na.bursty.archival_only.cheap.asc.9797fa: 0 items, 1 pg [ok] | elapsed 1.2m eta ~3.5m
+  08:32:45 [39/152] cp.sender.na.dense_everywhere.archival_only.expensive.asc.dd892b: 400 items, 4 pg [CAP] | elapsed 1.2m eta ~3.4m
+  08:32:45 [40/152] cp.sender.na.dense_everywhere.shared.expensive.asc.dd892b: 400 items, 4 pg [CAP] | elapsed 1.2m eta ~3.3m
+  08:32:45 [41/152] cp.sender.na.dense_everywhere.shared.expensive.desc.dd892b: 400 items, 4 pg [CAP] | elapsed 1.2m eta ~3.2m
+  08:34:08 [42/152] cp.sender.na.recent_only.shared.cheap.asc.5252b9: 65,097 items, 651 pg [ok] | elapsed 2.6m eta ~6.7m
+  08:34:48 [43/152] cp.sender.na.recent_only.shared.cheap.desc.5252b9: 65,097 items, 651 pg [ok] | elapsed 3.2m eta ~8.2m
+  08:34:48 [44/152] cp.sender.na.sparse.archival_only.cheap.asc.f739d3: 0 items, 1 pg [ok] | elapsed 3.2m eta ~7.9m
+  08:34:48 [45/152] cp.unfiltered.archival_only: 400 items, 4 pg [CAP] | elapsed 3.2m eta ~7.7m
+  08:34:48 [46/152] cp.unfiltered.shared: 400 items, 4 pg [CAP] | elapsed 3.2m eta ~7.5m
+  08:34:48 [47/152] ev.emit_module.full.bursty.archival_only.cheap.asc.7d6100: 0 items, 1 pg [ok] | elapsed 3.2m eta ~7.2m
+  08:34:49 [48/152] ev.emit_module.full.dense_everywhere.archival_only.expensive.asc.e40589: 1,662 items, 2 pg [ok] | elapsed 3.2m eta ~7.0m
+  08:34:49 [49/152] ev.emit_module.full.dense_everywhere.shared.expensive.asc.e40589: 1,662 items, 2 pg [ok] | elapsed 3.3m eta ~6.8m
+  08:34:49 [50/152] ev.emit_module.full.dense_everywhere.shared.expensive.desc.e40589: 1,662 items, 2 pg [ok] | elapsed 3.3m eta ~6.6m
+  08:34:50 [51/152] ev.emit_module.full.recent_only.shared.cheap.asc.6ef8ec: 4,000 items, 4 pg [CAP] | elapsed 3.3m eta ~6.5m
+  08:34:50 [52/152] ev.emit_module.full.recent_only.shared.cheap.desc.6ef8ec: 4,000 items, 4 pg [CAP] | elapsed 3.3m eta ~6.3m
+  08:34:50 [53/152] ev.emit_module.full.sparse.archival_only.cheap.asc.a2f08d: 0 items, 1 pg [ok] | elapsed 3.3m eta ~6.1m
+  08:34:51 [54/152] ev.emit_module.module.dense_everywhere.archival_only.expensive.asc.e40589: 1,662 items, 2 pg [ok] | elapsed 3.3m eta ~6.0m
+  08:34:51 [55/152] ev.emit_module.package.dense_everywhere.archival_only.expensive.asc.388930: 1,662 items, 2 pg [ok] | elapsed 3.3m eta ~5.8m
+  08:35:04 [56/152] ev.emit_module.unanchored_not.dense.shared: 80,000 items, 80 pg [CAP] | elapsed 3.5m eta ~6.0m
+  08:35:05 [57/152] ev.emit_or_eventtype.crossdim.shared: 2,205 items, 3 pg [ok] | elapsed 3.5m eta ~5.9m
+  08:35:05 [58/152] ev.event_stream_head.synthetic_empty.archival: 0 items, 1 pg [ok] | elapsed 3.5m eta ~5.7m
+  08:35:05 [59/152] ev.event_type.address.dense_everywhere.archival_only.expensive.asc.209b7e: 546 items, 1 pg [ok] | elapsed 3.5m eta ~5.5m
+  08:35:05 [60/152] ev.event_type.full.bursty.archival_only.cheap.asc.fbab87: 0 items, 1 pg [ok] | elapsed 3.5m eta ~5.4m
+  08:35:05 [61/152] ev.event_type.full.dense_everywhere.archival_only.expensive.asc.d39257: 543 items, 1 pg [ok] | elapsed 3.5m eta ~5.3m
+  08:35:05 [62/152] ev.event_type.full.dense_everywhere.shared.expensive.asc.d39257: 543 items, 1 pg [ok] | elapsed 3.5m eta ~5.1m
+  08:35:05 [63/152] ev.event_type.full.dense_everywhere.shared.expensive.desc.d39257: 543 items, 1 pg [ok] | elapsed 3.5m eta ~5.0m
+  08:35:08 [64/152] ev.event_type.full.recent_only.shared.cheap.asc.24484c: 4,000 items, 4 pg [CAP] | elapsed 3.6m eta ~4.9m
+  08:35:10 [65/152] ev.event_type.full.recent_only.shared.cheap.desc.24484c: 4,000 items, 4 pg [CAP] | elapsed 3.6m eta ~4.8m
+  08:35:10 [66/152] ev.event_type.generic.sparse.archival_only.cheap.asc.70c9a4: 0 items, 1 pg [ok] | elapsed 3.6m eta ~4.7m
+  08:35:10 [67/152] ev.event_type.module.dense_everywhere.archival_only.expensive.asc.b8ec37: 546 items, 1 pg [ok] | elapsed 3.6m eta ~4.6m
+  08:35:10 [68/152] ev.event_type.name.dense_everywhere.archival_only.expensive.asc.d39257: 543 items, 1 pg [ok] | elapsed 3.6m eta ~4.4m
+  08:35:10 [69/152] ev.sender.na.bursty.archival_only.cheap.asc.9797fa: 0 items, 1 pg [ok] | elapsed 3.6m eta ~4.3m
+  08:35:10 [70/152] ev.sender.na.dense_everywhere.archival_only.expensive.asc.dd892b: 4,144 items, 5 pg [ok] | elapsed 3.6m eta ~4.2m
+  08:35:11 [71/152] ev.sender.na.dense_everywhere.shared.expensive.asc.dd892b: 4,144 items, 5 pg [ok] | elapsed 3.6m eta ~4.1m
+  08:35:11 [72/152] ev.sender.na.dense_everywhere.shared.expensive.desc.dd892b: 4,144 items, 5 pg [ok] | elapsed 3.6m eta ~4.0m
+  08:35:12 [73/152] ev.sender.na.recent_only.shared.cheap.asc.5252b9: 4,000 items, 4 pg [CAP] | elapsed 3.6m eta ~3.9m
+  08:35:12 [74/152] ev.sender.na.recent_only.shared.cheap.desc.5252b9: 4,000 items, 4 pg [CAP] | elapsed 3.6m eta ~3.8m
+  08:35:12 [75/152] ev.sender.na.sparse.archival_only.cheap.asc.f739d3: 0 items, 1 pg [ok] | elapsed 3.6m eta ~3.7m
+  08:35:13 [76/152] ev.sender_and_emit_module.overlap.shared: 4,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.7m
+  08:35:14 [77/152] ev.unfiltered.archival_only: 4,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.6m
+  08:35:14 [78/152] ev.unfiltered.shared: 4,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.5m
+  08:35:15 [79/152] tx.affected_object.na.dense_everywhere.archival_only.expensive.asc.6640a7: 2,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.4m
+  08:35:15 [80/152] tx.affected_object.na.dense_everywhere.shared.cheap.asc.6640a7: 2,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.3m
+  08:35:15 [81/152] tx.affected_object.na.dense_everywhere.shared.cheap.desc.6640a7: 2,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.2m
+  08:35:16 [82/152] tx.affected_object.na.dense_everywhere.shared.expensive.asc.6640a7: 2,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.2m
+  08:35:16 [83/152] tx.affected_object.na.dense_everywhere.shared.expensive.desc.6640a7: 2,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.1m
+  08:35:16 [84/152] tx.affected_object.na.recent_only.shared.cheap.asc.b06c81: 2,000 items, 4 pg [CAP] | elapsed 3.7m eta ~3.0m
+  08:35:16 [85/152] tx.affected_object.na.recent_only.shared.cheap.desc.b06c81: 2,000 items, 4 pg [CAP] | elapsed 3.7m eta ~2.9m
+  08:35:17 [86/152] tx.affected_object.na.sparse.archival_only.cheap.asc.2d1a49: 18 items, 1 pg [ok] | elapsed 3.7m eta ~2.8m
+  08:35:17 [87/152] tx.degenerate.dense_and_dense.empty.archival: 0 items, 1 pg [ok] | elapsed 3.7m eta ~2.8m
+  08:35:17 [88/152] tx.emit_module.full.bursty.archival_only.cheap.asc.7d6100: 0 items, 1 pg [ok] | elapsed 3.7m eta ~2.7m
+  08:35:17 [89/152] tx.emit_module.full.dense_everywhere.archival_only.expensive.asc.e40589: 1,237 items, 3 pg [ok] | elapsed 3.7m eta ~2.6m
+  08:35:17 [90/152] tx.emit_module.full.dense_everywhere.shared.cheap.asc.e40589: 1,237 items, 3 pg [ok] | elapsed 3.7m eta ~2.6m
+  08:35:17 [91/152] tx.emit_module.full.dense_everywhere.shared.cheap.desc.e40589: 1,237 items, 3 pg [ok] | elapsed 3.7m eta ~2.5m
+  08:35:18 [92/152] tx.emit_module.full.dense_everywhere.shared.expensive.asc.e40589: 1,237 items, 3 pg [ok] | elapsed 3.7m eta ~2.4m
+  08:35:18 [93/152] tx.emit_module.full.dense_everywhere.shared.expensive.desc.e40589: 1,237 items, 3 pg [ok] | elapsed 3.7m eta ~2.4m
+  08:35:23 [94/152] tx.emit_module.full.recent_only.shared.cheap.asc.6ef8ec: 29,874 items, 60 pg [ok] | elapsed 3.8m eta ~2.4m
+  08:35:27 [95/152] tx.emit_module.full.recent_only.shared.cheap.desc.6ef8ec: 29,874 items, 60 pg [ok] | elapsed 3.9m eta ~2.3m
+  08:35:27 [96/152] tx.emit_module.full.sparse.archival_only.cheap.asc.a2f08d: 0 items, 1 pg [ok] | elapsed 3.9m eta ~2.3m
+  08:35:27 [97/152] tx.emit_module.module.dense_everywhere.archival_only.expensive.asc.e40589: 1,237 items, 3 pg [ok] | elapsed 3.9m eta ~2.2m
+  08:35:27 [98/152] tx.emit_module.package.dense_everywhere.archival_only.expensive.asc.388930: 1,237 items, 3 pg [ok] | elapsed 3.9m eta ~2.1m
+  08:35:27 [99/152] tx.event_stream_head.synthetic_empty.archival: 0 items, 1 pg [ok] | elapsed 3.9m eta ~2.1m
+  08:35:27 [100/152] tx.event_type.address.dense_everywhere.archival_only.expensive.asc.209b7e: 546 items, 2 pg [ok] | elapsed 3.9m eta ~2.0m
+  08:35:28 [101/152] tx.event_type.full.bursty.archival_only.cheap.asc.fbab87: 0 items, 1 pg [ok] | elapsed 3.9m eta ~2.0m
+  08:35:28 [102/152] tx.event_type.full.dense_everywhere.archival_only.expensive.asc.d39257: 543 items, 2 pg [ok] | elapsed 3.9m eta ~1.9m
+  08:35:28 [103/152] tx.event_type.full.dense_everywhere.shared.cheap.asc.d39257: 543 items, 2 pg [ok] | elapsed 3.9m eta ~1.9m
+  08:35:28 [104/152] tx.event_type.full.dense_everywhere.shared.cheap.desc.d39257: 543 items, 2 pg [ok] | elapsed 3.9m eta ~1.8m
+  08:35:28 [105/152] tx.event_type.full.dense_everywhere.shared.expensive.asc.d39257: 543 items, 2 pg [ok] | elapsed 3.9m eta ~1.7m
+  08:35:28 [106/152] tx.event_type.full.dense_everywhere.shared.expensive.desc.d39257: 543 items, 2 pg [ok] | elapsed 3.9m eta ~1.7m
+  08:35:29 [107/152] tx.event_type.full.recent_only.shared.cheap.asc.24484c: 2,000 items, 4 pg [CAP] | elapsed 3.9m eta ~1.6m
+  08:35:29 [108/152] tx.event_type.full.recent_only.shared.cheap.desc.24484c: 2,000 items, 4 pg [CAP] | elapsed 3.9m eta ~1.6m
+  08:35:29 [109/152] tx.event_type.generic.sparse.archival_only.cheap.asc.70c9a4: 0 items, 1 pg [ok] | elapsed 3.9m eta ~1.5m
+  08:35:29 [110/152] tx.event_type.module.dense_everywhere.archival_only.expensive.asc.b8ec37: 546 items, 2 pg [ok] | elapsed 3.9m eta ~1.5m
+  08:35:29 [111/152] tx.event_type.name.dense_everywhere.archival_only.expensive.asc.d39257: 543 items, 2 pg [ok] | elapsed 3.9m eta ~1.4m
+  08:35:29 [112/152] tx.move_call.full.bursty.archival_only.cheap.asc.a093ee: 0 items, 1 pg [ok] | elapsed 3.9m eta ~1.4m
+  08:35:29 [113/152] tx.move_call.full.dense_everywhere.archival_only.expensive.asc.1737f7: 2,000 items, 4 pg [CAP] | elapsed 3.9m eta ~1.4m
+  08:35:30 [114/152] tx.move_call.full.dense_everywhere.shared.cheap.asc.1737f7: 2,000 items, 4 pg [CAP] | elapsed 3.9m eta ~1.3m
+  08:35:30 [115/152] tx.move_call.full.dense_everywhere.shared.cheap.asc.rm_digest.1737f7: 2,000 items, 4 pg [CAP] | elapsed 3.9m eta ~1.3m
+  08:35:30 [116/152] tx.move_call.full.dense_everywhere.shared.cheap.desc.1737f7: 2,000 items, 4 pg [CAP] | elapsed 3.9m eta ~1.2m
+  08:35:31 [117/152] tx.move_call.full.dense_everywhere.shared.expensive.asc.1737f7: 2,000 items, 4 pg [CAP] | elapsed 3.9m eta ~1.2m
+  08:35:31 [118/152] tx.move_call.full.dense_everywhere.shared.expensive.asc.rm_heavy.1737f7: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~1.1m
+  08:35:31 [119/152] tx.move_call.full.dense_everywhere.shared.expensive.desc.1737f7: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~1.1m
+  08:35:32 [120/152] tx.move_call.full.recent_only.shared.cheap.asc.7a8013: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~1.1m
+  08:35:32 [121/152] tx.move_call.full.recent_only.shared.cheap.desc.7a8013: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~1.0m
+  08:35:32 [122/152] tx.move_call.full.sparse.archival_only.cheap.asc.1e5c8d: 0 items, 1 pg [ok] | elapsed 4.0m eta ~1.0m
+  08:35:32 [123/152] tx.move_call.function.dense_everywhere.archival_only.expensive.asc.1737f7: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~0.9m
+  08:35:33 [124/152] tx.move_call.module.dense_everywhere.archival_only.expensive.asc.1cb99b: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~0.9m
+  08:35:33 [125/152] tx.move_call.package.dense_everywhere.archival_only.expensive.asc.f53e2d: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~0.9m
+  08:35:33 [126/152] tx.package_write.na.dense_everywhere.archival_only: 786 items, 2 pg [ok] | elapsed 4.0m eta ~0.8m
+  08:35:34 [127/152] tx.package_write.na.dense_everywhere.shared: 786 items, 2 pg [ok] | elapsed 4.0m eta ~0.8m
+  08:35:34 [128/152] tx.sender.edge_limit5.dense.shared: 5 items, 1 pg [ok] | elapsed 4.0m eta ~0.7m
+  08:35:34 [129/152] tx.sender.edge_overcap.dense.shared: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~0.7m
+  08:35:35 [130/152] tx.sender.edge_tip.dense: 2,634 items, 6 pg [ok] | elapsed 4.0m eta ~0.7m
+  08:35:35 [131/152] tx.sender.na.bursty.archival_only.cheap.asc.9797fa: 0 items, 1 pg [ok] | elapsed 4.0m eta ~0.6m
+  08:35:35 [132/152] tx.sender.na.dense_everywhere.archival_only.expensive.asc.dd892b: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~0.6m
+  08:35:35 [133/152] tx.sender.na.dense_everywhere.shared.cheap.asc.232808: 2,000 items, 4 pg [CAP] | elapsed 4.0m eta ~0.6m
+  08:35:46 [134/152] tx.sender.na.dense_everywhere.shared.cheap.asc.41ef16: 25,903 items, 52 pg [ok] | elapsed 4.2m eta ~0.6m
+  08:35:59 [135/152] tx.sender.na.dense_everywhere.shared.cheap.asc.b20109: 30,642 items, 62 pg [ok] | elapsed 4.4m eta ~0.6m
+  08:35:59 [136/152] tx.sender.na.dense_everywhere.shared.cheap.asc.dd892b: 2,000 items, 4 pg [CAP] | elapsed 4.4m eta ~0.5m
+  08:35:59 [137/152] tx.sender.na.dense_everywhere.shared.cheap.asc.rm_digest.dd892b: 2,000 items, 4 pg [CAP] | elapsed 4.4m eta ~0.5m
+  08:36:00 [138/152] tx.sender.na.dense_everywhere.shared.cheap.desc.dd892b: 2,000 items, 4 pg [CAP] | elapsed 4.4m eta ~0.4m
+  08:36:00 [139/152] tx.sender.na.dense_everywhere.shared.expensive.asc.dd892b: 2,000 items, 4 pg [CAP] | elapsed 4.4m eta ~0.4m
+  08:36:00 [140/152] tx.sender.na.dense_everywhere.shared.expensive.asc.rm_heavy.dd892b: 2,000 items, 4 pg [CAP] | elapsed 4.4m eta ~0.4m
+  08:36:01 [141/152] tx.sender.na.dense_everywhere.shared.expensive.desc.dd892b: 2,000 items, 4 pg [CAP] | elapsed 4.4m eta ~0.3m
+  08:36:01 [142/152] tx.sender.na.mixed.shared.expensive.asc.66799b: 2,000 items, 4 pg [CAP] | elapsed 4.5m eta ~0.3m
+  08:36:11 [143/152] tx.sender.na.recent_only.shared.cheap.asc.5252b9: 65,097 items, 131 pg [ok] | elapsed 4.6m eta ~0.3m
+  08:36:20 [144/152] tx.sender.na.recent_only.shared.cheap.desc.5252b9: 65,097 items, 131 pg [ok] | elapsed 4.8m eta ~0.3m
+  08:36:20 [145/152] tx.sender.na.sparse.archival_only.cheap.asc.f739d3: 0 items, 1 pg [ok] | elapsed 4.8m eta ~0.2m
+  08:36:34 [146/152] tx.sender.or_deep_dnf.shared: 80,000 items, 160 pg [CAP] | elapsed 5.0m eta ~0.2m
+  08:36:47 [147/152] tx.sender.unanchored_not.recent.shared: 80,000 items, 160 pg [CAP] | elapsed 5.2m eta ~0.2m
+  08:36:47 [148/152] tx.sender_and_move_call.overlap.shared: 2,000 items, 4 pg [CAP] | elapsed 5.2m eta ~0.1m
+  08:36:47 [149/152] tx.sender_not_move_call.anchored.shared: 0 items, 3 pg [ok] | elapsed 5.2m eta ~0.1m
+  08:37:02 [150/152] tx.sender_or_move_call.crossdim.shared: 80,000 items, 160 pg [CAP] | elapsed 5.5m eta ~0.1m
+  08:37:02 [151/152] tx.unfiltered.archival_only: 2,000 items, 4 pg [CAP] | elapsed 5.5m eta ~0.0m
+  08:37:03 [152/152] tx.unfiltered.shared: 2,000 items, 4 pg [CAP] | elapsed 5.5m eta ~0.0m
+
+=== results (329s) ===
+  SKIP: tx.sender.na.dense_everywhere.archival_only.expensive.asc.dd892b
+      - count UNVERIFIED (expected 43,118,068 > cap 80,000); structural checks only
+  SKIP: tx.sender.na.dense_everywhere.shared.expensive.asc.dd892b
+      - count UNVERIFIED (expected 43,118,068 > cap 80,000); structural checks only
+  SKIP: tx.sender.na.dense_everywhere.shared.expensive.desc.dd892b
+      - count UNVERIFIED (expected 43,118,068 > cap 80,000); structural checks only
+  SKIP: tx.sender.na.dense_everywhere.shared.cheap.asc.dd892b
+      - count UNVERIFIED (expected 43,118,068 > cap 80,000); structural checks only
+  SKIP: tx.sender.na.dense_everywhere.shared.cheap.desc.dd892b
+      - count UNVERIFIED (expected 43,118,068 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.dense_everywhere.archival_only.expensive.asc.1737f7
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.dense_everywhere.shared.expensive.asc.1737f7
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.dense_everywhere.shared.expensive.desc.1737f7
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.dense_everywhere.shared.cheap.asc.1737f7
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.dense_everywhere.shared.cheap.desc.1737f7
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.recent_only.shared.cheap.asc.7a8013
+      - count UNVERIFIED (expected 564,851 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.recent_only.shared.cheap.desc.7a8013
+      - count UNVERIFIED (expected 564,851 > cap 80,000); structural checks only
+  SKIP: tx.event_type.full.recent_only.shared.cheap.asc.24484c
+      - count UNVERIFIED (expected 464,842 > cap 80,000); structural checks only
+  SKIP: tx.event_type.full.recent_only.shared.cheap.desc.24484c
+      - count UNVERIFIED (expected 464,842 > cap 80,000); structural checks only
+  SKIP: tx.affected_object.na.dense_everywhere.archival_only.expensive.asc.6640a7
+      - count UNVERIFIED (expected 17,916,453 > cap 80,000); structural checks only
+  SKIP: tx.affected_object.na.dense_everywhere.shared.expensive.asc.6640a7
+      - count UNVERIFIED (expected 17,916,453 > cap 80,000); structural checks only
+  SKIP: tx.affected_object.na.dense_everywhere.shared.expensive.desc.6640a7
+      - count UNVERIFIED (expected 17,916,453 > cap 80,000); structural checks only
+  SKIP: tx.affected_object.na.dense_everywhere.shared.cheap.asc.6640a7
+      - count UNVERIFIED (expected 17,916,453 > cap 80,000); structural checks only
+  SKIP: tx.affected_object.na.dense_everywhere.shared.cheap.desc.6640a7
+      - count UNVERIFIED (expected 17,916,453 > cap 80,000); structural checks only
+  SKIP: tx.affected_object.na.recent_only.shared.cheap.asc.b06c81
+      - count UNVERIFIED (expected 20,429,139 > cap 80,000); structural checks only
+  SKIP: tx.affected_object.na.recent_only.shared.cheap.desc.b06c81
+      - count UNVERIFIED (expected 20,429,139 > cap 80,000); structural checks only
+  SKIP: cp.sender.na.dense_everywhere.archival_only.expensive.asc.dd892b
+      - count UNVERIFIED (expected 6,000,000 > cap 80,000); structural checks only
+  SKIP: cp.sender.na.dense_everywhere.shared.expensive.asc.dd892b
+      - count UNVERIFIED (expected 6,000,000 > cap 80,000); structural checks only
+  SKIP: cp.sender.na.dense_everywhere.shared.expensive.desc.dd892b
+      - count UNVERIFIED (expected 6,000,000 > cap 80,000); structural checks only
+  SKIP: cp.move_call.full.dense_everywhere.archival_only.expensive.asc.1737f7
+      - count UNVERIFIED (expected 483,843 > cap 80,000); structural checks only
+  SKIP: cp.move_call.full.dense_everywhere.shared.expensive.asc.1737f7
+      - count UNVERIFIED (expected 483,843 > cap 80,000); structural checks only
+  SKIP: cp.move_call.full.dense_everywhere.shared.expensive.desc.1737f7
+      - count UNVERIFIED (expected 483,843 > cap 80,000); structural checks only
+  SKIP: cp.move_call.full.recent_only.shared.cheap.asc.7a8013
+      - count UNVERIFIED (expected 411,864 > cap 80,000); structural checks only
+  SKIP: cp.move_call.full.recent_only.shared.cheap.desc.7a8013
+      - count UNVERIFIED (expected 411,864 > cap 80,000); structural checks only
+  SKIP: cp.event_type.full.recent_only.shared.cheap.asc.24484c
+      - count UNVERIFIED (expected 460,873 > cap 80,000); structural checks only
+  SKIP: cp.event_type.full.recent_only.shared.cheap.desc.24484c
+      - count UNVERIFIED (expected 460,873 > cap 80,000); structural checks only
+  SKIP: cp.affected_object.na.dense_everywhere.archival_only.expensive.asc.6640a7
+      - count UNVERIFIED (expected 5,999,999 > cap 80,000); structural checks only
+  SKIP: cp.affected_object.na.dense_everywhere.shared.expensive.asc.6640a7
+      - count UNVERIFIED (expected 5,999,999 > cap 80,000); structural checks only
+  SKIP: cp.affected_object.na.dense_everywhere.shared.expensive.desc.6640a7
+      - count UNVERIFIED (expected 5,999,999 > cap 80,000); structural checks only
+  SKIP: cp.affected_object.na.recent_only.shared.cheap.asc.b06c81
+      - count UNVERIFIED (expected 6,000,000 > cap 80,000); structural checks only
+  SKIP: cp.affected_object.na.recent_only.shared.cheap.desc.b06c81
+      - count UNVERIFIED (expected 6,000,000 > cap 80,000); structural checks only
+  SKIP: ev.sender.na.recent_only.shared.cheap.asc.5252b9
+      - count UNVERIFIED (expected 370,726 > cap 80,000); structural checks only
+  SKIP: ev.sender.na.recent_only.shared.cheap.desc.5252b9
+      - count UNVERIFIED (expected 370,726 > cap 80,000); structural checks only
+  SKIP: ev.emit_module.full.recent_only.shared.cheap.asc.6ef8ec
+      - count UNVERIFIED (expected 490,710 > cap 80,000); structural checks only
+  SKIP: ev.emit_module.full.recent_only.shared.cheap.desc.6ef8ec
+      - count UNVERIFIED (expected 490,710 > cap 80,000); structural checks only
+  SKIP: ev.event_type.full.recent_only.shared.cheap.asc.24484c
+      - count UNVERIFIED (expected 464,842 > cap 80,000); structural checks only
+  SKIP: ev.event_type.full.recent_only.shared.cheap.desc.24484c
+      - count UNVERIFIED (expected 464,842 > cap 80,000); structural checks only
+  SKIP: tx.unfiltered.archival_only
+      - count UNVERIFIED (expected 90,755,269 > cap 80,000); structural checks only
+  SKIP: tx.unfiltered.shared
+      - count UNVERIFIED (expected 90,755,269 > cap 80,000); structural checks only
+  SKIP: ev.unfiltered.archival_only
+      - count UNVERIFIED (expected 141,329,173 > cap 80,000); structural checks only
+  SKIP: ev.unfiltered.shared
+      - count UNVERIFIED (expected 141,329,173 > cap 80,000); structural checks only
+  SKIP: cp.unfiltered.archival_only
+      - count UNVERIFIED (expected 6,000,000 > cap 80,000); structural checks only
+  SKIP: cp.unfiltered.shared
+      - count UNVERIFIED (expected 6,000,000 > cap 80,000); structural checks only
+  SKIP: tx.move_call.package.dense_everywhere.archival_only.expensive.asc.f53e2d
+      - count UNVERIFIED (expected 1,454,496 > cap 80,000); structural checks only
+  SKIP: tx.move_call.module.dense_everywhere.archival_only.expensive.asc.1cb99b
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: tx.move_call.function.dense_everywhere.archival_only.expensive.asc.1737f7
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: cp.move_call.package.dense_everywhere.archival_only.expensive.asc.f53e2d
+      - count UNVERIFIED (expected 487,459 > cap 80,000); structural checks only
+  SKIP: cp.move_call.module.dense_everywhere.archival_only.expensive.asc.1cb99b
+      - count UNVERIFIED (expected 483,843 > cap 80,000); structural checks only
+  SKIP: cp.move_call.function.dense_everywhere.archival_only.expensive.asc.1737f7
+      - count UNVERIFIED (expected 483,843 > cap 80,000); structural checks only
+  SKIP: tx.sender.na.dense_everywhere.shared.cheap.asc.rm_digest.dd892b
+      - count UNVERIFIED (expected 43,118,068 > cap 80,000); structural checks only
+  SKIP: tx.sender.na.dense_everywhere.shared.expensive.asc.rm_heavy.dd892b
+      - count UNVERIFIED (expected 43,118,068 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.dense_everywhere.shared.cheap.asc.rm_digest.1737f7
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: tx.move_call.full.dense_everywhere.shared.expensive.asc.rm_heavy.1737f7
+      - count UNVERIFIED (expected 1,450,589 > cap 80,000); structural checks only
+  SKIP: tx.sender.edge_overcap.dense.shared
+      - count UNVERIFIED (expected 179,595 > cap 80,000); structural checks only
+  SKIP: tx.sender_or_move_call.crossdim.shared
+      - component(s) unverifiable (capped/error/missing): ['tx.move_call.full.recent_only.shared.cheap.asc.7a8013']
+  SKIP: tx.sender.na.dense_everywhere.shared.cheap.asc.232808
+      - count UNVERIFIED (expected 179,595 > cap 80,000); structural checks only
+  SKIP: tx.sender.or_deep_dnf.shared
+      - component(s) unverifiable (capped/error/missing): ['tx.sender.na.dense_everywhere.shared.cheap.asc.232808']
+  SKIP: tx.sender.na.mixed.shared.expensive.asc.66799b
+      - count UNVERIFIED (expected 99,035 > cap 80,000); structural checks only
+  SKIP: tx.sender_and_move_call.overlap.shared
+      - count UNVERIFIED (expected 99,035 > cap 80,000); structural checks only
+  SKIP: tx.sender_not_move_call.anchored.shared
+      - component(s) unverifiable (capped/error/missing): ['tx.sender.na.mixed.shared.expensive.asc.66799b', 'tx.sender_and_move_call.overlap.shared']
+  SKIP: tx.sender.unanchored_not.recent.shared
+      - component(s) unverifiable (capped/error/missing): ['tx.unfiltered.shared']
+  SKIP: ev.emit_module.unanchored_not.dense.shared
+      - component(s) unverifiable (capped/error/missing): ['ev.unfiltered.shared']
+  SKIP: ev.sender_and_emit_module.overlap.shared
+      - count UNVERIFIED (expected 95,136 > cap 80,000); structural checks only
+
+PASS=101  FAIL=0  SKIP=68  (of 169 checks)
+wrote results.mainnet.json

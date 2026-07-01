@@ -1,0 +1,86 @@
+[
+    {
+        "TIER": "bursty",
+        "V": "0x5f58a338d21accf1a2ad8217969d73d136b0a4dd0eb781307c80620205cae55e::gacha::GachaBallMinted",
+        "CNT": 155751,
+        "LO": 6161990,
+        "HI": 6321169
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xd22293738694a4a3922e4b916af5d9742421f82ade44f6fd1090eefd00d823d5::bis_blob::BlobCertified",
+        "CNT": 141372,
+        "LO": 258114536,
+        "HI": 258439157
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xd22293738694a4a3922e4b916af5d9742421f82ade44f6fd1090eefd00d823d5::bis_blob::BlobRegistered",
+        "CNT": 141372,
+        "LO": 258114536,
+        "HI": 258439157
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x3::validator::StakingRequestEvent",
+        "CNT": 238418,
+        "LO": 5543,
+        "HI": 349954980
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x3::validator_set::ValidatorEpochInfoEventV2",
+        "CNT": 122753,
+        "LO": 5543,
+        "HI": 349656071
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x3::validator::UnstakingRequestEvent",
+        "CNT": 43778,
+        "LO": 12164,
+        "HI": 349899057
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xea780494f2e06863489a931b385771d8b0fa54ae704004007edb76f22ba29d0b::mark_price::MarkPriceUpdated",
+        "CNT": 471370,
+        "LO": 341912182,
+        "HI": 349999992
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xea780494f2e06863489a931b385771d8b0fa54ae704004007edb76f22ba29d0b::position_store::StorePositionUpdated",
+        "CNT": 437017,
+        "LO": 342041044,
+        "HI": 349999992
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xd848f191f5b3619d96e98063d8a3e6b15489b1671118da4ab71938170bcdf892::oracle_lane::ObservationRecorded<0xd848f191f5b3619d96e98063d8a3e6b15489b1671118da4ab71938170bcdf892::oracle_lane::OracleRead<0xd848f191f5b3619d96e98063d8a3e6b15489b1671118da4ab71938170bcdf892::pyth_feed::RawSpot>>",
+        "CNT": 291111,
+        "LO": 349209108,
+        "HI": 349999999
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xf5f1d129f771835af8a5ae47f45db31721000d776269fe33b43dda37e622a8bc::events::BondingCurveBuy<0xada26fdcc180e99dc6ed17b19ddb74feb3d61f2825553ad6e618660fe9e19cf9::faucet::FAUCET>",
+        "CNT": 500,
+        "LO": 200808193,
+        "HI": 201188328
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x1a0277cfa3ea0dedf1181aa72cae765ba3bbae969bc1d03f6527ccce3ea50ce7::lottery_campaign::BoosterPackRewarded",
+        "CNT": 500,
+        "LO": 201247213,
+        "HI": 201247348
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xef890e426e196b59165820409640079b97fd9f9852062ed608b63dfa55b6780e::points_management::PointTicketMinted<0xef890e426e196b59165820409640079b97fd9f9852062ed608b63dfa55b6780e::moviepass_points::MOVIEPASS_POINTS>",
+        "CNT": 500,
+        "LO": 167873362,
+        "HI": 167873362
+    }
+]

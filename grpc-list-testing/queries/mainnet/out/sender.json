@@ -1,0 +1,86 @@
+[
+    {
+        "TIER": "bursty",
+        "V": "0xac140826121ead8f8d491a096c74bc780d20abfeb7046f4732c1a24731e80b55",
+        "CNT": 387465,
+        "LO": 33040143,
+        "HI": 33358027
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xbec5132bd933e0a13232374cc436d6aa8f6da03cb71e8134ed13c35ed98a3dec",
+        "CNT": 331673,
+        "LO": 33316339,
+        "HI": 33631185
+    },
+    {
+        "TIER": "bursty",
+        "V": "0x3c2a69c314810603fed400f3f306e05013e588560785181a662951e8d798d51c",
+        "CNT": 252129,
+        "LO": 33073551,
+        "HI": 33454208
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "CNT": 991085838,
+        "LO": 0,
+        "HI": 287999999
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x9a0ee11c9bdc858b97453ac184eeaa5457135482b6b3ef0d6120d916afd77303",
+        "CNT": 5603702,
+        "LO": 4768085,
+        "HI": 287999885
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x60dd01bc037e2c1ea2aaf02187701f9f4453ba323338d2f2f521957065b0984d",
+        "CNT": 1214508,
+        "LO": 1125910,
+        "HI": 287999394
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xfc7e77997f2a342e8757631b6bfede8488fdb5fcab0ec35fd0863cfa8be5ef0d",
+        "CNT": 76489,
+        "LO": 278387347,
+        "HI": 287999910
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x6bd4396f679feed556829285becd2efea5e38458b9d5662c672395e221aba998",
+        "CNT": 70525,
+        "LO": 278010757,
+        "HI": 287999589
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x22651438e2858ce30ae7a8f7d82d3a946f87731d144e06bca6aaf8c7d9775f0c",
+        "CNT": 67014,
+        "LO": 280847951,
+        "HI": 287999683
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x06a60e3dbc8242d171a7b5c32b2284c3746adb09558e629f93595fbb7fd3f402",
+        "CNT": 500,
+        "LO": 34006751,
+        "HI": 39516231
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x36c9c9edf9110c0fdf7eef7c8f2132288890d4fe01d20b955f3f3a80d45bb0ef",
+        "CNT": 500,
+        "LO": 34443080,
+        "HI": 39187206
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x491579d359a813086d86c760a7c4c4c3545bfdced8108717d972b2a20860a285",
+        "CNT": 500,
+        "LO": 17239946,
+        "HI": 17337535
+    }
+]

@@ -1,0 +1,86 @@
+[
+    {
+        "TIER": "bursty",
+        "V": "0x96a4e462d72ce64c95877f089dad72c506a3f522c2a2524d8dce2c0397a101a3",
+        "CNT": 1678957,
+        "LO": 245771593,
+        "HI": 245832422
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xb30b2f030da8f17a33f59f018e3b9f8c354dc89d45c1b9394a1d100cecca11a6",
+        "CNT": 1678322,
+        "LO": 245771617,
+        "HI": 245832422
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xc1449724032517778686fe96c6b2b8b2470c47e1275dacbf8699b322a94bbae6",
+        "CNT": 1670146,
+        "LO": 245771913,
+        "HI": 245832422
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "CNT": 1233318119,
+        "LO": 0,
+        "HI": 349999999
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0xda03712cec2cd03ca771a0d42d97a65f45ded442e3ba0d1bad1a8fa089105939",
+        "CNT": 2020137,
+        "LO": 15756,
+        "HI": 349999828
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0xeca5cff0c43acb90dc8019232e7ee85d616930cfc2938befd225045690e2dab9",
+        "CNT": 1354374,
+        "LO": 1576389,
+        "HI": 349999899
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x5e56d7faeb76ca2d6ec2966d192948901a4742cf429304d778d7bee8df4122a0",
+        "CNT": 292109,
+        "LO": 349209108,
+        "HI": 349999999
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x87efada1ce85bf7fa6c7eff64355f7de19f7a67203897e002d2813f7f9c6e690",
+        "CNT": 17225,
+        "LO": 346771470,
+        "HI": 349999285
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x8712c86666c07321edf78ba7160734019707b06504f94bbe0db1e66b3ae68257",
+        "CNT": 5573,
+        "LO": 345244435,
+        "HI": 348540495
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x59e51b670aeeb0edd8a6fe5d0d21426b548b8599e44cbd910cf17e8a3641f8e9",
+        "CNT": 500,
+        "LO": 38456787,
+        "HI": 38480680
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x73ded841d32e0d93aef716e8b233fc435e939943ef63a8071d067e6b77374be6",
+        "CNT": 500,
+        "LO": 45853801,
+        "HI": 45891948
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xd91e3668798eeda1fa949e459b3511146ea8e9f98e5e17f404406102e8bf8a66",
+        "CNT": 500,
+        "LO": 124890733,
+        "HI": 175114427
+    }
+]

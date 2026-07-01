@@ -1,0 +1,14 @@
+{
+  "network": "mainnet",
+  "cp_ceiling": 293000000,
+  "shared_window_lo": 287000000,
+  "shared_window_hi": 293000000,
+  "genesis": 287000000,
+  "schema": "CHAINDATA_MAINNET",
+  "warehouse": "ANALYTICS_WH",
+  "connection": "nick",
+  "proto_rev": "43c5bc13202ae398b1519a3eead1f40df8ca277b",
+  "n_cases": 154,
+  "ordering_default": "ORDERING_ASCENDING",
+  "notes": "end_checkpoint exclusive; Snowflake oracle uses CHECKPOINT < cp_ceiling. cp_ceiling MUST be <= target kv-rpc cluster backfilled tip."
+}
