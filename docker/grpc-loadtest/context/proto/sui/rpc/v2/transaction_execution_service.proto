@@ -1,0 +1,83 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2;
+
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/struct.proto";
+import "sui/rpc/v2/argument.proto";
+import "sui/rpc/v2/bcs.proto";
+import "sui/rpc/v2/executed_transaction.proto";
+import "sui/rpc/v2/signature.proto";
+import "sui/rpc/v2/transaction.proto";
+
+service TransactionExecutionService {
+  rpc ExecuteTransaction(ExecuteTransactionRequest) returns (ExecuteTransactionResponse);
+  rpc SimulateTransaction(SimulateTransactionRequest) returns (SimulateTransactionResponse);
+}
+
+message ExecuteTransactionRequest {
+  // The transaction to execute.
+  optional Transaction transaction = 1;
+
+  // Set of `UserSignature`s authorizing the execution of the provided
+  // transaction.
+  repeated UserSignature signatures = 2;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `effects.status,checkpoint`.
+  optional google.protobuf.FieldMask read_mask = 3;
+}
+
+// Response message for `NodeService.ExecuteTransaction`.
+message ExecuteTransactionResponse {
+  optional ExecutedTransaction transaction = 1;
+}
+
+message SimulateTransactionRequest {
+  optional Transaction transaction = 1;
+
+  // Mask specifying which fields to read.
+  optional google.protobuf.FieldMask read_mask = 2;
+
+  // buf:lint:ignore ENUM_ZERO_VALUE_SUFFIX
+  enum TransactionChecks {
+    ENABLED = 0;
+    DISABLED = 1;
+  }
+
+  // Specify whether checks should be ENABLED (default) or DISABLED while executing the transaction
+  optional TransactionChecks checks = 3;
+
+  // Perform gas selection based on a budget estimation and include the
+  // selected gas payment and budget in the response.
+  //
+  // This option will be ignored if `checks` is `DISABLED`.
+  optional bool do_gas_selection = 4;
+}
+
+message SimulateTransactionResponse {
+  optional ExecutedTransaction transaction = 1;
+  repeated CommandResult command_outputs = 2;
+
+  // A suggested gas price to use, that is above RGP, in order to provide a
+  // better chance of the transaction being included in the presence of
+  // congested objects.
+  optional uint64 suggested_gas_price = 3;
+}
+
+// An intermediate result/output from the execution of a single command
+message CommandResult {
+  repeated CommandOutput return_values = 1;
+  repeated CommandOutput mutated_by_ref = 2;
+}
+
+message CommandOutput {
+  optional Argument argument = 1;
+  optional Bcs value = 2;
+
+  // JSON rendering of the output.
+  optional google.protobuf.Value json = 3;
+}

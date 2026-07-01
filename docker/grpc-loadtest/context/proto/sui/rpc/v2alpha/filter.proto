@@ -1,0 +1,179 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2alpha;
+
+// DNF filter for transactions: any term may match, and each term is an AND
+// of signed literals.
+// An absent filter matches everything. A present filter must have at least one
+// term, and every term must have at least one included literal.
+message TransactionFilter {
+  // Terms are ORed together.
+  repeated TransactionTerm terms = 1;
+}
+
+// One conjunction in a transaction DNF filter.
+message TransactionTerm {
+  // Literals are ANDed together.
+  repeated TransactionLiteral literals = 1;
+}
+
+// One signed transaction predicate literal.
+message TransactionLiteral {
+  oneof polarity {
+    // The predicate must match.
+    TransactionPredicate include = 1;
+
+    // The predicate must not match.
+    TransactionPredicate exclude = 2;
+  }
+}
+
+// One transaction-index predicate.
+message TransactionPredicate {
+  oneof predicate {
+    // Match transactions sent by the specified address.
+    SenderFilter sender = 1;
+
+    // Match transactions where the specified address's state moved as a side
+    // effect: it owns an object after the txn, owned an object before the
+    // txn that was mutated/transferred away/deleted/wrapped, or its
+    // address-balance changed via an accumulator event.
+    AffectedAddressFilter affected_address = 2;
+
+    // Match transactions whose effects include a change for the specified
+    // object.
+    AffectedObjectFilter affected_object = 3;
+
+    // Match transactions that made a Move call matching the specified filter.
+    MoveCallFilter move_call = 4;
+
+    // Match transactions that emitted an event whose package/module fields
+    // match the specified filter.
+    EmitModuleFilter emit_module = 5;
+
+    // Match transactions that emitted an event with a type matching the
+    // specified filter.
+    EventTypeFilter event_type = 6;
+
+    // Match transactions that wrote to the specified authenticated event
+    // stream head.
+    EventStreamHeadFilter event_stream_head = 7;
+
+    // Match transactions that wrote a Move package — a first publish or an
+    // upgrade, of any package.
+    PackageWriteFilter package_write = 8;
+  }
+}
+
+// DNF filter for events: any term may match, and each term is an AND of
+// signed literals. Sender predicates match all events from matching
+// transactions; emit-module, event-type, and event-stream-head predicates match
+// individual event-space dimensions. An absent filter matches everything. A
+// present filter must have at least one term, and every term must have at least
+// one included literal.
+message EventFilter {
+  // Terms are ORed together.
+  repeated EventTerm terms = 1;
+}
+
+// One conjunction in an event DNF filter.
+message EventTerm {
+  // Literals are ANDed together.
+  repeated EventLiteral literals = 1;
+}
+
+// One signed event predicate literal.
+message EventLiteral {
+  oneof polarity {
+    // The predicate must match.
+    EventPredicate include = 1;
+
+    // The predicate must not match.
+    EventPredicate exclude = 2;
+  }
+}
+
+// One event-index predicate.
+message EventPredicate {
+  oneof predicate {
+    // Match events from transactions sent by the specified address.
+    SenderFilter sender = 1;
+
+    // Match events whose package/module fields match the specified filter.
+    EmitModuleFilter emit_module = 2;
+
+    // Match events whose type matches the specified filter.
+    EventTypeFilter event_type = 3;
+
+    // Match events committed to the specified authenticated event stream head.
+    EventStreamHeadFilter event_stream_head = 4;
+  }
+}
+
+// Match by transaction sender address.
+message SenderFilter {
+  // The sender address (hex-encoded).
+  optional string address = 1;
+}
+
+// Match by any address whose state moved as a side effect of the
+// transaction: object ownership changes (in either direction), prior
+// owners of removed/wrapped objects, and address-balance changes via
+// accumulator events.
+message AffectedAddressFilter {
+  // The affected address (hex-encoded).
+  optional string address = 1;
+}
+
+// Match by changed object ID.
+message AffectedObjectFilter {
+  // The changed object ID (hex-encoded).
+  optional string object_id = 1;
+}
+
+// Match by Move function call, specified as a `::`-delimited Move path.
+//
+// Specificity levels:
+//   "0xpkg"                        -> matches any call in the package
+//   "0xpkg::module"                -> matches any call in the module
+//   "0xpkg::module::function"      -> matches calls to the exact function
+message MoveCallFilter {
+  // Required. Move path of the form `package[::module[::function]]`.
+  optional string function = 1;
+}
+
+// Match by an event's package/module fields, specified as a `::`-delimited
+// Move path. These identify the top-level Move call that triggered the event.
+//
+// Specificity levels:
+//   "0xpkg"               -> matches events with this package_id
+//   "0xpkg::module"       -> matches events with this package_id and module
+message EmitModuleFilter {
+  // Required. Move path of the form `package[::module]`.
+  optional string module = 1;
+}
+
+// Match by event struct type, specified as a Move type string.
+//
+// Specificity levels:
+//   "0xaddr"                              -> matches events whose type is defined at this address
+//   "0xaddr::module"                      -> matches events whose type is in this module
+//   "0xaddr::module::Name"                -> matches events with this type name (any instantiation)
+//   "0xaddr::module::Name<T1, T2>"        -> matches events with this exact generic instantiation
+message EventTypeFilter {
+  // Required. Move type string of the form
+  // `address[::module[::Name[<type_params>]]]`.
+  optional string type = 1;
+}
+
+// Match by authenticated event stream head.
+message EventStreamHeadFilter {
+  // The stream id address (hex-encoded).
+  optional string stream_id = 1;
+}
+
+// Match transactions that wrote a Move package.
+message PackageWriteFilter {}

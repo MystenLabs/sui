@@ -1,0 +1,186 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2alpha;
+
+import "google/protobuf/empty.proto";
+import "sui/rpc/v2/object_reference.proto";
+
+// ProofService provides cryptographic proofs of blockchain state.
+//
+// Proofs in this service are anchored at a checkpoint summary's
+// `checkpoint_artifacts_digest`, which commits to the Object Checkpoint
+// State (OCS) -- the per-checkpoint Merkle tree of object references
+// written in that checkpoint. "OCS" appears throughout this file to refer
+// to that commitment scheme; see the doc on `OcsInclusionProof` below for
+// the full definition.
+service ProofService {
+  // Returns a cryptographic proof attesting to what (if anything) a
+  // specific checkpoint did to a specific object id.
+  //
+  // If the object id appears in the checkpoint's set of modified
+  // objects (the OCS Merkle tree's leaves), the response carries an
+  // `OcsInclusionProof` and -- when the modification left the object
+  // live -- the BCS-encoded object data. If the object id does not
+  // appear in the modified set, the response carries an
+  // `OcsNonInclusionProof`.
+  //
+  // IMPORTANT: a non-inclusion proof attests only that this checkpoint
+  // did NOT modify the requested object id. It does NOT attest that the
+  // object doesn't exist on chain: an object that was last modified in
+  // some earlier checkpoint and remained unchanged here will produce a
+  // non-inclusion proof. Clients that need the object's state at this
+  // checkpoint when it wasn't modified here must use a separate query
+  // (e.g. ratchet back to the most recent modification).
+  rpc GetCheckpointObjectProof(GetCheckpointObjectProofRequest) returns (GetCheckpointObjectProofResponse);
+}
+
+// A node in a Blake2b256 Merkle tree.
+//
+// An empty node represents an empty subtree (used as padding for odd-sized
+// levels and as the root of a tree built from zero leaves). A digest node
+// carries a 32-byte Blake2b256 hash of either a leaf or an inner node.
+message MerkleNode {
+  oneof node {
+    // Marker for an empty subtree.
+    google.protobuf.Empty empty = 1;
+
+    // 32-byte Blake2b256 hash.
+    bytes digest = 2;
+  }
+}
+
+// An inclusion proof for a leaf in a Blake2b256 Merkle tree.
+//
+// The proof carries the sibling node hashes on the path from the leaf up
+// to the root, leaf-side first. To verify, hash the leaf bytes with the
+// `0x00` leaf prefix, then walk `path` upward and compute each parent as
+// `BLAKE2b-256(0x01 || left || right)`. The final computed hash must equal
+// the tree root.
+message MerkleProof {
+  // Sibling node hashes, leaf-side first.
+  repeated MerkleNode path = 1;
+}
+
+// A non-inclusion proof for a Blake2b256 Merkle tree built over leaves
+// in sorted order.
+//
+// The proof carries the absent leaf's would-be position in sort order
+// plus inclusion proofs for the leaves immediately before and after it.
+// A verifier checks that the two neighbours strictly bracket the
+// target's sort key and that they sit at adjacent indices in the tree.
+message MerkleNonInclusionProof {
+  // The 0-based index the target would occupy in sort order if it
+  // were present. `left_leaf` is unset iff `index == 0` (the target
+  // would be the very first leaf); `right_leaf` is unset iff the
+  // target would be appended past the last leaf, in which case
+  // `left_leaf.merkle_proof` must identify the tree's right-most leaf.
+  optional uint64 index = 1;
+
+  // Sort-order neighbour with sort key strictly less than the target,
+  // accompanied by its inclusion proof at position `index - 1`.
+  optional MerkleNeighbourLeaf left_leaf = 2;
+
+  // Sort-order neighbour with sort key strictly greater than the
+  // target, accompanied by its inclusion proof at position `index`.
+  optional MerkleNeighbourLeaf right_leaf = 3;
+}
+
+// A neighbour leaf in a `MerkleNonInclusionProof`: an object reference
+// at a specific sorted position in the OCS tree, plus the inclusion
+// proof that authenticates it against the tree root.
+message MerkleNeighbourLeaf {
+  // The object reference stored at this leaf.
+  optional sui.rpc.v2.ObjectReference leaf = 1;
+
+  // Inclusion proof for `leaf` at its position in the tree.
+  optional MerkleProof merkle_proof = 2;
+}
+
+// An Object Checkpoint State (OCS) inclusion proof.
+//
+// The OCS is a Blake2b256 Merkle tree built by each checkpoint over the
+// set of object references it modified (created, mutated, unwrapped, or
+// otherwise written). Each leaf is a BCS-encoded
+// `(ObjectID, SequenceNumber, ObjectDigest)` tuple, with leaves arranged
+// in ascending `ObjectID` order. The tree's root is committed to by the
+// containing `CheckpointSummary` via the `CheckpointArtifacts` variant of
+// its `checkpoint_commitments`.
+//
+// An `OcsInclusionProof` proves that a particular leaf appears in this
+// tree. Combined with a verified `CheckpointSummary` it cryptographically
+// authenticates that a specific object reference was written in a specific
+// checkpoint.
+message OcsInclusionProof {
+  // Object reference being proven: (object_id, version, digest).
+  // For a deletion or wrap, `digest` is a framework sentinel value
+  // and `object_data` is absent. Consumers that only care whether
+  // the object is live after the change can check `object_data`
+  // presence instead of inspecting the digest.
+  optional sui.rpc.v2.ObjectReference object_ref = 1;
+
+  // Merkle inclusion proof for the leaf.
+  optional MerkleProof merkle_proof = 2;
+
+  // Position of the leaf in the modified-objects tree.
+  optional uint64 leaf_index = 3;
+
+  // 32-byte Merkle root of the modified-objects tree.
+  optional bytes tree_root = 4;
+
+  // BCS-encoded `Object` data at the version committed by this
+  // checkpoint. Present iff the modification left the object live
+  // (created, mutated, or unwrapped). Absent if the modification was
+  // a deletion or wrap.
+  optional bytes object_data = 5;
+}
+
+// An Object Checkpoint State (OCS) non-inclusion proof.
+//
+// Proves that no leaf with a given object id appears in the OCS Merkle
+// tree -- i.e. that the checkpoint did not modify the object id at all.
+// The proof's bracketing neighbours must have object ids strictly
+// flanking the target id, which combined with the neighbours being at
+// adjacent indices in the sorted tree proves that no leaf with any
+// version or digest under the target id can be in the tree.
+//
+// As with `OcsInclusionProof`, this is anchored at the containing
+// `CheckpointSummary`'s `CheckpointArtifacts` commitment.
+message OcsNonInclusionProof {
+  // Merkle non-inclusion proof over the OCS tree.
+  optional MerkleNonInclusionProof non_inclusion_proof = 1;
+
+  // 32-byte Merkle root of the modified-objects tree.
+  optional bytes tree_root = 2;
+}
+
+// Request for a `GetCheckpointObjectProof` call.
+message GetCheckpointObjectProofRequest {
+  // Required. The object id to prove a checkpoint outcome for
+  // (hex-encoded address).
+  optional string object_id = 1;
+
+  // Required. The checkpoint sequence number to query.
+  optional uint64 checkpoint = 2;
+}
+
+// Response containing a checkpoint-object proof and the materials needed
+// to verify it end-to-end.
+message GetCheckpointObjectProofResponse {
+  // BCS-encoded `CertifiedCheckpointSummary` for the requested
+  // checkpoint, carrying the `checkpoint_artifacts_digest` that the
+  // proof's `tree_root` must reconstruct, plus the BLS aggregate
+  // signature attesting to it.
+  optional bytes checkpoint_summary = 1;
+
+  // The proof itself: either an inclusion or a non-inclusion proof.
+  oneof proof {
+    // The object id was modified in this checkpoint.
+    OcsInclusionProof inclusion = 2;
+
+    // The object id was not modified in this checkpoint.
+    OcsNonInclusionProof non_inclusion = 3;
+  }
+}

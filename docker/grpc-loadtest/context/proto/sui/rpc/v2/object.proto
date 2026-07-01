@@ -1,0 +1,85 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2;
+
+import "google/protobuf/struct.proto";
+import "sui/rpc/v2/bcs.proto";
+import "sui/rpc/v2/move_package.proto";
+import "sui/rpc/v2/owner.proto";
+
+// An object on the Sui blockchain.
+message Object {
+  // This Object serialized as BCS.
+  optional Bcs bcs = 1;
+
+  // `ObjectId` for this object.
+  optional string object_id = 2;
+
+  // Version of the object.
+  optional uint64 version = 3;
+
+  // The digest of this Object.
+  optional string digest = 4;
+
+  // Owner of the object.
+  optional Owner owner = 5;
+
+  // The type of this object.
+  //
+  // This will be 'package' for packages and a StructTag for move structs.
+  optional string object_type = 6;
+
+  // DEPRECATED this field is no longer used to determine whether a tx can transfer this
+  // object. Instead, it is always calculated from the objects type when loaded in execution.
+  //
+  // Only set for Move structs
+  optional bool has_public_transfer = 7;
+
+  // BCS bytes of a Move struct value.
+  //
+  // Only set for Move structs
+  optional Bcs contents = 8;
+
+  // Package information for Move Packages
+  optional Package package = 9;
+
+  // The digest of the transaction that created or last mutated this object
+  optional string previous_transaction = 10;
+
+  // The amount of SUI to rebate if this object gets deleted.
+  // This number is re-calculated each time the object is mutated based on
+  // the present storage gas price.
+  optional uint64 storage_rebate = 11;
+
+  // JSON rendering of the object.
+  optional google.protobuf.Value json = 100;
+
+  // Current balance if this object is a `0x2::coin::Coin<T>`
+  optional uint64 balance = 101;
+
+  // JSON rendering of the object based on an on-chain template.
+  // This will not be set if the value's type does not have an associated `Display` template.
+  optional Display display = 102;
+}
+
+// Set of Objects
+message ObjectSet {
+  // Objects are sorted by the key `(object_id, version)`.
+  repeated Object objects = 1;
+}
+
+// A rendered JSON blob based on an on-chain template.
+message Display {
+  // Output for all successfully substituted display fields. Unsuccessful
+  // fields will be `null`, and will be accompanied by a field in `errors`,
+  // explaining the error.
+  optional google.protobuf.Value output = 1;
+
+  // If any fields failed to render, this will contain a mapping from failed
+  // field names to error messages. If all fields succeed, this will either be
+  // `null` or not set.
+  optional google.protobuf.Value errors = 2;
+}
