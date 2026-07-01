@@ -360,6 +360,8 @@ const MAINNET_USDB: &str =
 //              Enable timestamp_based_epoch_close on mainnet.
 // Version 128: Make some additional bounds to binary tables explicit.
 // Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
+//              Step-by-step gas-charging pipeline (gas_model v15). Replaces the
+//              monolithic charge_gas with discrete steps
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5059,7 +5061,9 @@ impl ProtocolConfig {
                     cfg.binary_enum_defs = Some(200);
                     cfg.binary_enum_def_instantiations = Some(100);
                 }
-                129 => {}
+                129 => {
+                    cfg.gas_model_version = Some(15);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
