@@ -7895,7 +7895,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.0",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -8484,7 +8484,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=131e31eccdbddf5a859b8466aafda10868c2850a#131e31eccdbddf5a859b8466aafda10868c2850a"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=e22a81b6adace0d20022f679eaf6480a81035192#e22a81b6adace0d20022f679eaf6480a81035192"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -18197,7 +18197,7 @@ dependencies = [
 [[package]]
 name = "tideconsole"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=131e31eccdbddf5a859b8466aafda10868c2850a#131e31eccdbddf5a859b8466aafda10868c2850a"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=e22a81b6adace0d20022f679eaf6480a81035192#e22a81b6adace0d20022f679eaf6480a81035192"
 dependencies = [
  "anyhow",
  "clap",
@@ -18212,7 +18212,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=131e31eccdbddf5a859b8466aafda10868c2850a#131e31eccdbddf5a859b8466aafda10868c2850a"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=e22a81b6adace0d20022f679eaf6480a81035192#e22a81b6adace0d20022f679eaf6480a81035192"
 dependencies = [
  "arc-swap",
  "bincode 1.3.3",

@@ -13,7 +13,7 @@ use tidehunter::compressed_batch::BatchCodec;
 use tidehunter::config::Config;
 use tidehunter::db::Db;
 use tidehunter::iterators::db_iterator::DbIterator;
-use tidehunter::key_shape::{KeyShape, KeySpace};
+use tidehunter::key_shape::KeyShape;
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
     Decision, WalPosition,
@@ -38,6 +38,9 @@ pub fn open(path: &Path, key_shape: KeyShape, metric_conf: &MetricConf) -> (Arc<
     let registry_id = registry_service.add(registry.clone());
     let metrics = Metrics::new_in(&registry);
     ensure_database_type(path, StorageType::TideHunter).expect("failed to open tidehunter db");
+    // `Db::open` reconciles the declared shape against the persisted registry
+    // (matching by name; supports reorder/add/remove). Callers resolve each
+    // column family's handle by name via `Db::ks`.
     let db = Db::open(path, key_shape, Arc::new(thdb_config(metric_conf)), metrics)
         .expect("failed to open tidehunter db");
     db.start_periodic_snapshot();
@@ -49,14 +52,17 @@ fn new_db_registry(name: String) -> Registry {
     Registry::new_custom(None, Some(labels)).expect("failed to create registry")
 }
 
-pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfig) -> KeySpace {
+pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfig) {
+    // `add_key_space_config_indexing` returns `&mut KeyShapeBuilder`; the
+    // canonical handle is no longer assigned here. It is resolved by name from
+    // the `KeySpaces` returned by `open` (see the DBMapUtils derive macro).
     builder.add_key_space_config_indexing(
         name,
         config.key_indexing.clone(),
         config.mutexes,
         config.key_type,
         config.config.clone(),
-    )
+    );
 }
 
 fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
