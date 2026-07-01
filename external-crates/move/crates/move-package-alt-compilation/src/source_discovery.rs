@@ -17,6 +17,17 @@ pub fn get_sources(path: &PackagePath, config: &BuildConfig) -> Result<Vec<FileN
         .collect())
 }
 
+/// Find the test-only source files for a package at the given path (i.e. files in the package's
+/// `tests/` directory, when `test_mode` is enabled). The compiler uses these to warn about modules
+/// under `tests/` that are not annotated `#[test_only]` (or `#[test]`).
+pub fn get_test_sources(path: &PackagePath, config: &BuildConfig) -> Result<Vec<FileName>> {
+    let places_to_look = test_source_paths_for_config(path.path(), config);
+    Ok(find_move_filenames(&places_to_look, false)?
+        .into_iter()
+        .map(FileName::from)
+        .collect())
+}
+
 /// Get the source paths to look for source files in a package at the given path, based on the
 /// build config flags.
 fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<PathBuf> {
@@ -41,6 +52,19 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<Pat
         .into_iter()
         .filter(|path| path.exists())
         .collect()
+}
+
+/// Like `source_paths_for_config`, but returns only the `tests/` directory (when `test_mode`).
+fn test_source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<PathBuf> {
+    if !config.test_mode {
+        return Vec::new();
+    }
+    let tests = package_path.join(SourcePackageLayout::Tests.path());
+    if tests.exists() {
+        vec![tests]
+    } else {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]

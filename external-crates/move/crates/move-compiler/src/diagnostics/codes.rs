@@ -364,6 +364,10 @@ codes!(
         ValueWarning: { msg: "issue with attribute value", severity: Warning },
         AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
         UnfulfilledExpectation: { msg: "unfulfilled '#[expect(...)]'", severity: Warning },
+        TestsModuleMissingTestOnly: {
+            msg: "module in 'tests/' is not annotated '#[test_only]'",
+            severity: Warning,
+        },
     ],
     Tests: [
         TestFailed: { msg: "test failure", severity: BlockingError },

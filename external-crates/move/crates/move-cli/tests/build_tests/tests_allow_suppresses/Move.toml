@@ -1,0 +1,3 @@
+[package]
+name = "TestsAllowSuppresses"
+edition = "2024.beta"

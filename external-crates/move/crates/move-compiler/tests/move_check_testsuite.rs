@@ -41,6 +41,10 @@ const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
 const MOVE_2024_DIR: &str = "move_2024";
 const DEV_DIR: &str = "development";
+/// Path component marking a test file whose `.move` target should be passed in the compiler's
+/// test-source slot (`PackagePaths::test_paths`) instead of the regular sources slot, so the
+/// expansion can warn about modules under `tests/` that lack `#[test_only]`.
+const TEST_SOURCES_DIR: &str = "test_sources_dir";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 struct TestInfo {
@@ -213,7 +217,13 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let move_path = path.with_extension(MOVE_EXTENSION);
     let out_path = out_path(path, test_name, &suffix);
     let flavor = package_config.flavor;
-    let targets: Vec<String> = vec![move_path.to_str().unwrap().to_owned()];
+    let target_strs: Vec<String> = vec![move_path.to_str().unwrap().to_owned()];
+    let is_test_source = path.components().any(|c| c.as_os_str() == TEST_SOURCES_DIR);
+    let (target_paths, target_test_paths) = if is_test_source {
+        (vec![], target_strs)
+    } else {
+        (target_strs, vec![])
+    };
     let named_address_map = default_testing_addresses(flavor);
     let deps = if matches!(test_kind, TestKind::NoStd) {
         vec![]
@@ -221,6 +231,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
         vec![PackagePaths {
             name: Some(("stdlib".into(), PackageConfig::default())),
             paths: move_stdlib::source_files(),
+            test_paths: vec![],
             named_address_map: named_address_map.clone(),
         }]
     };
@@ -231,7 +242,8 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     };
     let targets = vec![PackagePaths {
         name: target_name,
-        paths: targets,
+        paths: target_paths,
+        test_paths: target_test_paths,
         named_address_map,
     }];
 

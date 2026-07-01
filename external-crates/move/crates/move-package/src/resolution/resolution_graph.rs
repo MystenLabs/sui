@@ -611,6 +611,17 @@ impl Package {
             .collect())
     }
 
+    /// Returns `.move` files from the package's `tests/` directory when `dev_mode` is enabled.
+    /// These are reported separately so the compiler can warn about modules under `tests/` that
+    /// lack `#[test_only]` (or `#[test]`).
+    pub fn get_test_sources(&self, config: &BuildConfig) -> Result<Vec<FileName>> {
+        let places_to_look = test_source_paths_for_config(&self.package_path, config);
+        Ok(find_move_filenames(&places_to_look, false)?
+            .into_iter()
+            .map(FileName::from)
+            .collect())
+    }
+
     fn get_build_paths(package_path: &Path) -> Result<Vec<PathBuf>> {
         let mut places_to_look = Vec::new();
         let path = package_path.join(Path::new(DEFAULT_OUTPUT_DIR));
@@ -686,6 +697,19 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<Pat
         .into_iter()
         .filter(|path| path.exists())
         .collect()
+}
+
+/// Like `source_paths_for_config`, but returns only the `tests/` directory (when `dev_mode`).
+fn test_source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<PathBuf> {
+    if !config.dev_mode {
+        return Vec::new();
+    }
+    let tests = package_path.join(SourcePackageLayout::Tests.path());
+    if tests.exists() {
+        vec![tests]
+    } else {
+        Vec::new()
+    }
 }
 
 fn package_digest_for_config(package_path: &Path, config: &BuildConfig) -> Result<PackageDigest> {

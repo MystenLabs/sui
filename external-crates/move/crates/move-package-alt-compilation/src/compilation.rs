@@ -7,7 +7,7 @@ use crate::{
     compiled_package::{CompiledPackage, CompiledPackageInfo, CompiledUnitWithSource},
     documentation::build_docs,
     shared,
-    source_discovery::get_sources,
+    source_discovery::{get_sources, get_test_sources},
 };
 
 use crate::{
@@ -25,7 +25,8 @@ use move_compiler::{
     editions::{Edition, Flavor},
     linters,
     shared::{
-        PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
+        PackageConfig, PackagePaths, SaveFlag, SaveHook,
+        files::{FileName, MappedFiles},
         known_attributes::ModeAttribute,
     },
     sui_mode,
@@ -399,10 +400,25 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
         debug!("Named address map {:#?}", addresses);
+        let all_sources = get_sources(pkg.path(), build_config)?;
+        // Only mark tests for the root package; dependencies should not include their own tests
+        // (and historically did not).
+        let (paths, test_paths) = if pkg.is_root() {
+            let test_sources = get_test_sources(pkg.path(), build_config)?;
+            let test_set: std::collections::BTreeSet<FileName> =
+                test_sources.iter().copied().collect();
+            let sources: Vec<FileName> = all_sources
+                .into_iter()
+                .filter(|p| !test_set.contains(p))
+                .collect();
+            (sources, test_sources)
+        } else {
+            (all_sources, vec![])
+        };
         let paths = PackagePaths {
             name: Some((safe_name, config)),
-            // paths: sources,
-            paths: get_sources(pkg.path(), build_config)?,
+            paths,
+            test_paths,
             named_address_map: addresses.inner,
         };
 

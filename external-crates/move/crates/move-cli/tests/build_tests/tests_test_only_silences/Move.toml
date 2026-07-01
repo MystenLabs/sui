@@ -1,0 +1,3 @@
+[package]
+name = "TestsTestOnlySilences"
+edition = "2024.beta"

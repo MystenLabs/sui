@@ -39,6 +39,7 @@ struct ParsedPackageFile {
     is_dep: bool,
     package: Option<Symbol>,
     named_address_map: NamedAddressMapIndex,
+    is_test_source: bool,
     file: ParsedFile,
 }
 
@@ -68,12 +69,14 @@ pub(crate) fn parse_program(
                 package,
                 path,
                 named_address_map,
+                is_test_source,
             } = package_path;
             let file = parse_file(&path, compilation_env, package)?;
             Ok(ParsedPackageFile {
                 is_dep,
                 package,
                 named_address_map,
+                is_test_source,
                 file,
             })
         })
@@ -83,6 +86,7 @@ pub(crate) fn parse_program(
             is_dep,
             package,
             named_address_map,
+            is_test_source,
             file,
         } = parsed_package_file;
         let ParsedFile {
@@ -92,6 +96,9 @@ pub(crate) fn parse_program(
             text,
         } = file;
         files.add(hash, fname, text);
+        if is_test_source {
+            files.mark_test_source(hash);
+        }
         let defs = defs.into_iter().map(|def| {
             let pkg_def_kind = pkg_target_kind(
                 compilation_env,

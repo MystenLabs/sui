@@ -38,6 +38,7 @@ static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new
         vec![PackagePaths {
             name: None,
             paths: move_stdlib::source_files(),
+            test_paths: vec![],
             named_address_map: move_stdlib::named_addresses(),
         }],
         None,

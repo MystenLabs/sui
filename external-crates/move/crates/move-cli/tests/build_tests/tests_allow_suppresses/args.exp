@@ -1,0 +1,16 @@
+Command `build --test`:
+BUILDING TestsAllowSuppresses
+error[E10005]: unable to generate test
+  ┌─ ./sources/main.move:1:14
+  │
+1 │ module 0x42::main {
+  │              ^^^^ Compilation in test mode requires passing the UnitTest module in the Move stdlib as a dependency
+
+warning[W09008]: unused function
+  ┌─ ./tests/allowed.move:3:9
+  │
+3 │     fun helper(): u64 { 0 }
+  │         ^^^^^^ The non-'public', non-'entry' function 'helper' is never called. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

@@ -6,7 +6,7 @@ use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, HashMap, hash_map},
+    collections::{BTreeMap, BTreeSet, HashMap, hash_map},
     path::PathBuf,
     sync::Arc,
 };
@@ -26,6 +26,10 @@ pub struct MappedFiles {
     files: SimpleFiles<Symbol, Arc<str>>,
     file_mapping: HashMap<FileHash, FileId>,
     file_name_mapping: BTreeMap<FileHash, PathBuf>,
+    /// Files supplied as test-only sources (i.e. those originating from a package's `tests/`
+    /// directory). Used by expansion to warn about modules in these files that are not annotated
+    /// `#[test_only]` (or `#[test]`).
+    test_sources: BTreeSet<FileHash>,
 }
 
 /// A file, the line:column start, and line:column end that corresponds to a `Loc`
@@ -87,6 +91,7 @@ impl MappedFiles {
             files: simple_files,
             file_mapping,
             file_name_mapping,
+            test_sources: BTreeSet::new(),
         }
     }
 
@@ -95,6 +100,7 @@ impl MappedFiles {
             files: SimpleFiles::new(),
             file_mapping: HashMap::new(),
             file_name_mapping: BTreeMap::new(),
+            test_sources: BTreeSet::new(),
         }
     }
 
@@ -114,6 +120,9 @@ impl MappedFiles {
             );
             let fname = format!("{}", path.to_string_lossy());
             self.add(file_hash, fname.into(), file.source().clone());
+            if other.test_sources.contains(&file_hash) {
+                self.test_sources.insert(file_hash);
+            }
         }
     }
 
@@ -130,6 +139,15 @@ impl MappedFiles {
         self.file_mapping.insert(fhash, id);
         self.file_name_mapping
             .insert(fhash, PathBuf::from(fname.as_str()));
+    }
+
+    /// Mark `fhash` as a test-only source file.
+    pub fn mark_test_source(&mut self, fhash: FileHash) {
+        self.test_sources.insert(fhash);
+    }
+
+    pub fn is_test_source(&self, fhash: &FileHash) -> bool {
+        self.test_sources.contains(fhash)
     }
 
     pub fn get(&self, fhash: &FileHash) -> Option<(Symbol, Arc<str>)> {

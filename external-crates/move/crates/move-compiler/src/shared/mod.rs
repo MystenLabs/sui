@@ -232,6 +232,10 @@ impl NamedAddressMaps {
 pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> = Symbol> {
     pub name: Option<(Symbol, PackageConfig)>,
     pub paths: Vec<Path>,
+    /// Paths to test-only source files (i.e. files in the package's `tests/` directory). These are
+    /// parsed and compiled like other sources; modules in these files are expected to be annotated
+    /// `#[test_only]` (or `#[test]`).
+    pub test_paths: Vec<Path>,
     pub named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
 }
 
@@ -363,6 +367,13 @@ impl CompilationEnv {
         source_text: Arc<str>,
     ) {
         self.mapped_files.add(file_hash, file_name, source_text)
+    }
+
+    /// Mark a previously-added source file as a test-only source (i.e. one originating from a
+    /// package's `tests/` directory). Used by expansion to warn about modules in such files that
+    /// lack `#[test_only]`/`#[test]`.
+    pub fn mark_test_source_file(&mut self, file_hash: FileHash) {
+        self.mapped_files.mark_test_source(file_hash);
     }
 
     pub fn mapped_files(&self) -> &MappedFiles {
@@ -1255,6 +1266,8 @@ pub struct IndexedPackagePath<P> {
     pub package: Option<Symbol>,
     pub path: P,
     pub named_address_map: NamedAddressMapIndex,
+    /// True when this path was provided as a test-only source via `PackagePaths::test_paths`.
+    pub is_test_source: bool,
 }
 
 pub type IndexedPhysicalPackagePath = IndexedPackagePath<Symbol>;
@@ -1281,12 +1294,14 @@ impl IndexedPhysicalPackagePath {
             package,
             path,
             named_address_map,
+            is_test_source,
         } = self;
 
         Ok(IndexedVfsPackagePath {
             package,
             path: vfs_path_from_str(path.to_string(), vfs_root)?,
             named_address_map,
+            is_test_source,
         })
     }
 }

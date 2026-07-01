@@ -1,0 +1,27 @@
+Command `build`:
+BUILDING TestsMissingTestOnly
+Command `build --test`:
+BUILDING TestsMissingTestOnly
+error[E10005]: unable to generate test
+  ┌─ ./sources/main.move:1:14
+  │
+1 │ module 0x42::main {
+  │              ^^^^ Compilation in test mode requires passing the UnitTest module in the Move stdlib as a dependency
+
+warning[W10010]: module in 'tests/' is not annotated '#[test_only]'
+  ┌─ ./tests/unannotated.move:1:8
+  │
+1 │ module 0x42::unannotated_tests {
+  │        ^^^^^^^^^^^^^^^^^^^^^^^ Module '0x42::unannotated_tests' is in 'tests/' but is not annotated '#[test_only]'
+  │
+  = Modules placed under 'tests/' should be annotated '#[test_only]' (or contain only '#[test]' items). Annotate the module, move it out of 'tests/', or suppress with '#[allow(tests_missing_test_only)]'.
+  = This warning can be suppressed with '#[allow(tests_missing_test_only)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09008]: unused function
+  ┌─ ./tests/unannotated.move:2:9
+  │
+2 │     fun helper(): u64 { 0 }
+  │         ^^^^^^ The non-'public', non-'entry' function 'helper' is never called. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

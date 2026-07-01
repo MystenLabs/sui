@@ -50,6 +50,7 @@ use crate::{
         *,
     },
 };
+use move_command_line_common::files::FileHash;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::parsing::parser::{parse_u16, parse_u32, parse_u256};
 use move_ir_types::location::*;
@@ -91,6 +92,12 @@ pub(super) struct Context<'env> {
     defn_context: DefnContext<'env>,
     address: Option<Address>,
     pub path_expander: Option<Box<dyn PathExpander>>,
+    /// For each file under the package's `tests/` directory, the set of modules in that file
+    /// missing `#[test_only]`/`#[test]`, along with each module's warning-filter scope (so the
+    /// first offender's `#[allow(...)]` is respected when the aggregated warning is emitted).
+    /// Drained at the end of source expansion to emit one warning per file. Only populated for
+    /// source modules originating from a test-source file (per [`MappedFiles::is_test_source`]).
+    tests_modules_missing_test_only: BTreeMap<FileHash, Vec<(ModuleIdent, Loc, FilterScope)>>,
 }
 
 macro_rules! report_path_expansion_error {
@@ -126,6 +133,7 @@ impl<'env> Context<'env> {
             defn_context,
             address: None,
             path_expander: None,
+            tests_modules_missing_test_only: BTreeMap::new(),
         }
     }
 
@@ -751,6 +759,8 @@ pub fn program(
         definition(context, &mut source_module_map, &named_addr_maps, addr, def);
     }
 
+    emit_tests_missing_test_only_warnings(context);
+
     for (addr, def) in lib_defs {
         definition(context, &mut lib_module_map, &named_addr_maps, addr, def);
     }
@@ -1185,6 +1195,43 @@ fn set_module_address(
     })
 }
 
+/// For each test-source file with at least one module missing `#[test_only]`/`#[test]`, emit a
+/// single warning anchored at the first such module. Subsequent offenders in the same file are
+/// attached as secondary labels. The first offender's warning-filter scope is re-pushed so that
+/// an `#[allow(tests_missing_test_only)]` on that module suppresses the warning.
+fn emit_tests_missing_test_only_warnings(context: &mut Context) {
+    let collected = std::mem::take(&mut context.tests_modules_missing_test_only);
+    for (_fhash, entries) in collected {
+        let mut entries = entries.into_iter();
+        let Some((first_mident, first_loc, first_scope)) = entries.next() else {
+            continue;
+        };
+        let mut diag = diag!(
+            Attributes::TestsModuleMissingTestOnly,
+            (
+                first_loc,
+                format!(
+                    "Module '{first_mident}' is in 'tests/' but is not annotated '#[test_only]'",
+                ),
+            ),
+        );
+        for (mident, loc, _) in entries {
+            diag.add_secondary_label((
+                loc,
+                format!("Module '{mident}' in the same file is also missing '#[test_only]'"),
+            ));
+        }
+        diag.add_note(
+            "Modules placed under 'tests/' should be annotated '#[test_only]' (or contain only \
+             '#[test]' items). Annotate the module, move it out of 'tests/', or suppress with \
+             '#[allow(tests_missing_test_only)]'.",
+        );
+        context.push_warning_filter_scope(first_scope);
+        context.add_diag(diag);
+        context.pop_warning_filter_scope();
+    }
+}
+
 fn duplicate_module_error(
     context: &mut Context,
     module_map: &UniqueMap<ModuleIdent, E::ModuleDefinition>,
@@ -1233,6 +1280,11 @@ fn module_(
     assert!(context.address.is_none());
     assert!(address.is_none());
     set_module_address(context, &name, module_address);
+    let missing_test_only = context
+        .env()
+        .mapped_files()
+        .is_test_source(&loc.file_hash())
+        && !attributes.is_test_or_test_only();
     let _ =
         check_restricted_name_all_cases(&context.defn_context.reporter, NameCase::Module, &name.0);
     if name.value().starts_with('_') {
@@ -1244,6 +1296,14 @@ fn module_(
     }
 
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
+
+    if missing_test_only {
+        context
+            .tests_modules_missing_test_only
+            .entry(loc.file_hash())
+            .or_default()
+            .push((current_module, name_loc, warning_filter.clone()));
+    }
 
     // [NOTE: MOD-EXT] Extensions are currently injected directly into the original module before any
     // processing is done. This means that extensions can use aliases and other definitions from the

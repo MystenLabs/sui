@@ -1,0 +1,36 @@
+Command `build --test`:
+BUILDING TestsMissingTestOnlyMulti
+warning[W10010]: module in 'tests/' is not annotated '#[test_only]'
+  ┌─ ./tests/multi.move:1:8
+  │
+1 │ module 0x42::first_tests {
+  │        ^^^^^^^^^^^^^^^^^ Module '0x42::first_tests' is in 'tests/' but is not annotated '#[test_only]'
+  ·
+5 │ module 0x42::second_tests {
+  │        ------------------ Module '0x42::second_tests' in the same file is also missing '#[test_only]'
+  │
+  = Modules placed under 'tests/' should be annotated '#[test_only]' (or contain only '#[test]' items). Annotate the module, move it out of 'tests/', or suppress with '#[allow(tests_missing_test_only)]'.
+  = This warning can be suppressed with '#[allow(tests_missing_test_only)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09008]: unused function
+  ┌─ ./tests/multi.move:2:9
+  │
+2 │     fun helper(): u64 { 0 }
+  │         ^^^^^^ The non-'public', non-'entry' function 'helper' is never called. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09008]: unused function
+  ┌─ ./tests/multi.move:6:9
+  │
+6 │     fun helper(): u64 { 0 }
+  │         ^^^^^^ The non-'public', non-'entry' function 'helper' is never called. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E10005]: unable to generate test
+  ┌─ ./sources/main.move:1:14
+  │
+1 │ module 0x42::main {
+  │              ^^^^ Compilation in test mode requires passing the UnitTest module in the Move stdlib as a dependency
+

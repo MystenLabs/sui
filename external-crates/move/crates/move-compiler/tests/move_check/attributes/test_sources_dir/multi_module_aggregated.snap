@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10010]: module in 'tests/' is not annotated '#[test_only]'
+   ┌─ tests/move_check/attributes/test_sources_dir/multi_module_aggregated.move:4:8
+   │
+ 4 │ module a::first {
+   │        ^^^^^^^^ Module 'a::first' is in 'tests/' but is not annotated '#[test_only]'
+   ·
+ 8 │ module a::second {
+   │        --------- Module 'a::second' in the same file is also missing '#[test_only]'
+   ·
+12 │ module a::third {
+   │        -------- Module 'a::third' in the same file is also missing '#[test_only]'
+   │
+   = Modules placed under 'tests/' should be annotated '#[test_only]' (or contain only '#[test]' items). Annotate the module, move it out of 'tests/', or suppress with '#[allow(tests_missing_test_only)]'.
+   = This warning can be suppressed with '#[allow(tests_missing_test_only)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

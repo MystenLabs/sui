@@ -13,6 +13,7 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
     let targets = vec![PackagePaths {
         name: None,
         paths: vec![path.to_str().unwrap().to_string()],
+        test_paths: vec![],
         named_address_map: std::collections::BTreeMap::<String, _>::new(),
     }];
     let env = run_model_builder(targets, vec![], Some(unused_for_test_filter_scope()))?;

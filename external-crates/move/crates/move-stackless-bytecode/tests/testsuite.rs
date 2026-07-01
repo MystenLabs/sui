@@ -131,6 +131,7 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
         vec![PackagePaths {
             name: None,
             paths: sources,
+            test_paths: vec![],
             named_address_map: move_stdlib::named_addresses(),
         }],
         vec![],

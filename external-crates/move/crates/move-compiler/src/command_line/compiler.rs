@@ -149,6 +149,7 @@ impl Compiler {
             for PackagePaths {
                 name,
                 paths,
+                test_paths,
                 named_address_map,
             } in all_pkgs
             {
@@ -165,21 +166,24 @@ impl Compiler {
                         .map(|(k, v)| (k.into(), v))
                         .collect::<NamedAddressMap>(),
                 );
-                let paths: Vec<Symbol> = if vfs_root.is_none() {
-                    let paths: Vec<_> = paths.into_iter().map(|p| p.into()).collect();
-                    let paths: Vec<_> = paths.iter().map(|p| p.as_str()).collect();
-                    find_filenames_and_keep_specified(&paths, &mut find_move_files)?
-                        .into_iter()
-                        .map(Symbol::from)
-                        .collect()
-                } else {
-                    paths.into_iter().map(|p| p.into()).collect()
-                };
-                idx_paths.extend(paths.into_iter().map(|path| IndexedPhysicalPackagePath {
-                    package: name,
-                    path,
-                    named_address_map: idx,
-                }))
+                for (paths, is_test_source) in [(paths, false), (test_paths, true)] {
+                    let resolved: Vec<Symbol> = if vfs_root.is_none() {
+                        let paths: Vec<Symbol> = paths.into_iter().map(|p| p.into()).collect();
+                        let paths: Vec<&str> = paths.iter().map(|p| p.as_str()).collect();
+                        find_filenames_and_keep_specified(&paths, &mut find_move_files)?
+                            .into_iter()
+                            .map(Symbol::from)
+                            .collect()
+                    } else {
+                        paths.into_iter().map(|p| p.into()).collect()
+                    };
+                    idx_paths.extend(resolved.into_iter().map(|path| IndexedPhysicalPackagePath {
+                        package: name,
+                        path,
+                        named_address_map: idx,
+                        is_test_source,
+                    }));
+                }
             }
             Ok(idx_paths)
         }
@@ -225,11 +229,13 @@ impl Compiler {
         let targets = vec![PackagePaths {
             name: None,
             paths: targets,
+            test_paths: vec![],
             named_address_map: named_address_map.clone(),
         }];
         let deps = vec![PackagePaths {
             name: None,
             paths: deps,
+            test_paths: vec![],
             named_address_map,
         }];
         Self::from_package_paths(vfs_root, targets, deps).unwrap()
@@ -419,7 +425,10 @@ impl Compiler {
             // TODO better support for bytecode interface file paths
             let path = vfs_to_original_path.get(fname).copied().unwrap_or(*fname);
 
-            compilation_env.add_source_file(*fhash, path, contents.clone())
+            compilation_env.add_source_file(*fhash, path, contents.clone());
+            if source_text.is_test_source(fhash) {
+                compilation_env.mark_test_source_file(*fhash);
+            }
         }
         let mapped_files = compilation_env.mapped_files().clone();
 
@@ -998,6 +1007,7 @@ pub fn generate_interface_files(
         package,
         path,
         named_address_map,
+        is_test_source,
     } in mv_files
     {
         let (id, interface_contents) =
@@ -1018,6 +1028,7 @@ pub fn generate_interface_files(
             package,
             path: vfs_path,
             named_address_map,
+            is_test_source,
         });
     }
 

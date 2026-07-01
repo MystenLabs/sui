@@ -901,7 +901,13 @@ pub(crate) fn make_source_and_deps_for_compiler(
         named_address_mapping_for_compiler(&root.resolved_table),
         &root.renaming,
     );
-    let sources = root.get_sources(&resolution_graph.build_options)?;
+    let all_sources = root.get_sources(&resolution_graph.build_options)?;
+    let test_sources = root.get_test_sources(&resolution_graph.build_options)?;
+    let test_set: BTreeSet<FileName> = test_sources.iter().copied().collect();
+    let sources: Vec<FileName> = all_sources
+        .into_iter()
+        .filter(|p| !test_set.contains(p))
+        .collect();
     let source_package_paths = PackagePaths {
         name: Some((
             root.source_package.package.name,
@@ -911,6 +917,7 @@ pub(crate) fn make_source_and_deps_for_compiler(
             ),
         )),
         paths: sources,
+        test_paths: test_sources,
         named_address_map: root_named_addrs,
     };
     Ok((source_package_paths, deps_package_paths))
@@ -932,6 +939,7 @@ pub(crate) fn make_deps_for_compiler_internal(
                 PackagePaths {
                     name: Some((dep.name, dep.compiler_config)),
                     paths,
+                    test_paths: vec![],
                     named_address_map,
                 },
                 dep.module_format,
