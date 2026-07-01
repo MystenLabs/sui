@@ -197,7 +197,6 @@ async fn main() -> Result<()> {
         .with_context(|| format!("resolving epoch {}", args.start_epoch))?;
     let (epochs, first_checkpoint, last_checkpoint) = resolve_epoch_work(
         &rpc,
-        &ingestion_client,
         chain,
         args.start_epoch..=args.end_epoch,
         args.max_checkpoints_per_epoch,
@@ -240,6 +239,18 @@ async fn main() -> Result<()> {
             .map(|value| ConcurrencyConfig::Fixed { value }),
     };
 
+    // We hand-build the ingestion service (rather than the simpler `Indexer::new`, which constructs
+    // one internally from `ClientArgs`) for two reasons, both of which would regress if we switched:
+    //   1. The remote-store source needs our `FixedChainId` wrapper (see [`ingestion`]) to avoid
+    //      deriving the chain id from genesis. `Indexer::new` builds the store client without it, so
+    //      every concurrent fetch `try_join`s a slow, repeatedly-retried genesis download — measured
+    //      as a sustained ~4x throughput drop (not just a startup cost), worst on bounded samples.
+    //   2. `Indexer::new` takes `ClientArgs` (= ingestion + streaming args), which would re-add the
+    //      streaming flags to the CLI that we deliberately dropped; we only flatten
+    //      `IngestionClientArgs`.
+    // If the remote-store source is ever retired (leaving only gRPC, which already gets the chain id
+    // from `GetServiceInfo`), this wiring — and the `ingestion` module — could collapse into
+    // `Indexer::new`.
     let ingestion_service = IngestionService::with_clients(
         ingestion_client,
         None,
