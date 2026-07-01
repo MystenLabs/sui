@@ -103,6 +103,16 @@ impl EffectsCertifier {
                 // But if it is not set, continuing to get full effects and certify the digest are still correct.
                 None => (None, None),
             },
+            // Durably processing (sequenced or checkpointed): no consensus position to track, so
+            // wait for the finalized outcome by digest — same path as an `Executed` response with
+            // no inline effects.
+            SubmitTxResult::Rejected { error }
+                if error
+                    .durable_transaction_processing_digest()
+                    .is_some_and(|digest| Some(digest) == tx_digest) =>
+            {
+                (None, None)
+            }
             SubmitTxResult::Rejected { error } => {
                 return Err(TransactionDriverError::ClientInternal {
                     error: format!(

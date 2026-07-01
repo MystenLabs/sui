@@ -272,9 +272,24 @@ impl TransactionSubmitter {
         }
         let result = resp.results.into_iter().next().unwrap();
 
-        // Since only one transaction is submitted, it is ok to return error when the submission is rejected.
+        // A rejection normally means submission failed; retry elsewhere. The exception is a durable
+        // `TransactionProcessing` rejection for this transaction (already sequenced or checkpointed):
+        // its outcome is final, so surface it as a result and let the driver wait for that outcome by
+        // digest. A non-durable "recently submitted" hit, or a different-digest rejection, stays
+        // retriable.
         if let SubmitTxResult::Rejected { error } = &result {
-            if is_validator_error(error.categorize()) {
+            let processing_this_tx = matches!(
+                error.as_inner(),
+                sui_types::error::SuiErrorKind::TransactionProcessing { digest, .. }
+                    if Some(*digest) == request.tx_digest()
+            );
+            if processing_this_tx && error.durable_transaction_processing_digest().is_some() {
+                // No fresh submission was accepted, so record neither success nor failure.
+                return Ok(result);
+            }
+            // A processing rejection for this transaction is a dedup hit on our own resubmission,
+            // not a validator fault, so it does not count against the validator's score.
+            if !processing_this_tx && is_validator_error(error.categorize()) {
                 client_monitor.record_interaction_result(OperationFeedback {
                     authority_name: validator,
                     display_name,

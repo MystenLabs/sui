@@ -979,7 +979,7 @@ impl ValidatorService {
                 results[idx] = Some(SubmitTxResult::Rejected {
                     error: SuiErrorKind::TransactionProcessing {
                         digest: tx_digest,
-                        status: "recently submitted".to_string(),
+                        status: sui_types::error::TX_PROCESSING_RECENTLY_SUBMITTED.to_string(),
                     }
                     .into(),
                 });

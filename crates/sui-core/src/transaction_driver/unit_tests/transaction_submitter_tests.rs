@@ -508,3 +508,221 @@ async fn test_submit_transaction_invalid_input() {
         e => panic!("Expected InvalidTransaction error, got: {:?}", e),
     }
 }
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_transaction_processing_returned_as_result() {
+    telemetry_subscribers::init_for_testing();
+
+    let reference_gas_price = 1000;
+    let (authority_aggregator, mock_authorities) =
+        create_test_authority_aggregator_with_rgp(reference_gas_price);
+    let authority_aggregator = Arc::new(authority_aggregator);
+
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
+    let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+    let submitter = TransactionSubmitter::new(metrics);
+
+    let request = create_test_submit_request(reference_gas_price);
+    let tx_digest = *request.transaction.as_ref().unwrap().digest();
+
+    // Every validator reports the transaction is already being processed by consensus.
+    for mock_authority in &mock_authorities {
+        mock_authority.set_submit_response(
+            tx_digest,
+            Ok(SubmitTxResult::Rejected {
+                error: SuiErrorKind::TransactionProcessing {
+                    digest: tx_digest,
+                    status: "sequenced by consensus".to_string(),
+                }
+                .into(),
+            }),
+        );
+    }
+
+    let options = SubmitTransactionOptions::default();
+    // A `TransactionProcessing` rejection must be surfaced as a result (so the driver can wait for
+    // effects by digest), NOT turned into a retriable submission error that resubmits the tx.
+    let (_, result) = submitter
+        .submit_transaction(
+            &authority_aggregator,
+            &client_monitor,
+            TxType::SingleWriter,
+            1,
+            request,
+            &options,
+        )
+        .await
+        .expect("TransactionProcessing should be returned as a result, not a submission error");
+
+    assert!(matches!(
+        result,
+        SubmitTxResult::Rejected { error }
+            if matches!(error.as_inner(), SuiErrorKind::TransactionProcessing { .. })
+    ));
+
+    // Accepted from the first validator without resubmitting to the others.
+    let total_submissions: usize = mock_authorities
+        .iter()
+        .map(|auth| auth.get_submission_count())
+        .sum();
+    assert_eq!(total_submissions, 1);
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_recently_submitted_is_retriable() {
+    telemetry_subscribers::init_for_testing();
+
+    let reference_gas_price = 1000;
+    let (authority_aggregator, mock_authorities) =
+        create_test_authority_aggregator_with_rgp(reference_gas_price);
+    let authority_aggregator = Arc::new(authority_aggregator);
+
+    // Hold the monitor metrics to assert on recorded submit feedback below.
+    let monitor_metrics =
+        Arc::new(crate::validator_client_monitor::ValidatorClientMetrics::new_for_tests());
+    let client_monitor = ValidatorClientMonitor::new(
+        sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig::default(),
+        monitor_metrics.clone(),
+        Arc::new(arc_swap::ArcSwap::new(authority_aggregator.clone())),
+    );
+    let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+    let submitter = TransactionSubmitter::new(metrics);
+
+    let request = create_test_submit_request(reference_gas_price);
+    let tx_digest = *request.transaction.as_ref().unwrap().digest();
+
+    // Every validator responds with the non-durable "recently submitted" dedup rejection. Unlike a
+    // durable "already sequenced" rejection, this does NOT mean the transaction reached consensus,
+    // so the submitter must keep resubmitting to other validators rather than short-circuiting into
+    // a wait-for-effects.
+    for mock_authority in &mock_authorities {
+        mock_authority.set_submit_response(
+            tx_digest,
+            Ok(SubmitTxResult::Rejected {
+                error: SuiErrorKind::TransactionProcessing {
+                    digest: tx_digest,
+                    status: "recently submitted".to_string(),
+                }
+                .into(),
+            }),
+        );
+    }
+
+    let options = SubmitTransactionOptions::default();
+    let result = submitter
+        .submit_transaction(
+            &authority_aggregator,
+            &client_monitor,
+            TxType::SingleWriter,
+            1,
+            request,
+            &options,
+        )
+        .await;
+
+    // Comes back as a retriable submission error (the driver's outer loop retries), NOT surfaced as
+    // a result to wait on.
+    assert!(
+        matches!(result, Err(TransactionDriverError::Aborted { .. })),
+        "recently-submitted rejections must stay retriable, got: {result:?}"
+    );
+
+    // The submitter resubmitted to every validator instead of stopping after the first.
+    let total_submissions: usize = mock_authorities
+        .iter()
+        .map(|auth| auth.get_submission_count())
+        .sum();
+    assert_eq!(total_submissions, mock_authorities.len());
+
+    // The dedup hit is caused by the driver's own resubmission, not a validator fault, so no
+    // submit failure is recorded against any validator's score.
+    for name in authority_aggregator.authority_clients.keys() {
+        let display_name = authority_aggregator.get_display_name(name);
+        assert_eq!(
+            monitor_metrics
+                .operation_failure
+                .with_label_values(&[display_name.as_str(), "submit", "false"])
+                .get(),
+            0
+        );
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_durable_processing_wrong_digest_is_retriable() {
+    telemetry_subscribers::init_for_testing();
+
+    let reference_gas_price = 1000;
+    let (authority_aggregator, mock_authorities) =
+        create_test_authority_aggregator_with_rgp(reference_gas_price);
+    let authority_aggregator = Arc::new(authority_aggregator);
+
+    // Hold the monitor metrics to assert on recorded submit feedback below.
+    let monitor_metrics =
+        Arc::new(crate::validator_client_monitor::ValidatorClientMetrics::new_for_tests());
+    let client_monitor = ValidatorClientMonitor::new(
+        sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig::default(),
+        monitor_metrics.clone(),
+        Arc::new(arc_swap::ArcSwap::new(authority_aggregator.clone())),
+    );
+    let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+    let submitter = TransactionSubmitter::new(metrics);
+
+    let request = create_test_submit_request(reference_gas_price);
+    let tx_digest = *request.transaction.as_ref().unwrap().digest();
+    let other_digest = TransactionDigest::random();
+    assert_ne!(tx_digest, other_digest);
+
+    // A durable status, but the rejection refers to a DIFFERENT transaction. The submitter must not
+    // stop resubmitting our transaction based on a claim about another one; it stays retriable.
+    for mock_authority in &mock_authorities {
+        mock_authority.set_submit_response(
+            tx_digest,
+            Ok(SubmitTxResult::Rejected {
+                error: SuiErrorKind::TransactionProcessing {
+                    digest: other_digest,
+                    status: "sequenced by consensus".to_string(),
+                }
+                .into(),
+            }),
+        );
+    }
+
+    let options = SubmitTransactionOptions::default();
+    let result = submitter
+        .submit_transaction(
+            &authority_aggregator,
+            &client_monitor,
+            TxType::SingleWriter,
+            1,
+            request,
+            &options,
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(TransactionDriverError::Aborted { .. })),
+        "a durable rejection for a different digest must stay retriable, got: {result:?}"
+    );
+
+    let total_submissions: usize = mock_authorities
+        .iter()
+        .map(|auth| auth.get_submission_count())
+        .sum();
+    assert_eq!(total_submissions, mock_authorities.len());
+
+    // A processing claim about a different transaction is a malformed response, and does count
+    // against the validator's score.
+    for name in authority_aggregator.authority_clients.keys() {
+        let display_name = authority_aggregator.get_display_name(name);
+        assert_eq!(
+            monitor_metrics
+                .operation_failure
+                .with_label_values(&[display_name.as_str(), "submit", "false"])
+                .get(),
+            1
+        );
+    }
+}

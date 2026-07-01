@@ -333,7 +333,14 @@ where
                 options,
             )
             .await?;
-        if let SubmitTxResult::Rejected { error } = &submit_txn_result {
+        // A durable `TransactionProcessing` rejection for this transaction is expected: the submitter
+        // returns it as a result (not a retriable error) and the certifier waits for the finalized
+        // outcome by digest. Any other `Rejected` should have come back as a submission error.
+        if let SubmitTxResult::Rejected { error } = &submit_txn_result
+            && error
+                .durable_transaction_processing_digest()
+                .is_none_or(|digest| Some(digest) != tx_digest)
+        {
             return Err(TransactionDriverError::ClientInternal {
                 error: format!(
                     "SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}",
