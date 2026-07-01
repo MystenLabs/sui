@@ -176,10 +176,10 @@ impl TransactionFilter {
         }
         if let Some(kind) = &self.kind {
             // Every system transaction (Genesis, ConsensusCommitPrologue, ChangeEpoch,
-            // RandomnessStateUpdate, AuthenticatorStateUpdate, EndOfEpoch) is sent from
-            // 0x0; programmable transactions never are. So ProgrammableTx maps to an
-            // unanchored `Exclude(Sender = 0x0)` and the bitmap layer synthesizes the
-            // TxUniverse anchor for us (sui-rpc-api/src/ledger_history/filter.rs).
+            // RandomnessStateUpdate, AuthenticatorStateUpdate, EndOfEpoch) is sent from 0x0;
+            // programmable transactions never are. So ProgrammableTx maps to an unanchored
+            // `Exclude(Sender = 0x0)` and the bitmap layer synthesizes the TxUniverse anchor for us
+            // (sui-rpc-api/src/ledger_history/filter.rs).
             let zero_sender = sender_predicate(&SuiAddress::ZERO);
             literals.push(match kind {
                 TransactionKindInput::SystemTx => include_literal(zero_sender),

@@ -453,7 +453,7 @@ impl Transaction {
         let before = page.before().map(|c| c.to_vec());
 
         let mut options = v2alpha::QueryOptions::default();
-        options.limit_items = Some((page.limit() + 1) as u32);
+        options.limit_items = Some(page.limit() as u32);
         options.after = after.map(|cursor| cursor.into());
         options.before = before.map(|cursor| cursor.into());
         options.ordering = if page.is_from_front() {
@@ -597,24 +597,11 @@ fn build_bitmap_connection(
     page: &Page<CTransaction>,
     result: StreamPage<v2::ExecutedTransaction>,
 ) -> Result<TransactionConnection, RpcError> {
-    // The (limit+1)-th item is a look-ahead probe: its existence proves a next page, but its
-    // cursor is never returned.
-    let probe_hit = result.items.len() > page.limit();
-    let more = probe_hit || result.has_more();
-
-    // Boundary cursors, in scan order. The probe only taints the trailing cursor (it points at
-    // the dropped probe, or a watermark beyond it), so anchor on the last kept item there;
-    // otherwise `last_cursor()` — the last item, or a trailing watermark that skips a
-    // scanned-empty tail.
+    let more = result.has_more();
     let start = result.first_cursor().cloned();
-    let end = if probe_hit {
-        Some(result.items[page.limit() - 1].cursor.clone())
-    } else {
-        result.last_cursor().cloned()
-    };
+    let end = result.last_cursor().cloned();
 
     let mut items = result.items;
-    items.truncate(page.limit());
     if !page.is_from_front() {
         items.reverse();
     }
@@ -956,26 +943,43 @@ mod tests {
             .expect("constructing backward Page<CTransaction>")
     }
 
-    /// Empty page: with no edges, `start_cursor` falls back to the stream's `first_wm_cursor` and
-    /// `end_cursor` to `last_wm_cursor`. Both are wrapped as `ByteCursor` and the page reports
-    /// `hasNextPage` based on whether there's an unsatisfied resume cursor.
-    ///
-    /// When does this realistically arise? The bitmap iterator skips buckets where the predicate
-    /// has no entries (`PendingBitmapBucket::new` in `sui-rpc-api`'s `bitmap_scan.rs`), so a
-    /// single-predicate filter that matches nothing usually terminates with `CheckpointBound`
-    /// and `hasNextPage: false` — not this case. The path that does reach this branch is a
-    /// multi-literal filter (e.g. `sentAddress: A AND function: f`) where both literals are
-    /// present in the same buckets but their position-level intersection in some buckets is
-    /// empty: the iterator yields those buckets (both literals have data there), each
-    /// evaluation produces zero hits, and if the per-request budget exhausts before completing
-    /// the range we get a navigable empty page. The same shape can also be induced by cursor
-    /// bounds that clip away every position in a yielded bucket.
+    /// Forward page opened from an `after` cursor (`first: N, after: <cursor>`).
+    fn forward_page_after(limit: u64, after: &[u8]) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(
+            &limits,
+            Some(limit),
+            Some(ByteCursor::new(after.to_vec())),
+            None,
+            None,
+        )
+        .expect("constructing forward Page with after")
+    }
+
+    /// Backward page opened from a `before` cursor (`last: N, before: <cursor>`).
+    fn backward_page_before(limit: u64, before: &[u8]) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(
+            &limits,
+            None,
+            None,
+            Some(limit),
+            Some(ByteCursor::new(before.to_vec())),
+        )
+        .expect("constructing backward Page with before")
+    }
+
+    /// Empty connection surfaces cursors if provided by the streamed page.
     #[test]
-    fn build_bitmap_connection_empty_page_uses_stream_cursors() {
+    fn build_bitmap_connection_empty_page_surfaces_boundary_cursors() {
         let scope = Scope::for_tests();
         let page = forward_page(10);
-        // `None` end_reason → `has_more()` true → forward pagination signals `hasNextPage` and
-        // the stream watermark cursors anchor both ends.
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             Vec::new(),
             Some(Bytes::copy_from_slice(b"first-watermark")),
@@ -985,28 +989,48 @@ mod tests {
 
         let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
         assert!(conn.edges.is_empty());
-        assert!(conn.page_info.has_next_page);
         assert!(!conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
 
-        // The fallback cursors should differ — `start_cursor` from the first frame,
-        // `end_cursor` from the latest. Mirror-style would have collapsed them.
+        // Both start and end cursors should be set on the connection
         let start = conn.page_info.start_cursor.expect("start cursor set");
         let end = conn.page_info.end_cursor.expect("end cursor set");
-        assert_ne!(
-            start, end,
-            "empty page should carry distinct start/end cursors when the stream emitted both"
+        assert_ne!(start, end, "start and end cursors should be different");
+    }
+
+    /// Order of cursors on connection should be swapped from streamed page.
+    #[test]
+    fn build_bitmap_connection_empty_page_backward_correct_cursors() {
+        let scope = Scope::for_tests();
+        let page = backward_page(10);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            Vec::new(),
+            Some(Bytes::copy_from_slice(b"last-watermark")),
+            Some(Bytes::copy_from_slice(b"first-watermark")),
+            None,
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert!(conn.edges.is_empty());
+        assert!(conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
+
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_eq!(
+            start,
+            ByteCursor::new(b"first-watermark".to_vec()).encode_cursor()
+        );
+        assert_eq!(
+            end,
+            ByteCursor::new(b"last-watermark".to_vec()).encode_cursor()
         );
     }
 
-    /// Non-empty page: edge cursors come from each item's embedded watermark, not the
-    /// stream's standalone watermark fallback. `start_cursor` is the first edge's cursor;
-    /// `end_cursor` is the last edge's.
     #[test]
     fn build_bitmap_connection_non_empty_page_uses_edge_cursors() {
         let scope = Scope::for_tests();
         let page = forward_page(10);
-        // No standalone watermarks: `first_cursor()`/`last_cursor()` fall back to the first/last
-        // item cursors, so the connection anchors on edges.
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![tx_item(b"edge-1"), tx_item(b"edge-2"), tx_item(b"edge-3")],
             None,
@@ -1031,73 +1055,52 @@ mod tests {
         );
     }
 
-    /// Boundary case: server returns exactly `page.limit()` items, which is one short of the
-    /// over-fetched `limit + 1` request. Distinct from the over-fetch case — `over_fetched`
-    /// must be `false` (no truncation), and `hasNextPage` must be `false` because the scan
-    /// terminated naturally before the over-fetch limit was reached. Guards against an
-    /// off-by-one regression where the comparison flips from `>` to `>=`, which would mis-treat
-    /// an exact-fit page as over-fetched.
     #[test]
-    fn build_bitmap_connection_exact_fit_does_not_signal_more() {
+    fn build_bitmap_connection_full_page_at_item_limit_signals_more() {
         let scope = Scope::for_tests();
         let page = forward_page(3);
-        // Exactly 3 items for a `first: 3` request — server returned its full page but didn't
-        // hit the `limit + 1 = 4` over-fetch threshold.
-        // `CheckpointBound` — scan exhausted the range without reaching the over-fetch threshold,
-        // so the natural answer is "no more pages".
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
             None,
             None,
-            Some(v2alpha::QueryEndReason::CheckpointBound),
+            Some(v2alpha::QueryEndReason::ItemLimit),
         );
 
         let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
-        assert_eq!(
-            conn.edges.len(),
-            3,
-            "exact-fit page must preserve all items; no truncation when items.len() == limit"
-        );
-        assert!(
-            !conn.page_info.has_next_page,
-            "exact-fit + CheckpointBound must report hasNextPage: false; signaling true here \
-             would be an off-by-one in over-fetch detection"
-        );
-    }
-
-    /// `paginate_bitmap` over-fetches by one (`limit + 1`) to detect "more results exist." If
-    /// the stream returns `limit + 1` items, `build_bitmap_connection` must truncate the tail
-    /// and signal `hasNextPage = true`.
-    #[test]
-    fn build_bitmap_connection_over_fetch_truncates_and_signals_more() {
-        let scope = Scope::for_tests();
-        let page = forward_page(2);
-        // 3 items returned for a `first: 2` request — one over-fetch.
-        // `CheckpointBound` would normally mean "no more" — but the over-fetch trumps it because
-        // we have one extra item locally. `more` is `probe_hit || has_more`.
-        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
-            vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
-            None,
-            None,
-            Some(v2alpha::QueryEndReason::CheckpointBound),
-        );
-
-        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
-        assert_eq!(
-            conn.edges.len(),
-            2,
-            "page.limit() = 2; the over-fetched third item must be truncated"
-        );
+        assert_eq!(conn.edges.len(), 3);
         assert!(
             conn.page_info.has_next_page,
-            "over-fetched items locally proves more results exist regardless of end_reason"
+            "full page + ItemLimit must report hasNextPage: true (has_more() is true)"
         );
     }
 
-    /// Descending (`last: N`) pagination: the stream yields items in descending position order
-    /// (the bitmap walks high → low), but the returned connection's edges must be ascending —
-    /// `items.reverse()` does this before edges are built. Verified by checking that the
-    /// edge cursors are in the reverse order of the input items.
+    /// If watermark cursors and non-empty, expect watermark cursors on the connection.
+    #[test]
+    fn build_bitmap_connection_non_empty_page_and_wm() {
+        let scope = Scope::for_tests();
+        let page = forward_page(3);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
+            Some(Bytes::copy_from_slice(b"first-watermark")),
+            Some(Bytes::copy_from_slice(b"last-watermark")),
+            None,
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        assert!(conn.page_info.has_next_page,);
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_eq!(
+            start,
+            ByteCursor::new(b"first-watermark".to_vec()).encode_cursor()
+        );
+        assert_eq!(
+            end,
+            ByteCursor::new(b"last-watermark".to_vec()).encode_cursor()
+        );
+    }
+
     #[test]
     fn build_bitmap_connection_descending_page_reverses_to_ascending_edges() {
         let scope = Scope::for_tests();
@@ -1120,12 +1123,61 @@ mod tests {
             start, conn.edges[0].cursor,
             "descending page's start_cursor anchors on the first ascending edge after reversal"
         );
+        assert_eq!(start, ByteCursor::new(b"c1".to_vec()).encode_cursor());
         assert_eq!(
             end, conn.edges[2].cursor,
             "descending page's end_cursor anchors on the last ascending edge after reversal"
         );
-        // Sanity: the three edges have distinct cursors and the order isn't the input order.
-        assert_ne!(conn.edges[0].cursor, conn.edges[1].cursor);
-        assert_ne!(conn.edges[1].cursor, conn.edges[2].cursor);
+        assert_eq!(end, ByteCursor::new(b"c3".to_vec()).encode_cursor());
+    }
+
+    /// A forward page opened from an `after` cursor reports `hasPreviousPage: true`
+    /// (`page.after().is_some()`). `CheckpointBound` makes `has_more()` false, so the only source
+    /// of a `true` flag is the input cursor — not the stream.
+    #[test]
+    fn build_bitmap_connection_forward_after_signals_previous_page() {
+        let scope = Scope::for_tests();
+        let page = forward_page_after(10, b"after-cursor");
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"e1"), tx_item(b"e2")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert!(
+            conn.page_info.has_previous_page,
+            "after cursor set → hasPreviousPage"
+        );
+        assert!(
+            !conn.page_info.has_next_page,
+            "CheckpointBound → no hasNextPage"
+        );
+    }
+
+    /// A backward page opened from a `before` cursor reports `hasNextPage: true`
+    /// (`page.before().is_some()`). `CheckpointBound` makes `has_more()` false, so the only source
+    /// of a `true` flag is the input cursor — not the stream.
+    #[test]
+    fn build_bitmap_connection_backward_before_signals_next_page() {
+        let scope = Scope::for_tests();
+        let page = backward_page_before(10, b"before-cursor");
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"c2"), tx_item(b"c1")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert!(
+            conn.page_info.has_next_page,
+            "before cursor set → hasNextPage"
+        );
+        assert!(
+            !conn.page_info.has_previous_page,
+            "CheckpointBound → no hasPreviousPage"
+        );
     }
 }
