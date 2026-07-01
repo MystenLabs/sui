@@ -8,8 +8,8 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use sui_inverted_index::BitmapScanLimitExceeded;
-use sui_inverted_index::error_contains;
+use sui_inverted_index::BitmapScanError;
+use sui_inverted_index::BitmapScanResult;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
@@ -136,7 +136,7 @@ pub(crate) async fn list_events(
     // watermarks). Unfiltered requests scan tx_seq_digest rows and expand
     // each row's event_count into concrete EventRefs.
     let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-    let event_ref_stream: BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> =
+    let event_ref_stream: BoxStream<'static, BitmapScanResult<Watermarked<EventRef>>> =
         if let Some(filter) = &request.filter {
             let query = ctx.event_filter_query(filter)?;
             client
@@ -173,7 +173,7 @@ pub(crate) async fn list_events(
     // Stage B (filtered path only): enrich refs with tx_seq_digest. The
     // unfiltered path already populates `tx_seq_digest` from point lookups,
     // so we skip this stage there.
-    let ref_with_digest_stream: BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> =
+    let ref_with_digest_stream: BoxStream<'static, BitmapScanResult<Watermarked<EventRef>>> =
         if filtered {
             pipelined_chunks(
                 ref_stream,
@@ -181,7 +181,15 @@ pub(crate) async fn list_events(
                 tx_seq_digest_stage.concurrency,
                 {
                     let client = client.clone();
-                    move |refs| attach_tx_seq_digests(client.clone(), refs)
+                    move |refs| {
+                        let client = client.clone();
+                        async move {
+                            attach_tx_seq_digests(client, refs)
+                                .await
+                                .map(|s| s.map_err(BitmapScanError::Source).boxed())
+                                .map_err(BitmapScanError::Source)
+                        }
+                    }
                 },
             )
         } else {
@@ -198,7 +206,16 @@ pub(crate) async fn list_events(
         {
             let client = client.clone();
             let columns = columns.clone();
-            move |refs| fetch_txs_for_refs(client.clone(), columns.clone(), refs)
+            move |refs| {
+                let client = client.clone();
+                let columns = columns.clone();
+                async move {
+                    fetch_txs_for_refs(client, columns, refs)
+                        .await
+                        .map(|s| s.map_err(BitmapScanError::Source).boxed())
+                        .map_err(BitmapScanError::Source)
+                }
+            }
         },
     );
 
@@ -225,8 +242,12 @@ pub(crate) async fn list_events(
                 match item? {
                     Watermarked::Item((event_ref, tx)) => {
                         let rendered =
-                            render_event(event_ref, tx, &read_mask, &resolver, wants_json).await?;
-                        Ok::<Watermarked<RenderedEvent>, anyhow::Error>(Watermarked::Item(rendered))
+                            render_event(event_ref, tx, &read_mask, &resolver, wants_json)
+                                .await
+                                .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))?;
+                        Ok::<Watermarked<RenderedEvent>, BitmapScanError>(Watermarked::Item(
+                            rendered,
+                        ))
                     }
                     Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
                 }
@@ -260,13 +281,18 @@ pub(crate) async fn list_events(
                     let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
                     yield watermark_response(wm);
                 }
-                Err(e) => {
-                    if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
-                        scan_limit_hit = true;
-                        break;
-                    } else {
-                        Err(RpcError::from(e))?;
-                    }
+                Err(BitmapScanError::ScanLimit) => {
+                    scan_limit_hit = true;
+                    break;
+                }
+                Err(BitmapScanError::Cancelled) => {
+                    Err(RpcError::new(
+                        tonic::Code::Cancelled,
+                        BitmapScanError::Cancelled.to_string(),
+                    ))?;
+                }
+                Err(BitmapScanError::Source(inner)) => {
+                    Err(RpcError::from(inner))?;
                 }
             }
         }
@@ -518,7 +544,7 @@ fn unfiltered_event_refs(
     event_range: std::ops::Range<u64>,
     options: QueryOptions,
     source_limit: usize,
-) -> BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> {
+) -> BoxStream<'static, BitmapScanResult<Watermarked<EventRef>>> {
     async_stream::try_stream! {
         let lower_bound = event_range.start;
         let upper_bound = event_range.end;
@@ -529,7 +555,8 @@ fn unfiltered_event_refs(
             clamp_tx_scan_range(tx_range, source_limit, &options);
         let rows = client
             .scan_tx_seq_digests_stream(scan_range, options.scan_direction(), source_limit)
-            .await?;
+            .await
+            .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))?;
 
         futures::pin_mut!(rows);
         while let Some(row) = rows.next().await {
@@ -540,7 +567,7 @@ fn unfiltered_event_refs(
 
         if scan_limited {
             yield Watermarked::Watermark(event_bitmap_index::event_seq_lo(frontier_tx));
-            Err(anyhow::Error::new(BitmapScanLimitExceeded))?;
+            Err(BitmapScanError::ScanLimit)?;
         }
     }
     .boxed()

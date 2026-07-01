@@ -20,7 +20,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use anyhow::Result;
 use futures::Stream;
 use futures::StreamExt;
 use futures::stream::BoxStream;
@@ -29,12 +28,12 @@ use roaring::RoaringBitmap;
 
 use super::BitmapBucketSource;
 use super::BitmapQuery;
-use super::BitmapScanLimitExceeded;
+use super::BitmapScanError;
+use super::BitmapScanResult;
 use super::BucketItem;
 use super::BucketStream;
 use super::DedupedQuery;
 use super::LeafHead;
-use super::MultiError;
 use super::ScanDirection;
 use super::Watermarked;
 use super::WatermarkedBucketStream;
@@ -133,7 +132,7 @@ impl<F: FnOnce(BitmapScanMetrics) + Send + 'static> Drop for ObserveOnDrop<F> {
 /// Evaluate a DNF `BitmapQuery` against a backend-provided bitmap source.
 ///
 /// `budget` caps evaluated buckets across all dimension scans (see
-/// [`BitmapScanLimitExceeded`] and [`BitmapScanMetrics`]). `on_metrics`
+/// [`BitmapScanError::ScanLimit`] and [`BitmapScanMetrics`]). `on_metrics`
 /// fires exactly once when the eval stream is dropped.
 ///
 /// Output emits `Watermarked::Item(absolute_member_id)` interleaved with
@@ -147,7 +146,7 @@ pub fn eval_bitmap_query_stream<S, F>(
     direction: ScanDirection,
     budget: u64,
     on_metrics: F,
-) -> BoxStream<'static, Result<Watermarked<u64>>>
+) -> BoxStream<'static, BitmapScanResult<Watermarked<u64>>>
 where
     S: BitmapBucketSource,
     F: FnOnce(BitmapScanMetrics) + Send + 'static,
@@ -158,10 +157,11 @@ where
         // `on_metrics` here — there's no scan to account for, and the
         // error surfaces on its own. `on_metrics` is dropped uncalled.
         return async_stream::stream! {
-            yield Err(anyhow::anyhow!(
+            // Misconfiguration is a genuine fault, not a `ScanLimit` stop.
+            yield Err(BitmapScanError::Source(anyhow::anyhow!(
                 "bitmap scan budget {budget} is insufficient for {leaves} leaf streams; \
                  server is misconfigured"
-            ));
+            )));
         }
         .boxed();
     }
@@ -318,7 +318,7 @@ where
 
             // Consume any budget-error frame so the error surfaces (after the
             // floor watermark below).
-            let mut errors: Vec<anyhow::Error> = Vec::new();
+            let mut errors: Vec<BitmapScanError> = Vec::new();
             for i in 0..leaf_count {
                 if !unreferenced[i] && matches!(class[i], Some(LeafHead::Error)) {
                     match Pin::new(&mut leaves[i]).next().await {
@@ -353,7 +353,7 @@ where
             // Budget exhausted: the floor watermark above is the resume cursor;
             // everything below it was fully evaluated in prior rounds.
             if !errors.is_empty() {
-                Err(MultiError::collapse(errors))?;
+                Err(BitmapScanError::collapse(errors))?;
             }
 
             // Evaluate the DNF at the nearest bucket any active leaf sits on.
@@ -435,7 +435,7 @@ where
 
 /// Wrap a raw per-dimension bucket stream with the shared scan budget: charge
 /// one bucket per pull (the first via `take_first`, the rest via `try_take`),
-/// yielding [`BitmapScanLimitExceeded`] when the pool is empty. Never a silent
+/// yielding [`BitmapScanError::ScanLimit`] when the pool is empty. Never a silent
 /// EOF — the driver must see the error to truncate at the floor.
 fn budgeted_bucket_stream<S>(
     inner: S,
@@ -453,7 +453,7 @@ where
                 budget.take_first();
                 first = false;
             } else if !budget.try_take() {
-                Err(anyhow::Error::new(BitmapScanLimitExceeded))?;
+                Err(BitmapScanError::ScanLimit)?;
             }
             yield item;
         }
@@ -472,7 +472,7 @@ pub fn buckets_with_watermarks<S>(
     range: Range<u64>,
     bucket_size: u64,
     direction: ScanDirection,
-) -> impl Stream<Item = Result<Watermarked<(u64, RoaringBitmap)>>> + Send + 'static
+) -> impl Stream<Item = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>> + Send + 'static
 where
     S: Stream<Item = BucketItem> + Send + 'static,
 {
@@ -529,9 +529,9 @@ pub fn flatten_watermarked_buckets<S>(
     range: Range<u64>,
     bucket_size: u64,
     direction: ScanDirection,
-) -> impl Stream<Item = Result<Watermarked<u64>>> + Send + 'static
+) -> impl Stream<Item = BitmapScanResult<Watermarked<u64>>> + Send + 'static
 where
-    S: Stream<Item = Result<Watermarked<(u64, RoaringBitmap)>>> + Send + 'static,
+    S: Stream<Item = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>> + Send + 'static,
 {
     async_stream::try_stream! {
         if range.is_empty() {
@@ -589,7 +589,6 @@ mod tests {
     use crate::bitmap_query::BitmapLiteral;
     use crate::bitmap_query::BitmapTerm;
     use crate::bitmap_query::BucketStream;
-    use crate::bitmap_query::error_contains;
 
     const BUCKET_SIZE: u64 = 100_000;
     type TestBuckets = BTreeMap<Vec<u8>, Vec<(u64, Vec<u32>)>>;
@@ -642,8 +641,8 @@ mod tests {
     /// Drain into (items, watermarks) parallel vecs. Order between the
     /// two is lost; for ordering checks collect `Watermarked` directly.
     async fn drain_marked(
-        stream: BoxStream<'static, Result<Watermarked<u64>>>,
-    ) -> Result<(Vec<u64>, Vec<u64>)> {
+        stream: BoxStream<'static, BitmapScanResult<Watermarked<u64>>>,
+    ) -> BitmapScanResult<(Vec<u64>, Vec<u64>)> {
         let all: Vec<Watermarked<u64>> = stream.try_collect().await?;
         let mut items = Vec::new();
         let mut watermarks = Vec::new();
@@ -711,7 +710,7 @@ mod tests {
         );
         // Collect rather than try_collect: short-circuiting on Err would
         // drop the pre-error watermark under test.
-        let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<BitmapScanResult<Watermarked<u64>>> = stream.collect().await;
 
         let last_ok =
             all.iter().rev().find_map(|r| r.as_ref().ok()).expect(
@@ -730,8 +729,8 @@ mod tests {
             .as_ref()
             .expect_err("scan must terminate with an error");
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+            matches!(err, BitmapScanError::ScanLimit),
+            "expected ScanLimit, got {err:?}"
         );
     }
 
@@ -780,7 +779,7 @@ mod tests {
             3,
             |_| {},
         );
-        let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<BitmapScanResult<Watermarked<u64>>> = stream.collect().await;
 
         // c's bucket-0 match (member id 7) is delivered despite term1 dying.
         let items: Vec<u64> = all
@@ -816,8 +815,8 @@ mod tests {
             .as_ref()
             .expect_err("scan must terminate with an error");
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+            matches!(err, BitmapScanError::ScanLimit),
+            "expected ScanLimit, got {err:?}"
         );
     }
 
@@ -1077,7 +1076,7 @@ mod tests {
         // query's leaf count would produce a cursorless SCAN_LIMIT
         // (merged watermarks stay None until every child reports). The
         // eval surfaces this as a plain anyhow error — distinct from
-        // BitmapScanLimitExceeded — so the handler propagates it as
+        // BitmapScanError::ScanLimit — so the handler propagates it as
         // Internal rather than SCAN_LIMIT.
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([(
@@ -1101,8 +1100,8 @@ mod tests {
         let err = drain_marked(stream).await.unwrap_err();
 
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(&err).is_none(),
-            "must NOT surface as BitmapScanLimitExceeded; would be cursorless SCAN_LIMIT"
+            matches!(err, BitmapScanError::Source(_)),
+            "must be a Source fault (cursorless), never a clean ScanLimit end"
         );
         assert!(
             err.to_string().contains("insufficient for"),
@@ -1120,7 +1119,7 @@ mod tests {
     async fn scan_budget_shared_across_dimensions() {
         // Three include dimensions with several buckets each. Budget = 4
         // should be consumed across all per-dimension fetches before
-        // ScanLimitExceeded surfaces from the merged eval stream.
+        // `BitmapScanError::ScanLimit` surfaces from the merged eval stream.
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
                 (
@@ -1156,17 +1155,17 @@ mod tests {
         let err = drain_marked(stream).await.unwrap_err();
 
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(&err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+            matches!(err, BitmapScanError::ScanLimit),
+            "expected ScanLimit, got {err:?}"
         );
         // All four buckets were evaluated through budgeted_bucket_stream
-        // before the fifth try_take() failed and surfaced BitmapScanLimitExceeded.
+        // before the fifth try_take() failed and surfaced BitmapScanError::ScanLimit.
         assert_eq!(metrics.lock().unwrap().unwrap().buckets_evaluated, 4);
     }
 
     /// Budget exhausting on an exclude leaf must NOT be mistaken for the
     /// exclude reaching its range terminus. With silent EOF semantics, includes
-    /// past the exclude cutoff would leak unfiltered. With `ScanLimitExceeded`,
+    /// past the exclude cutoff would leak unfiltered. With `BitmapScanError::ScanLimit`,
     /// the error propagates and the eval pipeline short-circuits cleanly.
     #[tokio::test]
     async fn scan_budget_exclude_side_exhaustion_does_not_leak_includes() {
@@ -1190,7 +1189,7 @@ mod tests {
         // Budget = leaf count gives every leaf one bucket fetch (the
         // minimum the runtime guard allows; see
         // `scan_budget_below_unique_leaf_count_yields_misconfig_error`). Once
-        // the budget exhausts mid-scan, ScanLimitExceeded propagates
+        // the budget exhausts mid-scan, `BitmapScanError::ScanLimit` propagates
         // without the driver mistaking the exclude leaf's error for a
         // natural EOF.
         let stream = eval_bitmap_query_stream(
@@ -1207,8 +1206,8 @@ mod tests {
         // Must error, not return Ok with leaked include rows.
         let err = result.expect_err("must surface scan-limit, not silently emit includes");
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(&err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+            matches!(err, BitmapScanError::ScanLimit),
+            "expected ScanLimit, got {err:?}"
         );
     }
 
@@ -1252,7 +1251,7 @@ mod tests {
         );
         // Don't try_collect — short-circuiting on Err would drop the
         // pre-error watermark we're verifying.
-        let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<BitmapScanResult<Watermarked<u64>>> = stream.collect().await;
 
         let last_ok = all
             .iter()
@@ -1274,8 +1273,8 @@ mod tests {
             .as_ref()
             .expect_err("scan must terminate with an error");
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+            matches!(err, BitmapScanError::ScanLimit),
+            "expected ScanLimit, got {err:?}"
         );
     }
 
@@ -1519,37 +1518,94 @@ mod tests {
         );
     }
 
-    /// Single-error `collapse` returns the inner error directly so the
-    /// common case preserves `downcast_ref` on the concrete error type.
+    /// Single-error `collapse` returns that error.
     #[test]
-    fn multi_error_collapses_single() {
-        let err = MultiError::collapse(vec![anyhow::Error::new(BitmapScanLimitExceeded)]);
-        assert!(err.downcast_ref::<MultiError>().is_none());
-        assert!(err.downcast_ref::<BitmapScanLimitExceeded>().is_some());
-        assert!(error_contains::<BitmapScanLimitExceeded>(&err).is_some());
+    fn collapse_single_scan_limit() {
+        assert!(matches!(
+            BitmapScanError::collapse(vec![BitmapScanError::ScanLimit]),
+            BitmapScanError::ScanLimit
+        ));
     }
 
-    /// Multi-error `collapse` wraps; `error_contains` looks through the
-    /// aggregate to find the requested error type from any sibling.
+    /// All-`ScanLimit` aggregate collapses to a single `ScanLimit`.
     #[test]
-    fn multi_error_error_contains_finds_through_aggregate() {
-        let err = MultiError::collapse(vec![
-            anyhow::anyhow!("first transport"),
-            anyhow::Error::new(BitmapScanLimitExceeded),
+    fn collapse_all_scan_limit() {
+        assert!(matches!(
+            BitmapScanError::collapse(
+                vec![BitmapScanError::ScanLimit, BitmapScanError::ScanLimit,]
+            ),
+            BitmapScanError::ScanLimit
+        ));
+    }
+
+    /// A `Source` fault co-occurring with a `ScanLimit` must win: masking the
+    /// fault as a clean `ScanLimit` end would silently corrupt results.
+    #[test]
+    fn collapse_fault_outranks_scan_limit() {
+        let collapsed = BitmapScanError::collapse(vec![
+            BitmapScanError::ScanLimit,
+            BitmapScanError::Source(anyhow::anyhow!("storage boom")),
         ]);
-        assert!(err.downcast_ref::<MultiError>().is_some());
-        // Without `error_contains` you'd miss it — top-level isn't BSLE.
-        assert!(err.downcast_ref::<BitmapScanLimitExceeded>().is_none());
-        assert!(error_contains::<BitmapScanLimitExceeded>(&err).is_some());
+        match collapsed {
+            BitmapScanError::Source(e) => assert!(e.to_string().contains("storage boom")),
+            other => panic!("expected Source fault to win, got {other:?}"),
+        }
     }
 
-    /// Display includes each inner error so logs are useful when the
-    /// aggregate hits the top level.
+    /// A `Source` fault outranks both `ScanLimit` and `Cancelled`: a real fault
+    /// must never be masked as a clean end or a cancel.
     #[test]
-    fn multi_error_display_lists_inner() {
-        let err = MultiError::collapse(vec![anyhow::anyhow!("alpha"), anyhow::anyhow!("beta")]);
-        let s = err.to_string();
-        assert!(s.contains("alpha"));
-        assert!(s.contains("beta"));
+    fn collapse_source_outranks_scan_limit_and_cancelled() {
+        let collapsed = BitmapScanError::collapse(vec![
+            BitmapScanError::ScanLimit,
+            BitmapScanError::Cancelled,
+            BitmapScanError::Source(anyhow::anyhow!("storage boom")),
+        ]);
+        match collapsed {
+            BitmapScanError::Source(e) => assert!(e.to_string().contains("storage boom")),
+            other => panic!("expected Source to win, got {other:?}"),
+        }
+    }
+
+    /// `ScanLimit` outranks `Cancelled`: the scan-limit frontier is a usable
+    /// continuation cursor, strictly better than ending on a cancel.
+    #[test]
+    fn collapse_scan_limit_outranks_cancelled() {
+        assert!(matches!(
+            BitmapScanError::collapse(
+                vec![BitmapScanError::Cancelled, BitmapScanError::ScanLimit,]
+            ),
+            BitmapScanError::ScanLimit
+        ));
+    }
+
+    /// Several concurrent faults combine into one `Source` that keeps every
+    /// leaf's message rather than dropping all but one.
+    #[test]
+    fn collapse_combines_concurrent_faults() {
+        let collapsed = BitmapScanError::collapse(vec![
+            BitmapScanError::Source(anyhow::anyhow!("boom one")),
+            BitmapScanError::Source(anyhow::anyhow!("boom two")),
+        ]);
+        match collapsed {
+            BitmapScanError::Source(e) => {
+                let s = e.to_string();
+                assert!(s.contains("boom one"), "missing first fault: {s}");
+                assert!(s.contains("boom two"), "missing second fault: {s}");
+            }
+            other => panic!("expected combined Source, got {other:?}"),
+        }
+    }
+
+    /// `From<anyhow::Error>` is a fault funnel: every `anyhow` becomes `Source`.
+    /// Terminal dispositions are decided at the source and never reconstructed
+    /// here, so this never produces `ScanLimit`/`Cancelled`.
+    #[test]
+    fn from_anyhow_funnels_to_source() {
+        let fault: anyhow::Error = anyhow::anyhow!("storage boom");
+        match BitmapScanError::from(fault) {
+            BitmapScanError::Source(e) => assert!(e.to_string().contains("storage boom")),
+            other => panic!("expected Source, got {other:?}"),
+        }
     }
 }

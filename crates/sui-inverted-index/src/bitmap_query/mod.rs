@@ -52,70 +52,89 @@ pub(crate) use stream::BitmapScanBudget;
 #[cfg(test)]
 pub(crate) use stream::eval_bitmap_query_bucket_stream;
 
-/// Terminal signal: the per-request bucket-fetch budget is exhausted.
-/// Surfaced as `anyhow::Error` so it short-circuits `try_stream!`
-/// pipelines through the existing error path. A silent EOF would be
-/// indistinguishable from a leaf reaching the range terminus, so the
-/// driver would advance the cursor to the end and claim full coverage
-/// instead of truncating the scan at the current floor.
+/// Terminal signal raised by a bitmap evaluator on the bucket channel's `Err`.
+/// It must be an error rather than a silent end-of-stream: the driver reads a
+/// clean end as "scanned the whole range" and advances the resume cursor to the
+/// terminus, so a budget or cancel stop has to short-circuit the `try_stream!`
+/// pipeline to truncate the scan at the current floor. The variant is chosen at
+/// the source, so each List handler maps it to a wire outcome with one
+/// exhaustive match.
 #[derive(Debug, thiserror::Error)]
-#[error("bitmap scan budget exhausted")]
-pub struct BitmapScanLimitExceeded;
+pub enum BitmapScanError {
+    /// The per-request bucket-scan limit was reached: a graceful early stop. The
+    /// handler ends the stream with `QUERY_END_REASON_SCAN_LIMIT` and the last
+    /// emitted watermark as the continuation cursor.
+    #[error("bitmap scan limit reached")]
+    ScanLimit,
+    /// The scan was cancelled (the request's cancellation token fired). The
+    /// handler ends the stream with a gRPC `Cancelled` status.
+    #[error("bitmap scan cancelled")]
+    Cancelled,
+    /// A backend/storage fault. The handler ends the stream with a gRPC
+    /// `Internal` status carrying this error unchanged.
+    #[error(transparent)]
+    Source(anyhow::Error),
+}
 
-/// Aggregate of multiple terminal errors raised in the same driver round
-/// (e.g. two leaves both exhaust the shared budget before the next round).
-/// The single-error shortcut returns the inner error directly so existing
-/// downcasts on the wire keep working — `MultiError` only appears when 2+
-/// errors coincide, in which case downstream consumers should use
-/// [`error_contains`] to interrogate the aggregate.
-#[derive(Debug)]
-pub struct MultiError(Vec<anyhow::Error>);
-
-impl MultiError {
-    /// Wrap a non-empty error list into an `anyhow::Error`. With exactly
-    /// one error, returns it unwrapped so the common case preserves
-    /// `downcast_ref` behavior on the original concrete type.
-    pub fn collapse(mut errs: Vec<anyhow::Error>) -> anyhow::Error {
-        assert!(!errs.is_empty(), "MultiError::collapse on empty Vec");
-        if errs.len() == 1 {
-            return errs.pop().expect("len == 1");
+impl BitmapScanError {
+    /// Reduce the terminal errors raised by several leaves in one driver round
+    /// to a single disposition. Precedence: `Source` > `ScanLimit` > `Cancelled`.
+    ///
+    /// - `Source` outranks everything: a real fault must surface as `Internal`,
+    ///   never be masked as a clean `SCAN_LIMIT` end or a `Cancelled` status.
+    /// - `ScanLimit` outranks `Cancelled`: a scan-limit stop already emitted its
+    ///   frontier watermark, so ending the stream cleanly with a continuation
+    ///   cursor is strictly more useful than a `Cancelled` error — the cancel
+    ///   (a deadline/timeout) loses nothing, the resume point is already on the
+    ///   wire.
+    ///
+    /// Multiple concurrent faults are combined into one `Source` so a correlated
+    /// failure keeps every leaf's message instead of an arbitrary one. Panics on
+    /// empty input — the evaluator only collapses when at least one leaf errored.
+    pub(crate) fn collapse(errs: Vec<BitmapScanError>) -> BitmapScanError {
+        assert!(!errs.is_empty(), "BitmapScanError::collapse on empty Vec");
+        let mut cancelled = false;
+        let mut scan_limit = false;
+        let mut faults: Vec<anyhow::Error> = Vec::new();
+        for e in errs {
+            match e {
+                BitmapScanError::Cancelled => cancelled = true,
+                BitmapScanError::ScanLimit => scan_limit = true,
+                BitmapScanError::Source(err) => faults.push(err),
+            }
         }
-        anyhow::Error::new(MultiError(errs))
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &anyhow::Error> {
-        self.0.iter()
-    }
-}
-
-impl std::fmt::Display for MultiError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} concurrent errors", self.0.len())?;
-        for (i, e) in self.0.iter().enumerate() {
-            write!(f, "\n  [{i}] {e}")?;
+        match faults.len() {
+            0 => {
+                if scan_limit {
+                    BitmapScanError::ScanLimit
+                } else {
+                    debug_assert!(cancelled, "collapse saw only non-erroring leaves");
+                    BitmapScanError::Cancelled
+                }
+            }
+            1 => BitmapScanError::Source(faults.pop().expect("len == 1")),
+            n => {
+                let combined = faults
+                    .iter()
+                    .enumerate()
+                    .map(|(i, err)| format!("  [{i}] {err}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                BitmapScanError::Source(anyhow::anyhow!(
+                    "{n} concurrent bitmap scan faults:\n{combined}"
+                ))
+            }
         }
-        Ok(())
     }
 }
 
-impl std::error::Error for MultiError {}
-
-/// Downcast probe that looks through a `MultiError` aggregate. Returns
-/// the first inner `T` whether the top-level error is `T` directly or a
-/// `MultiError` containing one. Use this instead of `downcast_ref::<T>`
-/// at sites that may receive aggregated errors from the bitmap eval
-/// driver.
-pub fn error_contains<T: std::error::Error + Send + Sync + 'static>(
-    err: &anyhow::Error,
-) -> Option<&T> {
-    if let Some(t) = err.downcast_ref::<T>() {
-        return Some(t);
+impl From<anyhow::Error> for BitmapScanError {
+    fn from(err: anyhow::Error) -> Self {
+        BitmapScanError::Source(err)
     }
-    if let Some(multi) = err.downcast_ref::<MultiError>() {
-        return multi.iter().find_map(|e| e.downcast_ref::<T>());
-    }
-    None
 }
+
+pub type BitmapScanResult<T> = std::result::Result<T, BitmapScanError>;
 
 /// Item or progress watermark flowing through a bitmap eval pipeline.
 /// `Watermark(p)` means every Item with position strictly before `p`
@@ -140,13 +159,13 @@ impl<T> Watermarked<T> {
 /// A stream of `(bucket_id, RoaringBitmap)` in the requested bucket order.
 /// Bitmap positions are **relative** to the bucket (u32 offsets `[0, BUCKET_SIZE)`)
 /// - edge trimming against the requested range happens at the flatten step.
-pub type BucketItem = Result<(u64, RoaringBitmap)>;
+pub type BucketItem = BitmapScanResult<(u64, RoaringBitmap)>;
 pub type BucketStream = BoxStream<'static, BucketItem>;
 
 /// A bucket stream that interleaves data buckets with progress watermarks.
 /// The flat DNF driver derives each watermark from the slowest leaf's
 /// position, so the output always reflects "every source has scanned past P."
-pub(crate) type WatermarkedBucket = Result<Watermarked<(u64, RoaringBitmap)>>;
+pub(crate) type WatermarkedBucket = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>;
 pub type WatermarkedBucketStream = BoxStream<'static, WatermarkedBucket>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
