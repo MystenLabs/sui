@@ -71,7 +71,7 @@ async fn alpha_cluster() -> (OffchainCluster, TempDir) {
     let cluster = OffchainCluster::new(
         client_args,
         OffchainClusterConfig {
-            enable_experimental_query_apis: true,
+            experimental_query_apis: true,
             // Minimal PG pipeline set. The bitmap path reads via kv-rpc/BigTable, not these
             // tables, but graphql's watermark task polls every configured pipeline — so
             // pipelines that error on our synthetic genesis (e.g. `tx_balance_changes` on the
