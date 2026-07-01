@@ -94,12 +94,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "AAAAAAAAAAAA",
-          "endCursor": "AAEAAAAAAAAA"
+          "startCursor": "CAIQARgAIAA=",
+          "endCursor": "CAIQARgAIAE="
         },
         "edges": [
           {
-            "cursor": "AAAAAAAAAAAA",
+            "cursor": "CAIQARgAIAA=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -109,7 +109,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAEAAAAAAAAA",
+            "cursor": "CAIQARgAIAE=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -135,12 +135,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "AAIAAAAAAAAA",
-          "endCursor": "AAoAAAAAAAAA"
+          "startCursor": "CAIQARgAIAI=",
+          "endCursor": "CAIQARgAIAo="
         },
         "edges": [
           {
-            "cursor": "AAIAAAAAAAAA",
+            "cursor": "CAIQARgAIAI=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -150,7 +150,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAMAAAAAAAAA",
+            "cursor": "CAIQARgAIAM=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -160,7 +160,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAQAAAAAAAAA",
+            "cursor": "CAIQARgAIAQ=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -170,7 +170,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAUAAAAAAAAA",
+            "cursor": "CAIQARgAIAU=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -180,7 +180,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAYAAAAAAAAA",
+            "cursor": "CAIQARgAIAY=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -190,7 +190,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAcAAAAAAAAA",
+            "cursor": "CAIQARgAIAc=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -200,7 +200,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAgAAAAAAAAA",
+            "cursor": "CAIQARgAIAg=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -210,7 +210,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAkAAAAAAAAA",
+            "cursor": "CAIQARgAIAk=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -220,7 +220,7 @@ Response: {
             }
           },
           {
-            "cursor": "AAoAAAAAAAAA",
+            "cursor": "CAIQARgAIAo=",
             "node": {
               "effects": {
                 "checkpoint": {
