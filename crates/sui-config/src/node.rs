@@ -280,6 +280,10 @@ pub struct NodeConfig {
     /// When set, enables per-commit binary logs of congestion tracker state.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub congestion_log: Option<CongestionLogConfig>,
+
+    /// Configuration for the trusted peer address prober.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address_prober: Option<AddressProberConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -359,6 +363,82 @@ pub struct ForkRecoveryConfig {
     /// Behavior when a fork is detected after recovery attempts
     #[serde(default)]
     pub fork_crash_behavior: ForkCrashBehavior,
+}
+
+/// Configuration for the address prober: a background task on validators that periodically
+/// checks whether trusted peers' advertised P2P and consensus addresses are connectable
+/// and reports the results as Prometheus metrics.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct AddressProberConfig {
+    /// Whether the prober runs.
+    ///
+    /// If unspecified, this defaults to `true`.
+    pub enabled: Option<bool>,
+
+    /// How often to re-probe an address that was reachable on its last probe.
+    ///
+    /// If unspecified, this defaults to 1 hour.
+    pub good_interval: Option<Duration>,
+
+    /// How often to re-probe an address that failed its last probe — should be frequently enough
+    /// to confirm a sustained failure and to promptly notice a fix.
+    ///
+    /// If unspecified, this defaults to 1 minute.
+    pub failed_interval: Option<Duration>,
+
+    /// Number of consecutive failed probes before a peer/endpoint/source's connectability gauge
+    /// flips to 0 (smooths out transient blips).
+    ///
+    /// If unspecified, this defaults to `3`.
+    pub failure_threshold: Option<u32>,
+
+    /// Maximum number of address probes in flight at once.
+    ///
+    /// If unspecified, this defaults to `16`.
+    pub concurrency: Option<usize>,
+
+    /// Per-probe timeout for the consensus connect (the P2P probe uses anemo's connect timeout).
+    ///
+    /// If unspecified, this defaults to 10 seconds.
+    pub consensus_probe_timeout: Option<Duration>,
+}
+
+impl AddressProberConfig {
+    pub fn enabled(&self) -> bool {
+        self.enabled.unwrap_or(true)
+    }
+
+    pub fn good_interval(&self) -> Duration {
+        self.good_interval.unwrap_or(Duration::from_secs(60 * 60))
+    }
+
+    pub fn failed_interval(&self) -> Duration {
+        self.failed_interval.unwrap_or(Duration::from_secs(60))
+    }
+
+    pub fn failure_threshold(&self) -> u32 {
+        self.failure_threshold.unwrap_or(3)
+    }
+
+    pub fn concurrency(&self) -> usize {
+        self.concurrency.unwrap_or(16)
+    }
+
+    pub fn consensus_probe_timeout(&self) -> Duration {
+        self.consensus_probe_timeout
+            .unwrap_or(Duration::from_secs(10))
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.failed_interval() <= self.good_interval(),
+            "address prober failed_interval ({:?}) must be <= good_interval ({:?})",
+            self.failed_interval(),
+            self.good_interval(),
+        );
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
