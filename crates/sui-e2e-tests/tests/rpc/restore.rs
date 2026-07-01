@@ -69,12 +69,11 @@ const SUI_COIN_TYPE: &str =
 /// history cohort from genesis, so this is generous.
 const WAIT_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// An rpc config that builds the embedded `sui-rpc-store` index backend
-/// with the ledger-history (bitmap) cohort enabled.
+/// An rpc config that builds the embedded `sui-rpc-store` index backend,
+/// which indexes both the live and ledger-history (bitmap) cohorts.
 fn embedded_indexing_config() -> RpcConfig {
     RpcConfig {
         enable_indexing: Some(true),
-        ledger_history_indexing: Some(true),
         ..Default::default()
     }
 }
