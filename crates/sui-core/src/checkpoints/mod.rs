@@ -8,7 +8,6 @@ mod metrics;
 
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::authority::AuthorityState;
-use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_network_config};
 use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::CertifiedCheckpointOutput;
