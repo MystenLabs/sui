@@ -575,6 +575,24 @@ impl<'backing> TemporaryStore<'backing> {
         self.invariants.clear();
     }
 
+    /// Reset to the "recorded no-op" state used by a BumpOnly bail: drop all writes AND every
+    /// execution *observation* (loaded runtime objects, per-epoch config, packages, generated ids,
+    /// wrapped containers), then bump the mutable inputs. The resulting store is equivalent to a
+    /// fresh `TemporaryStore::new` from the same inputs, so its effects record ONLY the input
+    /// version bumps and the input dependencies — nothing the (now-discarded) execution touched.
+    /// (`drop_writes` alone leaves the observations behind, which would leak into the effects.)
+    /// Reset to a clean from-inputs state for the BumpOnly no-op: drop writes and clear EVERY
+    /// execution observation (else it leaks into the effects), then bump the mutable inputs.
+    pub(crate) fn reset_to_recorded_noop(&mut self) {
+        self.drop_writes();
+        self.loaded_runtime_objects.clear();
+        self.wrapped_object_containers.clear();
+        self.runtime_packages_loaded_from_db.write().clear();
+        self.generated_runtime_ids.clear();
+        self.loaded_per_epoch_config_objects.write().clear();
+        self.ensure_active_inputs_mutated();
+    }
+
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
         debug_assert!(!self.execution_results.deleted_object_ids.contains(id));
@@ -853,15 +871,15 @@ impl<'backing> TemporaryStore<'backing> {
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
         gas_charger: &GasCharger,
-        mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
+        // DEVIATION FROM #27051 (#2b): we drop the caller-passed `mutable_inputs` arg; the
+        // InvariantChecker derives the mutable-input set from the store instead (behavior-identical).
         self.invariants.check_ownership_invariants(
             self,
             sender,
             sponsor,
             gas_charger,
-            mutable_inputs,
             is_epoch_change,
         )
     }

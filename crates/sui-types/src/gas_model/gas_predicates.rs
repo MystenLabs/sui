@@ -85,3 +85,7 @@ pub fn native_function_threshold_exceeded(gas_model_version: u64, num_native_cal
 pub fn refresh_gas_payment_location(gas_model_version: u64) -> bool {
     gas_model_version >= 13
 }
+
+pub fn use_step_gas_charging(gas_model_version: u64) -> bool {
+    gas_model_version >= 15
+}
