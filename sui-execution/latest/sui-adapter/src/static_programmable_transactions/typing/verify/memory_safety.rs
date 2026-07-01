@@ -31,6 +31,12 @@ type Paths = move_regex_borrow_graph::collections::Paths<(), Location>;
 #[must_use]
 enum Value {
     Ref(Ref),
+    /// A reference to `TxContext`. `TxContext` lives outside the borrow graph
+    /// entirely, so this variant carries no `Ref` payload. Every consumer of
+    /// references in this pass treats `TxContextRef` as an inert sentinel: it
+    /// is never a source for return-reference rooting, never released from the
+    /// graph, and never written through.
+    TxContextRef,
     NonRef,
 }
 
@@ -49,22 +55,25 @@ struct Context {
 impl Value {
     fn is_ref(&self) -> bool {
         match self {
-            Value::Ref(_) => true,
+            Value::Ref(_) | Value::TxContextRef => true,
             Value::NonRef => false,
         }
     }
 
     fn is_non_ref(&self) -> bool {
         match self {
-            Value::Ref(_) => false,
+            Value::Ref(_) | Value::TxContextRef => false,
             Value::NonRef => true,
         }
     }
 
-    fn to_ref(&self) -> Option<Ref> {
+    /// The `Ref` for this value as far as the borrow graph is concerned.
+    /// Returns `None` for `TxContextRef`, since `TxContext` lives outside the
+    /// graph and is never a valid source or target for graph operations.
+    fn to_graph_ref(&self) -> Option<Ref> {
         match self {
             Value::Ref(r) => Some(*r),
-            Value::NonRef => None,
+            Value::TxContextRef | Value::NonRef => None,
         }
     }
 }
@@ -415,7 +424,7 @@ fn consume_value_opt<E: ExecutionErrorTrait>(
 
 fn consume_value<E: ExecutionErrorTrait>(context: &mut Context, value: Value) -> Result<(), E> {
     match value {
-        Value::NonRef => Ok(()),
+        Value::NonRef | Value::TxContextRef => Ok(()),
         Value::Ref(r) => {
             context.release::<E>(r)?;
             Ok(())
@@ -491,6 +500,9 @@ fn copy_value<E: ExecutionErrorTrait>(
             Value::Ref(new_r)
         }
         Value::NonRef => Value::NonRef,
+        Value::TxContextRef => {
+            invariant_violation!("type checking should prevent copying a TxContext reference")
+        }
     })
 }
 
@@ -512,6 +524,23 @@ fn borrow_location<E: ExecutionErrorTrait>(
         value.is_non_ref(),
         "type checking should guarantee no borrowing of references"
     );
+    // `TxContext` lives outside the borrow graph. Soundness rests on a
+    // framework-level invariant rather than on graph tracking: at runtime,
+    // every `&mut TxContext` / `&TxContext` argument resolves to the same
+    // single `Locals` slot (see `Locations::resolve` in execution/context.rs),
+    // and the runtime `TxContext` value is a dummy whose fields are never
+    // written by any Move function (the only `&mut TxContext` consumer in
+    // `sui::tx_context` is `fresh_object_address`, which ignores its
+    // argument). With no observable mutation, formal aliasing of `TxContext`
+    // — whether within a single call or across commands via, e.g.,
+    // `sui::tx_context::digest`'s `&self.tx_hash` return — is harmless. So
+    // excluding `TxContext` from the graph cannot create a real reference
+    // safety violation, and it lets PTBs combine reference-returning calls
+    // with later `TxContext` borrows freely.
+    if let T::Location::TxContext = l {
+        let _ = is_mut;
+        return Ok(Value::TxContextRef);
+    }
     let new_r = context.extend_by_label::<E>(context.local_root, is_mut, l)?;
     Ok(Value::Ref(new_r))
 }
@@ -528,8 +557,8 @@ fn freeze_ref<E: ExecutionErrorTrait>(
             copy_value::<E>(context, arg_idx, *location, borrowed)?
         }
     };
-    let Some(r) = value.to_ref() else {
-        invariant_violation!("type checking should guarantee FreezeRef is used on only references")
+    let Some(r) = value.to_graph_ref() else {
+        invariant_violation!("type checking should guarantee FreezeRef is used on graph references")
     };
     let new_r = context.extend_by_epsilon::<E>(r, /* is_mut */ false)?;
     consume_value::<E>(context, value)?;
@@ -584,14 +613,16 @@ fn call<E: ExecutionErrorTrait>(
 ) -> Result<Vec<Value>, E> {
     let sources = arg_values
         .iter()
-        .filter_map(|v| v.to_ref())
+        .filter_map(|v| v.to_graph_ref())
         .collect::<BTreeSet<_>>();
     if let Some(v) = context.find_non_transferrable::<E>(&sources)? {
         let mut_idx = arg_values
             .iter()
             .zip_debug_eq(&signature.parameters)
             .enumerate()
-            .find(|(_, (x, ty))| x.to_ref() == Some(v) && matches!(ty, Type::Reference(true, _)));
+            .find(|(_, (x, ty))| {
+                x.to_graph_ref() == Some(v) && matches!(ty, Type::Reference(true, _))
+            });
 
         let Some((idx, _)) = mut_idx else {
             invariant_violation!("non transferrable value was not found in arguments");

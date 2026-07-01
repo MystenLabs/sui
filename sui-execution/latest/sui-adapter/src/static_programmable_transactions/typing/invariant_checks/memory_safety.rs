@@ -470,6 +470,13 @@ impl Context {
         let value = match arg {
             T::Argument__::Use(usage) => location.use_(usage)?,
             T::Argument__::Freeze(usage) => location.use_(usage)?.freeze()?,
+            // `TxContext` lives outside the reference-tracking model entirely
+            // (mirrored from the regex-based `verify::memory_safety` pass).
+            // Treat the borrow as a `NonRef` so no path through `TxContext`
+            // ever enters this safety net's `PathSet`s and no later command
+            // can spuriously conflict with a `TxContext` borrow. The explicit
+            // within-call `TxContext` aliasing check lives in the verify pass.
+            T::Argument__::Borrow(_, T::Location::TxContext) => Value::NonRef,
             T::Argument__::Borrow(is_mut, _) => location.borrow(*is_mut)?,
             T::Argument__::Read(usage) => {
                 location.use_(usage)?;

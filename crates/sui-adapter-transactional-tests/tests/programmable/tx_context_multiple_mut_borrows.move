@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests invalid multiple &mut/&TxContext parameters
+// tests that multiple TxContext reference parameters — including any mix of
+// `&` and `&mut` — are accepted. The PTB borrow checker excludes TxContext
+// from the borrow graph entirely; see tx_context_mut_mut_aliases.move for the
+// runtime side of why this is safe.
 
 //# init --addresses test=0x0
 
