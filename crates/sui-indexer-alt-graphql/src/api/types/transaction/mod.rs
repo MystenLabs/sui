@@ -28,6 +28,7 @@ use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc::proto::sui::rpc::v2alpha;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::QueryType;
@@ -367,10 +368,6 @@ impl Transaction {
             return Self::paginate_bitmap(reader, scope, page, filter).await;
         }
 
-        // Reject cursors incompatible with Postgres
-        require_seq_cursor(page.after())?;
-        require_seq_cursor(page.before())?;
-
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -452,10 +449,10 @@ impl Transaction {
             return Ok(Connection::new(false, false).into());
         };
 
-        // Opaque ledger-position bounds (ordering-independent); reject a stale
-        // sequence-number cursor that reached the bitmap path.
-        let after = bitmap_cursor(page.after())?;
-        let before = bitmap_cursor(page.before())?;
+        // Cursors are opaque pass-through bytes: the server minted them (an encoded gRPC
+        // `CursorToken`), so we hand them straight back as the scan bounds.
+        let after = page.after().map(|c| c.to_vec());
+        let before = page.before().map(|c| c.to_vec());
 
         let mut options = v2alpha::QueryOptions::default();
         options.limit_items = Some((page.limit() + 1) as u32);
@@ -556,17 +553,6 @@ impl TransactionConnection {
     }
 }
 
-impl TxCursor {
-    /// The `tx_sequence_number` for a Postgres-path cursor, or `None` for an
-    /// opaque bitmap cursor.
-    fn seq(&self) -> Option<u64> {
-        match self {
-            TxCursor::Seq(s) => Some(*s),
-            TxCursor::Opaque(_) => None,
-        }
-    }
-}
-
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
         CursorToken::decode(self)
@@ -611,30 +597,26 @@ impl From<Connection<String, Transaction>> for TransactionConnection {
 fn build_bitmap_connection(
     scope: Scope,
     page: &Page<CTransaction>,
-    result: StreamPage<v2alpha::TransactionItem>,
+    result: StreamPage<v2::ExecutedTransaction>,
 ) -> Result<TransactionConnection, RpcError> {
-    let next_cursor_bytes = result.next_cursor().cloned();
-    let has_more = next_cursor_bytes.is_some();
-    let StreamPage {
-        mut items,
-        start_cursor: start_cursor_bytes,
-        ..
-    } = result;
+    // The (limit+1)-th item is a look-ahead probe: its existence proves a next page, but its
+    // cursor is never returned.
+    let probe_hit = result.items.len() > page.limit();
+    let more = probe_hit || result.has_more();
 
-    let over_fetched = items.len() > page.limit();
-    if over_fetched {
-        items.truncate(page.limit());
-    }
-    let more = over_fetched || has_more;
-
-    let (has_previous_page, has_next_page) = if page.is_from_front() {
-        (page.after().is_some(), more)
+    // Boundary cursors, in scan order. The probe only taints the trailing cursor (it points at
+    // the dropped probe, or a watermark beyond it), so anchor on the last kept item there;
+    // otherwise `last_cursor()` — the last item, or a trailing watermark that skips a
+    // scanned-empty tail.
+    let start = result.first_cursor().cloned();
+    let end = if probe_hit {
+        Some(result.items[page.limit() - 1].cursor.clone())
     } else {
-        // A descending (`last`) scan walks high -> low, so "more" means earlier
-        // items remain before the page.
-        (more, page.before().is_some())
+        result.last_cursor().cloned()
     };
 
+    let mut items = result.items;
+    items.truncate(page.limit());
     if !page.is_from_front() {
         items.reverse();
     }
@@ -642,19 +624,15 @@ fn build_bitmap_connection(
     let mut edges = Vec::with_capacity(items.len());
     for item in items {
         let digest = item
-            .transaction
-            .as_ref()
-            .and_then(|tx| tx.digest.as_deref())
+            .payload
+            .digest
+            .as_deref()
             .context("ListTransactions item missing transaction digest")?
             .parse::<TransactionDigest>()
             .context("Failed to parse transaction digest from ListTransactions")?;
 
-        let cursor = item
-            .watermark
-            .as_ref()
-            .and_then(|w| w.cursor.as_ref())
-            .context("ListTransactions item missing watermark cursor")?;
-        let cursor = BcsCursor::new(TxCursor::Opaque(cursor.to_vec())).encode_cursor();
+        // The item's cursor is already an encoded `CursorToken`; hand it back opaquely.
+        let cursor = ByteCursor::new(item.cursor.to_vec()).encode_cursor();
 
         edges.push(Edge::new(
             cursor,
@@ -662,52 +640,30 @@ fn build_bitmap_connection(
         ));
     }
 
-    // On empty pages, fall back to the stream-reported cursors.
-    let start_watermark_cursor = start_cursor_bytes
-        .as_ref()
-        .map(|b| BcsCursor::new(TxCursor::Opaque(b.to_vec())).encode_cursor());
-    let end_watermark_cursor = next_cursor_bytes
-        .as_ref()
-        .map(|b| BcsCursor::new(TxCursor::Opaque(b.to_vec())).encode_cursor());
+    let (has_previous_page, has_next_page) = if page.is_from_front() {
+        (page.after().is_some(), more)
+    } else {
+        // A descending (`last`) scan walks high -> low, so "more" means earlier items remain
+        // before the page.
+        (more, page.before().is_some())
+    };
 
-    let start_cursor = edges
-        .first()
-        .map(|e| e.cursor.clone())
-        .or(start_watermark_cursor);
-    let end_cursor = edges
-        .last()
-        .map(|e| e.cursor.clone())
-        .or(end_watermark_cursor);
+    // Presented ascending: a forward scan keeps scan order, a descending scan swaps.
+    let (start_bytes, end_bytes) = if page.is_from_front() {
+        (start, end)
+    } else {
+        (end, start)
+    };
 
     Ok(TransactionConnection {
         edges,
         page_info: PageInfo {
             has_previous_page,
             has_next_page,
-            start_cursor,
-            end_cursor,
+            start_cursor: start_bytes.map(|b| ByteCursor::new(b.to_vec()).encode_cursor()),
+            end_cursor: end_bytes.map(|b| ByteCursor::new(b.to_vec()).encode_cursor()),
         },
     })
-}
-
-/// The opaque ledger-position bound for a bitmap scan, or `None` for no bound.
-/// Errors on a sequence-number cursor (a stale Postgres cursor reaching the
-/// bitmap path, e.g. after the flag was flipped mid-pagination) rather than
-/// misinterpreting it.
-fn bitmap_cursor(cursor: Option<&CTransaction>) -> Result<Option<Vec<u8>>, RpcError> {
-    match cursor.map(|c| c.deref()) {
-        None => Ok(None),
-        Some(TxCursor::Opaque(bytes)) => Ok(Some(bytes.clone())),
-        Some(TxCursor::Seq(_)) => Err(crate::pagination::Error::InvalidCursor.into()),
-    }
-}
-
-/// Require a cursor that maps to a sequence, rejects otherwise.
-fn require_seq_cursor(cursor: Option<&CTransaction>) -> Result<(), RpcError> {
-    if matches!(cursor.map(|c| c.deref()), Some(TxCursor::Opaque(_))) {
-        return Err(crate::pagination::Error::InvalidCursor.into());
-    }
-    Ok(())
 }
 
 pub(crate) async fn tx_digests(
@@ -963,6 +919,7 @@ mod tests {
     use super::*;
     use crate::pagination::PageLimits;
     use bytes::Bytes;
+    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
 
     /// 32-byte zero digest, base58-encoded. Round-trips through `TransactionDigest::parse` so
     /// `build_bitmap_connection` can convert items back into edges in tests.
@@ -970,17 +927,15 @@ mod tests {
         Base58::encode(TransactionDigest::default().inner())
     }
 
-    /// Build a synthetic `TransactionItem` whose `transaction.digest` is the zero digest and whose
-    /// embedded watermark cursor is the provided bytes.
-    fn tx_item(cursor: &[u8]) -> v2alpha::TransactionItem {
-        let mut watermark = v2alpha::Watermark::default();
-        watermark.cursor = Some(Bytes::copy_from_slice(cursor));
-        let mut tx = v2alpha::Transaction::default();
-        tx.digest = Some(zero_digest_b58());
-        let mut item = v2alpha::TransactionItem::default();
-        item.transaction = Some(tx);
-        item.watermark = Some(watermark);
-        item
+    /// Build a synthetic `PageItem` whose payload digest is the zero digest and whose resume
+    /// cursor is the provided bytes.
+    fn tx_item(cursor: &[u8]) -> PageItem<v2::ExecutedTransaction> {
+        let mut payload = v2::ExecutedTransaction::default();
+        payload.digest = Some(zero_digest_b58());
+        PageItem {
+            payload,
+            cursor: Bytes::copy_from_slice(cursor),
+        }
     }
 
     /// Build a `Page<CTransaction>` going forwards (`first: N`, no `after`/`before`).
@@ -1003,35 +958,9 @@ mod tests {
             .expect("constructing backward Page<CTransaction>")
     }
 
-    /// `Seq` cursors arrive at the bitmap path only via stale clients (e.g. paginating across a
-    /// flag flip). The path must refuse them rather than misinterpret them.
-    #[test]
-    fn bitmap_cursor_rejects_seq() {
-        let cursor = BcsCursor::new(TxCursor::Seq(42));
-        let result = bitmap_cursor(Some(&cursor));
-        assert!(result.is_err(), "expected InvalidCursor for Seq variant");
-    }
-
-    /// `Opaque` cursors are the contract — they round-trip into the raw bytes the kv-rpc path
-    /// expects in `after`/`before`.
-    #[test]
-    fn bitmap_cursor_passes_opaque_through() {
-        let cursor = BcsCursor::new(TxCursor::Opaque(b"\x01\x02\x03".to_vec()));
-        let result = bitmap_cursor(Some(&cursor)).expect("Opaque cursor should be accepted");
-        assert_eq!(result.as_deref(), Some(b"\x01\x02\x03".as_ref()));
-    }
-
-    /// Absent cursor means no bound — pass through as `None` cleanly.
-    #[test]
-    fn bitmap_cursor_passes_none_through() {
-        let result = bitmap_cursor(None).expect("None should be accepted");
-        assert!(result.is_none());
-    }
-
-    /// Empty page: with no edges, `start_cursor` falls back to `StreamPage.start_cursor` and
-    /// `end_cursor` falls back to `StreamPage.end_cursor`. Both are wrapped as
-    /// `TxCursor::Opaque` and the page reports `hasNextPage` based on whether there's an
-    /// unsatisfied resume cursor.
+    /// Empty page: with no edges, `start_cursor` falls back to the stream's `first_wm_cursor` and
+    /// `end_cursor` to `last_wm_cursor`. Both are wrapped as `ByteCursor` and the page reports
+    /// `hasNextPage` based on whether there's an unsatisfied resume cursor.
     ///
     /// When does this realistically arise? The bitmap iterator skips buckets where the predicate
     /// has no entries (`PendingBitmapBucket::new` in `sui-rpc-api`'s `bitmap_scan.rs`), so a
@@ -1047,14 +976,14 @@ mod tests {
     fn build_bitmap_connection_empty_page_uses_stream_cursors() {
         let scope = Scope::for_tests();
         let page = forward_page(10);
-        let result = StreamPage::<v2alpha::TransactionItem> {
-            items: Vec::new(),
-            start_cursor: Some(Bytes::copy_from_slice(b"first-watermark")),
-            end_cursor: Some(Bytes::copy_from_slice(b"last-watermark")),
-            // `None` end_reason → `has_more()` true → forward pagination signals
-            // `hasNextPage` and the stream cursors anchor both ends.
-            end_reason: None,
-        };
+        // `None` end_reason → `has_more()` true → forward pagination signals `hasNextPage` and
+        // the stream watermark cursors anchor both ends.
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            Vec::new(),
+            Some(Bytes::copy_from_slice(b"first-watermark")),
+            Some(Bytes::copy_from_slice(b"last-watermark")),
+            None,
+        );
 
         let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
         assert!(conn.edges.is_empty());
@@ -1078,12 +1007,14 @@ mod tests {
     fn build_bitmap_connection_non_empty_page_uses_edge_cursors() {
         let scope = Scope::for_tests();
         let page = forward_page(10);
-        let result = StreamPage::<v2alpha::TransactionItem> {
-            items: vec![tx_item(b"edge-1"), tx_item(b"edge-2"), tx_item(b"edge-3")],
-            start_cursor: Some(Bytes::copy_from_slice(b"unused-stream-start")),
-            end_cursor: Some(Bytes::copy_from_slice(b"unused-stream-end")),
-            end_reason: Some(v2alpha::QueryEndReason::CheckpointBound),
-        };
+        // No standalone watermarks: `first_cursor()`/`last_cursor()` fall back to the first/last
+        // item cursors, so the connection anchors on edges.
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"edge-1"), tx_item(b"edge-2"), tx_item(b"edge-3")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
 
         let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
         assert_eq!(conn.edges.len(), 3);
@@ -1114,14 +1045,14 @@ mod tests {
         let page = forward_page(3);
         // Exactly 3 items for a `first: 3` request — server returned its full page but didn't
         // hit the `limit + 1 = 4` over-fetch threshold.
-        let result = StreamPage::<v2alpha::TransactionItem> {
-            items: vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
-            start_cursor: Some(Bytes::copy_from_slice(b"start")),
-            end_cursor: Some(Bytes::copy_from_slice(b"end")),
-            // `CheckpointBound` — scan exhausted the range without reaching the over-fetch
-            // threshold, so the natural answer is "no more pages".
-            end_reason: Some(v2alpha::QueryEndReason::CheckpointBound),
-        };
+        // `CheckpointBound` — scan exhausted the range without reaching the over-fetch threshold,
+        // so the natural answer is "no more pages".
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
 
         let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
         assert_eq!(
@@ -1144,14 +1075,14 @@ mod tests {
         let scope = Scope::for_tests();
         let page = forward_page(2);
         // 3 items returned for a `first: 2` request — one over-fetch.
-        let result = StreamPage::<v2alpha::TransactionItem> {
-            items: vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
-            start_cursor: Some(Bytes::copy_from_slice(b"start")),
-            end_cursor: Some(Bytes::copy_from_slice(b"end")),
-            // `CheckpointBound` would normally mean "no more" — but the over-fetch trumps it
-            // because we have one extra item locally. `more` is `over_fetched || has_more`.
-            end_reason: Some(v2alpha::QueryEndReason::CheckpointBound),
-        };
+        // `CheckpointBound` would normally mean "no more" — but the over-fetch trumps it because
+        // we have one extra item locally. `more` is `probe_hit || has_more`.
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
 
         let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
         assert_eq!(
@@ -1174,12 +1105,12 @@ mod tests {
         let scope = Scope::for_tests();
         let page = backward_page(10);
         // Descending stream order: c3, c2, c1 (highest position first).
-        let result = StreamPage::<v2alpha::TransactionItem> {
-            items: vec![tx_item(b"c3"), tx_item(b"c2"), tx_item(b"c1")],
-            start_cursor: Some(Bytes::copy_from_slice(b"start")),
-            end_cursor: Some(Bytes::copy_from_slice(b"end")),
-            end_reason: Some(v2alpha::QueryEndReason::CheckpointBound),
-        };
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"c3"), tx_item(b"c2"), tx_item(b"c1")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
 
         let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
         assert_eq!(conn.edges.len(), 3);
