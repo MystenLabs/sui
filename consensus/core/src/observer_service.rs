@@ -221,7 +221,7 @@ impl ObserverNetworkService for ObserverService {
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
-        highest_round_per_authority: Vec<u64>,
+        highest_round_per_authority: Vec<Round>,
     ) -> ConsensusResult<ObserverBlockStream> {
         if highest_round_per_authority.len() != self.context.committee.size() {
             return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
@@ -230,6 +230,11 @@ impl ObserverNetworkService for ObserverService {
             ));
         }
 
+        // Subscribe to the live broadcast BEFORE snapshotting past blocks below, so a block
+        // accepted concurrently with the snapshot lands in both segments (a harmless duplicate
+        // that the receiver dedups) rather than in neither (a gap).
+        let broadcast_rx = self.rx_accepted_block_broadcast.resubscribe();
+
         // Collect all accepted blocks from DagState that the observer hasn't yet seen,
         // sorted by round for consistent ordering.
         let past_blocks = {
@@ -237,7 +242,7 @@ impl ObserverNetworkService for ObserverService {
             let mut past_blocks = Vec::new();
 
             for (authority, _) in self.context.committee.authorities() {
-                let from_round = highest_round_per_authority[authority.value()] as u32 + 1;
+                let from_round = highest_round_per_authority[authority.value()] + 1;
                 past_blocks.extend(dag_state.get_cached_blocks(authority, from_round));
             }
 
@@ -258,7 +263,7 @@ impl ObserverNetworkService for ObserverService {
         const MAX_BLOCKS_PER_POLL: usize = 20;
         let live_block_stream = BroadcastStream::<VerifiedBlock>::new(
             PeerId::Observer(Box::new(peer)),
-            self.rx_accepted_block_broadcast.resubscribe(),
+            broadcast_rx,
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         )
@@ -378,7 +383,7 @@ mod tests {
         );
 
         // Observer starts with no blocks seen
-        let highest_round_per_authority = vec![0u64; context.committee.size()];
+        let highest_round_per_authority = vec![0u32; context.committee.size()];
         let peer = keys[0].0.public().clone();
 
         let mut stream = observer_service
@@ -452,7 +457,7 @@ mod tests {
         let peer = keys[0].0.public().clone();
 
         // Test with wrong size of highest_round_per_authority
-        let invalid_highest_rounds = vec![0u64; 10]; // Wrong size, should be 4
+        let invalid_highest_rounds = vec![0u32; 10]; // Wrong size, should be 4
         let result = observer_service
             .handle_stream_blocks(peer, invalid_highest_rounds)
             .await;
