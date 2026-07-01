@@ -524,9 +524,9 @@ where
     /// prefix's lex successor, so the scan still stops cleanly at the
     /// end of the prefix range without per-item filtering; a `from`
     /// that sorts past the prefix simply yields nothing. The same
-    /// prefix-encoding contract as [`iter_prefix`] applies: the
-    /// schema's encoding must make `from`'s bytes well-ordered against
-    /// the full keys.
+    /// prefix-encoding contract as [`iter_prefix`](Self::iter_prefix)
+    /// applies: the schema's encoding must make `from`'s bytes
+    /// well-ordered against the full keys.
     pub fn iter_prefix_from<P: Encode, F: Encode>(
         &self,
         prefix: &P,
