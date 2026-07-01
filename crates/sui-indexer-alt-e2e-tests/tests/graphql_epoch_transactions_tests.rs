@@ -48,7 +48,7 @@ async fn epoch_transactions(
         }"#;
 
     let data = graphql::query(
-        cluster,
+        &cluster.graphql_url(),
         query,
         json!({ "epochId": epoch_id, "first": first, "last": last, "after": after, "before": before }),
     )

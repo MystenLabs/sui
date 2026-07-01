@@ -22,7 +22,6 @@ use std::time::Duration;
 
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use reqwest::Client;
 use serde_json::Value;
 use serde_json::json;
 use sui_framework::BuiltInFramework;
@@ -126,19 +125,12 @@ async fn alpha_cluster() -> (OffchainCluster, TempDir) {
 }
 
 /// Post a graphql query against the cluster and return the parsed JSON response.
-async fn graphql(cluster: &OffchainCluster, query: &str) -> Value {
-    let client = Client::new();
-    let body = json!({ "query": query });
-    let response = client
-        .post(cluster.graphql_url())
-        .json(&body)
-        .send()
+/// POST a GraphQL `query` (with `variables`) and return the `data` payload, panicking on transport
+/// or GraphQL errors. Thin wrapper over the shared [`graphql::query`] helper.
+async fn graphql(cluster: &OffchainCluster, query: &str, variables: Value) -> Value {
+    sui_indexer_alt_e2e_tests::graphql::query(&cluster.graphql_url(), query, variables)
         .await
-        .expect("graphql POST failed");
-    response
-        .json()
-        .await
-        .expect("graphql response was not valid JSON")
+        .expect("graphql query failed")
 }
 
 /// Paginate forwards with `first: N, filter: { sentAddress: <sender> }`, collecting digests
@@ -152,24 +144,23 @@ async fn paginate_forward(
     let mut digests = Vec::new();
     let mut after: Option<String> = None;
 
-    loop {
-        let after_clause = after
-            .as_deref()
-            .map(|c| format!(", after: \"{c}\""))
-            .unwrap_or_default();
+    let query = r#"query($sender: SuiAddress, $first: Int, $after: String) {
+        transactions(first: $first, filter: { sentAddress: $sender }, after: $after) {
+            edges { node { digest } }
+            pageInfo { endCursor hasNextPage }
+        }
+    }"#;
 
-        let query = format!(
-            r#"{{
-                transactions(first: {page_size}, filter: {{ sentAddress: "{sender}" }}{after_clause}) {{
-                    edges {{ node {{ digest }} }}
-                    pageInfo {{ endCursor hasNextPage }}
-                }}
-            }}"#
-        );
-        let resp = graphql(cluster, &query).await;
+    loop {
+        let resp = graphql(
+            cluster,
+            query,
+            json!({ "sender": sender, "first": page_size, "after": after }),
+        )
+        .await;
 
         let edges = resp
-            .pointer("/data/transactions/edges")
+            .pointer("/transactions/edges")
             .and_then(Value::as_array)
             .unwrap_or_else(|| panic!("expected edges array in {resp}"));
         for edge in edges {
@@ -181,11 +172,11 @@ async fn paginate_forward(
         }
 
         let has_next = resp
-            .pointer("/data/transactions/pageInfo/hasNextPage")
+            .pointer("/transactions/pageInfo/hasNextPage")
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let end_cursor = resp
-            .pointer("/data/transactions/pageInfo/endCursor")
+            .pointer("/transactions/pageInfo/endCursor")
             .and_then(Value::as_str)
             .map(String::from);
 
@@ -211,24 +202,23 @@ async fn paginate_backward(
     let mut pages: Vec<Vec<String>> = Vec::new();
     let mut before: Option<String> = None;
 
-    loop {
-        let before_clause = before
-            .as_deref()
-            .map(|c| format!(", before: \"{c}\""))
-            .unwrap_or_default();
+    let query = r#"query($sender: SuiAddress, $last: Int, $before: String) {
+        transactions(last: $last, filter: { sentAddress: $sender }, before: $before) {
+            edges { node { digest } }
+            pageInfo { startCursor hasPreviousPage }
+        }
+    }"#;
 
-        let query = format!(
-            r#"{{
-                transactions(last: {page_size}, filter: {{ sentAddress: "{sender}" }}{before_clause}) {{
-                    edges {{ node {{ digest }} }}
-                    pageInfo {{ startCursor hasPreviousPage }}
-                }}
-            }}"#
-        );
-        let resp = graphql(cluster, &query).await;
+    loop {
+        let resp = graphql(
+            cluster,
+            query,
+            json!({ "sender": sender, "last": page_size, "before": before }),
+        )
+        .await;
 
         let edges = resp
-            .pointer("/data/transactions/edges")
+            .pointer("/transactions/edges")
             .and_then(Value::as_array)
             .unwrap_or_else(|| panic!("expected edges array in {resp}"));
         let page: Vec<String> = edges
@@ -242,11 +232,11 @@ async fn paginate_backward(
             .collect();
 
         let has_prev = resp
-            .pointer("/data/transactions/pageInfo/hasPreviousPage")
+            .pointer("/transactions/pageInfo/hasPreviousPage")
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let start_cursor = resp
-            .pointer("/data/transactions/pageInfo/startCursor")
+            .pointer("/transactions/pageInfo/startCursor")
             .and_then(Value::as_str)
             .map(String::from);
 
@@ -356,16 +346,14 @@ async fn test_sent_address() {
         .await
         .expect("graphql did not reach checkpoint 1");
 
-    let query = format!(
-        r#"{{
-            transactions(first: 100, filter: {{ sentAddress: "{alice}" }}) {{
-                edges {{ node {{ digest }} }}
-            }}
-        }}"#
-    );
-    let resp = graphql(&cluster, &query).await;
+    let query = r#"query($address: SuiAddress) {
+        transactions(first: 50, filter: { sentAddress: $address }) {
+            edges { node { digest } }
+        }
+    }"#;
+    let resp = graphql(&cluster, query, json!({ "address": alice })).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
@@ -423,13 +411,13 @@ async fn test_function() {
         .expect("graphql did not reach checkpoint 1");
 
     let query = r#"{
-        transactions(first: 100, filter: { function: "0x42::m::a" }) {
+        transactions(first: 50, filter: { function: "0x42::m::a" }) {
             edges { node { digest } }
         }
     }"#;
-    let resp = graphql(&cluster, query).await;
+    let resp = graphql(&cluster, query, json!({})).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
@@ -483,16 +471,14 @@ async fn test_affected_address() {
         .await
         .expect("graphql did not reach checkpoint 1");
 
-    let query = format!(
-        r#"{{
-            transactions(first: 100, filter: {{ affectedAddress: "{bob}" }}) {{
-                edges {{ node {{ digest }} }}
-            }}
-        }}"#
-    );
-    let resp = graphql(&cluster, &query).await;
+    let query = r#"query($address: SuiAddress) {
+        transactions(first: 50, filter: { affectedAddress: $address }) {
+            edges { node { digest } }
+        }
+    }"#;
+    let resp = graphql(&cluster, query, json!({ "address": bob })).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
@@ -544,16 +530,14 @@ async fn test_affected_object() {
         .expect("graphql did not reach checkpoint 1");
 
     let target = target_object.to_canonical_string(true);
-    let query = format!(
-        r#"{{
-            transactions(first: 100, filter: {{ affectedObject: "{target}" }}) {{
-                edges {{ node {{ digest }} }}
-            }}
-        }}"#
-    );
-    let resp = graphql(&cluster, &query).await;
+    let query = r#"query($object: SuiAddress) {
+        transactions(first: 50, filter: { affectedObject: $object }) {
+            edges { node { digest } }
+        }
+    }"#;
+    let resp = graphql(&cluster, query, json!({ "object": target })).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
@@ -598,13 +582,13 @@ async fn test_programmable_kind() {
         .expect("graphql did not reach checkpoint 1");
 
     let query = r#"{
-        transactions(first: 100, filter: { kind: PROGRAMMABLE_TX }) {
+        transactions(first: 50, filter: { kind: PROGRAMMABLE_TX }) {
             edges { node { digest } }
         }
     }"#;
-    let resp = graphql(&cluster, query).await;
+    let resp = graphql(&cluster, query, json!({})).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
@@ -649,13 +633,13 @@ async fn test_system_kind() {
         .expect("graphql did not reach checkpoint 1");
 
     let query = r#"{
-        transactions(first: 100, filter: { kind: SYSTEM_TX }) {
+        transactions(first: 50, filter: { kind: SYSTEM_TX }) {
             edges { node { digest } }
         }
     }"#;
-    let resp = graphql(&cluster, query).await;
+    let resp = graphql(&cluster, query, json!({})).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
@@ -724,19 +708,17 @@ async fn test_sent_address_and_function() {
         .await
         .expect("graphql did not reach checkpoint 1");
 
-    let query = format!(
-        r#"{{
-            transactions(
-                first: 100,
-                filter: {{ sentAddress: "{alice}", function: "0x42::m::a" }}
-            ) {{
-                edges {{ node {{ digest }} }}
-            }}
-        }}"#
-    );
-    let resp = graphql(&cluster, &query).await;
+    let query = r#"query($address: SuiAddress) {
+        transactions(
+            first: 50,
+            filter: { sentAddress: $address, function: "0x42::m::a" }
+        ) {
+            edges { node { digest } }
+        }
+    }"#;
+    let resp = graphql(&cluster, query, json!({ "address": alice })).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
@@ -787,19 +769,17 @@ async fn test_sent_address_and_programmable_kind() {
         .await
         .expect("graphql did not reach checkpoint 1");
 
-    let query = format!(
-        r#"{{
-            transactions(
-                first: 100,
-                filter: {{ sentAddress: "{alice}", kind: PROGRAMMABLE_TX }}
-            ) {{
-                edges {{ node {{ digest }} }}
-            }}
-        }}"#
-    );
-    let resp = graphql(&cluster, &query).await;
+    let query = r#"query($address: SuiAddress) {
+        transactions(
+            first: 50,
+            filter: { sentAddress: $address, kind: PROGRAMMABLE_TX }
+        ) {
+            edges { node { digest } }
+        }
+    }"#;
+    let resp = graphql(&cluster, query, json!({ "address": alice })).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
@@ -837,19 +817,17 @@ async fn test_sent_address_and_system_kind() {
         .await
         .expect("graphql did not reach checkpoint 1");
 
-    let query = format!(
-        r#"{{
-            transactions(
-                first: 100,
-                filter: {{ sentAddress: "{alice}", kind: SYSTEM_TX }}
-            ) {{
-                edges {{ node {{ digest }} }}
-            }}
-        }}"#
-    );
-    let resp = graphql(&cluster, &query).await;
+    let query = r#"query($address: SuiAddress) {
+        transactions(
+            first: 50,
+            filter: { sentAddress: $address, kind: SYSTEM_TX }
+        ) {
+            edges { node { digest } }
+        }
+    }"#;
+    let resp = graphql(&cluster, query, json!({ "address": alice })).await;
     let digests: HashSet<String> = resp
-        .pointer("/data/transactions/edges")
+        .pointer("/transactions/edges")
         .and_then(Value::as_array)
         .unwrap_or_else(|| panic!("expected edges array in {resp}"))
         .iter()
