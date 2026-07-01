@@ -10,8 +10,9 @@ use crate::{
         cfg::{ImmForwardCFG, MutForwardCFG},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
-    diag,
+    dev_feature, diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
+    editions::FeatureGate,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
@@ -487,7 +488,12 @@ fn constant(
             constant_values
                 .add(name, value.clone())
                 .expect("ICE constant name collision");
-            Some(move_value_from_value(value))
+            let loc = value.loc;
+            let mv = move_value_from_value(context.env, context.current_package, value);
+            if mv.is_none() {
+                context.add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
+            }
+            mv
         }
         _ => None,
     };
@@ -610,14 +616,14 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
     }
 }
 
-pub(crate) fn move_value_from_value(sp!(_, v_): Value) -> MoveValue {
-    move_value_from_value_(v_)
-}
-
-pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
+pub(crate) fn move_value_from_value(
+    env: &CompilationEnv,
+    current_package: Option<Symbol>,
+    sp!(vloc, v_): Value,
+) -> Option<MoveValue> {
     use MoveValue as MV;
     use Value_ as V;
-    match v_ {
+    Some(match v_ {
         V::Address(a) => MV::Address(MoveAddress::new(a.into_bytes())),
         V::U8(u) => MV::U8(u),
         V::U16(u) => MV::U16(u),
@@ -626,8 +632,26 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
         V::U128(u) => MV::U128(u),
         V::U256(u) => MV::U256(u),
         V::Bool(b) => MV::Bool(b),
-        V::Vector(_, vs) => MV::Vector(vs.into_iter().map(move_value_from_value).collect()),
-    }
+        V::Vector(_, vs) => {
+            let mvs: Option<Vec<_>> = vs
+                .into_iter()
+                .map(|v| move_value_from_value(env, current_package, v))
+                .collect();
+            MV::Vector(mvs?)
+        }
+        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
+            // Upstream feature gating should have rejected signed-int code in any
+            // edition that doesn't support it. Reaching here in an unsupported edition
+            // means a feature-gate site is missing.
+            debug_assert!(
+                env.supports_feature(current_package, FeatureGate::SignedIntegers),
+                "ICE signed integer value reached cfgir with feature not supported"
+            );
+            env.diagnostic_reporter_at_top_level()
+                .add_diag(dev_feature!(FeatureGate::SignedIntegers, vloc));
+            return None;
+        }
+    })
 }
 
 //**************************************************************************************************

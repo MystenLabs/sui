@@ -1434,7 +1434,13 @@ fn value(
                 | Some(bt @ sp!(_, BT::U32))
                 | Some(bt @ sp!(_, BT::U64))
                 | Some(bt @ sp!(_, BT::U128))
-                | Some(bt @ sp!(_, BT::U256)) => *bt,
+                | Some(bt @ sp!(_, BT::U256))
+                | Some(bt @ sp!(_, BT::I8))
+                | Some(bt @ sp!(_, BT::I16))
+                | Some(bt @ sp!(_, BT::I32))
+                | Some(bt @ sp!(_, BT::I64))
+                | Some(bt @ sp!(_, BT::I128))
+                | Some(bt @ sp!(_, BT::I256)) => *bt,
                 _ => {
                     context.add_diag(ice!((
                         eloc,
@@ -2192,7 +2198,7 @@ fn make_assignments(
         let error_ty = error_single_type(a.loc);
         let a_ty = rvalue.ty.value.type_at_index(idx).unwrap_or_else(|| {
             // we can only get here if the rvalue was malformed and somewhere has an unresolved
-            // erro
+            // error
             ice_assert!(
                 context,
                 context.env.has_errors(),
@@ -2606,6 +2612,12 @@ fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
         EV::U64(u) => HV::U64(u),
         EV::U128(u) => HV::U128(u),
         EV::U256(u) => HV::U256(u),
+        EV::I8(i) => HV::I8(i),
+        EV::I16(i) => HV::I16(i),
+        EV::I32(i) => HV::I32(i),
+        EV::I64(i) => HV::I64(i),
+        EV::I128(i) => HV::I128(i),
+        EV::I256(i) => HV::I256(i),
         EV::Bool(u) => HV::Bool(u),
         EV::Bytearray(bytes) => HV::Vector(
             Box::new(H::BaseType_::u8(loc)),

@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E04003]: built-in operation not supported
+  ┌─ tests/development/signed_ints/invalid/signed_int_negation_unsigned_error.move:5:19
+  │
+4 │         let a: u64 = 5;
+  │                --- Found: 'u64'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+5 │         let _b = -a;
+  │                   ^ Invalid argument to '-'

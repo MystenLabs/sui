@@ -12,6 +12,7 @@ pub mod annotated_value;
 pub mod annotated_visitor;
 pub mod compressed;
 pub mod gas_algebra;
+pub mod i256;
 pub mod identifier;
 pub mod language_storage;
 pub mod metadata;
