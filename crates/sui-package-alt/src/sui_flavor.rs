@@ -8,10 +8,10 @@ use async_trait::async_trait;
 use indexmap::IndexMap;
 use move_compiler::editions::Edition;
 use move_package_alt::{
-    MoveFlavor,
+    MoveFlavor, OnChainPackageData,
     schema::{
         EnvironmentID, EnvironmentName, GitSha, LockfileDependencyInfo, LockfileGitDepInfo,
-        PackageName, ParsedManifest, ReplacementDependency, SystemDepName,
+        OriginalID, PackageName, ParsedManifest, PublishedID, ReplacementDependency, SystemDepName,
     },
 };
 
@@ -229,6 +229,45 @@ impl MoveFlavor for SuiFlavor {
 
     fn is_system_address(&self, address: &move_package_alt::schema::OriginalID) -> bool {
         is_system_package(address.0)
+    }
+
+    /// Fetch an on-chain package via gRPC. Returns an error if there is no network connection
+    /// or if the object at `address` is not a package.
+    async fn fetch_onchain_package(
+        &self,
+        address: &PublishedID,
+    ) -> anyhow::Result<OnChainPackageData> {
+        let Some(ref client) = self.client else {
+            anyhow::bail!("cannot fetch on-chain package {address}: no network connection")
+        };
+
+        let object_id = ObjectID::from(address.0);
+        let object = client.clone().get_object(object_id).await?;
+        let package = object
+            .data
+            .try_as_package()
+            .with_context(|| format!("object {address} is not a package"))?;
+
+        let modules = package.serialized_module_map().clone();
+        let dependencies = package
+            .linkage_table()
+            .iter()
+            .map(|(original_id, upgrade_info)| {
+                (
+                    OriginalID((*original_id).into()),
+                    PublishedID(upgrade_info.upgraded_id.into()),
+                )
+            })
+            .collect();
+        let original_id = OriginalID(package.original_package_id().into());
+        let version: u64 = package.version().into();
+
+        Ok(OnChainPackageData {
+            modules,
+            dependencies,
+            original_id,
+            version,
+        })
     }
 }
 
