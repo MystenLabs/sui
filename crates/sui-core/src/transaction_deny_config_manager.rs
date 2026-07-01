@@ -58,6 +58,9 @@ pub struct TransactionDenyConfigManager {
     effective_config: ArcSwap<TransactionDenyConfig>,
     /// Backing store for cross-restart durability of `peer_configs`.
     perpetual: Arc<AuthorityPerpetualTables>,
+    /// Serializes the read-modify-write in `allocate_next_broadcast_generation` so
+    /// concurrent callers cannot read the same prior generation and hand out duplicates.
+    broadcast_generation_lock: Mutex<()>,
     metrics: TransactionDenyConfigMetrics,
 }
 
@@ -113,6 +116,7 @@ impl TransactionDenyConfigManager {
             committee: ArcSwap::from(committee),
             effective_config: ArcSwap::from_pointee(effective),
             perpetual,
+            broadcast_generation_lock: Mutex::new(()),
             metrics,
         }))
     }
@@ -272,6 +276,9 @@ impl TransactionDenyConfigManager {
     /// returned value before any submission so a crash between allocate-and-send cannot
     /// reuse the generation.
     pub fn allocate_next_broadcast_generation(&self) -> SuiResult<u64> {
+        // Hold the lock across the whole read-modify-write: without it, two callers can
+        // read the same `last` and each return `last + 1`, colliding on a generation.
+        let _guard = self.broadcast_generation_lock.lock();
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system time before unix epoch")
