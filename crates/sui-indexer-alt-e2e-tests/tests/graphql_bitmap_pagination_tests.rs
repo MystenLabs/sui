@@ -1,22 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end tests for the bitmap-routed transaction pagination path.
-//!
-//! Cluster setup: graphql is configured to consume the kv-rpc's v2alpha experimental query APIs
-//! (`enable_experimental_query_apis: true`). The kv-rpc server inside `OffchainCluster` already
-//! serves alpha by default; this just tells the graphql consumer to construct the alpha client and
-//! register it in resolver context, which routes `Query.transactions` (when `kind` is unset) through
-//! `paginate_bitmap` instead of the Postgres path.
-//!
-//! Behaviors covered here that aren't reachable from the PG-path snapshot tests:
-//! - Opaque cursor round-trip across paginated requests
-//! - Empty-page navigation (start_cursor/end_cursor anchoring)
-//! - Partial-page behavior under `ScanLimit` / `ItemLimit`
-//! - Stale Postgres-style sequence cursor rejection
-//! - `kind` filter falling back to the Postgres path even with alpha wired up
-//! - One or two representative cross-path equivalence checks
-
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -48,20 +32,18 @@ use tempfile::TempDir;
 /// `TempDir`.
 ///
 /// The `TempDir` must be held by the caller for the duration of the test — dropping it removes the
-/// ingestion path the indexer is reading from. Even tests that don't write further checkpoints need
-/// to hold it, since the indexer keeps the path live while processing cp 0.
+/// ingestion path the indexer is reading from.
 async fn alpha_cluster() -> (OffchainCluster, TempDir) {
     telemetry_subscribers::init_for_testing();
     let (client_args, temp_dir) = local_ingestion_client_args();
 
     // Provide a stub genesis so `bootstrap()` skips waiting for cp 0 to contain a
-    // `TransactionKind::Genesis(_)` transaction. The actual cp 0 written by the test still
-    // needs to be a valid `advance_epoch` checkpoint that publishes the framework.
+    // `TransactionKind::Genesis(_)` transaction. The actual cp 0 written by the test still needs to
+    // be a valid `advance_epoch` checkpoint that publishes the framework.
     //
     // Protocol version must be >= MIN_PROTOCOL_VERSION (1). The default
     // `mock::sui_system_state_inner_v2()` sets `protocol_version: 0`, which the
-    // `kv_protocol_configs` pipeline rejects via `ProtocolConfig::get_for_version_if_supported`
-    // — wedging the indexer. Override here.
+    // `kv_protocol_configs` pipeline rejects via `ProtocolConfig::get_for_version_if_supported`.
     const PROTOCOL_VERSION: u64 = 1;
     let system_state = SuiSystemState::V2(SuiSystemStateInnerV2 {
         protocol_version: PROTOCOL_VERSION,
@@ -71,11 +53,7 @@ async fn alpha_cluster() -> (OffchainCluster, TempDir) {
         client_args,
         OffchainClusterConfig {
             experimental_query_apis: true,
-            // Minimal PG pipeline set. The bitmap path reads via kv-rpc/BigTable, not these
-            // tables, but graphql's watermark task polls every configured pipeline — so
-            // pipelines that error on our synthetic genesis (e.g. `tx_balance_changes` on the
-            // advance_epoch tx) would stall every other pipeline's watermark from advancing.
-            // Enabling only what's strictly needed avoids the stall.
+            // Minimum set of PG pipelines. Graphql's watermark task polls the named pipelines.
             indexer_config: IndexerConfig {
                 pipeline: PipelineLayer {
                     cp_sequence_numbers: Some(Default::default()),
@@ -124,9 +102,6 @@ async fn alpha_cluster() -> (OffchainCluster, TempDir) {
     (cluster, temp_dir)
 }
 
-/// Post a graphql query against the cluster and return the parsed JSON response.
-/// POST a GraphQL `query` (with `variables`) and return the `data` payload, panicking on transport
-/// or GraphQL errors. Thin wrapper over the shared [`graphql::query`] helper.
 async fn graphql(cluster: &OffchainCluster, query: &str, variables: Value) -> Value {
     sui_indexer_alt_e2e_tests::graphql::query(&cluster.graphql_url(), query, variables)
         .await
@@ -256,24 +231,17 @@ async fn paginate_backward(
 
 #[tokio::test]
 async fn opaque_cursor_round_trips_across_pages() {
-    // (a) Forward + backward pagination over a known data set, with deliberate gaps so the
-    // scan crosses over non-matching positions between matches.
+    // Setup a checkpoint with 10 transactions. Sender 1 ("Alice") sends transactions at
+    // tx_sequence_numbers [0, 1, 2, 4, 9]; sender 2 ("Bob") sends the rest. Filter by sentAddress =
+    // Alice should yield exactly 5 transactions.
     //
-    // Layout: checkpoint 0 with 10 transactions. Sender 1 ("Alice") sends transactions at
-    // tx_sequence_numbers [0, 1, 2, 4, 9]; sender 2 ("Bob") sends the rest. Filter by
-    // sentAddress = Alice should yield exactly 5 transactions.
-    //
-    // Test paginates forward with `first: 2`, collects every edge, then paginates backward
-    // with `last: 2` from the end and confirms the same set is recovered in the same order.
-    // The gaps (between 2 and 4, between 4 and 9) exercise the bitmap scan's over-fetch
-    // behaviour and cursor handoff across non-matching positions.
+    // Test paginates forward with `first: 2`, collects every edge, then paginates backward with
+    // `last: 2` from the end and confirms the same set is recovered in the same order. The gaps
+    // (between 2 and 4, between 4 and 9) exercise the bitmap scan's over-fetch behaviour and cursor
+    // handoff across non-matching positions.
     let (cluster, temp_dir) = alpha_cluster().await;
-
     let alice_addr = TestCheckpointBuilder::derive_address(1);
     let alice_positions: HashSet<u64> = [0, 1, 2, 4, 9].into_iter().collect();
-
-    // Build cp 1 with 10 transactions, alternating senders by position. (cp 0 was the
-    // genesis-advance checkpoint written by `alpha_cluster_with_ingestion`.)
     let mut builder = TestCheckpointBuilder::new(1);
     for i in 0..10u64 {
         let sender_idx = if alice_positions.contains(&i) { 1 } else { 2 };
@@ -283,6 +251,10 @@ async fn opaque_cursor_round_trips_across_pages() {
             .finish_transaction();
     }
     let checkpoint = builder.build_checkpoint();
+    let expected: Vec<String> = [0, 1, 2, 4, 9]
+        .iter()
+        .map(|&i| Base58::encode(checkpoint.transactions[i as usize].transaction.digest()))
+        .collect();
     write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
 
     // Wait for the indexer + bitmap pipeline to catch up to cp 1.
@@ -307,13 +279,8 @@ async fn opaque_cursor_round_trips_across_pages() {
         "backward pagination should recover the same set in the same order"
     );
 
-    // Sanity: every collected digest is unique (no duplicates across pages).
-    let unique: HashSet<&String> = forward.iter().collect();
-    assert_eq!(
-        unique.len(),
-        forward.len(),
-        "forward pagination duplicated edges: {forward:?}"
-    );
+    assert_eq!(forward, expected);
+    assert_eq!(backward, expected);
 }
 
 #[tokio::test]
