@@ -348,27 +348,34 @@ impl SharedObjVerManager {
                 .into_iter()
                 .map(|input| input.into_id_and_version())
                 .collect();
-            let cert_assigned_versions: Vec<_> = effects
-                .input_consensus_objects()
-                .into_iter()
-                .map(|iso| {
-                    let (id, version) = iso.id_and_version();
-                    let initial_version = initial_version_map
-                        .get(&id)
-                        .expect("transaction must have all inputs from effects");
-                    ((id, *initial_version), version)
-                })
-                .collect();
+            let mut cert_assigned_versions = Vec::new();
+            let mut recorded_system_object_versions = Vec::new();
+            for iso in effects.input_consensus_objects() {
+                let (id, version) = iso.id_and_version();
+                match initial_version_map.get(&id) {
+                    Some(initial_version) => {
+                        cert_assigned_versions.push(((id, *initial_version), version));
+                    }
+                    // Not a declared/sequenced input: this is a system object read during execution,
+                    // recorded in effects as a read-only consensus object. Reproduce the version it
+                    // was read at so the in-execution read resolves identically on replay.
+                    None => recorded_system_object_versions.push((id, version)),
+                }
+            }
             let tx_key = cert.key();
             trace!(
                 ?tx_key,
                 ?cert_assigned_versions,
+                ?recorded_system_object_versions,
                 "assigned consensus object versions from effects"
             );
-            assigned_versions.push((
-                tx_key,
-                AssignedVersions::new(cert_assigned_versions, *accumulator_version),
-            ));
+            // The accumulator back-fill seeds the accumulator root version (needed by legacy
+            // accumulator-version consumers even when the root isn't read in-execution); recorded
+            // system reads add any further system objects. For the accumulator root the two agree.
+            let mut av = AssignedVersions::new(cert_assigned_versions, *accumulator_version);
+            av.system_object_versions
+                .extend(recorded_system_object_versions);
+            assigned_versions.push((tx_key, av));
         }
         AssignedTxAndVersions::new(assigned_versions)
     }
