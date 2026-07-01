@@ -334,10 +334,18 @@ fn default_congestion_log_max_files() -> u32 {
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ForkCrashBehavior {
-    #[serde(rename = "await-fork-recovery")]
+    /// On a detected fork, clear the local fork state and re-execute against the canonical
+    /// certified checkpoint, at most once per binary version; halt if the same binary re-forks.
+    #[serde(rename = "recover-once-per-version")]
     #[default]
+    RecoverOncePerVersion,
+
+    /// Halt at startup awaiting operator intervention (e.g. supplying
+    /// canonical checkpoint digests).
+    #[serde(rename = "await-fork-recovery")]
     AwaitForkRecovery,
-    /// Return an error instead of blocking forever. This is primarily for testing.
+
+    /// Return an error instead of halting. This is primarily for testing.
     #[serde(rename = "return-error")]
     ReturnError,
 }

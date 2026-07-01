@@ -30,6 +30,9 @@ pub struct CheckpointMetrics {
     pub split_brain_checkpoint_forks: IntCounter,
     pub checkpoint_fork_crash_mode: IntGaugeVec,
     pub transaction_fork_crash_mode: IntGaugeVec,
+    pub checkpoint_fork_auto_recovered: IntGauge,
+    pub transaction_fork_auto_recovered: IntGauge,
+    pub fork_auto_recovery_exhausted: IntGauge,
     pub last_created_checkpoint_age: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     pub last_created_checkpoint_age_ms: MystenHistogram,
@@ -168,6 +171,25 @@ impl CheckpointMetrics {
                 "transaction_fork_crash_mode",
                 "Indicates node is in crash mode due to transaction fork",
                 &["tx_digest_prefix", "expected_effects_prefix", "actual_effects_prefix", "detected_at"],
+                registry
+            )
+            .unwrap(),
+            checkpoint_fork_auto_recovered: register_int_gauge_with_registry!(
+                "checkpoint_fork_auto_recovered",
+                "Set to 1 when the node automatically recovered from a checkpoint fork on startup",
+                registry
+            )
+            .unwrap(),
+            transaction_fork_auto_recovered: register_int_gauge_with_registry!(
+                "transaction_fork_auto_recovered",
+                "Set to 1 when the node automatically recovered from a transaction fork on startup",
+                registry
+            )
+            .unwrap(),
+            fork_auto_recovery_exhausted: register_int_gauge_with_registry!(
+                "fork_auto_recovery_exhausted",
+                "Set to 1 when automatic fork recovery was already attempted with this binary \
+                 version and the node equivocated again, so it is halting awaiting a new binary",
                 registry
             )
             .unwrap(),
