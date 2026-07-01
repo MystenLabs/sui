@@ -1,0 +1,25 @@
+//# print-bytecode
+// Constant names must begin with an uppercase letter.
+mvir 0x42::M {
+    const lower: u64 = 1u64;
+}
+
+//# print-bytecode
+// Local names must not begin with an uppercase letter.
+mvir 0x42::M {
+    public fun f() {
+        let Upper: u64;
+    label b0:
+        Upper = 1u64;
+        return;
+    }
+}
+
+//# print-bytecode
+// Parameter names must not begin with an uppercase letter.
+mvir 0x42::M {
+    public fun f(Arg: u64) {
+    label b0:
+        return;
+    }
+}
