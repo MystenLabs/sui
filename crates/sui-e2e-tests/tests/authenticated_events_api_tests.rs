@@ -42,7 +42,6 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 /// backs the v2alpha ListEvents and ProofService endpoints.
 fn create_rpc_config_with_ledger_history() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
-        ledger_history_indexing: Some(true),
         enable_indexing: Some(true),
         ..Default::default()
     }
@@ -993,32 +992,6 @@ async fn list_authenticated_events_no_events_for_stream() {
 }
 
 #[sim_test]
-async fn authenticated_events_disabled_test() {
-    let _guard: sui_protocol_config::OverrideGuard =
-        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-            cfg.enable_authenticated_event_streams_for_testing();
-            cfg
-        });
-
-    // No `ledger_history_indexing` enabled — the v2alpha ListEvents endpoint
-    // should reject the request with `Unimplemented`.
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let sender = test_cluster.wallet.config.keystore.addresses()[0];
-
-    let result = query_authenticated_events(test_cluster.rpc_url(), sender, 0, Some(10)).await;
-
-    let error = result.expect_err("ListEvents should fail when ledger history indexing is off");
-    assert_eq!(error.code(), tonic::Code::Unimplemented);
-    assert!(
-        error
-            .message()
-            .contains("ledger history indexing is disabled"),
-        "got: {}",
-        error.message()
-    );
-}
-
-#[sim_test]
 async fn authenticated_events_backfill_test() {
     let _guard: sui_protocol_config::OverrideGuard =
         ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
@@ -1027,7 +1000,6 @@ async fn authenticated_events_backfill_test() {
         });
 
     let rpc_config = sui_config::RpcConfig {
-        ledger_history_indexing: Some(false),
         enable_indexing: Some(true),
         ..Default::default()
     };
@@ -1052,7 +1024,6 @@ async fn authenticated_events_backfill_test() {
 
         if let Some(ref mut rpc_config) = new_fullnode_config.rpc {
             rpc_config.enable_indexing = Some(true);
-            rpc_config.ledger_history_indexing = Some(true);
         }
 
         let new_fullnode_handle = test_cluster
