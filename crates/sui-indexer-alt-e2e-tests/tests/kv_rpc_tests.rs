@@ -9,6 +9,8 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt_e2e_tests::FullCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 use sui_kv_rpc::KvRpcConfig;
+use sui_kv_rpc::LedgerHistoryConfig;
+use sui_kv_rpc::LedgerHistoryMethodConfig;
 use sui_kv_rpc::StageConfig;
 use sui_kv_rpc::StagesConfig;
 use sui_rpc::field::FieldMask;
@@ -1446,6 +1448,102 @@ async fn test_list_events_unfiltered() {
         event_type.contains("emit_test_event::TestEvent"),
         "unexpected event type: {event_type}"
     );
+}
+
+/// Archival wire-level `SCAN_LIMIT` smoke for the typed bitmap-scan terminal
+/// channel. The unfiltered `list_events` path scans `tx_seq_digest` rows bounded
+/// by `endpoint.max_limit_items` (the *source* limit, NOT the request's
+/// `limit_items`); when the event-derived tx range exceeds that bound,
+/// `clamp_tx_scan_range` flags `scan_limited`, the producer yields a frontier
+/// watermark followed by a bare `BitmapScanError::ScanLimit`, and the refactored
+/// handler arm maps it to `QueryEndReason::ScanLimit` with a resume cursor. This
+/// is the one full-stack path that drives a real `ScanLimit` terminal end to end
+/// (a genuine multi-leaf bitmap-bucket `SCAN_LIMIT` is unreachable in a feasible
+/// dataset; the merge/collapse path is covered by evaluator unit tests).
+#[tokio::test]
+async fn test_list_events_unfiltered_row_cap_scan_limit_resumes() {
+    // Cap the unfiltered tx-row scan at 2 rows per request, well below the
+    // seeded tx span, so the scan truncates and reports SCAN_LIMIT.
+    let kv_rpc_config = KvRpcConfig {
+        ledger_history: Some(LedgerHistoryConfig {
+            list_events: Some(LedgerHistoryMethodConfig {
+                max_limit_items: Some(2),
+                default_limit_items: Some(2),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut cluster = FullCluster::new_with_configs(
+        Simulacrum::new(),
+        OffchainClusterConfig {
+            kv_rpc_config,
+            ..Default::default()
+        },
+        &prometheus::Registry::new(),
+    )
+    .await
+    .unwrap();
+
+    // Seed several EVENT-LESS transactions (self-transfers emit no Move events),
+    // each in its own checkpoint, so the event-derived tx scan range spans more
+    // than the 2-row source cap.
+    let (sender, kp, mut gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
+    for _ in 0..5 {
+        gas = transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
+    }
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // First page: an unfiltered scan over the whole indexed range. The request
+    // limit is large; the SCAN_LIMIT is driven by the source row cap, not it.
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.options = Some(query_options(100));
+    let first = list_events_result(&mut client, req).await;
+    assert_eq!(
+        first.end_reason,
+        Some(QueryEndReason::ScanLimit),
+        "unfiltered scan past the row cap must terminate with SCAN_LIMIT"
+    );
+    let resume = first
+        .end_cursor
+        .clone()
+        .expect("SCAN_LIMIT page must carry a resume cursor");
+
+    // Resume from the frontier cursor: the scan must advance (no replay) and
+    // terminate on a reached-end reason once the remaining rows fit the cap.
+    let mut reason = QueryEndReason::ScanLimit;
+    let mut cursor = Some(resume);
+    let mut iterations = 0;
+    while reason == QueryEndReason::ScanLimit {
+        iterations += 1;
+        assert!(iterations <= 16, "resume loop did not terminate");
+        let mut req = ListEventsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+        req.options = Some(query_options_maybe_after(100, cursor.clone()));
+        let page = list_events_result(&mut client, req).await;
+        reason = page.end_reason.expect("each page carries an end reason");
+        match reason {
+            QueryEndReason::ScanLimit => {
+                let next = page
+                    .end_cursor
+                    .clone()
+                    .expect("SCAN_LIMIT page must carry a resume cursor");
+                assert_ne!(
+                    Some(&next),
+                    cursor.as_ref(),
+                    "resume cursor must strictly advance, not replay"
+                );
+                cursor = Some(next);
+            }
+            QueryEndReason::LedgerTip | QueryEndReason::CheckpointBound => break,
+            other => panic!("unexpected resume end_reason: {other:?}"),
+        }
+    }
 }
 
 #[tokio::test]
