@@ -2362,7 +2362,7 @@ async fn test_pay_coin_gasless_change_below_min_falls_back() {
 /// parsed into Operations.
 #[tokio::test]
 async fn test_address_balance_gas_payment_parsing() {
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::BTreeMap;
     use std::str::FromStr;
     use sui_rpc::proto::sui::rpc::v2::{
         BalanceChange, Bcs, ExecutedTransaction, GetTransactionResponse, Transaction,
@@ -2409,8 +2409,7 @@ async fn test_address_balance_gas_payment_parsing() {
         ExecutionStatus::Success,
         0,                                  // executed_epoch
         GasCostSummary::new(1000, 0, 0, 0), // computation_cost, non_refundable_storage_fee, storage_cost, storage_rebate
-        vec![],                             // shared_objects
-        BTreeSet::new(),                    // loaded_per_epoch_config_objects
+        vec![],                             // unchanged_consensus_objects
         tx_digest,                          // transaction_digest
         9.into(),                           // lamport_version
         BTreeMap::new(),                    // changed_objects
