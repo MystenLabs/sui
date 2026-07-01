@@ -1,0 +1,86 @@
+[
+    {
+        "TIER": "bursty",
+        "V": "0xe802635a57ebaeee17efa558904b63ee6b33eaafc6c9affea5adb92f16c99ed8::game::Tapped",
+        "CNT": 2500000,
+        "LO": 41959110,
+        "HI": 42281298
+    },
+    {
+        "TIER": "bursty",
+        "V": "0x680bc894824a2db5fae52d9976ee85c328a7849d5ed29e12d271730f033a234c::ax::DBG2",
+        "CNT": 639712,
+        "LO": 193452715,
+        "HI": 193710830
+    },
+    {
+        "TIER": "bursty",
+        "V": "0x680bc894824a2db5fae52d9976ee85c328a7849d5ed29e12d271730f033a234c::ax::DBG1",
+        "CNT": 638941,
+        "LO": 193452715,
+        "HI": 193710830
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x72f9c76421170b5a797432ba9e1b3b2e2b7cf6faa26eb955396c773af2479e1e::game_8192::GameMoveEvent8192",
+        "CNT": 685307528,
+        "LO": 1519007,
+        "HI": 287995605
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x1eabed72c53feb3805120a081dc15963c204dc8d091542592abaf7a35689b2fb::pool::SwapEvent",
+        "CNT": 170274067,
+        "LO": 1586390,
+        "HI": 287999960
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x91bfbc386a41afcfd9b2533058d7e915a1d3829089cc268ff4333d54d6339ca1::pool::SwapEvent",
+        "CNT": 36476987,
+        "LO": 1664814,
+        "HI": 287999881
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x70b1d191657bd7dd84711940efb08192a74a2ea30ef66d3f37e869c668894e53::admin::RegimePushEvent",
+        "CNT": 271212,
+        "LO": 279993453,
+        "HI": 287999985
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x70b1d191657bd7dd84711940efb08192a74a2ea30ef66d3f37e869c668894e53::admin::RegimeFillSummaryEvent",
+        "CNT": 271211,
+        "LO": 280136453,
+        "HI": 287999985
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xd6fd5fa8be2f2cb3042fbb11f31f26c27280676f6a08681b16cbb5e4cb64f24e::aggregator::PriceAggregated",
+        "CNT": 40470,
+        "LO": 283396545,
+        "HI": 287999280
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x275b6c59f68837f7c8d7076254373a5bb16e20e6435967defdd86f943e70a2db::reservoir_events::ChargeReservior<0x375f70cf2ae4c00bf37117d0c85a2c71545e6ee05c4a5c7d282cd66a4504b068::usdt::USDT>",
+        "CNT": 500,
+        "LO": 101815192,
+        "HI": 200542873
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x5b3edc9b2d5b7ae70b514f44a190952d1310e78cd0b008d200e0f092b80cfcb0::my_minter::NFTMinted",
+        "CNT": 500,
+        "LO": 77319590,
+        "HI": 90055836
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xbc3df36be17f27ac98e3c839b2589db8475fa07b20657b08e8891e3aaf5ee5f9::mint_event::MintEvent<0xe5cd1458962bdcf1a6aaa455f4f6607d4d6a6fddc230bba9f5c9fe7645732050::havens_compass_launch_edition::Hcle>",
+        "CNT": 500,
+        "LO": 4004724,
+        "HI": 4004748
+    }
+]

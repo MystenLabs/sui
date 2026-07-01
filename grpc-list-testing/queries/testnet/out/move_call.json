@@ -1,0 +1,86 @@
+[
+    {
+        "TIER": "bursty",
+        "V": "0x788a17470f61f2474f3490dd552a6eecf35251e457685325b2130040001b4d67::counter::increment",
+        "CNT": 3356789,
+        "LO": 245771594,
+        "HI": 245832422
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xd73ea4a5600d71f12f383d32a1d9685d36158d687c71bb15360aab3afd3fff29::counter::increment",
+        "CNT": 3339204,
+        "LO": 245771913,
+        "HI": 245832422
+    },
+    {
+        "TIER": "bursty",
+        "V": "0x97d108eccf56455edcc0361617e1d6120c78ea45f157026c55c2f05637886384::counter::increment",
+        "CNT": 1352990,
+        "LO": 233010450,
+        "HI": 233068778
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero",
+        "CNT": 23597417,
+        "LO": 933894,
+        "HI": 349999959
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::zero",
+        "CNT": 23583535,
+        "LO": 75833,
+        "HI": 349981728
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::split",
+        "CNT": 22904668,
+        "LO": 511707,
+        "HI": 348751434
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xea780494f2e06863489a931b385771d8b0fa54ae704004007edb76f22ba29d0b::mark_price::update_mark_price",
+        "CNT": 471971,
+        "LO": 341912182,
+        "HI": 349999992
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xd848f191f5b3619d96e98063d8a3e6b15489b1671118da4ab71938170bcdf892::pyth_feed::update",
+        "CNT": 292079,
+        "LO": 349209108,
+        "HI": 349999999
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x7ad752f3cf2f8c2c92dab8f53e49b7d4dba4b92b5b56de113e55d55cb4c89a15::update::new_update",
+        "CNT": 238982,
+        "LO": 349209121,
+        "HI": 349999957
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x5d14e4e02977d29ee6037a1dc1152adaa3cfc6682d81d4756392ffcc57077cd5::turf_information::initialize_turf",
+        "CNT": 500,
+        "LO": 124989131,
+        "HI": 124989131
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x740b284148632e54d8dd19c1d3e22ec982fe031c0628f67af907f25b9b0ad5fd::counter::create",
+        "CNT": 500,
+        "LO": 68148008,
+        "HI": 68148041
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xf26eef7fe92584383952b12eacfb7ae79292395fc9c6b66b6627f98f84929cbf::game::create_test_owned_location",
+        "CNT": 500,
+        "LO": 251697155,
+        "HI": 251697155
+    }
+]

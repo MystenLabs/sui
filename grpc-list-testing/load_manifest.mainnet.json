@@ -1,0 +1,22 @@
+{
+  "net": "mainnet",
+  "seed": 42,
+  "n": 50000,
+  "skipped": 0,
+  "page": 50,
+  "floor": 285600000,
+  "heavy_frac": 0.1,
+  "rpc_mix": {
+    "ListTransactions": 0.5,
+    "ListEvents": 0.3,
+    "ListCheckpoints": 0.2
+  },
+  "tier_mix": {
+    "dense_everywhere": 0.5,
+    "recent_only": 0.3,
+    "sparse": 0.2
+  },
+  "pool_generated_at": "2026-07-01T14:01:37Z",
+  "ceiling": 293000000,
+  "generated_at": "2026-07-01T14:24:48Z"
+}

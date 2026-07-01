@@ -1,0 +1,86 @@
+[
+    {
+        "TIER": "bursty",
+        "V": "0x290687a5edff3ed17721db9571865a0cb8a321ce29c77af619a7ff4b32cfc27c::exchange",
+        "CNT": 426645,
+        "LO": 193594209,
+        "HI": 194003305
+    },
+    {
+        "TIER": "bursty",
+        "V": "0x6760857357084f11ec2fa5b983ff915f822c268fc5113929e9f28339d2cb3c0e::airdrop",
+        "CNT": 380416,
+        "LO": 3931938,
+        "HI": 3933132
+    },
+    {
+        "TIER": "bursty",
+        "V": "0x48a7e5eb9c5fcfd416e1f43c8d12b934fbbb0d7fe8d54e928a72d274174fb3b9::bullshark_rewards",
+        "CNT": 380160,
+        "LO": 4099146,
+        "HI": 4100568
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000003::sui_system",
+        "CNT": 376559,
+        "LO": 5543,
+        "HI": 349954980
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000002::kiosk",
+        "CNT": 13748,
+        "LO": 17255,
+        "HI": 349323211
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000002::display",
+        "CNT": 3179,
+        "LO": 9509,
+        "HI": 349744759
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xea780494f2e06863489a931b385771d8b0fa54ae704004007edb76f22ba29d0b::settlement",
+        "CNT": 2175946,
+        "LO": 341761701,
+        "HI": 349999992
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x751eac8466a2eb8ba47e65c72e9811e74e8cbfa9bd2dcb1449f940cc3dfc4fc0::exchange",
+        "CNT": 652140,
+        "LO": 343543652,
+        "HI": 344274749
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xd4794ac2ed78d5137a002c69e8579c8336522f09e2c29ae00b0c4845f6d41eb6::exchange",
+        "CNT": 617500,
+        "LO": 344288388,
+        "HI": 344981727
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x87d0fc4f2c235399afdc6f540ced4806dc0d8acfd43b1c3ce530cd377ea54f9a::single_player_satoshi",
+        "CNT": 500,
+        "LO": 4950052,
+        "HI": 4951114
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xe017fd5ba47fc96bf519677db6abcd8e8bf3ca2b2fd30a108a4f1ee1976265e9::character",
+        "CNT": 500,
+        "LO": 52127679,
+        "HI": 52127679
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xf8d50b9f06d6e814268d7d68638f143eb16a334eb40db614c5b0c76cf81836aa::character",
+        "CNT": 500,
+        "LO": 51774971,
+        "HI": 51774971
+    }
+]

@@ -1,0 +1,86 @@
+[
+    {
+        "TIER": "bursty",
+        "V": "0x8d30fe73675d2737944a49a4c34454174c2fceb272903ee582f564999495b1fa::dbke",
+        "CNT": 4654477,
+        "LO": 234145451,
+        "HI": 234608212
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xeb8db04e75ee5443a63870e62f102a62dacd24b5b1d0a1e13f844876c8738513::dbke",
+        "CNT": 4389485,
+        "LO": 224527431,
+        "HI": 225004796
+    },
+    {
+        "TIER": "bursty",
+        "V": "0xe802635a57ebaeee17efa558904b63ee6b33eaafc6c9affea5adb92f16c99ed8::game",
+        "CNT": 2500002,
+        "LO": 41916211,
+        "HI": 42281298
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0xa0eba10b173538c8fecca1dff298e488402cc9ff374f8a12ca7758eebe830b66::spot_dex",
+        "CNT": 17832865,
+        "LO": 1772165,
+        "HI": 287996944
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000003::sui_system",
+        "CNT": 2007918,
+        "LO": 9769,
+        "HI": 287999522
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x5306f64e312b581766351c07af79c72fcb1cd25147157fdc2f8ad76de9a3fb6a::publish_message",
+        "CNT": 403565,
+        "LO": 1485552,
+        "HI": 287999901
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xe48b33ef41d56e04fc42bf558e4d54d7cae8a363da9054a6c24bafc2c53a4f33::alpha_lending",
+        "CNT": 737012,
+        "LO": 279949557,
+        "HI": 287999553
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x70b1d191657bd7dd84711940efb08192a74a2ea30ef66d3f37e869c668894e53::admin",
+        "CNT": 542437,
+        "LO": 279991829,
+        "HI": 287999985
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x5c01c240154fecc6d01ab379015c370b129bceac38f9cfce3c666fb6b9cfb181::magma",
+        "CNT": 308788,
+        "LO": 280907595,
+        "HI": 287999951
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x6d33d017b4a461809c5281011fbec0a09f7f74b99649b7d3bcb11b465d9fc72e::margin_utils",
+        "CNT": 500,
+        "LO": 234783067,
+        "HI": 236141421
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x3550278ed5d8ab395776da43ba8f6d5c68c27c5e1f8b4a7cc36051dc7c637715::sbuck_tool",
+        "CNT": 500,
+        "LO": 38862010,
+        "HI": 39563335
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x76789f552857d6c7650da0646f99c95f9821aafe3ab31228b49022aaeaa0fd0b::pawtato_quests",
+        "CNT": 500,
+        "LO": 195703805,
+        "HI": 196456016
+    }
+]

@@ -1,0 +1,39 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# One-off, in-cluster correctness run. NOT Pulumi-managed: `kubectl apply`, read
+# logs, then delete (ttlSecondsAfterFinished cleans it up). A run-to-completion
+# Job does not belong in a desired-state IaC stack. Promote to a CronJob in a
+# small stack only once this becomes scheduled CI.
+#
+# Replace <PLACEHOLDERS>. Targets the kv-rpc Service over plaintext h2c; data
+# below CP_CEILING is immutable, so the load-balanced Service is fine here
+# (no single-pod pinning needed for correctness).
+#
+#   kubectl apply -f k8s-job.yaml
+#   kubectl -n <KV_RPC_NAMESPACE> logs -f job/ledger-correctness
+#   kubectl -n <KV_RPC_NAMESPACE> delete job ledger-correctness
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ledger-correctness
+  namespace: <KV_RPC_NAMESPACE>
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: harness
+          image: <REGISTRY>/ledger-correctness:<TAG>
+          args:
+            - --corpus=/harness/corpus.testnet.jsonl
+            - --archival=<KV_RPC_SVC>.<KV_RPC_NAMESPACE>.svc.cluster.local:8000
+            - --max-drain=250000
+            # cross-backend differential (optional): add a fullnode + CA mount
+            # - --fullnode=<FULLNODE_SVC>.<NS>.svc.cluster.local:9443
+            # - --fullnode-ca=/etc/fn/ca.pem
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits: { cpu: "2", memory: 2Gi }

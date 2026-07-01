@@ -1,0 +1,82 @@
+[
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000006",
+        "CNT": 1698588671
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x4846a1f1030deffd9dea59016402d832588cf7e0c27b9e4c1a63d2b5e152873a",
+        "CNT": 536433614
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407",
+        "CNT": 524082225
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0xd335e8aa19d6dc04273d77e364c936bad69db4905a4ab3b2733d644dd2b31e0a",
+        "CNT": 436646037
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x47dcbbc8561fe3d52198336855f0983878152a12524749e054357ac2e3573d58",
+        "CNT": 375510413
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d",
+        "CNT": 347443315
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce",
+        "CNT": 267924235
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000008",
+        "CNT": 210880171
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x949d3e3059e3e9d7ca6f871ac1b9d2e399637a1dfb67cbc8dd50bf82825fa157",
+        "CNT": 180117056
+    },
+    {
+        "TIER": "dense_everywhere",
+        "V": "0x6c3def8fc81b655246f026a0836d481bcc383186df6e7d710716d01be99a8cb3",
+        "CNT": 178435856
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000acc",
+        "CNT": 53532108
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0x0000000000000000000000000000000000000000000000000000000000000006",
+        "CNT": 47322308
+    },
+    {
+        "TIER": "recent_only",
+        "V": "0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407",
+        "CNT": 30068256
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x3d4864e185aa2ce8ff01595fcac8b705c99af9a06060d3a17d73bf3761d5294b",
+        "CNT": 20
+    },
+    {
+        "TIER": "sparse",
+        "V": "0x3aa6eef2b9b4cdeac53ae641c7de22050755d2606c2bc86d1144b08342967adc",
+        "CNT": 24
+    },
+    {
+        "TIER": "sparse",
+        "V": "0xa5a59c6817591c1996707acf9c59560e305239b87d8259b407864183c44806d8",
+        "CNT": 34
+    }
+]
