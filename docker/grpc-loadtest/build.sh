@@ -37,9 +37,9 @@ CTX="${CTX:-$GRPC_TESTING_DIR/loadtest-context}"
 
 [[ -d "$GRPC_TESTING_DIR" ]] || { echo "ERROR: GRPC_TESTING_DIR not found: $GRPC_TESTING_DIR" >&2; exit 1; }
 
-# --- stage the build context ------------------------------------------------
+# --- stage the build context (inputs only; Dockerfile is passed to meta-svc via
+#     --dockerfile and to local builds via -f, never copied into the context) ---
 rm -rf "$CTX"; mkdir -p "$CTX/data" "$CTX/proto"
-cp "$DIR/Dockerfile" "$CTX/Dockerfile"
 
 # 1. load script
 cp "$GRPC_TESTING_DIR/load.k6.js" "$CTX/load.k6.js"
@@ -85,16 +85,20 @@ echo "  image  : $IMAGE"
 echo
 
 # --- build + push (ENGINE=container [default] | docker) ---------------------
+# Context = REPO ROOT (matches meta-svc), Dockerfile from docker/ via -f, COPY
+# paths repo-root-relative. Local `container`/`docker` only reads what the
+# Dockerfile COPYs, so the big repo context is cheap here.
+DOCKERFILE="$DIR/Dockerfile"
 ENGINE="${ENGINE:-container}"
 case "$ENGINE" in
   container)
-    container build --platform linux/amd64 -f "$CTX/Dockerfile" -t "$IMAGE" "$CTX"
+    container build --platform linux/amd64 -f "$DOCKERFILE" -t "$IMAGE" "$REPO_ROOT"
     if [[ "${PUSH:-1}" == "1" ]]; then
       container image push "$IMAGE"
     fi
     ;;
   docker)
-    docker build --platform linux/amd64 -f "$CTX/Dockerfile" -t "$IMAGE" "$CTX"
+    docker build --platform linux/amd64 -f "$DOCKERFILE" -t "$IMAGE" "$REPO_ROOT"
     if [[ "${PUSH:-1}" == "1" ]]; then
       docker push "$IMAGE"
     fi
