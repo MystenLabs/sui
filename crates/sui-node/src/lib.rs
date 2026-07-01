@@ -160,6 +160,7 @@ use typed_store::rocks::default_db_options;
 
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
+pub mod address_prober;
 pub mod admin;
 pub mod db_shell;
 mod handle;
@@ -175,6 +176,7 @@ pub struct ValidatorComponents {
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     admission_queue: Option<AdmissionQueueContext>,
 }
+
 pub struct P2pComponents {
     p2p_network: Network,
     known_peers: HashMap<PeerId, String>,
@@ -275,6 +277,9 @@ pub struct SuiNode {
 
     /// EndpointManager for updating peer network addresses.
     endpoint_manager: EndpointManager,
+
+    /// Handle to the discovery-shared address prober (`None` when disabled).
+    address_prober: Option<address_prober::Handle>,
 
     backpressure_manager: Arc<BackpressureManager>,
 
@@ -966,6 +971,34 @@ impl SuiNode {
             None
         };
 
+        if let Some(prober_config) = &config.address_prober {
+            prober_config.validate()?;
+        }
+        let address_prober = if Self::address_prober_enabled(&config) {
+            let handle = address_prober::Builder::new()
+                .config(config.address_prober.clone().unwrap_or_default())
+                .with_metrics(&prometheus_registry)
+                .build()
+                .start(
+                    p2p_network.clone(),
+                    discovery_handle.sender(),
+                    consensus_config::NetworkKeyPair::new(config.network_key_pair().copy()),
+                );
+            // Seed the current epoch if we are starting as a validator.
+            if node_role.is_validator()
+                && let Some(components) = &validator_components
+            {
+                handle.update_epoch(
+                    epoch_store.epoch(),
+                    epoch_store.epoch_start_state().get_consensus_committee(),
+                    components.consensus_manager.clone(),
+                );
+            }
+            Some(handle)
+        } else {
+            None
+        };
+
         // setup shutdown channel
         let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
 
@@ -988,6 +1021,7 @@ impl SuiNode {
             end_of_epoch_channel,
             endpoint_manager,
             backpressure_manager,
+            address_prober,
 
             _db_checkpoint_handle: db_checkpoint_handle,
 
@@ -1434,6 +1468,37 @@ impl SuiNode {
         .await
     }
 
+    fn address_prober_enabled(config: &NodeConfig) -> bool {
+        let prober_enabled = config
+            .address_prober
+            .as_ref()
+            .map(|c| c.enabled())
+            .unwrap_or(true);
+        let v3_enabled = config
+            .p2p_config
+            .discovery
+            .as_ref()
+            .is_some_and(|d| d.use_get_known_peers_v3());
+        prober_enabled && v3_enabled
+    }
+
+    fn update_address_prober_epoch(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        consensus_manager: &Arc<ConsensusManager>,
+    ) {
+        if !epoch_store.is_validator() {
+            return;
+        }
+        if let Some(handle) = &self.address_prober {
+            handle.update_epoch(
+                epoch_store.epoch(),
+                epoch_store.epoch_start_state().get_consensus_committee(),
+                consensus_manager.clone(),
+            );
+        }
+    }
+
     async fn start_epoch_specific_validator_components(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
@@ -1736,6 +1801,16 @@ impl SuiNode {
         &self._connection_monitor_handle
     }
 
+    #[cfg(any(test, msim))]
+    pub fn address_prober_metrics_for_testing(
+        &self,
+    ) -> std::sync::Arc<address_prober::AddressProberMetrics> {
+        self.address_prober
+            .as_ref()
+            .expect("address prober should be running in tests")
+            .metrics_for_testing()
+    }
+
     pub fn node_role(&self) -> NodeRole {
         self.state.load_epoch_store_one_call_per_task().node_role()
     }
@@ -1978,6 +2053,10 @@ impl SuiNode {
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
 
+                if let Some(handle) = &self.address_prober {
+                    handle.leave_committee();
+                }
+
                 info!("Epoch store finished reconfiguration.");
 
                 // No other components should be holding a strong reference to state hasher
@@ -1996,30 +2075,33 @@ impl SuiNode {
 
                 if new_role.runs_consensus() {
                     info!("Restarting consensus as {new_role}");
-                    Some(
-                        Self::start_epoch_specific_validator_components(
-                            &self.config,
-                            self.state.clone(),
-                            consensus_adapter,
-                            self.checkpoint_store.clone(),
-                            new_epoch_store.clone(),
-                            self.state_sync_handle.clone(),
-                            self.randomness_handle.clone(),
-                            self.randomness_receiver_handle.clone(),
-                            consensus_manager,
-                            consensus_store_pruner,
-                            weak_hasher,
-                            self.backpressure_manager.clone(),
-                            validator_server_handle,
-                            validator_overload_monitor_handle,
-                            checkpoint_metrics,
-                            self.metrics.clone(),
-                            sui_tx_validator_metrics,
-                            admission_queue,
-                            new_role,
-                        )
-                        .await?,
+                    let components = Self::start_epoch_specific_validator_components(
+                        &self.config,
+                        self.state.clone(),
+                        consensus_adapter,
+                        self.checkpoint_store.clone(),
+                        new_epoch_store.clone(),
+                        self.state_sync_handle.clone(),
+                        self.randomness_handle.clone(),
+                        self.randomness_receiver_handle.clone(),
+                        consensus_manager,
+                        consensus_store_pruner,
+                        weak_hasher,
+                        self.backpressure_manager.clone(),
+                        validator_server_handle,
+                        validator_overload_monitor_handle,
+                        checkpoint_metrics,
+                        self.metrics.clone(),
+                        sui_tx_validator_metrics,
+                        admission_queue,
+                        new_role,
                     )
+                    .await?;
+                    self.update_address_prober_epoch(
+                        &new_epoch_store,
+                        &components.consensus_manager,
+                    );
+                    Some(components)
                 } else {
                     info!(
                         "This node has new role {new_role} and no longer runs consensus after reconfiguration"
@@ -2074,6 +2156,10 @@ impl SuiNode {
                             .set_consensus_address_updater(components.consensus_manager.clone());
                     }
 
+                    self.update_address_prober_epoch(
+                        &new_epoch_store,
+                        &components.consensus_manager,
+                    );
                     Some(components)
                 } else {
                     None
@@ -2182,6 +2268,13 @@ impl SuiNode {
 
     pub fn endpoint_manager(&self) -> &EndpointManager {
         &self.endpoint_manager
+    }
+
+    pub async fn address_prober_report(&self) -> Option<address_prober::ProbeReport> {
+        match &self.address_prober {
+            Some(handle) => handle.probe_report().await,
+            None => None,
+        }
     }
 
     /// Get a short prefix of a digest for metric labels

@@ -87,6 +87,10 @@ use tracing::info;
 //
 //  $ curl -X POST 'http://127.0.0.1:1337/update-endpoint?endpoint_type=p2p&id=<hex_encoded_peer_id>&addresses=<multiaddr1>,<multiaddr2>'
 //  $ curl -X POST 'http://127.0.0.1:1337/update-endpoint?endpoint_type=consensus&id=<hex_encoded_network_pubkey>&addresses=<multiaddr1>,<multiaddr2>'
+//
+// Dump the address prober's latest results (full addresses + per-address outcomes) as JSON.
+//
+//  $ curl 'http://127.0.0.1:1337/address-prober-report'
 
 const NO_TRACING_HANDLE: &str = "tracing handle not available";
 const LOGGING_ROUTE: &str = "/logging";
@@ -104,6 +108,7 @@ const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
 const TRAFFIC_CONTROL: &str = "/traffic-control";
 const UPDATE_ENDPOINT: &str = "/update-endpoint";
+const ADDRESS_PROBER_REPORT: &str = "/address-prober-report";
 const DB_SHELL_LS: &str = "/db-shell/ls";
 const DB_SHELL_READ: &str = "/db-shell/read";
 const DB_SHELL_DELETE: &str = "/db-shell/delete";
@@ -160,6 +165,7 @@ pub async fn run_admin_server(
         )
         .route(TRAFFIC_CONTROL, post(traffic_control))
         .route(UPDATE_ENDPOINT, post(update_endpoint))
+        .route(ADDRESS_PROBER_REPORT, get(address_prober_report))
         .route(DB_SHELL_LS, get(handle_ls))
         .route(DB_SHELL_READ, get(handle_read))
         .route(DB_SHELL_DELETE, delete(handle_delete))
@@ -661,4 +667,18 @@ async fn update_endpoint(
             parsed_addresses.len(),
         ),
     )
+}
+
+async fn address_prober_report(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    let Some(report) = state.node.address_prober_report().await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "address prober is not running (node is not a validator, or the prober is disabled)\n"
+                .to_string(),
+        );
+    };
+    match serde_json::to_string_pretty(&report) {
+        Ok(json) => (StatusCode::OK, format!("{json}\n")),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+    }
 }
