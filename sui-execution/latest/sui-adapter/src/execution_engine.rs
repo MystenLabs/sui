@@ -216,7 +216,13 @@ mod checked {
         }
     }
 
-    #[allow(clippy::type_complexity)]
+    type ExecutionOutput<Mode> = (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<<Mode as ExecutionMode>::ExecutionResults, <Mode as ExecutionMode>::Error>,
+    );
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
@@ -235,13 +241,7 @@ mod checked {
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<Mode::ExecutionResults, Mode::Error>,
-    ) {
+    ) -> ExecutionOutput<Mode> {
         let input_objects = input_objects.into_inner();
         let mutable_inputs = if enable_expensive_checks {
             input_objects.all_mutable_inputs().keys().copied().collect()
@@ -275,7 +275,7 @@ mod checked {
             let execution_error: Mode::Error =
                 ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw).into();
             let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
-            let mut gas_meter = GasCharger::new(
+            let gas_meter = GasCharger::new(
                 transaction_digest,
                 PaymentKind::gasless(),
                 gas_status,
@@ -283,13 +283,14 @@ mod checked {
                 protocol_config,
             );
 
+            let gas_coin = gas_meter.gas_coin();
             let (inner, effects) = temporary_store.into_effects(
                 shared_object_refs,
                 &transaction_digest,
                 transaction_dependencies,
                 GasCostSummary::default(),
                 status,
-                &mut gas_meter,
+                gas_coin,
                 *epoch_id,
             );
 
@@ -410,75 +411,21 @@ mod checked {
         // dependencies
         transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
+        let gas_coin = gas_charger.gas_coin();
         let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
             &transaction_digest,
             transaction_dependencies,
             gas_cost_summary,
             status,
-            &mut gas_charger,
+            gas_coin,
             *epoch_id,
         );
 
         // Skip VM telemetry on simulation paths (dev-inspect / dry-run) since a new runtime is
         // spun-up each time.
         if !Mode::TRACK_EXECUTION {
-            metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
-                let t = move_vm.get_telemetry_report();
-                vm_metrics
-                    .move_vm_package_cache_count
-                    .set(t.package_cache_count as i64);
-                vm_metrics
-                    .move_vm_total_arena_size_bytes
-                    .set(t.total_arena_size as i64);
-                vm_metrics.move_vm_module_count.set(t.module_count as i64);
-                vm_metrics
-                    .move_vm_function_count
-                    .set(t.function_count as i64);
-                vm_metrics.move_vm_type_count.set(t.type_count as i64);
-                vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_count
-                    .set(t.vtable_cache_count as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_hits
-                    .set(t.vtable_cache_hits as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_misses
-                    .set(t.vtable_cache_misses as i64);
-                vm_metrics
-                    .move_vm_load_time_ms
-                    .set(t.total_load_time as i64);
-                vm_metrics.move_vm_load_count.set(t.load_count as i64);
-                vm_metrics
-                    .move_vm_validation_time_ms
-                    .set(t.total_validation_time as i64);
-                vm_metrics
-                    .move_vm_validation_count
-                    .set(t.validation_count as i64);
-                vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
-                vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
-                vm_metrics
-                    .move_vm_execution_time_ms
-                    .set(t.total_execution_time as i64);
-                vm_metrics
-                    .move_vm_execution_count
-                    .set(t.execution_count as i64);
-                vm_metrics
-                    .move_vm_interpreter_time_ms
-                    .set(t.total_interpreter_time as i64);
-                vm_metrics
-                    .move_vm_interpreter_count
-                    .set(t.interpreter_count as i64);
-                vm_metrics
-                    .move_vm_max_callstack_size
-                    .set(t.max_callstack_size as i64);
-                vm_metrics
-                    .move_vm_max_valuestack_size
-                    .set(t.max_valuestack_size as i64);
-                vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
-                vm_metrics.move_vm_total_count.set(t.total_count as i64);
-            });
+            update_vm_telemetry_metrics(&metrics, move_vm);
         }
 
         (
@@ -488,6 +435,65 @@ mod checked {
             timings,
             execution_result,
         )
+    }
+
+    fn update_vm_telemetry_metrics(metrics: &ExecutionMetrics, move_vm: &MoveRuntime) {
+        metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
+            let t = move_vm.get_telemetry_report();
+            vm_metrics
+                .move_vm_package_cache_count
+                .set(t.package_cache_count as i64);
+            vm_metrics
+                .move_vm_total_arena_size_bytes
+                .set(t.total_arena_size as i64);
+            vm_metrics.move_vm_module_count.set(t.module_count as i64);
+            vm_metrics
+                .move_vm_function_count
+                .set(t.function_count as i64);
+            vm_metrics.move_vm_type_count.set(t.type_count as i64);
+            vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
+            vm_metrics
+                .move_vm_vtable_cache_count
+                .set(t.vtable_cache_count as i64);
+            vm_metrics
+                .move_vm_vtable_cache_hits
+                .set(t.vtable_cache_hits as i64);
+            vm_metrics
+                .move_vm_vtable_cache_misses
+                .set(t.vtable_cache_misses as i64);
+            vm_metrics
+                .move_vm_load_time_ms
+                .set(t.total_load_time as i64);
+            vm_metrics.move_vm_load_count.set(t.load_count as i64);
+            vm_metrics
+                .move_vm_validation_time_ms
+                .set(t.total_validation_time as i64);
+            vm_metrics
+                .move_vm_validation_count
+                .set(t.validation_count as i64);
+            vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
+            vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
+            vm_metrics
+                .move_vm_execution_time_ms
+                .set(t.total_execution_time as i64);
+            vm_metrics
+                .move_vm_execution_count
+                .set(t.execution_count as i64);
+            vm_metrics
+                .move_vm_interpreter_time_ms
+                .set(t.total_interpreter_time as i64);
+            vm_metrics
+                .move_vm_interpreter_count
+                .set(t.interpreter_count as i64);
+            vm_metrics
+                .move_vm_max_callstack_size
+                .set(t.max_callstack_size as i64);
+            vm_metrics
+                .move_vm_max_valuestack_size
+                .set(t.max_valuestack_size as i64);
+            vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
+            vm_metrics.move_vm_total_count.set(t.total_count as i64);
+        });
     }
 
     pub fn execute_genesis_state_update(

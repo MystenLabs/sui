@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_mode::ExecutionMode;
-use crate::gas_charger::{GasCharger, PaymentLocation};
+use crate::gas_charger::GasCharger;
 use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
@@ -389,7 +389,7 @@ impl<'backing> TemporaryStore<'backing> {
         mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
-        gas_charger: &mut GasCharger,
+        gas_coin: Option<ObjectID>,
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         // Defense-in-depth: Owner::Party is not yet supported as an effect output. There are
@@ -426,17 +426,6 @@ impl<'backing> TemporaryStore<'backing> {
         }
 
         assert!(self.protocol_config.enable_effects_v2());
-
-        // In the case of special transactions that don't require a gas object,
-        // we don't really care about the effects to gas, just use the input for it.
-        // Gas coins are guaranteed to be at least size 1 and if more than 1
-        // the first coin is where all the others are merged.
-        let gas_coin = gas_charger
-            .gas_payment_amount()
-            .and_then(|gp| match gp.location {
-                PaymentLocation::Coin(coin_id) => Some(coin_id),
-                PaymentLocation::AddressBalance(_) => None,
-            });
 
         let object_changes = self.get_object_changes();
 
