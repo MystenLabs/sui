@@ -12,6 +12,7 @@ module v0::m {
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 module v1::m {
 }
+#[allow(deprecated_usage)]
 module v1::has_otw {
     public struct HAS_OTW has drop {
     }
