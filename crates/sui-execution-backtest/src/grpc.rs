@@ -9,6 +9,7 @@ use std::str::FromStr as _;
 
 use anyhow::{Context as _, Result};
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_rpc::proto::sui::rpc::v2 as rpc;
 use sui_types::base_types::ObjectID;
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
@@ -26,6 +27,10 @@ pub struct EpochBounds {
     pub last_checkpoint: u64,
     pub protocol_version: u64,
     pub reference_gas_price: u64,
+    /// The epoch's start timestamp (ms), i.e. its first checkpoint's `timestamp_ms` — the value the
+    /// executor expects for `epoch_timestamp_ms`. Sourced directly from `GetEpoch` so we don't have
+    /// to fetch the first checkpoint just to read its timestamp.
+    pub epoch_start_timestamp_ms: u64,
 }
 
 #[derive(Clone)]
@@ -49,6 +54,7 @@ impl RpcClient {
             "last_checkpoint",
             "protocol_config.protocol_version",
             "reference_gas_price",
+            "start",
         ]));
         let response = ledger
             .get_epoch(request)
@@ -63,6 +69,11 @@ impl RpcClient {
             .as_ref()
             .and_then(|c| c.protocol_version)
             .with_context(|| format!("epoch {epoch} missing protocol_version"))?;
+        let start = epoch_msg
+            .start
+            .with_context(|| format!("epoch {epoch} missing start timestamp"))?;
+        let epoch_start_timestamp_ms = proto_to_timestamp_ms(start)
+            .with_context(|| format!("decoding epoch {epoch} start timestamp"))?;
         Ok(EpochBounds {
             first_checkpoint: epoch_msg
                 .first_checkpoint
@@ -72,6 +83,7 @@ impl RpcClient {
                 .with_context(|| format!("epoch {epoch} missing last_checkpoint"))?,
             protocol_version,
             reference_gas_price: epoch_msg.reference_gas_price.unwrap_or(0),
+            epoch_start_timestamp_ms,
         })
     }
 
