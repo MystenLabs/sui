@@ -824,11 +824,14 @@ pub enum SuiErrorKind {
     )]
     TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: u64 },
 
-    #[error("Transaction {digest} is being processed: {status}")]
+    #[error("Transaction {digest} is being processed post-consensus: {status}")]
     TransactionProcessing {
         digest: TransactionDigest,
         status: String,
     },
+
+    #[error("Transaction {digest} has been recently submitted to this validator.")]
+    TransactionSubmitted { digest: TransactionDigest },
 }
 
 #[repr(u64)]
@@ -1057,6 +1060,7 @@ impl SuiErrorKind {
             // submission is pointless. The client should retry by waiting for effects
             // rather than resubmitting.
             SuiErrorKind::TransactionProcessing { .. } => true,
+            SuiErrorKind::TransactionSubmitted { .. } => true,
 
             // Non retryable error
             SuiErrorKind::ExecutionError(..) => false,

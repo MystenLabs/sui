@@ -341,7 +341,7 @@ impl ValidatorServiceMetrics {
             .unwrap(),
             inflight_transactions: register_int_gauge_with_registry!(
                 "validator_service_inflight_transactions",
-                "Number of transaction digests from inflight submit requests",
+                "Number of transactions from inflight submit requests",
                 registry,
             )
             .unwrap(),
@@ -805,10 +805,16 @@ impl ValidatorService {
 
             // A request must not repeat a transaction.
             if !request_digests.insert(tx_digest) {
-                return Err(SuiErrorKind::UserInputError {
+                let error: SuiError = SuiErrorKind::UserInputError {
                     error: UserInputError::RepeatedTransactions { digest: tx_digest },
                 }
-                .into());
+                .into();
+                // Reject individual repeated transactions in batch.
+                if is_soft_bundle_request {
+                    return Err(error);
+                }
+                results[idx] = Some(SubmitTxResult::Rejected { error });
+                continue;
             }
 
             // Soft bundles require all transactions to use the same gas price.
@@ -978,7 +984,7 @@ impl ValidatorService {
                 results[idx] = Some(SubmitTxResult::Rejected {
                     error: SuiErrorKind::TransactionProcessing {
                         digest: tx_digest,
-                        status: "sequenced by consensus".to_string(),
+                        status: "consensus message processed".to_string(),
                     }
                     .into(),
                 });
@@ -1001,11 +1007,7 @@ impl ValidatorService {
                         .with_label_values(&[req_type])
                         .inc();
                     results[idx] = Some(SubmitTxResult::Rejected {
-                        error: SuiErrorKind::TransactionProcessing {
-                            digest: tx_digest,
-                            status: "submission in progress".to_string(),
-                        }
-                        .into(),
+                        error: SuiErrorKind::TransactionSubmitted { digest: tx_digest }.into(),
                     });
                     debug!(
                         ?tx_digest,
@@ -1022,11 +1024,7 @@ impl ValidatorService {
                         .recently_submitted_resubmission_interval
                         .observe(since.as_secs_f64());
                     results[idx] = Some(SubmitTxResult::Rejected {
-                        error: SuiErrorKind::TransactionProcessing {
-                            digest: tx_digest,
-                            status: "recently processed".to_string(),
-                        }
-                        .into(),
+                        error: SuiErrorKind::TransactionSubmitted { digest: tx_digest }.into(),
                     });
                     debug!(?tx_digest, "handle_submit_transaction: recently processed");
                     continue;
@@ -1311,6 +1309,7 @@ impl ValidatorService {
                         else {
                             return Err(err);
                         };
+                        // For TransactionProcessing error, ensure the per txn result has the correct digest.
                         for (idx, tx_digest) in txns_meta {
                             debug!(
                                 ?tx_digest,
@@ -1483,8 +1482,8 @@ struct InflightTransactionsGuard {
     recently_submitted: Cache<TransactionDigest, Instant>,
     window: Duration,
     metrics: Arc<ValidatorServiceMetrics>,
-    /// Digests this request successfully acquired (in acquisition order).
-    owned: Vec<TransactionDigest>,
+    /// Digests this request successfully acquired.
+    acquired: HashSet<TransactionDigest>,
 }
 
 enum AcquireOutcome {
@@ -1505,23 +1504,24 @@ impl InflightTransactionsGuard {
             recently_submitted: service.recently_submitted.clone(),
             window: service.recent_submission_window,
             metrics: service.metrics.clone(),
-            owned: Vec::new(),
+            acquired: HashSet::new(),
         }
     }
 
     fn try_acquire(&mut self, digest: TransactionDigest) -> AcquireOutcome {
         // A retry of this own request re-acquires the same digests.
-        if self.owned.contains(&digest) {
+        if self.acquired.contains(&digest) {
             return AcquireOutcome::AlreadyAcquiredByThisRequest;
+        }
+
+        // Suppress resubmissions of recently processed transactions.
+        if let Some(outcome) = self.recently_processed_outcome(digest) {
+            return outcome;
         }
 
         // Atomic check-and-acquire against concurrent in-flight transactions.
         {
             let mut set = self.inflight.lock();
-            // Suppress resubmissions of recently processed transactions.
-            if let Some(outcome) = self.recently_processed_outcome(digest) {
-                return outcome;
-            }
             // Only continue processing the transaction if it is not already inflight.
             if !set.insert(digest) {
                 return AcquireOutcome::AlreadyAcquiredByAnotherRequest;
@@ -1529,7 +1529,16 @@ impl InflightTransactionsGuard {
             self.metrics.inflight_transactions.set(set.len() as i64);
         }
 
-        self.owned.push(digest);
+        // Without this re-check, a duplicated transaction arriving between the first check and
+        // the digest acquisition could slip through.
+        if let Some(outcome) = self.recently_processed_outcome(digest) {
+            let mut set = self.inflight.lock();
+            set.remove(&digest);
+            self.metrics.inflight_transactions.set(set.len() as i64);
+            return outcome;
+        }
+
+        self.acquired.insert(digest);
         AcquireOutcome::Acquired
     }
 
@@ -1542,15 +1551,18 @@ impl InflightTransactionsGuard {
 
 impl Drop for InflightTransactionsGuard {
     fn drop(&mut self) {
-        if self.owned.is_empty() {
+        if self.acquired.is_empty() {
             return;
         }
-        // Demote inflight transactions to recently processed cache while holding the in-flight lock.
+        // Demote inflight transactions to recently submitted cache before taking the in-flight lock,
+        // to avoid cleaning up the cache with the lock.
         let now = Instant::now();
+        for digest in &self.acquired {
+            self.recently_submitted.insert(*digest, now);
+        }
         {
             let mut set = self.inflight.lock();
-            for digest in &self.owned {
-                self.recently_submitted.insert(*digest, now);
+            for digest in &self.acquired {
                 set.remove(digest);
             }
             self.metrics.inflight_transactions.set(set.len() as i64);
@@ -2125,7 +2137,7 @@ mod inflight_guard_tests {
             recently_submitted: cache,
             window: Duration::from_secs(10),
             metrics,
-            owned: Vec::new(),
+            acquired: HashSet::new(),
         }
     }
 

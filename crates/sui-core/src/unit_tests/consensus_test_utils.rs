@@ -135,14 +135,29 @@ pub struct TestConsensusHandlerSetup<C> {
     pub captured_transactions: CapturedTransactions,
 }
 
+/// Makes a consensus adapter with the standard test wiring (limits, metrics), backed by the
+/// given consensus client.
+pub fn make_consensus_adapter_with_client_for_test(
+    state: &Arc<AuthorityState>,
+    client: Arc<dyn ConsensusClient>,
+) -> Arc<ConsensusAdapter> {
+    Arc::new(ConsensusAdapter::new(
+        client,
+        state.checkpoint_store.clone(),
+        state.name,
+        100_000,
+        100_000,
+        ConsensusAdapterMetrics::new_test(),
+        Arc::new(tokio::sync::Notify::new()),
+    ))
+}
+
 pub fn make_consensus_adapter_for_test(
     state: Arc<AuthorityState>,
     process_via_checkpoint: HashSet<TransactionDigest>,
     execute: bool,
     mock_block_status_receivers: Vec<BlockStatusReceiver>,
 ) -> Arc<ConsensusAdapter> {
-    let metrics = ConsensusAdapterMetrics::new_test();
-
     #[derive(Clone)]
     struct SubmitDirectly {
         state: Arc<AuthorityState>,
@@ -272,20 +287,13 @@ pub fn make_consensus_adapter_for_test(
         }
     }
     // Make a new consensus adapter instance.
-    Arc::new(ConsensusAdapter::new(
-        Arc::new(SubmitDirectly {
-            state: state.clone(),
-            process_via_checkpoint,
-            execute,
-            mock_block_status_receivers: Arc::new(Mutex::new(mock_block_status_receivers)),
-        }),
-        state.checkpoint_store.clone(),
-        state.name,
-        100_000,
-        100_000,
-        metrics,
-        Arc::new(tokio::sync::Notify::new()),
-    ))
+    let client = Arc::new(SubmitDirectly {
+        state: state.clone(),
+        process_via_checkpoint,
+        execute,
+        mock_block_status_receivers: Arc::new(Mutex::new(mock_block_status_receivers)),
+    });
+    make_consensus_adapter_with_client_for_test(&state, client)
 }
 
 /// Creates a ConsensusHandler for testing with a mock ExecutionSchedulerSender that captures transactions
