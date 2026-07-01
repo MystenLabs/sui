@@ -11,6 +11,7 @@ use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
+    accumulator_root::UnsettledObjectFundsRead,
     base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
@@ -34,6 +35,7 @@ use sui_adapter_latest::execution_engine::{
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::storage::BackingStore;
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
@@ -75,6 +77,7 @@ impl executor::Executor for Executor {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -94,6 +97,7 @@ impl executor::Executor for Executor {
                 store,
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -126,6 +130,7 @@ impl executor::Executor for Executor {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -145,6 +150,7 @@ impl executor::Executor for Executor {
                 store,
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -189,12 +195,24 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
+        // dev-inspect / dry-run isn't sequenced by consensus, so pin the accumulator root at its
+        // latest committed version read directly from the object store. A latest (non-fork-safe)
+        // read is fine here because this is a simulation: reading it before execution guarantees the
+        // in-execution funds check can read it back, except the rare case where that version is
+        // pruned mid-execution — which surfaces as a recoverable error rather than a panic in
+        // production. Empty when the accumulator root does not exist (accumulators disabled).
+        let system_object_versions = store
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .map(|obj| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, obj.version()))
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
         let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                system_object_versions.clone(),
+                // dev-inspect has no unsettled object funds to account for.
+                None,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -214,8 +232,9 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                system_object_versions,
+                // dev-inspect has no unsettled object funds to account for.
+                None,
                 gas,
                 gas_status,
                 transaction_kind,
