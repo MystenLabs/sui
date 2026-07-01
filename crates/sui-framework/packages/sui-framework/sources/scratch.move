@@ -17,7 +17,7 @@ module sui::scratch;
 /// A `Permit<K>` gates access to all entries keyed by values of type `K`.
 /// It is issued from an `internal::Permit<K>`, allowing the module that defines `K` to control
 /// all access to scratch entries.
-public struct Permit<phantom K: copy + drop>() has drop;
+public struct Permit<phantom K: copy + drop>() has copy, drop;
 
 /// Stand-in parent address used when hashing scratch keys.
 const DUMMY_ROOT: address = @0;
@@ -40,33 +40,33 @@ public fun permit<K: copy + drop>(_: internal::Permit<K>): Permit<K> {
 /// Adds the `key`-`value` pair to the scratch store. Requires a `Permit<K>` for the key type.
 /// Aborts with `EEntryAlreadyExists` if there is already an entry for `key`, regardless of its
 /// value type.
-public fun add<K: copy + drop, V: drop>(_: Permit<K>, key: K, value: V, _: &mut TxContext) {
+public fun add<K: copy + drop, V: drop>(_: &mut TxContext, _: Permit<K>, key: K, value: V) {
     add_impl(hash_type_and_key(key), value)
 }
 
 /// Returns a copy of the value bound to `key`. Requires a `Permit<K>` for the key type.
 /// Aborts with `EEntryDoesNotExist` if there is no entry for `key`.
 /// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `V`.
-public fun read<K: copy + drop, V: drop>(_: Permit<K>, key: K, _: &TxContext): V {
+public fun read<K: copy + drop, V: drop>(_: &TxContext, _: Permit<K>, key: K): V {
     read_impl(hash_type_and_key(key))
 }
 
 /// Removes the entry bound to `key` and returns its value. Requires a `Permit<K>` for the key type.
 /// Aborts with `EEntryDoesNotExist` if there is no entry for `key`.
 /// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `V`.
-public fun remove<K: copy + drop, V: drop>(_: Permit<K>, key: K, _: &mut TxContext): V {
+public fun remove<K: copy + drop, V: drop>(_: &mut TxContext, _: Permit<K>, key: K): V {
     remove_impl(hash_type_and_key(key))
 }
 
 /// Returns true if and only if the scratch store has an entry for `key`, without regard to the
 /// value type. Requires a `Permit<K>` for the key type.
-public fun exists<K: copy + drop>(_: Permit<K>, key: K, _: &TxContext): bool {
+public fun exists<K: copy + drop>(_: &TxContext, _: Permit<K>, key: K): bool {
     exists_impl(hash_type_and_key(key))
 }
 
 /// Returns true if and only if the scratch store has an entry for `key` whose value is of type `V`.
 /// Requires a `Permit<K>` for the key type.
-public fun exists_with_type<K: copy + drop, V: drop>(_: Permit<K>, key: K, _: &TxContext): bool {
+public fun exists_with_type<K: copy + drop, V: drop>(_: &TxContext, _: Permit<K>, key: K): bool {
     exists_with_type_impl<V>(hash_type_and_key(key))
 }
 
@@ -76,38 +76,38 @@ public fun exists_with_type<K: copy + drop, V: drop>(_: Permit<K>, key: K, _: &T
 /// Aborts with `EEntryAlreadyExists` if there is already an entry for `$key`, regardless of its
 /// value type.
 public macro fun internal_add<$K: copy + drop, $V: drop>(
+    $ctx: &mut TxContext,
     $key: $K,
     $value: $V,
-    $ctx: &mut TxContext,
 ) {
-    add(permit(internal::permit<$K>()), $key, $value, $ctx)
+    add($ctx, permit(internal::permit<$K>()), $key, $value)
 }
 
 /// A wrapper for `read` that constructs the `Permit<$K>` directly.
 /// Aborts with `EEntryDoesNotExist` if there is no entry for `$key`.
 /// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
-public macro fun internal_read<$K: copy + drop, $V: drop>($key: $K, $ctx: &TxContext): $V {
-    read<$K, $V>(permit(internal::permit<$K>()), $key, $ctx)
+public macro fun internal_read<$K: copy + drop, $V: drop>($ctx: &TxContext, $key: $K): $V {
+    read<$K, $V>($ctx, permit(internal::permit<$K>()), $key)
 }
 
 /// A wrapper for `remove` that constructs the `Permit<$K>` directly.
 /// Aborts with `EEntryDoesNotExist` if there is no entry for `$key`.
 /// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
-public macro fun internal_remove<$K: copy + drop, $V: drop>($key: $K, $ctx: &mut TxContext): $V {
-    remove<$K, $V>(permit(internal::permit<$K>()), $key, $ctx)
+public macro fun internal_remove<$K: copy + drop, $V: drop>($ctx: &mut TxContext, $key: $K): $V {
+    remove<$K, $V>($ctx, permit(internal::permit<$K>()), $key)
 }
 
 /// A wrapper for `exists` that constructs the `Permit<$K>` directly.
-public macro fun internal_exists<$K: copy + drop>($key: $K, $ctx: &TxContext): bool {
-    exists(permit(internal::permit<$K>()), $key, $ctx)
+public macro fun internal_exists<$K: copy + drop>($ctx: &TxContext, $key: $K): bool {
+    exists($ctx, permit(internal::permit<$K>()), $key)
 }
 
 /// A wrapper for `exists_with_type` that constructs the `Permit<$K>` directly.
 public macro fun internal_exists_with_type<$K: copy + drop, $V: drop>(
-    $key: $K,
     $ctx: &TxContext,
+    $key: $K,
 ): bool {
-    exists_with_type<$K, $V>(permit(internal::permit<$K>()), $key, $ctx)
+    exists_with_type<$K, $V>($ctx, permit(internal::permit<$K>()), $key)
 }
 
 /// Hashes the type and value of `k` against `DUMMY_ROOT` to produce the address identifying its
