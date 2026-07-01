@@ -141,70 +141,128 @@ async fn graphql(cluster: &OffchainCluster, query: &str) -> Value {
         .expect("graphql response was not valid JSON")
 }
 
-/// A `Page<CTransaction>`-shaped Postgres `Seq` cursor synthesised client-side. The bitmap path's
-/// `bitmap_cursor()` should reject this with an `InvalidCursor` error before the request reaches
-/// the stream.
-///
-/// Cursor format: BCS-encoded `TxCursor::Seq(N)`, base64-encoded for use in graphql's `after`
-/// argument. See `crates/sui-indexer-alt-graphql/src/api/scalars/cursor.rs` for the encoding
-/// (`BcsCursor::encode_cursor`).
-fn synthetic_seq_cursor(_seq: u64) -> String {
-    // TODO: construct via BcsCursor::new(TxCursor::Seq(seq)).encode_cursor(). Requires graphql
-    // crate's TxCursor + BcsCursor types to be reachable from this test crate, or we hand-build
-    // the bytes here (BCS-encode `Seq(seq)` then base64 the result).
-    todo!("synthesise a base64-encoded TxCursor::Seq(seq) for cursor-rejection tests")
+/// Paginate forwards with `first: N, filter: { sentAddress: <sender> }`, collecting digests
+/// across all pages until `hasNextPage` is false. Returns digests in emission order
+/// (ascending).
+async fn paginate_forward(
+    cluster: &OffchainCluster,
+    sender: &str,
+    page_size: usize,
+) -> Vec<String> {
+    let mut digests = Vec::new();
+    let mut after: Option<String> = None;
+
+    loop {
+        let after_clause = after
+            .as_deref()
+            .map(|c| format!(", after: \"{c}\""))
+            .unwrap_or_default();
+
+        let query = format!(
+            r#"{{
+                transactions(first: {page_size}, filter: {{ sentAddress: "{sender}" }}{after_clause}) {{
+                    edges {{ node {{ digest }} }}
+                    pageInfo {{ endCursor hasNextPage }}
+                }}
+            }}"#
+        );
+        let resp = graphql(cluster, &query).await;
+
+        let edges = resp
+            .pointer("/data/transactions/edges")
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("expected edges array in {resp}"));
+        for edge in edges {
+            let digest = edge["node"]["digest"]
+                .as_str()
+                .expect("edge node digest")
+                .to_string();
+            digests.push(digest);
+        }
+
+        let has_next = resp
+            .pointer("/data/transactions/pageInfo/hasNextPage")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let end_cursor = resp
+            .pointer("/data/transactions/pageInfo/endCursor")
+            .and_then(Value::as_str)
+            .map(String::from);
+
+        if !has_next || end_cursor.is_none() {
+            break;
+        }
+        after = end_cursor;
+    }
+
+    digests
 }
 
-#[tokio::test]
-#[ignore = "stub — needs synthetic_seq_cursor implemented"]
-async fn bitmap_path_rejects_stale_seq_cursor() {
-    // (d) A PG-era `Seq` cursor sent to the bitmap path should be rejected with InvalidCursor,
-    // not silently misinterpreted. This is the contract enforced by `bitmap_cursor()` in
-    // transaction/mod.rs.
-    let (cluster, _temp_dir) = alpha_cluster().await;
-    cluster
-        .wait_for_graphql(0, Duration::from_secs(10))
-        .await
-        .unwrap();
+/// Paginate backwards with `last: N, filter: { sentAddress: <sender> }`, collecting digests
+/// across all pages until `hasPreviousPage` is false. Returns digests in ascending order
+/// (matches `paginate_forward`'s order so callers can compare directly).
+async fn paginate_backward(
+    cluster: &OffchainCluster,
+    sender: &str,
+    page_size: usize,
+) -> Vec<String> {
+    // Collect pages in reverse-emission order, then reverse the whole thing at the end so
+    // the result matches forward ordering. Within each page, edges are already ascending.
+    let mut pages: Vec<Vec<String>> = Vec::new();
+    let mut before: Option<String> = None;
 
-    let cursor = synthetic_seq_cursor(0);
-    let query = format!(
-        r#"{{
-            transactions(first: 10, after: "{cursor}") {{
-                edges {{ cursor }}
-            }}
-        }}"#
-    );
-    let response = graphql(&cluster, &query).await;
+    loop {
+        let before_clause = before
+            .as_deref()
+            .map(|c| format!(", before: \"{c}\""))
+            .unwrap_or_default();
 
-    let errors = response
-        .pointer("/errors")
-        .expect("expected an errors array");
-    let errors = errors.as_array().expect("errors should be an array");
-    assert!(
-        !errors.is_empty(),
-        "expected at least one error, got {response}"
-    );
-    let message = errors[0]["message"].as_str().unwrap_or("");
-    assert!(
-        message.contains("InvalidCursor") || message.contains("invalid cursor"),
-        "expected InvalidCursor error, got: {message}"
-    );
+        let query = format!(
+            r#"{{
+                transactions(last: {page_size}, filter: {{ sentAddress: "{sender}" }}{before_clause}) {{
+                    edges {{ node {{ digest }} }}
+                    pageInfo {{ startCursor hasPreviousPage }}
+                }}
+            }}"#
+        );
+        let resp = graphql(cluster, &query).await;
+
+        let edges = resp
+            .pointer("/data/transactions/edges")
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("expected edges array in {resp}"));
+        let page: Vec<String> = edges
+            .iter()
+            .map(|e| {
+                e["node"]["digest"]
+                    .as_str()
+                    .expect("edge node digest")
+                    .to_string()
+            })
+            .collect();
+
+        let has_prev = resp
+            .pointer("/data/transactions/pageInfo/hasPreviousPage")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let start_cursor = resp
+            .pointer("/data/transactions/pageInfo/startCursor")
+            .and_then(Value::as_str)
+            .map(String::from);
+
+        if !page.is_empty() {
+            pages.push(page);
+        }
+
+        if !has_prev || start_cursor.is_none() {
+            break;
+        }
+        before = start_cursor;
+    }
+
+    // Earliest page came last; reverse so that flattening yields ascending order.
+    pages.into_iter().rev().flatten().collect()
 }
-
-// The "empty result with a navigable cursor" case (server emits zero items but `hasNextPage:
-// true` with a resume cursor) is unit-tested at the graphql wrapping layer in
-// `crates/sui-indexer-alt-graphql/src/api/types/transaction/mod.rs` (see
-// `build_bitmap_connection_empty_page_uses_stream_cursors`). Reproducing the upstream
-// `StreamPage` it consumes requires data spanning multiple bitmap buckets (`TX_BITMAP_BUCKET_SIZE
-// = 65_536`), which isn't viable for synthetic e2e setups — so this scenario lives at the unit
-// level and is not duplicated here.
-
-// The "partial page with `hasNextPage: true`" case (server returns fewer items than `first:`
-// requested but signals more available) reduces to the same upstream `StreamPage` shape as
-// `empty_result_returns_navigable_connection` and is unit-tested alongside it. Not duplicated
-// here for the same reason: provoking it from synthetic e2e data requires multi-bucket
-// datasets.
 
 #[tokio::test]
 async fn opaque_cursor_round_trips_across_pages() {
@@ -807,142 +865,4 @@ async fn test_sent_address_and_system_kind() {
         digests.is_empty(),
         "contradictory Include(Sender=Alice) AND Include(Sender=0x0) must return empty, got {digests:?}"
     );
-}
-
-/// Paginate forwards with `first: N, filter: { sentAddress: <sender> }`, collecting digests
-/// across all pages until `hasNextPage` is false. Returns digests in emission order
-/// (ascending).
-async fn paginate_forward(
-    cluster: &OffchainCluster,
-    sender: &str,
-    page_size: usize,
-) -> Vec<String> {
-    let mut digests = Vec::new();
-    let mut after: Option<String> = None;
-
-    loop {
-        let after_clause = after
-            .as_deref()
-            .map(|c| format!(", after: \"{c}\""))
-            .unwrap_or_default();
-
-        let query = format!(
-            r#"{{
-                transactions(first: {page_size}, filter: {{ sentAddress: "{sender}" }}{after_clause}) {{
-                    edges {{ node {{ digest }} }}
-                    pageInfo {{ endCursor hasNextPage }}
-                }}
-            }}"#
-        );
-        let resp = graphql(cluster, &query).await;
-
-        let edges = resp
-            .pointer("/data/transactions/edges")
-            .and_then(Value::as_array)
-            .unwrap_or_else(|| panic!("expected edges array in {resp}"));
-        for edge in edges {
-            let digest = edge["node"]["digest"]
-                .as_str()
-                .expect("edge node digest")
-                .to_string();
-            digests.push(digest);
-        }
-
-        let has_next = resp
-            .pointer("/data/transactions/pageInfo/hasNextPage")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let end_cursor = resp
-            .pointer("/data/transactions/pageInfo/endCursor")
-            .and_then(Value::as_str)
-            .map(String::from);
-
-        if !has_next || end_cursor.is_none() {
-            break;
-        }
-        after = end_cursor;
-    }
-
-    digests
-}
-
-/// Paginate backwards with `last: N, filter: { sentAddress: <sender> }`, collecting digests
-/// across all pages until `hasPreviousPage` is false. Returns digests in ascending order
-/// (matches `paginate_forward`'s order so callers can compare directly).
-async fn paginate_backward(
-    cluster: &OffchainCluster,
-    sender: &str,
-    page_size: usize,
-) -> Vec<String> {
-    // Collect pages in reverse-emission order, then reverse the whole thing at the end so
-    // the result matches forward ordering. Within each page, edges are already ascending.
-    let mut pages: Vec<Vec<String>> = Vec::new();
-    let mut before: Option<String> = None;
-
-    loop {
-        let before_clause = before
-            .as_deref()
-            .map(|c| format!(", before: \"{c}\""))
-            .unwrap_or_default();
-
-        let query = format!(
-            r#"{{
-                transactions(last: {page_size}, filter: {{ sentAddress: "{sender}" }}{before_clause}) {{
-                    edges {{ node {{ digest }} }}
-                    pageInfo {{ startCursor hasPreviousPage }}
-                }}
-            }}"#
-        );
-        let resp = graphql(cluster, &query).await;
-
-        let edges = resp
-            .pointer("/data/transactions/edges")
-            .and_then(Value::as_array)
-            .unwrap_or_else(|| panic!("expected edges array in {resp}"));
-        let page: Vec<String> = edges
-            .iter()
-            .map(|e| {
-                e["node"]["digest"]
-                    .as_str()
-                    .expect("edge node digest")
-                    .to_string()
-            })
-            .collect();
-
-        let has_prev = resp
-            .pointer("/data/transactions/pageInfo/hasPreviousPage")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let start_cursor = resp
-            .pointer("/data/transactions/pageInfo/startCursor")
-            .and_then(Value::as_str)
-            .map(String::from);
-
-        if !page.is_empty() {
-            pages.push(page);
-        }
-
-        if !has_prev || start_cursor.is_none() {
-            break;
-        }
-        before = start_cursor;
-    }
-
-    // Earliest page came last; reverse so that flattening yields ascending order.
-    pages.into_iter().rev().flatten().collect()
-}
-
-#[tokio::test]
-#[ignore = "stub — useful sanity check but needs both paths reachable in the same harness"]
-async fn bitmap_and_pg_paths_return_equivalent_results_for_basic_filter() {
-    // Equivalence test: run the same query through both paths and confirm the edges match
-    // (modulo cursor format). Catches semantic drift between the two implementations.
-    //
-    // Implementation choice: either spin up two clusters (one with alpha, one without) and
-    // diff the responses, or run a single cluster and toggle the alpha flag via per-request
-    // routing — neither is currently supported in OffchainCluster, so this test is more of
-    // a design placeholder than a stub-to-fill.
-    //
-    // Pick the representative query: e.g. `transactions(filter: {sentAddress: X}, first: 5)`
-    // with a sender that has more than 5 transactions, so paths produce real data both ways.
 }
