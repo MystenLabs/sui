@@ -8,3 +8,6 @@ build/
 storage/
 docker/
 !docker/stress/entrypoint.sh
+# grpc-loadtest: build inputs (k6 script + protos + request lists) live under
+# docker/, which `docker/` above would exclude. Let this one context through.
+!docker/grpc-loadtest/context/**

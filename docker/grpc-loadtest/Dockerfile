@@ -17,12 +17,14 @@
 # Expected context layout (build.sh produces it):
 #   load.k6.js          the load script
 #   proto/              merged proto root: sui/rpc/v2alpha/*, sui/rpc/v2/*, google/*
-#   data/load.jsonl     the generated hot-key-spread request list (gen_load.py)
+#   data/load.<net>.jsonl   one generated request list PER network (gen_load.py)
+# The image is network-agnostic: it bakes EVERY net's list, and the deploy
+# selects one via the REQ_FILE env (e.g. REQ_FILE=/data/load.testnet.jsonl).
 FROM grafana/k6:0.49.0
 
 COPY load.k6.js /scripts/load.k6.js
 COPY proto /proto
-COPY data/load.jsonl /data/load.jsonl
+COPY data/ /data/
 
 ENTRYPOINT ["k6"]
 CMD ["run", "/scripts/load.k6.js"]
