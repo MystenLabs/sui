@@ -8,6 +8,8 @@ use std::rc::Rc;
 use roaring::RoaringBitmap;
 use sui_inverted_index::BitmapBucketIteratorSource;
 use sui_inverted_index::BitmapQuery;
+use sui_inverted_index::BitmapScanError;
+use sui_inverted_index::BitmapScanResult;
 use sui_inverted_index::IndexDimension;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::Watermarked;
@@ -206,8 +208,8 @@ pub(super) fn drain_bitmap_hits_with_budget(
 }
 
 /// Item type of the iterative bitmap evaluator: a matching bucket, a progress
-/// watermark, or a scan error (e.g. `BitmapScanBudgetExceeded`).
-type WatermarkedBucketItem = anyhow::Result<Watermarked<(u64, RoaringBitmap)>>;
+/// watermark, or a terminal [`BitmapScanError`].
+type WatermarkedBucketItem = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>;
 
 /// Loop state from draining a watermarked-bucket iterator, independent of budget
 /// accounting (the caller adds `buckets_scanned` from its `BitmapScanBudget`).
@@ -220,12 +222,13 @@ struct DrainLoopState {
 }
 
 /// Drain matching member ids until `hit_limit` items, the iterator ends, or it
-/// signals `BitmapScanBudgetExceeded`. `open_iter` builds the iterator over a
-/// scan range and is invoked at most once, lazily — only when a fresh scan beyond
-/// `pending_bucket` is needed — so resuming a dense pending bucket never opens a
-/// RocksDB iterator. On budget exhaustion the resume range is anchored past the
-/// coalesced frontier; the caller decides whether that is the per-request cap
-/// (terminal `ScanLimit`) or a per-chunk cap (resume in the next chunk).
+/// signals [`BitmapScanError::ScanLimit`]. `open_iter` builds the iterator over
+/// a scan range and is invoked at most once, lazily — only when a fresh scan
+/// beyond `pending_bucket` is needed — so resuming a dense pending bucket never
+/// opens a RocksDB iterator. On scan-limit exhaustion the resume range is
+/// anchored past the coalesced frontier; the caller decides whether that is the
+/// per-request cap (terminal `ScanLimit`) or a per-chunk cap (resume in the next
+/// chunk).
 fn drain_watermarked_buckets<I>(
     open_iter: impl FnOnce(Range<u64>) -> I,
     mut pending_bucket: Option<PendingBitmapBucket>,
@@ -290,26 +293,29 @@ where
             Some(Ok(Watermarked::Watermark(pos))) => {
                 coalesced_frontier = Some(pos);
             }
-            Some(Err(e)) => {
-                // Budget exhaustion is a graceful stop, not an error: the
-                // combinators emit the frontier watermark before the error, so
+            Some(Err(BitmapScanError::ScanLimit)) => {
+                // Scan-limit is a graceful stop, not an error: the evaluator
+                // emits the frontier watermark before the error, so
                 // `coalesced_frontier` already holds the resume point. Anchor the
                 // resume range past the frontier; the caller decides whether this
                 // is the per-request cap (terminal `ScanLimit`) or a per-chunk cap
                 // (resume here in the next chunk).
-                if e.downcast_ref::<BitmapScanBudgetExceeded>().is_some() {
-                    scan_limit_hit = true;
-                    next_range = coalesced_frontier.and_then(|f| {
-                        remaining_range_after(iter_range.clone(), f, direction.is_ascending())
-                    });
-                    break;
-                }
-                let code = if e.downcast_ref::<BitmapScanCancelled>().is_some() {
-                    tonic::Code::Cancelled
-                } else {
-                    tonic::Code::Internal
-                };
-                return Err(RpcError::new(code, e.to_string()));
+                scan_limit_hit = true;
+                next_range = coalesced_frontier.and_then(|f| {
+                    remaining_range_after(iter_range.clone(), f, direction.is_ascending())
+                });
+                break;
+            }
+            // Cancelled stream → gRPC Cancelled status.
+            Some(Err(BitmapScanError::Cancelled)) => {
+                return Err(RpcError::new(
+                    tonic::Code::Cancelled,
+                    BitmapScanError::Cancelled.to_string(),
+                ));
+            }
+            // Genuine fault → gRPC Internal, carrying the error unchanged.
+            Some(Err(BitmapScanError::Source(inner))) => {
+                return Err(RpcError::new(tonic::Code::Internal, inner.to_string()));
             }
             None => {
                 next_range = None;
@@ -375,7 +381,7 @@ struct RpcIndexesBitmapIterator<'a> {
     cancel: CancellationToken,
     iter: Option<BitmapBucketIter<'a>>,
     finished: bool,
-    initial_error: Option<anyhow::Error>,
+    initial_error: Option<BitmapScanError>,
     /// This leaf has not yet charged a bucket. Its first bucket is reserved
     /// (always allowed) so every leaf emits its first watermark; see
     /// [`BitmapScanBudget::take_first`].
@@ -451,7 +457,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
 
         let (iter, initial_error) = match iter {
             Ok(iter) => (Some(BitmapBucketIter::Stored(iter)), None),
-            Err(e) => (None, Some(e)),
+            Err(e) => (None, Some(e.into())),
         };
         Self {
             scan_budget,
@@ -463,10 +469,10 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
         }
     }
 
-    fn read_next_bucket(&mut self) -> Option<anyhow::Result<(u64, RoaringBitmap)>> {
+    fn read_next_bucket(&mut self) -> Option<BitmapScanResult<(u64, RoaringBitmap)>> {
         if self.cancel.is_cancelled() {
             self.finished = true;
-            return Some(Err(BitmapScanCancelled.into()));
+            return Some(Err(BitmapScanError::Cancelled));
         }
         let Some(iter) = self.iter.as_mut() else {
             self.finished = true;
@@ -476,7 +482,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
         let next = match iter {
             BitmapBucketIter::Stored(iter) => match iter.next() {
                 Some(Ok(bucket)) => Some(Ok((bucket.bucket_id, bucket.bitmap))),
-                Some(Err(e)) => Some(Err(anyhow::anyhow!(e.to_string()))),
+                Some(Err(e)) => Some(Err(BitmapScanError::Source(anyhow::anyhow!(e.to_string())))),
                 None => None,
             },
             BitmapBucketIter::Universe(iter) => iter.next().map(Ok),
@@ -511,7 +517,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
 }
 
 impl Iterator for RpcIndexesBitmapIterator<'_> {
-    type Item = anyhow::Result<(u64, RoaringBitmap)>;
+    type Item = BitmapScanResult<(u64, RoaringBitmap)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(e) = self.initial_error.take() {
@@ -538,10 +544,10 @@ impl BitmapScanBudget {
         }
     }
 
-    fn take_one(&self) -> anyhow::Result<()> {
+    fn take_one(&self) -> BitmapScanResult<()> {
         let remaining = self.remaining.get();
         if remaining == 0 {
-            return Err(BitmapScanBudgetExceeded.into());
+            return Err(BitmapScanError::ScanLimit);
         }
         self.remaining.set(remaining - 1);
         Ok(())
@@ -560,28 +566,6 @@ impl BitmapScanBudget {
         self.remaining.get()
     }
 }
-
-#[derive(Debug)]
-struct BitmapScanBudgetExceeded;
-
-impl std::fmt::Display for BitmapScanBudgetExceeded {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("bitmap scan budget exhausted")
-    }
-}
-
-impl std::error::Error for BitmapScanBudgetExceeded {}
-
-#[derive(Debug)]
-struct BitmapScanCancelled;
-
-impl std::fmt::Display for BitmapScanCancelled {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("bitmap scan cancelled")
-    }
-}
-
-impl std::error::Error for BitmapScanCancelled {}
 
 #[cfg(test)]
 mod tests {
@@ -645,13 +629,6 @@ mod tests {
         assert_eq!(budget.remaining(), 0);
     }
 
-    #[test]
-    fn bitmap_scan_cancelled_is_downcastable_via_anyhow() {
-        let e: anyhow::Error = BitmapScanCancelled.into();
-        assert!(e.downcast_ref::<BitmapScanCancelled>().is_some());
-        assert!(e.downcast_ref::<BitmapScanBudgetExceeded>().is_none());
-    }
-
     fn wm(pos: u64) -> WatermarkedBucketItem {
         Ok(Watermarked::Watermark(pos))
     }
@@ -660,8 +637,10 @@ mod tests {
         Ok(Watermarked::Item((bucket_id, bitmap(bits))))
     }
 
+    /// A budget-exhausted leaf: the evaluator collapses per-leaf exhaustion to
+    /// `BitmapScanError::ScanLimit` before the drain ever sees it.
     fn budget_exceeded() -> WatermarkedBucketItem {
-        Err(BitmapScanBudgetExceeded.into())
+        Err(BitmapScanError::ScanLimit)
     }
 
     fn drain(
@@ -683,6 +662,78 @@ mod tests {
             &cancel,
         )
         .expect("drain succeeds")
+    }
+
+    fn drain_result(
+        events: Vec<WatermarkedBucketItem>,
+        range: Option<Range<u64>>,
+        bucket_size: u64,
+        direction: ScanDirection,
+        hit_limit: usize,
+    ) -> Result<DrainLoopState, RpcError> {
+        let cancel = CancellationToken::new();
+        drain_watermarked_buckets(
+            move |_range| events.into_iter(),
+            None,
+            range,
+            bucket_size,
+            direction,
+            hit_limit,
+            &cancel,
+        )
+    }
+
+    /// A `ScanLimit` terminal (after a frontier watermark) is a graceful stop:
+    /// `scan_limit_hit` is set and the continuation range is anchored strictly
+    /// past the coalesced frontier — never a cursorless terminal.
+    #[test]
+    fn scan_limit_terminal_sets_continuation_range() {
+        let state = drain(
+            vec![wm(10), wm(25), Err(BitmapScanError::ScanLimit)],
+            None,
+            Some(0..100),
+            1,
+            ScanDirection::Ascending,
+            10,
+        );
+        assert!(state.scan_limit_hit);
+        assert_eq!(state.coalesced_frontier, Some(25));
+        assert_eq!(state.next_range, Some(26..100));
+    }
+
+    /// A `Source` fault (what a collapsed budget+fault aggregate becomes) must
+    /// surface as `Internal`, never masked as a clean `ScanLimit` end.
+    #[test]
+    fn source_fault_terminal_is_internal() {
+        let err = drain_result(
+            vec![
+                wm(10),
+                Err(BitmapScanError::Source(anyhow::anyhow!("storage boom"))),
+            ],
+            Some(0..100),
+            1,
+            ScanDirection::Ascending,
+            10,
+        )
+        .err()
+        .expect("source fault must error");
+        assert_eq!(tonic::Status::from(err).code(), tonic::Code::Internal);
+    }
+
+    /// A `Cancelled` terminal must surface as gRPC `Cancelled`, not a clean
+    /// `ScanLimit` end.
+    #[test]
+    fn cancelled_terminal_is_cancelled() {
+        let err = drain_result(
+            vec![wm(10), Err(BitmapScanError::Cancelled)],
+            Some(0..100),
+            1,
+            ScanDirection::Ascending,
+            10,
+        )
+        .err()
+        .expect("cancelled must error");
+        assert_eq!(tonic::Status::from(err).code(), tonic::Code::Cancelled);
     }
 
     #[test]

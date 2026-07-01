@@ -512,9 +512,9 @@ pub(crate) type KeyedBatchOutput<I, K, V> = (I, Arc<HashMap<K, V>>);
 /// Convenience aliases for the marker-aware pipeline boundary types. Avoid
 /// repeating the deeply-nested `BoxStream<'static, Result<Watermarked<...>, _>>`
 /// at every signature. `E` is the pipeline's error type — `RpcError` for the
-/// non-eval handler chains, `anyhow::Error` for chains downstream of the
-/// bitmap evaluator (so `ScanLimitExceeded` survives in-band for the handler
-/// to downcast).
+/// non-eval handler chains, `BitmapScanError` for chains downstream of the
+/// bitmap evaluator (so the typed terminal survives in-band for the handler to
+/// match).
 pub(crate) type MarkedUpstream<I, E> = BoxStream<'static, Result<Watermarked<I>, E>>;
 pub(crate) type MarkedKeyedUpstream<I, K, E> = MarkedUpstream<(I, Vec<K>), E>;
 pub(crate) type MarkedKeyedDownstream<I, K, V, E> = MarkedUpstream<KeyedBatchOutput<I, K, V>, E>;
@@ -1050,7 +1050,7 @@ where
                         }
                         Race::Upstream(Some(Err(e))) => {
                             // A terminal upstream error (e.g.
-                            // `BitmapScanLimitExceeded`) must not swallow the
+                            // `BitmapScanError::ScanLimit`) must not swallow the
                             // last frontier watermark already in flight: the
                             // upstream chunker flushes its held watermark
                             // ahead of the error, so finishing this lookup (and
@@ -2707,7 +2707,7 @@ mod tests {
     /// must not swallow that watermark: it is finished and emitted before
     /// the error ends the stream. This is the scan-limit resume-cursor
     /// guarantee — the client gets a cursor at the boundary scanned so far
-    /// even though `BitmapScanLimitExceeded` truncated the response.
+    /// even though `BitmapScanError::ScanLimit` truncated the response.
     #[tokio::test]
     async fn terminal_error_finishes_in_flight_lookup() {
         let calls = Arc::new(AtomicUsize::new(0));

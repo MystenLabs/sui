@@ -2622,3 +2622,100 @@ async fn test_list_checkpoints_terminal_watermark() {
         "item-limited query must not emit a standalone terminal watermark"
     );
 }
+
+#[sim_test]
+async fn test_list_transactions_multi_leaf_tiny_budget_resumes() {
+    // A 2-leaf AND filter (`sender` + `move_call`) evaluated under a budget so
+    // tiny it equals the literal count (every leaf's `take_first` reservation
+    // exactly exhausts the request budget) must drain its full matching set
+    // across pages with continuation cursors and a clean terminal reason, never
+    // a cursorless `QueryEnd`. All seeded data lives in bucket 0, so `take_first`
+    // covers it and the scan completes naturally — this exercises the
+    // merge/reservation path under budget pressure, not a `SCAN_LIMIT` stop (a
+    // real multi-leaf bucket `SCAN_LIMIT` is unreachable full-stack; the
+    // evaluator-level unit tests cover that classification).
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .with_rpc_config(sui_config::RpcConfig {
+            enable_indexing: Some(true),
+            ledger_history_indexing: Some(true),
+            ledger_history: Some(sui_config::rpc_config::LedgerHistoryConfig {
+                bitmap_bucket_scan_budget: Some(2),
+                chunk_bucket_scan_budget: Some(2),
+                max_bitmap_filter_literals: Some(2),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .build()
+        .await;
+    let sender = cluster.get_address_0();
+    let other = cluster.get_address_1();
+
+    let (pkg, _) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
+    let move_call_path = format!(
+        "{}::emit_test_event::emit_test_event",
+        pkg.to_canonical_string(true)
+    );
+
+    // Matching set: sender's move calls into the published package.
+    let mut expected = HashSet::new();
+    for _ in 0..4 {
+        let tx = call_move(&cluster, sender, pkg, "emit_test_event", "emit_test_event").await;
+        expected.insert(tx_digest(&tx));
+    }
+    // Noise that must NOT match: sender's non-move-call tx, and another
+    // sender's move call into the same package — each fails exactly one leaf.
+    transfer_self(&cluster, sender).await;
+    call_move(&cluster, other, pkg, "emit_test_event", "emit_test_event").await;
+
+    let mut client = new_ledger_client(&cluster).await;
+    let filter = tx_and(vec![tx_sender(sender), tx_move_call(&move_call_path)]);
+
+    let mut paged: HashSet<String> = HashSet::new();
+    let mut after: Option<Bytes> = None;
+    let mut iterations = 0;
+    let final_reason = loop {
+        iterations += 1;
+        assert!(iterations <= 64, "pagination loop did not terminate");
+
+        let mut req = ListTransactionsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["digest"]));
+        req.filter = Some(filter.clone());
+        req.options = Some(query_options_maybe_after(2, after.clone()));
+        let resp = list_transactions_result(&mut client, req).await;
+        assert!(resp.end, "every page should carry an end frame");
+        assert_transaction_cursors(&resp);
+        for digest in transaction_digest_set(&resp) {
+            assert!(paged.insert(digest), "pages must not overlap");
+        }
+        match resp.end_reason {
+            Some(QueryEndReason::ItemLimit) => {
+                after = Some(transaction_end_cursor(
+                    &resp,
+                    "item-limited page should carry a resume cursor",
+                ));
+            }
+            reason @ (Some(QueryEndReason::CheckpointBound) | Some(QueryEndReason::LedgerTip)) => {
+                break reason;
+            }
+            other => panic!(
+                "multi-leaf scan under tiny budget must end with a non-error \
+                 reason (item-limit continuation or clean terminal), got {other:?}"
+            ),
+        }
+    };
+
+    assert_eq!(
+        paged, expected,
+        "paged union under tiny multi-leaf budget must equal the full matching set"
+    );
+    assert!(
+        matches!(
+            final_reason,
+            Some(QueryEndReason::CheckpointBound) | Some(QueryEndReason::LedgerTip)
+        ),
+        "drain must terminate on a natural-completion reason, got {final_reason:?}"
+    );
+}
