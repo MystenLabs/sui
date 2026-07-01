@@ -282,7 +282,7 @@ pub enum ExecutionStoreEvent {
         package_id: ObjectID,
         result: SuiResult<Option<Object>>,
     },
-    ChildObjectResolverStoreReadChildObject {
+    RuntimeObjectResolverStoreReadChildObject {
         parent: ObjectID,
         child: ObjectID,
         result: SuiResult<Option<Object>>,

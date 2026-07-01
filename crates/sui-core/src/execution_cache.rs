@@ -31,8 +31,8 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
-    BackingPackageStore, BackingStore, ChildObjectResolver, FullObjectKey, MarkerValue, ObjectKey,
-    ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
+    BackingPackageStore, BackingStore, FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone,
+    ObjectStore, PackageObject, ParentSync, RuntimeObjectResolver,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
@@ -62,7 +62,7 @@ pub struct ExecutionCacheTraitPointers {
     pub transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     pub cache_writer: Arc<dyn ExecutionCacheWrite>,
     pub backing_store: Arc<dyn BackingStore + Send + Sync>,
-    pub child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+    pub runtime_object_resolver: Arc<dyn RuntimeObjectResolver + Send + Sync>,
     pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
     pub object_store: Arc<dyn ObjectStore + Send + Sync>,
     pub reconfig_api: Arc<dyn ExecutionCacheReconfigAPI>,
@@ -97,7 +97,7 @@ impl ExecutionCacheTraitPointers {
             transaction_cache_reader: cache.clone(),
             cache_writer: cache.clone(),
             backing_store: cache.clone(),
-            child_object_resolver: cache.clone(),
+            runtime_object_resolver: cache.clone(),
             backing_package_store: cache.clone(),
             object_store: cache.clone(),
             reconfig_api: cache.clone(),
@@ -720,7 +720,7 @@ macro_rules! implement_storage_traits {
             }
         }
 
-        impl ChildObjectResolver for $implementor {
+        impl RuntimeObjectResolver for $implementor {
             fn read_child_object(
                 &self,
                 parent: &ObjectID,

@@ -20,7 +20,7 @@ use sui_types::{
         VerifiedCheckpoint,
     },
     object::Object,
-    storage::{BackingStore, ChildObjectResolver, ParentSync},
+    storage::{BackingStore, ParentSync, RuntimeObjectResolver},
     transaction::{InputObjectKind, VerifiedTransaction},
 };
 pub mod in_mem_store;
@@ -29,7 +29,7 @@ pub trait SimulatorStore:
     sui_types::storage::BackingPackageStore
     + sui_types::storage::ObjectStore
     + ParentSync
-    + ChildObjectResolver
+    + RuntimeObjectResolver
 {
     fn init_with_genesis(&mut self, genesis: &genesis::Genesis) {
         self.insert_checkpoint(genesis.checkpoint());
