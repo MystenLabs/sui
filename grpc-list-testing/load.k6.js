@@ -15,7 +15,13 @@
 //
 // Env:
 //   HOST         target host:port     (e.g. kv-rpc-http2.rpc-kv-testnet.svc.cluster.local:8000)
-//   REQ_FILE     load.<net>.jsonl     (default /data/load.jsonl in the image)
+//   REQ_FILE     which baked list to replay (default /data/load.mainnet.jsonl);
+//                the image bakes one per net -> set /data/load.testnet.jsonl etc.
+//   FLOOR        drop requests whose start_checkpoint < FLOOR (default 0).
+//                Use the target's lowest_available_checkpoint when hitting a
+//                PRUNED fullnode, so deep-history requests below its retained
+//                window are skipped at runtime (no per-backend data regen).
+//                0 = keep everything (BigTable archival serves full history).
 //   PLAINTEXT    "1" for h2c (kv-rpc :8000 / fullnode :9000); else TLS
 //   PROTO_ROOT   single dir holding the merged proto tree (default /proto):
 //                sui/rpc/v2alpha/*, sui/rpc/v2/*, google/* under one root
@@ -35,10 +41,11 @@ import { SharedArray } from 'k6/data';
 import { Trend, Counter, Rate } from 'k6/metrics';
 
 const HOST = __ENV.HOST || 'localhost:19000';
-const REQ_FILE = __ENV.REQ_FILE || '/data/load.jsonl';
+const REQ_FILE = __ENV.REQ_FILE || '/data/load.mainnet.jsonl';
 const PLAINTEXT = __ENV.PLAINTEXT === '1';
 const PROTO_ROOT = __ENV.PROTO_ROOT || '/proto';
 const PROTO_FILE = __ENV.PROTO_FILE || 'sui/rpc/v2alpha/ledger_service.proto';
+const FLOOR = Number(__ENV.FLOOR || 0); // drop requests starting below a pruned target's retained window
 
 // One-page-per-iteration RPC map: each pre-gen line names its rpc.
 const METHODS = {
@@ -48,8 +55,12 @@ const METHODS = {
 };
 
 // SharedArray: parsed ONCE, shared across all VUs (not re-parsed per VU).
+// FLOOR drops deep-history requests a pruned target can't serve (start below its
+// retained window) -- lets one --floor=0 list drive both archival and pruned.
 const reqs = new SharedArray('reqs', function () {
-  return open(REQ_FILE).split('\n').filter((l) => l.length > 0).map((l) => JSON.parse(l));
+  const all = open(REQ_FILE).split('\n').filter((l) => l.length > 0).map((l) => JSON.parse(l));
+  if (!FLOOR) return all;
+  return all.filter((r) => (r.request.start_checkpoint || 0) >= FLOOR);
 });
 
 const client = new grpc.Client();

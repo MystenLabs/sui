@@ -40,10 +40,15 @@ cp "$DIR/Dockerfile" "$CTX/Dockerfile"
 # 1. load script
 cp "$GRPC_TESTING_DIR/load.k6.js" "$CTX/load.k6.js"
 
-# 2. generated request list (baked; swap NET to change corpus)
+# 2. generated request lists (bake EVERY net present; deploy picks via REQ_FILE).
+#    NET still gates that AT LEAST that net's list exists (fail-fast).
 REQ="$GRPC_TESTING_DIR/load.${NET}.jsonl"
 [[ -f "$REQ" ]] || { echo "ERROR: $REQ not found; run: python gen_load.py $NET ..." >&2; exit 1; }
-cp "$REQ" "$CTX/data/load.jsonl"
+for f in "$GRPC_TESTING_DIR"/load.*.jsonl; do
+  [[ -e "$f" ]] || continue
+  cp "$f" "$CTX/data/$(basename "$f")"   # -> context/data/load.<net>.jsonl
+  echo "  staged $(basename "$f")"
+done
 
 # 3. merge the two proto roots into one tree (v2alpha under proto/, v2+google
 #    under vendored/proto/; disjoint paths -> single /proto root serves both,
@@ -70,7 +75,7 @@ echo "Building grpc-loadtest k6 image"
 echo "  net    : $NET"
 echo "  context: $CTX"
 echo "  script : load.k6.js"
-echo "  data   : $(wc -l < "$CTX/data/load.jsonl" | tr -d ' ') requests (from load.${NET}.jsonl)"
+echo "  data   : $(cd "$CTX/data" && ls load.*.jsonl | tr '\n' ' ')($(cat "$CTX"/data/load.*.jsonl | wc -l | tr -d ' ') total requests)"
 echo "  proto  : $(cd "$CTX/proto" && find . -name '*.proto' | wc -l | tr -d ' ') files (root: $ROOT)"
 echo "  image  : $IMAGE"
 echo
