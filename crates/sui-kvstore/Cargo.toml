@@ -33,7 +33,6 @@ rustls.workspace = true
 scoped-futures.workspace = true
 serde.workspace = true
 toml.workspace = true
-sui-default-config.workspace = true
 sui-futures.workspace = true
 sui-inverted-index.workspace = true
 sui-indexer-alt-framework.workspace = true

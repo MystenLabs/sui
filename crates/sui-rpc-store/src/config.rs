@@ -19,16 +19,16 @@
 
 use std::time::Duration;
 
-use sui_default_config::DefaultConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 
 /// Top-level configuration for the `sui-rpc-store` indexer
 /// service. Parses from TOML; every field has a sensible default
 /// for tests and for the embedded use case where most knobs are
 /// supplied programmatically.
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ServiceConfig {
     /// Cross-pipeline consistency knobs: how often to take
     /// snapshots and how deep the per-pipeline write buffer is.
@@ -60,9 +60,8 @@ pub struct ServiceConfig {
 ///
 /// [`Synchronizer`]: sui_consistent_store::Synchronizer
 /// [`DbOptions::snapshot_capacity`]: sui_consistent_store::DbOptions::snapshot_capacity
-#[DefaultConfig]
-#[derive(Clone)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ConsistencyConfig {
     /// Per-pipeline mpsc capacity for batches waiting to be
     /// committed. The synchronizer's slowest pipeline gates
@@ -97,9 +96,8 @@ pub struct ConsistencyConfig {
 /// ledger-history bitmap CFs. The live-set-bounded indexes
 /// (`object_by_owner`, `object_by_type`, `balance`,
 /// `package_versions`) and the tiny `epochs` CF are never pruned.
-#[DefaultConfig]
-#[derive(Clone)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PrunerConfig {
     /// Number of most-recent epochs to retain in full. Data in
     /// epochs older than this is eligible for pruning. Must be at
@@ -166,8 +164,8 @@ impl PrunerConfig {
 /// field as a top-level key.
 ///
 /// [`RpcStoreSchema`]: crate::RpcStoreSchema
-#[DefaultConfig]
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineLayer {
     // --- Raw chain data ---
     pub epochs: Option<CommitterLayer>,
@@ -195,9 +193,8 @@ pub struct PipelineLayer {
 /// unset field inherits from the shared committer default the
 /// orchestrator passes through to
 /// [`CommitterLayer::finish`](Self::finish).
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
