@@ -8,11 +8,3 @@ build/
 storage/
 docker/
 !docker/stress/entrypoint.sh
-# grpc-loadtest: build inputs (k6 script + protos + request lists) live under
-# docker/, which `docker/` above excludes. Re-include the subtree. The bare-dir
-# negations (not just `/**`) are required so BuildKit descends INTO the excluded
-# parent dirs to reach the files; a `/**` glob alone matches files but the walker
-# never enters the excluded dirs. Order matters: these come AFTER `docker/`.
-!docker/grpc-loadtest
-!docker/grpc-loadtest/context
-!docker/grpc-loadtest/context/**

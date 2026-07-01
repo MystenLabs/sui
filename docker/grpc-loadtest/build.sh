@@ -29,7 +29,11 @@ REPO_ROOT="$(git -C "$DIR" rev-parse --show-toplevel)"
 NET="${NET:-testnet}"
 GRPC_TESTING_DIR="${GRPC_TESTING_DIR:-$REPO_ROOT/grpc-list-testing}"
 REGISTRY="${REGISTRY:-us-central1-docker.pkg.dev/cryptic-bolt-398315/grpc-loadtest}"
-CTX="$DIR/context"
+# Context lives OUTSIDE docker/ on purpose: the repo-root .dockerignore excludes
+# `docker/`, and meta-svc's fsutil does NOT honor `!` negations to rescue it
+# (proven empirically -- negations work on local BuildKit but not meta-svc). A
+# path under grpc-list-testing/ matches no exclusion, so it always transfers.
+CTX="${CTX:-$GRPC_TESTING_DIR/loadtest-context}"
 
 [[ -d "$GRPC_TESTING_DIR" ]] || { echo "ERROR: GRPC_TESTING_DIR not found: $GRPC_TESTING_DIR" >&2; exit 1; }
 

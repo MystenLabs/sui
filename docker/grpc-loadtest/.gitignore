@@ -1,3 +1,4 @@
-# Staged build context (assembled by build.sh from generated/vendored inputs).
-# Reproducible, never committed.
-context/
+# The build context is staged OUTSIDE docker/ (under grpc-list-testing/) because
+# the repo-root .dockerignore excludes docker/ and meta-svc's fsutil won't honor
+# `!` negations to rescue it. build.sh stages to $GRPC_TESTING_DIR/loadtest-context.
+# Nothing to ignore here now (Dockerfile + build.sh are committed source).
