@@ -301,6 +301,72 @@ async fn test_successful_certified_effects() {
 }
 
 #[tokio::test]
+async fn test_transaction_processing_waits_for_effects() {
+    telemetry_subscribers::init_for_testing();
+    let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
+    let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+    let certifier = EffectsCertifier::new(metrics);
+
+    let tx_digest = create_test_transaction_digest(1);
+    let effects_digest = create_test_effects_digest(1);
+    let executed_data = create_test_executed_data();
+
+    let executed_response_full = WaitForEffectsResponse::Executed {
+        effects_digest,
+        details: Some(Box::new(executed_data.clone())),
+    };
+    let executed_response_ack = WaitForEffectsResponse::Executed {
+        effects_digest,
+        details: None,
+    };
+    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+        let client = safe_client.authority_client();
+        client.set_ack_response(tx_digest, executed_response_ack.clone());
+        client.set_full_response(tx_digest, executed_response_full.clone());
+    }
+
+    let options = SubmitTransactionOptions::default();
+    let name = authority_aggregator
+        .authority_clients
+        .keys()
+        .next()
+        .unwrap();
+
+    // Submission came back as "already processing" (no consensus position). The certifier should
+    // wait for the finalized effects by digest, not treat it as an internal error.
+    let submit_tx_result = SubmitTxResult::Rejected {
+        error: SuiErrorKind::TransactionProcessing {
+            digest: tx_digest,
+            status: "consensus message processed".to_string(),
+        }
+        .into(),
+    };
+    let result = certifier
+        .get_certified_finalized_effects(
+            &authority_aggregator,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
+            *name,
+            submit_tx_result,
+            &options,
+        )
+        .await;
+
+    assert!(
+        result.is_ok(),
+        "expected certified effects, got: {result:?}"
+    );
+    match result.unwrap().effects.finality_info {
+        EffectsFinalityInfo::QuorumExecuted(_) => {}
+        other => panic!("Expected QuorumExecuted finality info, got: {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn test_transaction_rejected_non_retriable() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());

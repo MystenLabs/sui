@@ -272,16 +272,36 @@ impl TransactionSubmitter {
         }
         let result = resp.results.into_iter().next().unwrap();
 
-        // Since only one transaction is submitted, it is ok to return error when the submission is rejected.
+        // A rejection normally means submission failed; retry elsewhere. Two exceptions, both keyed
+        // to this transaction's digest:
+        // - `TransactionProcessing`: the transaction is already being processed by consensus, so
+        //   surface the rejection as a result and let the driver wait for the finalized outcome by
+        //   digest instead of resubmitting.
+        // - `TransactionSubmitted`: a dedup hit on the driver's own recent submission; stays
+        //   retriable, but is not a validator fault so it does not count against the validator's
+        //   score.
+        // Rejections naming a different digest are malformed and stay retriable.
         if let SubmitTxResult::Rejected { error } = &result {
-            if is_validator_error(error.categorize()) {
-                client_monitor.record_interaction_result(OperationFeedback {
-                    authority_name: validator,
-                    display_name,
-                    operation: OperationType::Submit,
-                    ping_type: request.ping_type,
-                    result: Err(()),
-                });
+            match error.as_inner() {
+                sui_types::error::SuiErrorKind::TransactionProcessing { digest, .. }
+                    if Some(*digest) == request.tx_digest() =>
+                {
+                    // No fresh submission was accepted, so record neither success nor failure.
+                    return Ok(result);
+                }
+                sui_types::error::SuiErrorKind::TransactionSubmitted { digest }
+                    if Some(*digest) == request.tx_digest() => {}
+                _ => {
+                    if is_validator_error(error.categorize()) {
+                        client_monitor.record_interaction_result(OperationFeedback {
+                            authority_name: validator,
+                            display_name,
+                            operation: OperationType::Submit,
+                            ping_type: request.ping_type,
+                            result: Err(()),
+                        });
+                    }
+                }
             }
             return Err(TransactionRequestError::RejectedAtValidator(error.clone()));
         }

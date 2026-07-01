@@ -333,7 +333,16 @@ where
                 options,
             )
             .await?;
-        if let SubmitTxResult::Rejected { error } = &submit_txn_result {
+        // A `TransactionProcessing` rejection for this transaction is expected: the submitter
+        // returns it as a result (not a retriable error) and the certifier waits for the finalized
+        // outcome by digest. Any other `Rejected` should have come back as a submission error.
+        if let SubmitTxResult::Rejected { error } = &submit_txn_result
+            && !matches!(
+                error.as_inner(),
+                sui_types::error::SuiErrorKind::TransactionProcessing { digest, .. }
+                    if Some(*digest) == tx_digest
+            )
+        {
             return Err(TransactionDriverError::ClientInternal {
                 error: format!(
                     "SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}",

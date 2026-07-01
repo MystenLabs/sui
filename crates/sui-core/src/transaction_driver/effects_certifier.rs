@@ -104,12 +104,22 @@ impl EffectsCertifier {
                 None => (None, None),
             },
             SubmitTxResult::Rejected { error } => {
-                return Err(TransactionDriverError::ClientInternal {
-                    error: format!(
-                        "Unexpected submission error in get_certified_finalized_effects(): {}",
-                        error
-                    ),
-                });
+                if matches!(
+                    error.as_inner(),
+                    SuiErrorKind::TransactionProcessing { digest, .. } if Some(*digest) == tx_digest
+                ) {
+                    // Already being processed by consensus: no consensus position to track, so
+                    // wait for the finalized outcome by digest — same path as an `Executed`
+                    // response with no inline effects.
+                    (None, None)
+                } else {
+                    return Err(TransactionDriverError::ClientInternal {
+                        error: format!(
+                            "Unexpected submission error in get_certified_finalized_effects(): {}",
+                            error
+                        ),
+                    });
+                }
             }
         };
 
