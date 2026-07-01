@@ -3714,24 +3714,6 @@ impl<'de> Deserialize<'de> for SenderSignedTransaction {
 }
 
 impl SenderSignedTransaction {
-    /// Returns a mapping from signer address to the signature and its index in `tx_signatures`.
-    pub(crate) fn get_signer_sig_mapping(
-        &self,
-        verify_legacy_zklogin_address: bool,
-    ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
-        let mut mapping = BTreeMap::new();
-        for (idx, sig) in self.tx_signatures.iter().enumerate() {
-            if verify_legacy_zklogin_address && let GenericSignature::ZkLoginAuthenticator(z) = sig
-            {
-                // Try deriving the address from the legacy padded way.
-                mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, (idx as u8, sig));
-            }
-            let address = sig.try_into()?;
-            mapping.insert(address, (idx as u8, sig));
-        }
-        Ok(mapping)
-    }
-
     pub fn intent_message(&self) -> &IntentMessage<TransactionData> {
         &self.intent_message
     }
@@ -3768,14 +3750,6 @@ impl SenderSignedData {
     // or perform any de-dup checks.
     pub fn add_signature(&mut self, new_signature: Signature) {
         self.inner_mut().tx_signatures.push(new_signature.into());
-    }
-
-    pub(crate) fn get_signer_sig_mapping(
-        &self,
-        verify_legacy_zklogin_address: bool,
-    ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
-        self.inner()
-            .get_signer_sig_mapping(verify_legacy_zklogin_address)
     }
 
     pub fn transaction_data(&self) -> &TransactionData {
