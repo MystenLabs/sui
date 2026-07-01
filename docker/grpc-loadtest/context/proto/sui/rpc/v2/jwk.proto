@@ -1,0 +1,38 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2;
+
+// Key to uniquely identify a JWK.
+message JwkId {
+  // The issuer or identity of the OIDC provider.
+  optional string iss = 1;
+  // A key ID used to uniquely identify a key from an OIDC provider.
+  optional string kid = 2;
+}
+
+// A JSON web key.
+//
+// Struct that contains info for a JWK. A list of them for different kinds can
+// be retrieved from the JWK endpoint (for example, <https://www.googleapis.com/oauth2/v3/certs>).
+// The JWK is used to verify the JWT token.
+message Jwk {
+  // Key type parameter, https://datatracker.ietf.org/doc/html/rfc7517#section-4.1.
+  optional string kty = 1;
+  // RSA public exponent, https://datatracker.ietf.org/doc/html/rfc7517#section-9.3.
+  optional string e = 2;
+  // RSA modulus, https://datatracker.ietf.org/doc/html/rfc7517#section-9.3.
+  optional string n = 3;
+  // Algorithm parameter, https://datatracker.ietf.org/doc/html/rfc7517#section-4.4.
+  optional string alg = 4;
+}
+
+// Represents a standard JWT header according to
+// https://openid.net/specs/openid-connect-core-1_0.html
+// message JwtHeader {
+//   optional string alg = 1;
+//   optional string kid = 2;
+//   optional string typ = 3;
+// }

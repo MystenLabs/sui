@@ -1,0 +1,67 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2;
+
+import "google/protobuf/timestamp.proto";
+
+service NameService {
+  rpc LookupName(LookupNameRequest) returns (LookupNameResponse);
+  rpc ReverseLookupName(ReverseLookupNameRequest) returns (ReverseLookupNameResponse);
+}
+
+message LookupNameRequest {
+  // Required. The SuiNS name to lookup.
+  //
+  // Supports both `@name` as well as `name.sui` formats.
+  optional string name = 1;
+}
+
+message LookupNameResponse {
+  // The record for the requested name
+  optional NameRecord record = 1;
+}
+
+message ReverseLookupNameRequest {
+  // Required. The address to perform a reverse lookup for.
+  optional string address = 1;
+}
+
+message ReverseLookupNameResponse {
+  // The record for the SuiNS name linked to the requested address
+  optional NameRecord record = 1;
+}
+
+message NameRecord {
+  // Id of this record.
+  //
+  // Note that records are stored on chain as dynamic fields of the type
+  // `Field<Domain,NameRecord>`.
+  optional string id = 1;
+
+  // The SuiNS name of this record
+  optional string name = 2;
+
+  // The ID of the `RegistrationNFT` assigned to this record.
+  //
+  // The owner of the corresponding `RegistrationNFT` has the rights to
+  // be able to change and adjust the `target_address` of this domain.
+  //
+  // It is possible that the ID changes if the record expires and is
+  // purchased by someone else.
+  optional string registration_nft_id = 3;
+
+  // Timestamp when the record expires.
+  //
+  // This is either the expiration of the record itself or the expiration of
+  // this record's parent if this is a leaf record.
+  optional google.protobuf.Timestamp expiration_timestamp = 4;
+
+  // The target address that this name points to
+  optional string target_address = 5;
+
+  // Additional data which may be stored in a record
+  map<string, string> data = 6;
+}

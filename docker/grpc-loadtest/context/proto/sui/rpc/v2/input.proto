@@ -1,0 +1,91 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2;
+
+import "google/protobuf/struct.proto";
+
+// An input to a user transaction.
+message Input {
+  enum InputKind {
+    INPUT_KIND_UNKNOWN = 0;
+
+    // A move value serialized as BCS.
+    PURE = 1;
+
+    // A Move object that is either immutable or address owned.
+    IMMUTABLE_OR_OWNED = 2;
+
+    // A Move object whose owner is "Shared".
+    SHARED = 3;
+
+    // A Move object that is attempted to be received in this transaction.
+    RECEIVING = 4;
+
+    // Reservation to withdraw balance from a funds accumulator
+    FUNDS_WITHDRAWAL = 5;
+  }
+
+  optional InputKind kind = 1;
+
+  // A move value serialized as BCS.
+  //
+  // For normal operations this is required to be a move primitive type and not contain structs
+  // or objects.
+  optional bytes pure = 2;
+
+  // `ObjectId` of the object input.
+  optional string object_id = 3;
+
+  // Requested version of the input object when `kind` is `IMMUTABLE_OR_OWNED`
+  // or `RECEIVING` or if `kind` is `SHARED` this is the initial version of the
+  // object when it was shared
+  optional uint64 version = 4;
+
+  // The digest of this object.
+  optional string digest = 5;
+
+  // Controls whether the caller asks for a mutable reference to the shared
+  // object.
+  optional bool mutable = 6;
+
+  enum Mutability {
+    MUTABILITY_UNKNOWN = 0;
+    IMMUTABLE = 1;
+    MUTABLE = 2;
+
+    // Non-exclusive write is used to allow multiple transactions to
+    // simultaneously add disjoint dynamic fields to an object.
+    // (Currently only used by settlement transactions).
+    NON_EXCLUSIVE_WRITE = 3;
+  }
+
+  // NOTE: For backwards compatibility purposes the addition of the new
+  // `NON_EXCLUSIVE_WRITE` mutability variant requires providing a new field.
+  // The old `mutable` field will continue to be populated and respected as an
+  // input for the time being.
+  optional Mutability mutability = 7;
+
+  // Fund Reservation information if `kind` is `FUNDS_WITHDRAWAL`.
+  optional FundsWithdrawal funds_withdrawal = 8;
+
+  // A literal value
+  //
+  // INPUT ONLY
+  optional google.protobuf.Value literal = 1000;
+}
+
+message FundsWithdrawal {
+  optional uint64 amount = 1;
+  optional string coin_type = 2;
+
+  enum Source {
+    SOURCE_UNKNOWN = 0;
+    SENDER = 1;
+    SPONSOR = 2;
+  }
+
+  optional Source source = 3;
+}
