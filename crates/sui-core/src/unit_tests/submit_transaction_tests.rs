@@ -33,8 +33,10 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
-use crate::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusClient};
-use crate::consensus_test_utils::make_consensus_adapter_for_test;
+use crate::consensus_adapter::{ConsensusAdapter, ConsensusClient};
+use crate::consensus_test_utils::{
+    make_consensus_adapter_for_test, make_consensus_adapter_with_client_for_test,
+};
 use crate::mock_consensus::with_block_status;
 
 use super::AuthorityServerHandle;
@@ -82,15 +84,7 @@ impl TestContext {
 
     async fn new_with_consensus_client(consensus_client: Arc<dyn ConsensusClient>) -> Self {
         Self::new_with_adapter(|authority| {
-            Arc::new(ConsensusAdapter::new(
-                consensus_client,
-                authority.checkpoint_store.clone(),
-                authority.name,
-                100_000,
-                100_000,
-                ConsensusAdapterMetrics::new_test(),
-                Arc::new(tokio::sync::Notify::new()),
-            ))
+            make_consensus_adapter_with_client_for_test(&authority, consensus_client, 100_000)
         })
         .await
     }
@@ -104,6 +98,10 @@ impl TestContext {
         let gas_object_ref = gas_object.compute_object_reference();
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(&[gas_object])
+            // Several tests assert that a resubmission is still suppressed as a recent duplicate;
+            // pin a dedup window far longer than any test's runtime so entries cannot expire
+            // mid-test under CI load (the default window is only 1s of wall-clock time).
+            .with_recent_submission_dedup_window_ms(600_000)
             .build()
             .await;
 
@@ -150,7 +148,7 @@ impl TestContext {
 struct BlockingConsensusClient {
     first_submit_seen: tokio::sync::watch::Sender<bool>,
     release_first_submit: tokio::sync::watch::Sender<bool>,
-    submit_count: Arc<AtomicUsize>,
+    submit_count: AtomicUsize,
 }
 
 impl BlockingConsensusClient {
@@ -160,7 +158,7 @@ impl BlockingConsensusClient {
         Arc::new(Self {
             first_submit_seen,
             release_first_submit,
-            submit_count: Arc::new(AtomicUsize::new(0)),
+            submit_count: AtomicUsize::new(0),
         })
     }
 
@@ -250,6 +248,7 @@ async fn test_duplicate_submission_suppressed_within_window() {
     .await;
 
     let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
 
     // First submission is accepted.
     let first = test_context
@@ -271,10 +270,7 @@ async fn test_duplicate_submission_suppressed_within_window() {
         .unwrap();
     match &second.results[0] {
         SubmitTxResult::Rejected { error } => match error.clone().into_inner() {
-            SuiErrorKind::TransactionProcessing { status, .. } => assert!(
-                status.contains("recently processed"),
-                "unexpected rejection status: {status}"
-            ),
+            SuiErrorKind::TransactionSubmitted { digest } => assert_eq!(digest, tx_digest),
             other => panic!("unexpected rejection error kind: {other:?}"),
         },
         other => panic!("expected duplicate submission to be rejected, got {other:?}"),
@@ -316,12 +312,8 @@ async fn test_concurrent_duplicate_submission_rejected_as_inflight() {
     assert_eq!(second.results.len(), 1);
     match &second.results[0] {
         SubmitTxResult::Rejected { error } => match error.as_inner() {
-            SuiErrorKind::TransactionProcessing { digest, status } => {
+            SuiErrorKind::TransactionSubmitted { digest } => {
                 assert_eq!(*digest, tx_digest);
-                assert!(
-                    status.contains("submission in progress"),
-                    "unexpected rejection status: {status}"
-                );
             }
             other => panic!("unexpected rejection error kind: {other:?}"),
         },
@@ -637,6 +629,8 @@ async fn test_submit_batched_transactions() {
     }
 }
 
+// A repeated transaction in a plain batch rejects only the repeated index with
+// `RepeatedTransactions`; the first occurrence is still submitted.
 #[tokio::test]
 async fn test_submit_batched_transactions_with_repeated_transaction() {
     let test_context = TestContext::new().await;
@@ -652,23 +646,35 @@ async fn test_submit_batched_transactions_with_repeated_transaction() {
         ..Default::default()
     };
 
-    let response = test_context
+    let raw_response = test_context
         .client
         .client()
         .unwrap()
         .submit_transaction(request)
-        .await;
-    assert!(response.is_err());
-    let error: SuiError = response.unwrap_err().into();
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(raw_response.results.len(), 2);
+    let result0: SubmitTxResult = raw_response.results[0].clone().try_into().unwrap();
+    let result1: SubmitTxResult = raw_response.results[1].clone().try_into().unwrap();
+
     assert!(
-        matches!(
-            error.into_inner(),
-            SuiErrorKind::UserInputError {
-                error: UserInputError::RepeatedTransactions { digest }
-            } if digest == tx_digest
-        ),
-        "expected RepeatedTransactions error"
+        matches!(result0, SubmitTxResult::Submitted { .. }),
+        "expected first occurrence to be submitted, got: {result0:?}"
     );
+    match result1 {
+        SubmitTxResult::Rejected { error } => assert!(
+            matches!(
+                error.as_inner(),
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::RepeatedTransactions { digest }
+                } if *digest == tx_digest
+            ),
+            "expected RepeatedTransactions for repeated index, got: {error}"
+        ),
+        other => panic!("expected repeated index to be rejected, got: {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -1097,8 +1103,8 @@ async fn test_submit_oversized_transaction() {
 }
 
 // A batch containing a transaction that was already submitted (and is now in the recent-submission
-// window) rejects only that index with `TransactionProcessing { status: "recently processed" }`,
-// while a fresh transaction in the same batch is still submitted.
+// window) rejects only that index with `TransactionSubmitted`, while a fresh transaction in the
+// same batch is still submitted.
 #[tokio::test]
 async fn test_batch_with_recently_processed_duplicate_rejects_only_that_index() {
     // `execute = false` so the prior submission is suppressed via the recent-submission window
@@ -1166,12 +1172,8 @@ async fn test_batch_with_recently_processed_duplicate_rejects_only_that_index() 
     // tx1 rejected specifically as a recent duplicate.
     match result0 {
         SubmitTxResult::Rejected { error } => match error.as_inner() {
-            SuiErrorKind::TransactionProcessing { digest, status } => {
+            SuiErrorKind::TransactionSubmitted { digest } => {
                 assert_eq!(*digest, *tx1.digest());
-                assert!(
-                    status.contains("recently processed"),
-                    "unexpected rejection status: {status}"
-                );
             }
             other => panic!("unexpected rejection error kind: {other:?}"),
         },
@@ -1185,8 +1187,8 @@ async fn test_batch_with_recently_processed_duplicate_rejects_only_that_index() 
     }
 }
 
-// Same per-index dedup inside an atomic soft bundle: a previously-submitted member is rejected with
-// "recently processed" while the fresh member is still submitted. Confirms the dedup is
+// Same per-index dedup inside an atomic soft bundle: a previously-submitted member is rejected
+// with `TransactionSubmitted` while the fresh member is still submitted. Confirms the dedup is
 // req_type-agnostic (the per-tx loop sets `results[idx]` regardless of submit type).
 #[tokio::test]
 async fn test_soft_bundle_with_recently_processed_duplicate_rejects_only_that_index() {
@@ -1252,12 +1254,8 @@ async fn test_soft_bundle_with_recently_processed_duplicate_rejects_only_that_in
 
     match result0 {
         SubmitTxResult::Rejected { error } => match error.as_inner() {
-            SuiErrorKind::TransactionProcessing { digest, status } => {
+            SuiErrorKind::TransactionSubmitted { digest } => {
                 assert_eq!(*digest, *tx1.digest());
-                assert!(
-                    status.contains("recently processed"),
-                    "unexpected rejection status: {status}"
-                );
             }
             other => panic!("unexpected rejection error kind: {other:?}"),
         },
