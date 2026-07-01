@@ -45,7 +45,6 @@ use sui_types::storage::BackingPackageStore;
 use sui_types::storage::BackingStore;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
-use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIteratorItem;
 use sui_types::storage::EpochInfo;
@@ -59,6 +58,7 @@ use sui_types::storage::ParentSync;
 use sui_types::storage::ReadStore;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
+use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result as StorageResult;
 use sui_types::storage::load_package_object_from_object_store;
@@ -871,7 +871,7 @@ impl ParentSync for DataStore {
     }
 }
 
-impl ChildObjectResolver for DataStore {
+impl RuntimeObjectResolver for DataStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,

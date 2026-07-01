@@ -24,7 +24,7 @@ use sui_types::{
     object::Owner,
     object::{Data, Object},
     storage::{
-        BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage, WriteKind,
+        BackingPackageStore, ObjectChange, ParentSync, RuntimeObjectResolver, Storage, WriteKind,
     },
     transaction::InputObjects,
     TypeTag,
@@ -159,6 +159,7 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
             accumulator_running_max_withdraws: BTreeMap::new(),
+            retry_request: None,
         }
     }
 
@@ -959,7 +960,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

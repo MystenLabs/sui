@@ -71,8 +71,10 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::UnsettledObjectFundsRead;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
+use sui_types::execution::ExecutionRetryError;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
@@ -84,9 +86,9 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::node_role::NodeRole;
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::InputKey;
 use sui_types::storage::OverlayBackingPackageStore;
+use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::TrackingBackingStore;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
@@ -1518,7 +1520,7 @@ impl AuthorityState {
             return ExecutionOutput::EpochEnded;
         }
 
-        let accumulator_version = execution_env.assigned_versions.accumulator_version;
+        let accumulator_version = execution_env.assigned_versions.accumulator_version();
 
         let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
             &tx_guard,
@@ -1879,6 +1881,8 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -1903,6 +1907,8 @@ impl AuthorityState {
                 epoch_id,
                 epoch_timestamp_ms,
                 input_objects,
+                system_object_versions,
+                unsettled_object_funds,
                 gas_data,
                 gas_status,
                 kind,
@@ -1919,6 +1925,47 @@ impl AuthorityState {
             timings,
             execution_error,
         )
+    }
+
+    /// Spawns a task that waits until `object_id` reaches `version` (the version this transaction
+    /// requires), then re-enqueues `certificate` for execution. Used by the retry-on-not-ready path
+    /// when execution reports that a required system object had not yet caught up to the version
+    /// this transaction was sequenced against.
+    fn wait_for_system_object_and_reenqueue(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        execution_env: &ExecutionEnv,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        // Recover the object's initial shared version from the epoch start config (every system
+        // object is registered there) to form the full key the object cache waits on.
+        let init_shared_version = epoch_store
+            .epoch_start_config()
+            .system_object_initial_shared_version(object_id)
+            .expect("system object must be registered in the epoch start config");
+        let full_object_id = FullObjectID::Consensus((object_id, init_shared_version));
+        let cache_reader = self.get_object_cache_reader().clone();
+        let scheduler = self.execution_scheduler.clone();
+        let cert = certificate.clone();
+        let execution_env = execution_env.clone();
+        let epoch_store = epoch_store.clone();
+        tokio::task::spawn(async move {
+            // Bound the wait to the alive epoch: reconfiguration may finish while we wait.
+            let _ = epoch_store
+                .within_alive_epoch(async move {
+                    cache_reader
+                        .notify_read_system_object_at_version(full_object_id, version)
+                        .await;
+                    scheduler.send_transaction_for_execution(
+                        &cert,
+                        execution_env,
+                        tokio::time::Instant::now(),
+                    );
+                })
+                .await;
+        });
     }
 
     /// execute_certificate validates the transaction input, and executes the certificate,
@@ -1982,7 +2029,14 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
-        let accumulator_version = execution_env.assigned_versions.accumulator_version;
+        // Versions of system objects this transaction may read during execution, each at the version
+        // it was sequenced against. Execution gates reads on these (and records a retry if an object
+        // has not caught up); see `TemporaryStore::is_system_object_available`.
+        let system_object_versions = execution_env
+            .assigned_versions
+            .system_object_versions
+            .clone();
+        let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
@@ -1996,7 +2050,7 @@ impl AuthorityState {
                 &*self.coin_reservation_resolver,
                 sender,
                 &mut kind,
-                execution_env.assigned_versions.accumulator_version,
+                execution_env.assigned_versions.accumulator_version(),
             )
             .expect("rewriting must succeed for a certified transaction")
         } else {
@@ -2004,6 +2058,14 @@ impl AuthorityState {
         };
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
+        // Held across execution so the in-execution object-funds check can read unsettled
+        // withdrawals from the current consensus commit, and reused by the post-execution check
+        // below.
+        let object_funds_checker = self.object_funds_checker.load();
+        let unsettled_object_funds = object_funds_checker
+            .as_ref()
+            .map(|checker| checker.as_ref() as &dyn UnsettledObjectFundsRead);
 
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
@@ -2023,6 +2085,8 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
+                system_object_versions,
+                unsettled_object_funds,
                 gas_data,
                 gas_status,
                 kind,
@@ -2031,20 +2095,55 @@ impl AuthorityState {
                 tx_digest,
             );
 
-        let object_funds_checker = self.object_funds_checker.load();
-        if let Some(object_funds_checker) = object_funds_checker.as_ref()
-            && !object_funds_checker.should_commit_object_funds_withdraws(
-                certificate,
-                effects.status(),
-                &inner_temp_store.accumulator_running_max_withdraws,
-                &execution_env,
-                self.get_account_funds_read(),
-                &self.execution_scheduler,
-                epoch_store,
-            )
+        // Execution recorded that a system object it read had not yet caught up to the version this
+        // transaction requires. The effects it produced are not usable; discard them, wait for that
+        // object to reach the required version, then re-enqueue so execution runs again against the
+        // caught-up state.
+        if let Some(ExecutionRetryError::SystemObjectUnavailable { object_id, version }) =
+            inner_temp_store.retry_request.as_ref()
         {
-            assert_reachable!("retry object withdraw later");
+            assert_reachable!("retry on unavailable system object");
+            self.wait_for_system_object_and_reenqueue(
+                certificate,
+                *object_id,
+                *version,
+                &execution_env,
+                epoch_store,
+            );
             return ExecutionOutput::RetryLater;
+        }
+
+        // When the in-execution check is enabled the VM is authoritative and signals retries via
+        // `ExecutionRetryError` (handled above), so the post-execution checker is bypassed. Reuses
+        // the `object_funds_checker` guard loaded before execution.
+        if !protocol_config.check_object_funds_withdraw_in_execution() {
+            if let Some(object_funds_checker) = object_funds_checker.as_ref()
+                && !object_funds_checker.should_commit_object_funds_withdraws(
+                    certificate,
+                    effects.status(),
+                    &inner_temp_store.accumulator_running_max_withdraws,
+                    &execution_env,
+                    self.get_account_funds_read(),
+                    &self.execution_scheduler,
+                    epoch_store,
+                )
+            {
+                assert_reachable!("retry object withdraw later");
+                return ExecutionOutput::RetryLater;
+            }
+        } else if effects.status().is_ok()
+            && let Some(object_funds_checker) = object_funds_checker.as_ref()
+            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version()
+        {
+            // In-execution flow: the VM confirmed sufficiency and the transaction succeeded. Record
+            // its object withdrawals as unsettled so later transactions in this consensus commit,
+            // which read the same not-yet-advanced settled balance, account for them.
+            object_funds_checker.record_object_funds_withdraws(
+                certificate,
+                &inner_temp_store.accumulator_running_max_withdraws,
+                accumulator_version,
+                epoch_store,
+            );
         }
 
         if let Some(expected_effects_digest) = expected_effects_digest
@@ -3593,7 +3692,9 @@ impl AuthorityState {
         });
 
         let coin_reservation_resolver = Arc::new(CachingCoinReservationResolver::new(
-            execution_cache_trait_pointers.child_object_resolver.clone(),
+            execution_cache_trait_pointers
+                .runtime_object_resolver
+                .clone(),
         ));
 
         let object_funds_checker_metrics =
@@ -3675,9 +3776,14 @@ impl AuthorityState {
 
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
-        if self.node_role(&epoch_store).runs_consensus()
-            && epoch_store.protocol_config().enable_object_funds_withdraw()
-        {
+        let protocol_config = epoch_store.protocol_config();
+        // The post-execution checker is a validator concern, but the in-execution check requires the
+        // checker on every executing node (including fullnodes / checkpoint execution) to track
+        // unsettled withdrawals and to wait-and-reschedule on a retry.
+        let needs_checker = protocol_config.enable_object_funds_withdraw()
+            && (self.node_role(&epoch_store).runs_consensus()
+                || protocol_config.check_object_funds_withdraw_in_execution());
+        if needs_checker {
             if self.object_funds_checker.load().is_none() {
                 let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
                     Arc::new(ObjectFundsChecker::new(
@@ -3709,8 +3815,8 @@ impl AuthorityState {
         &self.execution_cache_trait_pointers.backing_store
     }
 
-    pub fn get_child_object_resolver(&self) -> &Arc<dyn ChildObjectResolver + Send + Sync> {
-        &self.execution_cache_trait_pointers.child_object_resolver
+    pub fn get_runtime_object_resolver(&self) -> &Arc<dyn RuntimeObjectResolver + Send + Sync> {
+        &self.execution_cache_trait_pointers.runtime_object_resolver
     }
 
     pub(crate) fn get_account_funds_read(&self) -> &Arc<dyn AccountFundsRead> {
@@ -4555,7 +4661,7 @@ impl AuthorityState {
     ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
         let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
         let accumulator_obj = AccumulatorValue::load_object_by_id(
-            self.get_child_object_resolver().as_ref(),
+            self.get_runtime_object_resolver().as_ref(),
             None,
             *accumulator_id.inner(),
         )?;
@@ -4571,7 +4677,7 @@ impl AuthorityState {
 
         let balance = crate::accumulators::balances::get_balance(
             owner,
-            self.get_child_object_resolver().as_ref(),
+            self.get_runtime_object_resolver().as_ref(),
             currency_type,
         )?;
 

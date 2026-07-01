@@ -9,7 +9,7 @@
 //! as in transaction data and effects, and from the `ObjectStore` for dynamic loads
 //! (e.g. dynamic fields).
 //! This module also contains the traits used by execution to talk to
-//! the store (BackingPackageStore, ObjectStore, ChildObjectResolver)
+//! the store (BackingPackageStore, ObjectStore, RuntimeObjectResolver)
 
 use crate::replay_txn::ReplayTransaction;
 use anyhow::{Context, Error, anyhow};
@@ -33,7 +33,7 @@ use sui_types::{
     inner_temporary_store::InnerTemporaryStore,
     metrics::ExecutionMetrics,
     object::Object,
-    storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
+    storage::{BackingPackageStore, PackageObject, ParentSync, RuntimeObjectResolver},
     supported_protocol_versions::ProtocolConfig,
     transaction::{CheckedInputObjects, TransactionData, TransactionDataAPI},
 };
@@ -140,6 +140,8 @@ pub fn execute_transaction_to_effects(
             &epoch,
             epoch_start_timestamp,
             input_objects,
+            std::collections::BTreeMap::new(),
+            None,
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),
@@ -345,7 +347,7 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
     }
 }
 
-impl ChildObjectResolver for ReplayStore<'_> {
+impl RuntimeObjectResolver for ReplayStore<'_> {
     // Load an `Object` at a root version. That is the version that is
     // less than or equal to the given `child_version_upper_bound`.
     fn read_child_object(

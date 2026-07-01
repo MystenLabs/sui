@@ -3,19 +3,19 @@
 
 use sui_types::{
     TypeTag, accumulator_root::AccumulatorValue, balance::Balance, base_types::SuiAddress,
-    error::SuiResult, storage::ChildObjectResolver,
+    error::SuiResult, storage::RuntimeObjectResolver,
 };
 
 /// Get the balance for a given owner address (which can be a wallet or an object)
 /// and currency type (e.g. 0x2::sui::SUI)
 pub fn get_balance(
     owner: SuiAddress,
-    child_object_resolver: &dyn ChildObjectResolver,
+    runtime_object_resolver: &dyn RuntimeObjectResolver,
     currency_type: TypeTag,
 ) -> SuiResult<u64> {
     let balance_type = Balance::type_tag(currency_type);
     let address_balance =
-        AccumulatorValue::load(child_object_resolver, None, owner, &balance_type)?
+        AccumulatorValue::load(runtime_object_resolver, None, owner, &balance_type)?
             .and_then(|b| b.as_u128())
             .unwrap_or(0);
 
@@ -40,13 +40,13 @@ pub fn get_balance(
 /// (which can be a wallet or an object)
 pub fn get_all_balances_for_owner(
     owner: SuiAddress,
-    child_object_resolver: &dyn ChildObjectResolver,
+    runtime_object_resolver: &dyn RuntimeObjectResolver,
     index_store: &crate::jsonrpc_index::IndexStore,
 ) -> SuiResult<Vec<(TypeTag, u64)>> {
     let currency_types = index_store.get_address_balance_coin_types_iter(owner);
     let mut balances = Vec::new();
     for currency_type in currency_types {
-        let balance = get_balance(owner, child_object_resolver, currency_type.clone())?;
+        let balance = get_balance(owner, runtime_object_resolver, currency_type.clone())?;
         balances.push((currency_type, balance));
     }
     Ok(balances)

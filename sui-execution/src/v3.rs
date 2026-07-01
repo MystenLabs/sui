@@ -73,6 +73,11 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        _system_object_versions: std::collections::BTreeMap<
+            sui_types::base_types::ObjectID,
+            sui_types::base_types::SequenceNumber,
+        >,
+        _unsettled_object_funds: Option<&dyn sui_types::accumulator_root::UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -127,6 +132,11 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        _system_object_versions: std::collections::BTreeMap<
+            sui_types::base_types::ObjectID,
+            sui_types::base_types::SequenceNumber,
+        >,
+        _unsettled_object_funds: Option<&dyn sui_types::accumulator_root::UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,

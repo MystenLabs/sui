@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_trace_format::format::MoveTraceBuilder;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
@@ -9,7 +10,8 @@ use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::storage::BackingStore;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::SuiAddress,
+    accumulator_root::UnsettledObjectFundsRead,
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -38,6 +40,10 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: CheckedInputObjects,
+        // Versions of system objects this transaction may read, keyed by object ID.
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        // Source of unsettled object-funds withdrawals for the current consensus commit, if any.
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         // Gas related
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -67,6 +73,8 @@ pub trait Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,

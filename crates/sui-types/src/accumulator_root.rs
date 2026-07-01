@@ -14,7 +14,7 @@ use crate::{
     },
     error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ObjectStore},
+    storage::{ObjectStore, RuntimeObjectResolver},
 };
 use move_core_types::{
     ident_str,
@@ -108,6 +108,23 @@ impl std::fmt::Display for AccumulatorObjId {
     }
 }
 
+/// Read access to object-funds withdrawals that have executed in the current consensus commit but
+/// whose settlement has not yet been applied. Settled balances (read from the accumulator root at a
+/// bounded version) do not reflect these in-flight withdrawals, so an in-execution funds check must
+/// subtract them to avoid double-spending against the same settled balance.
+///
+/// Implemented in the authority by the object-funds checker and threaded into the temporary store so
+/// execution can consult it.
+pub trait UnsettledObjectFundsRead {
+    /// Total amount withdrawn from `account` against accumulator version `accumulator_version` by
+    /// transactions that have executed but not yet settled. Returns 0 if there are none.
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128;
+}
+
 impl AccumulatorValue {
     pub fn as_u128(&self) -> Option<u128> {
         match self {
@@ -136,7 +153,7 @@ impl AccumulatorValue {
     }
 
     pub fn exists(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -155,11 +172,11 @@ impl AccumulatorValue {
             AccumulatorKey::get_type_tag(std::slice::from_ref(type_)),
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-        .exists(child_object_resolver)
+        .exists(runtime_object_resolver)
     }
 
     pub fn load_by_id<T>(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         id: AccumulatorObjId,
     ) -> SuiResult<Option<T>>
@@ -171,13 +188,13 @@ impl AccumulatorValue {
             id.0,
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
-        .load_object(child_object_resolver)?
+        .load_object(runtime_object_resolver)?
         .map(|o| o.load_value::<T>())
         .transpose()
     }
 
     pub fn load(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -194,7 +211,7 @@ impl AccumulatorValue {
 
         let Some(value) = DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
             .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-            .load_object(child_object_resolver)?
+            .load_object(runtime_object_resolver)?
             .map(|o| o.load_value::<U128>())
             .transpose()?
         else {
@@ -205,7 +222,7 @@ impl AccumulatorValue {
     }
 
     pub fn load_object(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -216,13 +233,13 @@ impl AccumulatorValue {
         Ok(
             DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
                 .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-                .load_object(child_object_resolver)?
+                .load_object(runtime_object_resolver)?
                 .map(|o| o.into_object()),
         )
     }
 
     pub fn load_object_by_id(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         id: ObjectID,
     ) -> SuiResult<Option<Object>> {
@@ -231,7 +248,7 @@ impl AccumulatorValue {
             id,
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
-        .load_object(child_object_resolver)?
+        .load_object(runtime_object_resolver)?
         .map(|o| o.into_object()))
     }
 

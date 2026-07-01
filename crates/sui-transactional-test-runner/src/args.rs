@@ -92,6 +92,12 @@ pub struct SuiInitArgs {
     /// Enable accumulator features for testing (e.g., authenticated event streams)
     #[clap(long = "enable-accumulators")]
     pub enable_accumulators: bool,
+    /// Enable object-funds withdrawals (`withdraw_from_object`) for testing
+    #[clap(long = "enable-object-funds-withdraw")]
+    pub enable_object_funds_withdraw: bool,
+    /// Enable the in-execution object-funds sufficiency check for testing
+    #[clap(long = "check-object-funds-withdraw-in-execution")]
+    pub check_object_funds_withdraw_in_execution: bool,
     /// Enable authenticated event streams for testing
     #[clap(long = "enable-authenticated-event-streams")]
     pub enable_authenticated_event_streams: bool,

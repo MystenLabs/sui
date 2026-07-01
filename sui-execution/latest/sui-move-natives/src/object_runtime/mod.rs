@@ -19,6 +19,7 @@ use move_core_types::{
     annotated_visitor as AV,
     language_storage::StructTag,
     runtime_value as R,
+    u256::U256,
     vm_status::StatusCode,
 };
 use move_vm_runtime::execution::values::{GlobalValue, Value};
@@ -42,7 +43,7 @@ use sui_types::{
     id::UID,
     metrics::ExecutionMetrics,
     object::{MoveObject, Owner},
-    storage::ChildObjectResolver,
+    storage::{ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 use tracing::error;
 
@@ -155,7 +156,7 @@ impl TestInventories {
 
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
-        object_resolver: &'a dyn ChildObjectResolver,
+        object_resolver: &'a dyn RuntimeObjectResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
@@ -212,6 +213,30 @@ impl<'a> ObjectRuntime<'a> {
             protocol_config,
             metrics,
         }
+    }
+
+    /// Checks whether `owner` holds at least `amount` of `type_`, by querying the object resolver
+    /// (the transaction's temporary store).
+    pub fn check_object_funds_sufficiency(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+        amount: U256,
+    ) -> PartialVMResult<ObjectFundsSufficiency> {
+        // Funds deposited to this account so far in this transaction offset the withdrawals: the
+        // sufficiency check is against the net withdrawn, not the gross. Deposits already emitted
+        // are tracked as accumulator merge totals.
+        let deposited = self
+            .state
+            .accumulator_merge_totals
+            .get(&(owner.into(), type_.clone()))
+            .copied()
+            .unwrap_or(0);
+        self.child_object_store
+            .check_object_funds_sufficiency(owner, type_, amount, deposited)
+            .map_err(|e| {
+                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{e}"))
+            })
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {

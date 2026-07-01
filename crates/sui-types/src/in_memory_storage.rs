@@ -14,7 +14,7 @@ use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::{Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+    storage::{BackingPackageStore, ObjectStore, ParentSync, RuntimeObjectResolver},
 };
 use better_any::{Tid, TidAble};
 use move_binary_format::CompiledModule;
@@ -37,7 +37,7 @@ impl BackingPackageStore for InMemoryStorage {
     }
 }
 
-impl ChildObjectResolver for InMemoryStorage {
+impl RuntimeObjectResolver for InMemoryStorage {
     fn read_child_object(
         &self,
         parent: &ObjectID,

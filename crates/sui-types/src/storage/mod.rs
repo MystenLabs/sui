@@ -30,6 +30,7 @@ use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::resolver::SerializedPackage;
+use move_core_types::u256::U256;
 pub use object_store_trait::ObjectStore;
 pub use read_store::BalanceInfo;
 pub use read_store::BalanceIterator;
@@ -181,12 +182,24 @@ pub enum ObjectChange {
     Delete(DeleteKindWithOldVersion),
 }
 
-pub trait StorageView: Storage + ParentSync + ChildObjectResolver {}
-impl<T: Storage + ParentSync + ChildObjectResolver> StorageView for T {}
+pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
+impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
+
+/// Outcome of checking whether an object owner holds enough funds for a withdrawal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectFundsSufficiency {
+    /// The owner holds at least the requested amount (net of earlier withdrawals in this tx).
+    Sufficient,
+    /// The owner does not hold the requested amount.
+    Insufficient,
+    /// The accumulator root has not yet caught up to the version this transaction requires, so the
+    /// balance cannot be determined yet; the transaction should be retried later.
+    Unknown,
+}
 
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
-pub trait ChildObjectResolver {
+pub trait RuntimeObjectResolver {
     /// `child` must have an `ObjectOwner` ownership equal to `owner`.
     fn read_child_object(
         &self,
@@ -194,6 +207,22 @@ pub trait ChildObjectResolver {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
+
+    /// Checks whether `owner` holds at least `amount` of `type_`, accounting for earlier
+    /// withdrawals from the same account within this transaction. Only `TemporaryStore` implements
+    /// the real check; other resolvers are never the execution-time resolver, so the default
+    /// reports `Sufficient` and never blocks.
+    /// `deposited` is the amount already deposited to this account so far in the transaction, which
+    /// offsets the withdrawals (the check is against the net withdrawn).
+    fn check_object_funds_sufficiency(
+        &self,
+        _owner: SuiAddress,
+        _type_: &TypeTag,
+        _amount: U256,
+        _deposited: u128,
+    ) -> SuiResult<ObjectFundsSufficiency> {
+        Ok(ObjectFundsSufficiency::Sufficient)
+    }
 
     /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.
     /// `get_object_received_at_version` must be the exact version at which the object will be received,
@@ -477,14 +506,14 @@ impl<S: ParentSync> ParentSync for &mut S {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for std::sync::Arc<S> {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(
+        RuntimeObjectResolver::read_child_object(
             self.as_ref(),
             parent,
             child,
@@ -498,7 +527,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             self.as_ref(),
             owner,
             receiving_object_id,
@@ -508,14 +537,14 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for &S {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &S {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
+        RuntimeObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
     fn get_object_received_at_version(
         &self,
@@ -524,7 +553,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             *self,
             owner,
             receiving_object_id,
@@ -534,14 +563,14 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &mut S {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
+        RuntimeObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
     fn get_object_received_at_version(
         &self,
@@ -550,7 +579,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             *self,
             owner,
             receiving_object_id,
@@ -718,7 +747,7 @@ impl Display for DeleteKind {
 }
 
 pub trait BackingStore:
-    BackingPackageStore + ChildObjectResolver + ObjectStore + ParentSync
+    BackingPackageStore + RuntimeObjectResolver + ObjectStore + ParentSync
 {
     fn as_object_store(&self) -> &dyn ObjectStore;
 }
@@ -726,7 +755,7 @@ pub trait BackingStore:
 impl<T> BackingStore for T
 where
     T: BackingPackageStore,
-    T: ChildObjectResolver,
+    T: RuntimeObjectResolver,
     T: ObjectStore,
     T: ParentSync,
 {
@@ -887,7 +916,7 @@ impl BackingPackageStore for TrackingBackingStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TrackingBackingStore<'_> {
+impl RuntimeObjectResolver for TrackingBackingStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

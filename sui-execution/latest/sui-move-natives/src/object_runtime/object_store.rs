@@ -3,6 +3,8 @@
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::language_storage::TypeTag;
+use move_core_types::u256::U256;
 use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
@@ -11,13 +13,13 @@ use std::{
 };
 use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SequenceNumber},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
-    error::VMMemoryLimitExceededSubStatusCode,
+    error::{SuiResult, VMMemoryLimitExceededSubStatusCode},
     execution::DynamicallyLoadedObjectMetadata,
     metrics::ExecutionMetrics,
     object::{Data, MoveObject, Object, Owner},
-    storage::ChildObjectResolver,
+    storage::{ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 
 pub(super) struct ChildObject {
@@ -67,7 +69,7 @@ pub(crate) type ChildObjectEffects = BTreeMap<ObjectID, ChildObjectEffect>;
 
 struct Inner<'a> {
     // used for loading child objects
-    resolver: &'a dyn ChildObjectResolver,
+    resolver: &'a dyn RuntimeObjectResolver,
     // The version of the root object in ownership at the beginning of the transaction.
     // If it was a child object, it resolves to the root parent's sequence number.
     // Otherwise, it is just the sequence number at the beginning of the transaction.
@@ -89,7 +91,7 @@ struct Inner<'a> {
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
-// from storage, through the `ChildObjectResolver`
+// from storage, through the `RuntimeObjectResolver`
 pub(super) struct ChildObjectStore<'a> {
     // contains object resolver and object cache
     // kept as a separate struct to deal with lifetime issues where the `store` is accessed
@@ -210,7 +212,7 @@ impl Inner<'_> {
                 previous_transaction: object.previous_transaction,
             };
 
-            // `ChildObjectResolver::receive_object_at_version` should return the object at the
+            // `RuntimeObjectResolver::receive_object_at_version` should return the object at the
             // version or nothing at all. If it returns an object with a different version, we
             // should raise an invariant violation since it should be checked by
             // `receive_object_at_version`.
@@ -410,7 +412,7 @@ fn deserialize_move_object(
 
 impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
-        resolver: &'a dyn ChildObjectResolver,
+        resolver: &'a dyn RuntimeObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
         is_metered: bool,
@@ -433,6 +435,18 @@ impl<'a> ChildObjectStore<'a> {
             config_setting_cache: BTreeMap::new(),
             is_metered,
         }
+    }
+
+    pub(super) fn check_object_funds_sufficiency(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+        amount: U256,
+        deposited: u128,
+    ) -> SuiResult<ObjectFundsSufficiency> {
+        self.inner
+            .resolver
+            .check_object_funds_sufficiency(owner, type_, amount, deposited)
     }
 
     pub(super) fn receive_object(

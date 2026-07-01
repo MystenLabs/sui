@@ -16,7 +16,6 @@ use sui_types::{
     crypto::get_account_key_pair,
     effects::TransactionEffectsAPI,
     executable_transaction::VerifiedExecutableTransaction,
-    execution::ExecutionOutput,
     execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
     gas_coin::GAS,
     object::Object,
@@ -217,7 +216,6 @@ async fn test_object_withdraw_multiple_withdraws() {
             )
             .build();
         let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
-        let digest = *cert.digest();
 
         let accumulator_version = env.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).1;
         let output = env
@@ -231,25 +229,21 @@ async fn test_object_withdraw_multiple_withdraws() {
                 )),
                 &env.epoch_store,
             );
-        let effects = if i < 2 {
-            let effects = output.unwrap().0;
+        // The in-execution funds check aborts the withdrawal inside the VM (code 2 =
+        // E_OBJECT_FUNDS_INSUFFICIENT) rather than retrying, so the third withdraw produces a
+        // committed failure rather than `RetryLater`.
+        let effects = output.unwrap().0;
+        if i < 2 {
             assert!(effects.status().is_ok());
-            effects
         } else {
-            assert!(matches!(output, ExecutionOutput::RetryLater));
-            let effects = env
-                .authority
-                .notify_read_effects_for_testing("test", digest)
-                .await;
             assert!(matches!(
                 effects.status(),
                 ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
+                    error: ExecutionErrorKind::MoveAbort(_, 2),
                     ..
                 })
             ));
-            effects
-        };
+        }
         all_effects.push(effects);
     }
     env.authority
@@ -281,7 +275,6 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
         )
         .build();
     let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
-    let digest = *cert.digest();
     let accumulator_version = env.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).1;
     let output = env.authority.try_execute_immediately(
         &cert,
@@ -289,15 +282,12 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
             .with_assigned_versions(AssignedVersions::new(vec![], Some(accumulator_version))),
         &env.epoch_store,
     );
-    assert!(matches!(output, ExecutionOutput::RetryLater));
-    let effects = env
-        .authority
-        .notify_read_effects_for_testing("test", digest)
-        .await;
+    // The withdraw of 3 (before the matching deposit) exceeds the balance of 2, so the
+    // in-execution check aborts inside the VM (code 2 = E_OBJECT_FUNDS_INSUFFICIENT).
     assert!(matches!(
-        effects.status(),
+        output.unwrap().0.status(),
         ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionErrorKind::InsufficientFundsForWithdraw,
+            error: ExecutionErrorKind::MoveAbort(_, 2),
             ..
         })
     ));
@@ -339,22 +329,18 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
         )
         .build();
     let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
-    let digest = *cert.digest();
     let output = env.authority.try_execute_immediately(
         &cert,
         ExecutionEnv::new()
             .with_assigned_versions(AssignedVersions::new(vec![], Some(accumulator_version))),
         &env.epoch_store,
     );
-    assert!(matches!(output, ExecutionOutput::RetryLater));
-    let effects = env
-        .authority
-        .notify_read_effects_for_testing("test", digest)
-        .await;
+    // The earlier transaction's unsettled withdraw of 2 leaves no balance, so this withdraw aborts
+    // inside the VM (code 2 = E_OBJECT_FUNDS_INSUFFICIENT).
     assert!(matches!(
-        effects.status(),
+        output.unwrap().0.status(),
         ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionErrorKind::InsufficientFundsForWithdraw,
+            error: ExecutionErrorKind::MoveAbort(_, 2),
             ..
         })
     ));

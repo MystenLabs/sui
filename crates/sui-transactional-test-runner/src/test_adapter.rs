@@ -271,6 +271,8 @@ impl AdapterInitConfig {
             data_ingestion_path,
             rest_api_url,
             enable_accumulators,
+            enable_object_funds_withdraw,
+            check_object_funds_withdraw_in_execution,
             enable_authenticated_event_streams,
             allow_references_in_ptbs,
             enable_non_exclusive_writes,
@@ -306,6 +308,12 @@ impl AdapterInitConfig {
         };
         if enable_accumulators {
             protocol_config.enable_accumulators_for_testing();
+        }
+        if enable_object_funds_withdraw {
+            protocol_config.set_enable_object_funds_withdraw_for_testing(true);
+        }
+        if check_object_funds_withdraw_in_execution {
+            protocol_config.set_check_object_funds_withdraw_in_execution_for_testing(true);
         }
         if enable_authenticated_event_streams {
             protocol_config.enable_authenticated_event_streams_for_testing();

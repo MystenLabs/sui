@@ -929,6 +929,8 @@ fn create_genesis_transaction(
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,
+                std::collections::BTreeMap::new(),
+                None,
                 gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,
