@@ -63,7 +63,7 @@ struct Context<'a> {
 // Some(changed) to keep
 // None to remove the cmd
 #[growing_stack]
-fn optimize_cmd(context: &Context, sp!(_, cmd_): &mut Command) -> Option<bool> {
+fn optimize_cmd(context: &Context, csp!(_, _, cmd_): &mut Command) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
         C::Assign(_, _ls, e) => optimize_exp(context, e),

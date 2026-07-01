@@ -79,7 +79,7 @@ simple_visitor!(
 #[growing_stack]
 fn extract_value(block: &T::Exp) -> Option<&Value> {
     match &block.exp.value {
-        UnannotatedExp_::Block((_, seq)) if seq.len() == 1 => extract_value_seq_item(&seq[0]),
+        UnannotatedExp_::Block(_, (_, seq)) if seq.len() == 1 => extract_value_seq_item(&seq[0]),
         UnannotatedExp_::Value(v) => Some(v),
         UnannotatedExp_::Annotate(e, _) => extract_value(e),
         _ => None,

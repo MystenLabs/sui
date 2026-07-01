@@ -61,7 +61,7 @@ fn check_mutate(context: &mut Context, loc: Loc, lhs: &T::Exp, rhs: &T::Exp) {
             | E::Cast(_, _)
             | E::ErrorConstant { .. }
             | E::UnresolvedError => None,
-            E::Block(s) | E::NamedBlock(_, s) => {
+            E::Block(_, s) | E::NamedBlock(_, _, s) => {
                 debug_assert!(s.1.len() > 1);
                 None
             }
@@ -126,7 +126,7 @@ fn inner_exp(mut e: &T::Exp) -> &T::Exp {
     loop {
         match &e.exp.value {
             E::Annotate(inner, _) => e = inner,
-            E::Block((_, seq)) | E::NamedBlock(_, (_, seq)) if seq.len() == 1 => {
+            E::Block(_, (_, seq)) | E::NamedBlock(_, _, (_, seq)) if seq.len() == 1 => {
                 match &seq[0].value {
                     T::SequenceItem_::Seq(inner) => e = inner,
                     T::SequenceItem_::Declare(_) | T::SequenceItem_::Bind(_, _, _) => break e,

@@ -1,0 +1,9 @@
+module A::m {
+    macro fun add_one($x: u64): u64 {
+        $x + 1
+    }
+
+    fun test(): u64 {
+        add_one!(42)
+    }
+}

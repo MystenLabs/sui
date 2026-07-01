@@ -610,7 +610,7 @@ pub trait SimpleAbsInt: Sized {
         if self.command_custom(context, state, cmd) {
             return;
         }
-        let sp!(_, cmd_) = cmd;
+        let csp!(_, _, cmd_) = cmd;
         match cmd_ {
             C::Assign(_, ls, e) => {
                 let values = self.exp(context, state, e);
@@ -722,8 +722,8 @@ pub trait SimpleAbsInt: Sized {
         if let Some(vs) = self.exp_custom(context, state, parent_e) {
             return vs;
         }
-        let eloc = &parent_e.exp.loc;
-        match &parent_e.exp.value {
+        let csp!(eloc, _, e_) = &parent_e.exp;
+        match e_ {
             E::Move { var, .. } => {
                 let locals = state.locals_mut();
                 let prev = locals.insert(
@@ -932,7 +932,7 @@ fn cfg_satisfies_(
 }
 
 fn command_satisfies_(
-    cmd @ sp!(_, cmd_): &Command,
+    cmd @ csp!(_, _, cmd_): &Command,
     p_command: &mut impl FnMut(&Command) -> bool,
     p_exp: &mut impl FnMut(&Exp) -> bool,
 ) -> bool {

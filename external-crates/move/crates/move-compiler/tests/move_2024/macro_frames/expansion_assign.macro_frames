@@ -1,0 +1,19 @@
+// Tests that bind_value_in_block uses the value expression's
+// color for the Assign statement. When a macro is called
+// inside a lambda's if-branch, tail() stamps MacroBody color
+// on the branch result. bind_value_in_block must use that
+// color (not context.current_color which is Lambda) for the
+// compiler-generated assignment that binds the if/else result.
+module A::m {
+    macro fun id($x: u64): u64 {
+        $x
+    }
+
+    macro fun apply($f: |u64| -> u64): u64 {
+        $f(1)
+    }
+
+    public fun test(p: u64): u64 {
+        apply!(|x| if (x > p) { id!(x) } else { 0 })
+    }
+}
