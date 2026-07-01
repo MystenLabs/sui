@@ -22,7 +22,11 @@
 //                PRUNED fullnode, so deep-history requests below its retained
 //                window are skipped at runtime (no per-backend data regen).
 //                0 = keep everything (BigTable archival serves full history).
-//   PLAINTEXT    "1" for h2c (kv-rpc :8000 / fullnode :9000); else TLS
+//   PLAINTEXT    "1" for h2c (fullnode :9000); else TLS. kv-rpc :8000 is TLS
+//                (gRPC-over-TLS; server RESETS a cleartext preface) -> leave
+//                PLAINTEXT unset/0 for kv-rpc. insecureSkipTLSVerify (below) is
+//                on because the cert has DNS SANs only (no IP SANs) so a pod-IP
+//                target won't verify; internal one-off, skip is fine.
 //   PROTO_ROOT   single dir holding the merged proto tree (default /proto):
 //                sui/rpc/v2alpha/*, sui/rpc/v2/*, google/* under one root
 //                (the two source roots are merged at image-build time; they do
@@ -31,10 +35,13 @@
 //                (default sui/rpc/v2alpha/ledger_service.proto)
 //   START_RPS,MAX_RPS,STEP_RPS,STEP_DUR,MAX_VUS   ramp knobs
 //
-// Run (per testing_plan.md 2.4: saturate ONE replica -> target a single pod IP
-// / pinned Service, generator in-cluster, HPA disabled). In-cluster the kv-rpc
-// Service has SessionAffinity: ClientIP, so a single k6 pod pins to one replica:
-//   k6 run -e HOST=<host>:8000 -e PLAINTEXT=1 load.k6.js
+// Run (per testing_plan.md 2.4: saturate ONE replica -> target a single pod IP,
+// generator in-cluster, HPA disabled). The kv-rpc Service DNS is in the cert
+// SANs, but a pod IP is not -> insecureSkipTLSVerify handles both. Single pod:
+//   BK=$(kubectl -n <ns> get endpoints kv-rpc-http2 \
+//        -o jsonpath='{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}')
+//   k6 run -e HOST=$BK load.k6.js          # kv-rpc: TLS (PLAINTEXT unset)
+//   k6 run -e HOST=<fullnode>:9000 -e PLAINTEXT=1 load.k6.js   # fullnode h2c
 
 import grpc from 'k6/net/grpc';
 import { SharedArray } from 'k6/data';
@@ -65,6 +72,10 @@ const reqs = new SharedArray('reqs', function () {
 
 const client = new grpc.Client();
 client.load([PROTO_ROOT], PROTO_FILE);
+// Connect ONCE per VU, then reuse the h2 connection across iterations (gRPC
+// multiplexes each iteration's Stream over it). Connecting/closing per-iteration
+// storms the server with TLS handshakes -> `connection reset by peer`.
+let connected = false;
 
 // Per-shape metrics (testing_plan.md 2.5: TTFF, drain, goodput; honest open-loop).
 const ttff = new Trend('ttff_ms', true);          // time to first frame
@@ -89,7 +100,7 @@ export const options = {
     ttff_ms: ['p(95)>=0'],
     page_errors: ['rate>=0'],
   },
-  insecureSkipTLSVerify: true, // §2.5: fullnode :9443 self-signed cert (no-op for plaintext kv-rpc)
+  insecureSkipTLSVerify: true, // kv-rpc :8000 + fullnode :9443 both self-signed / SAN-less for pod-IP targets
 };
 
 function buildStages() {
@@ -106,8 +117,20 @@ export default function () {
   // Round-robin the shuffled list: deterministic, uniform pool coverage.
   const rec = reqs[__ITER % reqs.length];
   const method = METHODS[rec.rpc];
-  if (PLAINTEXT) client.connect(HOST, { plaintext: true });
-  else client.connect(HOST, { plaintext: false, timeout: '10s' });
+  // Connect once per VU, then reuse across iterations. On any connect failure or
+  // mid-run stream error (idle GOAWAY, LB drop, a backend rollout) we reset
+  // `connected` in the error path below, so the NEXT iteration reconnects rather
+  // than pinning the VU to a dead h2 connection for the rest of the run.
+  if (!connected) {
+    try {
+      client.connect(HOST, { plaintext: PLAINTEXT, timeout: '10s' });
+      connected = true;
+    } catch (e) {
+      errRate.add(true);                             // count the failed attempt; retry next iter
+      client.close();
+      return;
+    }
+  }
 
   const t0 = Date.now();
   let n = 0;
@@ -122,12 +145,18 @@ export default function () {
   stream.on('error', function () {
     if (settled) return; settled = true;
     errRate.add(true); pageMs.add(Date.now() - t0);
+    // The h2 connection may be dead (server reset / GOAWAY). Drop it and force a
+    // fresh connect next iteration -- otherwise every later page on this VU fails.
+    connected = false;
+    client.close();
   });
   stream.on('end', function () {
     if (settled) return; settled = true;
     errRate.add(false); goodput.add(1);
     items.add(n); pageMs.add(Date.now() - t0);
-    client.close();
+    // NB: do NOT client.close() on success -- the connection is reused across
+    // iterations (connect-once above). Closing per-page storms the server with
+    // reconnects and triggers `connection reset by peer`.
   });
 
   stream.write(rec.request);                       // protojson request, verbatim from gen_load
