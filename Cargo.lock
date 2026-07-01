@@ -14490,7 +14490,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sui-default-config",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
@@ -14818,14 +14817,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "sui-default-config"
-version = "1.75.0"
-dependencies = [
- "quote",
- "syn 1.0.107",
 ]
 
 [[package]]
@@ -15212,7 +15203,6 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde",
- "sui-default-config",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
@@ -15272,7 +15262,6 @@ dependencies = [
  "scoped-futures",
  "serde",
  "serde_json",
- "sui-default-config",
  "sui-futures",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-framework",
@@ -15465,7 +15454,6 @@ dependencies = [
  "serde",
  "serde_json",
  "shared-crypto",
- "sui-default-config",
  "sui-display",
  "sui-futures",
  "sui-indexer-alt-metrics",
@@ -15525,7 +15513,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "sui-default-config",
  "sui-display",
  "sui-futures",
  "sui-indexer-alt-consistent-store",
@@ -15927,7 +15914,6 @@ dependencies = [
  "rustls",
  "scoped-futures",
  "serde",
- "sui-default-config",
  "sui-futures",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
@@ -16915,7 +16901,6 @@ dependencies = [
  "rocksdb",
  "serde",
  "sui-consistent-store",
- "sui-default-config",
  "sui-execution",
  "sui-futures",
  "sui-indexer-alt-framework",

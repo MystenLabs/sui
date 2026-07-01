@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use serde::Serialize;
-use sui_default_config::DefaultConfig;
 use sui_name_service::NameServiceConfig;
 use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolConfig;
@@ -46,9 +45,8 @@ pub struct RpcConfig {
     pub logging: LoggingConfig,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct RpcLayer {
     pub limits: LimitsLayer,
     pub health: HealthLayer,
@@ -65,9 +63,8 @@ pub struct HealthConfig {
     pub max_checkpoint_lag: Duration,
 }
 
-#[DefaultConfig]
-#[derive(Default, Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct HealthLayer {
     pub max_checkpoint_lag_ms: Option<u64>,
 }
@@ -169,9 +166,8 @@ pub struct Limits {
     pub max_rich_queries: usize,
 }
 
-#[DefaultConfig]
-#[derive(Default, Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct LimitsLayer {
     pub mutation_timeout_ms: Option<u32>,
     pub query_timeout_ms: Option<u32>,
@@ -198,9 +194,8 @@ pub struct LimitsLayer {
     pub max_rich_queries: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct NameServiceLayer {
     pub package_address: Option<SuiAddress>,
     pub registry_id: Option<ObjectID>,
@@ -212,9 +207,8 @@ pub struct WatermarkConfig {
     pub watermark_polling_interval: Duration,
 }
 
-#[DefaultConfig]
-#[derive(Default, Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct WatermarkLayer {
     pub watermark_polling_interval_ms: Option<u64>,
 }
@@ -224,9 +218,8 @@ pub struct ZkLoginConfig {
     pub max_epoch_upper_bound_delta: Option<u64>,
 }
 
-#[DefaultConfig]
-#[derive(Default, Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ZkLoginLayer {
     pub env: Option<ZkLoginEnv>,
     pub max_epoch_upper_bound_delta: Option<Option<u64>>,
@@ -257,9 +250,8 @@ impl Default for SubscriptionConfig {
     }
 }
 
-#[DefaultConfig]
-#[derive(Default, Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct SubscriptionLayer {
     pub broadcast_buffer: Option<usize>,
     pub package_eviction_interval_ms: Option<u64>,
@@ -288,9 +280,8 @@ pub struct LoggingConfig {
     pub sdk_version_allowlist: BTreeMap<String, BTreeSet<String>>,
 }
 
-#[DefaultConfig]
-#[derive(Default, Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct LoggingLayer {
     pub sdk_version_allowlist: Option<BTreeMap<String, BTreeSet<String>>>,
 }
