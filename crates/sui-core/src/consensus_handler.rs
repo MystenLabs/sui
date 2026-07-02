@@ -2672,6 +2672,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 {
                     let tx = tx_with_claims.tx();
                     let Some(owned_object_refs) = owned_object_refs_to_lock(tx_with_claims) else {
+                        // Invalid input object error is deterministic across all validators.
+                        status_updates.push((position, ConsensusTxStatus::Dropped));
+                        dropped_transaction_keys.push(parsed.transaction.key());
                         debug_fatal!("Invalid input objects for transaction {}", tx.digest());
                         continue;
                     };
@@ -3816,6 +3819,60 @@ mod tests {
                 .is_consensus_message_processed(&loser_key)
                 .unwrap()
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_rejected_transaction_sets_status_and_is_not_marked_processed() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
+            .skip_rpc_index_init()
+            .skip_genesis_owner_index()
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let transaction =
+            test_user_transaction(&state, sender, &keypair, gas_object, vec![owned_object]).await;
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+        let key = SequencedConsensusTransactionKey::External(consensus_tx.key());
+
+        let round = 100;
+        let commit = TestConsensusCommit::new(vec![consensus_tx], round as u64, 1_000, 10)
+            .with_rejected_indices([0]);
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(commit)
+            .await;
+
+        // The rejected position receives a terminal Rejected status.
+        let block = BlockRef {
+            author: consensus_config::AuthorityIndex::ZERO,
+            round,
+            digest: Default::default(),
+        };
+        assert!(matches!(
+            epoch_store
+                .consensus_tx_status_cache
+                .notify_read_transaction_status(ConsensusPosition {
+                    epoch: epoch_store.epoch(),
+                    block,
+                    index: 0,
+                })
+                .await,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Rejected)
+        ));
+        // Unlike dropped transactions, a rejected transaction must NOT be marked
+        // consensus-processed: rejection is per-position, and the digest must stay
+        // resubmittable within the epoch so a later occurrence can be finalized.
+        assert!(!epoch_store.is_consensus_message_processed(&key).unwrap());
     }
 
     fn to_short_strings(txs: Vec<VerifiedExecutableTransactionWithAliases>) -> Vec<String> {
