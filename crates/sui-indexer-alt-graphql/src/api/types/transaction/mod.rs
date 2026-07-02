@@ -7,6 +7,7 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use async_graphql::connection::PageInfo;
@@ -16,11 +17,17 @@ use diesel::sql_types::BigInt;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
+use prost_types::FieldMask;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2;
+use sui_rpc::proto::sui::rpc::v2alpha;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::QueryType;
 use sui_sql_macro::query;
@@ -38,6 +45,7 @@ use crate::api::scalars::json::Json;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas_input::GasInput;
 use crate::api::types::lookups::CheckpointBounds;
@@ -73,6 +81,7 @@ pub(crate) struct TransactionContents {
 
 pub type CTransaction = ByteCursor;
 
+/// Custom `Connection` for transactions to support partially-filled pages.
 pub(crate) struct TransactionConnection {
     pub edges: Vec<Edge<String, Transaction, EmptyFields>>,
     pub page_info: PageInfo,
@@ -353,6 +362,10 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<TransactionConnection, RpcError> {
+        if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
+            return Self::paginate_bitmap(reader, scope, page, filter).await;
+        }
+
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -402,6 +415,68 @@ impl Transaction {
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
+    }
+
+    /// Serve transaction pagination by streaming the roaring-bitmap index. Returns pages that may
+    /// be partially filled, with valid cursors if there are more pages to paginate through.
+    async fn paginate_bitmap(
+        reader: &AlphaLedgerGrpcReader,
+        scope: Scope,
+        page: Page<CTransaction>,
+        filter: TransactionFilter,
+    ) -> Result<TransactionConnection, RpcError> {
+        if page.limit() == 0 {
+            return Ok(Connection::new(false, false).into());
+        }
+
+        // Consistency upper bound; empty when scope has no checkpoint set.
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false).into());
+        };
+
+        // TODO: LedgerService expose available checkpoint range for `reader_lo`.
+        let reader_lo = 0;
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint().map(u64::from),
+            filter.at_checkpoint().map(u64::from),
+            filter.before_checkpoint().map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(Connection::new(false, false).into());
+        };
+
+        // Cursors are opaque pass-through bytes: the server minted them (an encoded gRPC
+        // `CursorToken`), so we hand them straight back as the scan bounds.
+        let after = page.after().map(|c| c.to_vec());
+        let before = page.before().map(|c| c.to_vec());
+
+        let mut options = v2alpha::QueryOptions::default();
+        options.limit_items = Some(page.limit() as u32);
+        options.after = after.map(|cursor| cursor.into());
+        options.before = before.map(|cursor| cursor.into());
+        options.ordering = if page.is_from_front() {
+            v2alpha::Ordering::Ascending as i32
+        } else {
+            v2alpha::Ordering::Descending as i32
+        };
+
+        let mut request = v2alpha::ListTransactionsRequest::default();
+        // Digest only — contents hydrate lazily via `KvLoader` on field access.
+        request.read_mask = Some(FieldMask::from_paths(["digest"]));
+        request.start_checkpoint = Some(*cp_bounds.start());
+        // `cp_bounds` end is inclusive; the request bound is exclusive.
+        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.filter = filter.to_bitmap_filter();
+        request.options = Some(options);
+
+        let result = reader
+            .list_transactions(request)
+            .await
+            .context("Failed to list transactions")?;
+
+        build_bitmap_connection(scope, &page, result)
     }
 }
 
@@ -512,6 +587,68 @@ impl From<Connection<String, Transaction>> for TransactionConnection {
             },
         }
     }
+}
+
+/// Build a `TransactionConnection` from draining a bitmap-scan page.
+///
+/// Edges are returned in ascending order.
+fn build_bitmap_connection(
+    scope: Scope,
+    page: &Page<CTransaction>,
+    result: StreamPage<v2::ExecutedTransaction>,
+) -> Result<TransactionConnection, RpcError> {
+    let more = result.has_more();
+    let start = result.first_cursor().cloned();
+    let end = result.last_cursor().cloned();
+
+    let mut items = result.items;
+    if !page.is_from_front() {
+        items.reverse();
+    }
+
+    let mut edges = Vec::with_capacity(items.len());
+    for item in items {
+        let digest = item
+            .payload
+            .digest
+            .as_deref()
+            .context("ListTransactions item missing transaction digest")?
+            .parse::<TransactionDigest>()
+            .context("Failed to parse transaction digest from ListTransactions")?;
+
+        // The item's cursor is already an encoded `CursorToken`; hand it back opaquely.
+        let cursor = ByteCursor::new(item.cursor.to_vec()).encode_cursor();
+
+        edges.push(Edge::new(
+            cursor,
+            Transaction::with_digest(scope.clone(), digest),
+        ));
+    }
+
+    let (has_previous_page, has_next_page) = if page.is_from_front() {
+        (page.after().is_some(), more)
+    } else {
+        // A descending (`last`) scan walks high -> low, so "more" means earlier items remain
+        // before the page.
+        (more, page.before().is_some())
+    };
+
+    // Presented ascending: a forward scan keeps scan order, a descending scan swaps.
+    let (start_bytes, end_bytes) = if page.is_from_front() {
+        (start, end)
+    } else {
+        (end, start)
+    };
+
+    Ok(TransactionConnection {
+        edges,
+        page_info: PageInfo {
+            has_previous_page,
+            has_next_page,
+            start_cursor: start_bytes.map(|b| ByteCursor::new(b.to_vec()).encode_cursor()),
+            end_cursor: end_bytes.map(|b| ByteCursor::new(b.to_vec()).encode_cursor()),
+        },
+    })
 }
 
 pub(crate) async fn tx_digests(
@@ -760,4 +897,287 @@ async fn tx_unfiltered(
 
     let tx_sequence_numbers = (tx_lo..tx_hi).collect();
     Ok(tx_sequence_numbers)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pagination::PageLimits;
+    use bytes::Bytes;
+    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
+
+    /// 32-byte zero digest, base58-encoded. Round-trips through `TransactionDigest::parse` so
+    /// `build_bitmap_connection` can convert items back into edges in tests.
+    fn zero_digest_b58() -> String {
+        Base58::encode(TransactionDigest::default().inner())
+    }
+
+    /// Build a synthetic `PageItem` whose payload digest is the zero digest and whose resume
+    /// cursor is the provided bytes.
+    fn tx_item(cursor: &[u8]) -> PageItem<v2::ExecutedTransaction> {
+        let mut payload = v2::ExecutedTransaction::default();
+        payload.digest = Some(zero_digest_b58());
+        PageItem {
+            payload,
+            cursor: Bytes::copy_from_slice(cursor),
+        }
+    }
+
+    /// Build a `Page<CTransaction>` going forwards (`first: N`, no `after`/`before`).
+    fn forward_page(limit: u64) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(&limits, Some(limit), None, None, None)
+            .expect("constructing forward Page<CTransaction>")
+    }
+
+    /// Build a `Page<CTransaction>` going backwards (`last: N`, no `after`/`before`).
+    fn backward_page(limit: u64) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(&limits, None, None, Some(limit), None)
+            .expect("constructing backward Page<CTransaction>")
+    }
+
+    /// Forward page opened from an `after` cursor (`first: N, after: <cursor>`).
+    fn forward_page_after(limit: u64, after: &[u8]) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(
+            &limits,
+            Some(limit),
+            Some(ByteCursor::new(after.to_vec())),
+            None,
+            None,
+        )
+        .expect("constructing forward Page with after")
+    }
+
+    /// Backward page opened from a `before` cursor (`last: N, before: <cursor>`).
+    fn backward_page_before(limit: u64, before: &[u8]) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(
+            &limits,
+            None,
+            None,
+            Some(limit),
+            Some(ByteCursor::new(before.to_vec())),
+        )
+        .expect("constructing backward Page with before")
+    }
+
+    /// Empty connection surfaces cursors if provided by the streamed page.
+    #[test]
+    fn build_bitmap_connection_empty_page_surfaces_boundary_cursors() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            Vec::new(),
+            Some(Bytes::copy_from_slice(b"first-watermark")),
+            Some(Bytes::copy_from_slice(b"last-watermark")),
+            None,
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert!(conn.edges.is_empty());
+        assert!(!conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
+
+        // Both start and end cursors should be set on the connection
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_ne!(start, end, "start and end cursors should be different");
+    }
+
+    /// Order of cursors on connection should be swapped from streamed page.
+    #[test]
+    fn build_bitmap_connection_empty_page_backward_correct_cursors() {
+        let scope = Scope::for_tests();
+        let page = backward_page(10);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            Vec::new(),
+            Some(Bytes::copy_from_slice(b"last-watermark")),
+            Some(Bytes::copy_from_slice(b"first-watermark")),
+            None,
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert!(conn.edges.is_empty());
+        assert!(conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
+
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_eq!(
+            start,
+            ByteCursor::new(b"first-watermark".to_vec()).encode_cursor()
+        );
+        assert_eq!(
+            end,
+            ByteCursor::new(b"last-watermark".to_vec()).encode_cursor()
+        );
+    }
+
+    #[test]
+    fn build_bitmap_connection_non_empty_page_uses_edge_cursors() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"edge-1"), tx_item(b"edge-2"), tx_item(b"edge-3")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        // `CheckpointBound` means the range was exhausted — no forward continuation.
+        assert!(!conn.page_info.has_next_page);
+
+        let start = conn.page_info.start_cursor.expect("start set");
+        let end = conn.page_info.end_cursor.expect("end set");
+        assert_eq!(
+            start, conn.edges[0].cursor,
+            "non-empty page should anchor start_cursor on first edge, not stream watermark"
+        );
+        assert_eq!(
+            end, conn.edges[2].cursor,
+            "non-empty page should anchor end_cursor on last edge, not stream watermark"
+        );
+    }
+
+    #[test]
+    fn build_bitmap_connection_full_page_at_item_limit_signals_more() {
+        let scope = Scope::for_tests();
+        let page = forward_page(3);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::ItemLimit),
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        assert!(
+            conn.page_info.has_next_page,
+            "full page + ItemLimit must report hasNextPage: true (has_more() is true)"
+        );
+    }
+
+    /// If watermark cursors and non-empty, expect watermark cursors on the connection.
+    #[test]
+    fn build_bitmap_connection_non_empty_page_and_wm() {
+        let scope = Scope::for_tests();
+        let page = forward_page(3);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"e1"), tx_item(b"e2"), tx_item(b"e3")],
+            Some(Bytes::copy_from_slice(b"first-watermark")),
+            Some(Bytes::copy_from_slice(b"last-watermark")),
+            None,
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        assert!(conn.page_info.has_next_page,);
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_eq!(
+            start,
+            ByteCursor::new(b"first-watermark".to_vec()).encode_cursor()
+        );
+        assert_eq!(
+            end,
+            ByteCursor::new(b"last-watermark".to_vec()).encode_cursor()
+        );
+    }
+
+    #[test]
+    fn build_bitmap_connection_descending_page_reverses_to_ascending_edges() {
+        let scope = Scope::for_tests();
+        let page = backward_page(10);
+        // Descending stream order: c3, c2, c1 (highest position first).
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"c3"), tx_item(b"c2"), tx_item(b"c1")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        // After reversal, the *first* edge corresponds to the *lowest* position from the
+        // stream — i.e. the last item the stream emitted (`c1`).
+        let start = conn.page_info.start_cursor.expect("start set");
+        let end = conn.page_info.end_cursor.expect("end set");
+        assert_eq!(
+            start, conn.edges[0].cursor,
+            "descending page's start_cursor anchors on the first ascending edge after reversal"
+        );
+        assert_eq!(start, ByteCursor::new(b"c1".to_vec()).encode_cursor());
+        assert_eq!(
+            end, conn.edges[2].cursor,
+            "descending page's end_cursor anchors on the last ascending edge after reversal"
+        );
+        assert_eq!(end, ByteCursor::new(b"c3".to_vec()).encode_cursor());
+    }
+
+    /// A forward page opened from an `after` cursor reports `hasPreviousPage: true`
+    /// (`page.after().is_some()`). `CheckpointBound` makes `has_more()` false, so the only source
+    /// of a `true` flag is the input cursor — not the stream.
+    #[test]
+    fn build_bitmap_connection_forward_after_signals_previous_page() {
+        let scope = Scope::for_tests();
+        let page = forward_page_after(10, b"after-cursor");
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"e1"), tx_item(b"e2")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert!(
+            conn.page_info.has_previous_page,
+            "after cursor set → hasPreviousPage"
+        );
+        assert!(
+            !conn.page_info.has_next_page,
+            "CheckpointBound → no hasNextPage"
+        );
+    }
+
+    /// A backward page opened from a `before` cursor reports `hasNextPage: true`
+    /// (`page.before().is_some()`). `CheckpointBound` makes `has_more()` false, so the only source
+    /// of a `true` flag is the input cursor — not the stream.
+    #[test]
+    fn build_bitmap_connection_backward_before_signals_next_page() {
+        let scope = Scope::for_tests();
+        let page = backward_page_before(10, b"before-cursor");
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(b"c2"), tx_item(b"c1")],
+            None,
+            None,
+            Some(v2alpha::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_bitmap_connection(scope, &page, result).expect("connection built");
+        assert!(
+            conn.page_info.has_next_page,
+            "before cursor set → hasNextPage"
+        );
+        assert!(
+            !conn.page_info.has_previous_page,
+            "CheckpointBound → no hasPreviousPage"
+        );
+    }
 }

@@ -15429,6 +15429,7 @@ dependencies = [
  "backoff",
  "bcs",
  "bin-version",
+ "bytes",
  "chrono",
  "clap",
  "const-str",

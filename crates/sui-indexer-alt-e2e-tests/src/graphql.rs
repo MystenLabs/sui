@@ -11,8 +11,7 @@
 use anyhow::Context;
 use serde::Deserialize;
 use serde_json::json;
-
-use crate::FullCluster;
+use url::Url;
 
 /// Relay `PageInfo`.
 #[derive(Debug, Deserialize)]
@@ -39,15 +38,16 @@ pub struct Connection<N> {
     pub edges: Vec<Edge<N>>,
 }
 
-/// POST a GraphQL `document` (with `variables`) to the cluster's GraphQL server, check for
-/// top-level errors, and return the `data` payload.
+/// POST a GraphQL `document` (with `variables`) to a GraphQL server, check for top-level errors,
+/// and return the `data` payload. Takes the endpoint URL directly so it works with any cluster
+/// (`cluster.graphql_url()`), not a specific cluster type.
 pub async fn query(
-    cluster: &FullCluster,
+    graphql_url: &Url,
     document: &str,
     variables: serde_json::Value,
 ) -> anyhow::Result<serde_json::Value> {
     let response: serde_json::Value = reqwest::Client::new()
-        .post(cluster.graphql_url().as_str())
+        .post(graphql_url.as_str())
         .json(&json!({ "query": document, "variables": variables }))
         .send()
         .await?
