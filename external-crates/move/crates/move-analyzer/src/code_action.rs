@@ -257,6 +257,7 @@ pub fn access_chain_autofix_actions_for_error(
                                 two_element_access_chain_autofixes(
                                     code_actions,
                                     symbols,
+                                    cursor,
                                     file_url.clone(),
                                     unbound_name,
                                     name_path.entries[0].name,
@@ -369,6 +370,7 @@ fn single_element_access_chain_autofixes<I, K>(
 fn two_element_access_chain_autofixes<I, K>(
     code_actions: &mut Vec<CodeAction>,
     symbols: &Symbols,
+    cursor: &CursorContext,
     file_url: Url,
     unbound_first_name: Name,
     second_name: Name,
@@ -388,6 +390,8 @@ fn two_element_access_chain_autofixes<I, K>(
             if mod_ident.value.module.value() == unbound_first_name.value
                 && member_name == second_name.value
             {
+                // Fully qualifying the package prefix preserves the existing module-qualified use
+                // site, e.g. `foo::Bar` becomes `Pkg::foo::Bar`.
                 let qualified_prefix =
                     format!("{}::", addr_to_ide_string(&mod_ident.value.address));
                 let text_edit = TextEdit {
@@ -400,6 +404,29 @@ fn two_element_access_chain_autofixes<I, K>(
                 let title = format!(
                     "Qualify as `{}{}::{}`",
                     qualified_prefix, unbound_first_name, second_name
+                );
+                code_actions.push(access_chain_code_action(
+                    title,
+                    text_edit,
+                    diag.clone(),
+                    file_url.clone(),
+                ));
+                // Importing the module is enough to resolve the first element of the chain while
+                // keeping the source expression as `module::member`.
+                let Some(import_insertion_info) = import_insertion_info(symbols, cursor) else {
+                    continue;
+                };
+                let import_text = format!(
+                    "use {}::{}",
+                    addr_to_ide_string(&mod_ident.value.address),
+                    mod_ident.value.module,
+                );
+                let text_edit = auto_import_text_edit(import_text.clone(), import_insertion_info);
+                let title = format!(
+                    "Import `{}` for `{}::{}`",
+                    import_text.trim_start_matches("use "),
+                    unbound_first_name,
+                    second_name
                 );
                 code_actions.push(access_chain_code_action(
                     title,
