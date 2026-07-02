@@ -3,6 +3,23 @@
 
 module sui::tx_context;
 
+use sui::scratch;
+
+/// Allows calling `sui::scratch::add` as `.scratch_add(permit, key, value)`.
+public use fun scratch::add as TxContext.scratch_add;
+
+/// Allows calling `sui::scratch::read` as `.scratch_read(permit, key)`.
+public use fun scratch::read as TxContext.scratch_read;
+
+/// Allows calling `sui::scratch::remove` as `.scratch_remove(permit, key)`.
+public use fun scratch::remove as TxContext.scratch_remove;
+
+/// Allows calling `sui::scratch::exists` as `.scratch_exists(permit, key)`.
+public use fun scratch::exists as TxContext.scratch_exists;
+
+/// Allows calling `sui::scratch::exists_with_type` as `.scratch_exists_with_type(permit, key)`.
+public use fun scratch::exists_with_type as TxContext.scratch_exists_with_type;
+
 #[test_only]
 /// Number of bytes in an tx hash (which will be the transaction digest)
 const TX_HASH_LENGTH: u64 = 32;
