@@ -360,6 +360,7 @@ const MAINNET_USDB: &str =
 //              Enable timestamp_based_epoch_close on mainnet.
 // Version 128: Make some additional bounds to binary tables explicit.
 // Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
+//              Enable zklogin v2 verify for devnet only.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -503,6 +504,9 @@ struct FeatureFlags {
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
+    // Enable zklogin v2 verification path, ie verifying against the v2 vk first and falling back to v1.
+    #[serde(skip_serializing_if = "is_false")]
+    zklogin_auth_v2: bool,
     // How we order transactions coming out of consensus before sending to execution.
     #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
     consensus_transaction_ordering: ConsensusTransactionOrdering,
@@ -2162,6 +2166,10 @@ impl ProtocolConfig {
 
     pub fn zklogin_auth(&self) -> bool {
         self.feature_flags.zklogin_auth
+    }
+
+    pub fn zklogin_auth_v2(&self) -> bool {
+        self.feature_flags.zklogin_auth_v2
     }
 
     pub fn zklogin_supported_providers(&self) -> &BTreeSet<String> {
@@ -5059,7 +5067,12 @@ impl ProtocolConfig {
                     cfg.binary_enum_defs = Some(200);
                     cfg.binary_enum_def_instantiations = Some(100);
                 }
-                129 => {}
+                129 => {
+                    // Enable zklogin v2 circuit verification for devnet only.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.zklogin_auth_v2 = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5289,6 +5302,9 @@ impl ProtocolConfig {
     }
     pub fn set_zklogin_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.zklogin_auth = val
+    }
+    pub fn set_zklogin_auth_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.zklogin_auth_v2 = val
     }
     pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_jwk_consensus_updates = val

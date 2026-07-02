@@ -1314,6 +1314,7 @@ impl KeyToolCommand {
                             true,
                             true,
                             true,
+                            true,
                             Some(2),
                             true,
                             true,

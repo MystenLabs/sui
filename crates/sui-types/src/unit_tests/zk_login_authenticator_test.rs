@@ -104,6 +104,7 @@ fn zklogin_sign_personal_message() {
         parsed,
         vec![],
         ZkLoginEnv::Test,
+        false,
         true,
         true,
         true,

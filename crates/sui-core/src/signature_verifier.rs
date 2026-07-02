@@ -63,6 +63,8 @@ struct ZkLoginParams {
     pub supported_providers: Vec<OIDCProvider>,
     /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
     pub env: ZkLoginEnv,
+    /// Flag to determine whether zkLogin v2 circuit verification is accepted.
+    pub zklogin_auth_v2: bool,
     /// Flag to determine whether legacy address (derived from padded address seed) should be verified.
     pub verify_legacy_zklogin_address: bool,
     // Flag to determine whether zkLogin inside multisig is accepted.
@@ -84,6 +86,7 @@ impl SignatureVerifier {
         metrics: Arc<SignatureVerifierMetrics>,
         supported_providers: Vec<OIDCProvider>,
         zklogin_env: ZkLoginEnv,
+        zklogin_auth_v2: bool,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
@@ -111,6 +114,7 @@ impl SignatureVerifier {
             zk_login_params: ZkLoginParams {
                 supported_providers,
                 env: zklogin_env,
+                zklogin_auth_v2,
                 verify_legacy_zklogin_address,
                 accept_zklogin_in_multisig,
                 accept_passkey_in_multisig,
@@ -224,6 +228,7 @@ impl SignatureVerifier {
             jwks,
             self.zk_login_params.supported_providers.clone(),
             self.zk_login_params.env,
+            self.zk_login_params.zklogin_auth_v2,
             self.zk_login_params.verify_legacy_zklogin_address,
             self.zk_login_params.accept_zklogin_in_multisig,
             self.zk_login_params.accept_passkey_in_multisig,

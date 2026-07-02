@@ -1457,7 +1457,8 @@
                 "validator_metadata_verify_v2": false,
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
-                "zklogin_auth": false
+                "zklogin_auth": false,
+                "zklogin_auth_v2": false
               },
               "attributes": {
                 "accumulator_object_storage_cost": null,
@@ -2424,7 +2425,8 @@
                 "validator_validate_metadata_data_cost_per_byte": "2",
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
-                "zklogin_auth": false
+                "zklogin_auth": false,
+                "zklogin_auth_v2": false
               }
             }
           }
