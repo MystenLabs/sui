@@ -360,6 +360,7 @@ const MAINNET_USDB: &str =
 //              Enable timestamp_based_epoch_close on mainnet.
 // Version 128: Make some additional bounds to binary tables explicit.
 // Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
+//              Enable unified linkage in PTBs
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1135,6 +1136,10 @@ struct FeatureFlags {
     // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
     early_exit_on_iffw: bool,
+
+    // If true enable unified linkage
+    #[serde(skip_serializing_if = "is_false")]
+    enable_unified_linkage: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2898,6 +2903,10 @@ impl ProtocolConfig {
 
     pub fn early_exit_on_iffw(&self) -> bool {
         self.feature_flags.early_exit_on_iffw
+    }
+
+    pub fn enable_unified_linkage(&self) -> bool {
+        self.feature_flags.enable_unified_linkage
     }
 }
 
@@ -5059,7 +5068,9 @@ impl ProtocolConfig {
                     cfg.binary_enum_defs = Some(200);
                     cfg.binary_enum_def_instantiations = Some(100);
                 }
-                129 => {}
+                129 => {
+                    cfg.feature_flags.enable_unified_linkage = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5359,6 +5370,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_party_transfer_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_party_transfer = val
+    }
+
+    pub fn set_enable_unified_linkage_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_unified_linkage = val
     }
 
     pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {

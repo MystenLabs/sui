@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
+use crate::static_programmable_transactions::loading::ast::{DeserializedPackage, PackagePayload};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::ExecutionErrorTrait;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -90,6 +91,22 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
             .saturating_mul(self.protocol_config.translation_per_linkage_entry_charge())
             .max(1);
         self.charge(amount)
+    }
+
+    pub fn charge_package_load<E: ExecutionErrorTrait>(
+        &mut self,
+        payload: &PackagePayload,
+    ) -> Result<(), E> {
+        match payload {
+            PackagePayload::Serialized(_) => {
+                // Payload stays serialized; deserialization (and charge) happen at execution time.
+                Ok(())
+            }
+            PackagePayload::Deserialized(DeserializedPackage { total_bytes, .. }) => {
+                self.charger.charge_publish_package(*total_bytes)?;
+                Ok(())
+            }
+        }
     }
 
     // We use a non-linear cost function for type references to account for the increased

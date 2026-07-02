@@ -1,0 +1,86 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 12-17:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-23:
+//# publish --dependencies Leaf_V1 --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4362400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 25-39:
+//# publish --dependencies Mid Leaf_V1 --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6984400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 41:
+//# run Root::m::make --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 43-48:
+//# upgrade --package Leaf_V1 --upgrade-capability 1,1 --sender A
+created: object(5,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, lines 50-52:
+//# programmable --sender A --inputs object(4,0)
+// Entry locks the whole closure: transitive `Leaf` pinned exact(1) => runs v1 => writes 10.
+//> Root::m::ent_go(Input(0));
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 7, line 54:
+//# view-object 4,0
+Owner: Shared( 5 )
+Version: 7
+Contents: Root::m::R {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    v: 1u64,
+}
+
+task 8, lines 56-59:
+//# programmable --sender A --inputs object(4,0)
+// Public + `ping` pinning `Leaf` exact(2): transitive `Leaf` unifies up to v2 => writes 20.
+//> 0: Root::m::pub_go(Input(0));
+//> 1: Leaf_V2::l::ping();
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 9, line 61:
+//# view-object 4,0
+Owner: Shared( 5 )
+Version: 8
+Contents: Root::m::R {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    v: 2u64,
+}
+
+task 10, lines 63-66:
+//# programmable --sender A --inputs object(4,0)
+// Entry pins transitive `Leaf` exact(1); `ping` pins it exact(2) => exact/exact conflict => InvalidLinkage.
+//> 0: Root::m::ent_go(Input(0));
+//> 1: Leaf_V2::l::ping();
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Debug of error: InvalidLinkage at command Some(1)
