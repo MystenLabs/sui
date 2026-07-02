@@ -326,6 +326,11 @@ impl CfTuning {
             if let Some(bits) = self.bloom_filter_bits {
                 bbt.set_bloom_filter(bits, false);
             }
+            // Keep each SST's index and filter blocks in the (bounded)
+            // block cache instead of pinning them in the table reader for
+            // the file's whole open lifetime.
+            bbt.set_cache_index_and_filter_blocks(true);
+            bbt.set_pin_l0_filter_and_index_blocks_in_cache(true);
             opts.set_block_based_table_factory(&bbt);
         }
 
