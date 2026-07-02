@@ -509,7 +509,25 @@ mod test {
         // quorum, empirically ~6% per-validator skip rate produces ~5% DKG failure per epoch.
         register_fail_point_if("rb-dkg", || thread_rng().gen_bool(0.06));
 
-        test_simulated_load(test_cluster, 120).await;
+        // Only transactions that opt in (by carrying the crash-opt-in marker arg, attached by the
+        // composite workload) are eligible to be poisoned, so setup/gas transactions are never
+        // crashed and a transaction's poison status is consistent for the whole run. The crash
+        // probability can therefore be enabled before load generation begins.
+        const CRASH_PROB: f32 = 0.02;
+        test_simulated_load_with_test_config(
+            test_cluster,
+            120,
+            SimulatedLoadConfig::default(),
+            None,
+            None,
+            Some(|_cluster: Arc<TestCluster>| {
+                register_fail_point_if("crash-with-tx-logging", || true);
+                sui_core::crash_recovery::set_crash_recovery_probability(CRASH_PROB as f64);
+                std::future::ready(())
+            }),
+            true,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]

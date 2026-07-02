@@ -3,6 +3,18 @@
 
 use crate::in_antithesis;
 
+/// Return `true` with probability `chance` where the decision depends only on `value`.
+///
+/// Seeds an RNG with the value bytes so independent processes always reach the same
+/// decision for the same input.
+pub fn content_addressed_probability(value: &[u8], chance: f32) -> bool {
+    use rand::{Rng, SeedableRng};
+    let mut seed = [0u8; 32];
+    let len = value.len().min(32);
+    seed[..len].copy_from_slice(&value[..len]);
+    rand::rngs::SmallRng::from_seed(seed).r#gen::<f32>() < chance
+}
+
 /// Get a random number generator.
 ///
 /// If we are running in antithesis mode, use the antithesis RNG.

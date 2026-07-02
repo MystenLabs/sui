@@ -1467,6 +1467,16 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
         let tx_digest = certificate.digest();
+        let _crash_guard =
+            crate::crash_recovery::register_executing_transaction(*tx_digest, self.name);
+
+        // Crash-recovered (poison) transactions are dropped here, at the latest possible point.
+        // They participate fully in consensus scheduling (locks, funds, versions) so neighbors'
+        // fates are reproducible across the crash boundary, but they never execute and are filtered
+        // from checkpoint contents and settlement.
+        if epoch_store.is_crashed_transaction(tx_digest) {
+            return ExecutionOutput::Dropped;
+        }
 
         if let Some(fork_recovery) = &self.fork_recovery_state
             && let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest)
@@ -1495,6 +1505,12 @@ impl AuthorityState {
             }
             tx_guard.release();
             return ExecutionOutput::Success((effects, None));
+        }
+
+        // Must be placed AFTER the effects-cache check above so it only fires on the first
+        // execution attempt, not on re-executions during checkpoint rebuild.
+        if !certificate.data().transaction_data().kind().is_system_tx() {
+            crate::crash_recovery::maybe_crash_for_testing(certificate.data().transaction_data());
         }
 
         let execution_start_time = Instant::now();

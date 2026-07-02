@@ -403,6 +403,12 @@ impl SharedObjVerManager {
             } else {
                 None
             };
+        let is_dropped = tx_key
+            .as_digest()
+            .is_some_and(|digest| epoch_store.is_crashed_transaction(digest));
+        if let Some(d) = tx_key.as_digest() {
+            tracing::info!("CLAUDE: assign-cert tx={} is_dropped={}", d, is_dropped);
+        }
         let txn_cancelled = cancellation_info.is_some();
 
         let mut input_object_keys = assignable.non_shared_input_object_keys();
@@ -412,9 +418,9 @@ impl SharedObjVerManager {
         let receiving_object_keys = assignable.receiving_object_keys();
         input_object_keys.extend(receiving_object_keys);
 
-        if txn_cancelled {
-            // For cancelled transaction due to congestion, assign special versions to all shared objects.
-            // Note that new lamport version does not depend on any shared objects.
+        if txn_cancelled || is_dropped {
+            // For cancelled or crash-dropped transactions, assign special versions to all shared
+            // objects. Note that new lamport version does not depend on any shared objects.
             for SharedInputObject {
                 id,
                 initial_shared_version,
@@ -439,7 +445,9 @@ impl SharedObjVerManager {
                             SequenceNumber::CANCELLED_READ
                         }
                     }
-                    None => unreachable!("cancelled transaction should have cancellation info"),
+                    // Crash-dropped transactions have no cancellation info; they read a cancelled
+                    // version and will never execute.
+                    None => SequenceNumber::CANCELLED_READ,
                 };
                 assigned_versions.push(((*id, *initial_shared_version), assigned_version));
                 is_exclusively_accessed_input.push(false);
@@ -474,7 +482,7 @@ impl SharedObjVerManager {
             next_version
         );
 
-        if !txn_cancelled {
+        if !txn_cancelled && !is_dropped {
             // Update the next version for the shared objects.
             assigned_versions
                 .iter()

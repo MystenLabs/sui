@@ -184,6 +184,15 @@ impl SettlementScheduler {
             .await
             .expect("db error");
 
+        // Crash-recovered (poison) transactions never execute and produce no effects, so they are
+        // excluded from the settlement just as they are from checkpoint contents. They still flow
+        // through scheduling identically on every run, so the settlement is reproducible across the
+        // crash boundary.
+        let digests: Vec<_> = digests
+            .into_iter()
+            .filter(|d| !epoch_store.is_crashed_transaction(d))
+            .collect();
+
         let effects = self
             .transaction_cache_read
             .notify_read_executed_effects(

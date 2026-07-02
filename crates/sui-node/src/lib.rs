@@ -244,7 +244,8 @@ pub use simulator::set_jwk_injector;
 use simulator::*;
 use sui_core::authority::authority_store_pruner::PrunerWatermarks;
 use sui_core::{
-    consensus_handler::ConsensusHandlerInitializer, safe_client::SafeClientMetricsBase,
+    consensus_handler::ConsensusHandlerInitializer, crash_recovery,
+    safe_client::SafeClientMetricsBase,
 };
 
 const DEFAULT_GRPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -498,6 +499,11 @@ impl SuiNode {
         #[cfg(not(msim))]
         mysten_metrics::thread_stall_monitor::start_thread_stall_monitor();
 
+        // Install the crash-recovery panic hook and load any transactions that caused a crash in
+        // a previous run. These are installed early so the hook is active for the rest of startup.
+        crash_recovery::install_panic_hook(config.protocol_public_key(), config.db_path.clone());
+        let crashed_transactions = crash_recovery::load_crashed_transactions(&config.db_path);
+
         let genesis = config.genesis()?.clone();
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
@@ -623,6 +629,7 @@ impl SuiNode {
                 &registry_service.default_registry(),
             )),
             config.fullnode_sync_mode,
+            crashed_transactions,
         )?;
 
         info!("created epoch store");

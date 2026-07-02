@@ -329,6 +329,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             0,
             Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
             None,
+            std::collections::HashSet::new(),
         )
         .expect("failed to create authority per epoch store");
 

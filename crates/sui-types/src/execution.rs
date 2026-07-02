@@ -398,6 +398,10 @@ pub enum ExecutionOutput<T> {
     /// balance withdrawals that require waiting for the balance to reach a deterministic amount.
     /// When this happens, the transaction is auto-rescheduled from AuthorityState.
     RetryLater,
+    /// The transaction caused a process panic in a previous run and is being dropped on recovery:
+    /// it is not executed and produces no effects. It is also filtered from checkpoint contents and
+    /// settlement. This is terminal - the transaction is never rescheduled.
+    Dropped,
 }
 
 impl<T> ExecutionOutput<T> {
@@ -415,6 +419,9 @@ impl<T> ExecutionOutput<T> {
             ExecutionOutput::RetryLater => {
                 panic!("called `ExecutionOutput::unwrap()` on `RetryLater`")
             }
+            ExecutionOutput::Dropped => {
+                panic!("called `ExecutionOutput::unwrap()` on `Dropped`")
+            }
         }
     }
 
@@ -427,6 +434,7 @@ impl<T> ExecutionOutput<T> {
             Self::EpochEnded => ExecutionOutput::EpochEnded,
             Self::Fatal(e) => ExecutionOutput::Fatal(e),
             Self::RetryLater => ExecutionOutput::RetryLater,
+            Self::Dropped => ExecutionOutput::Dropped,
         }
     }
 }

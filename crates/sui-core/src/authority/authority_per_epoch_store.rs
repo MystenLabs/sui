@@ -346,6 +346,12 @@ pub struct AuthorityPerEpochStore {
     parent_path: PathBuf,
     db_options: Option<Options>,
 
+    /// Transactions that caused a process panic in a previous run (loaded from the crash log at
+    /// startup). They are dropped at execution time and filtered from checkpoint contents and
+    /// settlement, but otherwise flow through scheduling identically to normal transactions so
+    /// their effect on neighbors is reproducible across the crash boundary.
+    crashed_transactions: HashSet<TransactionDigest>,
+
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<SequencedConsensusTransactionKey, ()>,
@@ -1010,6 +1016,7 @@ impl AuthorityPerEpochStore {
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
         fullnode_sync_mode: Option<FullNodeSyncMode>,
+        crashed_transactions: HashSet<TransactionDigest>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1180,6 +1187,7 @@ impl AuthorityPerEpochStore {
             )),
             parent_path: parent_path.to_path_buf(),
             db_options,
+            crashed_transactions,
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_token,
             epoch_alive: tokio::sync::RwLock::new(true),
@@ -1351,6 +1359,11 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
+    /// Returns true if `digest` caused a process panic in a previous run and must be dropped.
+    pub fn is_crashed_transaction(&self, digest: &TransactionDigest) -> bool {
+        self.crashed_transactions.contains(digest)
+    }
+
     /// Returns `&Arc<EpochStartConfiguration>`
     /// User can treat this `Arc` as `&EpochStartConfiguration`, or clone the Arc to pass as owned object
     pub fn epoch_start_config(&self) -> &Arc<EpochStartConfiguration> {
@@ -1414,6 +1427,9 @@ impl AuthorityPerEpochStore {
             epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
             fullnode_sync_mode,
+            // The crash log is loaded once at process startup; a crash restarts the process and
+            // reloads it, so the set never grows mid-process and can be carried across epochs.
+            self.crashed_transactions.clone(),
         )
     }
 
@@ -3173,6 +3189,10 @@ impl AuthorityPerEpochStore {
         debug!(
             "Assigned versions from consensus processing: {:?}",
             assigned_versions
+        );
+        info!(
+            "CLAUDE: version-assign crashed_set={:?} assigned_versions {:?}",
+            self.crashed_transactions, assigned_versions
         );
 
         output.set_next_shared_object_versions(shared_input_next_versions);
