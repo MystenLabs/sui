@@ -57,6 +57,8 @@ use super::*;
 pub(crate) struct ConsensusCommitOutput {
     // Consensus and reconfig state
     consensus_round: Round,
+    // Keeps all the processed consensus messages. It also includes transactions that have been dropped and not scheduled
+    // for execution after failing to acquire the required locks.
     consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>,
     end_of_publish: BTreeSet<AuthorityName>,
     reconfig_state: Option<ReconfigState>,

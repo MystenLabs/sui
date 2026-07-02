@@ -98,6 +98,7 @@ use crate::{
 struct FilteredConsensusOutput {
     transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
+    dropped_transaction_keys: Vec<ConsensusTransactionKey>,
 }
 
 pub struct ConsensusHandlerInitializer {
@@ -1164,6 +1165,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let FilteredConsensusOutput {
             transactions,
             owned_object_locks,
+            dropped_transaction_keys,
         } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
@@ -1172,6 +1174,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // Buffer owned object locks for batch write.
         if !owned_object_locks.is_empty() {
             state.output.set_owned_object_locks(owned_object_locks);
+        }
+
+        // Still record the dropped transactions as consensus message processed.
+        for key in dropped_transaction_keys {
+            state.output.record_consensus_message_processed(
+                SequencedConsensusTransactionKey::External(key),
+            );
         }
         let transactions = self.deduplicate_consensus_txns(&mut state, &commit_info, transactions);
 
@@ -2450,6 +2459,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let _scope = monitored_scope("ConsensusCommitHandler::filter_consensus_txns");
         let mut transactions = Vec::new();
         let mut owned_object_locks = HashMap::new();
+        let mut dropped_transaction_keys = Vec::new();
         // Consensus transaction status updates are collected here and flushed in a
         // single batched write (one lock acquisition, notifications outside the lock)
         // at the end of the commit, rather than one write+notify per transaction.
@@ -2682,8 +2692,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         }
                         Err(e) => {
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
+                            self.metrics.consensus_handler_dropped_transactions.inc();
                             status_updates.push((position, ConsensusTxStatus::Dropped));
                             self.epoch_store.set_rejection_vote_reason(position, &e);
+                            dropped_transaction_keys.push(parsed.transaction.key());
                             continue;
                         }
                     }
@@ -2726,6 +2738,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         FilteredConsensusOutput {
             transactions,
             owned_object_locks,
+            dropped_transaction_keys,
         }
     }
 
@@ -3483,11 +3496,15 @@ mod tests {
     use crate::{
         authority::{
             authority_per_epoch_store::ConsensusStatsAPI,
+            consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::test_user_transaction,
-        consensus_test_utils::make_consensus_adapter_for_test,
+        consensus_test_utils::{
+            TestConsensusCommit, make_consensus_adapter_for_test,
+            setup_consensus_handler_for_testing,
+        },
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
 
@@ -3682,6 +3699,123 @@ mod tests {
 
         // THEN check for no inflight or suspended transactions.
         state.execution_scheduler().check_empty_for_testing().await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_dropped_owned_object_lock_conflict_is_marked_processed() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_objects: Vec<Object> = (0..2)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let mut all_objects = gas_objects.clone();
+        all_objects.push(owned_object.clone());
+
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&all_objects)
+            .skip_rpc_index_init()
+            .skip_genesis_owner_index()
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        let owned_object_ref = state
+            .get_object(&owned_object.id())
+            .unwrap()
+            .compute_object_reference();
+
+        let winner = test_user_transaction(
+            &state,
+            sender,
+            &keypair,
+            gas_objects[0].clone(),
+            vec![owned_object.clone()],
+        )
+        .await;
+        let loser = test_user_transaction(
+            &state,
+            sender,
+            &keypair,
+            gas_objects[1].clone(),
+            vec![owned_object.clone()],
+        )
+        .await;
+
+        let winner_digest = *winner.tx().digest();
+        let loser_digest = *loser.tx().digest();
+        assert_ne!(winner_digest, loser_digest);
+
+        let winner_consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, winner.into());
+        let loser_consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, loser.into());
+        let winner_key = SequencedConsensusTransactionKey::External(winner_consensus_tx.key());
+        let loser_key = SequencedConsensusTransactionKey::External(loser_consensus_tx.key());
+
+        let round = 100;
+        let commit = TestConsensusCommit::new(
+            vec![winner_consensus_tx, loser_consensus_tx],
+            round as u64,
+            1_000,
+            10,
+        );
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(commit)
+            .await;
+        assert_eq!(
+            setup
+                .consensus_handler
+                .metrics
+                .consensus_handler_dropped_transactions
+                .get(),
+            1
+        );
+
+        let block = BlockRef {
+            author: consensus_config::AuthorityIndex::ZERO,
+            round,
+            digest: Default::default(),
+        };
+        assert!(matches!(
+            epoch_store
+                .consensus_tx_status_cache
+                .notify_read_transaction_status(ConsensusPosition {
+                    epoch: epoch_store.epoch(),
+                    block,
+                    index: 0,
+                })
+                .await,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
+        ));
+        assert!(matches!(
+            epoch_store
+                .consensus_tx_status_cache
+                .notify_read_transaction_status(ConsensusPosition {
+                    epoch: epoch_store.epoch(),
+                    block,
+                    index: 1,
+                })
+                .await,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
+        ));
+
+        let locks = epoch_store
+            .get_owned_object_locks_map(&[owned_object_ref])
+            .unwrap();
+        assert_eq!(locks.get(&owned_object_ref), Some(&winner_digest));
+        assert!(
+            epoch_store
+                .is_consensus_message_processed(&winner_key)
+                .unwrap()
+        );
+        assert!(
+            epoch_store
+                .is_consensus_message_processed(&loser_key)
+                .unwrap()
+        );
     }
 
     fn to_short_strings(txs: Vec<VerifiedExecutableTransactionWithAliases>) -> Vec<String> {
