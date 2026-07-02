@@ -1,0 +1,53 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tx_context_restrictions_verifier: a function that takes a `TxContext`
+// reference and returns `&mut T` must also have a non-TxContext `&mut U`
+// parameter. Each publish below violates the rule and must be rejected.
+
+//# init --check-tx-context-restrictions
+
+// `&mut TxContext` only, `&mut u64` return.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun bad(ctx: &mut tx_context::TxContext): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// `&mut TxContext` plus an immutable non-TxContext ref, `&mut u64` return —
+// no non-TxContext `&mut` present.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun bad(ctx: &mut tx_context::TxContext, x: &u64): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// Non-TxContext parameter passed by value: it is not a reference at all, so
+// it cannot serve as the mutable root for the `&mut u64` return.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun bad(ctx: &mut tx_context::TxContext, x: u64): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// Identity-shape return: `&mut TxContext -> &mut TxContext`. Rejected under
+// the universal rule — nobody legitimately writes this, and PTB machinery
+// (auto-injection + arity) is already the actual safety mechanism for the
+// exploit path.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun mut_id(ctx: &mut tx_context::TxContext): &mut tx_context::TxContext {
+        label l0:
+        return move(ctx);
+    }
+}

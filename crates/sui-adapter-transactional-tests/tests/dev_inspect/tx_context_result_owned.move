@@ -3,7 +3,7 @@
 
 // tests documents the strange things that occur in dev inspect with an owned TxContext
 
-//# init --addresses test=0x0
+//# init --addresses test=0x0 --protocol-version 129
 
 //# publish
 module test::m;

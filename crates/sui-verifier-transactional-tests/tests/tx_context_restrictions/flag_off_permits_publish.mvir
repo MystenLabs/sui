@@ -1,0 +1,28 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tx_context_restrictions_verifier is gated on
+// `ProtocolConfig::check_tx_context_restrictions`, enabled at protocol
+// version 130. Pinning to version 129 exercises the flag-off path: the same
+// signatures that would be rejected in mut_return_no_root_invalid.mvir must
+// publish successfully here.
+
+//# init --protocol-version 129
+
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun bad(ctx: &mut tx_context::TxContext): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun bad(ctx: &mut tx_context::TxContext, x: u64): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}

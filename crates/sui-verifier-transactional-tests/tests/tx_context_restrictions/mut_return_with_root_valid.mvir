@@ -1,0 +1,89 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tx_context_restrictions_verifier: signatures accepted under the rule.
+
+//# init --check-tx-context-restrictions
+
+// `&mut TxContext` + non-TxContext `&mut U` parameters, `&mut u64` return.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun good(ctx: &mut tx_context::TxContext, x: &mut u64): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// `&mut TxContext` + `&mut Foo`. Return `&mut u64`.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public struct Foo has drop { x: u64 }
+    public fun good(ctx: &mut tx_context::TxContext, foo: &mut Self::Foo): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// `&mut TxContext` and no reference return — the rule does not apply.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun ok_by_value(ctx: &mut tx_context::TxContext): u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// `&mut TxContext` and immutable reference return — the rule does not apply.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun ok_imm_return(ctx: &mut tx_context::TxContext): &u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// No TxContext parameter, `&mut u64` return — rule does not apply.
+//# publish
+mvir 0x0::m {
+    public fun no_ctx(): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// Non-TxContext immutable reference parameter, `&mut u64` return — rule does
+// not apply (TxContext is not in scope).
+//# publish
+mvir 0x0::m {
+    public fun no_ctx_imm(x: &u64): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// Immutable `&TxContext` only: no `&mut TxContext` is in scope, so the rule
+// does not apply even though the return is `&mut u64`.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun imm_ctx_only(ctx: &tx_context::TxContext): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// `&mut Foo` provides the mutable root; the returned `&mut Foo` really is
+// the caller-supplied reference (non-`abort` body).
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public struct Foo has drop { x: u64 }
+    public fun pass_and_return(ctx: &mut tx_context::TxContext, foo: &mut Self::Foo): &mut Self::Foo {
+        label l0:
+        return move(foo);
+    }
+}
