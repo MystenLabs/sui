@@ -94,6 +94,7 @@ use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::Schema;
 use sui_indexer_alt_framework::service::Service;
 use sui_types::base_types::ObjectID;
+use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
 use tokio::time::MissedTickBehavior;
@@ -448,21 +449,32 @@ fn retract_object_version_by_checkpoint(
 /// Unlike [`start_pruner`], this is not epoch-driven and not a
 /// `Service`. The embedded deployment deactivates the raw chain-data
 /// CFs (`transactions`, `effects`, `events`, `objects`,
-/// `checkpoint_*`), so it can neither derive a retention floor nor walk
-/// effects to find the rows to delete. Instead the perpetual pruner —
-/// which owns the raw data — supplies the floor directly, and this
-/// prunes exactly the history-cohort CFs that grow without bound:
+/// `checkpoint_*`), so it cannot derive a retention floor or read the
+/// raw effects itself. Instead the perpetual pruner — which owns the raw
+/// data — supplies the floor and the pruned checkpoints' `effects`
+/// directly, and this prunes exactly the history-cohort CFs that grow
+/// without bound:
 ///
 /// - `tx_metadata_by_seq` — range-deleted over
 ///   `[old_tx_lo, pruned_tx_seq_exclusive)`.
 /// - `tx_seq_by_digest` — point-deleted; the digests are read from
 ///   `tx_metadata_by_seq` (the only history CF that still carries them)
 ///   over the pruned range, before that range is deleted.
+/// - `object_version_by_checkpoint` — retracted effects-driven through the
+///   same `retract_object_version_by_checkpoint` helper as the standalone
+///   `prune_chunk` (the paired `objects` delete lives in that caller, not
+///   the helper, and the embedded store has no `objects` CF): each effect
+///   carries the checkpoint it was pruned from, so a superseded object
+///   keeps only its supersession-checkpoint row — the anchor a
+///   point-in-time read at the floor resolves to — and a removed object
+///   drops its rows (a later wrap/unwrap re-creation at or above the floor
+///   survives).
 /// - `transaction_bitmap` / `event_bitmap` — evicted by advancing the
-///   shared `tx_seq` floor so their compaction filters drop
-///   fully-pruned buckets, then forcing a compaction.
+///   shared `tx_seq` floor so their compaction filters drop fully-pruned
+///   buckets on the next natural background compaction.
 ///
-/// The live cohort and the tiny `epochs` CF are never pruned.
+/// The live cohort, `package_versions`, and the tiny `epochs` CF are
+/// never pruned.
 ///
 /// `pruned_checkpoint_watermark` is the highest checkpoint the
 /// perpetual store has pruned (inclusive); `pruned_tx_seq_exclusive` is
@@ -475,6 +487,7 @@ pub fn prune_history_cohort(
     schema: &RpcStoreSchema,
     pruned_checkpoint_watermark: u64,
     pruned_tx_seq_exclusive: u64,
+    effects: &[(u64, TransactionEffects)],
 ) -> anyhow::Result<()> {
     let cursor = schema.get_pruning_watermarks()?.unwrap_or_default();
     let tx_lo = cursor.tx_seq_lo;
@@ -502,6 +515,23 @@ pub fn prune_history_cohort(
     }
     batch.delete_range(&schema.tx_metadata_by_seq, &U64Be(tx_lo), &U64Be(tx_hi))?;
 
+    // Retract `object_version_by_checkpoint` for every object the pruned
+    // checkpoints superseded or removed, reusing the same effects-driven
+    // helper as the standalone `prune_chunk` (its paired `objects` delete
+    // lives in that caller, not the helper, and the embedded store has no
+    // `objects` CF). Each effect carries the checkpoint it was pruned from,
+    // so the retraction keeps each object's anchor at its true supersession
+    // checkpoint -- the row a read pinned at the floor resolves to -- and
+    // drops the older ones; a removed object drops its tombstone too.
+    for (checkpoint, effects) in effects {
+        for (id, _version) in effects.modified_at_versions() {
+            retract_object_version_by_checkpoint(&mut batch, schema, id, *checkpoint, false)?;
+        }
+        for (id, _version) in effects.all_tombstones() {
+            retract_object_version_by_checkpoint(&mut batch, schema, id, *checkpoint, true)?;
+        }
+    }
+
     // Advance the persisted floor atomically with the deletes, taking
     // the monotonic max on each axis so a stale lower floor never
     // regresses an axis the other call already advanced.
@@ -513,14 +543,12 @@ pub fn prune_history_cohort(
     batch.put(&schema.pruning_watermark, &k, &v)?;
     batch.commit()?;
 
-    // Durable now: advance the in-memory bitmap floor and force a
-    // compaction so the bitmap filters drop fully-pruned buckets
-    // promptly rather than waiting for a natural sweep.
+    // Durable now: advance the in-memory bitmap floor so the bitmap
+    // compaction filters start dropping fully-pruned buckets on the next
+    // natural background compaction. The prune forces no sweep of its own:
+    // compacting on every prune batch is far more compaction work than the
+    // reclaimed space is worth.
     schema.set_pruning_floor(new.tx_seq_lo);
-    db.compact_range_cf(transaction_bitmap::NAME, None, None)
-        .context("Compacting transaction_bitmap after prune")?;
-    db.compact_range_cf(event_bitmap::NAME, None, None)
-        .context("Compacting event_bitmap after prune")?;
 
     Ok(())
 }
@@ -1253,6 +1281,100 @@ mod tests {
         );
     }
 
+    /// The embedded entry point retracts `object_version_by_checkpoint`
+    /// effects-driven, matching the standalone `prune_chunk`: a superseded
+    /// object keeps only its latest sub-floor row (the anchor), while a
+    /// removed object's rows are dropped entirely.
+    #[test]
+    fn prune_history_cohort_retracts_object_version_by_checkpoint() {
+        let (_dir, db, schema) = fresh_db();
+
+        // Real checkpoints, built only for their effects: cp0 creates obj0
+        // and obj1; cp1 transfers obj0 (supersedes it) and deletes obj1.
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .create_owned_object(1)
+            .finish_transaction();
+        let cp0 = Arc::new(builder.build_checkpoint());
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction()
+            .start_transaction(0)
+            .delete_object(1)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let obj1 = TestCheckpointBuilder::derive_object_id(1);
+
+        // Seed the checkpoint-pinned rows directly (values are immaterial to
+        // the retraction): obj0 changed in cp0 and cp1; obj1 was created in
+        // cp0 and tombstoned in cp1.
+        let ver = |n: u64| sui_types::base_types::SequenceNumber::from_u64(n);
+        let mut batch = db.batch();
+        for (id, checkpoint, version) in [(obj0, 0, 1), (obj0, 1, 2), (obj1, 0, 1), (obj1, 1, 2)] {
+            let (k, v) = object_version_by_checkpoint::store(id, checkpoint, ver(version));
+            batch
+                .put(&schema.object_version_by_checkpoint, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Precondition: both objects resolve at their creation checkpoint.
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
+            Some(ver(1)),
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj1, 0).unwrap(),
+            Some(ver(1)),
+        );
+
+        // Prune through checkpoint 1 (new floor 2), feeding the pruned
+        // checkpoints' effects tagged with the checkpoint each came from.
+        // `pruned_tx_seq_exclusive` is 0 here: the tx-keyed CFs are empty in
+        // this test, and the checkpoint floor advancing alone is enough.
+        let effects: Vec<(u64, TransactionEffects)> = cp0
+            .transactions
+            .iter()
+            .map(|tx| (0u64, tx.effects.clone()))
+            .chain(cp1.transactions.iter().map(|tx| (1u64, tx.effects.clone())))
+            .collect();
+        prune_history_cohort(&db, &schema, 1, 0, &effects).unwrap();
+
+        // obj0 was superseded in cp1: its cp0 row is retracted, the cp1
+        // anchor survives to resolve reads at or above the floor.
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
+            None,
+            "a superseded object's pre-anchor row must be retracted",
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 2).unwrap(),
+            Some(ver(2)),
+            "the anchor a read at the floor resolves to must survive",
+        );
+
+        // obj1 was removed in cp1: all its sub-floor rows are dropped.
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj1, 2).unwrap(),
+            None,
+            "a removed object's rows must be dropped entirely",
+        );
+
+        // The floor advanced to the new lowest-available checkpoint.
+        assert_eq!(
+            schema
+                .get_pruning_watermarks()
+                .unwrap()
+                .unwrap()
+                .checkpoint_lo,
+            2,
+        );
+    }
+
     /// `prune_history_cohort` (the embedded entry point) range-deletes
     /// `tx_metadata_by_seq`, point-deletes `tx_seq_by_digest` for the
     /// pruned digests, and advances the persisted floor — all from the
@@ -1298,7 +1420,7 @@ mod tests {
 
         // Perpetual store has pruned through checkpoint 2; tx_seq 3 is
         // the first still-retained transaction.
-        prune_history_cohort(&db, &schema, 2, 3).unwrap();
+        prune_history_cohort(&db, &schema, 2, 3, &[]).unwrap();
 
         // tx_metadata 0..3 pruned, 3..6 retained.
         for tx_seq in 0..3 {
@@ -1332,7 +1454,7 @@ mod tests {
         );
 
         // Idempotent: a re-run at the same floor is a no-op.
-        prune_history_cohort(&db, &schema, 2, 3).unwrap();
+        prune_history_cohort(&db, &schema, 2, 3, &[]).unwrap();
         assert_eq!(
             schema.get_pruning_watermarks().unwrap(),
             Some(Watermarks {
@@ -1389,7 +1511,7 @@ mod tests {
         // No prior pruning watermark (floor unknown -> 0); prune through
         // checkpoint 0 / tx_seq 600_000 exclusive. Only the two rows
         // below 600_000 are unindexed; the one at 999_999 survives.
-        prune_history_cohort(&db, &schema, 0, 600_000).unwrap();
+        prune_history_cohort(&db, &schema, 0, 600_000, &[]).unwrap();
 
         assert!(schema.get_tx_metadata_by_seq(0).unwrap().is_none());
         assert!(schema.get_tx_metadata_by_seq(500_000).unwrap().is_none());
