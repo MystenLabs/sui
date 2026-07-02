@@ -14,18 +14,17 @@
 //!   each proposed a superset of its rules.
 //! - A "default" bucket threshold-gates each individual proposed rule *element*
 //!   (deny-list entry or boolean kill switch) that peers have proposed.
-//!
-//! The local validator is not a special case: its own broadcasts arrive back through
-//! consensus and count as its vote, exactly like a peer's. A node that hasn't broadcast
-//! (or has withdrawn) simply doesn't vote.
 
+use crate::authority::AuthorityState;
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+use crate::consensus_adapter::ConsensusAdapter;
 use arc_swap::ArcSwap;
 use itertools::Itertools;
 use parking_lot::Mutex;
 use prometheus::{
-    IntGauge, IntGaugeVec, Registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -36,9 +35,11 @@ use sui_types::base_types::AuthorityName;
 use sui_types::base_types::ConciseableName;
 use sui_types::committee::{Committee, StakeUnit, TOTAL_VOTING_POWER};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages_consensus::SharedTransactionDenyConfig;
+use sui_types::messages_consensus::{
+    ConsensusTransaction, SharedTransactionDenyConfig, SharedTransactionDenyConfigV1,
+};
 use sui_types::transaction_deny_rules::{DenyElement, DenyElementKind, TransactionDenyRules};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use typed_store::Map;
 
 pub struct TransactionDenyConfigManager {
@@ -150,29 +151,42 @@ impl TransactionDenyConfigManager {
         )
     }
 
-    /// Returns true if the perpetual store holds an active (`Some`) broadcast from this
-    /// node — i.e. an outstanding vote from before a restart.
-    pub fn persisted_broadcast_is_active(&self) -> SuiResult<bool> {
-        Ok(self
-            .perpetual
-            .shared_transaction_deny_configs
-            .get(&self.self_authority)?
-            .map(|msg| msg.rules().is_some())
-            .unwrap_or(false))
+    /// Returns true if this node has ever allocated a broadcast generation — a durable
+    /// signal that a pre-restart vote may be outstanding on the network.
+    ///
+    /// Deliberately not based on our own `shared_transaction_deny_configs` entry: that
+    /// entry is written only when the ConsensusHandler processes the commit carrying
+    /// our broadcast, which races startup reconciliation — a vote committed but not
+    /// yet processed at crash time would be missed. The generation counter is persisted
+    /// *before* submission, so it can never miss a broadcast; it can only
+    /// over-report (e.g. when the last action was itself a withdrawal), which at
+    /// worst costs one redundant withdrawal message.
+    pub fn may_have_outstanding_broadcast(&self) -> bool {
+        self.perpetual
+            .last_broadcast_deny_generation
+            .get(&())
+            .expect("db error")
+            .is_some()
     }
 
-    /// Apply a peer-broadcast proposal received via consensus.
-    /// See `apply_updates` for details.
-    pub fn apply_update(&self, msg: SharedTransactionDenyConfig) -> SuiResult<()> {
-        self.apply_updates(vec![msg])
-    }
-
-    /// Apply a batch of peer-broadcast proposals received in one consensus commit.
-    /// Caller must have already verified sender authenticity.
-    pub fn apply_updates(&self, msgs: Vec<SharedTransactionDenyConfig>) -> SuiResult<()> {
+    /// Apply a batch of proposals from a single authenticated sender: `from` must be
+    /// the verified origin of `msgs` — the author of the consensus block that carried
+    /// them, or this node itself for a just-submitted broadcast.
+    pub fn apply_updates(&self, from: AuthorityName, msgs: Vec<SharedTransactionDenyConfig>) {
         if msgs.is_empty() {
-            return Ok(());
+            return;
         }
+        // Cap on accepted generations: receivers persist the per-authority generation
+        // high-water mark until the authority leaves the committee, so accepting a
+        // far-future generation (e.g. from a peer's clock excursion) would permanently
+        // block that peer's subsequent updates. Ignoring such messages caps the
+        // high-water mark at roughly now + drift, making recovery automatic within the
+        // same margin. This wall-clock check must live here, on local state only — in
+        // the consensus validator it would make block validity nondeterministic across
+        // honest validators, and vote-tracker recovery panics if a locally stored block
+        // fails re-validation after a backward clock step.
+        let max_generation = AuthorityState::unixtime_now_ms()
+            .saturating_add(SharedTransactionDenyConfig::MAX_GENERATION_FUTURE_DRIFT_MS);
         let (evaluation, active_proposals) = {
             let mut peer_configs = self.peer_configs.lock();
             // Load the committee inside the critical section so this batch is validated
@@ -183,11 +197,39 @@ impl TransactionDenyConfigManager {
             for msg in msgs {
                 let authority = msg.authority();
                 let generation = msg.generation();
+                if authority != from {
+                    warn!(
+                        authority = %authority.concise(),
+                        from = %from.concise(),
+                        "Dropping UpdateTransactionDenyConfig: claimed authority does not match sender",
+                    );
+                    self.metrics
+                        .dropped_updates
+                        .with_label_values(&["author_mismatch"])
+                        .inc();
+                    continue;
+                }
                 if !committee.authority_exists(&authority) {
                     info!(
                         authority = %authority.concise(),
                         "Dropping UpdateTransactionDenyConfig: sender not in committee",
                     );
+                    self.metrics
+                        .dropped_updates
+                        .with_label_values(&["sender_not_in_committee"])
+                        .inc();
+                    continue;
+                }
+                if generation > max_generation {
+                    warn!(
+                        authority = %authority.concise(),
+                        generation,
+                        "Dropping UpdateTransactionDenyConfig: generation too far in the future",
+                    );
+                    self.metrics
+                        .dropped_updates
+                        .with_label_values(&["future_generation"])
+                        .inc();
                     continue;
                 }
                 if let Some(existing) = peer_configs.get(&authority)
@@ -199,12 +241,17 @@ impl TransactionDenyConfigManager {
                         existing_generation = existing.generation(),
                         "Dropping UpdateTransactionDenyConfig: stale generation",
                     );
+                    self.metrics
+                        .dropped_updates
+                        .with_label_values(&["stale_generation"])
+                        .inc();
                     continue;
                 }
                 // Persist before swapping in-memory so a crash leaves state consistent.
                 self.perpetual
                     .shared_transaction_deny_configs
-                    .insert(&authority, &msg)?;
+                    .insert(&authority, &msg)
+                    .expect("db error");
                 peer_configs.insert(authority, msg);
                 accepted = true;
                 info!(
@@ -214,7 +261,7 @@ impl TransactionDenyConfigManager {
                 );
             }
             if !accepted {
-                return Ok(());
+                return;
             }
             (
                 evaluate(
@@ -227,7 +274,6 @@ impl TransactionDenyConfigManager {
             )
         };
         self.apply_evaluation(evaluation, active_proposals);
-        Ok(())
     }
 
     /// Update the stored committee and prune proposals (in-memory + DB) from any
@@ -279,46 +325,66 @@ impl TransactionDenyConfigManager {
         // Hold the lock across the whole read-modify-write: without it, two callers can
         // read the same `last` and each return `last + 1`, colliding on a generation.
         let _guard = self.broadcast_generation_lock.lock();
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time before unix epoch")
-            .as_millis() as u64;
+        let now_ms = AuthorityState::unixtime_now_ms();
         let last = self
             .perpetual
             .last_broadcast_deny_generation
             .get(&())?
             .unwrap_or(0);
-        let generation = now_ms.max(last + 1);
+        let mut generation = now_ms.max(last.saturating_add(1));
+        // A past clock excursion can leave a far-future `last` behind, and peers ignore
+        // generations more than MAX_GENERATION_FUTURE_DRIFT_MS ahead of their own
+        // clocks (see `apply_updates`) — continuing from it would make every future
+        // broadcast a no-op. No correct-clock peer can have accepted a generation past
+        // that bound, so restarting from the current clock is safe (at worst briefly
+        // stale to peers that accepted a slightly-ahead generation).
+        if generation > now_ms + SharedTransactionDenyConfig::MAX_GENERATION_FUTURE_DRIFT_MS {
+            warn!(
+                last,
+                new_generation = now_ms,
+                "Persisted broadcast generation is too far in the future; resetting to current time",
+            );
+            generation = now_ms;
+        }
         self.perpetual
             .last_broadcast_deny_generation
             .insert(&(), &generation)?;
         Ok(generation)
     }
 
-    /// Build a ready-to-submit `UpdateTransactionDenyConfig` consensus transaction along
-    /// with the freshly-allocated generation. `Some(rules)` publishes a proposal;
-    /// `None` withdraws. The generation is persisted before return so a crash mid-submit
-    /// can never reuse it.
-    pub fn build_share_consensus_tx(
+    /// Allocate a generation and build the broadcast message.
+    fn build_share_message(
         &self,
         rules: Option<TransactionDenyRules>,
-    ) -> SuiResult<(sui_types::messages_consensus::ConsensusTransaction, u64)> {
+    ) -> SuiResult<SharedTransactionDenyConfig> {
         if let Some(rules) = &rules {
             rules.check_share_limits().map_err(SuiError::from)?;
         }
         let generation = self.allocate_next_broadcast_generation()?;
-        let msg = SharedTransactionDenyConfig::V1(
-            sui_types::messages_consensus::SharedTransactionDenyConfigV1 {
+        Ok(SharedTransactionDenyConfig::V1(
+            SharedTransactionDenyConfigV1 {
                 authority: self.self_authority,
                 generation,
                 rules,
             },
-        );
-        let tx =
-            sui_types::messages_consensus::ConsensusTransaction::new_update_transaction_deny_config(
-                msg,
-            );
-        Ok((tx, generation))
+        ))
+    }
+
+    /// Publish `Some(rules)` as our proposal (or `None` to withdraw) to the network,
+    /// returning the allocated generation.
+    pub fn submit_broadcast(
+        &self,
+        rules: Option<TransactionDenyRules>,
+        consensus_adapter: &Arc<ConsensusAdapter>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<u64> {
+        let msg = self.build_share_message(rules)?;
+        let generation = msg.generation();
+        let tx = ConsensusTransaction::new_update_transaction_deny_config(msg.clone());
+        info!(?tx, "Updating transaction deny config vote");
+        consensus_adapter.submit(tx, None, epoch_store, None, None)?;
+        self.apply_updates(self.self_authority, vec![msg]);
+        Ok(generation)
     }
 
     /// Republish metrics and atomically swap in the new effective config.
@@ -620,6 +686,7 @@ pub struct TransactionDenyConfigMetrics {
     local: DenyRulesGauges,
     effective: DenyRulesGauges,
     active_proposals: IntGauge,
+    dropped_updates: IntCounterVec,
     default_bucket_applied_elements: IntGaugeVec,
     default_bucket_eligible_stake: IntGaugeVec,
     shared_config_active: IntGaugeVec,
@@ -641,6 +708,13 @@ impl TransactionDenyConfigMetrics {
             active_proposals: register_int_gauge_with_registry!(
                 "tx_deny_active_proposals",
                 "Number of committee members with an accepted (Some) deny-rule proposal",
+                registry,
+            )
+            .unwrap(),
+            dropped_updates: register_int_counter_vec_with_registry!(
+                "tx_deny_dropped_updates",
+                "Number of UpdateTransactionDenyConfig messages dropped without effect, by reason",
+                &["reason"],
                 registry,
             )
             .unwrap(),
@@ -734,7 +808,6 @@ mod tests {
         TransactionDenyConfigBuilder, ValidatorEligibility,
     };
     use sui_types::base_types::{ObjectID, dbg_addr};
-    use sui_types::messages_consensus::SharedTransactionDenyConfigV1;
 
     fn fake_name(byte: u8) -> AuthorityName {
         AuthorityName::new([byte; sui_types::crypto::AuthorityPublicKey::LENGTH])
@@ -1207,31 +1280,49 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn apply_update_rejects_non_committee_sender() {
+    async fn apply_updates_rejects_non_committee_sender() {
         let (committee, names) = test_committee(4);
         let local = TransactionDenyConfigBuilder::new().build();
         let (manager, _dir) =
             manager_with(names[0], local, sync_with_prelisted(&committee), committee);
 
         let outsider = fake_name(200);
-        manager
-            .apply_update(make_msg(outsider, 1, Some(rules_with_objects(&[1]))))
-            .unwrap();
+        manager.apply_updates(
+            outsider,
+            vec![make_msg(outsider, 1, Some(rules_with_objects(&[1])))],
+        );
         assert!(manager.peer_configs_snapshot().is_empty());
     }
 
-    /// This node's own broadcast loops back through consensus and is accepted like any
-    /// peer's — it is no longer dropped as a self-loopback.
+    /// A message claiming an authority other than the authenticated sender is dropped,
+    /// even when both are committee members.
     #[tokio::test(flavor = "multi_thread")]
-    async fn apply_update_accepts_self_broadcast() {
+    async fn apply_updates_drops_author_mismatch() {
         let (committee, names) = test_committee(4);
         let local = TransactionDenyConfigBuilder::new().build();
         let (manager, _dir) =
             manager_with(names[0], local, sync_with_prelisted(&committee), committee);
 
-        manager
-            .apply_update(make_msg(names[0], 1, Some(rules_with_objects(&[1]))))
-            .unwrap();
+        manager.apply_updates(
+            names[2],
+            vec![make_msg(names[1], 1, Some(rules_with_objects(&[1])))],
+        );
+        assert!(manager.peer_configs_snapshot().is_empty());
+    }
+
+    /// A self-originated message (as applied by `submit_broadcast`) is accepted like
+    /// any peer's — it is not dropped as a self-loopback.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn apply_updates_accepts_self_broadcast() {
+        let (committee, names) = test_committee(4);
+        let local = TransactionDenyConfigBuilder::new().build();
+        let (manager, _dir) =
+            manager_with(names[0], local, sync_with_prelisted(&committee), committee);
+
+        manager.apply_updates(
+            names[0],
+            vec![make_msg(names[0], 1, Some(rules_with_objects(&[1])))],
+        );
         let snapshot = manager.peer_configs_snapshot();
         assert!(
             snapshot.contains_key(&names[0]),
@@ -1243,21 +1334,61 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn apply_update_ignores_stale_generations() {
+    async fn apply_updates_ignores_stale_generations() {
         let (committee, names) = test_committee(4);
         let local = TransactionDenyConfigBuilder::new().build();
         let (manager, _dir) =
             manager_with(names[0], local, sync_with_prelisted(&committee), committee);
 
-        manager
-            .apply_update(make_msg(names[1], 100, Some(rules_with_objects(&[1]))))
-            .unwrap();
+        manager.apply_updates(
+            names[1],
+            vec![make_msg(names[1], 100, Some(rules_with_objects(&[1])))],
+        );
         // Older generation must be dropped even though it carries different rules.
-        manager
-            .apply_update(make_msg(names[1], 50, Some(rules_with_objects(&[2]))))
-            .unwrap();
+        manager.apply_updates(
+            names[1],
+            vec![make_msg(names[1], 50, Some(rules_with_objects(&[2])))],
+        );
         let snapshot = manager.peer_configs_snapshot();
         assert_eq!(snapshot.get(&names[1]).unwrap().generation(), 100);
+    }
+
+    /// A far-future generation must be ignored entirely — in particular it must not
+    /// advance the persisted high-water mark, or it would permanently block the
+    /// sender's subsequent (sane) updates.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn apply_updates_ignores_far_future_generations() {
+        let (committee, names) = test_committee(4);
+        let local = TransactionDenyConfigBuilder::new().build();
+        let (manager, _dir) =
+            manager_with(names[0], local, sync_with_prelisted(&committee), committee);
+
+        let now_ms = AuthorityState::unixtime_now_ms();
+        let far_future =
+            now_ms + SharedTransactionDenyConfig::MAX_GENERATION_FUTURE_DRIFT_MS + 600_000;
+        manager.apply_updates(
+            names[1],
+            vec![make_msg(
+                names[1],
+                far_future,
+                Some(rules_with_objects(&[1])),
+            )],
+        );
+        assert!(manager.peer_configs_snapshot().is_empty());
+
+        // A sane generation from the same sender still lands afterwards.
+        manager.apply_updates(
+            names[1],
+            vec![make_msg(names[1], now_ms, Some(rules_with_objects(&[2])))],
+        );
+        assert_eq!(
+            manager
+                .peer_configs_snapshot()
+                .get(&names[1])
+                .unwrap()
+                .generation(),
+            now_ms
+        );
     }
 
     /// On construction the manager seeds `peer_configs` from the perpetual store,
@@ -1306,43 +1437,6 @@ mod tests {
         drop(dir);
     }
 
-    /// `persisted_broadcast_is_active` reflects the DB regardless of in-memory seeding.
-    #[tokio::test(flavor = "multi_thread")]
-    async fn persisted_broadcast_is_active_reads_db() {
-        let (committee, names) = test_committee(4);
-        let (dir, perpetual) = open_perpetual();
-        perpetual
-            .shared_transaction_deny_configs
-            .insert(
-                &names[0],
-                &make_msg(names[0], 5, Some(rules_with_objects(&[1]))),
-            )
-            .unwrap();
-        let registry = Registry::new();
-        let manager = TransactionDenyConfigManager::new(
-            names[0],
-            TransactionDenyConfigBuilder::new().build(),
-            sync_with_prelisted(&committee),
-            committee,
-            perpetual,
-            &registry,
-        )
-        .unwrap();
-
-        // An active (`Some`) persisted self-broadcast is reported even though it was
-        // not seeded into `peer_configs`.
-        assert!(manager.persisted_broadcast_is_active().unwrap());
-
-        // A withdrawal (`None`) is not active.
-        manager
-            .perpetual
-            .shared_transaction_deny_configs
-            .insert(&names[0], &make_msg(names[0], 6, None))
-            .unwrap();
-        assert!(!manager.persisted_broadcast_is_active().unwrap());
-        drop(dir);
-    }
-
     #[tokio::test(flavor = "multi_thread")]
     async fn update_for_committee_prunes_departed_peer() {
         let (committee, names) = test_committee(4);
@@ -1354,9 +1448,10 @@ mod tests {
             committee.clone(),
         );
 
-        manager
-            .apply_update(make_msg(names[1], 1, Some(rules_with_objects(&[1]))))
-            .unwrap();
+        manager.apply_updates(
+            names[1],
+            vec![make_msg(names[1], 1, Some(rules_with_objects(&[1])))],
+        );
         assert!(manager.peer_configs_snapshot().contains_key(&names[1]));
 
         // New committee drops names[1]; the manager prunes its cached entry.
@@ -1388,9 +1483,10 @@ mod tests {
         };
         let (manager, _dir) = manager_with(names[0], local, sync, committee);
 
-        manager
-            .apply_update(make_msg(names[1], 10, Some(rules_with_objects(&[1]))))
-            .unwrap();
+        manager.apply_updates(
+            names[1],
+            vec![make_msg(names[1], 10, Some(rules_with_objects(&[1])))],
+        );
         assert!(
             manager
                 .effective_config()
@@ -1399,7 +1495,7 @@ mod tests {
                 .contains(&ObjectID::from_single_byte(1))
         );
 
-        manager.apply_update(make_msg(names[1], 11, None)).unwrap();
+        manager.apply_updates(names[1], vec![make_msg(names[1], 11, None)]);
         assert!(
             manager
                 .effective_config()
@@ -1428,10 +1524,37 @@ mod tests {
         assert!(g3 > g2);
     }
 
-    /// `build_share_consensus_tx` is the single chokepoint for outgoing broadcasts: it
+    /// A persisted counter beyond the network's future-drift bound (e.g. from a past
+    /// clock excursion) would make every broadcast invalid at consensus voting, so
+    /// allocation must reset it to the current wall clock instead of continuing from it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn allocate_next_broadcast_generation_resets_far_future_counter() {
+        let (committee, names) = test_committee(4);
+        let local = TransactionDenyConfigBuilder::new().build();
+        let (manager, _dir) =
+            manager_with(names[0], local, PeerDenySyncConfig::default(), committee);
+
+        let poisoned = u64::MAX - 1;
+        manager
+            .perpetual
+            .last_broadcast_deny_generation
+            .insert(&(), &poisoned)
+            .unwrap();
+
+        let generation = manager.allocate_next_broadcast_generation().unwrap();
+        let now_ms = AuthorityState::unixtime_now_ms();
+        assert!(
+            generation <= now_ms + SharedTransactionDenyConfig::MAX_GENERATION_FUTURE_DRIFT_MS,
+            "generation {generation} not reset below the future-drift bound",
+        );
+        // Monotonicity resumes from the reset value.
+        assert!(manager.allocate_next_broadcast_generation().unwrap() > generation);
+    }
+
+    /// `build_share_message` is the single chokepoint for outgoing broadcasts: it
     /// rejects rules the consensus validator would otherwise reject downstream.
     #[tokio::test(flavor = "multi_thread")]
-    async fn build_share_consensus_tx_enforces_share_limit() {
+    async fn build_share_message_enforces_share_limit() {
         let (committee, names) = test_committee(4);
         let (manager, _dir) = manager_with(
             names[0],
@@ -1443,10 +1566,10 @@ mod tests {
         // Within-limit rules and a withdrawal both build fine.
         assert!(
             manager
-                .build_share_consensus_tx(Some(rules_with_objects(&[1])))
+                .build_share_message(Some(rules_with_objects(&[1])))
                 .is_ok()
         );
-        assert!(manager.build_share_consensus_tx(None).is_ok());
+        assert!(manager.build_share_message(None).is_ok());
 
         // A zkLogin provider name past the per-string limit makes the rules
         // unshareable, so the build is rejected.
@@ -1457,7 +1580,7 @@ mod tests {
             .collect(),
             ..Default::default()
         };
-        assert!(manager.build_share_consensus_tx(Some(oversized)).is_err());
+        assert!(manager.build_share_message(Some(oversized)).is_err());
     }
 
     #[tokio::test(flavor = "multi_thread")]

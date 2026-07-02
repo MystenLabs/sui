@@ -3123,17 +3123,10 @@ impl AuthorityPerEpochStore {
                 }
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UpdateTransactionDenyConfig(msg),
+                kind: ConsensusTransactionKind::UpdateTransactionDenyConfig(_),
                 ..
             }) => {
-                if transaction.sender_authority() != msg.authority() {
-                    warn!(
-                        "UpdateTransactionDenyConfig authority {} does not match its author from consensus {}",
-                        msg.authority(),
-                        transaction.certificate_author_index
-                    );
-                    return None;
-                }
+                // Handled in SuiTxValidator; ignored at commit processing.
             }
             SequencedConsensusTransactionKind::System(_) => {}
         }

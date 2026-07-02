@@ -1807,8 +1807,8 @@ impl SuiNode {
             CheckpointExecutorMetrics::new(&self.registry_service.default_registry());
 
         // Holds the startup-specific deny-config broadcast setting; consumed by the
-        // first iteration. Subsequent iterations fall back to the epoch-change
-        // setting.
+        // first iteration on which deny-config sharing is enabled in the protocol
+        // config. Subsequent iterations fall back to the epoch-change setting.
         let mut broadcast_on_startup: Option<bool> =
             Some(self.config.peer_deny_sync_config.broadcast_on_startup);
 
@@ -1896,40 +1896,30 @@ impl SuiNode {
 
                 // Reconcile our shared TransactionDenyConfig vote with the (possibly
                 // restart-edited) local config.
-                let sync_cfg = &self.config.peer_deny_sync_config;
-                let is_startup = broadcast_on_startup.is_some();
-                let should_broadcast = broadcast_on_startup
-                    .take()
-                    .unwrap_or(sync_cfg.broadcast_on_epoch_change);
                 if cur_epoch_store
                     .protocol_config()
                     .share_transaction_deny_config_in_consensus()
                 {
+                    let sync_cfg = &self.config.peer_deny_sync_config;
+                    let is_startup = broadcast_on_startup.is_some();
+                    let should_broadcast = broadcast_on_startup
+                        .take()
+                        .unwrap_or(sync_cfg.broadcast_on_epoch_change);
                     let manager = self.state.transaction_deny_config_manager();
-                    let publish = |rules: Option<TransactionDenyRules>| match manager
-                        .build_share_consensus_tx(rules)
-                    {
-                        Ok((tx, _generation)) => {
-                            info!(?tx, "Updating transaction deny config vote");
-                            if let Err(e) = components.consensus_adapter.submit(
-                                tx,
-                                None,
-                                &cur_epoch_store,
-                                None,
-                                None,
-                            ) {
-                                warn!("Failed to broadcast transaction deny config: {e:?}");
-                            }
-                        }
-                        Err(e) => {
-                            warn!("Failed to build deny config update: {e:?}");
+                    let publish = |rules: Option<TransactionDenyRules>| {
+                        if let Err(e) = manager.submit_broadcast(
+                            rules,
+                            &components.consensus_adapter,
+                            &cur_epoch_store,
+                        ) {
+                            warn!("Failed to broadcast transaction deny config: {e:?}");
                         }
                     };
                     let action = deny_config_broadcast_payload(
                         manager.local().rules(),
                         should_broadcast,
                         is_startup,
-                        manager.persisted_broadcast_is_active().unwrap_or(false),
+                        manager.may_have_outstanding_broadcast(),
                     );
                     match action {
                         DenyConfigBroadcastAction::Skip => {}
@@ -2858,7 +2848,7 @@ fn deny_config_broadcast_payload(
     local_rules: &TransactionDenyRules,
     broadcast: bool,
     is_startup: bool,
-    has_prior_broadcast: bool,
+    may_have_prior_broadcast: bool,
 ) -> DenyConfigBroadcastAction {
     let shareable = local_rules.is_empty() || local_rules.check_share_limits().is_ok();
     if broadcast && shareable {
@@ -2868,7 +2858,7 @@ fn deny_config_broadcast_payload(
         } else {
             DenyConfigBroadcastAction::Broadcast(local_rules.clone())
         }
-    } else if is_startup && has_prior_broadcast {
+    } else if is_startup && may_have_prior_broadcast {
         DenyConfigBroadcastAction::Withdraw
     } else {
         DenyConfigBroadcastAction::Skip

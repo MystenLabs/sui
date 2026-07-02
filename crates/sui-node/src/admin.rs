@@ -701,16 +701,11 @@ async fn submit_transaction_deny_config_update(
         }
     };
 
-    let (consensus_tx, generation) = match authority_state
+    match authority_state
         .transaction_deny_config_manager()
-        .build_share_consensus_tx(rules)
+        .submit_broadcast(rules, &consensus_adapter, &epoch_store)
     {
-        Ok(pair) => pair,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
-    };
-
-    match consensus_adapter.submit(consensus_tx, None, &epoch_store, None, None) {
-        Ok(_) => (
+        Ok(generation) => (
             StatusCode::OK,
             format!("UpdateTransactionDenyConfig submitted at generation {generation}\n"),
         ),

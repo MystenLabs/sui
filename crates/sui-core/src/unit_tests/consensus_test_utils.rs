@@ -337,7 +337,6 @@ where
         backpressure_manager.subscribe(),
         authority.traffic_controller.clone(),
         last_consensus_stats,
-        authority.transaction_deny_config_manager().clone(),
     );
 
     TestConsensusHandlerSetup {

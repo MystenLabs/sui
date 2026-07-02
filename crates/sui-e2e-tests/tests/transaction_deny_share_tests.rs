@@ -109,8 +109,8 @@ where
 // ===== Broadcast / propagation helpers =====
 
 /// Submit an `UpdateTransactionDenyConfig` from `sender_handle` through the same path
-/// the admin endpoint uses (manager-allocated monotonic generation +
-/// `ConsensusAdapter::submit`). Returns the generation.
+/// the admin endpoint uses (`TransactionDenyConfigManager::submit_broadcast`).
+/// Returns the generation.
 async fn broadcast_via_consensus(
     sender_handle: &SuiNodeHandle,
     rules: Option<TransactionDenyRules>,
@@ -118,18 +118,14 @@ async fn broadcast_via_consensus(
     sender_handle
         .with_async(|node| async move {
             let manager = node.state().transaction_deny_config_manager().clone();
-            let (consensus_tx, generation) = manager
-                .build_share_consensus_tx(rules)
-                .expect("build_share_consensus_tx");
             let epoch_store = node.state().load_epoch_store_one_call_per_task();
             let consensus_adapter = node
                 .consensus_adapter()
                 .await
                 .expect("validator components must be running");
-            consensus_adapter
-                .submit(consensus_tx, None, &epoch_store, None, None)
-                .expect("consensus submit");
-            generation
+            manager
+                .submit_broadcast(rules, &consensus_adapter, &epoch_store)
+                .expect("submit_broadcast")
         })
         .await
 }
@@ -162,9 +158,9 @@ async fn broadcast_via_consensus_with_explicit_generation(
         .await
 }
 
-/// Wait until every validator — including the originator, whose own broadcast loops
-/// back through consensus — has accepted (or surpassed) `generation` from `authority`.
-/// Panics on timeout.
+/// Wait until every validator — including the originator, which applies its own
+/// broadcast at submission — has accepted (or surpassed) `generation` from
+/// `authority`. Panics on timeout.
 async fn wait_for_generation(
     handles: &[SuiNodeHandle],
     authority: AuthorityName,
@@ -572,8 +568,8 @@ async fn test_default_buckets_segregate_kinds() {
     assert!(!effective_user_transaction_disabled(observer));
 }
 
-/// A validator's own broadcast loops back through consensus and counts toward its own
-/// thresholds, exactly like a peer's — there is no special "self" handling.
+/// A validator's own broadcast counts toward its own thresholds, exactly like a
+/// peer's — there is no special "self" handling.
 #[sim_test]
 async fn test_own_broadcast_counts_as_a_vote() {
     let _guard = enable_protocol_flags();
@@ -591,8 +587,8 @@ async fn test_own_broadcast_counts_as_a_vote() {
     broadcast_and_wait(&handles, &handles[2], Some(rules_objs(&[1]))).await;
     assert!(!ruleset_is_active(broadcaster, "c"));
 
-    // handles[0] broadcasts too; its own broadcast loops back, so its own evaluation
-    // now sees 3 voters (7500 = 75% >= 60%) and the ruleset activates.
+    // handles[0] broadcasts too, which also applies its own vote locally; its own
+    // evaluation now sees 3 voters (7500 = 75% >= 60%) and the ruleset activates.
     broadcast_and_wait(&handles, broadcaster, Some(rules_objs(&[1]))).await;
     assert!(ruleset_is_active(broadcaster, "c"));
 }

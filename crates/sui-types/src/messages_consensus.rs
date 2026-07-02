@@ -329,6 +329,10 @@ pub enum SharedTransactionDenyConfig {
 }
 
 impl SharedTransactionDenyConfig {
+    /// Upper bound on how far (in ms) a generation may run ahead of a receiving
+    /// validator's wall clock before the update is ignored rather than applied.
+    pub const MAX_GENERATION_FUTURE_DRIFT_MS: u64 = 60_000;
+
     pub fn authority(&self) -> AuthorityName {
         match self {
             Self::V1(inner) => inner.authority,
