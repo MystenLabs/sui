@@ -18,6 +18,7 @@ pub mod gas;
 pub mod linkage_context;
 pub mod logging;
 pub mod safe_ops;
+pub mod system_packages;
 pub mod types;
 pub mod views;
 pub mod vm_pointer;

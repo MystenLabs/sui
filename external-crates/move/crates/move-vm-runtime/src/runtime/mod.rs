@@ -11,6 +11,7 @@ use crate::{
     shared::{
         gas::GasMeter,
         linkage_context::LinkageContext,
+        system_packages::SystemPackages,
         types::{OriginalId, VersionId},
     },
     try_block,
@@ -42,20 +43,142 @@ pub struct MoveRuntime {
 
 impl MoveRuntime {
     pub fn new(natives: NativeFunctions, vm_config: VMConfig) -> Self {
-        let natives = Arc::new(natives);
-        let vm_config = Arc::new(vm_config);
-        let cache = Arc::new(MoveCache::new(vm_config.clone()));
-        let telemetry = Arc::new(TelemetryContext::new());
-        Self {
-            cache,
-            natives,
-            vm_config,
-            telemetry,
-        }
+        Self::new_with_system_packages(natives, vm_config, SystemPackages::empty())
     }
 
     pub fn new_with_default_config(natives: NativeFunctions) -> Self {
         Self::new(natives, VMConfig::default())
+    }
+
+    /// Construct a `MoveRuntime` with a set of pinned system packages installed at start-up.
+    /// Each input package becomes identity-linked (`OriginalId == VersionId`) and stays alive
+    /// for the lifetime of the runtime.
+    ///
+    /// **This call cannot fail.** Inputs that fail the identity-link check or the defining-ID
+    /// check are dropped before being handed to the loader; per-package load/verify/JIT errors
+    /// are logged and skipped. User packages that depend on a missing system package fall
+    /// back to virtual-call dispatch.
+    ///
+    /// TODO: A richer cross-validation story across the input system packages (full transitive
+    /// linkage validation among themselves) is left as future work; today each pkg is verified
+    /// in isolation by the standard pipeline.
+    pub fn new_with_system_packages(
+        natives: NativeFunctions,
+        vm_config: VMConfig,
+        system_packages: SystemPackages,
+    ) -> Self {
+        let natives = Arc::new(natives);
+        let vm_config = Arc::new(vm_config);
+        let telemetry = Arc::new(TelemetryContext::new());
+        let cache = Arc::new(MoveCache::new(vm_config.clone()));
+        let mut runtime = Self {
+            cache,
+            natives,
+            vm_config,
+            telemetry,
+        };
+        runtime.install_system_packages(system_packages);
+        runtime
+    }
+
+    /// Filter, validate, and install the input system packages into the cache. Run only at
+    /// construction time, when this `MoveRuntime` holds the unique strong reference to its
+    /// cache `Arc`.
+    ///
+    /// Filtering rejects two cheap-to-detect classes of bad input on the serialized form
+    /// (logged + skipped, never fatal):
+    ///   1. `original_id != version_id` — system packages must be identity-linked at v0.
+    ///   2. Any `type_origin_table` entry whose defining id isn't `original_id` — the package's
+    ///      types must originate from itself.
+    ///
+    /// Survivors are run through the standard load/verify/JIT pipeline one at a time so each
+    /// install observes prior siblings already in `cache.system_packages` (the JIT translator
+    /// snapshots that map once per `resolve_packages` call). Resolution failures and duplicate
+    /// `OriginalId`s are logged; the runtime always constructs.
+    fn install_system_packages(&mut self, system_packages: SystemPackages) {
+        if system_packages.is_empty() {
+            return;
+        }
+
+        let filtered: Vec<SerializedPackage> = system_packages
+            .iter()
+            .filter(|pkg| {
+                if pkg.original_id != pkg.version_id {
+                    error!(
+                        version_id = %pkg.version_id,
+                        original_id = %pkg.original_id,
+                        "System package skipped: version_id != original_id (must be identity-linked)",
+                    );
+                    return false;
+                }
+                if let Some((name, defining_id)) = pkg
+                    .type_origin_table
+                    .iter()
+                    .find(|(_, def_id)| **def_id != pkg.original_id)
+                {
+                    error!(
+                        version_id = %pkg.version_id,
+                        original_id = %pkg.original_id,
+                        type_module = %name.module_name,
+                        type_name = %name.type_name,
+                        %defining_id,
+                        "System package skipped: type defining_id does not match original_id",
+                    );
+                    return false;
+                }
+                true
+            })
+            .cloned()
+            .collect();
+
+        let resolver = SystemPackages::new(filtered).into_resolver();
+
+        // Split borrows of `self` so that the `&mut cache` borrow can coexist with the
+        // immutable `&telemetry` / `&natives` borrows below.
+        let Self {
+            cache,
+            telemetry,
+            natives,
+            ..
+        } = self;
+        let Some(cache) = Arc::get_mut(cache) else {
+            error!(
+                "install_system_packages: cache Arc is shared; system packages will not be installed",
+            );
+            return;
+        };
+
+        for pkg in resolver.iter() {
+            let version_id = pkg.version_id;
+            let result = telemetry.with_transaction_telemetry(|tx_telemetry| {
+                package_resolution::resolve_packages(
+                    &resolver,
+                    tx_telemetry,
+                    cache,
+                    natives,
+                    std::iter::once(version_id).collect(),
+                )
+            });
+            match result {
+                Ok(resolved) => {
+                    for (_, p) in resolved {
+                        let original_id = p.runtime.original_id;
+                        if !cache.add_system_package(p) {
+                            error!(
+                                %original_id,
+                                "System package already registered at original_id; skipping duplicate",
+                            );
+                        }
+                    }
+                }
+                Err(err) => {
+                    error!(
+                        %version_id, error = ?err,
+                        "System package install failed; skipping",
+                    );
+                }
+            }
+        }
     }
 
     /// Retrieive the Move VM Natives associated with the Runtime
@@ -292,6 +415,7 @@ impl MoveRuntime {
                     txn_telemetry,
                     &self.cache,
                     &self.natives,
+                    self.cache.system_packages(),
                     verified_pkg.clone(),
                 )?;
 
