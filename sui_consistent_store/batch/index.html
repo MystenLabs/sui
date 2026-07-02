@@ -1,0 +1,76 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Atomic write batches."><title>sui_consistent_store::batch - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_consistent_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module batch</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_consistent_store/index.html">sui_<wbr>consistent_<wbr>store</a><span class="version">1.75.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module batch</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#merge-operations" title="Merge operations">Merge operations</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sui_<wbr>consistent_<wbr>store</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sui_consistent_store</a></div><h1>Module <span>batch</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sui_consistent_store/batch.rs.html#4-730">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Atomic write batches.</p>
+<p><a href="struct.Batch.html" title="struct sui_consistent_store::batch::Batch"><code>Batch</code></a> accumulates put, delete, and merge operations across one
+or more column families and applies them atomically when
+<a href="struct.Batch.html#method.commit" title="method sui_consistent_store::batch::Batch::commit"><code>Batch::commit</code></a> is called. RocksDB guarantees that the
+operations in a single batch either all become visible to readers
+or none do.</p>
+<p>Batches are constructed from a <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a> via <a href="../db/struct.Db.html#method.batch" title="method sui_consistent_store::db::Db::batch"><code>Db::batch</code></a>. Each
+operation takes a <a href="../map/struct.DbMap.html" title="struct sui_consistent_store::map::DbMap"><code>DbMap</code></a> handle whose key and value types are
+encoded into bytes using the crate’s encoding traits before being
+handed to the underlying [<code>rocksdb::WriteBatch</code>].</p>
+<h2 id="merge-operations"><a class="doc-anchor" href="#merge-operations">§</a>Merge operations</h2>
+<p><a href="struct.Batch.html#method.merge" title="method sui_consistent_store::batch::Batch::merge"><code>Batch::merge</code></a> stages a merge operand against a key. The
+merge operator that combines the operand with any existing value
+is configured by the schema author on the column family’s
+[<code>rocksdb::Options</code>] (returned from
+<a href="../schema/trait.Schema.html#tymethod.cfs" title="associated function sui_consistent_store::schema::Schema::cfs"><code>Schema::cfs</code></a>) at open time. RocksDB
+applies the operator lazily at read or compaction time; this
+crate simply forwards the bytes.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sui_consistent_store::Db;
+<span class="kw">use </span>sui_consistent_store::DbMap;
+<span class="kw">use </span>sui_consistent_store::DbOptions;
+<span class="kw">use </span>bytes::Buf;
+<span class="kw">use </span>bytes::BufMut;
+
+<span class="kw">use </span>sui_consistent_store::Decode;
+<span class="kw">use </span>sui_consistent_store::Encode;
+<span class="kw">use </span>sui_consistent_store::Schema;
+<span class="kw">use </span>sui_consistent_store::error::DecodeError;
+<span class="kw">use </span>sui_consistent_store::error::EncodeError;
+<span class="kw">use </span>sui_consistent_store::error::OpenError;
+
+<span class="attr">#[derive(Debug, PartialEq, Eq)]
+</span><span class="kw">struct </span>U64Be(u64);
+
+<span class="kw">impl </span>Encode <span class="kw">for </span>U64Be {
+    <span class="kw">fn </span>encode_into&lt;B: BufMut&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>B) -&gt; <span class="prelude-ty">Result</span>&lt;(), EncodeError&gt; {
+        buf.put_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.to_be_bytes());
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">impl </span>Decode <span class="kw">for </span>U64Be {
+    <span class="kw">fn </span>decode&lt;B: Buf&gt;(buf: <span class="kw-2">&amp;mut </span>B) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">if </span>buf.remaining() != <span class="number">8 </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::msg(<span class="string">"expected 8 bytes"</span>));
+        }
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(buf.get_u64()))
+    }
+}
+
+<span class="kw">struct </span>MySchema {
+    items: DbMap&lt;U64Be, U64Be&gt;,
+}
+
+<span class="kw">impl </span>Schema <span class="kw">for </span>MySchema {
+    <span class="kw">fn </span>cfs(opts: <span class="kw-2">&amp;</span>sui_consistent_store::CfOptionsResolver) -&gt; Vec&lt;sui_consistent_store::CfDescriptor&gt; {
+        <span class="macro">vec!</span>[sui_consistent_store::CfDescriptor::new(<span class="string">"items"</span>, opts.options(<span class="string">"items"</span>))]
+    }
+
+    <span class="kw">fn </span>open(db: <span class="kw-2">&amp;</span>Db) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, OpenError&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            items: DbMap::new(db.clone(), <span class="string">"items"</span>)<span class="question-mark">?</span>,
+        })
+    }
+}
+
+<span class="kw">let </span>dir = tempfile::tempdir().unwrap();
+<span class="kw">let </span>(db, schema) = Db::open::&lt;MySchema&gt;(dir.path(), DbOptions::default()).unwrap();
+
+<span class="kw">let </span><span class="kw-2">mut </span>batch = db.batch();
+batch.put(<span class="kw-2">&amp;</span>schema.items, <span class="kw-2">&amp;</span>U64Be(<span class="number">1</span>), <span class="kw-2">&amp;</span>U64Be(<span class="number">100</span>)).unwrap();
+batch.put(<span class="kw-2">&amp;</span>schema.items, <span class="kw-2">&amp;</span>U64Be(<span class="number">2</span>), <span class="kw-2">&amp;</span>U64Be(<span class="number">200</span>)).unwrap();
+batch.commit().unwrap();
+
+<span class="macro">assert_eq!</span>(schema.items.get(<span class="kw-2">&amp;</span>U64Be(<span class="number">1</span>)).unwrap(), <span class="prelude-val">Some</span>(U64Be(<span class="number">100</span>)));</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Batch.html" title="struct sui_consistent_store::batch::Batch">Batch</a></dt><dd>An accumulating, typed write batch.</dd></dl></section></div></main></body></html>

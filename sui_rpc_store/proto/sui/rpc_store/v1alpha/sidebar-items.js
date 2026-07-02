@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StoredObjectTombstoneKind"],"mod":["stored_object"],"struct":["BalanceDelta","BitmapBlob","ObjectVersionInfo","PackageVersionInfo","PruningWatermarks","StoredCheckpointContents","StoredCheckpointSummary","StoredEffects","StoredEpoch","StoredEvents","StoredObject","StoredObjectTombstone","StoredTransaction","TxMetadata"]};

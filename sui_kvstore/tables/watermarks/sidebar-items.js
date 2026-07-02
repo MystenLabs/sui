@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NAME","SCHEMA_V1"],"fn":["decode_v0","decode_v1","encode_committer_cells","encode_key","encode_v0"],"mod":["col"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BUCKET_ID_WIDTH","BUCKET_SIZE","EVENT_BITS","MAX_EVENTS_PER_TX","MAX_TX_SEQ","NAME","SCHEMA_VERSION"],"fn":["decode_event_seq","encode_event_seq","encode_row_key","encode_row_key_into","event_seq_lo"],"mod":["col"]};

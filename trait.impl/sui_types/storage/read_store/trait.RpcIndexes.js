@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["sui_core",[["impl <a class=\"trait\" href=\"sui_types/storage/read_store/trait.RpcIndexes.html\" title=\"trait sui_types::storage::read_store::RpcIndexes\">RpcIndexes</a> for <a class=\"struct\" href=\"sui_core/storage/struct.RestReadStore.html\" title=\"struct sui_core::storage::RestReadStore\">RestReadStore</a>"],["impl <a class=\"trait\" href=\"sui_types/storage/read_store/trait.RpcIndexes.html\" title=\"trait sui_types::storage::read_store::RpcIndexes\">RpcIndexes</a> for <a class=\"struct\" href=\"sui_core/storage/struct.RpcStoreReadStore.html\" title=\"struct sui_core::storage::RpcStoreReadStore\">RpcStoreReadStore</a>"]]],["sui_fork",[["impl <a class=\"trait\" href=\"sui_types/storage/read_store/trait.RpcIndexes.html\" title=\"trait sui_types::storage::read_store::RpcIndexes\">RpcIndexes</a> for <a class=\"struct\" href=\"sui_fork/store/struct.DataStore.html\" title=\"struct sui_fork::store::DataStore\">DataStore</a>"]]],["sui_rpc_store",[["impl&lt;R: Reader + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a>&gt; <a class=\"trait\" href=\"sui_types/storage/read_store/trait.RpcIndexes.html\" title=\"trait sui_types::storage::read_store::RpcIndexes\">RpcIndexes</a> for <a class=\"struct\" href=\"sui_rpc_store/reader/struct.RpcStoreReader.html\" title=\"struct sui_rpc_store::reader::RpcStoreReader\">RpcStoreReader</a>&lt;R&gt;"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[638,305,633]}

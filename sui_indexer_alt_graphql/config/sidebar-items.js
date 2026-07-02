@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ZkLoginEnv"],"struct":["HealthConfig","HealthLayer","IndexerConfig","Limits","LimitsLayer","LoggingConfig","LoggingLayer","NameServiceLayer","RpcConfig","RpcLayer","SubscriptionConfig","SubscriptionLayer","WatermarkConfig","WatermarkLayer","ZkLoginConfig","ZkLoginLayer"]};

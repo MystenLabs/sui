@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BigtablePoolLayer","CommitterLayer","ConcurrentLayer","IndexerConfig","IngestionConfig","PipelineIngestionLayer","PipelineLayer","SequentialLayer"]};

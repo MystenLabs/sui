@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`RestoreSource` backed by a validator’s `AuthorityPerpetualTables`."><title>sui_core::rpc_store_restore_source - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module rpc_store_restore_source</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_core/index.html">sui_<wbr>core</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module rpc_<wbr>store_<wbr>restore_<wbr>source</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#sharding" title="Sharding">Sharding</a></li><li><a href="#snapshot-consistency" title="Snapshot consistency">Snapshot consistency</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#constants" title="Constants">Constants</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sui_<wbr>core</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sui_core</a></div><h1>Module <span>rpc_<wbr>store_<wbr>restore_<wbr>source</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sui_core/rpc_store_restore_source.rs.html#4-370">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>[<code>RestoreSource</code>] backed by a validator’s
+<a href="../authority/authority_store_tables/struct.AuthorityPerpetualTables.html" title="struct sui_core::authority::authority_store_tables::AuthorityPerpetualTables"><code>AuthorityPerpetualTables</code></a>.</p>
+<p>Streams every <code>LiveObject::Normal</code> in the perpetual store
+into the <code>sui-consistent-store</code> restore driver, sharded by
+<code>ObjectID</code> prefix so multiple shards can iterate in parallel.</p>
+<h2 id="sharding"><a class="doc-anchor" href="#sharding">§</a>Sharding</h2>
+<p>The <code>ObjectID</code> space is split into 32 shards by the top
+<code>SHARD_BITS = 5</code> bits of the first byte (matching the split
+used by <code>par_index_live_object_set</code>).
+Each shard yields chunks of <a href="constant.CHUNK_SIZE.html" title="constant sui_core::rpc_store_restore_source::CHUNK_SIZE"><code>CHUNK_SIZE</code></a> objects; the
+<code>RestoreChunk::cursor</code> is the 32-byte ObjectID of the last
+object in that chunk, so resuming with <code>Some(c)</code> starts the
+next iteration immediately after that id.</p>
+<h2 id="snapshot-consistency"><a class="doc-anchor" href="#snapshot-consistency">§</a>Snapshot consistency</h2>
+<p>Each shard’s stream opens exactly one RocksDB iterator and
+drives it to completion from a single <code>spawn_blocking</code> task,
+pushing chunks back over a tokio mpsc. RocksDB iterators
+created without an explicit snapshot implicitly pin one at
+construction time, so a shard sees a single point-in-time
+view for its full run — including the merge-based <code>balance</code>
+pipeline, which is safe against concurrent execution.</p>
+<p>Different shards take their snapshots at the moments their
+<code>spawn_blocking</code> tasks start, so cross-shard skew can still
+exist if the validator commits between shard launches. This
+does not affect any of the <code>sui-rpc-store</code> pipelines because
+every object lives in exactly one shard.</p>
+<p>A side-effect of holding open one iterator per shard for the
+full restore is that the SSTs it references stay pinned and
+cannot compact away for the duration. That is acceptable for
+a one-shot bootstrap.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.PerpetualStoreRestoreSource.html" title="struct sui_core::rpc_store_restore_source::PerpetualStoreRestoreSource">Perpetual<wbr>Store<wbr>Restore<wbr>Source</a></dt><dd>[<code>RestoreSource</code>] over an
+<a href="../authority/authority_store_tables/struct.AuthorityPerpetualTables.html" title="struct sui_core::authority::authority_store_tables::AuthorityPerpetualTables"><code>AuthorityPerpetualTables</code></a>. Construct via
+<a href="struct.PerpetualStoreRestoreSource.html#method.new" title="associated function sui_core::rpc_store_restore_source::PerpetualStoreRestoreSource::new"><code>PerpetualStoreRestoreSource::new</code></a>.</dd></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.CHUNK_SIZE.html" title="constant sui_core::rpc_store_restore_source::CHUNK_SIZE">CHUNK_<wbr>SIZE</a></dt><dd>Default objects per [<code>RestoreChunk</code>]. Tuned to keep the
+per-pipeline batch comfortably under a few MB of writes
+while still amortising the per-chunk commit overhead.</dd></dl></section></div></main></body></html>

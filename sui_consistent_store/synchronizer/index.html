@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`Synchronizer` — coordinates writes from multiple pipelines into a single `Db`, taking a cross-pipeline snapshot at every checkpoint boundary."><title>sui_consistent_store::synchronizer - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_consistent_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module synchronizer</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_consistent_store/index.html">sui_<wbr>consistent_<wbr>store</a><span class="version">1.75.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module synchronizer</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#dynamic-membership-and-late-join" title="Dynamic membership and late join">Dynamic membership and late join</a></li><li><a href="#pipelines-must-commit-exactly-one-checkpoint-per-batch" title="Pipelines must commit exactly one checkpoint per batch">Pipelines must commit exactly one checkpoint per batch</a></li><li><a href="#lifecycle" title="Lifecycle">Lifecycle</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sui_<wbr>consistent_<wbr>store</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sui_consistent_store</a></div><h1>Module <span>synchronizer</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sui_consistent_store/synchronizer.rs.html#4-848">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="struct.Synchronizer.html" title="struct sui_consistent_store::synchronizer::Synchronizer"><code>Synchronizer</code></a> — coordinates writes from multiple pipelines
+into a single <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a>, taking a cross-pipeline snapshot at every
+checkpoint boundary.</p>
+<p>The framework’s <code>SequentialStore::transaction</code> ships each
+pipeline’s <code>(Watermark, Batch)</code> pair through a per-pipeline
+mpsc channel. The synchronizer’s per-pipeline task receives
+these in checkpoint order and commits the batch against the
+shared database. At each checkpoint boundary (the snapshot
+frontier), every pipeline that has caught up pauses via
+a shared <code>SnapshotCoordinator</code>; the last one to arrive calls
+<a href="../db/struct.Db.html#method.take_snapshot" title="method sui_consistent_store::db::Db::take_snapshot"><code>Db::take_snapshot</code></a> and releases the
+rest.</p>
+<p>This guarantees that a snapshot at checkpoint <code>C</code> captures
+exactly the state every participating pipeline has up through
+<code>C</code>’s writes — no such pipeline is half-applied when the snapshot
+is taken.</p>
+<h2 id="dynamic-membership-and-late-join"><a class="doc-anchor" href="#dynamic-membership-and-late-join">§</a>Dynamic membership and late join</h2>
+<p>The set of pipelines a snapshot waits on is dynamic. A pipeline
+lagging behind the frontier — for example a
+history cohort backfilling from a low watermark while a live
+cohort follows the tip — commits freely without gating snapshots,
+and joins the snapshot cohort once it climbs to the frontier. A
+late join is still consistent: like every member, the joiner has
+committed through <code>frontier - 1</code> at the moment it arrives. Until
+it joins, snapshots reflect its data only up to wherever its
+backfill has reached, which is why a snapshot is consistent only
+for the pipelines that were members when it was taken.</p>
+<h2 id="pipelines-must-commit-exactly-one-checkpoint-per-batch"><a class="doc-anchor" href="#pipelines-must-commit-exactly-one-checkpoint-per-batch">§</a>Pipelines must commit exactly one checkpoint per batch</h2>
+<p>The synchronizer assumes each <code>(Watermark, Batch)</code> it receives
+corresponds to exactly one checkpoint. A pipeline driven by
+the indexer-alt framework’s <code>sequential::pipeline</code> must therefore
+set <code>MAX_BATCH_CHECKPOINTS = 1</code> on its <code>sequential::Handler</code>
+impl so the framework’s collector commits each checkpoint as
+its own batch rather than folding several into one. If a batch
+spans multiple checkpoints the synchronizer will bail with an
+out-of-order error on the first such batch.</p>
+<h2 id="lifecycle"><a class="doc-anchor" href="#lifecycle">§</a>Lifecycle</h2>
+<ol>
+<li><a href="struct.Synchronizer.html#method.new" title="associated function sui_consistent_store::synchronizer::Synchronizer::new"><code>Synchronizer::new</code></a> creates the service with a database and
+per-pipeline channel buffer size. The framework schema is read
+off <code>db</code> on demand.</li>
+<li><a href="struct.Synchronizer.html#method.register_pipeline" title="method sui_consistent_store::synchronizer::Synchronizer::register_pipeline"><code>register_pipeline</code></a> reads
+the pipeline’s existing watermark (if any) from the
+framework schema and records it as that pipeline’s resume
+point.</li>
+<li><a href="struct.Synchronizer.html#method.run" title="method sui_consistent_store::synchronizer::Synchronizer::run"><code>Synchronizer::run</code></a> consumes the synchronizer, spawns one
+task per registered pipeline, and returns the per-pipeline
+write queues plus a [<code>tokio::task::JoinSet</code>] whose tasks
+complete when their input channels close.</li>
+</ol>
+<p>Today the <a href="../store/struct.Store.html" title="struct sui_consistent_store::store::Store"><code>Store</code></a> integration is wired via
+<a href="../store/struct.Store.html#method.install_sync" title="method sui_consistent_store::store::Store::install_sync"><code>Store::install_sync</code></a>; see that
+function’s documentation for the end-to-end flow.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Synchronizer.html" title="struct sui_consistent_store::synchronizer::Synchronizer">Synchronizer</a></dt><dd>Builder + runner for the per-pipeline synchronizer tasks.</dd></dl></section></div></main></body></html>

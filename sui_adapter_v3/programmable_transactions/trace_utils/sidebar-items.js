@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_coin_obj_info","add_move_value_info_from_obj_value","add_move_value_info_from_value","trace_execution_error","trace_make_move_vec","trace_merge_coins","trace_move_call_end","trace_move_call_start","trace_ptb_summary","trace_publish_event","trace_split_coins","trace_transfer","trace_upgrade_event"]};

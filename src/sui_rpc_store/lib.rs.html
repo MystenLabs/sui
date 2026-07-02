@@ -1,0 +1,119 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui-rpc-store/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_rpc_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">sui_rpc_store/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! Storage backend for `sui-rpc-api`.
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! Built on top of [`sui_consistent_store`], this crate hosts the
+<a href=#7 id=7 data-nosnippet>7</a>//! column families that back every read the RPC service performs:
+<a href=#8 id=8 data-nosnippet>8</a>//!
+<a href=#9 id=9 data-nosnippet>9</a>//! - Raw chain data — objects, transactions, effects, events,
+<a href=#10 id=10 data-nosnippet>10</a>//!   checkpoints, committees — previously served by the validator's
+<a href=#11 id=11 data-nosnippet>11</a>//!   perpetual / checkpoint / committee stores.
+<a href=#12 id=12 data-nosnippet>12</a>//! - Indexes — owner, dynamic-field, coin, balance, package version,
+<a href=#13 id=13 data-nosnippet>13</a>//!   epoch info, ledger history — previously served by
+<a href=#14 id=14 data-nosnippet>14</a>//!   `sui-core::rpc_index` and `sui-indexer-alt-consistent-store`.
+<a href=#15 id=15 data-nosnippet>15</a>//!
+<a href=#16 id=16 data-nosnippet>16</a>//! Values are encoded with bespoke protobuf messages defined under
+<a href=#17 id=17 data-nosnippet>17</a>//! `proto/sui/rpc_store/`, mirroring the build setup in
+<a href=#18 id=18 data-nosnippet>18</a>//! `sui-consistent-store`.
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a></span><span class="kw">pub mod </span>config;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">pub mod </span>indexer;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">pub mod </span>proto;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">pub mod </span>reader;
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">pub mod </span>schema;
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>std::path::Path;
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>prometheus::Registry;
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>sui_consistent_store::DbOptions;
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>sui_indexer_alt_framework::IndexerArgs;
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>sui_indexer_alt_framework::ingestion::ClientArgs;
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>sui_indexer_alt_framework::ingestion::IngestionConfig;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>sui_indexer_alt_framework::ingestion::streaming_client::GrpcStreamingClient;
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>sui_indexer_alt_framework::metrics::IngestionMetrics;
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>sui_indexer_alt_framework::pipeline::CommitterConfig;
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>sui_indexer_alt_framework::service::Service;
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">pub use </span><span class="kw">crate</span>::config::CommitterLayer;
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">pub use </span><span class="kw">crate</span>::config::ConsistencyConfig;
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">pub use </span><span class="kw">crate</span>::config::PipelineLayer;
+<a href=#43 id=43 data-nosnippet>43</a><span class="kw">pub use </span><span class="kw">crate</span>::config::PrunerConfig;
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">pub use </span><span class="kw">crate</span>::config::RestoreLayer;
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">pub use </span><span class="kw">crate</span>::config::ServiceConfig;
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::Indexer;
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::METRICS_PREFIX;
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::Store;
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::checkpoint_broadcast::CheckpointBroadcast;
+<a href=#50 id=50 data-nosnippet>50</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::checkpoint_broadcast::seed_watermark_to_tip <span class="kw">as </span>seed_checkpoint_broadcast_watermark;
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::pruner::prune_history_cohort;
+<a href=#52 id=52 data-nosnippet>52</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::restore::HISTORY_COHORT;
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::restore::LIVE_COHORT;
+<a href=#54 id=54 data-nosnippet>54</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::restore::floor_unrestored_pipelines;
+<a href=#55 id=55 data-nosnippet>55</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::restore::restore_indexes;
+<a href=#56 id=56 data-nosnippet>56</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::restore::seed_current_epoch_start;
+<a href=#57 id=57 data-nosnippet>57</a><span class="kw">pub use </span><span class="kw">crate</span>::indexer::restore::seed_history_cohort;
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">pub use </span><span class="kw">crate</span>::reader::RpcStoreReader;
+<a href=#59 id=59 data-nosnippet>59</a><span class="kw">pub use </span><span class="kw">crate</span>::schema::RpcStoreSchema;
+<a href=#60 id=60 data-nosnippet>60</a><span class="kw">pub use </span><span class="kw">crate</span>::schema::default_rocksdb_config;
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a><span class="doccomment">/// Standalone-binary entry point. Opens the database at `path`,
+<a href=#63 id=63 data-nosnippet>63</a>/// constructs an [`Indexer`] from `ClientArgs`-driven ingestion /
+<a href=#64 id=64 data-nosnippet>64</a>/// streaming clients, registers every pipeline that is enabled in
+<a href=#65 id=65 data-nosnippet>65</a>/// `config.pipeline`, and runs the resulting indexer.
+<a href=#66 id=66 data-nosnippet>66</a>///
+<a href=#67 id=67 data-nosnippet>67</a>/// The embedded-fullnode path bypasses this helper and constructs
+<a href=#68 id=68 data-nosnippet>68</a>/// [`Indexer::from_store`] directly with its own
+<a href=#69 id=69 data-nosnippet>69</a>/// [`IngestionClientTrait`] /
+<a href=#70 id=70 data-nosnippet>70</a>/// [`CheckpointStreamingClient`] implementations.
+<a href=#71 id=71 data-nosnippet>71</a>///
+<a href=#72 id=72 data-nosnippet>72</a>/// [`IngestionClientTrait`]:
+<a href=#73 id=73 data-nosnippet>73</a>///   sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait
+<a href=#74 id=74 data-nosnippet>74</a>/// [`CheckpointStreamingClient`]:
+<a href=#75 id=75 data-nosnippet>75</a>///   sui_indexer_alt_framework::ingestion::streaming_client::CheckpointStreamingClient
+<a href=#76 id=76 data-nosnippet>76</a></span><span class="kw">pub async fn </span>start_indexer(
+<a href=#77 id=77 data-nosnippet>77</a>    path: <span class="kw">impl </span>AsRef&lt;Path&gt;,
+<a href=#78 id=78 data-nosnippet>78</a>    indexer_args: IndexerArgs,
+<a href=#79 id=79 data-nosnippet>79</a>    client_args: ClientArgs,
+<a href=#80 id=80 data-nosnippet>80</a>    db_options: DbOptions,
+<a href=#81 id=81 data-nosnippet>81</a>    ingestion_config: IngestionConfig,
+<a href=#82 id=82 data-nosnippet>82</a>    config: ServiceConfig,
+<a href=#83 id=83 data-nosnippet>83</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#84 id=84 data-nosnippet>84</a>) -&gt; anyhow::Result&lt;Service&gt; {
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="kw">let </span>metrics_prefix = <span class="prelude-val">Some</span>(METRICS_PREFIX);
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="comment">// Build the metrics once; the same Arc threads through the
+<a href=#88 id=88 data-nosnippet>88</a>    // ingestion client and (via `IngestionClient::metrics`) the
+<a href=#89 id=89 data-nosnippet>89</a>    // ingestion service, avoiding double registration against
+<a href=#90 id=90 data-nosnippet>90</a>    // `registry`.
+<a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">let </span>ingestion_metrics = IngestionMetrics::new(metrics_prefix, registry);
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">let </span>ingestion_client = IngestionClient::new(client_args.ingestion, ingestion_metrics)<span class="question-mark">?</span>;
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">let </span>streaming_client: <span class="prelude-ty">Option</span>&lt;BoxedStreamingClient&gt; =
+<a href=#94 id=94 data-nosnippet>94</a>        client_args.streaming.streaming_url.map(|uri| {
+<a href=#95 id=95 data-nosnippet>95</a>            Box::new(GrpcStreamingClient::new(
+<a href=#96 id=96 data-nosnippet>96</a>                uri,
+<a href=#97 id=97 data-nosnippet>97</a>                ingestion_config.streaming_connection_timeout(),
+<a href=#98 id=98 data-nosnippet>98</a>                ingestion_config.streaming_statement_timeout(),
+<a href=#99 id=99 data-nosnippet>99</a>            )) <span class="kw">as </span>BoxedStreamingClient
+<a href=#100 id=100 data-nosnippet>100</a>        });
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">let </span><span class="kw-2">mut </span>indexer = Indexer::new(
+<a href=#103 id=103 data-nosnippet>103</a>        path,
+<a href=#104 id=104 data-nosnippet>104</a>        indexer_args,
+<a href=#105 id=105 data-nosnippet>105</a>        ingestion_client,
+<a href=#106 id=106 data-nosnippet>106</a>        streaming_client,
+<a href=#107 id=107 data-nosnippet>107</a>        config.consistency,
+<a href=#108 id=108 data-nosnippet>108</a>        config.pruner,
+<a href=#109 id=109 data-nosnippet>109</a>        ingestion_config,
+<a href=#110 id=110 data-nosnippet>110</a>        db_options,
+<a href=#111 id=111 data-nosnippet>111</a>        registry,
+<a href=#112 id=112 data-nosnippet>112</a>    )
+<a href=#113 id=113 data-nosnippet>113</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#114 id=114 data-nosnippet>114</a>
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">let </span>committer = config.committer.finish(CommitterConfig::default());
+<a href=#116 id=116 data-nosnippet>116</a>    indexer.add_pipelines(config.pipeline, committer).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a>    indexer.run().<span class="kw">await
+<a href=#119 id=119 data-nosnippet>119</a></span>}</code></pre></div></section></main></body></html>

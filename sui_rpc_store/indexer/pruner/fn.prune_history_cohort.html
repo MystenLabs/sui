@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Prune the embedded fullnode’s history cohort up to a floor supplied by the validator’s perpetual-store pruner."><title>prune_history_cohort in sui_rpc_store::indexer::pruner - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sui_rpc_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">prune_history_cohort</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../sui_rpc_store/index.html">sui_<wbr>rpc_<wbr>store</a><span class="version">1.75.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"><h2><a href="index.html">In sui_<wbr>rpc_<wbr>store::<wbr>indexer::<wbr>pruner</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">sui_rpc_store</a>::<wbr><a href="../index.html">indexer</a>::<wbr><a href="index.html">pruner</a></div><h1>Function <span class="fn">prune_<wbr>history_<wbr>cohort</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/sui_rpc_store/indexer/pruner.rs.html#474-527">Source</a> </span></div><pre class="rust item-decl"><code>pub fn prune_history_cohort(
+    db: &amp;Db,
+    schema: &amp;<a class="struct" href="../../schema/struct.RpcStoreSchema.html" title="struct sui_rpc_store::schema::RpcStoreSchema">RpcStoreSchema</a>,
+    pruned_checkpoint_watermark: <a class="primitive" href="https://doc.rust-lang.org/1.92.0/std/primitive.u64.html">u64</a>,
+    pruned_tx_seq_exclusive: <a class="primitive" href="https://doc.rust-lang.org/1.92.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.85/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.92.0/std/primitive.unit.html">()</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Prune the embedded fullnode’s history cohort up to a floor supplied
+by the validator’s perpetual-store pruner.</p>
+<p>Unlike <a href="fn.start_pruner.html" title="fn sui_rpc_store::indexer::pruner::start_pruner"><code>start_pruner</code></a>, this is not epoch-driven and not a
+<code>Service</code>. The embedded deployment deactivates the raw chain-data
+CFs (<code>transactions</code>, <code>effects</code>, <code>events</code>, <code>objects</code>,
+<code>checkpoint_*</code>), so it can neither derive a retention floor nor walk
+effects to find the rows to delete. Instead the perpetual pruner —
+which owns the raw data — supplies the floor directly, and this
+prunes exactly the history-cohort CFs that grow without bound:</p>
+<ul>
+<li><code>tx_metadata_by_seq</code> — range-deleted over
+<code>[old_tx_lo, pruned_tx_seq_exclusive)</code>.</li>
+<li><code>tx_seq_by_digest</code> — point-deleted; the digests are read from
+<code>tx_metadata_by_seq</code> (the only history CF that still carries them)
+over the pruned range, before that range is deleted.</li>
+<li><code>transaction_bitmap</code> / <code>event_bitmap</code> — evicted by advancing the
+shared <code>tx_seq</code> floor so their compaction filters drop
+fully-pruned buckets, then forcing a compaction.</li>
+</ul>
+<p>The live cohort and the tiny <code>epochs</code> CF are never pruned.</p>
+<p><code>pruned_checkpoint_watermark</code> is the highest checkpoint the
+perpetual store has pruned (inclusive); <code>pruned_tx_seq_exclusive</code> is
+the first still-retained <code>tx_seq</code>. These mirror
+<code>sui_core::rpc_index::RpcIndexStore::prune</code>’s parameters so the
+embedded rpc-store and the legacy index prune in lockstep on the
+same floor. Idempotent: a re-run with the same or a lower floor is a
+no-op.</p>
+</div></details></section></div></main></body></html>

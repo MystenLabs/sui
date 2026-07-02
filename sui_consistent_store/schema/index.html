@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The `Schema` trait used to register column families with the database and to construct typed handles into them, plus the `SchemaAtSnapshot` companion trait used to re-bind a schema at a captured snapshot."><title>sui_consistent_store::schema - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_consistent_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module schema</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_consistent_store/index.html">sui_<wbr>consistent_<wbr>store</a><span class="version">1.75.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module schema</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sui_<wbr>consistent_<wbr>store</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sui_consistent_store</a></div><h1>Module <span>schema</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sui_consistent_store/schema.rs.html#4-196">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The <a href="trait.Schema.html" title="trait sui_consistent_store::schema::Schema"><code>Schema</code></a> trait used to register column families with the
+database and to construct typed handles into them, plus the
+<a href="trait.SchemaAtSnapshot.html" title="trait sui_consistent_store::schema::SchemaAtSnapshot"><code>SchemaAtSnapshot</code></a> companion trait used to re-bind a schema at
+a captured snapshot.</p>
+<p>Schemas are hand-written Rust structs whose fields are typed
+handles into individual column families (<a href="../map/struct.DbMap.html" title="struct sui_consistent_store::map::DbMap"><code>DbMap&lt;K, V, R&gt;</code></a>).
+The struct is parameterized by a <a href="../reader/trait.Reader.html" title="trait sui_consistent_store::reader::Reader"><code>Reader</code></a>
+(defaulted to <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a>) so the same schema body serves both the
+live tip and snapshot-bound projections.</p>
+<p><a href="trait.Schema.html" title="trait sui_consistent_store::schema::Schema"><code>Schema</code></a> is implemented for the live variant (<code>MySchema&lt;Db&gt;</code>)
+and pairs the static set of column families a schema requires
+(<a href="trait.Schema.html#tymethod.cfs" title="associated function sui_consistent_store::schema::Schema::cfs"><code>Schema::cfs</code></a>) with the constructor that builds the schema
+struct from an opened database (<a href="trait.Schema.html#tymethod.open" title="associated function sui_consistent_store::schema::Schema::open"><code>Schema::open</code></a>).</p>
+<p><a href="trait.SchemaAtSnapshot.html" title="trait sui_consistent_store::schema::SchemaAtSnapshot"><code>SchemaAtSnapshot</code></a> is a separate trait the schema author opts
+into; it declares a <code>MySchema&lt;Snapshot&gt;</code> projection and a
+one-line constructor that re-binds each field via
+<a href="../map/struct.DbMap.html#method.at" title="method sui_consistent_store::map::DbMap::at"><code>DbMap::at</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sui_consistent_store::CfDescriptor;
+<span class="kw">use </span>sui_consistent_store::Db;
+<span class="kw">use </span>sui_consistent_store::DbMap;
+<span class="kw">use </span>sui_consistent_store::DbOptions;
+<span class="kw">use </span>sui_consistent_store::Reader;
+<span class="kw">use </span>sui_consistent_store::Schema;
+<span class="kw">use </span>sui_consistent_store::SchemaAtSnapshot;
+<span class="kw">use </span>sui_consistent_store::Snapshot;
+<span class="kw">use </span>sui_consistent_store::error::OpenError;
+
+<span class="kw">struct </span>MySchema&lt;R: Reader = Db&gt; {
+    _reader: std::marker::PhantomData&lt;R&gt;,
+    _db: Db,
+}
+
+<span class="kw">impl </span>Schema <span class="kw">for </span>MySchema {
+    <span class="kw">fn </span>cfs(opts: <span class="kw-2">&amp;</span>sui_consistent_store::CfOptionsResolver) -&gt; Vec&lt;CfDescriptor&gt; {
+        <span class="macro">vec!</span>[CfDescriptor::new(<span class="string">"my_cf"</span>, opts.options(<span class="string">"my_cf"</span>))]
+    }
+
+    <span class="kw">fn </span>open(db: <span class="kw-2">&amp;</span>Db) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, OpenError&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            _reader: std::marker::PhantomData,
+            _db: db.clone(),
+        })
+    }
+}
+
+<span class="kw">impl </span>SchemaAtSnapshot <span class="kw">for </span>MySchema {
+    <span class="kw">type </span>At = MySchema&lt;Snapshot&gt;;
+    <span class="kw">fn </span>at(<span class="kw-2">&amp;</span><span class="self">self</span>, _snap: <span class="kw-2">&amp;</span>Snapshot) -&gt; <span class="self">Self</span>::At {
+        MySchema {
+            _reader: std::marker::PhantomData,
+            _db: <span class="self">self</span>._db.clone(),
+        }
+    }
+}
+
+<span class="kw">let </span>dir = tempfile::tempdir().unwrap();
+<span class="kw">let </span>(_db, _schema) = Db::open::&lt;MySchema&gt;(dir.path(), DbOptions::default()).unwrap();</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.CfDescriptor.html" title="struct sui_consistent_store::schema::CfDescriptor">CfDescriptor</a></dt><dd>Describes one column family in a <a href="trait.Schema.html" title="trait sui_consistent_store::schema::Schema"><code>Schema</code></a>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Schema.html" title="trait sui_consistent_store::schema::Schema">Schema</a></dt><dd>Declares the column families a database needs and constructs the
+typed handle struct against an opened database at the live tip.</dd><dt><a class="trait" href="trait.SchemaAtSnapshot.html" title="trait sui_consistent_store::schema::SchemaAtSnapshot">Schema<wbr>AtSnapshot</a></dt><dd>Re-binds a <a href="trait.Schema.html" title="trait sui_consistent_store::schema::Schema"><code>Schema</code></a> at a captured <a href="../snapshot/struct.Snapshot.html" title="struct sui_consistent_store::snapshot::Snapshot"><code>Snapshot</code></a>.</dd></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["VfsPath"],"fn":["parse_path","resolve_path"]};

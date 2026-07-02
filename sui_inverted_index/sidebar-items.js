@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["bitmap_query","dimensions"]};

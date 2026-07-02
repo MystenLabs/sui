@@ -1,0 +1,46 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The `Reader` trait abstracting the read context a `DbMap` is bound to."><title>sui_consistent_store::reader - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_consistent_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module reader</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_consistent_store/index.html">sui_<wbr>consistent_<wbr>store</a><span class="version">1.75.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module reader</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#why-this-exists" title="Why this exists">Why this exists</a></li><li><a href="#cost-model" title="Cost model">Cost model</a></li></ul><h3><a href="#traits">Module Items</a></h3><ul class="block"><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sui_<wbr>consistent_<wbr>store</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sui_consistent_store</a></div><h1>Module <span>reader</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sui_consistent_store/reader.rs.html#4-119">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The <a href="trait.Reader.html" title="trait sui_consistent_store::reader::Reader"><code>Reader</code></a> trait abstracting the read context a
+<a href="../map/struct.DbMap.html" title="struct sui_consistent_store::map::DbMap"><code>DbMap</code></a> is bound to.</p>
+<p>The crate ships exactly two reader types: <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a> (live-tip) and
+<a href="../snapshot/struct.Snapshot.html" title="struct sui_consistent_store::snapshot::Snapshot"><code>Snapshot</code></a> (snapshot-bound), each with a
+blanket impl on its <code>&amp;</code> form for the borrowed variant. There is
+no separate <code>Live</code>/<code>LiveRef</code> wrapper — a <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a> handle <em>is</em> the
+live-tip read context, and a borrow of one <em>is</em> the borrowed
+live-tip context.</p>
+<p>Every <a href="../map/struct.DbMap.html" title="struct sui_consistent_store::map::DbMap"><code>DbMap&lt;K, V, R&gt;</code></a> is parameterized by a
+<a href="trait.Reader.html" title="trait sui_consistent_store::reader::Reader"><code>Reader</code></a>. The default is <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a>, so today’s call sites
+(<code>DbMap::new(db, "items")</code>, <code>Db::open::&lt;MySchema&gt;(...)</code>) keep
+working unchanged. Re-projecting a schema or a single map at a
+captured snapshot — via
+<a href="../schema/trait.SchemaAtSnapshot.html#tymethod.at" title="method sui_consistent_store::schema::SchemaAtSnapshot::at"><code>SchemaAtSnapshot::at</code></a> or
+<a href="../map/struct.DbMap.html#method.at" title="method sui_consistent_store::map::DbMap::at"><code>DbMap::at</code></a> — produces a parallel handle whose
+reader is <a href="../snapshot/struct.Snapshot.html" title="struct sui_consistent_store::snapshot::Snapshot"><code>Snapshot</code></a>.</p>
+<h2 id="why-this-exists"><a class="doc-anchor" href="#why-this-exists">§</a>Why this exists</h2>
+<p>The crate previously routed snapshot reads through an entirely
+separate type (the snapshot handle’s read methods, plus a
+borrowed <code>SnapshotView</code>). That kept the read API duplicated and
+forced call sites to choose between <code>map.get(&amp;k)?</code> (live) and
+<code>snap.get(&amp;map, &amp;k)?</code> (snapshot). With the reader generic, both
+call sites read identically: the choice of consistency context is
+made once, at the point the schema or map is bound, and from
+there every method call is <code>map.get(&amp;k)?</code> against whatever reader
+is in scope.</p>
+<h2 id="cost-model"><a class="doc-anchor" href="#cost-model">§</a>Cost model</h2>
+<p>Constructing a <a href="../map/struct.DbMap.html" title="struct sui_consistent_store::map::DbMap"><code>DbMap</code></a> bound to a <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a> costs
+one <code>Arc</code> bump (the <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a> clone). Constructing one bound to
+<a href="../snapshot/struct.Snapshot.html" title="struct sui_consistent_store::snapshot::Snapshot"><code>Snapshot</code></a> costs two (the snapshot’s own
+<a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a> and <code>Arc&lt;SnapshotEntry&gt;</code>). Each call to
+<a href="../map/struct.DbMap.html#method.at" title="method sui_consistent_store::map::DbMap::at"><code>DbMap::at</code></a> clones the snapshot (two <code>Arc</code>
+bumps); the column-family name is a <a href="https://doc.rust-lang.org/1.92.0/std/primitive.str.html" title="primitive str"><code>&amp;'static str</code></a>,
+so it copies without allocating. Re-projecting an N-CF schema
+costs 2N <code>Arc</code> bumps and N struct constructions per call to
+<a href="../schema/trait.SchemaAtSnapshot.html#tymethod.at" title="method sui_consistent_store::schema::SchemaAtSnapshot::at"><code>SchemaAtSnapshot::at</code></a>. For a
+per-request handler that projects once and reads many times,
+this is amortized; for a hot path that projects on every read,
+project once outside the loop.</p>
+<p><code>&amp;Db</code> and <code>&amp;Snapshot</code> are the zero-<code>Arc</code>-bump variants. Use them
+via <code>DbMap::new(&amp;db, "cf")</code> or
+<a href="../map/struct.DbMap.html#method.at_ref" title="method sui_consistent_store::map::DbMap::at_ref"><code>DbMap::at_ref</code></a> when the returned
+<a href="../map/struct.DbMap.html" title="struct sui_consistent_store::map::DbMap"><code>DbMap</code></a> is scoped to a single function body and
+can be tied to a <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a> or <a href="../snapshot/struct.Snapshot.html" title="struct sui_consistent_store::snapshot::Snapshot"><code>Snapshot</code></a> the
+caller already holds.</p>
+</div></details><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Reader.html" title="trait sui_consistent_store::reader::Reader">Reader</a></dt><dd>Abstracts the read context a <a href="../map/struct.DbMap.html" title="struct sui_consistent_store::map::DbMap"><code>DbMap</code></a> is bound to.</dd></dl></section></div></main></body></html>

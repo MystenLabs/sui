@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["object_runtime","sp"],"mod":["adapter","data_store","error","execution_engine","execution_mode","execution_value","gas_charger","gas_meter","static_programmable_transactions","temporary_store","type_layout_resolver"]};

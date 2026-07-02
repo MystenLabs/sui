@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Shared `Watermark` construction for the v2alpha list APIs."><title>sui_rpc_api::ledger_history::watermark - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sui_rpc_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module watermark</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../sui_rpc_api/index.html">sui_<wbr>rpc_<wbr>api</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module watermark</a></h2><h3><a href="#functions">Module Items</a></h3><ul class="block"><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In sui_<wbr>rpc_<wbr>api::<wbr>ledger_<wbr>history</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">sui_rpc_api</a>::<wbr><a href="../index.html">ledger_history</a></div><h1>Module <span>watermark</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/sui_rpc_api/ledger_history/watermark.rs.html#4-280">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Shared <code>Watermark</code> construction for the v2alpha list APIs.</p>
+<p>Both ledger-history backends — the fullnode (<code>sui-rpc-api</code>) and bigtable
+(<code>sui-kv-rpc</code>) — and all three list handlers (<code>list_transactions</code>,
+<code>list_events</code>, <code>list_checkpoints</code>) emit the same wire <code>Watermark</code>: a resume
+cursor plus a direction-matching completion boundary (<code>checkpoint_hi</code>
+ascending / <code>checkpoint_lo</code> descending). The cursor encoding and the
+boundary bookkeeping are identical; what differs per API is how a scan
+position resolves into a completion-boundary candidate:</p>
+<ul>
+<li><code>list_transactions</code> / <code>list_events</code> scan within a checkpoint, so an
+item at cp <code>C</code> does NOT prove <code>C</code> complete (more matches may sit at
+higher/lower tx_seqs / event_seqs). Their boundary candidate is
+<code>C ∓ 1</code> — see <a href="fn.advance_boundary_excluding_cp.html" title="fn sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp"><code>advance_boundary_excluding_cp</code></a>.</li>
+<li><code>list_checkpoints</code> dedupes cp_seq, so “cp <code>C</code> emitted” ≡ “cp <code>C</code>
+complete.” It feeds <code>C</code> straight into <a href="fn.advance_checkpoint_boundary.html" title="fn sui_rpc_api::ledger_history::watermark::advance_checkpoint_boundary"><code>advance_checkpoint_boundary</code></a>
+for items, and translates its scan frontier into a cp-space candidate
+itself before doing the same.</li>
+</ul>
+<p>This module owns the shared pieces; each handler keeps only its
+API-specific frontier-to-candidate adapter.</p>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.advance_boundary_excluding_cp.html" title="fn sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp">advance_<wbr>boundary_<wbr>excluding_<wbr>cp</a></dt><dd>Fold a cp whose own checkpoint is NOT proven complete into the
+accumulated boundary (<code>list_transactions</code> / <code>list_events</code>: cp <code>C</code> may
+still hold further matches at other tx_seqs / event_seqs; and any scan
+frontier, which lands partway through the checkpoint it resolves to). The
+boundary excludes <code>C</code> itself: <code>C - 1</code> ascending / <code>C + 1</code> descending.</dd><dt><a class="fn" href="fn.advance_checkpoint_boundary.html" title="fn sui_rpc_api::ledger_history::watermark::advance_checkpoint_boundary">advance_<wbr>checkpoint_<wbr>boundary</a></dt><dd>Fold an already-resolved completion-boundary <code>candidate</code> into the
+accumulated boundary, keeping the most-advanced value in scan direction:
+the max ascending, the min descending.</dd><dt><a class="fn" href="fn.boundary_cursor_cp.html" title="fn sui_rpc_api::ledger_history::watermark::boundary_cursor_cp">boundary_<wbr>cursor_<wbr>cp</a></dt><dd>Resolve the boundary-cursor checkpoint coordinate for a <code>list_transactions</code>
+/ <code>list_events</code> scan frontier. The cursor encoding is asymmetric:
+ascending <code>Boundary</code> cursors advance the cp-range start, so the frontier
+cp is used directly; descending <code>Boundary</code> cursors treat the cp
+coordinate as an EXCLUSIVE upper bound, so <code>cp + 1</code> is needed to keep
+<code>cp</code> itself included on resume.</dd><dt><a class="fn" href="fn.boundary_watermark.html" title="fn sui_rpc_api::ledger_history::watermark::boundary_watermark">boundary_<wbr>watermark</a></dt><dd>Build a standalone scan-frontier <code>Watermark</code>. <code>cursor_cp</code> / <code>position</code>
+are the boundary cursor coordinates the caller has already resolved for
+its scan domain (see <a href="fn.boundary_cursor_cp.html" title="fn sui_rpc_api::ledger_history::watermark::boundary_cursor_cp"><code>boundary_cursor_cp</code></a> for the per-checkpoint
+scanners’ direction adjustment); <code>boundary</code> is the accumulated
+completion boundary.</dd><dt><a class="fn" href="fn.item_watermark.html" title="fn sui_rpc_api::ledger_history::watermark::item_watermark">item_<wbr>watermark</a></dt><dd>Build the embedded <code>Watermark</code> for an item: the cursor encodes this
+item’s position (so the next request’s <code>after</code>/<code>before</code> resumes past it)
+plus the current direction-matching checkpoint boundary. <code>cp</code> /
+<code>position</code> are the item’s cursor coordinates (<code>list_checkpoints</code> passes
+its cp_seq for both).</dd><dt><a class="fn" href="fn.reached_range_end.html" title="fn sui_rpc_api::ledger_history::watermark::reached_range_end">reached_<wbr>range_<wbr>end</a></dt><dd>Whether the scan reached the natural end of the requested range (the
+ledger tip or a requested <code>end_checkpoint</code>) rather than being truncated
+by an item or scan limit, or bounded by a client cursor. Only natural
+completion proves the range’s final checkpoint complete.</dd><dt><a class="fn" href="fn.terminal_boundary_watermark.html" title="fn sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark">terminal_<wbr>boundary_<wbr>watermark</a></dt><dd>Boundary watermark emitted once a scan has drained its entire resolved
+range under natural completion. Unlike per-item watermarks it can claim
+the range’s final checkpoint complete — <code>end_checkpoint - 1</code> ascending
+(the exclusive cp upper) or <code>end_checkpoint</code> descending (the inclusive cp
+lower) — because no further items exist in it within the requested range.
+The <code>(end_checkpoint, end_position)</code> cursor resumes exactly past the
+scanned range.</dd></dl></section></div></main></body></html>

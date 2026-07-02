@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BitmapKind","Watermark"],"struct":["BalanceIndexInfo","BalanceKey","BitmapBlob","BitmapCompactionFilter","BitmapIndexKey","CoinIndexInfo","CoinIndexKey","IndexStoreOptions","IndexStoreTablesReadOnly","OwnerIndexInfo","OwnerIndexKey","PackageVersionInfo","PackageVersionKey","RpcIndexStore","TxSeqDigestInfo"]};
