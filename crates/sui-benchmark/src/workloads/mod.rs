@@ -21,7 +21,7 @@ pub mod workload_configuration;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::drivers::Interval;
+use crate::drivers::{Interval, SubmissionAmplification};
 use crate::workloads::payload::Payload;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
@@ -48,6 +48,7 @@ pub struct WorkloadBuilderInfo {
 pub struct WorkloadInfo {
     pub workload_params: WorkloadParams,
     pub workload: Box<dyn Workload<dyn Payload>>,
+    pub submission_amplification: SubmissionAmplification,
 }
 
 pub type Gas = (ObjectRef, SuiAddress, Arc<AccountKeyPair>);

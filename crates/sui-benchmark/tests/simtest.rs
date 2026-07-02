@@ -1286,6 +1286,7 @@ mod test {
             bank,
             system_state_observer.clone(),
             gas_request_chunk_size,
+            BTreeMap::new(),
         )
         .await
         .unwrap();
@@ -1933,6 +1934,7 @@ mod test {
             bank,
             system_state_observer.clone(),
             100,
+            BTreeMap::new(),
         )
         .await
         .unwrap();

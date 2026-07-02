@@ -5,10 +5,127 @@ use duration_str::parse;
 use std::fmt::Formatter;
 use std::{str::FromStr, time::Duration};
 
+use anyhow::ensure;
+use clap::ValueEnum;
+use rand::Rng;
+
 pub mod bench_driver;
 pub mod driver;
 use comfy_table::{Cell, Color, ContentArrangement, Row, Table};
 use hdrhistogram::{Histogram, serialization::Serializer};
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq, ValueEnum)]
+#[clap(rename_all = "kebab-case")]
+pub enum ValidatorSelection {
+    Random,
+    HighestPerformance,
+}
+
+impl std::fmt::Display for ValidatorSelection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValidatorSelection::Random => f.write_str("random"),
+            ValidatorSelection::HighestPerformance => f.write_str("highest-performance"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct SubmissionAmplification {
+    pub amplification_probability: f64,
+    pub amplification_validators_per_tx: usize,
+    pub duplicate_probability: f64,
+    pub duplicate_copies_per_validator: usize,
+    pub validator_selection: ValidatorSelection,
+}
+
+impl Default for SubmissionAmplification {
+    fn default() -> Self {
+        Self {
+            amplification_probability: 0.0,
+            amplification_validators_per_tx: 1,
+            duplicate_probability: 0.0,
+            duplicate_copies_per_validator: 1,
+            validator_selection: ValidatorSelection::Random,
+        }
+    }
+}
+
+impl SubmissionAmplification {
+    pub fn new(
+        amplification_probability: f64,
+        amplification_validators_per_tx: usize,
+        duplicate_probability: f64,
+        duplicate_copies_per_validator: usize,
+        validator_selection: ValidatorSelection,
+    ) -> anyhow::Result<Self> {
+        ensure!(
+            (0.0..=1.0).contains(&amplification_probability),
+            "amplification probability must be between 0.0 and 1.0"
+        );
+        ensure!(
+            (0.0..=1.0).contains(&duplicate_probability),
+            "duplicate probability must be between 0.0 and 1.0"
+        );
+        ensure!(
+            amplification_validators_per_tx > 0,
+            "amplification validators per tx must be greater than zero"
+        );
+        ensure!(
+            duplicate_copies_per_validator > 0,
+            "duplicate copies per validator must be greater than zero"
+        );
+
+        Ok(Self {
+            amplification_probability,
+            amplification_validators_per_tx,
+            duplicate_probability,
+            duplicate_copies_per_validator,
+            validator_selection,
+        })
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        (self.amplification_probability > 0.0 && self.amplification_validators_per_tx > 1)
+            || (self.duplicate_probability > 0.0 && self.duplicate_copies_per_validator > 1)
+    }
+
+    pub fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SubmissionAmplificationSample {
+        let validators_per_tx = if rng.gen_bool(self.amplification_probability) {
+            self.amplification_validators_per_tx
+        } else {
+            1
+        };
+        let copies_per_validator = if rng.gen_bool(self.duplicate_probability) {
+            self.duplicate_copies_per_validator
+        } else {
+            1
+        };
+        SubmissionAmplificationSample {
+            validators_per_tx,
+            copies_per_validator,
+            validator_selection: self.validator_selection,
+        }
+    }
+
+    pub fn expected_submission_multiplier(&self) -> f64 {
+        (1.0 + self.amplification_probability * (self.amplification_validators_per_tx - 1) as f64)
+            * (1.0 + self.duplicate_probability * (self.duplicate_copies_per_validator - 1) as f64)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct SubmissionAmplificationSample {
+    pub validators_per_tx: usize,
+    pub copies_per_validator: usize,
+    pub validator_selection: ValidatorSelection,
+}
+
+impl SubmissionAmplificationSample {
+    pub fn total_submissions(&self) -> usize {
+        self.validators_per_tx * self.copies_per_validator
+    }
+}
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 pub enum Interval {
