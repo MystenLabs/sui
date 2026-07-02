@@ -9,8 +9,10 @@ use move_core_types::{
     language_storage::ModuleId,
     vm_status::{StatusCode, StatusType},
 };
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::error::ExecutionError;
 use sui_types::execution_status::{ExecutionErrorKind, MoveLocation, MoveLocationOpt};
+use sui_types::funds_accumulator::FUNDS_ACCUMULATOR_MODULE_NAME;
 
 pub(crate) fn convert_vm_error_impl(
     error: VMError,
@@ -27,6 +29,18 @@ pub(crate) fn convert_vm_error_impl(
             debug_assert!(false, "No abort code");
             // this is a Move VM invariant violation, the code should always be there
             ExecutionErrorKind::VMInvariantViolation
+        }
+        // The abort minted by the `check_sufficient_object_funds` native on an overdraw. The raw
+        // code is unambiguous within `0x2::funds_accumulator`: the module's own Move-level aborts
+        // use clever-encoded error constants (or `EOverflow = 0`), so a plain
+        // `E_OBJECT_FUNDS_INSUFFICIENT` there can only come from the native. Converted to a
+        // dedicated kind so clients see a legible status instead of an opaque abort code.
+        (StatusCode::ABORTED, Some(code), Location::Module(id))
+            if code == sui_move_natives::funds_accumulator::E_OBJECT_FUNDS_INSUFFICIENT
+                && id.address() == &SUI_FRAMEWORK_ADDRESS
+                && id.name() == FUNDS_ACCUMULATOR_MODULE_NAME =>
+        {
+            ExecutionErrorKind::InsufficientObjectFundsForWithdraw
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
             let abort_location_id = abort_module_id_relocation_fn(id);

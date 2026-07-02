@@ -16,7 +16,9 @@ mod checked {
     use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
     use std::collections::{BTreeMap, BTreeSet};
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
-    use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
+    use sui_types::accumulator_root::{
+        ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE, UnsettledObjectFundsRead,
+    };
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -151,6 +153,7 @@ mod checked {
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -184,6 +187,7 @@ mod checked {
             protocol_config,
             *epoch_id,
             system_object_versions,
+            unsettled_object_funds,
         );
 
         // TODO: remove all `legacy` code on the next execution version cut
@@ -208,6 +212,30 @@ mod checked {
             transaction_dependencies,
             mutable_inputs,
         )
+    }
+
+    /// The temporary store's retry request and the `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` unwind
+    /// error are minted together (`TemporaryStore::check_system_object_available`), so observing
+    /// either one alone means some path fabricated, swallowed, or replaced one of them. Checked
+    /// after the final execution result is settled and before effects are built; behavior past the
+    /// `debug_fatal` stays keyed off the retry request.
+    fn enforce_retry_invariant<R, E: ExecutionErrorTrait>(
+        temporary_store: &TemporaryStore<'_>,
+        execution_result: &Result<R, E>,
+    ) {
+        let has_retry_request = temporary_store.has_retry_request();
+        let is_retry_unwind = execution_result.as_ref().err().is_some_and(|e| {
+            matches!(
+                e.kind(),
+                ExecutionErrorKind::SystemObjectNotAvailableLocally
+            )
+        });
+        if has_retry_request != is_retry_unwind {
+            debug_fatal!(
+                "retry request ({has_retry_request}) and system-object-unavailable unwind error \
+                 ({is_retry_unwind}) must only appear together",
+            );
+        }
     }
 
     fn update_vm_telemetry_metrics(metrics: &ExecutionMetrics, move_vm: &MoveRuntime) {
@@ -287,6 +315,8 @@ mod checked {
             protocol_config,
             0,
             BTreeMap::new(),
+            // Genesis performs no object funds withdraws.
+            None,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         SPT::execute::<execution_mode::Genesis>(
@@ -540,6 +570,8 @@ mod checked {
                 // FIXME: we cannot fail the transaction if this is an epoch change transaction.
                 execution_result = Err(e);
             }
+
+            enforce_retry_invariant(&temporary_store, &execution_result);
 
             let status = if let Err(error) = &execution_result {
                 ExecutionStatus::new_failure(error.to_execution_failure())

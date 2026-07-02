@@ -1,0 +1,112 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
+---
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 14-39:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7782400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 41:
+//# run test::obj_vault::new --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 43-46:
+//# programmable --sender A --inputs 1000 object(2,0)
+// Fund the vault (created above, owned by A) with 1000.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+mutated: object(0,0), object(2,0)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 4, lines 48-54:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 56-58:
+//# programmable --sender A --dry-run --inputs object(2,0) 500 @A
+// Sufficient: withdraw 500 of the settled 1000. Succeeds.
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+mutated: object(0,0), object(2,0)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 500), (object(5,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 500)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 6, lines 60-63:
+//# programmable --sender A --dry-run --inputs object(2,0) 5000 @A
+// Insufficient: withdraw 5000 against a settled 1000. Fails with
+// InsufficientObjectFundsForWithdraw.
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+Error: Transaction Effects Status: InsufficientObjectFundsForWithdraw in command 0
+Execution Error: InsufficientObjectFundsForWithdraw in command 0
+
+task 7, lines 65-70:
+//# programmable --sender A --dry-run --inputs object(2,0) 600 @A
+// Cumulative within one transaction: 600 then 600 sums to 1200 > the settled 1000, so the second
+// withdrawal fails; the in-execution check counts the running total per object, not each
+// withdrawal in isolation.
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+//> 1: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+Error: Transaction Effects Status: InsufficientObjectFundsForWithdraw in command 1
+Execution Error: InsufficientObjectFundsForWithdraw in command 1
+
+task 8, lines 72-79:
+//# programmable --sender A --dry-run --inputs 500 object(2,0) 1400 @A
+// A deposit earlier in the same transaction offsets the withdrawal: deposit 500 into the vault,
+// then withdraw 1400. Against the settled 1000 alone the withdrawal is oversized, but the
+// in-transaction deposit raises available funds, so the check compares against the net
+// (1400 - 500 = 900 <= 1000) and succeeds.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+//> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
+mutated: object(0,0), object(2,0)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 900), (object(5,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1400)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 9, lines 81-86:
+//# programmable --sender A --dry-run --inputs 500 object(2,0) 1600 @A
+// Same shape, but the deposit does not fully cover the excess: deposit 500, withdraw 1600, net
+// 1100 > the settled 1000, so it still fails.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+//> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
+Error: Transaction Effects Status: InsufficientObjectFundsForWithdraw in command 2
+Execution Error: InsufficientObjectFundsForWithdraw in command 2
+
+task 10, lines 88-91:
+//# programmable --sender A --dry-run --inputs object(2,0) 0 @A
+// A zero-amount withdrawal is legal and trivially sufficient: it emits a Split(0) accumulator
+// event but contributes nothing to the running total.
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+mutated: object(0,0), object(2,0)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 0), (object(5,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 11, line 93:
+//# run test::obj_vault::new --sender A
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 95:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 13, lines 97-102:
+//# programmable --sender A --dry-run --inputs 700 object(11,0) 600 @A
+// A second vault with no settled balance at all: a withdrawal covered entirely by a deposit made
+// earlier in the same transaction succeeds; sufficiency does not depend on any settled funds.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+//> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
+mutated: object(0,0), object(11,0)
+accumulators_written: (object(5,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 600), (object(13,0), fake(11,0), sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876

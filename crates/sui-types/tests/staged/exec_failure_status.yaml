@@ -42,3 +42,4 @@
 40: InsufficientFundsForWithdraw
 41: NonExclusiveWriteInputObjectModified
 42: SystemObjectNotAvailableLocally
+43: InsufficientObjectFundsForWithdraw

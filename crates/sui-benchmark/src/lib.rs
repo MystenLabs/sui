@@ -226,27 +226,22 @@ impl ExecutionEffects {
         }
     }
 
+    // TODO: distinguish address-funds (`InsufficientFundsForWithdraw`) from object-funds
+    // (`InsufficientObjectFundsForWithdraw`) insufficiency at the callers, so workloads can assert
+    // which kind they expected and increase benchmark coverage.
     pub fn is_insufficient_funds(&self) -> bool {
-        match self {
-            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
-                match effects.data().status() {
-                    ExecutionStatus::Success => false,
-                    ExecutionStatus::Failure(ExecutionFailure {
-                        error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                        ..
-                    }) => true,
-                    _ => false,
-                }
-            }
-            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
-                ExecutionStatus::Success => false,
-                ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                    ..
-                }) => true,
-                _ => false,
-            },
-        }
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::InsufficientFundsForWithdraw
+                    | ExecutionErrorKind::InsufficientObjectFundsForWithdraw,
+                ..
+            })
+        )
     }
 
     pub fn is_invalid_transaction(&self) -> bool {

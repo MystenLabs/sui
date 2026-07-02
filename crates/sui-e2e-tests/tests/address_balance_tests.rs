@@ -25,7 +25,9 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, dbg_addr},
     coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
     digests::{ChainIdentifier, CheckpointDigest},
-    effects::{InputConsensusObject, TransactionEffectsAPI},
+    effects::{
+        InputConsensusObject, TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind,
+    },
     error::UserInputResult,
     gas::GasCostSummary,
     gas_coin::GAS,
@@ -2157,6 +2159,21 @@ async fn test_multiple_deposits_merged_in_effects() {
     test_env.trigger_reconfiguration().await;
 }
 
+/// Builder for the overflow / representability-guard tests below. Each submits an oversized (e.g.
+/// `u64::MAX`) withdrawal via `exec_tx_directly` and asserts it is rejected by the coin
+/// representability guard (`CoinBalanceOverflow`) — the mainnet, flag-off rejection path. With the
+/// in-execution object-funds check enabled the withdrawal would instead be rejected as insufficient
+/// first, and because `exec_tx_directly` assigns no accumulator version the check would hit its
+/// invariant guard, so these tests disable it.
+fn overflow_guard_test_env() -> TestEnvBuilder {
+    TestEnvBuilder::new()
+        .with_num_validators(1)
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(false);
+            cfg
+        }))
+}
+
 /// A single transaction produces two Merge accumulator events to the same `(sender, Balance<SUI>)`
 /// key whose amounts sum past `u64::MAX`:
 ///
@@ -2173,7 +2190,7 @@ async fn test_multiple_deposits_merged_in_effects() {
 /// SUI-conservation sum.
 #[sim_test]
 async fn test_accumulator_merge_overflow_poison_pill() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = overflow_guard_test_env().build().await;
 
     // Publish the test package and fund the sender's SUI address balance so that the gas-payment
     // reservation (the smash target) is backed at signing time.
@@ -2257,7 +2274,7 @@ async fn test_accumulator_merge_overflow_poison_pill() {
 /// if the cap were ever bypassed.
 #[sim_test]
 async fn test_accumulator_merge_overflow_custom_coin_capped() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = overflow_guard_test_env().build().await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
     let (_publisher, coin_a_type) = test_env.setup_custom_coin().await;
@@ -2321,7 +2338,7 @@ async fn test_accumulator_merge_overflow_custom_coin_capped() {
 /// `u64::MAX`.)
 #[sim_test]
 async fn test_accumulator_conservation_overflow_single_withdrawal() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = overflow_guard_test_env().build().await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
@@ -2377,7 +2394,7 @@ async fn test_accumulator_conservation_overflow_single_withdrawal() {
 /// is never emitted.
 #[sim_test]
 async fn test_accumulator_merge_overflow_gas_refund_poison_pill() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = overflow_guard_test_env().build().await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
@@ -2492,7 +2509,7 @@ async fn test_accumulator_merge_overflow_gas_refund_poison_pill() {
 /// charged. (The per-key supply guard alone does not catch this — each withdrawal is under supply.)
 #[sim_test]
 async fn test_gas_coin_overflow_via_merge_into_gas_coin() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = overflow_guard_test_env().build().await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
@@ -3743,6 +3760,406 @@ async fn test_simulate_object_funds_insufficient() {
         result.transaction.effects.status().is_err(),
         "Expected execution failure due to insufficient object funds"
     );
+}
+
+/// Same as `test_simulate_object_funds_sufficient`, but with the in-execution funds check enabled.
+/// This exercises the in-VM path (`check_sufficient_object_funds` native → `check_system_object_available`)
+/// under simulation: the accumulator-root version is sourced from the object store by the dev-inspect
+/// path rather than from consensus assignment. Before that support existed, simulating any
+/// object-funds withdrawal with the flag on tripped the "no assigned version" guard.
+#[sim_test]
+async fn test_simulate_object_funds_sufficient_in_execution() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(1000).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false, false)
+        .await
+        .unwrap();
+    assert!(result.transaction.effects.status().is_ok());
+}
+
+/// The in-execution counterpart to `test_simulate_object_funds_insufficient`. With the flag on, an
+/// oversized withdrawal is rejected by the in-VM native rather than the post-execution checker. The
+/// key regression this guards: simulation completes and returns a normal failed result rather than
+/// hitting the "no assigned version" guard, because the dev-inspect path pins the accumulator root
+/// at its latest version read from the store.
+#[sim_test]
+async fn test_simulate_object_funds_insufficient_in_execution() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(100).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false, false)
+        .await
+        .unwrap();
+    assert!(
+        result.transaction.effects.status().is_err(),
+        "Expected in-execution object-funds insufficiency to fail simulation"
+    );
+}
+
+/// Whether the accumulator root was recorded into effects as a `ReadOnlyRoot` unchanged-consensus
+/// object — which happens exactly when the in-execution check reads it.
+fn accumulator_recorded_as_read_only_root(effects: &TransactionEffects) -> bool {
+    effects
+        .unchanged_consensus_objects()
+        .iter()
+        .any(|(id, kind)| {
+            *id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+                && matches!(kind, UnchangedConsensusKind::ReadOnlyRoot(_))
+        })
+}
+
+/// Real (committed) execution with the in-execution funds check on: a sufficient object-funds
+/// withdrawal succeeds. Complements the simulate variant by going through the actual execution path
+/// where the accumulator version is assigned by consensus rather than read from the store.
+#[sim_test]
+async fn test_object_funds_sufficient_in_execution() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(1000).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "sufficient object-funds withdrawal should succeed: {:?}",
+        effects.status()
+    );
+    // The accumulator root read during the check is recorded into effects as a ReadOnlyRoot
+    // unchanged-consensus object, so the read can be reproduced on replay.
+    assert!(
+        accumulator_recorded_as_read_only_root(&effects),
+        "accumulator root should be recorded as ReadOnlyRoot with the in-execution check on: {:?}",
+        effects.unchanged_consensus_objects()
+    );
+}
+
+/// Ungated-change guard. With the in-execution check *off*, the same sufficient withdrawal must not
+/// record the accumulator root into effects (no `ReadOnlyRoot`), i.e. the object-funds feature is
+/// inert when the flag is off — enabling the flag is the only thing that changes committed effects.
+/// This is what keeps a mixed / partially-upgraded network from diverging before the feature turns
+/// on at its protocol version.
+#[sim_test]
+async fn test_object_funds_effects_unchanged_when_flag_off() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(false);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(1000).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+    assert!(
+        !accumulator_recorded_as_read_only_root(&effects),
+        "no ReadOnlyRoot should be recorded with the in-execution check off: {:?}",
+        effects.unchanged_consensus_objects()
+    );
+}
+
+/// Real (committed) execution with the in-execution funds check on: an oversized object-funds
+/// withdrawal is rejected in the Move VM and surfaces as `InsufficientObjectFundsForWithdraw` in
+/// the effects. Before this feature, `withdraw_from_object` did not consult funds during
+/// execution, so the withdrawal would not have aborted here.
+#[sim_test]
+async fn test_object_funds_insufficient_in_execution() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(100).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if failure.error == sui_types::execution_status::ExecutionFailureStatus::InsufficientObjectFundsForWithdraw
+        ),
+        "expected InsufficientObjectFundsForWithdraw, got: {status:?}"
+    );
+}
+
+/// The version the accumulator root was read at, when effects record the read as a `ReadOnlyRoot`
+/// unchanged-consensus object. Two withdrawals landed in the same consensus commit iff these match.
+fn accumulator_read_only_root_version(effects: &TransactionEffects) -> Option<SequenceNumber> {
+    effects
+        .unchanged_consensus_objects()
+        .iter()
+        .find_map(|(id, kind)| match kind {
+            UnchangedConsensusKind::ReadOnlyRoot((version, _))
+                if *id == SUI_ACCUMULATOR_ROOT_OBJECT_ID =>
+            {
+                Some(*version)
+            }
+            _ => None,
+        })
+}
+
+/// The unsettled-withdrawal store doing real work: two withdrawals from the same object account in
+/// one consensus commit, sized so both read a settled balance that covers either alone — the
+/// second can fail *only because* the first's amount is tracked as unsettled. Also covers the
+/// non-flipping control (two withdrawals that fit together), spending the exact remaining balance
+/// after settlement, and fullnode parity: a freshly spawned state-syncing fullnode re-executes
+/// everything, so a fullnode that failed to track unsettled withdrawals would produce different
+/// effects and trip the fork detector.
+#[sim_test]
+async fn test_object_funds_unsettled_withdraws_same_commit() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            cfg.set_record_net_unsettled_object_withdraws_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender0 = test_env.get_sender(0);
+    let sender1 = test_env.get_sender(1);
+
+    // Publish the example package and create a *shared* vault, so two independently submitted
+    // transactions can withdraw from the same object account in one consensus commit.
+    let tx = test_env
+        .tx_builder(sender0)
+        .publish_examples("object_balance")
+        .await
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    let package_id = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| owner.is_immutable())
+        .unwrap()
+        .0
+        .0;
+
+    let tx = test_env
+        .tx_builder(sender0)
+        .move_call(package_id, "object_balance", "new_shared", vec![])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    let (vault_ref, vault_owner) = effects.created().into_iter().next().unwrap();
+    let vault_id = vault_ref.0;
+    let Owner::Shared {
+        initial_shared_version,
+    } = vault_owner
+    else {
+        panic!("vault must be shared, got {vault_owner:?}");
+    };
+
+    let fund_vault = |test_env: &TestEnv, amount: u64| {
+        let gas = test_env.get_sender_and_gas(0).1;
+        test_env
+            .tx_builder(sender0)
+            .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(amount, vault_id.into())])
+            .build()
+    };
+    let withdraw_tx = |test_env: &TestEnv, sender: SuiAddress, amount: u64| {
+        test_env
+            .tx_builder(sender)
+            .transfer_sui_to_address_balance(
+                FundSource::object_fund_shared(package_id, vault_id, initial_shared_version),
+                vec![(amount, sender)],
+            )
+            .build()
+    };
+
+    let tx = fund_vault(&test_env, 1000);
+    test_env.exec_tx_directly(tx).await.unwrap();
+    // Settle the funding so the withdrawals below read a settled balance of 1000.
+    test_env.trigger_reconfiguration().await;
+
+    let mut executed_digests = vec![];
+    let mut settled = 1000u64;
+
+    // Flip case: two withdrawals of 600 against a settled 1000, submitted as a soft bundle so they
+    // sequence into the same consensus commit. Whatever the commit placement, the balance covers
+    // exactly one of them; when they share a commit, both read the same settled 1000 and the
+    // failure can only have come from the first's unsettled 600. Soft-bundle placement is
+    // best-effort, so verify same-commit via the recorded accumulator-root read versions and retry
+    // after topping the balance back up if they split.
+    let mut flipped = false;
+    for _ in 0..10 {
+        let tx0 = withdraw_tx(&test_env, sender0, 600);
+        let tx1 = withdraw_tx(&test_env, sender1, 600);
+        let results = test_env
+            .cluster
+            .sign_and_execute_txns_in_soft_bundle(&[tx0, tx1])
+            .await
+            .unwrap();
+        test_env.update_all_gas().await;
+
+        let successes = results.iter().filter(|(_, fx)| fx.status().is_ok()).count();
+        assert_eq!(successes, 1, "the settled balance covers exactly one 600");
+        let failed_status = results
+            .iter()
+            .find(|(_, fx)| fx.status().is_err())
+            .map(|(_, fx)| fx.status())
+            .unwrap();
+        assert!(
+            matches!(
+                failed_status,
+                sui_types::execution_status::ExecutionStatus::Failure(failure)
+                    if failure.error == sui_types::execution_status::ExecutionFailureStatus::InsufficientObjectFundsForWithdraw
+            ),
+            "expected InsufficientObjectFundsForWithdraw, got: {failed_status:?}"
+        );
+        settled -= 600;
+        executed_digests.extend(results.iter().map(|(digest, _)| *digest));
+
+        // Both executions read the root: the failed one read it before failing.
+        let v0 = accumulator_read_only_root_version(&results[0].1)
+            .expect("withdrawal must record the accumulator root read");
+        let v1 = accumulator_read_only_root_version(&results[1].1)
+            .expect("withdrawal must record the accumulator root read");
+        if v0 == v1 {
+            flipped = true;
+            break;
+        }
+        // Different commits: the failure was ordinary settled-balance insufficiency. Restore the
+        // balance and try again.
+        let tx = fund_vault(&test_env, 600);
+        test_env.exec_tx_directly(tx).await.unwrap();
+        settled += 600;
+    }
+    assert!(
+        flipped,
+        "withdrawals never landed in the same consensus commit"
+    );
+
+    // Non-flipping control: two withdrawals that fit alongside each other (400 + 400 against a
+    // settled 1000) both succeed — the unsettled tracking is not over-conservative. (Commit
+    // placement is best-effort here; the property must hold either way.)
+    let tx = fund_vault(&test_env, 1000 - settled);
+    test_env.exec_tx_directly(tx).await.unwrap();
+    settled = 1000;
+    let tx0 = withdraw_tx(&test_env, sender0, 400);
+    let tx1 = withdraw_tx(&test_env, sender1, 400);
+    let results = test_env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx0, tx1])
+        .await
+        .unwrap();
+    test_env.update_all_gas().await;
+    for (digest, fx) in &results {
+        assert!(
+            fx.status().is_ok(),
+            "both fitting withdrawals must succeed, got: {:?}",
+            fx.status()
+        );
+        executed_digests.push(*digest);
+    }
+    settled -= 800;
+
+    // Withdraw the exact remaining balance in a later commit: succeeds only if the earlier
+    // withdrawals settled for precisely their net amounts.
+    let tx = withdraw_tx(&test_env, sender0, settled);
+    let (digest, fx) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        fx.status().is_ok(),
+        "spending the exact remaining balance must succeed, got: {:?}",
+        fx.status()
+    );
+    executed_digests.push(digest);
+
+    // A fresh fullnode re-executes all of the above from checkpoints; diverging effects (e.g. a
+    // fullnode not tracking unsettled withdrawals would let both 600s succeed) trip the fork
+    // detector inside the checkpoint executor.
+    let fullnode = test_env.cluster.spawn_new_fullnode().await.sui_node;
+    fullnode
+        .state()
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects("", &executed_digests)
+        .await;
 }
 
 // TODO(address-balances): Re-enable this once input checks land

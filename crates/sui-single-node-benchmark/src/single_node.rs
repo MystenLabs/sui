@@ -218,6 +218,7 @@ impl SingleValidator {
                 0,
                 input_objects,
                 std::collections::BTreeMap::new(),
+                None,
                 gas_data,
                 gas_status,
                 kind,

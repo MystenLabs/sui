@@ -305,6 +305,13 @@ pub enum ExecutionErrorKind {
     // unwind can be recognized by kind (see `TemporaryStore::check_system_object_available`).
     #[error("System object not available locally; transaction must be retried")]
     SystemObjectNotAvailableLocally,
+
+    // An object-funds withdrawal exceeded the funds available to the object, detected by the
+    // in-execution sufficiency check (the `check_sufficient_object_funds` native). The
+    // address-funds counterpart is `InsufficientFundsForWithdraw`, produced by the scheduler
+    // before execution.
+    #[error("Insufficient object funds for funds accumulator withdrawal")]
+    InsufficientObjectFundsForWithdraw,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

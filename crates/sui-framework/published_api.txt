@@ -1927,6 +1927,9 @@ add_to_accumulator_address
 withdraw_from_accumulator_address
 	fun
 	0x2::funds_accumulator
+check_sufficient_object_funds
+	fun
+	0x2::funds_accumulator
 create_withdrawal
 	public(package) fun
 	0x2::funds_accumulator

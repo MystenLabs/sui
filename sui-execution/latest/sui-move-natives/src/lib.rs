@@ -87,7 +87,7 @@ mod config;
 mod crypto;
 mod dynamic_field;
 pub mod event;
-mod funds_accumulator;
+pub mod funds_accumulator;
 mod object;
 pub mod object_runtime;
 mod protocol_config;
@@ -1086,6 +1086,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "funds_accumulator",
             "withdraw_from_accumulator_address",
             make_native!(funds_accumulator::withdraw_from_accumulator_address),
+        ),
+        (
+            "funds_accumulator",
+            "check_sufficient_object_funds",
+            make_native!(funds_accumulator::check_sufficient_object_funds),
         ),
         (
             "groth16",

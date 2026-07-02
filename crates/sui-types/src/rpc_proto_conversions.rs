@@ -1393,6 +1393,11 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             E::SystemObjectNotAvailableLocally => {
                 panic!("SystemObjectNotAvailableLocally is never committed to effects")
             }
+            // The proto has no dedicated kind for object-funds insufficiency yet; surface it as
+            // the general insufficient-funds kind.
+            E::InsufficientObjectFundsForWithdraw => {
+                ExecutionErrorKind::InsufficientFundsForWithdraw
+            }
         };
 
         message.set_kind(kind);

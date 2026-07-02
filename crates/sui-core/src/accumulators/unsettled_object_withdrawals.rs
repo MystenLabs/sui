@@ -9,7 +9,7 @@ use std::{
 use parking_lot::RwLock;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    accumulator_root::AccumulatorObjId,
+    accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
     base_types::SequenceNumber,
     effects::{TransactionEffects, TransactionEffectsAPI},
 };
@@ -21,10 +21,13 @@ use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetric
 /// balance read bounded by an accumulator version must additionally account for the withdrawals
 /// recorded here at that version.
 ///
-/// The post-execution [`ObjectFundsChecker`] checks and records withdrawals through this store.
-/// Entries are garbage-collected at checkpoint commit once their accumulator version has settled.
+/// Two consumers share this store: the in-execution sufficiency check (the Move VM reads it
+/// through [`UnsettledObjectFundsRead`], and the authority records a successful transaction's net
+/// withdrawals after execution), and the post-execution [`ObjectFundsCheckerDEPRECATED`] path (which checks
+/// and records through its own logic). Entries are garbage-collected at checkpoint commit once
+/// their accumulator version has settled.
 ///
-/// [`ObjectFundsChecker`]: crate::accumulators::object_funds_checker::ObjectFundsChecker
+/// [`ObjectFundsCheckerDEPRECATED`]: crate::accumulators::object_funds_checker::ObjectFundsCheckerDEPRECATED
 pub struct UnsettledObjectWithdrawals {
     inner: RwLock<Inner>,
     metrics: Arc<ObjectFundsCheckerMetrics>,
@@ -46,6 +49,20 @@ struct Inner {
     /// unused entries in unsettled_withdraws that are now fully committed. Without doing so unsettled_withdraws
     /// may grow unbounded.
     unsettled_accounts: BTreeMap<SequenceNumber, BTreeSet<AccumulatorObjId>>,
+}
+
+impl UnsettledObjectFundsRead for UnsettledObjectWithdrawals {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        UnsettledObjectWithdrawals::get_unsettled_object_withdraw(
+            self,
+            account,
+            accumulator_version,
+        )
+    }
 }
 
 impl UnsettledObjectWithdrawals {

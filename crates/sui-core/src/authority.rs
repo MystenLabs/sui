@@ -4,7 +4,7 @@
 
 use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
-use crate::accumulators::object_funds_checker::ObjectFundsChecker;
+use crate::accumulators::object_funds_checker::ObjectFundsCheckerDEPRECATED;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::unsettled_object_withdrawals::UnsettledObjectWithdrawals;
@@ -71,6 +71,7 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::UnsettledObjectFundsRead;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionRetryError;
@@ -144,7 +145,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_status::ExecutionErrorKind;
+use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, ObjectMap, TxCoins, WrittenObjects};
 use sui_types::message_envelope::Message;
@@ -982,10 +983,12 @@ pub struct AuthorityState {
     /// Notification channel for reconfiguration
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
 
-    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
+    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsCheckerDEPRECATED>,
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
-    /// Unsettled object-withdrawal bookkeeping, shared with the post-execution checker. Always
-    /// present: an idle store is inert, so correctness cannot depend on any role-aware init gating.
+    /// Unsettled object-withdrawal bookkeeping, shared by the in-execution funds check (which every
+    /// executing node runs, fullnodes included) and the post-execution checker (validators only).
+    /// Always present: an idle store is inert, and unconditional initialization means fullnode
+    /// correctness under the in-execution check cannot depend on any role-aware init gating.
     pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
 
     /// Tracks transactions whose post-processing (indexing/events) is still in flight.
@@ -1909,6 +1912,7 @@ impl AuthorityState {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -1934,6 +1938,7 @@ impl AuthorityState {
                 epoch_timestamp_ms,
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas_data,
                 gas_status,
                 kind,
@@ -2096,6 +2101,11 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
+        // Lets the in-execution object-funds check read unsettled withdrawals from the current
+        // consensus commit.
+        let unsettled_object_funds =
+            Some(self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead);
+
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
             .execute_transaction_to_effects(
@@ -2115,6 +2125,7 @@ impl AuthorityState {
                     .epoch_start_timestamp(),
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas_data,
                 gas_status,
                 kind,
@@ -2156,20 +2167,61 @@ impl AuthorityState {
             );
         }
 
-        let object_funds_checker = self.object_funds_checker.load();
-        if let Some(object_funds_checker) = object_funds_checker.as_ref()
-            && !object_funds_checker.should_commit_object_funds_withdraws(
-                certificate,
-                &effects,
-                &inner_temp_store.accumulator_running_max_withdraws,
-                &execution_env,
-                self.get_account_funds_read(),
-                &self.execution_scheduler,
-                epoch_store,
-            )
+        if protocol_config.check_object_funds_withdraw_in_execution()
+            && let ExecutionStatus::Failure(failure) = effects.status()
+            && failure.error == ExecutionErrorKind::InsufficientObjectFundsForWithdraw
         {
-            assert_reachable!("retry object withdraw later");
-            return ExecutionOutput::RetryLater;
+            assert_reachable!("object funds insufficient in execution");
+            self.object_funds_checker_metrics
+                .in_execution_check_result
+                .with_label_values(&["insufficient"])
+                .inc();
+        }
+
+        // When the in-execution check is enabled the VM is authoritative and signals retries via
+        // `ExecutionRetryError` (handled above), so the post-execution checker is bypassed.
+        if !protocol_config.check_object_funds_withdraw_in_execution() {
+            let object_funds_checker = self.object_funds_checker.load();
+            if let Some(object_funds_checker) = object_funds_checker.as_ref()
+                && !object_funds_checker.should_commit_object_funds_withdraws(
+                    certificate,
+                    &effects,
+                    &inner_temp_store.accumulator_running_max_withdraws,
+                    &execution_env,
+                    self.get_account_funds_read(),
+                    &self.execution_scheduler,
+                    epoch_store,
+                )
+            {
+                assert_reachable!("retry object withdraw later");
+                return ExecutionOutput::RetryLater;
+            }
+        } else if effects.status().is_ok() {
+            if let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version()
+            {
+                // In-execution flow: the VM confirmed sufficiency and the transaction succeeded.
+                // Record its object withdrawals as unsettled so later transactions in this
+                // consensus commit, which read the same not-yet-advanced settled balance, account
+                // for them.
+                self.record_object_funds_withdraws(
+                    certificate,
+                    &effects,
+                    &inner_temp_store.accumulator_running_max_withdraws,
+                    accumulator_version,
+                    epoch_store,
+                );
+            } else if !inner_temp_store
+                .accumulator_running_max_withdraws
+                .is_empty()
+            {
+                // A transaction with withdraws can only exist when accumulators are enabled, and
+                // every production path that produces one also assigns an accumulator version.
+                // Skipping the recording would deterministically under-count unsettled withdraws,
+                // so make the impossible state loud.
+                debug_fatal!(
+                    "accumulator_version must be set for a successful tx with object withdraws"
+                );
+            }
         }
 
         if let Some(expected_effects_digest) = expected_effects_digest
@@ -2653,7 +2705,16 @@ impl AuthorityState {
         );
 
         // Post-execution: check object funds (non-address withdrawals discovered during execution).
-        let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
+        // With the in-execution check on, the VM already checked sufficiency against the pinned
+        // accumulator version and an insufficient withdrawal surfaced as a failed execution, so
+        // there is nothing left to check here.
+        // TODO: once `check_object_funds_withdraw_in_execution` is rolled out on all networks,
+        // delete this post-execution branch entirely — dry-run / simulate never re-executes
+        // historical transactions, so the flag-off path here becomes dead code.
+        let (inner_temp_store, effects, execution_result) = if !protocol_config
+            .check_object_funds_withdraw_in_execution()
+            && execution_result.is_ok()
+        {
             let has_insufficient_object_funds = inner_temp_store
                 .accumulator_running_max_withdraws
                 .iter()
@@ -3793,14 +3854,82 @@ impl AuthorityState {
         state
     }
 
+    /// Records the object-funds withdrawals of a transaction that executed successfully under the
+    /// in-execution funds check, so subsequent transactions in the same consensus commit see them
+    /// as unsettled. Records the per-account *net* withdraw amounts from the effects (what
+    /// settlement will actually deduct): the in-execution check is only enabled together with
+    /// `record_net_unsettled_object_withdraws`, so the nets are the only amounts recorded.
+    /// Entries are garbage-collected at checkpoint commit once the accumulator version settles.
+    fn record_object_funds_withdraws(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        effects: &TransactionEffects,
+        accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        accumulator_version: SequenceNumber,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if accumulator_running_max_withdraws.is_empty() {
+            return;
+        }
+        // Address-reservation withdraws are settled separately; only object withdraws (those
+        // without a funds reservation) are tracked as unsettled.
+        let address_funds_reservations: BTreeSet<_> = certificate
+            .transaction_data()
+            .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier())
+            .into_keys()
+            .collect();
+        let updates: BTreeMap<_, _> = effects
+            .accumulator_events()
+            .into_iter()
+            .filter(|event| !address_funds_reservations.contains(&event.accumulator_obj))
+            .filter_map(|event| {
+                event
+                    .write
+                    .get_fund_withdraw_amount()
+                    // A zero-amount withdraw emits a single Split(0) accumulator event, which
+                    // survives effects folding as a Split (the fold's Merge tie-break only
+                    // applies when an account has multiple writes). It contributes nothing to
+                    // settlement, so recording it would be a no-op; skip it.
+                    .filter(|amount| *amount > 0)
+                    .map(|amount| (event.accumulator_obj, amount))
+            })
+            .collect();
+        assert_reachable!("record unsettled object withdraws from in-execution check");
+        self.object_funds_checker_metrics
+            .in_execution_check_result
+            .with_label_values(&["sufficient"])
+            .inc();
+        // A positive net withdraw in effects implies a positive peak, so the account must have a
+        // running max entry that the net cannot exceed. Recording more than what the VM's
+        // sufficiency check covered could let later transactions in the commit under-spend.
+        debug_assert!(
+            updates.iter().all(|(obj_id, net)| {
+                accumulator_running_max_withdraws
+                    .get(obj_id)
+                    .is_some_and(|max| net <= max)
+            }),
+            "net withdraw exceeds running max: tx={:?} updates={:?} running_max={:?}",
+            certificate.digest(),
+            updates,
+            accumulator_running_max_withdraws,
+        );
+        self.unsettled_object_withdrawals
+            .record_unsettled_withdraws(updates.iter(), accumulator_version);
+    }
+
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
-        if self.node_role(&epoch_store).runs_consensus()
-            && epoch_store.protocol_config().enable_object_funds_withdraw()
-        {
+        let protocol_config = epoch_store.protocol_config();
+        // The post-execution checker is a validator-only concern; the unsettled-withdrawal store
+        // that the in-execution check needs on every executing node (fullnodes included) is
+        // `self.unsettled_object_withdrawals`, which is unconditionally initialized and shared
+        // with the checker here.
+        let needs_checker = protocol_config.enable_object_funds_withdraw()
+            && self.node_role(&epoch_store).runs_consensus();
+        if needs_checker {
             if self.object_funds_checker.load().is_none() {
                 let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
-                    Arc::new(ObjectFundsChecker::new(
+                    Arc::new(ObjectFundsCheckerDEPRECATED::new(
                         o.version(),
                         self.unsettled_object_withdrawals.clone(),
                         self.object_funds_checker_metrics.clone(),

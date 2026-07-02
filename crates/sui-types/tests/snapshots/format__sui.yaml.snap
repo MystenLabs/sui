@@ -668,6 +668,8 @@ ExecutionErrorKind:
               TYPENAME: ObjectID
     42:
       SystemObjectNotAvailableLocally: UNIT
+    43:
+      InsufficientObjectFundsForWithdraw: UNIT
 ExecutionFailure:
   STRUCT:
     - error:
