@@ -128,6 +128,12 @@ pub trait Payload: Send + Sync + std::fmt::Debug + Display {
         NonZeroUsize::new(5).unwrap()
     }
 
+    /// Returns true if every transaction in the batch should be submitted independently through
+    /// the normal transaction path instead of being packed into soft bundles.
+    fn use_direct_batch_submission(&self) -> bool {
+        false
+    }
+
     /// Creates a batch of transactions for concurrent execution.
     /// Only called when `is_batched()` returns true.
     async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
