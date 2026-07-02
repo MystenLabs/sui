@@ -82,10 +82,27 @@ impl MoveCache {
     /// inserted, `false` if a package was already registered at that id (which the system-pkg
     /// install loop hits naturally when `resolve_packages` returns previously-installed
     /// siblings as cache hits — caller decides whether to log).
+    ///
+    /// Only callable during `MoveRuntime` construction, when the caller holds the unique strong
+    /// reference to this `MoveCache` (via `Arc::get_mut` on `runtime.cache`). We use
+    /// `Arc::get_mut` on the inner map (rather than `Arc::make_mut`) so that CoW cloning can't
+    /// silently split the map — if the inner `Arc` were somehow shared, we log and refuse the
+    /// insert rather than diverging the JIT translator's read view from the write view.
     pub(crate) fn add_system_package(&mut self, pkg: Arc<Package>) -> bool {
         use std::collections::btree_map::Entry;
         let id = pkg.runtime.original_id;
-        match Arc::make_mut(&mut self.system_packages).entry(id) {
+        let Some(map) = Arc::get_mut(&mut self.system_packages) else {
+            tracing::error!(
+                %id,
+                "add_system_package: inner system_packages Arc is shared; refusing to install"
+            );
+            debug_assert!(
+                false,
+                "add_system_package called with shared system_packages Arc"
+            );
+            return false;
+        };
+        match map.entry(id) {
             Entry::Occupied(_) => false,
             Entry::Vacant(slot) => {
                 slot.insert(pkg);

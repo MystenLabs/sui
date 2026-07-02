@@ -148,8 +148,41 @@ fn cross_system_calls_become_direct() {
     assert_eq!(virt, 0, "expected no virtual calls in pinned_b");
 }
 
-// 4. Identity-link check rejects input where original_id != version_id.
+// 3b. Cross-system direct calls under a reversed dependency direction: `pinned_b` lives at
+//     `0x1` and depends on `pinned_a` at `0x3`, i.e. the dependency runs *opposite* to
+//     address order. The host provides `[pinned_a, pinned_b]` (dependency order); the install
+//     pipeline must honor that rather than iterating by `AccountAddress` order, which would
+//     JIT `0x1::pinned_b` before `0x3::pinned_a` was pinned and quietly demote the direct call.
 #[test]
+fn cross_system_calls_become_direct_reversed_dep_order() {
+    let pkgs = compile_packages_in_file("system_packages_chain_reversed.move", &[]);
+    // 0x3 is the leaf; 0x1 depends on it. Host provides dependency order [0x3, 0x1].
+    let a = pkg_at(SYS_ADDR_TWO, &pkgs).into_serialized_package();
+    let b = pkg_at(SYS_ADDR, &pkgs).into_serialized_package();
+
+    let runtime = fresh_runtime(vec![a, b]);
+    let cache = runtime.cache();
+    let pkg_b = cache
+        .cached_package_at(SYS_ADDR)
+        .expect("pinned_b cached at 0x1");
+    let (direct, virt) = count_calls(&pkg_b);
+    assert!(
+        direct >= 1,
+        "expected pinned_b (0x1) -> pinned_a (0x3) to be a direct call under reversed dep order, got direct={direct} virt={virt}",
+    );
+    assert_eq!(virt, 0, "expected no virtual calls in pinned_b, got {virt}");
+}
+
+// 4. Identity-link check rejects input where original_id != version_id.
+//
+// The install pipeline `debug_assert!(false, ...)` fires on this bad host input in debug
+// builds, so the test expects a panic there. Release builds compile the assert out and the
+// tail assertion verifies graceful degradation (empty system_packages set).
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    should_panic(expected = "version_id != original_id")
+)]
 fn identity_link_check_rejects_non_identity_input() {
     let pkgs = compile_packages_in_file("system_packages_basic.move", &[]);
     let mut sys = pkg_at(SYS_ADDR, &pkgs).into_serialized_package();
@@ -160,7 +193,14 @@ fn identity_link_check_rejects_non_identity_input() {
 }
 
 // 5. Defining-ID check rejects a system pkg whose type_origin_table points elsewhere.
+//
+// Same debug/release split as test 4 — debug panics on the host bug; release verifies
+// graceful degradation.
 #[test]
+#[cfg_attr(
+    debug_assertions,
+    should_panic(expected = "defining_id does not match original_id")
+)]
 fn defining_id_check_rejects_mismatched_origin() {
     let pkgs = compile_packages_in_file("system_packages_basic.move", &[]);
     let mut sys = pkg_at(SYS_ADDR, &pkgs).into_serialized_package();
@@ -183,7 +223,15 @@ fn defining_id_check_rejects_mismatched_origin() {
 }
 
 // 6. Validation failure logs and skips, runtime still constructs and is usable.
+//
+// Same debug/release split as tests 4 and 5. Debug panics on the host bug via
+// `debug_assert!`; release exercises the full graceful-degradation path (bad system pkg
+// is skipped, non-system publish still succeeds).
 #[test]
+#[cfg_attr(
+    debug_assertions,
+    should_panic(expected = "System package install failed")
+)]
 fn validation_failure_logs_and_continues() {
     let pkgs = compile_packages_in_file("system_packages_basic.move", &[]);
     let mut sys = pkg_at(SYS_ADDR, &pkgs).into_serialized_package();

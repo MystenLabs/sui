@@ -109,6 +109,10 @@ impl MoveRuntime {
                         original_id = %pkg.original_id,
                         "System package skipped: version_id != original_id (must be identity-linked)",
                     );
+                    debug_assert!(
+                        false,
+                        "System package skipped: version_id != original_id (host bug)",
+                    );
                     return false;
                 }
                 if let Some((name, defining_id)) = pkg
@@ -124,6 +128,10 @@ impl MoveRuntime {
                         %defining_id,
                         "System package skipped: type defining_id does not match original_id",
                     );
+                    debug_assert!(
+                        false,
+                        "System package skipped: type defining_id does not match original_id (host bug)",
+                    );
                     return false;
                 }
                 true
@@ -131,7 +139,14 @@ impl MoveRuntime {
             .cloned()
             .collect();
 
-        let resolver = SystemPackages::new(filtered).into_resolver();
+        let deduped = SystemPackages::new(filtered);
+        // Capture install order from the host-provided sequence *before* consuming into the
+        // resolver — the resolver's internal `BTreeMap` sorts by `version_id`, and we must
+        // not let address ordering leak in as the effective install order (a system package
+        // that depends on a higher-numbered sibling would otherwise be JIT'd before its
+        // dependency was pinned, silently dropping the direct-call rewrite for that edge).
+        let load_order_keys: Vec<VersionId> = deduped.iter().map(|p| p.version_id).collect();
+        let resolver = deduped.into_resolver();
 
         // Split borrows of `self` so that the `&mut cache` borrow can coexist with the
         // immutable `&telemetry` / `&natives` borrows below.
@@ -145,11 +160,25 @@ impl MoveRuntime {
             error!(
                 "install_system_packages: cache Arc is shared; system packages will not be installed",
             );
+            // We just constructed this cache: `get_mut` must succeed. Missing it here means
+            // we've handed out an Arc clone before install, which is an internal-invariant bug.
+            debug_assert!(
+                false,
+                "install_system_packages: cache Arc must be unique at construction time",
+            );
             return;
         };
 
-        for pkg in resolver.iter() {
-            let version_id = pkg.version_id;
+        // Install each system package in its own `resolve_packages` call rather than in bulk.
+        // The JIT translator snapshots `cache.system_packages()` once per `resolve_packages`
+        // call (see `effective_system_packages_for`), so a bulk resolve would give every
+        // in-batch package a snapshot that omits its siblings — even ones we intended to
+        // direct-call into. Per-package installs make each successful install visible to the
+        // next call's snapshot, letting later system packages direct-resolve into earlier ones.
+        //
+        // Iterate `load_order_keys` (host-provided order) rather than iterating the resolver
+        // — see comments above and on `SystemPackageResolver` for why.
+        for version_id in load_order_keys {
             let result = telemetry.with_transaction_telemetry(|tx_telemetry| {
                 package_resolution::resolve_packages(
                     &resolver,
@@ -168,6 +197,13 @@ impl MoveRuntime {
                                 %original_id,
                                 "System package already registered at original_id; skipping duplicate",
                             );
+                            // Filter + `SystemPackages::new` dedup by version_id, and the filter
+                            // enforces version_id == original_id, so duplicate original_ids
+                            // should be impossible here.
+                            debug_assert!(
+                                false,
+                                "duplicate system package original_id survived dedup + filter",
+                            );
                         }
                     }
                 }
@@ -175,6 +211,10 @@ impl MoveRuntime {
                     error!(
                         %version_id, error = ?err,
                         "System package install failed; skipping",
+                    );
+                    debug_assert!(
+                        false,
+                        "System package install failed for {version_id}: {err:?} (host bug)",
                     );
                 }
             }

@@ -14,13 +14,15 @@ use move_core_types::{
     account_address::AccountAddress,
     resolver::{ModuleResolver, SerializedPackage},
 };
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::Infallible,
+};
 use tracing::error;
-
-use std::{collections::BTreeMap, convert::Infallible};
 
 /// Public input type. Mirrors `NativeFunctions`: built by the host, handed to
 /// `MoveRuntime::new_with_system_packages`. Pinned for the lifetime of the runtime.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SystemPackages {
     packages: Vec<SerializedPackage>,
 }
@@ -35,13 +37,17 @@ impl SystemPackages {
     /// a duplicate `version_id` in the host's input list is a host bug, not a runtime error,
     /// so we surface it loudly rather than aborting construction.
     pub fn new(packages: Vec<SerializedPackage>) -> Self {
-        let mut seen = std::collections::BTreeSet::new();
+        let mut seen = BTreeSet::new();
         let mut out = Vec::with_capacity(packages.len());
         for pkg in packages {
             if !seen.insert(pkg.version_id) {
                 error!(
                     version_id = %pkg.version_id,
                     "Duplicate system package version_id in input; keeping first occurrence",
+                );
+                debug_assert!(
+                    false,
+                    "duplicate system package version_id in input (host bug)"
                 );
                 continue;
             }
@@ -76,15 +82,15 @@ impl SystemPackages {
 
 /// Internal resolver wrapping the deduplicated input set, keyed by `version_id` for the
 /// `ModuleResolver` callbacks the load/verify/JIT pipeline expects.
+///
+/// The map is a `BTreeMap` only because it needs efficient keyed lookup by `version_id` —
+/// **no ordered iteration is exposed**. Install order is driven separately by the caller
+/// (`install_system_packages`) using a `Vec<VersionId>` captured before dedup consumes the
+/// input, so we don't depend on `BTreeMap`'s address-sorted iteration matching the dependency
+/// order the host supplied.
 #[derive(Debug)]
 pub(crate) struct SystemPackageResolver {
     by_version_id: BTreeMap<AccountAddress, SerializedPackage>,
-}
-
-impl SystemPackageResolver {
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &SerializedPackage> {
-        self.by_version_id.values()
-    }
 }
 
 impl ModuleResolver for SystemPackageResolver {

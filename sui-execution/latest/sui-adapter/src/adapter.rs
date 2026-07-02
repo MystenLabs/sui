@@ -44,42 +44,10 @@ mod checked {
     ) -> Result<MoveRuntime, SuiError> {
         let native_functions =
             NativeFunctions::new(natives).map_err(|_| SuiErrorKind::ExecutionInvariantViolation)?;
-        Ok(MoveRuntime::new_with_system_packages(
+        Ok(MoveRuntime::new(
             native_functions,
             vm_config(protocol_config),
-            system_packages_for_runtime(),
         ))
-    }
-
-    // Serialize the truly pinned system packages (move-stdlib + sui-framework) into the form
-    // `MoveRuntime` expects. Other entries from `BuiltInFramework` (sui-system, deepbook,
-    // bridge) are user-upgradable on chain, so pinning their genesis bytecode buys nothing
-    // once they upgrade past v0; the linkage version-id check would skip them anyway.
-    //
-    // Per-package serialization failure logs and skips rather than aborting: the runtime
-    // tolerates an empty/partial system-package set and falls back to virtual dispatch for
-    // anything not pinned.
-    fn system_packages_for_runtime() -> move_vm_runtime::shared::system_packages::SystemPackages {
-        use move_vm_runtime::shared::system_packages::SystemPackages;
-        use sui_framework::BuiltInFramework;
-        use sui_types::{MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID};
-        let packages = BuiltInFramework::iter_system_packages()
-            .filter(|pkg| pkg.id == MOVE_STDLIB_PACKAGE_ID || pkg.id == SUI_FRAMEWORK_PACKAGE_ID)
-            .filter_map(|pkg| {
-                match pkg.genesis_move_package().into_serialized_move_package() {
-                    Ok(serialized) => Some(serialized),
-                    Err(err) => {
-                        debug_fatal!(
-                            "Failed to serialize system package {}: {:?}; skipping (runtime will fall back to virtual dispatch for this package)",
-                            pkg.id,
-                            err,
-                        );
-                        None
-                    }
-                }
-            })
-            .collect();
-        SystemPackages::new(packages)
     }
 
     pub fn vm_config(protocol_config: &ProtocolConfig) -> VMConfig {

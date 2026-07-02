@@ -145,21 +145,14 @@ impl PackageContext<'_> {
         let known_fn_opt = if vtable_entry.package_key() == self.original_id {
             // Same-package call: resolve against the package we're currently building.
             self.vtable_funs.get(vtable_entry.intra_package_key())
-        } else if self
-            .system_packages
-            .contains_key(&vtable_entry.package_key())
-        {
-            // System-package call: only direct-resolve if the caller has handed us a pinned
-            // version that matches the user's linkage.
-            self.system_packages
-                .get(&vtable_entry.package_key())
-                .and_then(|sys_pkg| {
-                    sys_pkg
-                        .runtime
-                        .vtable
-                        .functions
-                        .get(vtable_entry.intra_package_key())
-                })
+        } else if let Some(sys_pkg) = self.system_packages.get(&vtable_entry.package_key()) {
+            // System-package call: caller has already filtered `system_packages` to those the
+            // user's linkage maps to our pinned versions, so membership here is sufficient.
+            sys_pkg
+                .runtime
+                .vtable
+                .functions
+                .get(vtable_entry.intra_package_key())
         } else {
             return Ok(None);
         };
@@ -232,6 +225,13 @@ pub fn package(
     );
     let version_id = verified_package.version_id;
     let original_id = verified_package.original_id;
+    // The package we're translating must not appear in its own direct-call system-package set;
+    // self-calls are resolved via `vtable_funs`, and confusing the two would let a package
+    // "direct-call" a stale/mismatched copy of itself.
+    debug_assert!(
+        !system_packages.contains_key(&original_id),
+        "package being translated ({original_id}) must not appear in its own system_packages set",
+    );
     let (module_ids_in_pkg, package_modules): (BTreeSet<_>, Vec<_>) =
         verified_package.modules.into_iter().unzip();
 

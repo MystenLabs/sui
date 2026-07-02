@@ -13906,7 +13906,6 @@ dependencies = [
  "quick_cache",
  "serde",
  "serde_json",
- "sui-framework",
  "sui-macros",
  "sui-move-natives-latest",
  "sui-protocol-config",

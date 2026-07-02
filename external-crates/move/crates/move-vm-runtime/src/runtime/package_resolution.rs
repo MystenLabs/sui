@@ -285,6 +285,11 @@ pub(crate) fn jit_and_cache_package(
 /// maps `OriginalId -> our pinned VersionId` exactly. Anything else (no entry, wrong version) is
 /// excluded; the JIT translator only direct-resolves into a system pkg when the user has
 /// explicitly linked to that specific pinned version.
+///
+/// The package being translated is *also* excluded (defensively) — a package must never appear
+/// in its own direct-call set. Same-package calls are resolved via the in-progress vtable in
+/// `try_resolve_direct_function_call`, and mixing self into `system_packages` risks pinning a
+/// stale copy of ourselves via the direct-call path.
 fn effective_system_packages_for(
     system_packages: &BTreeMap<OriginalId, Arc<Package>>,
     verified_pkg: &verification::ast::Package,
@@ -292,9 +297,11 @@ fn effective_system_packages_for(
     if system_packages.is_empty() {
         return BTreeMap::new();
     }
+    let self_id = verified_pkg.original_id;
     let linkage = verified_pkg.linkage_table();
     system_packages
         .iter()
+        .filter(|(orig_id, _)| **orig_id != self_id)
         .filter_map(|(orig_id, sys_pkg)| match linkage.get(orig_id) {
             Some(linked_version) if *linked_version == sys_pkg.runtime.version_id => {
                 Some((*orig_id, Arc::clone(sys_pkg)))
