@@ -250,7 +250,7 @@ fn function(context: &Context, fun: &Function) -> Doc {
     }
 }
 
-/// Look through any number of `Exp::Block` wrappers — used by the function-body dispatcher
+/// Look through any number of `Exp::Block` wrappers - used by the function-body dispatcher
 /// to decide which braces strategy applies based on the underlying shape.
 fn peek_block(exp: &Exp) -> &Exp {
     match exp {
@@ -264,7 +264,7 @@ fn peek_block(exp: &Exp) -> &Exp {
 //
 // Anything that prints a `Type` ultimately bottoms out at a `TypeRef`'s `Display` impl, which
 // already knows about `Aliased` vs. `Qualified`. The renderers below just walk the AST shapes
-// in the same shape as `move_model_2::pretty_printer::fun_header` etc. — the difference is the
+// in the same shape as `move_model_2::pretty_printer::fun_header` etc. - the difference is the
 // types they read have been through `collect_uses`.
 
 fn fun_header_doc(fun: &Function) -> Doc {
@@ -385,7 +385,7 @@ fn datatype_tparam_doc(idx: usize, tp: &DatatypeTyParameter) -> Doc {
 
 /// Render the abilities in an `AbilitySet`, in the same order as
 /// `move_model_2::summary::Ability` (copy, drop, key, store) so output stays stable against
-/// any upstream changes to AbilitySet iteration. `sep` is the joiner — `+` for constraints
+/// any upstream changes to AbilitySet iteration. `sep` is the joiner - `+` for constraints
 /// in type-parameter positions, `,` for struct/enum `has` clauses.
 fn ability_parts(s: AbilitySet) -> Vec<Doc> {
     let mut parts: Vec<Doc> = Vec::new();
@@ -415,7 +415,7 @@ fn ability_constraints_doc(s: AbilitySet) -> Option<Doc> {
     }
 }
 
-/// `has copy, drop` ability list for struct/enum declarations — same set as
+/// `has copy, drop` ability list for struct/enum declarations - same set as
 /// `ability_constraints_doc` but comma-separated instead of `+`-separated.
 fn ability_list_doc(s: AbilitySet) -> Option<Doc> {
     let parts = ability_parts(s);
@@ -514,7 +514,7 @@ fn variant_doc(v: &Variant) -> Doc {
     }
 }
 
-/// `{ name: ty, ... }` — used for both struct fields and enum variant fields. Empty fields
+/// `{ name: ty, ... }` - used for both struct fields and enum variant fields. Empty fields
 /// render as `{}`. Wide-vs.-tall layout mirrors model-2's `Fields::to_doc` so output stays
 /// stable: the wide form is `{ a: A, b: B }`, the tall form has each field on its own line
 /// with a trailing comma.
@@ -822,7 +822,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
 
     fn e_block(context: &Context, e: &Exp) -> Doc {
         // Peel `Block` wrappers, collecting `/* block N */` comments to lead the brace-block,
-        // then delegate the inner shape (Seq → stmts; single Exp → statement).
+        // then delegate the inner shape (Seq -> stmts; single Exp -> statement).
         let mut headers: Vec<Doc> = Vec::new();
         let mut inner = e;
         while let Exp::Block(id, body) = inner {
@@ -943,8 +943,35 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
         }
     }
 
+    /// Receiver for method syntax (`.foo(...)`). Move's `.method` auto-borrows, so a
+    /// `Borrow(_, inner)` arg means we emit `inner.method(...)` rather than `&inner.method(...)`
+    /// - the latter parses as `&(inner.method())` and would give us the wrong type.
+    fn method_receiver(context: &Context, e: &Exp) -> Doc {
+        match e {
+            Exp::Borrow(_, inner) => maybe_parens(context, inner),
+            _ => maybe_parens(context, e),
+        }
+    }
+
     match op {
-        DataOp::ReadRef => D::text("*").concat(maybe_parens(context, &args[0])),
+        // `*(&x.f)` collapses to `x.f` (value form). Same for `*(&v[i])` and the `&mut`
+        // variants - the round-trip ref-then-deref reads as the field/element value.
+        DataOp::ReadRef => match &args[0] {
+            Exp::Data {
+                op: DataOp::ImmBorrowField(field_ref) | DataOp::MutBorrowField(field_ref),
+                args: inner,
+            } => maybe_parens(context, &inner[0])
+                .concat(D::text("."))
+                .concat(D::text(field_ref.field.name.as_str())),
+            Exp::Data {
+                op: DataOp::VecImmBorrow(_) | DataOp::VecMutBorrow(_),
+                args: inner,
+            } => maybe_parens(context, &inner[0])
+                .concat(D::text("["))
+                .concat(exp(context, &inner[1]))
+                .concat(D::text("]")),
+            _ => D::text("*").concat(maybe_parens(context, &args[0])),
+        },
 
         DataOp::WriteRef => D::text("*")
             .concat(maybe_parens(context, &args[0]))
@@ -966,7 +993,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(exp_list(context, args))
             .concat(D::text("]")),
 
-        DataOp::VecLen(_) => exp(context, &args[0]).concat(D::text(".len()")),
+        DataOp::VecLen(_) => method_receiver(context, &args[0]).concat(D::text(".length()")),
 
         DataOp::VecImmBorrow(_) => D::text("&")
             .concat(maybe_parens(context, &args[0]))
@@ -980,14 +1007,14 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(exp(context, &args[1]))
             .concat(D::text("]")),
 
-        DataOp::VecPushBack(_) => maybe_parens(context, &args[0])
+        DataOp::VecPushBack(_) => method_receiver(context, &args[0])
             .concat(D::text(".push_back("))
             .concat(exp(context, &args[1]))
             .concat(D::text(")")),
 
-        DataOp::VecPopBack(_) => maybe_parens(context, &args[0]).concat(D::text(".pop_back()")),
+        DataOp::VecPopBack(_) => method_receiver(context, &args[0]).concat(D::text(".pop_back()")),
 
-        DataOp::VecSwap(_) => maybe_parens(context, &args[0])
+        DataOp::VecSwap(_) => method_receiver(context, &args[0])
             .concat(D::text(".swap("))
             .concat(exp(context, &args[1]))
             .concat(D::text(", "))
@@ -1052,14 +1079,38 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
             .concat_space(D::text(sym.to_string()))
             .concat_space(exp(context, rhs))
     };
+    // `&&` / `||` parenthesize boolean-operator children so nested compound conditions
+    // read unambiguously: `a && b || c` becomes `(a && b) || c`, etc.
+    let is_bool_compound = |e: &Exp| {
+        matches!(
+            e,
+            Exp::Primitive {
+                op: PrimitiveOp::And | PrimitiveOp::Or,
+                ..
+            }
+        )
+    };
+    let bool_arg = |e: &Exp| {
+        let doc = exp(context, e);
+        if is_bool_compound(e) {
+            doc.parens()
+        } else {
+            doc
+        }
+    };
+    let bool_bin = |lhs: &Exp, sym: &str, rhs: &Exp| {
+        bool_arg(lhs)
+            .concat_space(D::text(sym.to_string()))
+            .concat_space(bool_arg(rhs))
+    };
 
     match op {
-        PrimitiveOp::CastU8 => exp(context, &args[0]).concat(D::text(" as u8")),
-        PrimitiveOp::CastU16 => exp(context, &args[0]).concat(D::text(" as u16")),
-        PrimitiveOp::CastU32 => exp(context, &args[0]).concat(D::text(" as u32")),
-        PrimitiveOp::CastU64 => exp(context, &args[0]).concat(D::text(" as u64")),
-        PrimitiveOp::CastU128 => exp(context, &args[0]).concat(D::text(" as u128")),
-        PrimitiveOp::CastU256 => exp(context, &args[0]).concat(D::text(" as u256")),
+        PrimitiveOp::CastU8 => exp(context, &args[0]).concat(D::text("as u8")),
+        PrimitiveOp::CastU16 => exp(context, &args[0]).concat(D::text("as u16")),
+        PrimitiveOp::CastU32 => exp(context, &args[0]).concat(D::text("as u32")),
+        PrimitiveOp::CastU64 => exp(context, &args[0]).concat(D::text("as u64")),
+        PrimitiveOp::CastU128 => exp(context, &args[0]).concat(D::text("as u128")),
+        PrimitiveOp::CastU256 => exp(context, &args[0]).concat(D::text("as u256")),
 
         PrimitiveOp::Add => bin(&args[0], "+", &args[1]),
         PrimitiveOp::Subtract => bin(&args[0], "-", &args[1]),
@@ -1069,8 +1120,8 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
         PrimitiveOp::BitOr => bin(&args[0], "|", &args[1]),
         PrimitiveOp::BitAnd => bin(&args[0], "&", &args[1]),
         PrimitiveOp::Xor => bin(&args[0], "^", &args[1]),
-        PrimitiveOp::Or => bin(&args[0], "||", &args[1]),
-        PrimitiveOp::And => bin(&args[0], "&&", &args[1]),
+        PrimitiveOp::Or => bool_bin(&args[0], "||", &args[1]),
+        PrimitiveOp::And => bool_bin(&args[0], "&&", &args[1]),
         PrimitiveOp::Equal => bin(&args[0], "==", &args[1]),
         PrimitiveOp::NotEqual => bin(&args[0], "!=", &args[1]),
         PrimitiveOp::LessThan => bin(&args[0], "<", &args[1]),

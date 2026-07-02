@@ -3,11 +3,11 @@
 
 use std::ffi::c_int;
 
-use sui_default_config::DefaultConfig;
-
+use serde::Deserialize;
+use serde::Serialize;
 /// Configuration for setting up a RocksDB database.
-#[DefaultConfig]
-#[serde(deny_unknown_fields)]
+#[derive(Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct DbConfig {
     /// The amount of data to keep in memory before flushing to disk, in MiB.
     pub write_buffer_size_mb: usize,

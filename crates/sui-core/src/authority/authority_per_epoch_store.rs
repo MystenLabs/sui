@@ -18,7 +18,6 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{Either, join_all};
 use itertools::Itertools;
-use moka::sync::SegmentedCache as MokaCache;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
@@ -90,6 +89,7 @@ use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::consensus_tx_status_cache::{ConsensusTxStatus, ConsensusTxStatusCache};
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use super::execution_time_estimator::{ConsensusObservations, ExecutionTimeEstimator};
+use super::finalized_transactions_cache::FinalizedTransactionsCache;
 use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
@@ -434,7 +434,7 @@ pub struct AuthorityPerEpochStore {
     pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
 
     /// A cache which tracks recently finalized transactions.
-    pub(crate) finalized_transactions_cache: MokaCache<TransactionDigest, ()>,
+    pub(crate) finalized_transactions_cache: FinalizedTransactionsCache,
 
     /// The node's role for this epoch, derived from committee membership and
     /// the configured sync mode. Computed once at construction.
@@ -1165,10 +1165,8 @@ impl AuthorityPerEpochStore {
         let submitted_transaction_cache =
             SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
 
-        let finalized_transactions_cache = MokaCache::builder(8)
-            .max_capacity(randomize_cache_capacity_in_tests(100_000))
-            .eviction_policy(moka::policy::EvictionPolicy::lru())
-            .build();
+        let finalized_transactions_cache =
+            FinalizedTransactionsCache::new(randomize_cache_capacity_in_tests(100_000));
 
         let s = Arc::new(Self {
             name,
@@ -1972,12 +1970,33 @@ impl AuthorityPerEpochStore {
             .get_owned_object_locks(&tables, obj_refs)
     }
 
+    /// Batched read of existing owned-object locks, returned as a map containing only
+    /// the refs that are currently locked. The consensus commit handler prefetches the
+    /// cross-commit lock state (constant for the duration of a commit) once with this,
+    /// rather than reading per transaction inside
+    /// `try_acquire_owned_object_locks_post_consensus`.
+    pub fn get_owned_object_locks_map(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<HashMap<ObjectRef, LockDetails>> {
+        let locks = self.get_owned_object_locks(obj_refs)?;
+        Ok(obj_refs
+            .iter()
+            .cloned()
+            .zip_eq(locks)
+            .filter_map(|(obj_ref, lock)| lock.map(|lock| (obj_ref, lock)))
+            .collect())
+    }
+
     /// Attempts to acquire owned object locks for a transaction post-consensus.
     ///
     /// Checks whether the object versions are already locked by searching:
-    /// 1. The current commit
-    /// 2. Quarantine and cache (earlier consensus commits in this epoch)
-    /// 3. DB (cache miss)
+    /// 1. The current commit (`current_commit_locks`, accumulated as earlier
+    ///    transactions in this commit acquire locks).
+    /// 2. `existing_locks`: locks from earlier commits in this epoch (and the DB after
+    ///    crash recovery). These are constant for the duration of a commit, so the
+    ///    caller prefetches them once via `get_owned_object_locks_map` rather than
+    ///    reading per transaction.
     ///
     /// Returns the new locks to add on success, or error if a conflict exists.
     pub fn try_acquire_owned_object_locks_post_consensus(
@@ -1985,13 +2004,10 @@ impl AuthorityPerEpochStore {
         owned_object_refs: &[ObjectRef],
         tx_digest: TransactionDigest,
         current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
+        existing_locks: &HashMap<ObjectRef, LockDetails>,
     ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
-        if owned_object_refs.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Check for intra-commit conflicts (transactions processed earlier in the same commit).
         for obj_ref in owned_object_refs {
+            // Conflict with a transaction earlier in the same commit.
             if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
                 && *locked_tx_digest != tx_digest
             {
@@ -2001,16 +2017,8 @@ impl AuthorityPerEpochStore {
                 }
                 .into());
             }
-        }
-
-        // Check quarantine and epoch store for existing locks.
-        let existing_locks = self
-            .get_owned_object_locks(owned_object_refs)
-            .unwrap_or_default();
-
-        // Check for conflicts with existing locks (from earlier commits or crash recovery)
-        for (lock, obj_ref) in existing_locks.iter().zip_debug_eq(owned_object_refs) {
-            if let Some(locked_tx_digest) = lock
+            // Conflict with a lock from an earlier commit (or crash recovery).
+            if let Some(locked_tx_digest) = existing_locks.get(obj_ref)
                 && *locked_tx_digest != tx_digest
             {
                 return Err(SuiErrorKind::ObjectLockConflict {
@@ -3490,6 +3498,7 @@ impl AuthorityPerEpochStore {
         self.signature_verifier.clear_signature_cache();
     }
 
+    #[cfg(test)]
     pub(crate) fn set_consensus_tx_status(
         &self,
         position: ConsensusPosition,
@@ -3497,6 +3506,14 @@ impl AuthorityPerEpochStore {
     ) {
         self.consensus_tx_status_cache
             .set_transaction_status(position, status);
+    }
+
+    pub(crate) fn set_consensus_tx_statuses(
+        &self,
+        updates: Vec<(ConsensusPosition, ConsensusTxStatus)>,
+    ) {
+        self.consensus_tx_status_cache
+            .set_transaction_statuses(updates);
     }
 
     pub(crate) fn set_rejection_vote_reason(&self, position: ConsensusPosition, reason: &SuiError) {
@@ -3514,14 +3531,14 @@ impl AuthorityPerEpochStore {
 
     /// Caches recent finalized transactions, to avoid revoting them.
     pub(crate) fn cache_recently_finalized_transaction(&self, tx_digest: TransactionDigest) {
-        self.finalized_transactions_cache.insert(tx_digest, ());
+        self.finalized_transactions_cache.insert(tx_digest);
     }
 
     /// If true, transaction is recently finalized and should not be voted on.
     /// If false, the transaction may never be finalized, or has been finalized
     /// but the info has been evicted from the cache.
     pub(crate) fn is_recently_finalized(&self, tx_digest: &TransactionDigest) -> bool {
-        self.finalized_transactions_cache.contains_key(tx_digest)
+        self.finalized_transactions_cache.contains(tx_digest)
     }
 
     /// Only used by admin API

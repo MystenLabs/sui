@@ -16,7 +16,7 @@
 //!
 //! Both arms-are-literal forms reduce the if to a plain expression that preserves `t`'s
 //! evaluation (including side effects); the mixed forms map to short-circuited `&&`/`||`,
-//! which evaluate `t` then conditionally evaluate `e` — the same observable behavior as the
+//! which evaluate `t` then conditionally evaluate `e` - the same observable behavior as the
 //! original if's arm selection.
 //!
 //! We peek through any `Block` wrapper on an arm (it carries a block ID for goto cross-

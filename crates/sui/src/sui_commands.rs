@@ -69,6 +69,7 @@ use sui_move_build::BuildConfig as SuiBuildConfig;
 use sui_package_alt::{SuiFlavor, find_environment};
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::{LocalDatabase, get_available_port};
+use sui_prompt::{self, execute_prompt_command};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
 use sui_rpc_api::Client;
@@ -378,6 +379,10 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         cmd: sui_move::Command,
     },
+
+    /// Expert Sui and Move knowledge for AI agents (run `sui prompt` to start).
+    #[clap(name = "prompt")]
+    Prompt(sui_prompt::Prompt),
 
     /// Command to initialize the bridge committee, usually used when
     /// running local bridge cluster.
@@ -714,6 +719,10 @@ impl SuiCommand {
                     }
                 }
             }
+            SuiCommand::Prompt(prompt) => {
+                execute_prompt_command(prompt)?;
+                Ok(())
+            }
             SuiCommand::BridgeInitialize {
                 network_config,
                 client_config,
@@ -1027,21 +1036,16 @@ async fn start(
         swarm_builder = swarm_builder.with_data_ingestion_dir(dir.clone());
     }
 
-    let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
-    fullnode_rpc_address.set_port(fullnode_rpc_port);
-
-    if no_full_node {
+    let fullnode_rpc_address = if no_full_node {
         swarm_builder = swarm_builder.with_fullnode_count(0);
+        let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
+        fullnode_rpc_address.set_port(fullnode_rpc_port);
+        fullnode_rpc_address
     } else {
         let rpc_config = sui_config::RpcConfig {
             enable_indexing: Some(true),
             ..Default::default()
         };
-
-        swarm_builder = swarm_builder
-            .with_fullnode_count(1)
-            .with_fullnode_rpc_addr(fullnode_rpc_address)
-            .with_fullnode_rpc_config(rpc_config.clone());
 
         let fullnode_config_path = config_dir.join(SUI_FULLNODE_CONFIG);
         if fullnode_config_path.exists() {
@@ -1052,7 +1056,7 @@ async fn start(
                         fullnode_config_path
                     ))
                 })?;
-            fullnode_config.json_rpc_address = fullnode_rpc_address;
+            fullnode_config.json_rpc_address.set_port(fullnode_rpc_port);
             fullnode_config.rpc = Some(rpc_config);
             let localhost = sui_config::local_ip_utils::localhost_for_testing();
             fullnode_config.metrics_address =
@@ -1070,9 +1074,21 @@ async fn start(
                     .checkpoint_executor_config
                     .data_ingestion_dir = Some(dir.clone());
             }
-            swarm_builder = swarm_builder.with_fullnode_config(fullnode_config);
+            let fullnode_rpc_address = fullnode_config.json_rpc_address;
+            swarm_builder = swarm_builder
+                .with_fullnode_count(1)
+                .with_fullnode_config(fullnode_config);
+            fullnode_rpc_address
+        } else {
+            let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
+            fullnode_rpc_address.set_port(fullnode_rpc_port);
+            swarm_builder = swarm_builder
+                .with_fullnode_count(1)
+                .with_fullnode_rpc_addr(fullnode_rpc_address)
+                .with_fullnode_rpc_config(rpc_config);
+            fullnode_rpc_address
         }
-    }
+    };
 
     let mut swarm = swarm_builder.build();
     swarm.launch().await?;

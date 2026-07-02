@@ -716,7 +716,7 @@ fn vec_pack_gen_deep_it(
     session: &mut InMemoryTestAdapter,
     snippet_rep: usize,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
-    const STRUCT_TY_PARAMS: usize = 3;
+    const STRUCT_TY_PARAMS: usize = 1;
     const STRUCT_TY_ARGS_DEPTH: usize = 2;
     const FUNC_TY_ARGS_DEPTH: usize = 3;
 
@@ -873,7 +873,7 @@ fn deep_gen_call_it(
     session: &mut InMemoryTestAdapter,
     snippet_rep: usize,
 ) -> (ModuleId, Identifier, Vec<TypeTag>) {
-    const STRUCT_TY_PARAMS: usize = 3;
+    const STRUCT_TY_PARAMS: usize = 1;
     const STRUCT_TY_ARGS_DEPTH: usize = 2;
     const FUNC_TY_ARGS_DEPTH: usize = 3;
 

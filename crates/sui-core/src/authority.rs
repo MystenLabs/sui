@@ -69,7 +69,6 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_execution::Executor;
-use sui_protocol_config::Chain;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::dynamic_field::visitor as DFV;
@@ -261,6 +260,7 @@ pub mod consensus_tx_status_cache;
 pub(crate) mod epoch_marker_key;
 pub mod epoch_start_configuration;
 pub mod execution_time_estimator;
+pub mod finalized_transactions_cache;
 pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
 pub mod submitted_transaction_cache;
@@ -324,6 +324,7 @@ pub struct AuthorityMetrics {
 
     /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
+    pub consensus_handler_processed_user_transactions: IntCounterVec,
     pub consensus_handler_transaction_sizes: HistogramVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
@@ -639,14 +640,20 @@ impl AuthorityMetrics {
             .unwrap(),
             consensus_handler_processed: register_int_counter_vec_with_registry!(
                 "consensus_handler_processed",
-                "Number of transactions processed by consensus handler",
-                &["class"],
+                "Number of transactions processed by consensus handler, sliced by class and commit outcome (accepted/rejected)",
+                &["class", "outcome"],
+                registry
+            ).unwrap(),
+            consensus_handler_processed_user_transactions: register_int_counter_vec_with_registry!(
+                "consensus_handler_processed_user_transactions",
+                "Number of user transactions processed by consensus handler, sliced by commit outcome (accepted/rejected) and block author",
+                &["outcome", "authority"],
                 registry
             ).unwrap(),
             consensus_handler_transaction_sizes: register_histogram_vec_with_registry!(
                 "consensus_handler_transaction_sizes",
-                "Sizes of each type of transactions processed by consensus handler",
-                &["class"],
+                "Sizes of each type of transactions processed by consensus handler, sliced by class and commit outcome (accepted/rejected)",
+                &["class", "outcome"],
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
@@ -1975,14 +1982,7 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
-        // Mainnet-only: feed the accumulator (settlement) version so the address-balance gas-smash
-        // short-circuit activates at its rollout version and replays bit-for-bit. Other chains pass
-        // `None`, where the short-circuit applies unconditionally.
-        let accumulator_version = if self.chain_identifier.chain() == Chain::Mainnet {
-            execution_env.assigned_versions.accumulator_version
-        } else {
-            None
-        };
+        let accumulator_version = execution_env.assigned_versions.accumulator_version;
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),

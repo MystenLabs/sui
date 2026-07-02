@@ -259,3 +259,87 @@ async fn test_consensus_manager_address_update() {
 
     manager.shutdown().await;
 }
+
+/// Reads the value of the single-series `consensus_active_address_source` gauge for
+/// a given `peer_id`, or `None` if that series is absent. The value is the active
+/// source's `metric_code` (or the committee code when no override is active).
+fn active_source_code(registry: &Registry, peer_id: &str) -> Option<i64> {
+    let families = registry.gather();
+    let family = families
+        .iter()
+        .find(|f| f.name() == "consensus_active_address_source")?;
+    family.get_metric().iter().find_map(|m| {
+        m.get_label()
+            .iter()
+            .any(|l| l.name() == "peer_id" && l.value() == peer_id)
+            .then(|| m.gauge.value() as i64)
+    })
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_consensus_active_address_source_metric() {
+    use fastcrypto::encoding::{Encoding, Hex};
+
+    let configs = ConfigBuilder::new_with_temp_dir()
+        .committee_size(4.try_into().unwrap())
+        .build();
+    let config = &configs.validator_configs()[0];
+    let consensus_config = config.consensus_config().unwrap();
+
+    // Registry clones share state, so gathering `registry` sees what ConsensusManager
+    // registers into `registry_service.default_registry()`.
+    let registry = Registry::new();
+    let registry_service = RegistryService::new(registry.clone());
+    let secret = Arc::pin(config.protocol_key_pair().copy());
+    let genesis = config.genesis().unwrap();
+
+    let state = TestAuthorityBuilder::new()
+        .with_genesis_and_keypair(genesis, &secret)
+        .build()
+        .await;
+    let epoch_store = state.epoch_store_for_testing();
+    let consensus_client = Arc::new(UpdatableConsensusClient::new());
+
+    let manager = ConsensusManager::new(
+        config,
+        consensus_config,
+        &registry_service,
+        consensus_client,
+        NodeRole::Validator,
+    );
+
+    // A committee peer's consensus network public key, and its metric label.
+    let committee = epoch_store.epoch_start_state().get_consensus_committee();
+    let (_idx, peer_authority) = committee.authorities().nth(1).unwrap();
+    let peer_network_key = peer_authority.network_key.clone();
+    let peer_label = Hex::encode(peer_network_key.to_bytes());
+    let peer_network_pubkey = peer_network_key.into_inner();
+
+    // Apply a Discovery override. Consensus isn't running, so update_address returns
+    // Err, but the active-source metric is recorded before the running check.
+    let discovery_addr: Multiaddr = "/ip4/10.0.0.1/udp/9001".parse().unwrap();
+    let _ = manager.update_address(
+        peer_network_pubkey.clone(),
+        AddressSource::Discovery,
+        vec![discovery_addr],
+    );
+
+    assert_eq!(
+        active_source_code(&registry, &peer_label),
+        Some(AddressSource::Discovery.metric_code()),
+        "Discovery override should be the active source"
+    );
+
+    // Clear the override: the peer falls back to the on-chain committee address.
+    let _ = manager.update_address(
+        peer_network_pubkey.clone(),
+        AddressSource::Discovery,
+        vec![],
+    );
+
+    assert_eq!(
+        active_source_code(&registry, &peer_label),
+        Some(AddressSource::DEFAULT_ADDRESS_SOURCE_CODE),
+        "with no override, the default address is in use"
+    );
+}

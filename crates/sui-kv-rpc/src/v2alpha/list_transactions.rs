@@ -8,12 +8,31 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
+use sui_inverted_index::BitmapScanError;
+use sui_inverted_index::BitmapScanResult;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
+use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::reached_range_end;
+use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
+use sui_rpc_cursor::QueryType;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
 use tracing::debug_span;
@@ -35,25 +54,6 @@ use crate::resolve::compute_object_keys;
 use crate::resolve::needs_object_types;
 use crate::resolve::transaction_columns;
 use crate::v2::get_transaction::validate_read_mask;
-use sui_inverted_index::BitmapScanLimitExceeded;
-use sui_inverted_index::error_contains;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
-use sui_rpc_api::ledger_history::query_options::CheckpointRange;
-use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::QueryType;
-use sui_rpc_api::ledger_history::query_options::ResolvedRange;
-use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
-use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
-use sui_rpc_api::ledger_history::watermark::boundary_watermark;
-use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::reached_range_end;
-use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 
 pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;
@@ -129,7 +129,7 @@ pub(crate) async fn list_transactions(
     // Filtered requests are sparse bitmap hits and still use chunked
     // multi_get lookups. Unfiltered requests scan the dense tx_seq_digest
     // keyspace directly, bounded by limit_items.
-    let digest_stream: BoxStream<'static, Result<Watermarked<TxSeqDigestData>, anyhow::Error>> =
+    let digest_stream: BoxStream<'static, BitmapScanResult<Watermarked<TxSeqDigestData>>> =
         if let Some(filter) = &request.filter {
             let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
             let query = ctx.transaction_filter_query(filter)?;
@@ -148,7 +148,15 @@ pub(crate) async fn list_transactions(
                 tx_seq_digest_stage.concurrency,
                 {
                     let client = client.clone();
-                    move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
+                    move |seqs| {
+                        let client = client.clone();
+                        async move {
+                            fetch_tx_seq_digests(client, seqs)
+                                .await
+                                .map(|s| s.map_err(BitmapScanError::Source).boxed())
+                                .map_err(BitmapScanError::Source)
+                        }
+                    }
                 },
             )
         } else {
@@ -178,13 +186,18 @@ pub(crate) async fn list_transactions(
                         let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
                         yield watermark_response(wm);
                     }
-                    Err(e) => {
-                        if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
-                            scan_limit_hit = true;
-                            break;
-                        } else {
-                            Err(RpcError::from(e))?;
-                        }
+                    Err(BitmapScanError::ScanLimit) => {
+                        scan_limit_hit = true;
+                        break;
+                    }
+                    Err(BitmapScanError::Cancelled) => {
+                        Err(RpcError::new(
+                            tonic::Code::Cancelled,
+                            BitmapScanError::Cancelled.to_string(),
+                        ))?;
+                    }
+                    Err(BitmapScanError::Source(inner)) => {
+                        Err(RpcError::from(inner))?;
                     }
                 }
             }
@@ -223,7 +236,16 @@ pub(crate) async fn list_transactions(
         {
             let client = client.clone();
             let columns = columns.clone();
-            move |rows| fetch_transactions(client.clone(), columns.clone(), rows)
+            move |rows| {
+                let client = client.clone();
+                let columns = columns.clone();
+                async move {
+                    fetch_transactions(client, columns, rows)
+                        .await
+                        .map(|s| s.map_err(BitmapScanError::Source).boxed())
+                        .map_err(BitmapScanError::Source)
+                }
+            }
         },
     );
 
@@ -231,7 +253,7 @@ pub(crate) async fn list_transactions(
     // watermarks pass through pipelined_keyed_batches unchanged.
     let txn_with_objects_stream: BoxStream<
         'static,
-        Result<Watermarked<TransactionWithObjectsStreamItem>, anyhow::Error>,
+        BitmapScanResult<Watermarked<TransactionWithObjectsStreamItem>>,
     > = resolve::with_object_maps(
         tx_stream,
         client.clone(),
@@ -269,13 +291,18 @@ pub(crate) async fn list_transactions(
                     let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
                     yield watermark_response(wm);
                 }
-                Err(e) => {
-                    if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
-                        scan_limit_hit = true;
-                        break;
-                    } else {
-                        Err(RpcError::from(e))?;
-                    }
+                Err(BitmapScanError::ScanLimit) => {
+                    scan_limit_hit = true;
+                    break;
+                }
+                Err(BitmapScanError::Cancelled) => {
+                    Err(RpcError::new(
+                        tonic::Code::Cancelled,
+                        BitmapScanError::Cancelled.to_string(),
+                    ))?;
+                }
+                Err(BitmapScanError::Source(inner)) => {
+                    Err(RpcError::from(inner))?;
                 }
             }
         }
@@ -316,11 +343,14 @@ async fn scan_tx_seq_digests(
     range: std::ops::Range<u64>,
     limit: usize,
     options: &QueryOptions,
-) -> Result<BoxStream<'static, Result<Watermarked<TxSeqDigestData>, anyhow::Error>>, RpcError> {
+) -> Result<BoxStream<'static, BitmapScanResult<Watermarked<TxSeqDigestData>>>, RpcError> {
     let rows = client
         .scan_tx_seq_digests_stream(range, options.scan_direction(), limit)
         .await?;
-    Ok(rows.map_ok(Watermarked::Item).boxed())
+    Ok(rows
+        .map_ok(Watermarked::Item)
+        .map_err(BitmapScanError::Source)
+        .boxed())
 }
 
 async fn fetch_tx_seq_digests(

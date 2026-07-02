@@ -173,6 +173,11 @@ jobs:
         if: ${{ env.s3_existing_archive == '' }}
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
+          # macos-latest-large (Intel) is the slowest release runner; its build
+          # exceeds the default 1h OIDC session, expiring sccache's S3 token
+          # mid-build (ExpiredToken). Request a 4h session for that leg only.
+          # Requires sui-sccache-rw-github MaxSessionDuration >= 14400.
+          role-duration-seconds: ${{ matrix.os == 'macos-latest-large' && '14400' || '' }}
           key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher

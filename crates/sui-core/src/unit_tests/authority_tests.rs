@@ -5791,7 +5791,9 @@ where
         TestConsensusCommit::new(consensus_txns, round, epoch_start_ms + (1000 * round), 0);
 
     // Process through the consensus handler
-    consensus_handler.handle_consensus_commit(commit).await;
+    consensus_handler
+        .handle_consensus_commit_for_test(commit)
+        .await;
 
     // Give a bit of time for the async capture to complete
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;

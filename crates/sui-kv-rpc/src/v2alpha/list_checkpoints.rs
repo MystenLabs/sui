@@ -9,6 +9,9 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
+use sui_inverted_index::BitmapScanError;
+use sui_inverted_index::BitmapScanResult;
+use sui_inverted_index::ScanDirection;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::tables;
@@ -16,9 +19,25 @@ use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
+use sui_rpc::proto::sui::rpc::v2alpha::CheckpointItem;
+use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::advance_checkpoint_boundary;
+use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::reached_range_end;
+use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc_cursor::QueryType;
 use tracing::Instrument;
 use tracing::debug_span;
 use tracing::info;
@@ -30,6 +49,7 @@ use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
+use crate::pipeline::dedup_consecutive;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::resolve_watermarks;
 use crate::pipeline::take_items;
@@ -37,26 +57,6 @@ use crate::render::render_full_checkpoint;
 use crate::resolve;
 use crate::resolve::list_checkpoint_columns;
 use crate::resolve::needs_transactions_or_objects;
-use sui_inverted_index::BitmapScanLimitExceeded;
-use sui_inverted_index::ScanDirection;
-use sui_inverted_index::error_contains;
-use sui_rpc_api::ledger_history::query_options::CheckpointRange;
-use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::QueryType;
-use sui_rpc_api::ledger_history::query_options::ResolvedRange;
-use sui_rpc_api::ledger_history::watermark::advance_checkpoint_boundary;
-use sui_rpc_api::ledger_history::watermark::boundary_watermark;
-use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::reached_range_end;
-use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
-
-use sui_rpc::proto::sui::rpc::v2alpha::CheckpointItem;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 
 const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
@@ -76,6 +76,7 @@ pub(crate) async fn list_checkpoints(
     let checkpoints_stage = ctx.stage(PipelineStage::Checkpoints);
     let transactions_stage = ctx.stage(PipelineStage::Transactions);
     let objects_stage = ctx.stage(PipelineStage::Objects);
+    let tx_seq_digest_stage = ctx.stage(PipelineStage::TxSeqDigest);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -146,42 +147,72 @@ pub(crate) async fn list_checkpoints(
     // requests use sparse bitmap-eval over transactions and then fetch the
     // deduped checkpoint rows. Unfiltered requests scan the dense checkpoint
     // keyspace directly, bounded by limit_items.
-    let cp_data_stream: BoxStream<
-        'static,
-        Result<Watermarked<(u64, CheckpointData)>, anyhow::Error>,
-    > = if let Some(filter) = &request.filter {
-        let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
-        let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
-        let seq_stream = filtered_checkpoint_seq_stream(
-            &ctx,
-            filter,
-            tx_range,
-            limit_items,
-            options.clone(),
-            scan_budget,
-        )
-        .await?;
-        let seq_stream = take_items(seq_stream, limit_items);
-        pipelined_chunks(
-            seq_stream,
-            checkpoints_stage.chunk_size,
-            checkpoints_stage.concurrency,
-            {
-                let client = client.clone();
-                let columns = cp_columns.clone();
-                move |seqs| fetch_checkpoint_data(client.clone(), columns.clone(), seqs)
-            },
-        )
-    } else {
-        scan_checkpoint_data(
-            client.clone(),
-            cp_columns.clone(),
-            cp_range.clone(),
-            limit_items,
-            &options,
-        )
-        .await?
-    };
+    let cp_data_stream: BoxStream<'static, BitmapScanResult<Watermarked<(u64, CheckpointData)>>> =
+        if let Some(filter) = &request.filter {
+            let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
+            let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
+            let query = ctx.transaction_filter_query(filter)?;
+            let tx_seq_stream = client.eval_bitmap_query_stream(
+                query,
+                tx_range,
+                BitmapIndexSpec::tx(),
+                direction,
+                scan_budget,
+                ctx.bitmap_scan_observer(),
+            );
+            // Stage A2: resolve tx_seq -> cp_seq, streaming each cp as soon as the
+            // scan-order prefix is contiguous, then collapse each checkpoint's
+            // (contiguous) transactions to a single cp_seq. Dedup is its own stage
+            // rather than a per-chunk mapper because it carries state across chunk
+            // boundaries.
+            let cp_seq_stream = pipelined_chunks(
+                tx_seq_stream,
+                tx_seq_digest_stage.chunk_size,
+                tx_seq_digest_stage.concurrency,
+                {
+                    let client = client.clone();
+                    move |tx_seqs| {
+                        let client = client.clone();
+                        async move {
+                            resolve_checkpoint_seqs(client, tx_seqs)
+                                .await
+                                .map(|s| s.map_err(BitmapScanError::Source).boxed())
+                                .map_err(BitmapScanError::Source)
+                        }
+                    }
+                },
+            );
+            let cp_seq_stream = take_items(dedup_consecutive(cp_seq_stream), limit_items);
+            // Stage A3: fetch checkpoint rows for the deduped cp_seqs.
+            pipelined_chunks(
+                cp_seq_stream,
+                checkpoints_stage.chunk_size,
+                checkpoints_stage.concurrency,
+                {
+                    let client = client.clone();
+                    let columns = cp_columns.clone();
+                    move |seqs| {
+                        let client = client.clone();
+                        let columns = columns.clone();
+                        async move {
+                            fetch_checkpoint_data(client, columns, seqs)
+                                .await
+                                .map(|s| s.map_err(BitmapScanError::Source).boxed())
+                                .map_err(BitmapScanError::Source)
+                        }
+                    }
+                },
+            )
+        } else {
+            scan_checkpoint_data(
+                client.clone(),
+                cp_columns.clone(),
+                cp_range.clone(),
+                limit_items,
+                &options,
+            )
+            .await?
+        };
 
     // Fast path: read_mask doesn't request transactions or objects → render
     // directly from CheckpointData via the existing `checkpoint_to_response`.
@@ -221,13 +252,18 @@ pub(crate) async fn list_checkpoints(
                         let wm = boundary_watermark(&options, cp_frontier, cp_frontier, checkpoint_boundary);
                         yield watermark_response(wm);
                     }
-                    Err(e) => {
-                        if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
-                            scan_limit_hit = true;
-                            break;
-                        } else {
-                            Err(RpcError::from(e))?;
-                        }
+                    Err(BitmapScanError::ScanLimit) => {
+                        scan_limit_hit = true;
+                        break;
+                    }
+                    Err(BitmapScanError::Cancelled) => {
+                        Err(RpcError::new(
+                            tonic::Code::Cancelled,
+                            BitmapScanError::Cancelled.to_string(),
+                        ))?;
+                    }
+                    Err(BitmapScanError::Source(inner)) => {
+                        Err(RpcError::from(inner))?;
                     }
                 }
             }
@@ -298,13 +334,18 @@ pub(crate) async fn list_checkpoints(
                     let wm = boundary_watermark(&options, cp_frontier, cp_frontier, checkpoint_boundary);
                     yield watermark_response(wm);
                 }
-                Err(e) => {
-                    if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
-                        scan_limit_hit = true;
-                        break;
-                    } else {
-                        Err(RpcError::from(e))?;
-                    }
+                Err(BitmapScanError::ScanLimit) => {
+                    scan_limit_hit = true;
+                    break;
+                }
+                Err(BitmapScanError::Cancelled) => {
+                    Err(RpcError::new(
+                        tonic::Code::Cancelled,
+                        BitmapScanError::Cancelled.to_string(),
+                    ))?;
+                }
+                Err(BitmapScanError::Source(inner)) => {
+                    Err(RpcError::from(inner))?;
                 }
             }
         }
@@ -366,13 +407,15 @@ async fn scan_checkpoint_data(
     range: std::ops::Range<u64>,
     limit: usize,
     options: &QueryOptions,
-) -> Result<BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, anyhow::Error>>, RpcError>
-{
+) -> Result<BoxStream<'static, BitmapScanResult<Watermarked<(u64, CheckpointData)>>>, RpcError> {
     let column_filter = BigTableClient::column_filter(&columns);
     let rows = client
         .scan_checkpoints_stream(range, options.scan_direction(), limit, Some(column_filter))
         .await?;
-    Ok(rows.map_ok(Watermarked::Item).boxed())
+    Ok(rows
+        .map_ok(Watermarked::Item)
+        .map_err(BitmapScanError::Source)
+        .boxed())
 }
 
 async fn fetch_checkpoint_data(
@@ -421,6 +464,40 @@ async fn fetch_checkpoint_data(
     .boxed())
 }
 
+/// Resolve a chunk of `tx_sequence_number`s (already in scan order) to their
+/// checkpoint sequence numbers, streaming each cp_seq as soon as the scan-order
+/// prefix is contiguously available rather than buffering the whole batch.
+/// BigTable multi-get rows arrive unordered, so `InputOrderEmitter` (keyed by
+/// the input scan order) releases the contiguous front as rows fill in — the
+/// same ordering trick as `fetch_checkpoint_data`. Consecutive duplicates (one
+/// checkpoint's multiple transactions) are collapsed downstream by
+/// `dedup_consecutive`.
+async fn resolve_checkpoint_seqs(
+    client: BigTableClient,
+    tx_seqs: Vec<u64>,
+) -> Result<BoxStream<'static, Result<u64, anyhow::Error>>, anyhow::Error> {
+    if tx_seqs.is_empty() {
+        return Ok(stream::empty().boxed());
+    }
+    let rows = client
+        .resolve_tx_checkpoints_stream(tx_seqs.clone())
+        .await?;
+    Ok(async_stream::try_stream! {
+        let mut emitter: InputOrderEmitter<u64, u64> = InputOrderEmitter::new(tx_seqs);
+        futures::pin_mut!(rows);
+        while let Some(row) = rows.next().await {
+            let (tx_seq, cp_seq) = row?;
+            for cp in emitter.push(tx_seq, cp_seq, "list_checkpoints: tx -> checkpoint resolution")? {
+                yield cp;
+            }
+        }
+        for cp in emitter.finish("list_checkpoints: missing tx -> checkpoint row")? {
+            yield cp;
+        }
+    }
+    .boxed())
+}
+
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
     let mut item = CheckpointItem::default();
     item.checkpoint = Some(message);
@@ -438,106 +515,6 @@ fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut response = ListCheckpointsResponse::default();
     response.response = Some(list_checkpoints_response::Response::End(end));
     response
-}
-
-/// Filtered cp_seq discovery for `ListCheckpoints`. The tx-bitmap scan and
-/// the `tx_seq -> cp_seq` mapping live in the same chunked loop so cp dedup
-/// stays local. Tx-space watermarks emitted by the bitmap are
-/// translated into cp-space watermarks in-band: each marker arrival
-/// flushes the current chunk (so the marker stays ordered AFTER any cps it
-/// dominates) and then emits `Watermarked::Watermark(cp_seq)` of its own.
-///
-/// Returns the cp_seq stream. `BitmapScanLimitExceeded` propagates as `anyhow::Error`
-/// through the stream; the parent handler downcasts to detect it.
-async fn filtered_checkpoint_seq_stream(
-    ctx: &QueryContext,
-    filter: &sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter,
-    tx_range: std::ops::Range<u64>,
-    limit: usize,
-    options: QueryOptions,
-    budget: u64,
-) -> Result<BoxStream<'static, Result<Watermarked<u64>, anyhow::Error>>, RpcError> {
-    if limit == 0 || tx_range.is_empty() {
-        return Ok(stream::empty().boxed());
-    }
-
-    let client = ctx.client();
-    let query = ctx.transaction_filter_query(filter)?;
-    let chunk_max = ctx.stage(PipelineStage::TxSeqDigest).chunk_size;
-
-    let tx_seq_stream = client.eval_bitmap_query_stream(
-        query,
-        tx_range,
-        BitmapIndexSpec::tx(),
-        options.scan_direction(),
-        budget,
-        ctx.bitmap_scan_observer(),
-    );
-    let fetch_client: BigTableClient = client.clone();
-    let direction = options.scan_direction();
-
-    let stream = async_stream::try_stream! {
-        futures::pin_mut!(tx_seq_stream);
-        let mut tx_seq_chunk: Vec<u64> = Vec::with_capacity(chunk_max);
-        let mut last_cp_seq: Option<u64> = None;
-        let mut emitted = 0usize;
-
-        loop {
-            // Read until we have a full chunk of tx_seq Items, OR a Frontier
-            // marker arrives (forcing flush), OR the upstream ends.
-            let mut pending_watermark: Option<u64> = None;
-            while tx_seq_chunk.len() < chunk_max && pending_watermark.is_none() {
-                match tx_seq_stream.try_next().await? {
-                    Some(Watermarked::Item(tx_seq)) => tx_seq_chunk.push(tx_seq),
-                    Some(Watermarked::Watermark(p)) => pending_watermark = Some(p),
-                    None => break,
-                }
-            }
-
-            // Resolve items' cps via one multi_get; dedupe by cp_seq.
-            // The WM (if any) stays in tx-space — it passes through to
-            // the tail `coalesce_watermarks`, which may drop it as
-            // item-superseded. Surviving WMs do their own one-row
-            // lookup in the handler at emit time. This decouples the
-            // small WM lookup from the bulky item multi_get, mirroring
-            // the structure in list_transactions / list_events.
-            if !tx_seq_chunk.is_empty() {
-                let mut tx_checkpoints = fetch_client.resolve_tx_checkpoints(&tx_seq_chunk).await?;
-                if direction.is_ascending() {
-                    tx_checkpoints.sort_by_key(|(tx_seq, _)| *tx_seq);
-                } else {
-                    tx_checkpoints.sort_by_key(|(tx_seq, _)| std::cmp::Reverse(*tx_seq));
-                }
-                tx_seq_chunk.clear();
-                for (_, cp_seq) in tx_checkpoints {
-                    if last_cp_seq == Some(cp_seq) {
-                        continue;
-                    }
-                    last_cp_seq = Some(cp_seq);
-                    emitted += 1;
-                    yield Watermarked::Item(cp_seq);
-                    if emitted >= limit {
-                        return;
-                    }
-                }
-            }
-
-            // Pass the WM through untranslated (tx-space position).
-            // Downstream `coalesce_watermarks` drops it if items
-            // follow; otherwise the handler resolves it to cp and
-            // applies the clamp at emit time.
-            if let Some(tx_frontier) = pending_watermark {
-                yield Watermarked::Watermark(tx_frontier);
-                continue;
-            }
-
-            // Upstream ended.
-            break;
-        }
-    }
-    .boxed();
-
-    Ok(stream)
 }
 
 /// Determine the checkpoint_sequence_number scan window from the logical

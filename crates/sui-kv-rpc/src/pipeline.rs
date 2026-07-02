@@ -396,6 +396,39 @@ where
     .boxed()
 }
 
+/// Collapse runs of equal `Watermarked::Item` values into one, forwarding
+/// `Watermarked::Watermark` frames and errors unchanged. Items must already be
+/// in scan order. Used by `ListCheckpoints` to turn the per-transaction
+/// checkpoint ids of a filtered scan (a checkpoint's txs are contiguous in scan
+/// order) into a single id per checkpoint. Unlike a per-chunk mapper this
+/// carries its dedup state across the whole stream, so duplicates split across
+/// chunk boundaries still collapse.
+pub(crate) fn dedup_consecutive<T, E>(
+    stream: BoxStream<'static, Result<Watermarked<T>, E>>,
+) -> BoxStream<'static, Result<Watermarked<T>, E>>
+where
+    T: PartialEq + Clone + Send + 'static,
+    E: Send + 'static,
+{
+    async_stream::try_stream! {
+        futures::pin_mut!(stream);
+        let mut last: Option<T> = None;
+        while let Some(item) = stream.next().await {
+            match item? {
+                Watermarked::Item(t) => {
+                    if last.as_ref() == Some(&t) {
+                        continue;
+                    }
+                    last = Some(t.clone());
+                    yield Watermarked::Item(t);
+                }
+                Watermarked::Watermark(p) => yield Watermarked::Watermark(p),
+            }
+        }
+    }
+    .boxed()
+}
+
 /// Buffers values arriving keyed-but-out-of-input-order and emits them in
 /// input order as their slots become contiguous. Used by chunk fetch stages
 /// to translate BigTable's arrival-order multi_get responses into the
@@ -479,9 +512,9 @@ pub(crate) type KeyedBatchOutput<I, K, V> = (I, Arc<HashMap<K, V>>);
 /// Convenience aliases for the marker-aware pipeline boundary types. Avoid
 /// repeating the deeply-nested `BoxStream<'static, Result<Watermarked<...>, _>>`
 /// at every signature. `E` is the pipeline's error type — `RpcError` for the
-/// non-eval handler chains, `anyhow::Error` for chains downstream of the
-/// bitmap evaluator (so `ScanLimitExceeded` survives in-band for the handler
-/// to downcast).
+/// non-eval handler chains, `BitmapScanError` for chains downstream of the
+/// bitmap evaluator (so the typed terminal survives in-band for the handler to
+/// match).
 pub(crate) type MarkedUpstream<I, E> = BoxStream<'static, Result<Watermarked<I>, E>>;
 pub(crate) type MarkedKeyedUpstream<I, K, E> = MarkedUpstream<(I, Vec<K>), E>;
 pub(crate) type MarkedKeyedDownstream<I, K, V, E> = MarkedUpstream<KeyedBatchOutput<I, K, V>, E>;
@@ -1017,7 +1050,7 @@ where
                         }
                         Race::Upstream(Some(Err(e))) => {
                             // A terminal upstream error (e.g.
-                            // `BitmapScanLimitExceeded`) must not swallow the
+                            // `BitmapScanError::ScanLimit`) must not swallow the
                             // last frontier watermark already in flight: the
                             // upstream chunker flushes its held watermark
                             // ahead of the error, so finishing this lookup (and
@@ -2674,7 +2707,7 @@ mod tests {
     /// must not swallow that watermark: it is finished and emitted before
     /// the error ends the stream. This is the scan-limit resume-cursor
     /// guarantee — the client gets a cursor at the boundary scanned so far
-    /// even though `BitmapScanLimitExceeded` truncated the response.
+    /// even though `BitmapScanError::ScanLimit` truncated the response.
     #[tokio::test]
     async fn terminal_error_finishes_in_flight_lookup() {
         let calls = Arc::new(AtomicUsize::new(0));

@@ -1,10 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use move_core_types::ident_str;
+use simulacrum::Simulacrum;
 use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
+use sui_kv_rpc::KvRpcConfig;
+use sui_kv_rpc::LedgerHistoryConfig;
+use sui_kv_rpc::LedgerHistoryMethodConfig;
+use sui_kv_rpc::StageConfig;
+use sui_kv_rpc::StagesConfig;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
@@ -1440,6 +1448,102 @@ async fn test_list_events_unfiltered() {
         event_type.contains("emit_test_event::TestEvent"),
         "unexpected event type: {event_type}"
     );
+}
+
+/// Archival wire-level `SCAN_LIMIT` smoke for the typed bitmap-scan terminal
+/// channel. The unfiltered `list_events` path scans `tx_seq_digest` rows bounded
+/// by `endpoint.max_limit_items` (the *source* limit, NOT the request's
+/// `limit_items`); when the event-derived tx range exceeds that bound,
+/// `clamp_tx_scan_range` flags `scan_limited`, the producer yields a frontier
+/// watermark followed by a bare `BitmapScanError::ScanLimit`, and the refactored
+/// handler arm maps it to `QueryEndReason::ScanLimit` with a resume cursor. This
+/// is the one full-stack path that drives a real `ScanLimit` terminal end to end
+/// (a genuine multi-leaf bitmap-bucket `SCAN_LIMIT` is unreachable in a feasible
+/// dataset; the merge/collapse path is covered by evaluator unit tests).
+#[tokio::test]
+async fn test_list_events_unfiltered_row_cap_scan_limit_resumes() {
+    // Cap the unfiltered tx-row scan at 2 rows per request, well below the
+    // seeded tx span, so the scan truncates and reports SCAN_LIMIT.
+    let kv_rpc_config = KvRpcConfig {
+        ledger_history: Some(LedgerHistoryConfig {
+            list_events: Some(LedgerHistoryMethodConfig {
+                max_limit_items: Some(2),
+                default_limit_items: Some(2),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut cluster = FullCluster::new_with_configs(
+        Simulacrum::new(),
+        OffchainClusterConfig {
+            kv_rpc_config,
+            ..Default::default()
+        },
+        &prometheus::Registry::new(),
+    )
+    .await
+    .unwrap();
+
+    // Seed several EVENT-LESS transactions (self-transfers emit no Move events),
+    // each in its own checkpoint, so the event-derived tx scan range spans more
+    // than the 2-row source cap.
+    let (sender, kp, mut gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
+    for _ in 0..5 {
+        gas = transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
+    }
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // First page: an unfiltered scan over the whole indexed range. The request
+    // limit is large; the SCAN_LIMIT is driven by the source row cap, not it.
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.options = Some(query_options(100));
+    let first = list_events_result(&mut client, req).await;
+    assert_eq!(
+        first.end_reason,
+        Some(QueryEndReason::ScanLimit),
+        "unfiltered scan past the row cap must terminate with SCAN_LIMIT"
+    );
+    let resume = first
+        .end_cursor
+        .clone()
+        .expect("SCAN_LIMIT page must carry a resume cursor");
+
+    // Resume from the frontier cursor: the scan must advance (no replay) and
+    // terminate on a reached-end reason once the remaining rows fit the cap.
+    let mut reason = QueryEndReason::ScanLimit;
+    let mut cursor = Some(resume);
+    let mut iterations = 0;
+    while reason == QueryEndReason::ScanLimit {
+        iterations += 1;
+        assert!(iterations <= 16, "resume loop did not terminate");
+        let mut req = ListEventsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+        req.options = Some(query_options_maybe_after(100, cursor.clone()));
+        let page = list_events_result(&mut client, req).await;
+        reason = page.end_reason.expect("each page carries an end reason");
+        match reason {
+            QueryEndReason::ScanLimit => {
+                let next = page
+                    .end_cursor
+                    .clone()
+                    .expect("SCAN_LIMIT page must carry a resume cursor");
+                assert_ne!(
+                    Some(&next),
+                    cursor.as_ref(),
+                    "resume cursor must strictly advance, not replay"
+                );
+                cursor = Some(next);
+            }
+            QueryEndReason::LedgerTip | QueryEndReason::CheckpointBound => break,
+            other => panic!("unexpected resume end_reason: {other:?}"),
+        }
+    }
 }
 
 #[tokio::test]
@@ -4010,3 +4114,202 @@ async fn test_list_transactions_resume_from_standalone_watermark() {
 // configurable — both are out of scope. The ScanLimit cursor contract is
 // unit-tested in `sui-inverted-index` (budget validation) and handler-level
 // tests in `sui-kv-rpc`.
+
+/// Execute `n` self-transfers from `sender` (each matched by a sender filter on
+/// `sender`), then create a single checkpoint containing them. Returns that
+/// checkpoint's sequence number and the updated gas ref.
+async fn checkpoint_matching_txns(
+    cluster: &mut FullCluster,
+    sender: SuiAddress,
+    kp: &AccountKeyPair,
+    mut gas: ObjectRef,
+    n: usize,
+) -> (u64, ObjectRef) {
+    for _ in 0..n {
+        let (_, new_gas) = transfer_self(cluster, sender, kp, gas).await;
+        gas = new_gas;
+    }
+    let checkpoint = cluster.create_checkpoint().await;
+    (checkpoint.sequence_number, gas)
+}
+
+fn is_resumable(reason: QueryEndReason) -> bool {
+    matches!(
+        reason,
+        QueryEndReason::ItemLimit | QueryEndReason::ScanLimit
+    )
+}
+
+/// Drain a filtered `ListTransactions` fully, following cursors, and return the
+/// distinct set of checkpoint sequence numbers its transactions fall in.
+async fn drain_transaction_checkpoints(
+    client: &mut KvLedgerServiceClient<Channel>,
+    filter: TransactionFilter,
+    ascending: bool,
+    limit: u32,
+) -> BTreeSet<u64> {
+    let mut cps = BTreeSet::new();
+    let mut cursor: Option<prost::bytes::Bytes> = None;
+    for _ in 0..100 {
+        let mut req = ListTransactionsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["checkpoint"]));
+        req.filter = Some(filter.clone());
+        req.options = Some(if ascending {
+            query_options_maybe_after(limit, cursor.clone())
+        } else {
+            query_options_descending_maybe_before(limit, cursor.clone())
+        });
+        let result = list_transactions_result(client, req).await;
+        for item in &result.transactions {
+            let cp = item
+                .transaction
+                .as_ref()
+                .and_then(|tx| tx.checkpoint)
+                .expect("transaction checkpoint populated");
+            cps.insert(cp);
+        }
+        let reason = result.end_reason.expect("list_transactions end reason");
+        match (is_resumable(reason), result.end_cursor.clone()) {
+            (true, Some(c)) => cursor = Some(c),
+            _ => return cps,
+        }
+    }
+    panic!("drain_transaction_checkpoints did not terminate");
+}
+
+/// Drain a filtered `ListCheckpoints` fully, following cursors, and return the
+/// set of checkpoint sequence numbers plus the final terminal reason.
+async fn drain_checkpoint_set(
+    client: &mut KvLedgerServiceClient<Channel>,
+    filter: TransactionFilter,
+    ascending: bool,
+    limit: u32,
+) -> (BTreeSet<u64>, QueryEndReason) {
+    let mut cps = BTreeSet::new();
+    let mut cursor: Option<prost::bytes::Bytes> = None;
+    for _ in 0..100 {
+        let mut req = ListCheckpointsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        req.filter = Some(filter.clone());
+        req.options = Some(if ascending {
+            query_options_maybe_after(limit, cursor.clone())
+        } else {
+            query_options_descending_maybe_before(limit, cursor.clone())
+        });
+        let result = list_checkpoints_result(client, req).await;
+        for item in &result.checkpoints {
+            cps.insert(checkpoint_sequence(item));
+        }
+        let reason = result.end_reason.expect("list_checkpoints end reason");
+        match (is_resumable(reason), result.end_cursor.clone()) {
+            (true, Some(c)) => cursor = Some(c),
+            _ => return (cps, reason),
+        }
+    }
+    panic!("drain_checkpoint_set did not terminate");
+}
+
+/// Regression: filtered `ListCheckpoints` must return exactly the checkpoints
+/// that filtered `ListTransactions` reports — even when a single bitmap bucket
+/// holds more matching transactions than one scan chunk.
+///
+/// The tx_seq -> distinct-checkpoint layer used to `break` its scan loop
+/// whenever a chunk filled (rather than only on a true upstream EOF), so a
+/// dense bucket truncated the result after one chunk and the stream ended with
+/// the pre-computed terminal reason (CHECKPOINT_BOUND / LEDGER_TIP) before the
+/// scan reached the bound. The set under-returned and was order-dependent.
+#[tokio::test]
+async fn test_list_checkpoints_dense_bucket_matches_transactions() {
+    // A small `tx_seq_digest` chunk size lets a modest dataset reproduce the
+    // multi-chunk-within-one-bucket scan. Every matching tx in a feasible
+    // dataset shares bitmap bucket 0 (BUCKET_SIZE = 65_536), so the chunk
+    // boundary — not a bucket boundary — is what drives the loop.
+    let stages = StagesConfig {
+        tx_seq_digest: Some(StageConfig {
+            chunk_size: Some(2),
+            concurrency: None,
+        }),
+        ..Default::default()
+    };
+    let kv_rpc_config = KvRpcConfig {
+        stages: Some(stages),
+        ..Default::default()
+    };
+
+    let mut cluster = FullCluster::new_with_configs(
+        Simulacrum::new(),
+        OffchainClusterConfig {
+            kv_rpc_config,
+            ..Default::default()
+        },
+        &prometheus::Registry::new(),
+    )
+    .await
+    .unwrap();
+
+    let (match_sender, match_kp, mut match_gas) =
+        cluster.funded_account(60 * DEFAULT_GAS_BUDGET).unwrap();
+    let (noise_sender, noise_kp, mut noise_gas) =
+        cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
+
+    // Sparse matches spanning the range: two checkpoints densely packed with
+    // matching txs (> chunk_size) at the low and high ends, two single-match
+    // checkpoints in the middle, with noise checkpoints interspersed and
+    // trailing so the scan crosses empty checkpoint regions and reaches the tip
+    // on a non-matching checkpoint.
+    let (cp_lo, gas) =
+        checkpoint_matching_txns(&mut cluster, match_sender, &match_kp, match_gas, 3).await;
+    match_gas = gas;
+    noise_gas = transfer_in_own_checkpoint(&mut cluster, noise_sender, &noise_kp, noise_gas).await;
+    let (cp_m1, gas) =
+        checkpoint_matching_txns(&mut cluster, match_sender, &match_kp, match_gas, 1).await;
+    match_gas = gas;
+    noise_gas = transfer_in_own_checkpoint(&mut cluster, noise_sender, &noise_kp, noise_gas).await;
+    let (cp_m2, gas) =
+        checkpoint_matching_txns(&mut cluster, match_sender, &match_kp, match_gas, 1).await;
+    match_gas = gas;
+    noise_gas = transfer_in_own_checkpoint(&mut cluster, noise_sender, &noise_kp, noise_gas).await;
+    let (cp_hi, gas) =
+        checkpoint_matching_txns(&mut cluster, match_sender, &match_kp, match_gas, 3).await;
+    match_gas = gas;
+    noise_gas = transfer_in_own_checkpoint(&mut cluster, noise_sender, &noise_kp, noise_gas).await;
+    let _ = (match_gas, noise_gas);
+
+    let expected: BTreeSet<u64> = [cp_lo, cp_m1, cp_m2, cp_hi].into_iter().collect();
+    assert_eq!(expected.len(), 4, "distinct matching checkpoints");
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let filter = tx_sender(match_sender);
+
+    // Small page size so the drains also follow cursors across multiple pages.
+    const LIMIT: u32 = 3;
+
+    for ascending in [true, false] {
+        let tx_cps =
+            drain_transaction_checkpoints(&mut client, filter.clone(), ascending, LIMIT).await;
+        assert_eq!(
+            tx_cps, expected,
+            "ListTransactions distinct checkpoints (ascending={ascending})"
+        );
+
+        let (cp_set, reason) =
+            drain_checkpoint_set(&mut client, filter.clone(), ascending, LIMIT).await;
+        assert_eq!(
+            cp_set, tx_cps,
+            "ListCheckpoints set must equal ListTransactions distinct checkpoints \
+             (ascending={ascending})"
+        );
+        // The fully drained stream genuinely reaches the range end, so the
+        // terminal reason must be a reached-end reason (never a premature one
+        // while matches remain).
+        assert!(
+            matches!(
+                reason,
+                QueryEndReason::LedgerTip | QueryEndReason::CheckpointBound
+            ),
+            "ListCheckpoints terminal reason (ascending={ascending}): {reason:?}"
+        );
+    }
+}

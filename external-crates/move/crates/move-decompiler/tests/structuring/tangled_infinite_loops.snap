@@ -1,24 +1,5 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
+assertion_line: 21
 ---
-if (0) {
-    { }
-} else {
-    jump<AOS> NodeIndex(3);
-}
-'loop_1: loop {
-    { 1 }
-    if (2) {
-        continue 'loop_1;
-    } else {
-        break 'loop_1;
-    }
-}
-'loop_3: loop {
-    { 3 }
-    if (4) {
-        continue 'loop_3;
-    } else {
-        break 'loop_3;
-    }
-}
+// STRUCTURING PANICKED: structuring failed on top-level function residue after loop collapse

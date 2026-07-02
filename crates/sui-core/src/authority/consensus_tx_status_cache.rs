@@ -75,28 +75,54 @@ impl ConsensusTxStatusCache {
         }
     }
 
+    /// Single-update convenience wrapper around [`Self::set_transaction_statuses`].
+    /// Production code uses the batched form; this is retained for tests.
+    #[cfg(test)]
     pub(crate) fn set_transaction_status(&self, pos: ConsensusPosition, status: ConsensusTxStatus) {
-        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow()
-            && pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= last_committed_leader_round
-        {
-            // Ignore stale status updates.
-            return;
-        }
+        self.set_transaction_statuses(vec![(pos, status)]);
+    }
 
-        let mut inner = self.inner.write();
-        let old_status = inner.transaction_status.insert(pos, status);
-        if let Some(old_status) = old_status
-            && old_status != status
+    /// Batched form of `set_transaction_status`: applies all updates under a
+    /// single write lock and issues the notifications after the lock is released.
+    /// The consensus commit handler uses this to replace a per-transaction lock
+    /// acquisition (and a notify held across the write lock) with one acquisition
+    /// per commit. Semantics are otherwise identical: stale updates are dropped, a
+    /// conflicting status for an already-recorded position panics, and every applied
+    /// update is notified.
+    pub(crate) fn set_transaction_statuses(
+        &self,
+        updates: Vec<(ConsensusPosition, ConsensusTxStatus)>,
+    ) {
+        // The committed leader round is constant for the duration of a commit, so
+        // read it once for the whole batch rather than per update.
+        let last_committed_leader_round = *self.last_committed_leader_round_rx.borrow();
+        let mut to_notify = Vec::with_capacity(updates.len());
         {
-            panic!(
-                "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
-                pos, old_status, status
-            );
+            let mut inner = self.inner.write();
+            for (pos, status) in updates {
+                if let Some(last_committed_leader_round) = last_committed_leader_round
+                    && pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS
+                        <= last_committed_leader_round
+                {
+                    // Ignore stale status updates.
+                    continue;
+                }
+                let old_status = inner.transaction_status.insert(pos, status);
+                if let Some(old_status) = old_status
+                    && old_status != status
+                {
+                    panic!(
+                        "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
+                        pos, old_status, status
+                    );
+                }
+                debug!("Transaction status is set for {}: {:?}", pos, status);
+                to_notify.push((pos, status));
+            }
         }
-
-        // All code paths leading to here should have set the status.
-        debug!("Transaction status is set for {}: {:?}", pos, status);
-        self.status_notify_read.notify(&pos, &status);
+        for (pos, status) in to_notify {
+            self.status_notify_read.notify(&pos, &status);
+        }
     }
 
     /// Given a known previous status provided by `old_status`, this function will return a new

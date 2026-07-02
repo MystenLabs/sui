@@ -141,6 +141,22 @@ pub fn make_consensus_adapter_for_test(
     execute: bool,
     mock_block_status_receivers: Vec<BlockStatusReceiver>,
 ) -> Arc<ConsensusAdapter> {
+    make_consensus_adapter_for_test_with_submit_limit(
+        state,
+        process_via_checkpoint,
+        execute,
+        mock_block_status_receivers,
+        100_000,
+    )
+}
+
+pub fn make_consensus_adapter_for_test_with_submit_limit(
+    state: Arc<AuthorityState>,
+    process_via_checkpoint: HashSet<TransactionDigest>,
+    execute: bool,
+    mock_block_status_receivers: Vec<BlockStatusReceiver>,
+    max_pending_local_submissions: usize,
+) -> Arc<ConsensusAdapter> {
     let metrics = ConsensusAdapterMetrics::new_test();
 
     #[derive(Clone)]
@@ -282,7 +298,7 @@ pub fn make_consensus_adapter_for_test(
         state.checkpoint_store.clone(),
         state.name,
         100_000,
-        100_000,
+        max_pending_local_submissions,
         metrics,
         Arc::new(tokio::sync::Notify::new()),
     ))

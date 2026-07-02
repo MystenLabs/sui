@@ -1,0 +1,67 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+assertion_line: 72
+---
+module staleness {
+    public fun feed_ts () {
+        return l0 * 3u64 + 1u64
+    }
+
+    public fun inner_loop_two_feed () {
+        let l8 = true;
+        let l9 = 0u64;
+        while(l9 < l1) {
+            let l5 =         staleness::feed_ts(l9)
+;
+            if (l0 > l5) {
+                if (l0 - l5 >= l2) {
+                    l8 = false;
+                } else {
+                    let l6 =         staleness::feed_ts(l3)
+;
+                    if (l0 > l6) {
+                        if (l0 - l6 >= l2) {
+                            l8 = false;
+                        }
+                    } else {
+                        if (l6 - l0 >= l2) {
+                            l8 = false;
+                        }
+                    }
+                }
+            } else {
+                if (l5 - l0 >= l2) {
+                    l8 = false;
+                } else {
+                    let l7 =         staleness::feed_ts(l3)
+;
+                    if (l0 > l7) {
+                        if (l0 - l7 >= l2) {
+                            l8 = false;
+                        }
+                    } else {
+                        if (l7 - l0 >= l2) {
+                            l8 = false;
+                        }
+                    }
+                }
+            }
+            l9 = l9 + 1u64;
+        }
+        *l4 = l8
+    }
+
+    public fun non_uniform_arms () {
+        if (l0 > l1) {
+            if (l0 - l1 >= l2) {
+                *l4 = false
+            }
+        } else {
+            if (l1 - l0 >= l2) {
+                *l4 = false
+                *l3 =         *l3 + 1u64
+            }
+        }
+    }
+
+}

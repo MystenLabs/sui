@@ -28,8 +28,6 @@ use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionK
 use sui_types::{SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber, error::SuiResult};
 use tracing::trace;
 
-use super::epoch_start_configuration::EpochStartConfigTrait;
-
 pub struct SharedObjVerManager {}
 
 /// Version assignments for a single transaction
@@ -541,7 +539,6 @@ mod tests {
     use super::*;
 
     use crate::authority::AuthorityState;
-    use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
     use crate::authority::shared_object_version_manager::{
         ConsensusSharedObjVerAssignment, SharedObjVerManager,
     };

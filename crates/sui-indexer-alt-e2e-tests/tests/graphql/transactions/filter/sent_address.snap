@@ -42,14 +42,14 @@ Response: {
   "data": {
     "transactionsA": {
       "pageInfo": {
-        "startCursor": "Mg==",
-        "endCursor": "Mg==",
+        "startCursor": "CAIQARgAIAI=",
+        "endCursor": "CAIQARgAIAI=",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "Mg==",
+          "cursor": "CAIQARgAIAI=",
           "node": {
             "digest": "74XecJe2t2baP9fJgfxrBuc7YpX1Nrc7S38wwoYTxdLL",
             "effects": {
@@ -64,14 +64,14 @@ Response: {
     },
     "transactionsB": {
       "pageInfo": {
-        "startCursor": "NQ==",
-        "endCursor": "NQ==",
+        "startCursor": "CAIQARgAIAU=",
+        "endCursor": "CAIQARgAIAU=",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "NQ==",
+          "cursor": "CAIQARgAIAU=",
           "node": {
             "digest": "5LWtVeBUiTA87ugd6888N2ii7ZQiAprV3EvWmdYN4oRt",
             "effects": {

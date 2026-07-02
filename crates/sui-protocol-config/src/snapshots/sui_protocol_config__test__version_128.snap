@@ -203,6 +203,8 @@ binary_function_defs: 1000
 binary_field_handles: 500
 binary_field_instantiations: 250
 binary_friend_decls: 100
+binary_enum_defs: 200
+binary_enum_def_instantiations: 100
 binary_variant_handles: 1024
 binary_variant_instantiation_handles: 1024
 max_move_object_size: 256000
@@ -219,6 +221,8 @@ max_function_parameters: 128
 max_basic_blocks: 1024
 max_value_stack_size: 1024
 max_type_nodes: 256
+max_generic_instantiation_type_nodes_per_function: 10000
+max_generic_instantiation_type_nodes_per_module: 500000
 max_push_size: 10000
 max_struct_definitions: 200
 max_function_definitions: 1000

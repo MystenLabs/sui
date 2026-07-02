@@ -26,6 +26,15 @@ pub struct JsonCursor<C>(C);
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct BcsCursor<C>(C);
 
+/// Cursor whose value is an opaque byte sequence, encoded as Base64.
+///
+/// Use this when the inner bytes already carry their own stable encoding (e.g. BCS), to avoid
+/// wrapping them in a second layer of BCS via [`BcsCursor`].
+///
+/// In the GraphQL schema this will show up as a `String`.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct ByteCursor(Vec<u8>);
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Invalid Base64")]
@@ -47,6 +56,12 @@ impl<C> JsonCursor<C> {
 impl<C> BcsCursor<C> {
     pub(crate) fn new(cursor: C) -> Self {
         Self(cursor)
+    }
+}
+
+impl ByteCursor {
+    pub(crate) fn new(bytes: Vec<u8>) -> Self {
+        Self(bytes)
     }
 }
 
@@ -80,6 +95,26 @@ where
     C: Send + Sync,
     C: Serialize + DeserializeOwned,
 {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        if let Value::String(s) = value {
+            Self::decode_cursor(&s).map_err(InputValueError::custom)
+        } else {
+            Err(InputValueError::expected_type(value))
+        }
+    }
+
+    /// Just check that the value is a string, as we'll do more involved tests during parsing.
+    fn is_valid(value: &Value) -> bool {
+        matches!(value, Value::String(_))
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.encode_cursor())
+    }
+}
+
+#[Scalar(name = "String", visible = false)]
+impl ScalarType for ByteCursor {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(s) = value {
             Self::decode_cursor(&s).map_err(InputValueError::custom)
@@ -134,6 +169,19 @@ where
     }
 }
 
+impl CursorType for ByteCursor {
+    type Error = Error;
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        let bytes = Base64::decode(s).map_err(|_| Error::BadBase64)?;
+        Ok(ByteCursor(bytes))
+    }
+
+    fn encode_cursor(&self) -> String {
+        Base64::encode(&self.0)
+    }
+}
+
 impl<C> Deref for JsonCursor<C> {
     type Target = C;
 
@@ -145,6 +193,15 @@ impl<C> Deref for JsonCursor<C> {
 
 impl<C> Deref for BcsCursor<C> {
     type Target = C;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Deref for ByteCursor {
+    type Target = [u8];
 
     #[inline]
     fn deref(&self) -> &Self::Target {

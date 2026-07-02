@@ -31,7 +31,15 @@
 //!   versions) and `all_tombstones` (deleted / wrapped markers) are
 //!   the exact `(ObjectID, version)` rows that are now dead. The
 //!   latest live version is never an input to a pruned transaction,
-//!   so it — and the `live_objects` pointer at it — is preserved.
+//!   so it — and the greatest `object_version_by_checkpoint` entry
+//!   that resolves to it — is preserved.
+//! - **`object_version_by_checkpoint`** — retracted in lockstep with
+//!   `objects` history: the same effects-driven walk issues a
+//!   per-object range delete clearing every checkpoint-pinned entry
+//!   below the superseding transaction's checkpoint, plus a point
+//!   delete of the tombstone entry when the object was removed. The
+//!   retained set mirrors the `objects` versions kept, so the index
+//!   never points at a pruned version.
 //! - **Ledger-history bitmaps** (`transaction_bitmap`,
 //!   `event_bitmap`) — not deleted directly; advancing the shared
 //!   [`tx_seq_floor`](crate::schema::pruning_watermark::tx_seq_floor)
@@ -39,9 +47,9 @@
 //!   force a compaction once the floor advances so the eviction is
 //!   prompt rather than waiting for a natural sweep.
 //!
-//! The live-set-bounded indexes (`live_objects`, `object_by_owner`,
-//! `object_by_type`, `balance`, `package_versions`) and the tiny
-//! `epochs` CF are never pruned.
+//! The live-set-bounded indexes (`object_by_owner`, `object_by_type`,
+//! `balance`, `package_versions`) and the tiny `epochs` CF are never
+//! pruned.
 //!
 //! # Floor, retention, and safety
 //!
@@ -80,10 +88,12 @@ use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::register_int_counter_with_registry;
 use prometheus::register_int_gauge_with_registry;
+use sui_consistent_store::Batch;
 use sui_consistent_store::Db;
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::Schema;
 use sui_indexer_alt_framework::service::Service;
+use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
 use tokio::time::MissedTickBehavior;
@@ -95,6 +105,7 @@ use crate::RpcStoreSchema;
 use crate::config::PrunerConfig;
 use crate::schema::checkpoint_seq_by_digest;
 use crate::schema::event_bitmap;
+use crate::schema::object_version_by_checkpoint;
 use crate::schema::objects;
 use crate::schema::primitives::U64Be;
 use crate::schema::pruning_watermark;
@@ -309,45 +320,65 @@ fn prune_chunk(
     let mut batch = db.batch();
     let mut objects_deleted: u64 = 0;
 
-    // Transaction side. Each effects row yields the object versions
-    // to retract and the transaction digest to unindex. A missing
-    // row means the range was already pruned (idempotent re-run).
-    for tx_seq in tx_lo..tx_hi {
-        let Some((effects, _unchanged)) = schema.get_effects(tx_seq)? else {
-            continue;
-        };
-        for (id, version) in effects.modified_at_versions() {
-            batch.delete(&schema.objects, &objects::Key { id, version })?;
-            objects_deleted += 1;
-        }
-        for (id, version) in effects.all_tombstones() {
-            batch.delete(&schema.objects, &objects::Key { id, version })?;
-            objects_deleted += 1;
-        }
-        batch.delete(
-            &schema.tx_seq_by_digest,
-            &tx_seq_by_digest::Key(*effects.transaction_digest()),
-        )?;
-    }
-
-    // The `tx_seq`-keyed CFs are contiguous, so one range delete each
-    // clears the whole chunk regardless of how many rows it spans.
-    batch.delete_range(&schema.transactions, &U64Be(tx_lo), &U64Be(tx_hi))?;
-    batch.delete_range(&schema.effects, &U64Be(tx_lo), &U64Be(tx_hi))?;
-    batch.delete_range(&schema.events, &U64Be(tx_lo), &U64Be(tx_hi))?;
-    batch.delete_range(&schema.tx_metadata_by_seq, &U64Be(tx_lo), &U64Be(tx_hi))?;
-
-    // Checkpoint side. Collect each checkpoint's digest for the
-    // reverse index, then range-delete the seq-keyed CFs.
+    // Walk each pruned checkpoint and the transactions it contains.
+    // Consecutive summaries' `network_total_transactions` partition
+    // `[tx_lo, tx_hi)` into per-checkpoint tx ranges, so the containing
+    // checkpoint of every transaction is known here -- it is exactly
+    // the `seq` being walked -- without a per-transaction metadata
+    // lookup. Each effects row yields the object versions to retract
+    // and the transaction digest to unindex; a missing effects row
+    // means that transaction was already pruned (idempotent re-run).
+    let mut tx_cursor = tx_lo;
     for seq in ckpt_lo..chunk_ckpt_hi {
-        let Some(summary) = schema.get_checkpoint_summary(seq)? else {
-            continue;
-        };
+        // Every in-range summary is still present: the chunk has not
+        // deleted any yet, and prior chunks committed atomically. A
+        // miss is therefore corruption, not an expected re-run state,
+        // so fail loudly rather than mis-partition the tx range.
+        let summary = schema
+            .get_checkpoint_summary(seq)?
+            .with_context(|| format!("checkpoint_summary missing for checkpoint {seq}"))?;
+        let ckpt_tx_hi = summary.data().network_total_transactions;
+
+        for tx_seq in tx_cursor..ckpt_tx_hi {
+            let Some((effects, _unchanged)) = schema.get_effects(tx_seq)? else {
+                continue;
+            };
+            for (id, version) in effects.modified_at_versions() {
+                batch.delete(&schema.objects, &objects::Key { id, version })?;
+                // Retract checkpoint-pinned entries older than this
+                // supersession; the entry at `seq` (the object's final
+                // version in this checkpoint) is kept.
+                retract_object_version_by_checkpoint(&mut batch, schema, id, seq, false)?;
+                objects_deleted += 1;
+            }
+            for (id, version) in effects.all_tombstones() {
+                batch.delete(&schema.objects, &objects::Key { id, version })?;
+                // The object was removed in `seq`: drop its tombstone
+                // entry at `seq` too.
+                retract_object_version_by_checkpoint(&mut batch, schema, id, seq, true)?;
+                objects_deleted += 1;
+            }
+            batch.delete(
+                &schema.tx_seq_by_digest,
+                &tx_seq_by_digest::Key(*effects.transaction_digest()),
+            )?;
+        }
+        tx_cursor = ckpt_tx_hi;
+
+        // Unindex this checkpoint's digest reverse map.
         batch.delete(
             &schema.checkpoint_seq_by_digest,
             &checkpoint_seq_by_digest::Key(summary.data().digest()),
         )?;
     }
+
+    // The `tx_seq`- and checkpoint-keyed CFs are contiguous, so one
+    // range delete each clears the whole chunk regardless of how many
+    // rows it spans.
+    batch.delete_range(&schema.transactions, &U64Be(tx_lo), &U64Be(tx_hi))?;
+    batch.delete_range(&schema.effects, &U64Be(tx_lo), &U64Be(tx_hi))?;
+    batch.delete_range(&schema.events, &U64Be(tx_lo), &U64Be(tx_hi))?;
+    batch.delete_range(&schema.tx_metadata_by_seq, &U64Be(tx_lo), &U64Be(tx_hi))?;
     batch.delete_range(
         &schema.checkpoint_summary,
         &U64Be(ckpt_lo),
@@ -375,6 +406,40 @@ fn prune_chunk(
     metrics.objects_deleted.inc_by(objects_deleted);
 
     Ok(new)
+}
+
+/// Retract `object_version_by_checkpoint` rows for one object, given a
+/// transaction at checkpoint `cp` that superseded or removed it, in
+/// lockstep with the `objects` CF.
+///
+/// Deletes every checkpoint-pinned entry for `id` strictly older than
+/// `cp` with a single per-object range delete. Once the floor advances
+/// past `cp`, the entry at `cp` (or a newer one) is the floor a
+/// checkpoint-pinned read resolves to, so the older entries can never
+/// be the answer again. Because the chunk only prunes checkpoints below
+/// the new floor, `cp` is itself below the floor, so the kept entry is
+/// never the answer to an in-range read either; it survives only until
+/// its own superseding transaction is pruned in a later chunk.
+///
+/// The entry *at* `cp` is kept for a supersession (it is the object's
+/// final live version in `cp`). When `removed` is set, the object was
+/// deleted or wrapped in `cp`: its tombstone entry at `cp` is dropped
+/// too, since nothing at or after the floor can reference a removed
+/// object.
+fn retract_object_version_by_checkpoint(
+    batch: &mut Batch,
+    schema: &RpcStoreSchema,
+    id: ObjectID,
+    cp: u64,
+    removed: bool,
+) -> anyhow::Result<()> {
+    let lo = object_version_by_checkpoint::Key { id, checkpoint: 0 };
+    let hi = object_version_by_checkpoint::Key { id, checkpoint: cp };
+    batch.delete_range(&schema.object_version_by_checkpoint, &lo, &hi)?;
+    if removed {
+        batch.delete(&schema.object_version_by_checkpoint, &hi)?;
+    }
+    Ok(())
 }
 
 /// Prune the embedded fullnode's history cohort up to a floor supplied
@@ -1088,6 +1153,104 @@ mod tests {
         assert!(
             schema.get_object_by_key(obj0, v_b).unwrap().is_some(),
             "live v_b must be preserved",
+        );
+    }
+
+    /// The checkpoint-pinned `object_version_by_checkpoint` index is
+    /// retracted in lockstep with the `objects` history: a
+    /// checkpoint-pinned entry survives until the transaction that
+    /// supersedes its object is pruned, and is dropped once that
+    /// transaction's checkpoint ages out.
+    ///
+    /// Checkpoint 0 creates `obj0@v_a`; checkpoint 1 transfers it to
+    /// `obj0@v_b`. Pruning checkpoint 0 keeps the cp0-pinned entry (its
+    /// superseding transaction is still retained); pruning checkpoint 1
+    /// retracts it while preserving the cp1-pinned floor entry.
+    #[tokio::test]
+    async fn prune_chunk_retracts_object_version_by_checkpoint() {
+        use crate::indexer::object_version_by_checkpoint::ObjectVersionByCheckpoint;
+
+        let (_dir, db, schema) = fresh_db();
+
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let cp0 = Arc::new(builder.build_checkpoint());
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let v_a = cp0.transactions[0].effects.lamport_version();
+        let v_b = cp1.transactions[0].effects.lamport_version();
+        assert_ne!(v_a, v_b);
+
+        // Seed the base CFs the pruner reads (`seed` populates
+        // `checkpoint_summary`, from which the pruner derives each
+        // transaction's checkpoint) plus the checkpoint-pinned index
+        // under test.
+        for cp in [&cp0, &cp1] {
+            seed(&db, &schema, cp).await;
+            let mut batch = db.batch();
+            for row in ObjectVersionByCheckpoint::default()
+                .process(cp)
+                .await
+                .unwrap()
+            {
+                // Seed only the change rows; the floor candidates are
+                // exercised in the pipeline's own tests.
+                let crate::indexer::object_version_by_checkpoint::Row::Change {
+                    id,
+                    checkpoint,
+                    version,
+                } = row
+                else {
+                    continue;
+                };
+                let (k, v) = object_version_by_checkpoint::store(id, checkpoint, version);
+                batch
+                    .put(&schema.object_version_by_checkpoint, &k, &v)
+                    .unwrap();
+            }
+            batch.commit().unwrap();
+        }
+
+        // Precondition: obj0 resolves at both checkpoints.
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
+            Some(v_a),
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 1).unwrap(),
+            Some(v_b),
+        );
+
+        let metrics = PrunerMetrics::new(None, &Registry::new());
+
+        // Prune checkpoint 0 only: tx0 creates obj0 and supersedes
+        // nothing, so the cp0-pinned entry survives.
+        let after_first = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
+            Some(v_a),
+            "cp0-pinned entry must survive while its superseding tx is retained",
+        );
+
+        // Prune checkpoint 1: tx1 supersedes obj0@v_a, retracting the
+        // cp0-pinned entry; the cp1-pinned floor entry remains.
+        prune_chunk(&db, &schema, after_first, 2, &metrics).unwrap();
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
+            None,
+            "cp0-pinned entry must be retracted once its superseding tx is pruned",
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 1).unwrap(),
+            Some(v_b),
+            "cp1-pinned floor entry must be preserved",
         );
     }
 

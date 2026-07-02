@@ -3,7 +3,8 @@
 
 use std::num::NonZeroUsize;
 
-use sui_default_config::DefaultConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline;
@@ -18,9 +19,8 @@ pub trait Merge: Sized {
     fn merge(self, other: Self) -> anyhow::Result<Self>;
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct IndexerConfig {
     /// How checkpoints are read by the indexer.
     pub ingestion: IngestionLayer,
@@ -48,9 +48,8 @@ pub struct IndexerConfig {
 // configuration files can be combined into one final configuration. Having a separate type for
 // reading configs also allows us to detect and warn against unrecognised fields.
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct IngestionLayer {
     pub ingest_concurrency: Option<ConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
@@ -64,9 +63,8 @@ pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
@@ -78,9 +76,8 @@ pub struct SequentialLayer {
     pub pipeline_depth: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
@@ -94,25 +91,22 @@ pub struct ConcurrentLayer {
     pub committer_channel_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PipelineIngestionLayer {
     pub subscriber_channel_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PrunerLayer {
     pub interval_ms: Option<u64>,
     pub delay_ms: Option<u64>,
@@ -121,9 +115,8 @@ pub struct PrunerLayer {
     pub prune_concurrency: Option<u64>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "snake_case", deny_unknown_fields)]
 pub struct PipelineLayer {
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,

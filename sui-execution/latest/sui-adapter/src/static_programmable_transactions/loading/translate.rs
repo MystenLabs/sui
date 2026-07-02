@@ -6,7 +6,7 @@ use crate::{
     gas_charger::GasPayment,
     static_programmable_transactions::{
         env::Env,
-        loading::ast as L,
+        loading::ast::{self as L, PackagePayload},
         metering::{self, translation_meter::TranslationMeter},
     },
 };
@@ -274,17 +274,19 @@ fn command<Mode: ExecutionMode>(
         }
         P::Command::SplitCoins(coin, amounts) => L::Command::SplitCoins(coin, amounts),
         P::Command::MergeCoins(target, coins) => L::Command::MergeCoins(target, coins),
-        P::Command::Publish(items, object_ids) => {
+        P::Command::Publish(items, dep_ids) => {
             let resolved_linkage = env
                 .linkage_analysis
-                .compute_publication_linkage::<Mode::Error>(&object_ids, env.linkable_store)?;
-            L::Command::Publish(items, object_ids, resolved_linkage)
+                .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
+            let payload = PackagePayload::Serialized(items);
+            L::Command::Publish(payload, dep_ids, resolved_linkage)
         }
-        P::Command::Upgrade(items, object_ids, object_id, argument) => {
+        P::Command::Upgrade(items, dep_ids, object_id, argument) => {
             let resolved_linkage = env
                 .linkage_analysis
-                .compute_publication_linkage::<Mode::Error>(&object_ids, env.linkable_store)?;
-            L::Command::Upgrade(items, object_ids, object_id, argument, resolved_linkage)
+                .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
+            let payload = PackagePayload::Serialized(items);
+            L::Command::Upgrade(payload, dep_ids, object_id, argument, resolved_linkage)
         }
     })
 }

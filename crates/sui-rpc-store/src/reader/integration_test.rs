@@ -33,10 +33,8 @@ use sui_types::storage::RpcStateReader;
 use crate::RpcStoreSchema;
 use crate::reader::RpcStoreReader;
 use crate::schema::checkpoint_summary;
-use crate::schema::live_objects;
 use crate::schema::objects;
 use crate::schema::primitives::U64Be;
-use crate::schema::primitives::U64Varint;
 
 fn build_summary(seq: u64) -> CheckpointSummary {
     CheckpointSummary {
@@ -92,13 +90,6 @@ fn integration_reads_objects_and_checkpoint_via_trait_surface() {
                 version: object.version(),
             },
             &objects::store(&object),
-        )
-        .unwrap();
-    batch
-        .put(
-            &schema.live_objects,
-            &live_objects::Key(object.id()),
-            &U64Varint(object.version().value()),
         )
         .unwrap();
     batch

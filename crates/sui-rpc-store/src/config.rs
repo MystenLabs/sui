@@ -19,16 +19,16 @@
 
 use std::time::Duration;
 
-use sui_default_config::DefaultConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 
 /// Top-level configuration for the `sui-rpc-store` indexer
 /// service. Parses from TOML; every field has a sensible default
 /// for tests and for the embedded use case where most knobs are
 /// supplied programmatically.
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ServiceConfig {
     /// Cross-pipeline consistency knobs: how often to take
     /// snapshots and how deep the per-pipeline write buffer is.
@@ -60,9 +60,8 @@ pub struct ServiceConfig {
 ///
 /// [`Synchronizer`]: sui_consistent_store::Synchronizer
 /// [`DbOptions::snapshot_capacity`]: sui_consistent_store::DbOptions::snapshot_capacity
-#[DefaultConfig]
-#[derive(Clone)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ConsistencyConfig {
     /// Per-pipeline mpsc capacity for batches waiting to be
     /// committed. The synchronizer's slowest pipeline gates
@@ -92,13 +91,13 @@ pub struct ConsistencyConfig {
 /// (`transactions`, `effects`, `events`, `tx_metadata_by_seq`),
 /// per-checkpoint (`checkpoint_summary`, `checkpoint_contents`),
 /// digest-reverse-index (`tx_seq_by_digest`,
-/// `checkpoint_seq_by_digest`), superseded-`objects`-version, and
+/// `checkpoint_seq_by_digest`), superseded-`objects`-version,
+/// checkpoint-pinned `object_version_by_checkpoint`, and
 /// ledger-history bitmap CFs. The live-set-bounded indexes
-/// (`live_objects`, `object_by_owner`, `object_by_type`, `balance`,
+/// (`object_by_owner`, `object_by_type`, `balance`,
 /// `package_versions`) and the tiny `epochs` CF are never pruned.
-#[DefaultConfig]
-#[derive(Clone)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PrunerConfig {
     /// Number of most-recent epochs to retain in full. Data in
     /// epochs older than this is eligible for pruning. Must be at
@@ -165,8 +164,8 @@ impl PrunerConfig {
 /// field as a top-level key.
 ///
 /// [`RpcStoreSchema`]: crate::RpcStoreSchema
-#[DefaultConfig]
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineLayer {
     // --- Raw chain data ---
     pub epochs: Option<CommitterLayer>,
@@ -179,7 +178,7 @@ pub struct PipelineLayer {
     pub effects: Option<CommitterLayer>,
     pub events: Option<CommitterLayer>,
     pub objects: Option<CommitterLayer>,
-    pub live_objects: Option<CommitterLayer>,
+    pub object_version_by_checkpoint: Option<CommitterLayer>,
 
     // --- Indexes ---
     pub object_by_owner: Option<CommitterLayer>,
@@ -194,9 +193,8 @@ pub struct PipelineLayer {
 /// unset field inherits from the shared committer default the
 /// orchestrator passes through to
 /// [`CommitterLayer::finish`](Self::finish).
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
@@ -234,7 +232,7 @@ impl PipelineLayer {
             effects: Some(CommitterLayer::default()),
             events: Some(CommitterLayer::default()),
             objects: Some(CommitterLayer::default()),
-            live_objects: Some(CommitterLayer::default()),
+            object_version_by_checkpoint: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
             balance: Some(CommitterLayer::default()),
@@ -250,9 +248,9 @@ impl PipelineLayer {
     ///
     /// The raw chain-data CFs (`transactions`, `effects`, `events`,
     /// `objects`, `checkpoint_summary`, `checkpoint_contents`,
-    /// `checkpoint_seq_by_digest`) are left `None`: the perpetual
-    /// store already holds that data and serves it directly, so this
-    /// indexer must not double-write it.
+    /// `checkpoint_seq_by_digest`) are left `None`: the perpetual store
+    /// already holds that data and serves it directly, so this indexer
+    /// must not double-write it.
     ///
     /// The enabled pipelines form two cohorts. The
     /// [`Synchronizer`](sui_consistent_store::Synchronizer)
@@ -260,25 +258,33 @@ impl PipelineLayer {
     /// not by this layer, so both are simply registered here:
     ///
     /// - **Live cohort** — restored to the fullnode's tip and
-    ///   following live from there: `live_objects`, `object_by_owner`,
-    ///   `object_by_type`, `balance`, `package_versions`.
+    ///   following live from there: `object_by_owner`,
+    ///   `object_by_type`, `balance`.
     /// - **History cohort** — seeded to the lowest available
     ///   checkpoint and backfilling upward: `epochs`,
-    ///   `tx_seq_by_digest`, `tx_metadata_by_seq`,
-    ///   `transaction_bitmap`, `event_bitmap`. These back the
-    ///   ledger-history list APIs (the bitmaps plus the `tx_seq` <->
-    ///   digest maps needed to interpret bitmap results) and the
-    ///   per-epoch protocol/committee reads (`epochs`).
+    ///   `object_version_by_checkpoint`, `package_versions`,
+    ///   `tx_seq_by_digest`, `tx_metadata_by_seq`, `transaction_bitmap`,
+    ///   `event_bitmap`. These back the ledger-history list APIs (the
+    ///   bitmaps plus the `tx_seq` <-> digest maps needed to interpret
+    ///   bitmap results) and the per-epoch protocol/committee reads
+    ///   (`epochs`). `object_version_by_checkpoint` and
+    ///   `package_versions` are additionally restored at the tip for
+    ///   their floor rows, then backfill the per-checkpoint detail over
+    ///   `(L, T]` (see the cohort docs in
+    ///   [`restore`](crate::indexer::restore)).
     pub fn embedded() -> Self {
         Self {
             // Live cohort: restored to the tip, follows live.
-            live_objects: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
             balance: Some(CommitterLayer::default()),
-            package_versions: Some(CommitterLayer::default()),
             // History cohort: seeded to L, backfills upward.
+            // `object_version_by_checkpoint` and `package_versions` are
+            // additionally restored at the tip for their floor rows (see
+            // the cohort docs in `restore.rs`).
             epochs: Some(CommitterLayer::default()),
+            object_version_by_checkpoint: Some(CommitterLayer::default()),
+            package_versions: Some(CommitterLayer::default()),
             tx_seq_by_digest: Some(CommitterLayer::default()),
             tx_metadata_by_seq: Some(CommitterLayer::default()),
             transaction_bitmap: Some(CommitterLayer::default()),
@@ -291,8 +297,8 @@ impl PipelineLayer {
 /// Per-pipeline registration toggles for
 /// [`restore_indexes`](crate::restore_indexes).
 ///
-/// The derived-index pipelines (`live_objects`, `object_by_owner`,
-/// `object_by_type`, `balance`, `package_versions`) are always
+/// The derived-index pipelines (`object_by_owner`, `object_by_type`,
+/// `balance`, `package_versions`) are always
 /// restored — they cannot be reconstructed from anywhere else. The
 /// raw `objects` CF is conditional: the standalone deployment
 /// needs it so version-keyed reads are served by the restored
@@ -362,13 +368,14 @@ mod tests {
     fn embedded_enables_only_cohort_pipelines() {
         let layer = PipelineLayer::embedded();
         // Live cohort.
-        assert!(layer.live_objects.is_some());
         assert!(layer.object_by_owner.is_some());
         assert!(layer.object_by_type.is_some());
         assert!(layer.balance.is_some());
-        assert!(layer.package_versions.is_some());
-        // History cohort.
+        // History cohort (object_version_by_checkpoint and
+        // package_versions are also restored).
         assert!(layer.epochs.is_some());
+        assert!(layer.object_version_by_checkpoint.is_some());
+        assert!(layer.package_versions.is_some());
         assert!(layer.tx_seq_by_digest.is_some());
         assert!(layer.tx_metadata_by_seq.is_some());
         assert!(layer.transaction_bitmap.is_some());
@@ -390,7 +397,6 @@ mod tests {
         assert!(layer.checkpoint_summary.is_some());
         assert!(layer.transactions.is_some());
         assert!(layer.objects.is_some());
-        assert!(layer.live_objects.is_some());
         assert!(layer.object_by_owner.is_some());
         assert!(layer.balance.is_some());
         assert!(layer.event_bitmap.is_some());

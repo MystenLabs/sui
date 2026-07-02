@@ -4,12 +4,13 @@
 //! Entry point for bulk-loading the [`RpcStoreSchema`]'s
 //! derived-index CFs from a [`RestoreSource`].
 //!
-//! Registers the five live-object-derivable pipelines
-//! ([`LiveObjects`], [`ObjectByOwner`], [`ObjectByType`],
-//! [`Balance`], [`PackageVersions`]) — and, when the caller's
-//! [`RestoreLayer`] opts in, the raw [`Objects`] CF — against a
-//! single [`RestoreDriver`] and returns a [`Service`] driving the
-//! restore through to completion. Once finished, every registered
+//! Registers the three live-object-derivable index pipelines
+//! ([`ObjectByOwner`], [`ObjectByType`], [`Balance`]) plus the
+//! [`ObjectVersionByCheckpoint`] and [`PackageVersions`] floor rows —
+//! and, when the caller's [`RestoreLayer`] opts in, the raw
+//! [`Objects`] CF — against a single [`RestoreDriver`] and returns a
+//! [`Service`] driving the restore through to completion. Once
+//! finished, every registered
 //! pipeline's `__restore` row is `Complete` and its `__watermark`
 //! row is set to the source's target, so the regular
 //! [`Indexer::add_pipelines`] path will accept them for tip
@@ -56,9 +57,9 @@ use crate::indexer::effects::Effects;
 use crate::indexer::epochs::Epochs;
 use crate::indexer::event_bitmap::EventBitmap;
 use crate::indexer::events::Events;
-use crate::indexer::live_objects::LiveObjects;
 use crate::indexer::object_by_owner::ObjectByOwner;
 use crate::indexer::object_by_type::ObjectByType;
+use crate::indexer::object_version_by_checkpoint::ObjectVersionByCheckpoint;
 use crate::indexer::objects::Objects;
 use crate::indexer::package_versions::PackageVersions;
 use crate::indexer::transaction_bitmap::TransactionBitmap;
@@ -79,25 +80,35 @@ use crate::schema::pruning_watermark;
 /// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded);
 /// the `embedded_registers_only_cohort_pipelines` test pins the two
 /// together.
-pub const LIVE_COHORT: &[&str] = &[
-    LiveObjects::NAME,
-    ObjectByOwner::NAME,
-    ObjectByType::NAME,
-    Balance::NAME,
-    PackageVersions::NAME,
-];
+pub const LIVE_COHORT: &[&str] = &[ObjectByOwner::NAME, ObjectByType::NAME, Balance::NAME];
 
-/// The embedded fullnode's **history cohort**: the pipelines that are
-/// *not* restored but seeded to the lowest available checkpoint `L`
-/// and backfilled upward from the perpetual store (then followed
-/// live). They cannot be reconstructed from a live-object snapshot —
+/// The embedded fullnode's **history cohort**: the pipelines seeded to
+/// the lowest available checkpoint `L` and backfilled upward from the
+/// perpetual store, then followed live.
+///
+/// Most cannot be reconstructed from a live-object snapshot at all --
 /// they record ledger history (`tx_seq` <-> digest maps, the
-/// transaction and event bitmaps) and per-epoch metadata (`epochs`).
+/// transaction and event bitmaps) and per-epoch metadata (`epochs`) --
+/// so they are seeded, never restored.
+///
+/// `object_version_by_checkpoint` and `package_versions` are the
+/// exceptions: they are *both* restored and backfilled.
+/// [`restore_indexes`] bulk-loads their floor rows at the tip `T` (the
+/// versions live in the snapshot but predate the available window, so a
+/// checkpoint-bounded read treats them as having always existed), and
+/// the history seed then rewinds their `__watermark` to `L-1` so they
+/// also backfill the per-checkpoint detail over `(L, T]` --
+/// `object_version_by_checkpoint`'s per-checkpoint changes, and
+/// `package_versions`'s real publish checkpoint for versions published
+/// in the window. The embedded bootstrap runs the restore before the
+/// seed, so the `L-1` watermark wins.
 ///
 /// Matches the history half of
 /// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded).
 pub const HISTORY_COHORT: &[&str] = &[
     Epochs::NAME,
+    ObjectVersionByCheckpoint::NAME,
+    PackageVersions::NAME,
     TxSeqByDigest::NAME,
     TxMetadataBySeq::NAME,
     TransactionBitmap::NAME,
@@ -108,10 +119,14 @@ pub const HISTORY_COHORT: &[&str] = &[
 /// `layer` on a [`RestoreDriver`] bound to `db` / `schema` and
 /// `source`, then run the resulting [`Service`].
 ///
-/// The five derived-index pipelines are always registered; the raw
-/// [`Objects`] pipeline is only registered when `layer.objects` is
-/// set. The returned `Service`'s primary task completes once every
-/// registered pipeline transitions to [`RestoreState::Complete`].
+/// The live-cohort pipelines are always registered, plus
+/// `object_version_by_checkpoint` and `package_versions` -- history-
+/// cohort members whose floor rows are bulk-loaded from the live set
+/// here (the history seed separately rewinds their watermarks so they
+/// also backfill `(L, T]`). The raw [`Objects`] pipeline is only
+/// registered when `layer.objects` is set. The returned `Service`'s
+/// primary task completes once every registered pipeline transitions to
+/// [`RestoreState::Complete`].
 ///
 /// [`Restore`]: sui_consistent_store::Restore
 /// [`RestoreState::Complete`]: sui_consistent_store::restore_state::Complete
@@ -123,12 +138,19 @@ pub fn restore_indexes<Src: RestoreSource>(
     layer: RestoreLayer,
     metrics: Arc<RestoreMetrics>,
 ) -> anyhow::Result<Service> {
+    // Capture the anchor before the driver consumes `source`: the
+    // checkpoint-pinned object index attributes every restored live
+    // object to it.
+    let target_checkpoint = source.target_checkpoint();
     let mut driver = RestoreDriver::new(db, schema, source, config, metrics);
-    driver.register(LiveObjects)?;
+    // History-cohort members, but their floor rows are restored from the
+    // live set; the embedded history seed later rewinds their watermarks
+    // so they also backfill `(L, T]`.
+    driver.register(ObjectVersionByCheckpoint::for_restore(target_checkpoint))?;
+    driver.register(PackageVersions)?;
     driver.register(ObjectByOwner)?;
     driver.register(ObjectByType)?;
     driver.register(Balance)?;
-    driver.register(PackageVersions)?;
     if layer.objects {
         driver.register(Objects)?;
     }
@@ -169,7 +191,7 @@ pub fn floor_unrestored_pipelines(
 ) -> anyhow::Result<()> {
     let restored: &[&'static str] = if layer.objects {
         &[
-            LiveObjects::NAME,
+            ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
             Balance::NAME,
@@ -178,7 +200,7 @@ pub fn floor_unrestored_pipelines(
         ]
     } else {
         &[
-            LiveObjects::NAME,
+            ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
             Balance::NAME,
@@ -201,7 +223,7 @@ pub fn floor_unrestored_pipelines(
         Effects::NAME,
         Events::NAME,
         Objects::NAME,
-        LiveObjects::NAME,
+        ObjectVersionByCheckpoint::NAME,
         ObjectByOwner::NAME,
         ObjectByType::NAME,
         Balance::NAME,
@@ -526,7 +548,7 @@ mod tests {
 
     /// End-to-end: drive a handful of address-owned objects
     /// through every registered pipeline. Verifies that the
-    /// rows we expect end up in `live_objects` and
+    /// rows we expect end up in `object_version_by_checkpoint` and
     /// `object_by_owner`, and that every pipeline's
     /// `__restore` / `__watermark` rows are set up for the
     /// tip-indexer to take over.
@@ -557,10 +579,13 @@ mod tests {
         .await
         .unwrap();
 
-        // Each object's live pointer landed.
+        // Each object's restore floor row landed in the checkpoint-pinned
+        // index at the anchor checkpoint (123).
         for o in &objects {
             assert_eq!(
-                schema.get_live_object_version(o.id()).unwrap(),
+                schema
+                    .get_object_version_at_checkpoint(o.id(), 123)
+                    .unwrap(),
                 Some(o.version()),
             );
         }
@@ -593,7 +618,7 @@ mod tests {
         // was not registered with `indexes_only`, so it has no
         // __restore row at all.
         for name in [
-            LiveObjects::NAME,
+            ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
             Balance::NAME,
@@ -670,7 +695,7 @@ mod tests {
         // run a restore in this test). The helper must not
         // clobber them.
         for name in [
-            LiveObjects::NAME,
+            ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
             Balance::NAME,
@@ -840,7 +865,7 @@ mod tests {
         let live: std::collections::BTreeSet<_> = LIVE_COHORT.iter().collect();
         let history: std::collections::BTreeSet<_> = HISTORY_COHORT.iter().collect();
         assert!(live.is_disjoint(&history), "cohorts must not overlap");
-        assert_eq!(live.len(), 5);
-        assert_eq!(history.len(), 5);
+        assert_eq!(live.len(), 3);
+        assert_eq!(history.len(), 7);
     }
 }

@@ -13,7 +13,7 @@ use petgraph::{
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Graph {
     pub cfg: DiGraph<(), ()>,
     pub dom_tree: dom_tree::DominatorTree,
@@ -24,12 +24,6 @@ pub struct Graph {
     /// enclosing-loop successor that `structure_loop` will append after the `Loop` form;
     /// `structure_code_node`'s `next` fusion consults it for the same reason.
     pub loop_exits: HashMap<NodeIndex, HashSet<NodeIndex>>,
-    /// Per-node emission flag. Set when a structurer constructs a `Block`, `IfElse`,
-    /// `Switch`, or `JumpIf` carrying that node's code. After `structure()` returns,
-    /// any input node whose slot is still `false` was never emitted into the structured
-    /// output — the rendered function carries a `// Did not structure and emit blocks …`
-    /// note listing them.
-    pub emitted: Vec<bool>,
 }
 
 impl Graph {
@@ -67,14 +61,12 @@ impl Graph {
             print_heading("loop heads");
             println!("{loop_heads:#?}");
         }
-        let node_count = cfg.node_count();
         let mut graph = Self {
             cfg,
             dom_tree,
             loop_heads,
             back_edges,
             loop_exits: HashMap::new(),
-            emitted: vec![false; node_count],
         };
         // Populate `loop_exits` from the loops' bodies after the graph is otherwise built so
         // `find_loop_nodes` has the dom-tree and back-edges available.
@@ -90,44 +82,6 @@ impl Graph {
         }
         graph.loop_exits = loop_exits;
         graph
-    }
-
-    /// Mark `code` (a basic-block id) as emitted into the structured output. Called at every
-    /// site that constructs a `Block`, `IfElse`, `Switch`, or `JumpIf` carrying a `Code`.
-    pub fn mark_emitted(&mut self, code: u64) {
-        let idx = code as usize;
-        if idx < self.emitted.len() {
-            self.emitted[idx] = true;
-        }
-    }
-
-    /// Input nodes (out of `all_nodes`) whose basic-block ids never got `mark_emitted`
-    /// during structuring. Sorted ascending; intended to drive the rendered
-    /// `// Did not structure and emit blocks …` notice.
-    pub fn unemitted_from(&self, all_nodes: &[NodeIndex]) -> Vec<u64> {
-        let mut out: Vec<u64> = all_nodes
-            .iter()
-            .filter(|n| !self.emitted.get(n.index()).copied().unwrap_or(false))
-            .map(|n| n.index() as u64)
-            .collect();
-        out.sort_unstable();
-        out
-    }
-
-    pub fn update_latch_nodes(&mut self, node: NodeIndex, latch: NodeIndex) {
-        self.update_latch_branch_nodes(node, vec![latch]);
-    }
-
-    pub fn update_latch_branch_nodes(&mut self, node: NodeIndex, latches: Vec<NodeIndex>) {
-        let latches = latches
-            .iter()
-            .filter_map(|latch| self.back_edges.remove(latch))
-            .flatten()
-            .collect::<HashSet<NodeIndex>>();
-        if !latches.is_empty() {
-            let result = self.back_edges.insert(node, latches);
-            assert!(result.is_none());
-        }
     }
 
     pub fn update_loop_info(&mut self, loop_head: NodeIndex) {
@@ -150,7 +104,7 @@ impl Graph {
         // Loop-body discovery, following the No More Gotos definition: for each back-edge t -> h
         // (where the header h dominates the latch t), the loop body is {h} together with every
         // node that can reach t without going through h. We collect that with one reverse BFS
-        // from the latches, treating the header as a frontier — O(V + E) per call.
+        // from the latches, treating the header as a frontier - O(V + E) per call.
         //
         // We recompute back-edges from the CFG and dom tree directly: u -> h is a back-edge iff h
         // dominates u. Both the CFG and the dom tree are immutable across structuring, so this is
@@ -186,7 +140,7 @@ impl Graph {
             }
         }
 
-        // Iterate `loop_nodes` in sorted order — it's a HashSet so iteration order is
+        // Iterate `loop_nodes` in sorted order - it's a HashSet so iteration order is
         // otherwise non-deterministic, and that order leaks into `refine_loop_nodes`'s
         // greedy fixpoint, which can produce different SCC-boundary refinements run-to-run.
         let mut loop_nodes_sorted: Vec<NodeIndex> = loop_nodes.iter().copied().collect();
@@ -228,13 +182,11 @@ impl Graph {
                 {
                     loop_nodes.insert(node);
                     succ_nodes.remove(&node);
-                    // When absorbing `node` into the body, its outgoing CFG edges to nodes
-                    // not in `loop_nodes` are now exit edges of the (enlarged) body. Don't
-                    // filter by dom_tree subtree of the header — a legitimate loop break
-                    // target (a label owned by an outer scope) is not dominated by the loop
-                    // header but is the loop's true successor; dropping it would leave
-                    // `succ_nodes` empty so `insert_breaks` couldn't rewrite the break Jump
-                    // and the goto leaks out as residue.
+                    // Note: NMG also filters by `dom_nodes.contains(nodes)` here, but we do not:
+                    // a legitimate loop break target (a label owned by an outer scope) is not
+                    // dominated by the loop header but may be the loop's true successor;
+                    // dropping it would leave `succ_nodes` empty, meaning `insert_breaks`
+                    // cannot rewrite the break `Jump` and the goto leaks out as residue.
                     let nodes = self
                         .cfg
                         .neighbors_directed(node, petgraph::Direction::Outgoing)

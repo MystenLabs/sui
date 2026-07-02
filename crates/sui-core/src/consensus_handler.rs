@@ -11,6 +11,7 @@ use std::{
 
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CommitConsumerMonitor, CommitIndex, CommitRef};
+use consensus_types::block::BlockRef;
 use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use lru::LruCache;
@@ -51,8 +52,8 @@ use sui_types::{
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedTransaction,
-        WithAliases,
+        InputObjectKind, PlainTransactionWithClaims, SenderSignedData, TransactionDataAPI,
+        TransactionKey, VerifiedTransaction, WithAliases,
     },
 };
 use tokio::task::JoinSet;
@@ -69,7 +70,6 @@ use crate::{
         backpressure::{BackpressureManager, BackpressureSubscriber},
         congestion_log::CongestionCommitLogger,
         consensus_tx_status_cache::ConsensusTxStatus,
-        epoch_start_configuration::EpochStartConfigTrait,
         execution_time_estimator::ExecutionTimeEstimator,
         shared_object_congestion_tracker::SharedObjectCongestionTracker,
         shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions, Schedulable},
@@ -81,7 +81,7 @@ use crate::{
     },
     consensus_adapter::ConsensusAdapter,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
-    consensus_types::consensus_output_api::ConsensusCommitAPI,
+    consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction},
     epoch::{
         randomness::{DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
@@ -1077,13 +1077,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &mut self,
         consensus_commit: impl ConsensusCommitAPI,
     ) {
-        self.handle_consensus_commit(consensus_commit).await;
+        let transactions = consensus_commit.transactions();
+        self.handle_consensus_commit(consensus_commit, transactions)
+            .await;
     }
 
     #[instrument(level = "debug", skip_all, fields(epoch = self.epoch_store.epoch(), round = consensus_commit.leader_round()))]
     pub(crate) async fn handle_consensus_commit(
         &mut self,
         consensus_commit: impl ConsensusCommitAPI,
+        transactions: ParsedConsensusTransactions,
     ) {
         {
             let protocol_config = self.epoch_store.protocol_config();
@@ -1164,7 +1167,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
-            &consensus_commit,
+            transactions,
         );
         // Buffer owned object locks for batch write.
         if !owned_object_locks.is_empty() {
@@ -2442,24 +2445,56 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &mut self,
         initial_reconfig_state: ReconfigState,
         commit_info: &ConsensusCommitInfo,
-        consensus_commit: &impl ConsensusCommitAPI,
+        block_transactions: ParsedConsensusTransactions,
     ) -> FilteredConsensusOutput {
         let _scope = monitored_scope("ConsensusCommitHandler::filter_consensus_txns");
         let mut transactions = Vec::new();
         let mut owned_object_locks = HashMap::new();
+        // Consensus transaction status updates are collected here and flushed in a
+        // single batched write (one lock acquisition, notifications outside the lock)
+        // at the end of the commit, rather than one write+notify per transaction.
+        let mut status_updates: Vec<(ConsensusPosition, ConsensusTxStatus)> = Vec::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
-        for (block, parsed_transactions) in consensus_commit.transactions() {
+
+        // Prefetch the cross-commit owned-object lock state for the whole commit in one
+        // batched read. These locks are constant for the duration of a commit (new locks
+        // are only written at commit end), so this replaces the per-transaction
+        // quarantine+DB lookup that try_acquire_owned_object_locks_post_consensus used to
+        // do. Over-reading refs of transactions that are later filtered out is harmless.
+        let existing_locks = {
+            let mut prefetch_refs: Vec<ObjectRef> = Vec::new();
+            for (_block, parsed_transactions) in &block_transactions {
+                for parsed in parsed_transactions {
+                    if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                        &parsed.transaction.kind
+                        && let Some(refs) = owned_object_refs_to_lock(tx_with_claims)
+                    {
+                        prefetch_refs.extend(refs);
+                    }
+                }
+            }
+            prefetch_refs.sort();
+            prefetch_refs.dedup();
+            // On a read error fall back to an empty map (treat refs as unlocked) — the
+            // same lenient behavior the per-transaction read had.
+            self.epoch_store
+                .get_owned_object_locks_map(&prefetch_refs)
+                .unwrap_or_default()
+        };
+
+        for (block, parsed_transactions) in block_transactions {
             let author = block.author.value();
+            let author_hostname = self.committee.authority(block.author).hostname.as_str();
             // TODO: consider only messages within 1~3 rounds of the leader?
             self.last_consensus_stats.stats.inc_num_messages(author);
 
             // Set the "ping" transaction status for this block. This is necessary as there might be some ping requests waiting for the ping transaction to be certified.
-            self.epoch_store.set_consensus_tx_status(
+            status_updates.push((
                 ConsensusPosition::ping(epoch, block),
                 ConsensusTxStatus::Finalized,
-            );
+            ));
 
             for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
@@ -2501,26 +2536,41 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
+                // Record metrics for every committed transaction, regardless of whether it was
+                // accepted or rejected by consensus, so we measure the full committed output.
+                let kind = classify(&parsed.transaction);
+                let outcome = if parsed.rejected {
+                    "rejected"
+                } else {
+                    "accepted"
+                };
+                self.metrics
+                    .consensus_handler_processed
+                    .with_label_values(&[kind, outcome])
+                    .inc();
+                self.metrics
+                    .consensus_handler_transaction_sizes
+                    .with_label_values(&[kind, outcome])
+                    .observe(parsed.serialized_len as f64);
+                // Per-author breakdown is only tracked for user transactions, since that is where
+                // rejections and author-attributable spam are meaningful. Keeping the block author
+                // label scoped to user transactions also bounds metric cardinality.
+                if parsed.transaction.is_user_transaction() {
+                    self.metrics
+                        .consensus_handler_processed_user_transactions
+                        .with_label_values(&[outcome, author_hostname])
+                        .inc();
+                }
+
                 if parsed.rejected {
-                    // TODO(fastpath): Add metrics for rejected transactions.
                     if parsed.transaction.is_user_transaction() {
-                        self.epoch_store
-                            .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
+                        status_updates.push((position, ConsensusTxStatus::Rejected));
                         num_rejected_user_transactions[author] += 1;
                     }
                     // Skip processing rejected transactions.
                     continue;
                 }
 
-                let kind = classify(&parsed.transaction);
-                self.metrics
-                    .consensus_handler_processed
-                    .with_label_values(&[kind])
-                    .inc();
-                self.metrics
-                    .consensus_handler_transaction_sizes
-                    .with_label_values(&[kind])
-                    .observe(parsed.serialized_len as f64);
                 if parsed.transaction.is_user_transaction() {
                     self.last_consensus_stats
                         .stats
@@ -2610,28 +2660,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
                     &parsed.transaction.kind
                 {
-                    let immutable_object_ids: HashSet<ObjectID> =
-                        tx_with_claims.get_immutable_objects().into_iter().collect();
                     let tx = tx_with_claims.tx();
-
-                    let Ok(input_objects) = tx.transaction_data().input_objects() else {
+                    let Some(owned_object_refs) = owned_object_refs_to_lock(tx_with_claims) else {
                         debug_fatal!("Invalid input objects for transaction {}", tx.digest());
                         continue;
                     };
-
-                    // Filter ImmOrOwnedMoveObject inputs, excluding those claimed to be immutable.
-                    // Immutable objects don't need lock acquisition as they can be used concurrently.
-                    let owned_object_refs: Vec<_> = input_objects
-                        .iter()
-                        .filter_map(|obj| match obj {
-                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
-                                if !immutable_object_ids.contains(&obj_ref.0) =>
-                            {
-                                Some(*obj_ref)
-                            }
-                            _ => None,
-                        })
-                        .collect();
 
                     match self
                         .epoch_store
@@ -2639,18 +2672,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             &owned_object_refs,
                             *tx.digest(),
                             &owned_object_locks,
+                            &existing_locks,
                         ) {
                         Ok(new_locks) => {
                             owned_object_locks.extend(new_locks.into_iter());
                             // Lock acquisition succeeded - now set Finalized status
-                            self.epoch_store
-                                .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                            status_updates.push((position, ConsensusTxStatus::Finalized));
                             num_finalized_user_transactions[author] += 1;
                         }
                         Err(e) => {
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
-                            self.epoch_store
-                                .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
+                            status_updates.push((position, ConsensusTxStatus::Dropped));
                             self.epoch_store.set_rejection_vote_reason(position, &e);
                             continue;
                         }
@@ -2661,6 +2693,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 transactions.push((transaction, author as u32));
             }
         }
+
+        // Flush all collected status updates in one batched write. None of the logic
+        // above reads transaction status back, so deferring visibility to here (still
+        // before dedup/processing) is equivalent to setting each status inline.
+        self.epoch_store.set_consensus_tx_statuses(status_updates);
 
         for (i, authority) in self.committee.authorities() {
             let hostname = &authority.hostname;
@@ -3009,6 +3046,16 @@ impl ExecutionSchedulerSender {
     }
 }
 
+/// Capacity of the channel from the deserialize worker to the commit handler. Small/bounded: lets
+/// the worker prepare ~1 commit ahead (pipelining) while applying backpressure when the handler is
+/// behind, instead of buffering parsed commits unboundedly.
+const CONSENSUS_HANDLER_DESERIALIZE_CHANNEL_CAPACITY: usize = 2;
+
+/// Transactions BCS-deserialized out of a consensus commit, grouped by block. Produced by the
+/// deserialize worker and consumed by the commit handler, so parsing stays off the handler's
+/// critical path.
+type ParsedConsensusTransactions = Vec<(BlockRef, Vec<ParsedTransaction>)>;
+
 /// Manages the lifetime of tasks handling the commits and transactions output by consensus.
 pub(crate) struct MysticetiConsensusHandler {
     tasks: JoinSet<()>,
@@ -3026,15 +3073,45 @@ impl MysticetiConsensusHandler {
             "Starting consensus replay"
         );
         let mut tasks = JoinSet::new();
+
+        // Stage 1 — deserialize worker: BCS-parses each commit's transactions off the handler's
+        // critical path, so parsing overlaps the handler processing the previous commit. The
+        // channel is bounded (small) so the worker prepares ~1 commit ahead but applies
+        // backpressure (rather than buffering parsed commits unboundedly) when the handler is the
+        // bottleneck. Single-threaded; ordering is preserved (one worker, FIFO channel, one handler).
+        let (parsed_sender, mut parsed_receiver) = monitored_mpsc::channel(
+            "consensus_deserialized_commits",
+            CONSENSUS_HANDLER_DESERIALIZE_CHANNEL_CAPACITY,
+        );
+        tasks.spawn(monitored_future!(async move {
+            while let Some(consensus_commit) = commit_receiver.recv().await {
+                let transactions: ParsedConsensusTransactions = {
+                    let _scope = monitored_scope("ConsensusCommitHandler::deserialize_worker");
+                    consensus_commit.transactions()
+                };
+                // The send is intentionally outside the scope above: on the bounded channel it
+                // blocks when the handler is the bottleneck, and that idle-wait would otherwise
+                // inflate the deserialize_worker scope (making it read as CPU work, not waiting).
+                if parsed_sender
+                    .send((consensus_commit, transactions))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }));
+
+        // Stage 2 — commit handler: processes pre-parsed commits in order.
         tasks.spawn(monitored_future!(async move {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
-            while let Some(consensus_commit) = commit_receiver.recv().await {
+            while let Some((consensus_commit, transactions)) = parsed_receiver.recv().await {
                 let commit_index = consensus_commit.commit_ref.index;
                 if commit_index <= last_processed_commit_at_startup {
                     consensus_handler.handle_prior_consensus_commit(consensus_commit);
                 } else {
                     consensus_handler
-                        .handle_consensus_commit(consensus_commit)
+                        .handle_consensus_commit(consensus_commit, transactions)
                         .await;
                 }
                 commit_consumer_monitor.set_highest_handled_commit(commit_index);
@@ -3068,6 +3145,36 @@ fn authenticator_state_update_transaction(
             .expect("authenticator state obj must exist"),
     );
     VerifiedExecutableTransaction::new_system(transaction, epoch)
+}
+
+/// The owned (non-immutable `ImmOrOwnedMoveObject`) object refs that a
+/// `UserTransactionV2` must lock post-consensus. Immutable objects are excluded as
+/// they can be used concurrently. Returns `None` if the transaction's input objects
+/// are invalid. Used both to prefetch existing locks for the whole commit and, per
+/// transaction, to perform conflict detection — keeping the two in sync.
+fn owned_object_refs_to_lock(
+    tx_with_claims: &PlainTransactionWithClaims,
+) -> Option<Vec<ObjectRef>> {
+    let immutable_object_ids: HashSet<ObjectID> =
+        tx_with_claims.get_immutable_objects().into_iter().collect();
+    let input_objects = tx_with_claims
+        .tx()
+        .transaction_data()
+        .input_objects()
+        .ok()?;
+    Some(
+        input_objects
+            .iter()
+            .filter_map(|obj| match obj {
+                InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                    if !immutable_object_ids.contains(&obj_ref.0) =>
+                {
+                    Some(*obj_ref)
+                }
+                _ => None,
+            })
+            .collect(),
+    )
 }
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
@@ -3520,7 +3627,8 @@ mod tests {
 
         // AND process the consensus commit once
         {
-            let waiter = consensus_handler.handle_consensus_commit(committed_sub_dag.clone());
+            let waiter =
+                consensus_handler.handle_consensus_commit_for_test(committed_sub_dag.clone());
             pin_mut!(waiter);
 
             // waiter should not complete within 5 seconds
@@ -3713,7 +3821,7 @@ mod tests {
             state.consensus_gasless_counter.clone(),
         );
 
-        handler.handle_consensus_commit(commit).await;
+        handler.handle_consensus_commit_for_test(commit).await;
 
         use crate::consensus_handler::SequencedConsensusTransactionKey as SK;
         use sui_types::messages_consensus::ConsensusTransactionKey as CK;
@@ -3839,7 +3947,7 @@ mod tests {
             state.consensus_gasless_counter.clone(),
         );
 
-        handler.handle_consensus_commit(commit).await;
+        handler.handle_consensus_commit_for_test(commit).await;
 
         use crate::consensus_handler::SequencedConsensusTransactionKey as SK;
         use sui_types::messages_consensus::ConsensusTransactionKey as CK;
