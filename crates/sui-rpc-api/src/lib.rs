@@ -20,7 +20,6 @@ pub mod grpc;
 pub mod ledger_history;
 mod metrics;
 pub mod read_mask_defaults;
-mod read_pool;
 mod reader;
 mod response;
 mod service;
@@ -70,7 +69,6 @@ pub struct RpcService {
     extra_routes: axum::Router,
     extra_service_names: Vec<&'static str>,
     extra_file_descriptor_sets: Vec<&'static [u8]>,
-    read_pool: Option<Arc<crate::read_pool::ReadPool>>,
 }
 
 impl RpcService {
@@ -87,7 +85,6 @@ impl RpcService {
             extra_routes: axum::Router::new(),
             extra_service_names: Vec::new(),
             extra_file_descriptor_sets: Vec::new(),
-            read_pool: None,
         }
     }
 
@@ -113,22 +110,6 @@ impl RpcService {
 
     pub fn with_metrics(&mut self, metrics: RpcMetrics) {
         self.metrics = Some(Arc::new(metrics));
-    }
-
-    pub fn with_read_pool(&mut self, registry: &prometheus::Registry) {
-        let (threads, capacity) = crate::read_pool::resolve_pool_sizing(&self.config);
-        let metrics = Arc::new(crate::read_pool::ReadPoolMetrics::new(registry));
-        self.read_pool = Some(Arc::new(crate::read_pool::ReadPool::new(
-            threads, capacity, metrics,
-        )));
-    }
-
-    /// The dedicated RocksDB read pool. Errors (rather than silently blocking
-    /// the async worker) when `with_read_pool` was never called.
-    pub(crate) fn read_pool(&self) -> Result<Arc<crate::read_pool::ReadPool>, RpcError> {
-        self.read_pool
-            .clone()
-            .ok_or_else(|| RpcError::new(tonic::Code::Internal, "read pool not configured"))
     }
 
     pub fn with_custom_service<S>(&mut self, svc: S)

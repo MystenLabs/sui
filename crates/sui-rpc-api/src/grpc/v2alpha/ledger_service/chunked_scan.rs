@@ -3,8 +3,8 @@
 
 use std::collections::VecDeque;
 
-use futures::future::BoxFuture;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::sync::DropGuard;
 
@@ -55,11 +55,11 @@ pub(crate) struct ChunkedScan<State, Item, Spawn>
 where
     State: Send + 'static,
     Item: Send + 'static,
-    Spawn: FnMut(State, ChunkArgs) -> BoxFuture<'static, Result<ScanChunkDone<State, Item>, RpcError>>
+    Spawn: FnMut(State, ChunkArgs) -> JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>
         + Send
         + 'static,
 {
-    current: Option<BoxFuture<'static, Result<ScanChunkDone<State, Item>, RpcError>>>,
+    current: Option<JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>>,
     buffered: VecDeque<Item>,
     spawn: Spawn,
     produced: usize,
@@ -75,7 +75,7 @@ impl<State, Item, Spawn> ChunkedScan<State, Item, Spawn>
 where
     State: Send + 'static,
     Item: Send + 'static,
-    Spawn: FnMut(State, ChunkArgs) -> BoxFuture<'static, Result<ScanChunkDone<State, Item>, RpcError>>
+    Spawn: FnMut(State, ChunkArgs) -> JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>
         + Send
         + 'static,
 {
@@ -124,7 +124,9 @@ where
                 return Ok(None);
             };
 
-            let done = chunk.await?;
+            let done = chunk
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))??;
             self.apply_done(done);
         }
     }
@@ -172,7 +174,6 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use futures::FutureExt;
 
     #[tokio::test]
     async fn chunked_scan_drains_vector_chunks_in_order() {
@@ -187,7 +188,7 @@ mod tests {
             ));
             let scan_budget = args.scan_budget;
             let _ = args.cancel;
-            async move {
+            tokio::task::spawn_blocking(move || {
                 let items = match state {
                     0 => vec![0, 1],
                     1 => vec![10, 11],
@@ -205,8 +206,7 @@ mod tests {
                     },
                     remaining_scan_budget: scan_budget - 1,
                 })
-            }
-            .boxed()
+            })
         });
 
         let mut items = Vec::new();
@@ -235,7 +235,7 @@ mod tests {
         let captured_for_spawn = captured.clone();
         let scan = ChunkedScan::new(0usize, 5, 2, 10, move |_state, args: ChunkArgs| {
             *captured_for_spawn.lock().unwrap() = Some(args.cancel.clone());
-            async move {
+            tokio::task::spawn_blocking(move || {
                 Ok(ScanChunkDone::<usize, usize> {
                     items: Vec::new(),
                     produced: 0,
@@ -247,8 +247,7 @@ mod tests {
                     },
                     remaining_scan_budget: args.scan_budget,
                 })
-            }
-            .boxed()
+            })
         });
 
         let token = captured.lock().unwrap().clone().expect("token captured");
@@ -260,15 +259,12 @@ mod tests {
     #[tokio::test]
     async fn chunked_scan_worker_observes_cancel_and_returns_cancelled_error() {
         let mut scan = ChunkedScan::new(0usize, 5, 2, 10, move |_state, args: ChunkArgs| {
-            let handle = tokio::task::spawn_blocking(
-                move || -> Result<ScanChunkDone<usize, usize>, RpcError> {
-                    while !args.cancel.is_cancelled() {
-                        std::thread::sleep(std::time::Duration::from_millis(5));
-                    }
-                    Err(cancelled())
-                },
-            );
-            async move { handle.await.expect("join") }.boxed()
+            tokio::task::spawn_blocking(move || -> Result<ScanChunkDone<usize, usize>, RpcError> {
+                while !args.cancel.is_cancelled() {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                Err(cancelled())
+            })
         });
 
         scan.cancel_token().cancel();
