@@ -422,24 +422,6 @@ impl Database {
         ret
     }
 
-    pub fn key_may_exist_cf<K: AsRef<[u8]>>(
-        &self,
-        cf_name: &str,
-        key: K,
-        readopts: &ReadOptions,
-    ) -> bool {
-        match &self.storage {
-            // [`rocksdb::DBWithThreadMode::key_may_exist_cf`] can have false positives,
-            // but no false negatives. We use it to short-circuit the absent case
-            Storage::Rocks(rocks) => {
-                rocks
-                    .underlying
-                    .key_may_exist_cf_opt(&rocks_cf(rocks, cf_name), key, readopts)
-            }
-            _ => true,
-        }
-    }
-
     pub(crate) fn write_opt_internal(
         &self,
         batch: StorageWriteBatch,
@@ -1776,9 +1758,27 @@ where
     where
         J: Borrow<K>,
     {
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_multiget_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let perf_ctx = if self.multiget_sample_interval.sample() {
+            Some(RocksDBPerfContext)
+        } else {
+            None
+        };
         let keys_bytes = keys.into_iter().map(|k| be_fix_int_ser(k.borrow()));
-        self.db
-            .multi_contains(&self.column_family, keys_bytes, &self.opts.readopts())
+        let result = self
+            .db
+            .multi_contains(&self.column_family, keys_bytes, &self.opts.readopts());
+        if perf_ctx.is_some() {
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
+        }
+        result
     }
 
     #[instrument(level = "trace", skip_all, err)]
