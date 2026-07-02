@@ -316,14 +316,6 @@ impl ConsensusCommitOutput {
         }
 
         batch.delete_batch(
-            &tables.deferred_transactions_v2,
-            &self.deleted_deferred_txns,
-        )?;
-        batch.delete_batch(
-            &tables.deferred_transactions_with_aliases_v2,
-            &self.deleted_deferred_txns,
-        )?;
-        batch.delete_batch(
             &tables.deferred_transactions_with_aliases_v3,
             &self.deleted_deferred_txns,
         )?;
@@ -437,7 +429,7 @@ pub(crate) struct ConsensusOutputCache {
 impl ConsensusOutputCache {
     pub(crate) fn new(tables: &AuthorityEpochTables) -> Self {
         let deferred_transactions = tables
-            .get_all_deferred_transactions_v2()
+            .get_all_deferred_transactions()
             .expect("load deferred transactions cannot fail");
 
         let executed_in_epoch_cache_capacity = 50_000;
