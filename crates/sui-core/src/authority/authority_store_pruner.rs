@@ -138,7 +138,7 @@ impl AuthorityStorePruner {
     /// prunes old versions of objects based on transaction effects
     #[cfg(not(tidehunter))]
     async fn prune_objects_and_indexes(
-        transaction_effects: Vec<TransactionEffects>,
+        transaction_effects: Vec<(CheckpointSequenceNumber, TransactionEffects)>,
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_number: CheckpointSequenceNumber,
         metrics: Arc<AuthorityStorePruningMetrics>,
@@ -152,7 +152,7 @@ impl AuthorityStorePruner {
         // Collect objects keys that need to be deleted from `transaction_effects`.
         let mut live_object_keys_to_prune = vec![];
         let mut object_tombstones_to_prune = vec![];
-        for effects in &transaction_effects {
+        for (_checkpoint, effects) in &transaction_effects {
             for (object_id, seq_number) in effects.modified_at_versions() {
                 live_object_keys_to_prune.push(ObjectKey(object_id, seq_number));
             }
@@ -223,6 +223,7 @@ impl AuthorityStorePruner {
                 rpc_store.schema(),
                 checkpoint_number,
                 pruned_tx_seq_exclusive,
+                &transaction_effects,
             )?;
         }
 
@@ -231,7 +232,7 @@ impl AuthorityStorePruner {
 
     #[cfg(tidehunter)]
     async fn prune_objects_and_indexes(
-        transaction_effects: Vec<TransactionEffects>,
+        transaction_effects: Vec<(CheckpointSequenceNumber, TransactionEffects)>,
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_number: CheckpointSequenceNumber,
         metrics: Arc<AuthorityStorePruningMetrics>,
@@ -243,7 +244,7 @@ impl AuthorityStorePruner {
         let mut wb = perpetual_db.objects.batch();
         let mut objects_to_prune = vec![];
 
-        for effects in &transaction_effects {
+        for (_checkpoint, effects) in &transaction_effects {
             for (object_id, version) in effects
                 .modified_at_versions()
                 .into_iter()
@@ -269,6 +270,7 @@ impl AuthorityStorePruner {
                 rpc_store.schema(),
                 checkpoint_number,
                 pruned_tx_seq_exclusive,
+                &transaction_effects,
             )?;
         }
 
@@ -281,7 +283,7 @@ impl AuthorityStorePruner {
         checkpoint_number: CheckpointSequenceNumber,
         checkpoints_to_prune: Vec<CheckpointDigest>,
         checkpoint_content_to_prune: Vec<CheckpointContents>,
-        effects_to_prune: &Vec<TransactionEffects>,
+        effects_to_prune: &Vec<(CheckpointSequenceNumber, TransactionEffects)>,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("EffectsLivePruner");
@@ -300,7 +302,7 @@ impl AuthorityStorePruner {
         )?;
 
         let mut effect_digests = vec![];
-        for effects in effects_to_prune {
+        for (_checkpoint, effects) in effects_to_prune {
             let effects_digest = effects.digest();
             debug!("Pruning effects {:?}", effects_digest);
             effect_digests.push(effects_digest);
@@ -479,7 +481,10 @@ impl AuthorityStorePruner {
 
         let mut checkpoints_to_prune = vec![];
         let mut checkpoint_content_to_prune = vec![];
-        let mut effects_to_prune = vec![];
+        // Each effect is tagged with the checkpoint it is pruned from so the
+        // embedded rpc-store's `object_version_by_checkpoint` retraction can
+        // keep each object's anchor at its true supersession checkpoint.
+        let mut effects_to_prune: Vec<(CheckpointSequenceNumber, TransactionEffects)> = vec![];
         // Absolute tx-seq floor (exclusive) after pruning the current
         // batch — the last-pruned checkpoint's `network_total_transactions`.
         // The embedded rpc-store's history-cohort prune consumes this
@@ -522,7 +527,12 @@ impl AuthorityStorePruner {
             info!("scheduling pruning for checkpoint {:?}", checkpoint_number);
             checkpoints_to_prune.push(*checkpoint.digest());
             checkpoint_content_to_prune.push(content);
-            effects_to_prune.extend(effects.into_iter().flatten());
+            effects_to_prune.extend(
+                effects
+                    .into_iter()
+                    .flatten()
+                    .map(|effects| (checkpoint_number, effects)),
+            );
 
             if effects_to_prune.len() >= config.max_transactions_in_batch
                 || checkpoints_to_prune.len() >= config.max_checkpoints_in_batch
@@ -1195,7 +1205,7 @@ mod tests {
                 ));
             }
             AuthorityStorePruner::prune_objects_and_indexes(
-                vec![effects],
+                vec![(0, effects)],
                 &db,
                 0,
                 metrics,
@@ -1293,7 +1303,7 @@ mod tests {
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
         let total_pruned = AuthorityStorePruner::prune_objects_and_indexes(
-            vec![effects],
+            vec![(0, effects)],
             &perpetual_db,
             0,
             metrics,
