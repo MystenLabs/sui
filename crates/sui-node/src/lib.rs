@@ -2425,7 +2425,7 @@ impl SuiNode {
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
         use sui_types::error::SuiErrorKind;
-        let client = reqwest::Client::new();
+        let client = reqwest012::Client::new();
         fetch_jwks(provider, &client, true)
             .await
             .map_err(|_| SuiErrorKind::JWKRetrievalError.into())

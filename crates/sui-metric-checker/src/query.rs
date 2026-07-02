@@ -4,7 +4,7 @@ use crate::unix_seconds_to_timestamp_string;
 use anyhow::anyhow;
 use base64::{Engine, engine::general_purpose};
 use prometheus_http_query::Client;
-use reqwest::header::{AUTHORIZATION, HeaderValue};
+use reqwest012::header::{AUTHORIZATION, HeaderValue};
 use tracing::{debug, info};
 
 pub async fn instant_query(

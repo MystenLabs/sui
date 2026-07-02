@@ -439,7 +439,7 @@ notify = "6.1.1"
 num-bigint = "0.4.4"
 num_cpus = "1.15.0"
 num_enum = "0.6.1"
-object_store = { version = "0.13.0", features = [
+object_store = { version = "0.14.0", features = [
   "aws",
   "gcp",
   "azure",
@@ -472,10 +472,20 @@ rand = "0.8.5"
 rayon = "1.5.3"
 rcgen = "0.13"
 regex = "1.7.1"
-reqwest = { version = "0.12", default-features = false, features = [
+reqwest = { version = "0.13.4", default-features = false, features = [
+  "http2",
+  "json",
+  "rustls",
+  "stream",
+] }
+# reqwest 0.12, retained for crates that pass reqwest values into deps still pinned to it:
+# cynic (sui-package-dump), prometheus-http-query (sui-metric-checker), and
+# fastcrypto-zkp's fetch_jwks (sui, sui-node).
+reqwest012 = { package = "reqwest", version = "0.12", default-features = false, features = [
   "http2",
   "json",
   "rustls-tls",
+  "stream",
 ] }
 roaring = "0.11.3"
 ron = "0.8.0"
