@@ -38,6 +38,10 @@ impl RpcError {
         }
     }
 
+    pub(crate) fn code(&self) -> Code {
+        self.code
+    }
+
     pub fn into_status_proto(self) -> crate::proto::google::rpc::Status {
         crate::proto::google::rpc::Status {
             code: self.code.into(),

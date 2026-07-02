@@ -24,6 +24,26 @@ pub struct RpcMetrics {
     /// Wall time of the actual `List*` chunk work run on the blocking
     /// thread, labelled by method.
     pub(crate) blocking_work_seconds: HistogramVec,
+    /// Wall-clock latency of a v2alpha `List*` request stream, labelled by
+    /// bounded method name.
+    pub(crate) list_request_seconds: HistogramVec,
+    /// Completed blocking chunks per v2alpha `List*` request.
+    pub(crate) list_request_chunks: HistogramVec,
+    /// Real item frames emitted per v2alpha `List*` request, excluding
+    /// watermark and terminal frames.
+    pub(crate) list_request_items: HistogramVec,
+    /// Sum of blocking queue wait across all completed chunks in a v2alpha
+    /// `List*` request.
+    pub(crate) list_request_blocking_queue_wait_seconds: HistogramVec,
+    /// Sum of blocking work time across all completed chunks in a v2alpha
+    /// `List*` request.
+    pub(crate) list_request_blocking_work_seconds: HistogramVec,
+    /// Request wall-clock time not accounted for by accumulated blocking queue
+    /// wait plus accumulated blocking work.
+    pub(crate) list_request_unaccounted_seconds: HistogramVec,
+    /// Terminal v2alpha `List*` request outcomes. `end_reason` is set for
+    /// successful stream terminals and `none` for error/drop outcomes.
+    pub(crate) list_request_outcomes: IntCounterVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -35,6 +55,10 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 /// saturated), so use wide exponential buckets: ~0.1 ms to ~52 s.
 fn blocking_sec_buckets() -> Vec<f64> {
     prometheus::exponential_buckets(0.0001, 2.0, 20).unwrap()
+}
+
+fn list_request_count_buckets() -> Vec<f64> {
+    prometheus::exponential_buckets(1.0, 2.0, 16).unwrap()
 }
 
 impl RpcMetrics {
@@ -75,6 +99,61 @@ impl RpcMetrics {
                 "Wall time of List* chunk work on a blocking thread, per method",
                 &["method"],
                 blocking_sec_buckets(),
+                registry,
+            )
+            .unwrap(),
+            list_request_seconds: register_histogram_vec_with_registry!(
+                "list_request_seconds",
+                "Wall-clock latency of v2alpha List* request streams, per method",
+                &["method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            list_request_chunks: register_histogram_vec_with_registry!(
+                "list_request_chunks",
+                "Completed blocking chunks per v2alpha List* request, per method",
+                &["method"],
+                list_request_count_buckets(),
+                registry,
+            )
+            .unwrap(),
+            list_request_items: register_histogram_vec_with_registry!(
+                "list_request_items",
+                "Real item frames emitted per v2alpha List* request, per method",
+                &["method"],
+                list_request_count_buckets(),
+                registry,
+            )
+            .unwrap(),
+            list_request_blocking_queue_wait_seconds: register_histogram_vec_with_registry!(
+                "list_request_blocking_queue_wait_seconds",
+                "Accumulated blocking queue wait per v2alpha List* request, per method",
+                &["method"],
+                blocking_sec_buckets(),
+                registry,
+            )
+            .unwrap(),
+            list_request_blocking_work_seconds: register_histogram_vec_with_registry!(
+                "list_request_blocking_work_seconds",
+                "Accumulated blocking work time per v2alpha List* request, per method",
+                &["method"],
+                blocking_sec_buckets(),
+                registry,
+            )
+            .unwrap(),
+            list_request_unaccounted_seconds: register_histogram_vec_with_registry!(
+                "list_request_unaccounted_seconds",
+                "V2alpha List* request wall-clock time not accounted for by blocking queue wait or work, per method",
+                &["method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            list_request_outcomes: register_int_counter_vec_with_registry!(
+                "list_request_outcomes",
+                "Terminal outcomes of v2alpha List* request streams",
+                &["method", "outcome", "end_reason"],
                 registry,
             )
             .unwrap(),

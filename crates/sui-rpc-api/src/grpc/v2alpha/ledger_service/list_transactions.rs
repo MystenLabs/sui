@@ -48,7 +48,9 @@ use super::bitmap_scan::drain_bitmap_hits_with_budget;
 use super::chunked_scan::ChunkArgs;
 use super::chunked_scan::ChunkTerminal;
 use super::chunked_scan::ChunkedScan;
+use super::chunked_scan::ListRequestMetrics;
 use super::chunked_scan::ScanChunkDone;
+use super::chunked_scan::ScanChunkResult;
 use super::chunked_scan::cancelled;
 use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
@@ -64,6 +66,7 @@ use super::ledger_read::validate_checkpoint_bounds;
 use super::query_end::query_end;
 
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
+const METHOD: &str = "list_transactions";
 
 pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;
@@ -72,32 +75,50 @@ pub(crate) async fn list_transactions(
     service: RpcService,
     request: ListTransactionsRequest,
 ) -> Result<ListTransactionsStream, RpcError> {
-    ensure_ledger_history_enabled(&service)?;
     let started = Instant::now();
+    macro_rules! try_construct {
+        ($expr:expr) => {
+            match $expr {
+                Ok(value) => value,
+                Err(error) => {
+                    ListRequestMetrics::observe_construction_error(
+                        service.metrics.clone(),
+                        METHOD,
+                        started,
+                        &error,
+                    );
+                    return Err(error);
+                }
+            }
+        };
+    }
+    try_construct!(ensure_ledger_history_enabled(&service));
     let start_checkpoint = request.start_checkpoint;
     let end_checkpoint = request.end_checkpoint;
     let filter = request.filter;
     let request_options = request.options;
     let filtered = filter.is_some();
-    validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
-    let read_mask = validate_read_mask(request.read_mask)?;
+    try_construct!(validate_checkpoint_bounds(start_checkpoint, end_checkpoint));
+    let read_mask = try_construct!(validate_read_mask(request.read_mask));
     let ledger_history = service.config.ledger_history();
     let endpoint = ledger_history.list_transactions();
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
     let chunk_bucket_scan_budget = ledger_history.chunk_bucket_scan_budget();
     let max_bitmap_filter_literals = ledger_history.max_bitmap_filter_literals();
-    let options = QueryOptions::from_proto(
+    let options = try_construct!(QueryOptions::from_proto(
         request_options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
         QueryType::Transactions,
-    )?;
+    ));
     let limit_items = options.limit_items;
     let ordering = options.ordering;
-    let filter_query = filter
-        .as_ref()
-        .map(|filter| transaction_filter_to_query(filter, max_bitmap_filter_literals))
-        .transpose()?;
+    let filter_query = try_construct!(
+        filter
+            .as_ref()
+            .map(|filter| transaction_filter_to_query(filter, max_bitmap_filter_literals))
+            .transpose()
+    );
 
     let initial_state = TransactionScanState::Init {
         start_checkpoint,
@@ -107,6 +128,8 @@ pub(crate) async fn list_transactions(
 
     let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
+        let mut request_metrics = ListRequestMetrics::new(service.metrics.clone(), METHOD);
+        let mut items_emitted = 0usize;
         let render_contents = should_render_transaction_contents(&read_mask);
         let mut scan = ChunkedScan::new(
             initial_state,
@@ -129,8 +152,43 @@ pub(crate) async fn list_transactions(
             },
         );
 
-        while let Some(response) = scan.next_item().await? {
-            yield response;
+        loop {
+            match scan.next_item().await {
+                Ok(Some(response)) => {
+                    if matches!(
+                        &response.response,
+                        Some(list_transactions_response::Response::Item(_))
+                    ) {
+                        items_emitted = items_emitted.saturating_add(1);
+                    }
+                    request_metrics.update(
+                        scan.chunks(),
+                        items_emitted,
+                        scan.blocking_queue_wait(),
+                        scan.blocking_work(),
+                    );
+                    yield response;
+                }
+                Ok(None) => {
+                    request_metrics.update(
+                        scan.chunks(),
+                        items_emitted,
+                        scan.blocking_queue_wait(),
+                        scan.blocking_work(),
+                    );
+                    break;
+                }
+                Err(error) => {
+                    request_metrics.update(
+                        scan.chunks(),
+                        items_emitted,
+                        scan.blocking_queue_wait(),
+                        scan.blocking_work(),
+                    );
+                    request_metrics.finish_error(&error);
+                    Err(error)?;
+                }
+            }
         }
 
         let emitted = scan.produced();
@@ -143,6 +201,7 @@ pub(crate) async fn list_transactions(
                 terminal.end_position,
             ));
         }
+        request_metrics.finish_ok(reason);
         yield end_response(reason);
         info!(
             filtered,
@@ -168,15 +227,16 @@ fn spawn_transaction_chunk(
     remaining_request_item_limit: usize,
     render_contents: bool,
     cancel: CancellationToken,
-) -> JoinHandle<Result<TransactionChunkDone, RpcError>> {
+) -> JoinHandle<ScanChunkResult<TransactionScanState, ListTransactionsResponse>> {
     let metrics = service.metrics.clone();
     let queued_at = Instant::now();
     tokio::task::spawn_blocking(move || {
+        let queue_wait = queued_at.elapsed();
         if let Some(metrics) = &metrics {
             metrics
                 .blocking_queue_wait_seconds
-                .with_label_values(&["list_transactions"])
-                .observe(queued_at.elapsed().as_secs_f64());
+                .with_label_values(&[METHOD])
+                .observe(queue_wait.as_secs_f64());
         }
         let work = Instant::now();
         let r = next_transaction_chunk(
@@ -191,13 +251,14 @@ fn spawn_transaction_chunk(
             remaining_request_item_limit,
             &cancel,
         );
+        let work_elapsed = work.elapsed();
         if let Some(metrics) = &metrics {
             metrics
                 .blocking_work_seconds
-                .with_label_values(&["list_transactions"])
-                .observe(work.elapsed().as_secs_f64());
+                .with_label_values(&[METHOD])
+                .observe(work_elapsed.as_secs_f64());
         }
-        r
+        ScanChunkResult::new(r, queue_wait, work_elapsed)
     })
 }
 

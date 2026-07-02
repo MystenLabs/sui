@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use tokio::task::JoinHandle;
@@ -9,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::sync::DropGuard;
 
 use crate::RpcError;
+use crate::metrics::RpcMetrics;
 
 /// How a query stream ended, plus the exclusive range boundary the scan
 /// reached. The boundary `(end_checkpoint, end_position)` lets the caller build
@@ -30,6 +34,26 @@ pub(crate) struct ScanChunkDone<State, Item> {
     pub(crate) next_state: Option<State>,
     pub(crate) terminal: ChunkTerminal,
     pub(crate) remaining_scan_budget: usize,
+}
+
+pub(crate) struct ScanChunkResult<State, Item> {
+    pub(crate) result: Result<ScanChunkDone<State, Item>, RpcError>,
+    pub(crate) blocking_queue_wait: Duration,
+    pub(crate) blocking_work: Duration,
+}
+
+impl<State, Item> ScanChunkResult<State, Item> {
+    pub(crate) fn new(
+        result: Result<ScanChunkDone<State, Item>, RpcError>,
+        blocking_queue_wait: Duration,
+        blocking_work: Duration,
+    ) -> Self {
+        Self {
+            result,
+            blocking_queue_wait,
+            blocking_work,
+        }
+    }
 }
 
 pub(crate) struct ChunkArgs {
@@ -55,16 +79,17 @@ pub(crate) struct ChunkedScan<State, Item, Spawn>
 where
     State: Send + 'static,
     Item: Send + 'static,
-    Spawn: FnMut(State, ChunkArgs) -> JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>
-        + Send
-        + 'static,
+    Spawn: FnMut(State, ChunkArgs) -> JoinHandle<ScanChunkResult<State, Item>> + Send + 'static,
 {
-    current: Option<JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>>,
+    current: Option<JoinHandle<ScanChunkResult<State, Item>>>,
     buffered: VecDeque<Item>,
     spawn: Spawn,
     produced: usize,
     scan_budget: usize,
     terminal: Option<ChunkTerminal>,
+    chunks: usize,
+    blocking_queue_wait: Duration,
+    blocking_work: Duration,
     limit_items: usize,
     chunk_max: usize,
     cancel: CancellationToken,
@@ -75,9 +100,7 @@ impl<State, Item, Spawn> ChunkedScan<State, Item, Spawn>
 where
     State: Send + 'static,
     Item: Send + 'static,
-    Spawn: FnMut(State, ChunkArgs) -> JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>
-        + Send
-        + 'static,
+    Spawn: FnMut(State, ChunkArgs) -> JoinHandle<ScanChunkResult<State, Item>> + Send + 'static,
 {
     pub(crate) fn new(
         initial_state: State,
@@ -107,6 +130,9 @@ where
             produced: 0,
             scan_budget,
             terminal: None,
+            chunks: 0,
+            blocking_queue_wait: Duration::ZERO,
+            blocking_work: Duration::ZERO,
             limit_items,
             chunk_max,
             cancel,
@@ -126,7 +152,11 @@ where
 
             let done = chunk
                 .await
-                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))??;
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            self.chunks = self.chunks.saturating_add(1);
+            self.blocking_queue_wait += done.blocking_queue_wait;
+            self.blocking_work += done.blocking_work;
+            let done = done.result?;
             self.apply_done(done);
         }
     }
@@ -138,6 +168,18 @@ where
     /// Total real items produced across all chunks (excludes watermark frames).
     pub(crate) fn produced(&self) -> usize {
         self.produced
+    }
+
+    pub(crate) fn chunks(&self) -> usize {
+        self.chunks
+    }
+
+    pub(crate) fn blocking_queue_wait(&self) -> Duration {
+        self.blocking_queue_wait
+    }
+
+    pub(crate) fn blocking_work(&self) -> Duration {
+        self.blocking_work
     }
 
     #[cfg(test)]
@@ -168,6 +210,155 @@ where
     }
 }
 
+pub(crate) struct ListRequestMetrics {
+    metrics: Option<Arc<RpcMetrics>>,
+    method: &'static str,
+    started: Instant,
+    chunks: usize,
+    items_emitted: usize,
+    blocking_queue_wait: Duration,
+    blocking_work: Duration,
+    recorded: bool,
+}
+
+impl ListRequestMetrics {
+    pub(crate) fn new(metrics: Option<Arc<RpcMetrics>>, method: &'static str) -> Self {
+        Self {
+            metrics,
+            method,
+            started: Instant::now(),
+            chunks: 0,
+            items_emitted: 0,
+            blocking_queue_wait: Duration::ZERO,
+            blocking_work: Duration::ZERO,
+            recorded: false,
+        }
+    }
+
+    pub(crate) fn observe_construction_error(
+        metrics: Option<Arc<RpcMetrics>>,
+        method: &'static str,
+        started: Instant,
+        error: &RpcError,
+    ) {
+        let mut request_metrics = Self {
+            metrics,
+            method,
+            started,
+            chunks: 0,
+            items_emitted: 0,
+            blocking_queue_wait: Duration::ZERO,
+            blocking_work: Duration::ZERO,
+            recorded: false,
+        };
+        request_metrics.record(rpc_error_outcome(error), "none");
+    }
+
+    pub(crate) fn update(
+        &mut self,
+        chunks: usize,
+        items_emitted: usize,
+        blocking_queue_wait: Duration,
+        blocking_work: Duration,
+    ) {
+        self.chunks = chunks;
+        self.items_emitted = items_emitted;
+        self.blocking_queue_wait = blocking_queue_wait;
+        self.blocking_work = blocking_work;
+    }
+
+    pub(crate) fn finish_ok(&mut self, end_reason: QueryEndReason) {
+        self.record("ok", query_end_reason_label(end_reason));
+    }
+
+    pub(crate) fn finish_error(&mut self, error: &RpcError) {
+        self.record(rpc_error_outcome(error), "none");
+    }
+
+    fn record(&mut self, outcome: &'static str, end_reason: &'static str) {
+        if self.recorded {
+            return;
+        }
+        self.recorded = true;
+        let Some(metrics) = &self.metrics else {
+            return;
+        };
+
+        let elapsed = self.started.elapsed();
+        let accounted = self.blocking_queue_wait + self.blocking_work;
+        let unaccounted = elapsed.saturating_sub(accounted);
+
+        metrics
+            .list_request_seconds
+            .with_label_values(&[self.method])
+            .observe(elapsed.as_secs_f64());
+        metrics
+            .list_request_chunks
+            .with_label_values(&[self.method])
+            .observe(self.chunks as f64);
+        metrics
+            .list_request_items
+            .with_label_values(&[self.method])
+            .observe(self.items_emitted as f64);
+        metrics
+            .list_request_blocking_queue_wait_seconds
+            .with_label_values(&[self.method])
+            .observe(self.blocking_queue_wait.as_secs_f64());
+        metrics
+            .list_request_blocking_work_seconds
+            .with_label_values(&[self.method])
+            .observe(self.blocking_work.as_secs_f64());
+        metrics
+            .list_request_unaccounted_seconds
+            .with_label_values(&[self.method])
+            .observe(unaccounted.as_secs_f64());
+        metrics
+            .list_request_outcomes
+            .with_label_values(&[self.method, outcome, end_reason])
+            .inc();
+    }
+}
+
+impl Drop for ListRequestMetrics {
+    fn drop(&mut self) {
+        self.record("dropped", "none");
+    }
+}
+
+fn query_end_reason_label(reason: QueryEndReason) -> &'static str {
+    match reason {
+        QueryEndReason::Unspecified => "unspecified",
+        QueryEndReason::ItemLimit => "item_limit",
+        QueryEndReason::ScanLimit => "scan_limit",
+        QueryEndReason::LedgerTip => "ledger_tip",
+        QueryEndReason::CheckpointBound => "checkpoint_bound",
+        QueryEndReason::CursorBound => "cursor_bound",
+        _ => "unknown",
+    }
+}
+
+fn rpc_error_outcome(error: &RpcError) -> &'static str {
+    match error.code() {
+        tonic::Code::Ok => "ok",
+        tonic::Code::Cancelled => "cancelled",
+        tonic::Code::Unknown => "unknown",
+        tonic::Code::InvalidArgument => "invalid_argument",
+        tonic::Code::DeadlineExceeded => "deadline",
+        tonic::Code::NotFound => "not_found",
+        tonic::Code::AlreadyExists => "already_exists",
+        tonic::Code::PermissionDenied => "permission_denied",
+        tonic::Code::ResourceExhausted => "resource_exhausted",
+        tonic::Code::FailedPrecondition => "failed_precondition",
+        tonic::Code::Aborted => "aborted",
+        tonic::Code::OutOfRange => "out_of_range",
+        tonic::Code::Unimplemented => "unimplemented",
+        tonic::Code::Internal => "internal",
+        tonic::Code::Unavailable => "unavailable",
+        tonic::Code::DataLoss => "data_loss",
+        tonic::Code::Unauthenticated => "unauthenticated",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -195,17 +386,21 @@ mod tests {
                     2 => vec![20],
                     _ => Vec::new(),
                 };
-                Ok(ScanChunkDone {
-                    produced: items.len(),
-                    items,
-                    next_state: (state < 2).then_some(state + 1),
-                    terminal: ChunkTerminal {
-                        reason: QueryEndReason::CheckpointBound,
-                        end_checkpoint: 0,
-                        end_position: 0,
-                    },
-                    remaining_scan_budget: scan_budget - 1,
-                })
+                ScanChunkResult::new(
+                    Ok(ScanChunkDone {
+                        produced: items.len(),
+                        items,
+                        next_state: (state < 2).then_some(state + 1),
+                        terminal: ChunkTerminal {
+                            reason: QueryEndReason::CheckpointBound,
+                            end_checkpoint: 0,
+                            end_position: 0,
+                        },
+                        remaining_scan_budget: scan_budget - 1,
+                    }),
+                    Duration::from_millis(1),
+                    Duration::from_millis(2),
+                )
             })
         });
 
@@ -236,17 +431,21 @@ mod tests {
         let scan = ChunkedScan::new(0usize, 5, 2, 10, move |_state, args: ChunkArgs| {
             *captured_for_spawn.lock().unwrap() = Some(args.cancel.clone());
             tokio::task::spawn_blocking(move || {
-                Ok(ScanChunkDone::<usize, usize> {
-                    items: Vec::new(),
-                    produced: 0,
-                    next_state: None,
-                    terminal: ChunkTerminal {
-                        reason: QueryEndReason::CheckpointBound,
-                        end_checkpoint: 0,
-                        end_position: 0,
-                    },
-                    remaining_scan_budget: args.scan_budget,
-                })
+                ScanChunkResult::new(
+                    Ok(ScanChunkDone::<usize, usize> {
+                        items: Vec::new(),
+                        produced: 0,
+                        next_state: None,
+                        terminal: ChunkTerminal {
+                            reason: QueryEndReason::CheckpointBound,
+                            end_checkpoint: 0,
+                            end_position: 0,
+                        },
+                        remaining_scan_budget: args.scan_budget,
+                    }),
+                    Duration::ZERO,
+                    Duration::ZERO,
+                )
             })
         });
 
@@ -259,11 +458,11 @@ mod tests {
     #[tokio::test]
     async fn chunked_scan_worker_observes_cancel_and_returns_cancelled_error() {
         let mut scan = ChunkedScan::new(0usize, 5, 2, 10, move |_state, args: ChunkArgs| {
-            tokio::task::spawn_blocking(move || -> Result<ScanChunkDone<usize, usize>, RpcError> {
+            tokio::task::spawn_blocking(move || -> ScanChunkResult<usize, usize> {
                 while !args.cancel.is_cancelled() {
                     std::thread::sleep(std::time::Duration::from_millis(5));
                 }
-                Err(cancelled())
+                ScanChunkResult::new(Err(cancelled()), Duration::ZERO, Duration::ZERO)
             })
         });
 
