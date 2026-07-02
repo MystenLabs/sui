@@ -15370,6 +15370,7 @@ dependencies = [
  "diesel_migrations",
  "futures",
  "http 1.3.1",
+ "mysten-metrics",
  "mysten-network",
  "num_cpus",
  "object_store 0.13.0",

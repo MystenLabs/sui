@@ -12,6 +12,10 @@ use anyhow::ensure;
 use ingestion::ClientArgs;
 use ingestion::IngestionConfig;
 use ingestion::IngestionService;
+use ingestion::backfill::BackfillConfig;
+use ingestion::backfill::BackfillService;
+use ingestion::backfill::backfill_adapter;
+use ingestion::ingestion_client::CheckpointEnvelope;
 use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
@@ -20,6 +24,7 @@ use sui_indexer_alt_framework_store_traits::Connection;
 use sui_indexer_alt_framework_store_traits::SequentialStore;
 use sui_indexer_alt_framework_store_traits::Store;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
+use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::metrics::IngestionMetrics;
@@ -117,6 +122,10 @@ pub struct Indexer<S: Store> {
 
     /// Service for downloading and disseminating checkpoint data.
     ingestion_service: IngestionService,
+
+    /// Shared forward-backfill service. Each pipeline subscribes a handle covering its historical
+    /// range and catches up through it before handing off to `ingestion_service` for live data.
+    backfill: BackfillService,
 
     /// Optional override of the checkpoint lowerbound. When set, pipelines without a committer
     /// watermark will start processing at this checkpoint.
@@ -249,10 +258,19 @@ impl<S: Store> Indexer<S> {
 
         info!(latest_checkpoint);
 
+        // Seed the backfill service's tip with the network tip captured at startup; it re-polls and
+        // advances from there as pipelines catch up.
+        let backfill = BackfillService::new(
+            BackfillConfig::default(),
+            ingestion_service.ingestion_client().clone(),
+            latest_checkpoint,
+        )?;
+
         Ok(Self {
             store,
             metrics,
             ingestion_service,
+            backfill,
             first_checkpoint,
             last_checkpoint,
             latest_checkpoint,
@@ -305,11 +323,12 @@ impl<S: Store> Indexer<S> {
         self.next_sequential_checkpoint
     }
 
-    /// Start ingesting checkpoints from `next_checkpoint`. Individual pipelines
-    /// will start processing and committing once the ingestion service has caught up to their
-    /// respective watermarks.
+    /// Start the backfill and ingestion services. Each pipeline catches up over its historical
+    /// range through the backfill service, then hands off to live ingestion at the network tip.
     ///
-    /// Ingestion will stop after consuming the configured `last_checkpoint` if one is provided.
+    /// Live ingestion runs from the network tip captured at startup; everything below it is served
+    /// by the backfill service. When `last_checkpoint` is set the whole range is historical, so live
+    /// ingestion runs over an empty range and the pipelines finish once backfill drains.
     pub async fn run(self) -> anyhow::Result<Service> {
         if let Some(enabled_pipelines) = self.enabled_pipelines {
             ensure!(
@@ -319,9 +338,15 @@ impl<S: Store> Indexer<S> {
             );
         }
 
-        let start = self.next_checkpoint;
+        // Backfill covers `[resume, tip)` per pipeline (or the whole bounded range); live ingestion
+        // begins at the captured tip. In bounded mode the live range `(last+1..=last)` is empty.
+        let start = self
+            .last_checkpoint
+            .map_or(self.latest_checkpoint, |last| last.saturating_add(1));
         let end = self.last_checkpoint;
-        info!(start, end, "Ingestion range");
+        info!(start, end, "Live ingestion range");
+
+        let s_backfill = self.backfill.run();
 
         let mut service = self
             .ingestion_service
@@ -331,6 +356,8 @@ impl<S: Store> Indexer<S> {
             ))
             .await
             .context("Failed to start ingestion service")?;
+
+        service = service.merge(s_backfill);
 
         for pipeline in self.pipelines {
             service = service.merge(pipeline);
@@ -394,6 +421,29 @@ impl<S: Store> Indexer<S> {
 
         Ok(Some(next_checkpoint))
     }
+
+    /// Wire a pipeline's checkpoint stream through the forward backfill service. The pipeline reads
+    /// the returned receiver as its single checkpoint stream: it first receives the historical
+    /// range from a [`BackfillHandle`] — `[resume, last_checkpoint]` when bounded, or `[resume, ..)`
+    /// tracking the network tip otherwise — and then live data from the ingestion service once
+    /// backfill hands off. The adapter task that bridges the two is registered as a pipeline service
+    /// so it shares the indexer's lifetime.
+    fn subscribe_with_backfill(
+        &mut self,
+        name: &'static str,
+        resume: u64,
+        channel_size: usize,
+    ) -> mpsc::Receiver<Arc<CheckpointEnvelope>> {
+        let handle = match self.last_checkpoint {
+            Some(last) => self.backfill.subscribe(resume..last.saturating_add(1)),
+            None => self.backfill.subscribe(resume..),
+        };
+        let live_rx = self.ingestion_service.subscribe_bounded(channel_size);
+        let (pipeline_tx, checkpoint_rx) = mpsc::channel(channel_size);
+        self.pipelines
+            .push(backfill_adapter(name, resume, handle, live_rx, pipeline_tx));
+        checkpoint_rx
+    }
 }
 
 impl<S: ConcurrentStore> Indexer<S> {
@@ -415,9 +465,11 @@ impl<S: ConcurrentStore> Indexer<S> {
             return Ok(());
         };
 
-        let checkpoint_rx = self
-            .ingestion_service
-            .subscribe_bounded(config.ingestion.subscriber_channel_size());
+        let checkpoint_rx = self.subscribe_with_backfill(
+            H::NAME,
+            next_checkpoint,
+            config.ingestion.subscriber_channel_size(),
+        );
 
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
@@ -464,9 +516,11 @@ impl<T: SequentialStore> Indexer<T> {
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
         );
 
-        let checkpoint_rx = self
-            .ingestion_service
-            .subscribe_bounded(config.ingestion.subscriber_channel_size());
+        let checkpoint_rx = self.subscribe_with_backfill(
+            H::NAME,
+            next_checkpoint,
+            config.ingestion.subscriber_channel_size(),
+        );
 
         self.pipelines.push(sequential::pipeline::<H>(
             handler,
@@ -733,6 +787,23 @@ mod tests {
             assert_eq!(
                 $metrics
                     .total_watermarks_out_of_order
+                    .get_metric_with_label_values(&[$pipeline])
+                    .unwrap()
+                    .get(),
+                $expected,
+            );
+        };
+    }
+
+    /// Asserts how many checkpoints a pipeline's processor was fed. With forward backfill this
+    /// equals the size of the pipeline's own range `[resume, end)`, so each pipeline sees a
+    /// distinct count — unlike the old lockstep path, which fed every pipeline the same global
+    /// range starting from the lowest pipeline's resume point.
+    macro_rules! assert_checkpoints_received {
+        ($metrics:expr, $pipeline:expr, $expected:expr) => {
+            assert_eq!(
+                $metrics
+                    .total_handler_checkpoints_received
                     .get_metric_with_label_values(&[$pipeline])
                     .unwrap()
                     .get(),
@@ -1174,11 +1245,20 @@ mod tests {
 
         indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 24);
+        // Backfill fetches the shared chunk [0, 30) once (chunk-aligned down to genesis) and serves
+        // each pipeline only its own range, so no pipeline reprocesses checkpoints below its
+        // watermark (out-of-order is 0, unlike the old lockstep ingestion from the global minimum).
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 30);
         assert_out_of_order!(indexer_metrics, A::NAME, 0);
-        assert_out_of_order!(indexer_metrics, B::NAME, 5);
-        assert_out_of_order!(indexer_metrics, C::NAME, 10);
-        assert_out_of_order!(indexer_metrics, D::NAME, 15);
+        assert_out_of_order!(indexer_metrics, B::NAME, 0);
+        assert_out_of_order!(indexer_metrics, C::NAME, 0);
+        assert_out_of_order!(indexer_metrics, D::NAME, 0);
+        // Resumes at 6/11/16/21 (watermark + 1), end 30: each pipeline receives only its own range.
+        // The old lockstep path fed all four the same 24 checkpoints from A's resume.
+        assert_checkpoints_received!(indexer_metrics, A::NAME, 24);
+        assert_checkpoints_received!(indexer_metrics, B::NAME, 19);
+        assert_checkpoints_received!(indexer_metrics, C::NAME, 14);
+        assert_checkpoints_received!(indexer_metrics, D::NAME, 9);
     }
 
     // test ingestion, no pipelines missing watermarks, first_checkpoint provided
@@ -1215,11 +1295,19 @@ mod tests {
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 24);
+        // Each pipeline backfills only its own range from the shared chunk [0, 30), so out-of-order
+        // is 0 (first_checkpoint is ignored because every pipeline has a watermark).
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 30);
         assert_out_of_order!(metrics, A::NAME, 0);
-        assert_out_of_order!(metrics, B::NAME, 5);
-        assert_out_of_order!(metrics, C::NAME, 10);
-        assert_out_of_order!(metrics, D::NAME, 15);
+        assert_out_of_order!(metrics, B::NAME, 0);
+        assert_out_of_order!(metrics, C::NAME, 0);
+        assert_out_of_order!(metrics, D::NAME, 0);
+        // first_checkpoint=3 is ignored, so resumes are 6/11/16/21 (watermark + 1), end 30: each
+        // pipeline receives only its own range rather than the global 24 the old path delivered.
+        assert_checkpoints_received!(metrics, A::NAME, 24);
+        assert_checkpoints_received!(metrics, B::NAME, 19);
+        assert_checkpoints_received!(metrics, C::NAME, 14);
+        assert_checkpoints_received!(metrics, D::NAME, 9);
     }
 
     // test ingestion, some pipelines missing watermarks, no first_checkpoint provided
@@ -1254,11 +1342,19 @@ mod tests {
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
+        // A has no watermark so it backfills from genesis; the others backfill only their own
+        // ranges from the shared chunk [0, 30), so none reprocess below their watermarks.
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 30);
         assert_out_of_order!(metrics, A::NAME, 0);
-        assert_out_of_order!(metrics, B::NAME, 11);
-        assert_out_of_order!(metrics, C::NAME, 16);
-        assert_out_of_order!(metrics, D::NAME, 21);
+        assert_out_of_order!(metrics, B::NAME, 0);
+        assert_out_of_order!(metrics, C::NAME, 0);
+        assert_out_of_order!(metrics, D::NAME, 0);
+        // A (no watermark) backfills the whole [0, 30); B/C/D resume at 11/16/21. Each pipeline
+        // receives only its own range, so the counts differ instead of all matching A's 30.
+        assert_checkpoints_received!(metrics, A::NAME, 30);
+        assert_checkpoints_received!(metrics, B::NAME, 19);
+        assert_checkpoints_received!(metrics, C::NAME, 14);
+        assert_checkpoints_received!(metrics, D::NAME, 9);
     }
 
     // test ingestion, some pipelines missing watermarks, use first_checkpoint
@@ -1294,11 +1390,19 @@ mod tests {
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 20);
+        // A (no watermark) backfills from first_checkpoint=10; B/C/D from their watermarks. All
+        // share the chunk [0, 30) and receive only their own ranges, so out-of-order is 0.
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 30);
         assert_out_of_order!(metrics, A::NAME, 0);
-        assert_out_of_order!(metrics, B::NAME, 1);
-        assert_out_of_order!(metrics, C::NAME, 6);
-        assert_out_of_order!(metrics, D::NAME, 11);
+        assert_out_of_order!(metrics, B::NAME, 0);
+        assert_out_of_order!(metrics, C::NAME, 0);
+        assert_out_of_order!(metrics, D::NAME, 0);
+        // A (no watermark) resumes at first_checkpoint=10; B/C/D at 11/16/21. Each pipeline
+        // receives only its own range, so the counts differ instead of all matching A's 20.
+        assert_checkpoints_received!(metrics, A::NAME, 20);
+        assert_checkpoints_received!(metrics, B::NAME, 19);
+        assert_checkpoints_received!(metrics, C::NAME, 14);
+        assert_checkpoints_received!(metrics, D::NAME, 9);
     }
 
     #[tokio::test]
@@ -1475,8 +1579,12 @@ mod tests {
 
         tasked_indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 17);
+        // Backfill fetches the shared chunk [0, 26) (aligned down to genesis) but the pipeline only
+        // receives and commits its own [9, 26) range, so the committed data is unchanged.
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 26);
         assert_out_of_order!(metrics, "test", 0);
+        // The pipeline is fed only its 17-checkpoint range, not the 26 the shared chunk fetched.
+        assert_checkpoints_received!(metrics, "test", 17);
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
