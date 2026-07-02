@@ -258,16 +258,16 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
         in_flight_ratio: Vec<u64>,
         // Probability that a logical transaction is submitted to multiple validators.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.05])]
         amplification_probability: Vec<f64>,
         // Number of validators to submit to when amplification_probability triggers.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [3])]
         amplification_validators_per_tx: Vec<usize>,
         // Probability that each selected validator receives multiple copies.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.02])]
         duplicate_probability: Vec<f64>,
         // Number of copies sent to each selected validator when duplicate_probability triggers.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [2])]
         duplicate_copies_per_validator: Vec<usize>,
         // Validator selection strategy for duplicate/amplified submissions.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [ValidatorSelection::Random])]
