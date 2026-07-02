@@ -380,6 +380,21 @@ pub struct DbWideConfig {
     /// When unset, each CF uses its own RocksDB-default cache.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_cache_size_mb: Option<usize>,
+
+    /// When `Some(true)`, build the shared block cache as a RocksDB
+    /// HyperClockCache (lock-free on lookup) instead of the default
+    /// sharded LRU cache, avoiding LRUCacheShard mutex contention under
+    /// concurrent reads. Only takes effect when
+    /// [`Self::block_cache_size_mb`] is also set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_cache_hyper_clock: Option<bool>,
+
+    /// Estimated average cached-entry charge, in KiB, for
+    /// HyperClockCache sizing; ignored for LRU. When HyperClockCache is
+    /// enabled and this is unset, defaults to the configured block size
+    /// (16 KiB).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_cache_estimated_entry_charge_kb: Option<usize>,
 }
 
 impl DbWideConfig {
@@ -399,6 +414,12 @@ impl DbWideConfig {
                 .table_cache_num_shard_bits
                 .or(base.table_cache_num_shard_bits),
             block_cache_size_mb: self.block_cache_size_mb.or(base.block_cache_size_mb),
+            block_cache_hyper_clock: self
+                .block_cache_hyper_clock
+                .or(base.block_cache_hyper_clock),
+            block_cache_estimated_entry_charge_kb: self
+                .block_cache_estimated_entry_charge_kb
+                .or(base.block_cache_estimated_entry_charge_kb),
         }
     }
 }
@@ -473,10 +494,18 @@ impl CfOptionsResolver {
     /// block cache if one is configured.
     pub fn new(config: RocksDbConfig) -> Result<Self, OpenError> {
         config.validate()?;
-        let block_cache = config
-            .db
-            .block_cache_size_mb
-            .map(|mb| rocksdb::Cache::new_lru_cache(mib_usize(mb as u64)));
+        let block_cache = config.db.block_cache_size_mb.map(|mb| {
+            let cap = mib_usize(mb as u64);
+            if config.db.block_cache_hyper_clock.unwrap_or(false) {
+                let charge_kb = config
+                    .db
+                    .block_cache_estimated_entry_charge_kb
+                    .unwrap_or(16);
+                rocksdb::Cache::new_hyper_clock_cache(cap, charge_kb << 10)
+            } else {
+                rocksdb::Cache::new_lru_cache(cap)
+            }
+        });
         Ok(Self {
             config,
             block_cache,
@@ -571,6 +600,28 @@ mod tests {
         let merged = over.merge_over(&base);
         assert_eq!(merged.write_buffer_size_mb, Some(256));
         assert_eq!(merged.compression, Some(Compression::Lz4));
+    }
+
+    #[test]
+    fn db_wide_config_merge_prefers_self_then_base() {
+        let base = DbWideConfig {
+            block_cache_hyper_clock: Some(false),
+            block_cache_estimated_entry_charge_kb: Some(32),
+            ..Default::default()
+        };
+        let over = DbWideConfig {
+            block_cache_hyper_clock: Some(true),
+            block_cache_estimated_entry_charge_kb: Some(64),
+            ..Default::default()
+        };
+
+        let merged = over.merge_over(&base);
+        assert_eq!(merged.block_cache_hyper_clock, Some(true));
+        assert_eq!(merged.block_cache_estimated_entry_charge_kb, Some(64));
+
+        let fallback = DbWideConfig::default().merge_over(&base);
+        assert_eq!(fallback.block_cache_hyper_clock, Some(false));
+        assert_eq!(fallback.block_cache_estimated_entry_charge_kb, Some(32));
     }
 
     #[test]
@@ -729,12 +780,21 @@ mod tests {
                 ..Default::default()
             },
         );
-        let resolver = CfOptionsResolver::new(cfg).unwrap();
+        let resolver = CfOptionsResolver::new(cfg.clone()).unwrap();
+        assert!(resolver.block_cache.is_some());
         // Building the options must not panic for either an
         // override-bearing or a default-only CF.
         let _ = resolver.options("digest");
         let _ = resolver.options("anything-else");
         let _ = resolver.db_options();
+
+        cfg.db.block_cache_hyper_clock = Some(true);
+        cfg.db.block_cache_estimated_entry_charge_kb = Some(16);
+        let hcc_resolver = CfOptionsResolver::new(cfg).unwrap();
+        assert!(hcc_resolver.block_cache.is_some());
+        let _ = hcc_resolver.options("digest");
+        let _ = hcc_resolver.options("anything-else");
+        let _ = hcc_resolver.db_options();
     }
 
     #[test]

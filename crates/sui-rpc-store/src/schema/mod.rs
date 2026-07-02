@@ -305,6 +305,8 @@ pub fn default_rocksdb_config() -> RocksDbConfig {
             enable_pipelined_write: Some(true),
             table_cache_num_shard_bits: Some(10),
             block_cache_size_mb: Some(1024),
+            block_cache_hyper_clock: Some(true),
+            block_cache_estimated_entry_charge_kb: Some(16),
         },
         default_cf,
         column_family,
@@ -376,6 +378,8 @@ mod tests {
     #[test]
     fn default_config_sets_per_cf_deviations() {
         let cfg = default_rocksdb_config();
+        assert_eq!(cfg.db.block_cache_hyper_clock, Some(true));
+        assert_eq!(cfg.db.block_cache_estimated_entry_charge_kb, Some(16));
         // Point-lookup CFs get a bloom filter.
         assert_eq!(
             cfg.column_family[tx_seq_by_digest::NAME].bloom_filter_bits,
