@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use crate::rpc_format::Format;
 use crate::rpc_format::Meter;
 use crate::rpc_format::MeterError;
@@ -98,6 +100,20 @@ impl<T: ToFormat> ToFormat for Vec<T> {
 }
 
 impl<T: ToFormat> ToFormat for [T] {
+    fn to_format<F: Format, M: Meter>(&self, meter: &mut M) -> Result<F, MeterError> {
+        let mut out = F::Vec::default();
+        {
+            let mut nested = meter.nest()?;
+            for item in self {
+                let elem = item.to_format::<F, _>(&mut nested)?;
+                F::vec_push_element(&mut nested, &mut out, elem)?;
+            }
+        }
+        F::vec(meter, out)
+    }
+}
+
+impl<T: ToFormat> ToFormat for BTreeSet<T> {
     fn to_format<F: Format, M: Meter>(&self, meter: &mut M) -> Result<F, MeterError> {
         let mut out = F::Vec::default();
         {

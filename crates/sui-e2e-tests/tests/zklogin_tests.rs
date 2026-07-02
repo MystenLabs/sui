@@ -95,7 +95,7 @@ async fn test_zklogin_feature_legacy_address_deny() {
 
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_verify_legacy_zklogin_address_for_testing(false);
-        config.set_zklogin_max_epoch_upper_bound_delta_for_testing(None);
+        config.disable_zklogin_max_epoch_upper_bound_delta_for_testing();
         config
     });
 
@@ -157,7 +157,7 @@ async fn zklogin_end_to_end_test() {
 async fn test_max_epoch_too_large_fail_tx() {
     use sui_protocol_config::ProtocolConfig;
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_zklogin_max_epoch_upper_bound_delta_for_testing(Some(1));
+        config.set_zklogin_max_epoch_upper_bound_delta_for_testing(1);
         config
     });
 

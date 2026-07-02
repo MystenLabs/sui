@@ -1088,7 +1088,7 @@ impl AuthorityPerEpochStore {
             protocol_config.verify_legacy_zklogin_address(),
             protocol_config.accept_zklogin_in_multisig(),
             protocol_config.accept_passkey_in_multisig(),
-            protocol_config.zklogin_max_epoch_upper_bound_delta(),
+            protocol_config.zklogin_max_epoch_upper_bound_delta_as_option(),
             protocol_config.additional_multisig_checks(),
             protocol_config.validate_zklogin_public_identifier(),
             protocol_config.address_aliases(),
