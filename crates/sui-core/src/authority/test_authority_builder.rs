@@ -71,6 +71,7 @@ pub struct TestAuthorityBuilder<'a> {
     cache_config: Option<ExecutionCacheConfig>,
     chain_override: Option<Chain>,
     dev_inspect_disabled: bool,
+    recent_submission_dedup_window_ms: Option<u64>,
     /// Skip full RPC index initialization (use for tests that don't need RPC endpoints)
     skip_rpc_index_init: bool,
     /// Skip genesis owner/dynamic-field indexing (use for tests that don't query owned objects)
@@ -205,6 +206,15 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_chain_override(mut self, chain: Chain) -> Self {
         self.chain_override = Some(chain);
+        self
+    }
+
+    pub fn with_recent_submission_dedup_window_ms(mut self, window_ms: u64) -> Self {
+        assert!(
+            self.recent_submission_dedup_window_ms
+                .replace(window_ms)
+                .is_none()
+        );
         self
     }
 
@@ -393,6 +403,9 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.authority_overload_config = authority_overload_config;
         config.authority_store_pruning_config = pruning_config;
         config.dev_inspect_disabled = self.dev_inspect_disabled;
+        if let Some(window_ms) = self.recent_submission_dedup_window_ms {
+            config.recent_submission_dedup_window_ms = Some(window_ms);
+        }
 
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         let policy_config = config.policy_config.clone();
