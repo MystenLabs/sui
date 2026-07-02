@@ -1044,6 +1044,7 @@ async fn run_bench_worker(
                     // Check if this is a batched payload
                     if payload.is_batched() {
                         let txs = payload.make_transaction_batch().await;
+                        let use_direct_batch_submission = payload.use_direct_batch_submission();
                         let max_bundles = payload.max_soft_bundles();
 
                         let num_txs = txs.len();
@@ -1052,63 +1053,120 @@ async fn run_bench_worker(
                         let proxy = worker.execution_proxy.clone_new();
 
                         let max_bundle_size = payload.max_soft_bundle_size().get();
-                        // Partition transactions into random bundles
-                        let bundles = partition_into_random_bundles(txs, max_bundles, max_bundle_size);
-                        let num_bundles = bundles.len();
-                        debug!(
-                            "Partitioned {} transactions into {} bundles (max_bundles={})",
-                            num_txs, num_bundles, max_bundles
-                        );
-                        debug_assert!(
-                            num_bundles <= max_bundles.get(),
-                            "Created {} bundles but max_bundles is {}",
-                            num_bundles,
-                            max_bundles
-                        );
-
                         let res = async move {
-                            // Submit each bundle concurrently
-                            let bundle_futures: Vec<_> = bundles
-                                .into_iter()
-                                .map(|(start_idx, bundle_txs)| {
-                                    let proxy = proxy.clone_new();
-                                    let digests: Vec<TransactionDigest> =
-                                        bundle_txs.iter().map(|tx| *tx.digest()).collect();
-                                    async move {
-                                        info!("executing bundle {:?}", digests);
-                                        // For single-transaction bundles, randomly use execute_transaction_block
-                                        let result = if bundle_txs.len() == 1
-                                            && rand::thread_rng().gen_bool(0.5)
-                                        {
-                                            let tx = bundle_txs.into_iter().next().unwrap();
+                            let bundle_results = if use_direct_batch_submission {
+                                let direct_futures: Vec<_> = txs
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(start_idx, tx)| {
+                                        let proxy = proxy.clone_new();
+                                        async move {
                                             let digest = *tx.digest();
-                                            let exec_result =
-                                                proxy.execute_transaction_block(tx).await;
-                                            exec_result.map(|effects| {
-                                                vec![(digest, BundleItemResponse::DirectEffects(effects.into()))]
-                                            })
-                                        } else {
-                                            proxy.execute_soft_bundle(bundle_txs).await.map(|results| {
-                                                results
-                                                    .into_iter()
-                                                    .map(|(d, r)| (d, BundleItemResponse::WaitForEffects(r)))
-                                                    .collect()
-                                            })
-                                        };
-                                        if let Ok(results) = &result {
-                                            info!("results for bundle {:?}", results.iter().map(|(digest, _)| format!("{}", digest)).collect::<Vec<_>>());
-                                        } else {
-                                            error!("error for bundle");
+                                            let result = proxy
+                                                .execute_transaction_block(tx)
+                                                .await
+                                                .map(|effects| {
+                                                    vec![(
+                                                        digest,
+                                                        BundleItemResponse::DirectEffects(
+                                                            effects.into(),
+                                                        ),
+                                                    )]
+                                                })
+                                                .unwrap_or_else(|error| {
+                                                    vec![(
+                                                        digest,
+                                                        BundleItemResponse::DirectFailure(
+                                                            direct_submission_error_status(error),
+                                                        ),
+                                                    )]
+                                                });
+                                            (start_idx, vec![digest], Ok(result))
                                         }
-                                        (start_idx, digests, result)
-                                    }
-                                })
-                                .collect();
+                                    })
+                                    .collect();
+                                futures::future::join_all(direct_futures).await
+                            } else {
+                                // Partition transactions into random bundles
+                                let bundles =
+                                    partition_into_random_bundles(txs, max_bundles, max_bundle_size);
+                                let num_bundles = bundles.len();
+                                debug!(
+                                    "Partitioned {} transactions into {} bundles (max_bundles={})",
+                                    num_txs, num_bundles, max_bundles
+                                );
+                                debug_assert!(
+                                    num_bundles <= max_bundles.get(),
+                                    "Created {} bundles but max_bundles is {}",
+                                    num_bundles,
+                                    max_bundles
+                                );
 
-                            let bundle_results = futures::future::join_all(bundle_futures).await;
+                                let bundle_futures: Vec<_> = bundles
+                                    .into_iter()
+                                    .map(|(start_idx, bundle_txs)| {
+                                        let proxy = proxy.clone_new();
+                                        let digests: Vec<TransactionDigest> =
+                                            bundle_txs.iter().map(|tx| *tx.digest()).collect();
+                                        async move {
+                                            info!("executing bundle {:?}", digests);
+                                            // For single-transaction bundles, randomly use execute_transaction_block
+                                            let result = if bundle_txs.len() == 1
+                                                && rand::thread_rng().gen_bool(0.5)
+                                            {
+                                                let tx = bundle_txs.into_iter().next().unwrap();
+                                                let digest = *tx.digest();
+                                                let exec_result =
+                                                    proxy.execute_transaction_block(tx).await;
+                                                exec_result.map(|effects| {
+                                                    vec![(
+                                                        digest,
+                                                        BundleItemResponse::DirectEffects(
+                                                            effects.into(),
+                                                        ),
+                                                    )]
+                                                })
+                                            } else {
+                                                proxy.execute_soft_bundle(bundle_txs).await.map(
+                                                    |results| {
+                                                        results
+                                                            .into_iter()
+                                                            .map(|(d, r)| {
+                                                                (
+                                                                    d,
+                                                                    BundleItemResponse::WaitForEffects(r),
+                                                                )
+                                                            })
+                                                            .collect()
+                                                    },
+                                                )
+                                            };
+                                            if let Ok(results) = &result {
+                                                info!(
+                                                    "results for bundle {:?}",
+                                                    results
+                                                        .iter()
+                                                        .map(|(digest, _)| format!("{}", digest))
+                                                        .collect::<Vec<_>>()
+                                                );
+                                            } else {
+                                                error!("error for bundle");
+                                            }
+                                            (start_idx, digests, result)
+                                        }
+                                    })
+                                    .collect();
+                                futures::future::join_all(bundle_futures).await
+                            };
                             let latency = start.elapsed();
 
-                            process_bundle_results(num_txs, payload, latency, &metrics_clone, bundle_results)
+                            process_bundle_results(
+                                num_txs,
+                                payload,
+                                latency,
+                                &metrics_clone,
+                                bundle_results,
+                            )
                         };
                         futures.push(Box::pin(res));
                     } else {
@@ -1235,6 +1293,7 @@ async fn run_bench_worker(
 enum BundleItemResponse {
     WaitForEffects(WaitForEffectsResponse),
     DirectEffects(Box<ExecutionEffects>),
+    DirectFailure(BatchedTransactionStatus),
 }
 
 type BundleResults = Vec<(
@@ -1242,6 +1301,18 @@ type BundleResults = Vec<(
     Vec<TransactionDigest>,
     anyhow::Result<Vec<(TransactionDigest, BundleItemResponse)>>,
 )>;
+
+fn direct_submission_error_status(error: anyhow::Error) -> BatchedTransactionStatus {
+    let is_retriable = error
+        .downcast_ref::<TransactionSubmissionError>()
+        .is_none_or(TransactionSubmissionError::is_retriable);
+    let error = format!("{error:?}");
+    if is_retriable {
+        BatchedTransactionStatus::RetriableFailure { error }
+    } else {
+        BatchedTransactionStatus::PermanentFailure { error }
+    }
+}
 
 fn process_bundle_results(
     num_txs: usize,
@@ -1268,6 +1339,7 @@ fn process_bundle_results(
                             );
                             BatchedTransactionStatus::Success { effects }
                         }
+                        BundleItemResponse::DirectFailure(status) => status,
                         BundleItemResponse::WaitForEffects(wait_response) => match wait_response {
                             WaitForEffectsResponse::Executed { details, .. } => {
                                 let effects = details.map(|d| {
