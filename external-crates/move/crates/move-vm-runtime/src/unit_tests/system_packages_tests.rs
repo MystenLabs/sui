@@ -336,6 +336,10 @@ fn system_packages_map_records_original_id() {
     assert_eq!(sys.len(), 2);
     assert!(sys.contains_key(&OriginalId::from(SYS_ADDR)));
     assert!(sys.contains_key(&OriginalId::from(SYS_ADDR_TWO)));
+
+    // Telemetry surfaces the same pinned count.
+    let report = runtime.get_telemetry_report();
+    assert_eq!(report.system_package_count, 2);
 }
 
 // 10. End-to-end with the real move-stdlib: install stdlib at 0x1 and JIT a user pkg that

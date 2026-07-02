@@ -261,6 +261,7 @@ impl MoveCache {
 
         MoveCacheTelemetry {
             package_cache_count,
+            system_package_count: self.system_packages.len() as u64,
             total_arena_size,
             module_count,
             function_count,
