@@ -76,6 +76,9 @@ impl TransactionDenyRules {
     /// a peer recommendation. Real provider names are short (e.g. "Google", "Apple").
     pub const MAX_ZKLOGIN_PROVIDER_LENGTH: usize = 256;
 
+    /// Maximum BCS-serialized size of a shared rules payload.
+    pub const MAX_SHARE_SERIALIZED_BYTES: u64 = 200 * 1024;
+
     /// Union-merge another rules set into this one. Set fields are extended; boolean
     /// fields are OR'd.
     pub fn merge(&mut self, other: &Self) {
@@ -222,6 +225,15 @@ impl TransactionDenyRules {
                     Self::MAX_ZKLOGIN_PROVIDER_LENGTH,
                 ));
             }
+        }
+        let serialized_size = bcs::serialized_size(self)
+            .map_err(|e| format!("failed to compute rules serialized size: {e}"))?
+            as u64;
+        if serialized_size > Self::MAX_SHARE_SERIALIZED_BYTES {
+            return Err(format!(
+                "rules serialized size {serialized_size} bytes exceeds limit ({})",
+                Self::MAX_SHARE_SERIALIZED_BYTES,
+            ));
         }
         Ok(())
     }
@@ -387,6 +399,45 @@ mod tests {
         let actual_kinds: BTreeSet<DenyElementKind> = rules.elements().map(|e| e.kind()).collect();
         let expected: BTreeSet<DenyElementKind> = expected_kinds.iter().copied().collect();
         assert_eq!(actual_kinds, expected);
+    }
+
+    /// A payload within the entry and per-string caps can still exceed the wire
+    /// budget: ~1,100 max-length provider strings BCS-encode past the serialized-size
+    /// limit while sitting at a fifth of the entry cap.
+    #[test]
+    fn check_share_limits_bounds_serialized_size() {
+        let rules = TransactionDenyRules {
+            zklogin_disabled_providers: (0..1_100)
+                .map(|i| {
+                    format!(
+                        "{i:0>width$}",
+                        width = TransactionDenyRules::MAX_ZKLOGIN_PROVIDER_LENGTH
+                    )
+                })
+                .collect(),
+            ..Default::default()
+        };
+        assert!(rules.entry_count() < TransactionDenyRules::MAX_SHARE_ENTRIES);
+        let err = rules.check_share_limits().unwrap_err();
+        assert!(err.contains("serialized size"), "{err}");
+
+        // A maximal all-ID config stays within the byte budget: the entry cap is the
+        // binding limit for fixed-size entries.
+        let max_ids = TransactionDenyRules {
+            object_deny_list: (0..TransactionDenyRules::MAX_SHARE_ENTRIES)
+                .map(|i| {
+                    let mut bytes = [0u8; ObjectID::LENGTH];
+                    bytes[..8].copy_from_slice(&(i as u64).to_be_bytes());
+                    ObjectID::from_bytes(bytes).unwrap()
+                })
+                .collect(),
+            ..Default::default()
+        };
+        assert_eq!(
+            max_ids.entry_count(),
+            TransactionDenyRules::MAX_SHARE_ENTRIES
+        );
+        max_ids.check_share_limits().unwrap();
     }
 
     #[test]
