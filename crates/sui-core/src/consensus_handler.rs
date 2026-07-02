@@ -100,6 +100,8 @@ struct ConflictInfo {
     gas_object_conflicts: u64,
     /// Number of conflicts on non-gas owned objects.
     non_gas_object_conflicts: u64,
+    /// Index of the block authority that sequenced the winning (lock holder) transaction.
+    winner_author: usize,
 }
 
 /// Output from filtering consensus transactions.
@@ -1907,6 +1909,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .consensus_handler_double_spend_conflict_count
                 .with_label_values(&["non_gas_object"])
                 .observe(conflict_info.non_gas_object_conflicts as f64);
+            // Attribute the winning side of the conflict to the authority that sequenced the
+            // contested holder transaction.
+            self.metrics
+                .consensus_handler_double_spend_conflicting_authority
+                .with_label_values(&[
+                    self.authority_hostname(conflict_info.winner_author),
+                    "winner",
+                ])
+                .inc();
 
             if protocol_config.defer_owned_object_double_spend() {
                 let deferred_from_round = previously_deferred_tx_digests
@@ -2516,6 +2527,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
     }
 
+    // Returns the hostname of the block author at the given committee index, used as a metric
+    // label. Falls back to "unknown" if the index is out of bounds.
+    fn authority_hostname(&self, author: usize) -> &str {
+        self.committee
+            .to_authority_index(author)
+            .map(|index| self.committee.authority(index).hostname.as_str())
+            .unwrap_or("unknown")
+    }
+
     // Filters out rejected or deprecated transactions.
     // Returns FilteredConsensusOutput containing transactions and owned_object_locks.
     #[instrument(level = "trace", skip_all)]
@@ -2535,6 +2555,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut status_updates: Vec<(ConsensusPosition, ConsensusTxStatus)> = Vec::new();
         let mut contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo> =
             HashMap::new();
+        // Block author for each transaction that successfully acquired owned object locks, so we
+        // can attribute the winning side of a double-spend conflict to the authority that
+        // sequenced it.
+        let mut lock_holder_authors: HashMap<TransactionDigest, usize> = HashMap::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
@@ -2792,6 +2816,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         ) {
                         Ok(new_locks) => {
                             owned_object_locks.extend(new_locks.into_iter());
+                            lock_holder_authors.insert(*tx.digest(), author);
                             // Lock acquisition succeeded - now set Finalized status
                             status_updates.push((position, ConsensusTxStatus::Finalized));
                             num_finalized_user_transactions[author] += 1;
@@ -2806,17 +2831,32 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 .iter()
                                 .map(|obj_ref| obj_ref.0)
                                 .collect();
+                            let mut is_intra_commit_conflict = false;
                             for obj_ref in &owned_object_refs {
                                 if let Some(holder_digest) = owned_object_locks.get(obj_ref) {
+                                    is_intra_commit_conflict = true;
                                     let info = contested_transaction_digests
                                         .entry(*holder_digest)
                                         .or_default();
+                                    info.winner_author = lock_holder_authors
+                                        .get(holder_digest)
+                                        .copied()
+                                        .unwrap_or(author);
                                     if gas_object_ids.contains(&obj_ref.0) {
                                         info.gas_object_conflicts += 1;
                                     } else {
                                         info.non_gas_object_conflicts += 1;
                                     }
                                 }
+                            }
+                            // Attribute the losing side of the conflict to the authority that
+                            // sequenced this dropped transaction. Counted once per loser, even
+                            // if it conflicted on multiple objects.
+                            if is_intra_commit_conflict {
+                                self.metrics
+                                    .consensus_handler_double_spend_conflicting_authority
+                                    .with_label_values(&[self.authority_hostname(author), "loser"])
+                                    .inc();
                             }
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
                             self.metrics

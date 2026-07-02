@@ -330,6 +330,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_double_spend_deferrals: IntCounter,
     pub consensus_handler_double_spend_conflict_count: HistogramVec,
+    pub consensus_handler_double_spend_conflicting_authority: IntCounterVec,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_dropped_transactions: IntCounterVec,
     pub consensus_handler_max_object_costs: IntGaugeVec,
@@ -684,6 +685,14 @@ impl AuthorityMetrics {
                 "Number of conflicting transactions per double-spend winner, by object type",
                 &["object_type"],
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            consensus_handler_double_spend_conflicting_authority: register_int_counter_vec_with_registry!(
+                "consensus_handler_double_spend_conflicting_authority",
+                "Number of transactions involved in owned object double-spend contention, by the \
+                 block authority that sequenced the transaction and its role in the conflict \
+                 (winner = won the lock, loser = dropped)",
+                &["authority", "role"],
                 registry,
             ).unwrap(),
             consensus_handler_cancelled_transactions: register_int_counter_with_registry!(
