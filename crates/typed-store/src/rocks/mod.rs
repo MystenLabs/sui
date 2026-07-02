@@ -262,6 +262,36 @@ impl Database {
         }
     }
 
+    /// Multi-key variant of [`Self::contains`]. On tidehunter each key uses the
+    /// native `exists` presence check, avoiding the value-record reads that
+    /// `multi_get` performs. Other backends answer via `multi_get`.
+    fn multi_contains<I, K>(
+        &self,
+        cf: &ColumnFamily,
+        keys: I,
+        readopts: &ReadOptions,
+    ) -> Result<Vec<bool>, TypedStoreError>
+    where
+        I: IntoIterator<Item = K>,
+        K: AsRef<[u8]>,
+    {
+        match (&self.storage, cf) {
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => keys
+                .into_iter()
+                .map(|k| {
+                    db.exists(*ks, &transform_th_key(k.as_ref(), prefix))
+                        .map_err(typed_store_error_from_th_error)
+                })
+                .collect(),
+            _ => self
+                .multi_get(cf, keys, readopts)
+                .into_iter()
+                .map(|r| r.map(|v| v.is_some()))
+                .collect(),
+        }
+    }
+
     fn multi_get<I, K>(
         &self,
         cf: &ColumnFamily,
@@ -1746,8 +1776,9 @@ where
     where
         J: Borrow<K>,
     {
-        let values = self.multi_get_pinned(keys)?;
-        Ok(values.into_iter().map(|v| v.is_some()).collect())
+        let keys_bytes = keys.into_iter().map(|k| be_fix_int_ser(k.borrow()));
+        self.db
+            .multi_contains(&self.column_family, keys_bytes, &self.opts.readopts())
     }
 
     #[instrument(level = "trace", skip_all, err)]
