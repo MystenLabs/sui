@@ -17,6 +17,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::object::Object;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
 use crate::consensus_handler::ConsensusHandler;
 
@@ -153,6 +154,36 @@ async fn test_double_spend_detection_emits_metrics() {
         .with_label_values(&["gas_object"]);
     assert_eq!(gas.get_sample_count(), 1);
     assert_eq!(gas.get_sample_sum(), 0.0);
+
+    // Both transactions are sequenced in author 0's block, so the winner and the loser
+    // are both attributed to that authority's hostname, once each.
+    let consensus_committee = setup
+        .authority_state
+        .epoch_store_for_testing()
+        .epoch_start_state()
+        .get_consensus_committee();
+    let author0_hostname = consensus_committee
+        .authority(consensus_committee.to_authority_index(0).unwrap())
+        .hostname
+        .clone();
+    assert_eq!(
+        setup
+            .metrics
+            .consensus_handler_double_spend_conflicting_authority
+            .with_label_values(&[author0_hostname.as_str(), "winner"])
+            .get(),
+        1,
+        "Expected one double-spend winner attributed to author 0"
+    );
+    assert_eq!(
+        setup
+            .metrics
+            .consensus_handler_double_spend_conflicting_authority
+            .with_label_values(&[author0_hostname.as_str(), "loser"])
+            .get(),
+        1,
+        "Expected one double-spend loser attributed to author 0"
+    );
 }
 
 /// Two transactions in the same commit compete for the same owned object.
