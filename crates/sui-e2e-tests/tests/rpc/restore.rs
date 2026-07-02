@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Restore/resume behavior of the embedded `sui-rpc-store` index backend
-//! (`use_experimental_rpc_store`).
+//! Restore/resume behavior of the embedded `sui-rpc-store` index backend.
 //!
 //! Each test drives a dedicated fullnode through a sequence of restarts,
 //! toggling its index configuration between runs, and checks two things:
@@ -70,13 +69,11 @@ const SUI_COIN_TYPE: &str =
 /// history cohort from genesis, so this is generous.
 const WAIT_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// An rpc config that builds the embedded `sui-rpc-store` index backend
-/// with the ledger-history (bitmap) cohort enabled.
+/// An rpc config that builds the embedded `sui-rpc-store` index backend,
+/// which indexes both the live and ledger-history (bitmap) cohorts.
 fn embedded_indexing_config() -> RpcConfig {
     RpcConfig {
         enable_indexing: Some(true),
-        use_experimental_rpc_store: Some(true),
-        ledger_history_indexing: Some(true),
         ..Default::default()
     }
 }
@@ -86,7 +83,6 @@ fn embedded_indexing_config() -> RpcConfig {
 fn no_indexing_config() -> RpcConfig {
     RpcConfig {
         enable_indexing: Some(false),
-        use_experimental_rpc_store: Some(false),
         ..Default::default()
     }
 }

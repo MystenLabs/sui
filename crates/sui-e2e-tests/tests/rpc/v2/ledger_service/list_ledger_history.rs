@@ -432,7 +432,6 @@ async fn new_cluster() -> TestCluster {
         .disable_fullnode_pruning()
         .with_rpc_config(sui_config::RpcConfig {
             enable_indexing: Some(true),
-            ledger_history_indexing: Some(true),
             ..Default::default()
         })
         .build()
@@ -2639,7 +2638,6 @@ async fn test_list_transactions_multi_leaf_tiny_budget_resumes() {
         .disable_fullnode_pruning()
         .with_rpc_config(sui_config::RpcConfig {
             enable_indexing: Some(true),
-            ledger_history_indexing: Some(true),
             ledger_history: Some(sui_config::rpc_config::LedgerHistoryConfig {
                 bitmap_bucket_scan_budget: Some(2),
                 chunk_bucket_scan_budget: Some(2),

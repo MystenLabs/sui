@@ -4,11 +4,9 @@
 //! Startup orchestration for the embedded `sui-rpc-store` indexer.
 //!
 //! When a fullnode is configured with
-//! [`RpcConfig::use_experimental_rpc_store`](sui_config::RpcConfig::use_experimental_rpc_store),
-//! it serves the rpc-api
-//! index surface from an embedded [`sui_rpc_store`] instance instead of
-//! the legacy `rpc-index`. This module owns the lifecycle of that
-//! instance:
+//! [`RpcConfig::enable_indexing`](sui_config::RpcConfig::enable_indexing), it
+//! serves the rpc-api index surface from an embedded [`sui_rpc_store`]
+//! instance. This module owns the lifecycle of that instance:
 //!
 //! 1. Open the rpc-store database under the node's `db_path()`.
 //! 2. Compare its persisted per-pipeline watermarks against the

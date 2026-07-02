@@ -8,15 +8,14 @@ use move_core_types::language_storage::StructTag;
 use serde_json::json;
 use std::collections::HashMap;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::Balance;
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
-use sui_json_rpc_types::{Balance, SuiTransactionBlockResponseOptions};
 use sui_move_build::test_utils::compile_managed_coin_package;
 use sui_test_transaction_builder::make_staking_transaction;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
-use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use tracing::info;
 
 pub struct CoinIndexTest;
@@ -48,16 +47,9 @@ impl TestCaseImpl for CoinIndexTest {
 
         // 1. Execute one transfer coin transaction (to another address)
         let txn = ctx.make_transactions(1).await.swap_remove(0);
-        let response = client
-            .quorum_driver_api()
-            .execute_transaction_block(
-                txn,
-                SuiTransactionBlockResponseOptions::new()
-                    .with_effects()
-                    .with_balance_changes(),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await?;
+        let response = ctx
+            .sign_and_execute(txn.into_data().transaction_data().clone(), "transfer")
+            .await;
 
         let balance_change = response.balance_changes.unwrap();
         let owner_balance = balance_change
@@ -106,16 +98,12 @@ impl TestCaseImpl for CoinIndexTest {
             .sui_address;
         let txn = make_staking_transaction(ctx.get_wallet(), validator_addr).await;
 
-        let response = client
-            .quorum_driver_api()
-            .execute_transaction_block(
-                txn,
-                SuiTransactionBlockResponseOptions::new()
-                    .with_effects()
-                    .with_balance_changes(),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        let response = ctx
+            .sign_and_execute(
+                txn.into_data().transaction_data().clone(),
+                "staking transaction",
             )
-            .await?;
+            .await;
 
         let balance_change = &response.balance_changes.unwrap()[0];
         assert_eq!(balance_change.owner, Owner::AddressOwner(account));
