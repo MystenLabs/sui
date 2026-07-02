@@ -16323,6 +16323,7 @@ dependencies = [
  "sui-types",
  "tap",
  "telemetry-subscribers",
+ "tempfile",
  "tikv-jemallocator",
  "tokio",
  "tower 0.5.3",
