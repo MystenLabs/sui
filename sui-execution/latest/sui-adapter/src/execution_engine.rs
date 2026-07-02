@@ -1051,15 +1051,15 @@ mod checked {
                             builder = setup_randomness_state_create(builder);
                         }
                         EndOfEpochTransactionKind::DenyListStateCreate => {
-                            assert!(protocol_config.enable_coin_deny_list_v1());
+                            assert!(protocol_config.enable_coin_deny_list());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
                         EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
-                            assert!(protocol_config.enable_bridge());
+                            assert!(protocol_config.bridge());
                             builder = setup_bridge_create(builder, chain_id)
                         }
                         EndOfEpochTransactionKind::BridgeCommitteeInit(bridge_shared_version) => {
-                            assert!(protocol_config.enable_bridge());
+                            assert!(protocol_config.bridge());
                             assert!(protocol_config.should_try_to_finalize_bridge_committee());
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
