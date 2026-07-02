@@ -111,13 +111,7 @@ where
     // Stage C: (cp_seq, CheckpointData) -> + Vec<TransactionData>. Derive each
     // checkpoint's transaction digests and fetch them through
     // `pipelined_keyed_batches` — chunk-bounded and concurrent, batching at
-    // `chunk_size` keys per BigTable request just like the objects stage
-    // (`with_object_maps`). `sui-kvstore` additionally re-clamps each request
-    // to `MAX_TX_DIGESTS_PER_REQUEST` as a backend safety net, so a misconfigured
-    // `chunk_size` still can't exceed the request-size limit. Each checkpoint's
-    // transaction vector is then reconstructed in checkpoint-contents order;
-    // input order is preserved by `pipelined_keyed_batches`, so no
-    // `InputOrderEmitter`.
+    // `chunk_size` keys per BigTable request.
     let with_keys = cp_data_stream
         .map(|res: Result<Watermarked<(u64, CheckpointData)>, E>| {
             let m = res?;
@@ -163,11 +157,6 @@ where
                         let (digest, tx) = row.map_err(E::from)?;
                         map.insert(digest, tx);
                     }
-                    // `keys` is de-duplicated by `pipelined_keyed_batches`, so a
-                    // shortfall means BigTable is missing a requested row. Fail
-                    // with a domain-specific message (the reassembler's own
-                    // missing-key check would otherwise fire first with a
-                    // generic one).
                     if map.len() != requested {
                         return Err(E::from(anyhow::anyhow!(
                             "resolve_checkpoints: BigTable returned fewer transactions than \
@@ -192,10 +181,16 @@ where
                             "checkpoint {cp_seq} contents column missing"
                         ))
                     })?;
-                    let mut txs: Vec<TransactionData> = Vec::new();
+                    // The per-item map is uniquely owned here — the reassembler
+                    // just built it and handed it over — so move each body out
+                    // in checkpoint-contents order rather than deep-cloning it.
+                    // The `unwrap_or_else` clone is a correctness fallback for
+                    // the (currently impossible) case of a shared map.
+                    let mut tx_map = Arc::try_unwrap(tx_map).unwrap_or_else(|arc| (*arc).clone());
+                    let mut txs: Vec<TransactionData> = Vec::with_capacity(contents.size());
                     for d in contents.iter() {
                         let digest = d.transaction;
-                        let tx = tx_map.get(&digest).cloned().ok_or_else(|| {
+                        let tx = tx_map.remove(&digest).ok_or_else(|| {
                             E::from(anyhow::anyhow!(
                                 "resolve_checkpoints: BigTable returned fewer transactions \
                                  than requested (checkpoint {cp_seq} missing transaction {digest})"
