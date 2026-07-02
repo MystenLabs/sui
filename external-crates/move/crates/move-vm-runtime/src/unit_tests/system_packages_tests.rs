@@ -177,10 +177,7 @@ fn cross_system_calls_become_direct_reversed_dep_order() {
 // because original_id != version_id, so the test expects a panic there. Release builds compile the
 // assert out and the tail assertion verifies graceful degradation (empty system_packages set).
 #[test]
-#[cfg_attr(
-    debug_assertions,
-    should_panic(expected = "version_id != original_id")
-)]
+#[cfg_attr(debug_assertions, should_panic(expected = "version_id != original_id"))]
 fn identity_link_check_rejects_non_identity_input() {
     let pkgs = compile_packages_in_file("system_packages_basic.move", &[]);
     let mut sys = pkg_at(SYS_ADDR, &pkgs).into_serialized_package();

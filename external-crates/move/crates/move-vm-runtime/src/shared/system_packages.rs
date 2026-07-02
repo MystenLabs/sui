@@ -49,7 +49,8 @@ impl SystemPackages {
                     false,
                     "duplicate system package version_id in input (host bug)"
                 );
-                continue; }
+                continue;
+            }
             out.push(pkg);
         }
         Self { packages: out }
