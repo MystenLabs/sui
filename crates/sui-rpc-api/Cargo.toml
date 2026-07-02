@@ -34,6 +34,7 @@ tower.workspace = true
 tracing.workspace = true
 async-stream.workspace = true
 futures.workspace = true
+crossbeam-channel.workspace = true
 
 sui-name-service.workspace = true
 fastcrypto.workspace = true

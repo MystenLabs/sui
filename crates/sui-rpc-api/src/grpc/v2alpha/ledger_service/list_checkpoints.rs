@@ -5,7 +5,9 @@ use std::collections::VecDeque;
 use std::ops::Range;
 use std::time::Instant;
 
+use futures::FutureExt;
 use futures::StreamExt;
+use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use prost_types::FieldMask;
 use sui_inverted_index::BitmapQuery;
@@ -23,7 +25,6 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 use sui_rpc_cursor::QueryType;
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -165,20 +166,25 @@ fn spawn_checkpoint_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
-) -> JoinHandle<Result<CheckpointChunkDone, RpcError>> {
-    tokio::task::spawn_blocking(move || {
-        next_checkpoint_chunk(
-            service,
-            state,
-            read_mask,
-            options,
-            scan_budget,
-            chunk_scan_budget,
-            chunk_item_limit,
-            remaining_request_item_limit,
-            &cancel,
-        )
-    })
+) -> BoxFuture<'static, Result<CheckpointChunkDone, RpcError>> {
+    async move {
+        let pool = service.read_pool()?;
+        pool.run("list_checkpoints", move || {
+            next_checkpoint_chunk(
+                service,
+                state,
+                read_mask,
+                options,
+                scan_budget,
+                chunk_scan_budget,
+                chunk_item_limit,
+                remaining_request_item_limit,
+                &cancel,
+            )
+        })
+        .await?
+    }
+    .boxed()
 }
 
 #[derive(Clone)]

@@ -16760,6 +16760,7 @@ dependencies = [
  "axum 0.8.3",
  "bcs",
  "bytes",
+ "crossbeam-channel",
  "fastcrypto",
  "futures",
  "http 1.3.1",

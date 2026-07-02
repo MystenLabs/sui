@@ -4,7 +4,9 @@
 use std::ops::Range;
 use std::time::Instant;
 
+use futures::FutureExt;
 use futures::StreamExt;
+use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use prost_types::FieldMask;
 use sui_inverted_index::BitmapQuery;
@@ -22,7 +24,6 @@ use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc_cursor::QueryType;
 use sui_sdk_types::Digest;
 use sui_types::storage::LedgerTxSeqDigest;
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -168,21 +169,26 @@ fn spawn_transaction_chunk(
     remaining_request_item_limit: usize,
     render_contents: bool,
     cancel: CancellationToken,
-) -> JoinHandle<Result<TransactionChunkDone, RpcError>> {
-    tokio::task::spawn_blocking(move || {
-        next_transaction_chunk(
-            service,
-            state,
-            read_mask,
-            options,
-            render_contents,
-            scan_budget,
-            chunk_scan_budget,
-            chunk_item_limit,
-            remaining_request_item_limit,
-            &cancel,
-        )
-    })
+) -> BoxFuture<'static, Result<TransactionChunkDone, RpcError>> {
+    async move {
+        let pool = service.read_pool()?;
+        pool.run("list_transactions", move || {
+            next_transaction_chunk(
+                service,
+                state,
+                read_mask,
+                options,
+                render_contents,
+                scan_budget,
+                chunk_scan_budget,
+                chunk_item_limit,
+                remaining_request_item_limit,
+                &cancel,
+            )
+        })
+        .await?
+    }
+    .boxed()
 }
 
 #[derive(Clone)]

@@ -6,7 +6,9 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::time::Instant;
 
+use futures::FutureExt;
 use futures::StreamExt;
+use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::FieldMask;
@@ -24,7 +26,6 @@ use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
 use sui_rpc_cursor::QueryType;
 use sui_types::storage::LedgerTxSeqDigest;
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -174,21 +175,26 @@ fn spawn_event_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
-) -> JoinHandle<Result<EventChunkDone, RpcError>> {
-    tokio::task::spawn_blocking(move || {
-        next_event_chunk(
-            service,
-            state,
-            read_mask,
-            options,
-            scan_budget,
-            chunk_scan_budget,
-            unfiltered_row_scan_budget,
-            chunk_item_limit,
-            remaining_request_item_limit,
-            &cancel,
-        )
-    })
+) -> BoxFuture<'static, Result<EventChunkDone, RpcError>> {
+    async move {
+        let pool = service.read_pool()?;
+        pool.run("list_events", move || {
+            next_event_chunk(
+                service,
+                state,
+                read_mask,
+                options,
+                scan_budget,
+                chunk_scan_budget,
+                unfiltered_row_scan_budget,
+                chunk_item_limit,
+                remaining_request_item_limit,
+                &cancel,
+            )
+        })
+        .await?
+    }
+    .boxed()
 }
 
 #[derive(Clone)]
