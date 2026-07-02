@@ -6,6 +6,11 @@ publish = false
 edition = "2024"
 version.workspace = true
 
+[features]
+# Exposes the in-memory mock BigTable server (`testing::MockBigtableServer`)
+# for cross-crate read/write-path tests without pulling it into normal builds.
+testing = ["dep:tokio-stream"]
+
 [dependencies]
 anyhow.workspace = true
 arc-swap.workspace = true
@@ -44,6 +49,7 @@ telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true, features = ["transport"] }
 tonic-prost.workspace = true
+tokio-stream = { workspace = true, optional = true }
 tracing.workspace = true
 
 [dev-dependencies]

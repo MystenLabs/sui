@@ -3649,15 +3649,18 @@ async fn test_list_checkpoints_with_transactions_read_mask() {
     let mut cluster = FullCluster::new().await.unwrap();
     let (sender, kp, mut gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
 
-    // Two checkpoints, each containing one transfer tx. Capture the digests
-    // so we can confirm the populated `transactions[].digest` matches.
+    // One checkpoint with three self-transfers. The transfers chain the same
+    // gas object, so they are causally ordered and appear in the checkpoint
+    // contents in build order — capture that order to assert exact per-cp
+    // `transactions[].digest` order (not just set membership).
     let mut expected_digests: Vec<sui_types::digests::TransactionDigest> = Vec::new();
-    for _ in 0..2 {
+    for _ in 0..3 {
         let (digest, new_gas) = transfer_self(&mut cluster, sender, &kp, gas).await;
-        cluster.create_checkpoint().await;
         expected_digests.push(digest);
         gas = new_gas;
     }
+    let checkpoint = cluster.create_checkpoint().await;
+    let seq = checkpoint.sequence_number;
 
     let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
@@ -3672,24 +3675,30 @@ async fn test_list_checkpoints_with_transactions_read_mask() {
 
     let resp = list_checkpoints_result(&mut client, req).await;
 
-    let returned_digests: std::collections::HashSet<String> = resp
+    let proto_cp = resp
         .checkpoints
         .iter()
-        .flat_map(|cp| {
-            let proto_cp = cp.checkpoint.as_ref().expect("checkpoint populated");
-            proto_cp
-                .transactions
-                .iter()
-                .filter_map(|tx| tx.digest.clone())
-        })
-        .collect();
+        .filter_map(|cp| cp.checkpoint.as_ref())
+        .find(|cp| cp.sequence_number == Some(seq))
+        .expect("checkpoint with our sequence number returned");
 
-    for expected in &expected_digests {
-        assert!(
-            returned_digests.contains(&expected.to_string()),
-            "expected digest {expected} to appear in transactions[].digest, got {returned_digests:?}"
-        );
-    }
+    // The checkpoint also contains system transactions (e.g. a
+    // consensus-commit prologue) around our transfers, so filter the returned
+    // digests down to the ones we created and assert their relative order is
+    // preserved end-to-end — that is what the Stage C reconstruction must get
+    // right regardless of BigTable row arrival order.
+    let expected: Vec<String> = expected_digests.iter().map(|d| d.to_string()).collect();
+    let expected_set: std::collections::HashSet<&String> = expected.iter().collect();
+    let returned_ours: Vec<String> = proto_cp
+        .transactions
+        .iter()
+        .filter_map(|tx| tx.digest.clone())
+        .filter(|d| expected_set.contains(d))
+        .collect();
+    assert_eq!(
+        returned_ours, expected,
+        "our transactions must appear in transactions[].digest in checkpoint contents order"
+    );
 }
 
 #[tokio::test]
