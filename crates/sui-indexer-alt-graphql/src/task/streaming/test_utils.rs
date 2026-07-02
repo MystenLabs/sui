@@ -20,72 +20,9 @@ use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointConten
 use sui_types::messages_checkpoint::CheckpointSummary as NativeCheckpointSummary;
 use tokio::sync::broadcast;
 
-use super::ProcessedCheckpoint;
 use super::checkpoint_stream_task::SubscriptionBroadcast;
 use super::gap_recovery::CheckpointFetcher;
-
-/// Build a `SubscriptionBroadcast` with the given `first_live_checkpoint` and a buffer large
-/// enough that tests do not trigger lag incidentally. Returns the sender so tests can drive
-/// the channel directly to advance `network_tip()`.
-pub(super) fn test_broadcast(
-    first_live_checkpoint: u64,
-) -> (
-    broadcast::Sender<Arc<ProcessedCheckpoint>>,
-    Arc<SubscriptionBroadcast>,
-) {
-    let (tx, rx) = broadcast::channel(256);
-    (
-        tx,
-        Arc::new(SubscriptionBroadcast::new(rx, first_live_checkpoint)),
-    )
-}
-
-/// Build a fully deserializable test `ProtoCheckpoint` at the given sequence number.
-/// Empty contents, default aggregate signature. `process_checkpoint` parses (but does not
-/// verify) the signature, so the default BLS bytes are accepted.
-pub(super) fn make_test_proto_checkpoint(seq: u64) -> ProtoCheckpoint {
-    let contents = NativeCheckpointContents::new_with_digests_only_for_tests(vec![]);
-    let summary = NativeCheckpointSummary {
-        epoch: 0,
-        sequence_number: seq,
-        network_total_transactions: 0,
-        content_digest: *contents.digest(),
-        previous_digest: None,
-        epoch_rolling_gas_cost_summary: GasCostSummary::default(),
-        timestamp_ms: 0,
-        checkpoint_commitments: vec![],
-        end_of_epoch_data: None,
-        version_specific_data: vec![],
-    };
-    // Default bytes are the G1 infinity point, which round-trips through
-    // `AggregateAuthoritySignature::from_bytes` (all-zero bytes do not).
-    let sig_bytes: [u8; 48] = AggregateAuthoritySignature::default()
-        .as_ref()
-        .try_into()
-        .unwrap();
-    let sdk_sig = SdkValidatorAggregatedSignature {
-        epoch: 0,
-        signature: Bls12381Signature::new(sig_bytes),
-        bitmap: Bitmap::default(),
-    };
-
-    let mut summary_bcs = grpc::Bcs::default();
-    summary_bcs.value = Some(bcs::to_bytes(&summary).unwrap().into());
-    let mut summary_proto = grpc::CheckpointSummary::default();
-    summary_proto.bcs = Some(summary_bcs);
-
-    let mut contents_bcs = grpc::Bcs::default();
-    contents_bcs.value = Some(bcs::to_bytes(&contents).unwrap().into());
-    let mut contents_proto = grpc::CheckpointContents::default();
-    contents_proto.bcs = Some(contents_bcs);
-
-    let mut cp = ProtoCheckpoint::default();
-    cp.sequence_number = Some(seq);
-    cp.summary = Some(summary_proto);
-    cp.contents = Some(contents_proto);
-    cp.signature = Some(sdk_sig.into());
-    cp
-}
+use super::processed_checkpoint::ProcessedCheckpoint;
 
 /// Per-key behavior of the mock fetcher.
 #[derive(Debug, Clone)]
@@ -162,4 +99,67 @@ impl CheckpointFetcher for MockFetcher {
             }
         }
     }
+}
+
+/// Build a `SubscriptionBroadcast` with the given `first_live_checkpoint` and a buffer large
+/// enough that tests do not trigger lag incidentally. Returns the sender so tests can drive
+/// the channel directly to advance `network_tip()`.
+pub(super) fn test_broadcast(
+    first_live_checkpoint: u64,
+) -> (
+    broadcast::Sender<Arc<ProcessedCheckpoint>>,
+    Arc<SubscriptionBroadcast>,
+) {
+    let (tx, rx) = broadcast::channel(256);
+    (
+        tx,
+        Arc::new(SubscriptionBroadcast::new(rx, first_live_checkpoint)),
+    )
+}
+
+/// Build a fully deserializable test `ProtoCheckpoint` at the given sequence number.
+/// Empty contents, default aggregate signature. `process_checkpoint` parses (but does not
+/// verify) the signature, so the default BLS bytes are accepted.
+pub(super) fn make_test_proto_checkpoint(seq: u64) -> ProtoCheckpoint {
+    let contents = NativeCheckpointContents::new_with_digests_only_for_tests(vec![]);
+    let summary = NativeCheckpointSummary {
+        epoch: 0,
+        sequence_number: seq,
+        network_total_transactions: 0,
+        content_digest: *contents.digest(),
+        previous_digest: None,
+        epoch_rolling_gas_cost_summary: GasCostSummary::default(),
+        timestamp_ms: 0,
+        checkpoint_commitments: vec![],
+        end_of_epoch_data: None,
+        version_specific_data: vec![],
+    };
+    // Default bytes are the G1 infinity point, which round-trips through
+    // `AggregateAuthoritySignature::from_bytes` (all-zero bytes do not).
+    let sig_bytes: [u8; 48] = AggregateAuthoritySignature::default()
+        .as_ref()
+        .try_into()
+        .unwrap();
+    let sdk_sig = SdkValidatorAggregatedSignature {
+        epoch: 0,
+        signature: Bls12381Signature::new(sig_bytes),
+        bitmap: Bitmap::default(),
+    };
+
+    let mut summary_bcs = grpc::Bcs::default();
+    summary_bcs.value = Some(bcs::to_bytes(&summary).unwrap().into());
+    let mut summary_proto = grpc::CheckpointSummary::default();
+    summary_proto.bcs = Some(summary_bcs);
+
+    let mut contents_bcs = grpc::Bcs::default();
+    contents_bcs.value = Some(bcs::to_bytes(&contents).unwrap().into());
+    let mut contents_proto = grpc::CheckpointContents::default();
+    contents_proto.bcs = Some(contents_bcs);
+
+    let mut cp = ProtoCheckpoint::default();
+    cp.sequence_number = Some(seq);
+    cp.summary = Some(summary_proto);
+    cp.contents = Some(contents_proto);
+    cp.signature = Some(sdk_sig.into());
+    cp
 }

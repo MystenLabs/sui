@@ -60,8 +60,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
+#[cfg(any(feature = "staging", test))]
 use async_stream::stream;
 use backoff::ExponentialBackoff;
+#[cfg(any(feature = "staging", test))]
 use futures::Stream;
 use futures::StreamExt;
 use move_core_types::account_address::AccountAddress;
@@ -96,12 +98,15 @@ use tracing::info;
 use tracing::warn;
 
 use crate::config::SubscriptionConfig;
+#[cfg(any(feature = "staging", test))]
 use crate::error::RpcError;
 use crate::task::watermark::Watermarks;
 
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
+#[cfg(any(feature = "staging", test))]
 use super::checkpoint_resume::scan_checkpoints;
+#[cfg(any(feature = "staging", test))]
 use super::gap_recovery::CheckpointFetcher;
 use super::gap_recovery::recover_gap;
 use super::processed_checkpoint::ProcessedCheckpoint;
@@ -171,6 +176,7 @@ pub(super) fn checkpoint_field_mask() -> FieldMask {
 /// Handle on the checkpoint broadcast that subscription resolvers consume from. Registered in
 /// the GraphQL context as a nominal type so its members do not clash with other context entries
 /// that may be added later.
+#[cfg(any(feature = "staging", test))]
 pub(crate) struct SubscriptionBroadcast {
     /// Receiver created with the channel and never `.recv()`'d. Subscribers call `resubscribe()`
     /// on it to get their own receivers; we also read `broadcaster.len()` to count how many
@@ -183,6 +189,7 @@ pub(crate) struct SubscriptionBroadcast {
     first_live_checkpoint: u64,
 }
 
+#[cfg(any(feature = "staging", test))]
 impl SubscriptionBroadcast {
     pub(crate) fn new(broadcaster: CheckpointBroadcaster, first_live_checkpoint: u64) -> Self {
         Self {
@@ -193,6 +200,7 @@ impl SubscriptionBroadcast {
 
     /// Direct access to the broadcast receiver template. Subscribers should call
     /// `.resubscribe()` to get their own receiver.
+    #[cfg(feature = "staging")]
     pub(crate) fn broadcaster(&self) -> &CheckpointBroadcaster {
         &self.broadcaster
     }
@@ -225,7 +233,7 @@ impl SubscriptionBroadcast {
 
         stream! {
             let mut last_yielded: Option<u64> = resume_from;
-            let mut pending_receiver: Option<CheckpointBroadcaster> = None;
+            let mut receiver = self.broadcaster.resubscribe();
             // `resubscribe` is future-only (delivers `handoff + 1`), so Phase 1 stops exactly at
             // `handoff` rather than chasing the tip.
             let mut handoff: Option<u64> = None;
@@ -238,10 +246,10 @@ impl SubscriptionBroadcast {
                     last_yielded = Some(seq);
                     yield Ok(processed);
 
-                    if pending_receiver.is_none()
+                    if handoff.is_none()
                         && self.network_tip().saturating_sub(seq) <= handoff_threshold
                     {
-                        pending_receiver = Some(self.broadcaster.resubscribe());
+                        receiver = self.broadcaster.resubscribe();
                         handoff = Some(self.network_tip());
                     }
 
@@ -252,8 +260,6 @@ impl SubscriptionBroadcast {
             }
 
             // Phase 2: follow live from the pinned receiver, or a fresh one if Phase 1 was skipped.
-            let mut receiver = pending_receiver
-                .unwrap_or_else(|| self.broadcaster.resubscribe());
             // Tags the disconnect log: a `Lagged` before the first live item is catch-up overflow.
             let mut delivered_live = false;
             loop {
@@ -295,14 +301,14 @@ impl SubscriptionBroadcast {
 }
 
 /// Convert a broadcast `RecvError` into an `RpcError` to be yielded to the subscriber.
+#[cfg(any(feature = "staging", test))]
 pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
     match e {
         broadcast::error::RecvError::Lagged(missed_count) => {
             warn!(missed_count, "Subscription lagged, disconnecting");
             anyhow::anyhow!(
                 "Subscription too slow: missed {missed_count} checkpoints. \
-                 Please reconnect and use the query API to backfill \
-                 from your last seen sequenceNumber."
+                 Please reconnect and resume from your last seen checkpoint."
             )
             .into()
         }
@@ -314,11 +320,11 @@ pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
 }
 
 /// General error for a subscription interrupted by a gap or catch-up overflow. The specific reason
-/// is logged at the call site; clients only see that they should reconnect and backfill.
+/// is logged at the call site; clients only see that they should reconnect and resume.
+#[cfg(any(feature = "staging", test))]
 fn reconnect_error() -> RpcError {
     anyhow::anyhow!(
-        "Subscription interrupted. Please reconnect and use the query API to backfill \
-         from your last seen sequenceNumber."
+        "Subscription interrupted. Please reconnect and resume from your last seen checkpoint."
     )
     .into()
 }

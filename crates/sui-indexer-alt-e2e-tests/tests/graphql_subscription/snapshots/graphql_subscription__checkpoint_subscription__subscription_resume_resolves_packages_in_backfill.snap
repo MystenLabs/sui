@@ -5,43 +5,45 @@ expression: item
 {
   "data": {
     "checkpoints": {
-      "sequenceNumber": "[seq]",
-      "transactions": {
-        "nodes": [
-          {
-            "digest": "[digest]",
-            "effects": {
-              "objectChanges": {
-                "nodes": [
-                  {
-                    "outputState": {
-                      "asMoveObject": {
-                        "contents": {
-                          "json": {
-                            "id": "[json_id]",
-                            "balance": "29999999996666800"
+      "node": {
+        "sequenceNumber": "[seq]",
+        "transactions": {
+          "nodes": [
+            {
+              "digest": "[digest]",
+              "effects": {
+                "objectChanges": {
+                  "nodes": [
+                    {
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "json": {
+                              "id": "[json_id]",
+                              "balance": "29999999996666800"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "json": {
+                              "id": "[json_id]",
+                              "value": "42"
+                            }
                           }
                         }
                       }
                     }
-                  },
-                  {
-                    "outputState": {
-                      "asMoveObject": {
-                        "contents": {
-                          "json": {
-                            "id": "[json_id]",
-                            "value": "42"
-                          }
-                        }
-                      }
-                    }
-                  }
-                ]
+                  ]
+                }
               }
             }
-          }
-        ]
+          ]
+        }
       }
     }
   }

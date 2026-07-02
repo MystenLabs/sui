@@ -481,8 +481,9 @@ async fn test_subscription_resume_with_after_cursor() {
 
     let resume_seq = cluster.validator_checkpoint_tip();
     let cursor = CCheckpoint::new(resume_seq).encode_cursor();
-    let query =
-        format!(r#"subscription {{ checkpoints(after: "{cursor}") {{ sequenceNumber }} }}"#,);
+    let query = format!(
+        r#"subscription {{ checkpoints(after: "{cursor}") {{ node {{ sequenceNumber }} }} }}"#,
+    );
     let mut stream = cluster.subscribe(&query).await;
 
     let first = checkpoint_seq(&stream.next().await.unwrap());
@@ -497,7 +498,7 @@ async fn test_subscription_resume_with_after_checkpoint() {
 
     let resume_seq = cluster.validator_checkpoint_tip();
     let query = format!(
-        "subscription {{ checkpoints(afterCheckpoint: {resume_seq}) {{ sequenceNumber }} }}",
+        "subscription {{ checkpoints(afterCheckpoint: {resume_seq}) {{ node {{ sequenceNumber }} }} }}",
     );
     let mut stream = cluster.subscribe(&query).await;
 
@@ -518,7 +519,7 @@ async fn test_subscription_resume_long_backfill() {
     let validator_tip = cluster.validator_checkpoint_tip();
 
     let query = format!(
-        "subscription {{ checkpoints(afterCheckpoint: {resume_seq}) {{ sequenceNumber }} }}",
+        "subscription {{ checkpoints(afterCheckpoint: {resume_seq}) {{ node {{ sequenceNumber }} }} }}",
     );
     let mut stream = cluster.subscribe(&query).await;
 
@@ -537,7 +538,7 @@ async fn test_subscription_resume_with_both_args_uses_max() {
     let cluster = SubscriptionTestCluster::new().await;
 
     let mut first_stream = cluster
-        .subscribe("subscription { checkpoints { sequenceNumber } }")
+        .subscribe("subscription { checkpoints { node { sequenceNumber } } }")
         .await;
     let lower = checkpoint_seq(&first_stream.next().await.unwrap());
     let higher = checkpoint_seq(&first_stream.next().await.unwrap());
@@ -547,7 +548,7 @@ async fn test_subscription_resume_with_both_args_uses_max() {
     // Resume must pick the higher of `after` (lower) and `afterCheckpoint` (higher).
     let cursor = CCheckpoint::new(lower).encode_cursor();
     let query = format!(
-        r#"subscription {{ checkpoints(after: "{cursor}", afterCheckpoint: {higher}) {{ sequenceNumber }} }}"#,
+        r#"subscription {{ checkpoints(after: "{cursor}", afterCheckpoint: {higher}) {{ node {{ sequenceNumber }} }} }}"#,
     );
     let mut stream = cluster.subscribe(&query).await;
 
@@ -573,14 +574,16 @@ async fn test_subscription_resume_resolves_packages_in_backfill() {
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
             checkpoints(afterCheckpoint: {resume_from}) {{
-                sequenceNumber
-                transactions(filter: {{ sentAddress: $sender }}) {{
-                    nodes {{
-                        digest
-                        effects {{
-                            objectChanges {{
-                                nodes {{
-                                    outputState {{ asMoveObject {{ contents {{ json }} }} }}
+                node {{
+                    sequenceNumber
+                    transactions(filter: {{ sentAddress: $sender }}) {{
+                        nodes {{
+                            digest
+                            effects {{
+                                objectChanges {{
+                                    nodes {{
+                                        outputState {{ asMoveObject {{ contents {{ json }} }} }}
+                                    }}
                                 }}
                             }}
                         }}

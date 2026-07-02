@@ -463,23 +463,27 @@ pub async fn start_rpc(
     // binding the listener, so the schema is only advertised once `kv_packages`
     // has caught up to the first streamed checkpoint.
     let streaming_handles =
-        if let Some((stream_task, broadcaster, eviction_task, streaming_packages, readiness)) =
+        if let Some((stream_task, _broadcaster, eviction_task, streaming_packages, readiness)) =
             streaming_setup
         {
             rpc = rpc.data(streaming_packages).data(config.subscription);
             let s_stream = stream_task.run();
             let s_eviction = eviction_task.run();
             readiness.wait_for_ready().await?;
-            // `first_live_checkpoint` is the first checkpoint the live upstream stream broadcast,
-            // recorded as readiness fires.
-            let first_live_checkpoint = readiness
-                .first_live_checkpoint()
-                .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
-            let subscription_broadcast = Arc::new(task::streaming::SubscriptionBroadcast::new(
-                broadcaster,
-                first_live_checkpoint,
-            ));
-            rpc = rpc.data(subscription_broadcast);
+            // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
+            #[cfg(feature = "staging")]
+            {
+                // `first_live_checkpoint` is the first checkpoint the live upstream stream
+                // broadcast, recorded as readiness fires.
+                let first_live_checkpoint = readiness
+                    .first_live_checkpoint()
+                    .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
+                let subscription_broadcast = Arc::new(task::streaming::SubscriptionBroadcast::new(
+                    _broadcaster,
+                    first_live_checkpoint,
+                ));
+                rpc = rpc.data(subscription_broadcast);
+            }
             Some((s_stream, s_eviction))
         } else {
             None
