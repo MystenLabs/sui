@@ -1444,6 +1444,7 @@ mod test {
             party: config.party_weight,
             conflicting_transfer: config.conflicting_transfer_weight,
             composite: config.composite_weight,
+            gas_double_spend: 0,
         };
 
         let workload_config = WorkloadConfig {
@@ -1461,6 +1462,7 @@ mod test {
             shared_counter_gas_price_multiplier: config.shared_counter_gas_price_multiplier,
             num_contested_objects: config.num_contested_objects,
             randomized_transaction_concurrency: config.randomized_transaction_concurrency,
+            gas_double_spend_copies: 2,
             target_qps,
             in_flight_ratio,
             duration,
