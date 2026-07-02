@@ -1040,6 +1040,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(funds_accumulator::withdraw_from_accumulator_address),
         ),
         (
+            "funds_accumulator",
+            "check_sufficient_object_funds",
+            make_native!(funds_accumulator::check_sufficient_object_funds),
+        ),
+        (
             "groth16",
             "verify_groth16_proof_internal",
             make_native!(groth16::verify_groth16_proof_internal),

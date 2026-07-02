@@ -11,6 +11,7 @@ use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
+    accumulator_root::UnsettledObjectFundsRead,
     base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
@@ -75,6 +76,7 @@ impl executor::Executor for Executor {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -94,6 +96,7 @@ impl executor::Executor for Executor {
                 store,
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -126,6 +129,7 @@ impl executor::Executor for Executor {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -145,6 +149,7 @@ impl executor::Executor for Executor {
                 store,
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -195,6 +200,8 @@ impl executor::Executor for Executor {
                 input_objects,
                 // TODO: Support system object versions for dev-inspect.
                 BTreeMap::new(),
+                // dev-inspect has no unsettled object funds to account for.
+                None,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -216,6 +223,8 @@ impl executor::Executor for Executor {
                 input_objects,
                 // TODO: Support system object versions for dev-inspect.
                 BTreeMap::new(),
+                // dev-inspect has no unsettled object funds to account for.
+                None,
                 gas,
                 gas_status,
                 transaction_kind,

@@ -227,25 +227,30 @@ impl ExecutionEffects {
     }
 
     pub fn is_insufficient_funds(&self) -> bool {
-        match self {
-            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
-                match effects.data().status() {
-                    ExecutionStatus::Success => false,
-                    ExecutionStatus::Failure(ExecutionFailure {
-                        error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                        ..
-                    }) => true,
-                    _ => false,
-                }
+        // Object-funds withdrawals that fail the in-execution sufficiency check abort with this code
+        // in the framework's `funds_accumulator` module (E_OBJECT_FUNDS_INSUFFICIENT in the native).
+        const OBJECT_FUNDS_INSUFFICIENT_ABORT_CODE: u64 = 2;
+
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        match status {
+            // Address-funds overdraws are rejected post-execution with this dedicated status.
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::InsufficientFundsForWithdraw,
+                ..
+            }) => true,
+            // Object-funds overdraws are caught during execution: the `funds_accumulator` native
+            // aborts, so surface that specific abort as an insufficient-funds outcome too.
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::MoveAbort(location, code),
+                ..
+            }) => {
+                *code == OBJECT_FUNDS_INSUFFICIENT_ABORT_CODE
+                    && location.module.name().as_str() == "funds_accumulator"
             }
-            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
-                ExecutionStatus::Success => false,
-                ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                    ..
-                }) => true,
-                _ => false,
-            },
+            _ => false,
         }
     }
 
