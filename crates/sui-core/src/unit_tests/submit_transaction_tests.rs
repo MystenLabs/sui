@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+use std::time::Duration;
 
 use consensus_core::BlockStatus;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
@@ -14,6 +18,7 @@ use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
+use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::messages_grpc::{
     RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SubmitTxType,
 };
@@ -23,11 +28,15 @@ use sui_types::transaction::{
 };
 use sui_types::utils::to_sender_signed_transaction;
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
-use crate::consensus_test_utils::make_consensus_adapter_for_test;
+use crate::consensus_adapter::{ConsensusAdapter, ConsensusClient};
+use crate::consensus_test_utils::{
+    make_consensus_adapter_for_test, make_consensus_adapter_with_client_for_test,
+};
 use crate::mock_consensus::with_block_status;
 
 use super::AuthorityServerHandle;
@@ -62,24 +71,43 @@ impl TestContext {
         execute: bool,
         block_status_receivers: Vec<crate::consensus_adapter::BlockStatusReceiver>,
     ) -> Self {
+        Self::new_with_adapter(|authority| {
+            make_consensus_adapter_for_test(
+                authority,
+                HashSet::new(),
+                execute,
+                block_status_receivers,
+            )
+        })
+        .await
+    }
+
+    async fn new_with_consensus_client(consensus_client: Arc<dyn ConsensusClient>) -> Self {
+        Self::new_with_adapter(|authority| {
+            make_consensus_adapter_with_client_for_test(&authority, consensus_client, 100_000)
+        })
+        .await
+    }
+
+    async fn new_with_adapter(
+        make_adapter: impl FnOnce(Arc<AuthorityState>) -> Arc<ConsensusAdapter>,
+    ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, keypair) = get_account_key_pair();
         let gas_object = Object::with_owner_for_testing(sender);
         let gas_object_ref = gas_object.compute_object_reference();
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(&[gas_object])
+            // Several tests assert that a resubmission is still suppressed as a recent duplicate;
+            // pin a dedup window far longer than any test's runtime so entries cannot expire
+            // mid-test under CI load (the default window is only 1s of wall-clock time).
+            .with_recent_submission_dedup_window_ms(600_000)
             .build()
             .await;
 
-        let adapter = make_consensus_adapter_for_test(
-            authority.clone(),
-            HashSet::new(),
-            execute,
-            block_status_receivers,
-        );
+        let adapter = make_adapter(authority.clone());
         let server =
             AuthorityServer::new_for_test_with_consensus_adapter(authority.clone(), adapter);
-        let _metrics = server.metrics.clone();
         let server_handle = server.spawn_for_test().await.unwrap();
         let client = NetworkAuthorityClient::connect(
             server_handle.address(),
@@ -117,6 +145,75 @@ impl TestContext {
     }
 }
 
+struct BlockingConsensusClient {
+    first_submit_seen: tokio::sync::watch::Sender<bool>,
+    release_first_submit: tokio::sync::watch::Sender<bool>,
+    submit_count: AtomicUsize,
+}
+
+impl BlockingConsensusClient {
+    fn new() -> Arc<Self> {
+        let (first_submit_seen, _) = tokio::sync::watch::channel(false);
+        let (release_first_submit, _) = tokio::sync::watch::channel(false);
+        Arc::new(Self {
+            first_submit_seen,
+            release_first_submit,
+            submit_count: AtomicUsize::new(0),
+        })
+    }
+
+    fn subscribe_first_submit(&self) -> tokio::sync::watch::Receiver<bool> {
+        self.first_submit_seen.subscribe()
+    }
+
+    fn release_first_submit(&self) {
+        let _ = self.release_first_submit.send(true);
+    }
+
+    fn submit_count(&self) -> usize {
+        self.submit_count.load(Ordering::SeqCst)
+    }
+}
+
+#[async_trait::async_trait]
+impl ConsensusClient for BlockingConsensusClient {
+    async fn submit(
+        &self,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> sui_types::error::SuiResult<(
+        Vec<ConsensusPosition>,
+        crate::consensus_adapter::BlockStatusReceiver,
+    )> {
+        let submit_index = self.submit_count.fetch_add(1, Ordering::SeqCst);
+        if submit_index == 0 {
+            let _ = self.first_submit_seen.send(true);
+            let mut release_first_submit = self.release_first_submit.subscribe();
+            while !*release_first_submit.borrow() {
+                release_first_submit
+                    .changed()
+                    .await
+                    .map_err(|_| SuiError::from("blocking consensus release channel closed"))?;
+            }
+        }
+
+        let consensus_positions = transactions
+            .iter()
+            .enumerate()
+            .map(|(index, _)| ConsensusPosition {
+                epoch: epoch_store.epoch(),
+                block: BlockRef::MIN,
+                index: index as u16,
+            })
+            .collect();
+
+        Ok((
+            consensus_positions,
+            with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+        ))
+    }
+}
+
 #[tokio::test]
 async fn test_submit_transaction_success() {
     let test_context = TestContext::new().await;
@@ -151,6 +248,7 @@ async fn test_duplicate_submission_suppressed_within_window() {
     .await;
 
     let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
 
     // First submission is accepted.
     let first = test_context
@@ -172,14 +270,69 @@ async fn test_duplicate_submission_suppressed_within_window() {
         .unwrap();
     match &second.results[0] {
         SubmitTxResult::Rejected { error } => match error.clone().into_inner() {
-            SuiErrorKind::TransactionProcessing { status, .. } => assert!(
-                status.contains("recently submitted"),
-                "unexpected rejection status: {status}"
-            ),
+            SuiErrorKind::TransactionSubmitted { digest } => assert_eq!(digest, tx_digest),
             other => panic!("unexpected rejection error kind: {other:?}"),
         },
         other => panic!("expected duplicate submission to be rejected, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn test_concurrent_duplicate_submission_rejected_as_inflight() {
+    let consensus_client = BlockingConsensusClient::new();
+    let mut first_submit_seen = consensus_client.subscribe_first_submit();
+    let test_context = TestContext::new_with_consensus_client(consensus_client.clone()).await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+
+    let first_client = test_context.client.clone();
+    let first_request = test_context.build_submit_request(transaction.clone());
+    let first_submit =
+        tokio::spawn(async move { first_client.submit_transaction(first_request, None).await });
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !*first_submit_seen.borrow() {
+            first_submit_seen
+                .changed()
+                .await
+                .expect("blocking consensus client should remain alive");
+        }
+    })
+    .await
+    .expect("first submission should reach consensus client");
+    assert_eq!(consensus_client.submit_count(), 1);
+
+    let second = test_context
+        .client
+        .submit_transaction(test_context.build_submit_request(transaction), None)
+        .await
+        .unwrap();
+
+    assert_eq!(second.results.len(), 1);
+    match &second.results[0] {
+        SubmitTxResult::Rejected { error } => match error.as_inner() {
+            SuiErrorKind::TransactionSubmitted { digest } => {
+                assert_eq!(*digest, tx_digest);
+            }
+            other => panic!("unexpected rejection error kind: {other:?}"),
+        },
+        other => panic!("expected concurrent duplicate to be rejected, got {other:?}"),
+    }
+    assert_eq!(
+        consensus_client.submit_count(),
+        1,
+        "concurrent duplicate should be rejected before consensus submission"
+    );
+
+    consensus_client.release_first_submit();
+    let first = first_submit.await.unwrap().unwrap();
+    assert_eq!(first.results.len(), 1);
+    assert!(
+        matches!(first.results[0], SubmitTxResult::Submitted { .. }),
+        "first submission should complete after release, got {:?}",
+        first.results[0]
+    );
 }
 
 #[tokio::test]
@@ -476,6 +629,54 @@ async fn test_submit_batched_transactions() {
     }
 }
 
+// A repeated transaction in a plain batch rejects only the repeated index with
+// `RepeatedTransactions`; the first occurrence is still submitted.
+#[tokio::test]
+async fn test_submit_batched_transactions_with_repeated_transaction() {
+    let test_context = TestContext::new().await;
+
+    let tx = test_context.build_test_transaction();
+    let tx_digest = *tx.digest();
+
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx).unwrap().into(),
+            bcs::to_bytes(&tx).unwrap().into(),
+        ],
+        ..Default::default()
+    };
+
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(raw_response.results.len(), 2);
+    let result0: SubmitTxResult = raw_response.results[0].clone().try_into().unwrap();
+    let result1: SubmitTxResult = raw_response.results[1].clone().try_into().unwrap();
+
+    assert!(
+        matches!(result0, SubmitTxResult::Submitted { .. }),
+        "expected first occurrence to be submitted, got: {result0:?}"
+    );
+    match result1 {
+        SubmitTxResult::Rejected { error } => assert!(
+            matches!(
+                error.as_inner(),
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::RepeatedTransactions { digest }
+                } if *digest == tx_digest
+            ),
+            "expected RepeatedTransactions for repeated index, got: {error}"
+        ),
+        other => panic!("expected repeated index to be rejected, got: {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn test_submit_batched_transactions_with_already_executed() {
     let test_context = TestContext::new().await;
@@ -704,10 +905,10 @@ async fn test_submit_soft_bundle_with_repeated_transaction() {
         matches!(
             error.into_inner(),
             SuiErrorKind::UserInputError {
-                error: UserInputError::RepeatedTransactionInSoftBundle { digest }
+                error: UserInputError::RepeatedTransactions { digest }
             } if digest == tx_digest
         ),
-        "expected RepeatedTransactionInSoftBundle error"
+        "expected RepeatedTransactions error"
     );
 }
 
@@ -899,4 +1100,170 @@ async fn test_submit_oversized_transaction() {
         error_str.contains("serialized transaction size exceeded maximum"),
         "Expected size limit error but got: {error_str}"
     );
+}
+
+// A batch containing a transaction that was already submitted (and is now in the recent-submission
+// window) rejects only that index with `TransactionSubmitted`, while a fresh transaction in the
+// same batch is still submitted.
+#[tokio::test]
+async fn test_batch_with_recently_processed_duplicate_rejects_only_that_index() {
+    // `execute = false` so the prior submission is suppressed via the recent-submission window
+    // rather than short-circuited by the executed-effects path.
+    let test_context = TestContext::new_with_consensus(
+        false,
+        vec![
+            with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+            with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+        ],
+    )
+    .await;
+
+    // tx1: submit it once so it is demoted into the recent-submission cache when the handler returns.
+    let tx1 = test_context.build_test_transaction();
+    let first = test_context
+        .client
+        .submit_transaction(test_context.build_submit_request(tx1.clone()), None)
+        .await
+        .unwrap();
+    assert!(
+        matches!(first.results[0], SubmitTxResult::Submitted { .. }),
+        "first submission of tx1 should be accepted, got {:?}",
+        first.results[0]
+    );
+
+    // tx2: a distinct, fresh transaction from its own gas object.
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
+
+    // Batch [tx1, tx2]: tx1 is a recent duplicate, tx2 is fresh.
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        ..Default::default()
+    };
+
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(raw_response.results.len(), 2);
+    let result0: SubmitTxResult = raw_response.results[0].clone().try_into().unwrap();
+    let result1: SubmitTxResult = raw_response.results[1].clone().try_into().unwrap();
+
+    // tx1 rejected specifically as a recent duplicate.
+    match result0 {
+        SubmitTxResult::Rejected { error } => match error.as_inner() {
+            SuiErrorKind::TransactionSubmitted { digest } => {
+                assert_eq!(*digest, *tx1.digest());
+            }
+            other => panic!("unexpected rejection error kind: {other:?}"),
+        },
+        other => panic!("expected tx1 to be rejected as recent duplicate, got: {other:?}"),
+    }
+
+    // tx2 still submitted to consensus.
+    match result1 {
+        SubmitTxResult::Submitted { .. } => {}
+        other => panic!("expected tx2 to be submitted, got: {other:?}"),
+    }
+}
+
+// Same per-index dedup inside an atomic soft bundle: a previously-submitted member is rejected
+// with `TransactionSubmitted` while the fresh member is still submitted. Confirms the dedup is
+// req_type-agnostic (the per-tx loop sets `results[idx]` regardless of submit type).
+#[tokio::test]
+async fn test_soft_bundle_with_recently_processed_duplicate_rejects_only_that_index() {
+    let test_context = TestContext::new_with_consensus(
+        false,
+        vec![
+            with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+            with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+        ],
+    )
+    .await;
+
+    // tx1: submit once so it is demoted into the recent-submission cache on handler return.
+    let tx1 = test_context.build_test_transaction();
+    let first = test_context
+        .client
+        .submit_transaction(test_context.build_submit_request(tx1.clone()), None)
+        .await
+        .unwrap();
+    assert!(
+        matches!(first.results[0], SubmitTxResult::Submitted { .. }),
+        "first submission of tx1 should be accepted, got {:?}",
+        first.results[0]
+    );
+
+    // tx2: distinct, fresh, same gas price (soft bundle requires a single shared gas price).
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
+
+    // Soft bundle [tx1, tx2]: tx1 is a recent duplicate, tx2 is fresh.
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        submit_type: SubmitTxType::SoftBundle.into(),
+    };
+
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(raw_response.results.len(), 2);
+    let result0: SubmitTxResult = raw_response.results[0].clone().try_into().unwrap();
+    let result1: SubmitTxResult = raw_response.results[1].clone().try_into().unwrap();
+
+    match result0 {
+        SubmitTxResult::Rejected { error } => match error.as_inner() {
+            SuiErrorKind::TransactionSubmitted { digest } => {
+                assert_eq!(*digest, *tx1.digest());
+            }
+            other => panic!("unexpected rejection error kind: {other:?}"),
+        },
+        other => panic!("expected tx1 to be rejected as recent duplicate, got: {other:?}"),
+    }
+
+    match result1 {
+        SubmitTxResult::Submitted { .. } => {}
+        other => panic!("expected tx2 to be submitted, got: {other:?}"),
+    }
 }
