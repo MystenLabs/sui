@@ -92,7 +92,9 @@ impl DoubleSpendTestSetup {
 
     /// Submit a commit and return the number of scheduled transactions.
     async fn submit_commit_and_count_scheduled(&mut self, commit: TestConsensusCommit) -> usize {
-        self.consensus_handler.handle_consensus_commit(commit).await;
+        self.consensus_handler
+            .handle_consensus_commit_for_test(commit)
+            .await;
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let mut captured = self.captured_transactions.lock();
