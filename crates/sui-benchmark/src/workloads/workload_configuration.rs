@@ -8,6 +8,7 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWorkloadBuilder};
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
+use crate::workloads::gas_double_spend::GasDoubleSpendWorkloadBuilder;
 use crate::workloads::party::PartyWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::slow::SlowWorkloadBuilder;
@@ -44,6 +45,7 @@ pub struct WorkloadWeights {
     pub party: u32,
     pub conflicting_transfer: u32,
     pub composite: u32,
+    pub gas_double_spend: u32,
 }
 
 pub struct WorkloadConfig {
@@ -59,6 +61,7 @@ pub struct WorkloadConfig {
     pub shared_counter_max_tip: u64,
     pub num_contested_objects: u64,
     pub randomized_transaction_concurrency: u64,
+    pub gas_double_spend_copies: usize,
     pub target_qps: u64,
     pub in_flight_ratio: u64,
     pub duration: Interval,
@@ -94,10 +97,12 @@ impl WorkloadConfiguration {
                 party,
                 conflicting_transfer,
                 composite,
+                gas_double_spend,
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
                 num_contested_objects,
+                gas_double_spend_copies,
                 batch_payment_size,
                 adversarial_cfg,
                 expected_failure_type,
@@ -163,6 +168,7 @@ impl WorkloadConfiguration {
                             party: party[i],
                             conflicting_transfer: conflicting_transfer[i],
                             composite: composite[i],
+                            gas_double_spend: gas_double_spend[i],
                         },
                         adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
                             .unwrap(),
@@ -176,6 +182,7 @@ impl WorkloadConfiguration {
                         shared_counter_max_tip: shared_counter_max_tip[i],
                         num_contested_objects: num_contested_objects[i],
                         randomized_transaction_concurrency: 4,
+                        gas_double_spend_copies: gas_double_spend_copies[i],
                         target_qps: target_qps[i],
                         in_flight_ratio: in_flight_ratio[i],
                         duration: duration[i],
@@ -282,6 +289,7 @@ impl WorkloadConfiguration {
             shared_counter_max_tip,
             num_contested_objects: _,
             randomized_transaction_concurrency,
+            gas_double_spend_copies,
             target_qps,
             in_flight_ratio,
             duration,
@@ -333,7 +341,8 @@ impl WorkloadConfiguration {
             + weights.slow
             + weights.party
             + weights.conflicting_transfer
-            + weights.composite;
+            + weights.composite
+            + weights.gas_double_spend;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
             weights.shared_counter as f32 / total_weight as f32,
@@ -431,6 +440,17 @@ impl WorkloadConfiguration {
             randomized_transaction_concurrency,
         );
         workload_builders.push(randomized_transaction_workload);
+        let gas_double_spend_workload = GasDoubleSpendWorkloadBuilder::from(
+            weights.gas_double_spend as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            gas_double_spend_copies,
+            reference_gas_price,
+            duration,
+            group,
+        );
+        workload_builders.push(gas_double_spend_workload);
         let slow_workload = SlowWorkloadBuilder::from(
             weights.slow as f32 / total_weight as f32,
             target_qps,

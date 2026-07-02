@@ -7,6 +7,7 @@ pub mod batch_payment;
 pub mod composite;
 pub mod delegation;
 pub mod expected_failure;
+pub mod gas_double_spend;
 pub mod party;
 pub mod payload;
 pub mod randomized_transaction;
