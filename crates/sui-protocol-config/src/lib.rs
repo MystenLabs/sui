@@ -1128,6 +1128,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enforce_address_balance_change_invariant: bool,
 
+    // If true, validators may broadcast `UpdateTransactionDenyConfig` consensus messages.
+    #[serde(skip_serializing_if = "is_false")]
+    share_transaction_deny_config_in_consensus: bool,
+
     // Enables more granular post-execution checks.
     #[serde(skip_serializing_if = "is_false")]
     granular_post_execution_checks: bool,
@@ -2646,6 +2650,11 @@ impl ProtocolConfig {
     pub fn ignore_execution_time_observations_after_certs_closed(&self) -> bool {
         self.feature_flags
             .ignore_execution_time_observations_after_certs_closed
+    }
+
+    pub fn share_transaction_deny_config_in_consensus(&self) -> bool {
+        self.feature_flags
+            .share_transaction_deny_config_in_consensus
     }
 
     pub fn dependency_linkage_error(&self) -> bool {
@@ -5507,6 +5516,11 @@ impl ProtocolConfig {
     ) {
         self.feature_flags
             .ignore_execution_time_observations_after_certs_closed = val;
+    }
+
+    pub fn set_share_transaction_deny_config_in_consensus_for_testing(&mut self, val: bool) {
+        self.feature_flags
+            .share_transaction_deny_config_in_consensus = val;
     }
 
     pub fn set_consensus_checkpoint_signature_key_includes_digest_for_testing(

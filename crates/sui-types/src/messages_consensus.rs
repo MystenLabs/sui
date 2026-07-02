@@ -14,6 +14,7 @@ use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
 use crate::transaction::{CertifiedTransaction, PlainTransactionWithClaims, Transaction};
+use crate::transaction_deny_rules::TransactionDenyRules;
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
@@ -233,6 +234,13 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::UserTransactionV2(tx) => {
                 format!("UserV2({})", tx.tx().digest())
             }
+            ConsensusTransactionKind::UpdateTransactionDenyConfig(msg) => {
+                format!(
+                    "UpdateDenyConfig({}, gen={})",
+                    msg.authority().concise(),
+                    msg.generation()
+                )
+            }
         }
     }
 }
@@ -255,6 +263,8 @@ pub enum ConsensusTransactionKey {
     CheckpointSignatureV2(AuthorityName, CheckpointSequenceNumber, CheckpointDigest),
     // Deprecated.
     RandomnessStateUpdate,
+    /// `(authority, generation)` — supersede by strictly-increasing generation.
+    UpdateTransactionDenyConfig(AuthorityName, u64),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -304,8 +314,50 @@ impl Debug for ConsensusTransactionKey {
             Self::RandomnessStateUpdate => {
                 write!(f, "RandomnessStateUpdate")
             }
+            Self::UpdateTransactionDenyConfig(name, generation) => write!(
+                f,
+                "UpdateTransactionDenyConfig({:?}, {generation:?})",
+                name.concise()
+            ),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Hash, Debug, PartialEq, Eq)]
+pub enum SharedTransactionDenyConfig {
+    V1(SharedTransactionDenyConfigV1),
+}
+
+impl SharedTransactionDenyConfig {
+    pub fn authority(&self) -> AuthorityName {
+        match self {
+            Self::V1(inner) => inner.authority,
+        }
+    }
+
+    pub fn generation(&self) -> u64 {
+        match self {
+            Self::V1(inner) => inner.generation,
+        }
+    }
+
+    pub fn rules(&self) -> Option<&TransactionDenyRules> {
+        match self {
+            Self::V1(inner) => inner.rules.as_ref(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Hash, Debug, PartialEq, Eq)]
+pub struct SharedTransactionDenyConfigV1 {
+    /// Originating authority — must match consensus transaction source.
+    pub authority: AuthorityName,
+    /// Generation: ms since epoch (matches `CapabilityNotificationV2`). The receiver
+    /// only accepts updates with strictly greater generation than the last accepted
+    /// for that authority.
+    pub generation: u64,
+    /// `Some(rules)` = recommendation; `None` = withdraw a previous recommendation.
+    pub rules: Option<TransactionDenyRules>,
 }
 
 /// Deprecated in favor of AuthorityCapabilitiesV2
@@ -464,6 +516,10 @@ pub enum ConsensusTransactionKind {
     // - AddressAliases: specific object versions used for signature verification
     // - ImmutableInputObjects: object IDs that are immutable (to avoid locking them)
     UserTransactionV2(Box<PlainTransactionWithClaims>),
+
+    /// Recommended `TransactionDenyConfig` settings broadcast by an authority for peers
+    /// to use. Application of recommended rules by receiving validators is opt-in.
+    UpdateTransactionDenyConfig(Box<SharedTransactionDenyConfig>),
 }
 
 impl ConsensusTransactionKind {
@@ -665,6 +721,16 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_update_transaction_deny_config(msg: SharedTransactionDenyConfig) -> Self {
+        let mut hasher = DefaultHasher::new();
+        msg.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::UpdateTransactionDenyConfig(Box::new(msg)),
+        }
+    }
+
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
@@ -732,6 +798,12 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::ExecutionTimeObservation(msg) => {
                 ConsensusTransactionKey::ExecutionTimeObservation(msg.authority, msg.generation)
             }
+            ConsensusTransactionKind::UpdateTransactionDenyConfig(msg) => {
+                ConsensusTransactionKey::UpdateTransactionDenyConfig(
+                    msg.authority(),
+                    msg.generation(),
+                )
+            }
         }
     }
 
@@ -751,6 +823,73 @@ impl ConsensusTransaction {
     pub fn is_end_of_publish(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::EndOfPublish(_))
     }
+}
+
+#[test]
+fn test_shared_transaction_deny_config_bcs_roundtrip() {
+    use crate::base_types::{ObjectID, SuiAddress};
+    use crate::transaction_deny_rules::TransactionDenyRules;
+    use std::collections::BTreeSet;
+
+    let authority = AuthorityName::new([7u8; 96]);
+    let mut rules = TransactionDenyRules::default();
+    rules.object_deny_list.insert(ObjectID::new([1u8; 32]));
+    rules.object_deny_list.insert(ObjectID::new([2u8; 32]));
+    rules
+        .address_deny_list
+        .insert(SuiAddress::from_bytes([3u8; 32]).unwrap());
+    rules.user_transaction_disabled = true;
+    let mut providers: BTreeSet<String> = BTreeSet::new();
+    providers.insert("Google".to_string());
+    rules.zklogin_disabled_providers = providers;
+
+    let msg = SharedTransactionDenyConfig::V1(SharedTransactionDenyConfigV1 {
+        authority,
+        generation: 12345,
+        rules: Some(rules),
+    });
+    let consensus_tx = ConsensusTransaction::new_update_transaction_deny_config(msg.clone());
+
+    // Round-trip the full ConsensusTransaction wire format. This is exactly what
+    // mysticeti_adapter sends and consensus_validator parses on receive.
+    let bytes = bcs::to_bytes(&consensus_tx).unwrap();
+    let decoded: ConsensusTransaction = bcs::from_bytes(&bytes).unwrap();
+    assert_eq!(decoded.tracking_id, consensus_tx.tracking_id);
+    let decoded_msg = match decoded.kind {
+        ConsensusTransactionKind::UpdateTransactionDenyConfig(m) => *m,
+        other => panic!("unexpected kind: {other:?}"),
+    };
+    assert_eq!(decoded_msg, msg);
+
+    // The dedup key must be (authority, generation), letting receivers ignore
+    // out-of-order replays of older generations from the same authority.
+    let key = consensus_tx.key();
+    match key {
+        ConsensusTransactionKey::UpdateTransactionDenyConfig(name, generation) => {
+            assert_eq!(name, authority);
+            assert_eq!(generation, 12345);
+        }
+        other => panic!("unexpected key: {other:?}"),
+    }
+}
+
+#[test]
+fn test_shared_transaction_deny_config_withdrawal_bcs_roundtrip() {
+    let authority = AuthorityName::new([9u8; 96]);
+    let msg = SharedTransactionDenyConfig::V1(SharedTransactionDenyConfigV1 {
+        authority,
+        generation: 99,
+        rules: None,
+    });
+    let consensus_tx = ConsensusTransaction::new_update_transaction_deny_config(msg.clone());
+    let bytes = bcs::to_bytes(&consensus_tx).unwrap();
+    let decoded: ConsensusTransaction = bcs::from_bytes(&bytes).unwrap();
+    let decoded_msg = match decoded.kind {
+        ConsensusTransactionKind::UpdateTransactionDenyConfig(m) => *m,
+        other => panic!("unexpected kind: {other:?}"),
+    };
+    assert_eq!(decoded_msg, msg);
+    assert!(decoded_msg.rules().is_none());
 }
 
 #[test]

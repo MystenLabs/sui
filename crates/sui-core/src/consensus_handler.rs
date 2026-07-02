@@ -48,7 +48,7 @@ use sui_types::{
     messages_consensus::{
         AuthorityCapabilitiesV2, AuthorityIndex, ConsensusDeterminedVersionAssignments,
         ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-        ExecutionTimeObservation,
+        ExecutionTimeObservation, SharedTransactionDenyConfig,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
@@ -91,6 +91,7 @@ use crate::{
     gasless_rate_limiter::ConsensusGaslessCounter,
     post_consensus_tx_reorder::PostConsensusTxReorder,
     traffic_controller::{TrafficController, policies::TrafficTally},
+    transaction_deny_config_manager::TransactionDenyConfigManager,
 };
 
 /// Output from filtering consensus transactions.
@@ -191,6 +192,7 @@ impl ConsensusHandlerInitializer {
             self.state.traffic_controller.clone(),
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
+            self.state.transaction_deny_config_manager().clone(),
         )
     }
 }
@@ -818,6 +820,8 @@ pub struct ConsensusHandler<C> {
 
     consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
+    transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
+
     checkpoint_queue: Mutex<CheckpointQueue>,
 }
 
@@ -837,6 +841,7 @@ impl<C> ConsensusHandler<C> {
         traffic_controller: Option<Arc<TrafficController>>,
         congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
         consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
+        transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
     ) -> Self {
         assert!(
             matches!(
@@ -898,6 +903,7 @@ impl<C> ConsensusHandler<C> {
             traffic_controller,
             congestion_logger,
             consensus_gasless_counter,
+            transaction_deny_config_manager,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -926,6 +932,7 @@ impl<C> ConsensusHandler<C> {
         backpressure_subscriber: BackpressureSubscriber,
         traffic_controller: Option<Arc<TrafficController>>,
         last_consensus_stats: ExecutionIndicesWithStatsV2,
+        transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
     ) -> Self {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
@@ -958,6 +965,7 @@ impl<C> ConsensusHandler<C> {
             traffic_controller,
             congestion_logger: None,
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
+            transaction_deny_config_manager,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -980,6 +988,7 @@ struct CommitHandlerInput {
     randomness_dkg_confirmations: Vec<(AuthorityName, Vec<u8>)>,
     end_of_publish_transactions: Vec<AuthorityName>,
     new_jwks: Vec<(AuthorityName, JwkId, JWK)>,
+    shared_transaction_deny_configs: Vec<SharedTransactionDenyConfig>,
 }
 
 struct CommitHandlerState {
@@ -1186,6 +1195,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_dkg_confirmations,
             end_of_publish_transactions,
             new_jwks,
+            shared_transaction_deny_configs,
         } = self.build_commit_handler_input(transactions);
 
         self.process_gasless_transactions(&commit_info, &user_transactions);
@@ -1193,6 +1203,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.process_capability_notifications(capability_notifications);
         self.process_execution_time_observations(&mut state, execution_time_observations);
         self.process_checkpoint_signature_messages(checkpoint_signature_messages);
+        self.process_shared_transaction_deny_configs(shared_transaction_deny_configs);
 
         self.process_dkg_updates(
             &mut state,
@@ -2125,6 +2136,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
     }
 
+    fn process_shared_transaction_deny_configs(
+        &self,
+        shared_transaction_deny_configs: Vec<SharedTransactionDenyConfig>,
+    ) {
+        if let Err(e) = self
+            .transaction_deny_config_manager
+            .apply_updates(shared_transaction_deny_configs)
+        {
+            warn!("Failed to apply UpdateTransactionDenyConfig batch: {e:?}");
+        }
+    }
+
     fn process_execution_time_observations(
         &self,
         state: &mut CommitHandlerState,
@@ -2590,7 +2613,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         | ConsensusTransactionKind::EndOfPublish(_)
                         // Note: we no longer have to check protocol_config.ignore_execution_time_observations_after_certs_closed()
                         | ConsensusTransactionKind::ExecutionTimeObservation(_)
-                        | ConsensusTransactionKind::NewJWKFetched(_, _, _) => {
+                        | ConsensusTransactionKind::NewJWKFetched(_, _, _)
+                        | ConsensusTransactionKind::UpdateTransactionDenyConfig(_) => {
                             debug!(
                                 "Ignoring consensus transaction {:?} because of end of epoch",
                                 parsed.transaction.key()
@@ -2943,6 +2967,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 .checkpoint_signature_messages
                                 .push(*checkpoint_signature_message);
                         }
+                        ConsensusTransactionKind::UpdateTransactionDenyConfig(msg) => {
+                            commit_handler_input
+                                .shared_transaction_deny_configs
+                                .push(*msg);
+                        }
 
                         // Deprecated messages, filtered earlier by filter_consensus_txns()
                         // or rejected by SuiTxValidator. Kept for exhaustiveness.
@@ -3199,6 +3228,9 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
             }
         }
         ConsensusTransactionKind::ExecutionTimeObservation(_) => "execution_time_observation",
+        ConsensusTransactionKind::UpdateTransactionDenyConfig(_) => {
+            "update_transaction_deny_config"
+        }
     }
 }
 
@@ -3553,6 +3585,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            state.transaction_deny_config_manager().clone(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -3819,6 +3852,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            state.transaction_deny_config_manager().clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
@@ -3945,6 +3979,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            state.transaction_deny_config_manager().clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;

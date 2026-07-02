@@ -570,7 +570,7 @@ async fn test_actual_signer_denied_via_alias() {
         tx.data().tx_signatures(),
         &tx_data.input_objects().unwrap(),
         &tx_data.receiving_objects(),
-        &state.config.transaction_deny_config,
+        state.local_transaction_deny_config(),
         state.get_backing_package_store().as_ref(),
     );
     assert_denied(&result);
@@ -611,7 +611,7 @@ async fn test_non_denied_actual_signer_allowed() {
         tx.data().tx_signatures(),
         &tx_data.input_objects().unwrap(),
         &tx_data.receiving_objects(),
-        &state.config.transaction_deny_config,
+        state.local_transaction_deny_config(),
         state.get_backing_package_store().as_ref(),
     );
     assert!(result.is_ok());
