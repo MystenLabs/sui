@@ -84,8 +84,8 @@ fn publish_and_cache_user_pkg(
     }
 }
 
-// 1. With an empty system-package list, JIT'd user packages still produce VirtualCall for
-//    cross-package calls (no behavior change vs. the existing flow).
+// With an empty system-package list, JIT'd user packages still produce VirtualCall for
+// cross-package calls (no behavior change vs. the existing flow).
 #[test]
 fn no_system_packages_uses_virtual_calls() {
     let pkgs = compile_packages_in_file("system_packages_basic.move", &[]);
@@ -106,7 +106,7 @@ fn no_system_packages_uses_virtual_calls() {
     assert!(virt >= 2, "expected the two cross-pkg calls to be virtual");
 }
 
-// 2. With the system pkg installed, the user pkg's calls into it become DirectCall.
+// With the system pkg installed, the user pkg's calls into it become DirectCall.
 #[test]
 fn system_package_user_calls_become_direct() {
     let pkgs = compile_packages_in_file("system_packages_basic.move", &[]);
@@ -126,8 +126,8 @@ fn system_package_user_calls_become_direct() {
     assert_eq!(virt, 0, "expected no virtual calls remaining, got {virt}");
 }
 
-// 3. Cross-system direct calls: install pinned_a, then pinned_b which calls pinned_a; the
-//    second pkg's bytecode must direct-call into the first.
+// Install pinned_a, then pinned_b which calls pinned_a; the second pkg's bytecode must direct-call
+// into the first.
 #[test]
 fn cross_system_calls_become_direct() {
     let pkgs = compile_packages_in_file("system_packages_chain.move", &[]);
@@ -148,11 +148,11 @@ fn cross_system_calls_become_direct() {
     assert_eq!(virt, 0, "expected no virtual calls in pinned_b");
 }
 
-// 3b. Cross-system direct calls under a reversed dependency direction: `pinned_b` lives at
-//     `0x1` and depends on `pinned_a` at `0x3`, i.e. the dependency runs *opposite* to
-//     address order. The host provides `[pinned_a, pinned_b]` (dependency order); the install
-//     pipeline must honor that rather than iterating by `AccountAddress` order, which would
-//     JIT `0x1::pinned_b` before `0x3::pinned_a` was pinned and quietly demote the direct call.
+// Ensure dependency order is proeserved based on argument order: `pinned_b` lives at `0x1` and
+// depends on `pinned_a` at `0x3`, i.e. the dependency runs *opposite* to address order. The host
+// provides `[pinned_a, pinned_b]` (dependency order); the install pipeline must honor that rather
+// than iterating by `AccountAddress` order, which would JIT `0x1::pinned_b` before `0x3::pinned_a`
+// was pinned and quietly demote the direct call.
 #[test]
 fn cross_system_calls_become_direct_reversed_dep_order() {
     let pkgs = compile_packages_in_file("system_packages_chain_reversed.move", &[]);
@@ -173,11 +173,9 @@ fn cross_system_calls_become_direct_reversed_dep_order() {
     assert_eq!(virt, 0, "expected no virtual calls in pinned_b, got {virt}");
 }
 
-// 4. Identity-link check rejects input where original_id != version_id.
-//
-// The install pipeline `debug_assert!(false, ...)` fires on this bad host input in debug
-// builds, so the test expects a panic there. Release builds compile the assert out and the
-// tail assertion verifies graceful degradation (empty system_packages set).
+// The install pipeline `debug_assert!(false, ...)` fires on this bad host input in debug builds
+// because original_id != version_id, so the test expects a panic there. Release builds compile the
+// assert out and the tail assertion verifies graceful degradation (empty system_packages set).
 #[test]
 #[cfg_attr(
     debug_assertions,
@@ -192,10 +190,8 @@ fn identity_link_check_rejects_non_identity_input() {
     assert_eq!(runtime.cache().system_packages().len(), 0);
 }
 
-// 5. Defining-ID check rejects a system pkg whose type_origin_table points elsewhere.
-//
-// Same debug/release split as test 4 — debug panics on the host bug; release verifies
-// graceful degradation.
+// Same debug/release split as above: debug panics on the host bug; release verifies graceful
+// degradation in the presence of an error.
 #[test]
 #[cfg_attr(
     debug_assertions,
@@ -222,11 +218,8 @@ fn defining_id_check_rejects_mismatched_origin() {
     );
 }
 
-// 6. Validation failure logs and skips, runtime still constructs and is usable.
-//
-// Same debug/release split as tests 4 and 5. Debug panics on the host bug via
-// `debug_assert!`; release exercises the full graceful-degradation path (bad system pkg
-// is skipped, non-system publish still succeeds).
+// Same debug/release split as above, and debug panics via `debug_assert!`; release exercises the
+// full graceful-degradation path (bad system pkg is skipped, non-system publish still succeeds).
 #[test]
 #[cfg_attr(
     debug_assertions,
@@ -254,9 +247,9 @@ fn validation_failure_logs_and_continues() {
         .unwrap();
 }
 
-// 7. A user pkg whose linkage maps the system OriginalId to a *different* version ID must
-//    NOT direct-call into our pinned system pkg. This guards against a host that maps
-//    `0x1 -> some_other_version` accidentally pulling our global into their dispatch.
+// A user pkg whose linkage maps the system OriginalId to a *different* version ID must NOT
+// direct-call into our pinned system pkg. This guards against a host that maps `0x1 ->
+// some_other_version` accidentally pulling our global into their dispatch.
 #[test]
 fn linkage_with_wrong_version_does_not_direct_resolve() {
     use crate::shared::linkage_context::LinkageContext;
@@ -308,8 +301,8 @@ fn linkage_with_wrong_version_does_not_direct_resolve() {
     );
 }
 
-// 8. Successfully installed system packages are findable in the regular package cache too,
-//    so the standard `resolve_packages` path picks them up without a storage round-trip.
+// Ensure successfully installed system packages are findable in the regular package cache too, so
+// the standard `resolve_packages` path picks them up without a storage round-trip.
 #[test]
 fn system_packages_are_in_regular_cache() {
     let pkgs = compile_packages_in_file("system_packages_basic.move", &[]);
@@ -323,7 +316,7 @@ fn system_packages_are_in_regular_cache() {
     );
 }
 
-// 9. The retained system-package map carries the right ID after install.
+// The retained system-package map carries the right ID after install.
 #[test]
 fn system_packages_map_records_original_id() {
     let pkgs = compile_packages_in_file("system_packages_chain.move", &[]);
@@ -342,8 +335,8 @@ fn system_packages_map_records_original_id() {
     assert_eq!(report.system_package_count, 2);
 }
 
-// 10. End-to-end with the real move-stdlib: install stdlib at 0x1 and JIT a user pkg that
-//     calls into it; user calls into stdlib must be direct.
+// End-to-end with the real move-stdlib: install stdlib at 0x1 and JIT a user pkg that calls into
+// it; user calls into stdlib must be direct.
 #[test]
 fn move_stdlib_installs_and_user_calls_become_direct() {
     use move_compiler::{

@@ -49,8 +49,7 @@ impl SystemPackages {
                     false,
                     "duplicate system package version_id in input (host bug)"
                 );
-                continue;
-            }
+                continue; }
             out.push(pkg);
         }
         Self { packages: out }
@@ -83,11 +82,9 @@ impl SystemPackages {
 /// Internal resolver wrapping the deduplicated input set, keyed by `version_id` for the
 /// `ModuleResolver` callbacks the load/verify/JIT pipeline expects.
 ///
-/// The map is a `BTreeMap` only because it needs efficient keyed lookup by `version_id` —
-/// **no ordered iteration is exposed**. Install order is driven separately by the caller
-/// (`install_system_packages`) using a `Vec<VersionId>` captured before dedup consumes the
-/// input, so we don't depend on `BTreeMap`'s address-sorted iteration matching the dependency
-/// order the host supplied.
+/// The `BTreeMap` is safe because it only needs efficient keyed lookup by `version_id`, and no
+/// iteration is exposed. IF YOU ADD AN ITERATION IN THE FUTURE, MAKE THIS AN INDEX MAP OR SIMILAR
+/// TO ENSURE YOU PRESERVE THE ORDER OF THE PROVIDED INPUT VECTOR.
 #[derive(Debug)]
 pub(crate) struct SystemPackageResolver {
     by_version_id: BTreeMap<AccountAddress, SerializedPackage>,

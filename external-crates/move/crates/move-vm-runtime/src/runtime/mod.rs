@@ -141,10 +141,8 @@ impl MoveRuntime {
 
         let deduped = SystemPackages::new(filtered);
         // Capture install order from the host-provided sequence *before* consuming into the
-        // resolver — the resolver's internal `BTreeMap` sorts by `version_id`, and we must
-        // not let address ordering leak in as the effective install order (a system package
-        // that depends on a higher-numbered sibling would otherwise be JIT'd before its
-        // dependency was pinned, silently dropping the direct-call rewrite for that edge).
+        // resolver, to ensure we load in the order the packages were provided (in order to handle
+        // downstream dependencies correctly).
         let load_order_keys: Vec<VersionId> = deduped.iter().map(|p| p.version_id).collect();
         let resolver = deduped.into_resolver();
 
@@ -169,15 +167,15 @@ impl MoveRuntime {
             return;
         };
 
-        // Install each system package in its own `resolve_packages` call rather than in bulk.
-        // The JIT translator snapshots `cache.system_packages()` once per `resolve_packages`
-        // call (see `effective_system_packages_for`), so a bulk resolve would give every
-        // in-batch package a snapshot that omits its siblings — even ones we intended to
-        // direct-call into. Per-package installs make each successful install visible to the
-        // next call's snapshot, letting later system packages direct-resolve into earlier ones.
+        // Install each system package in its own `resolve_packages` call rather than in bulk:
+        // the jit snapshots `cache.system_packages()` once per `resolve_packages` call, so a bulk
+        // resolve would give every in-batch package a snapshot that omits its siblings, preventing
+        // direct calls across pinned packages. Per-package installs make each successful install
+        // visible to the next call's snapshot, letting later system packages direct-resolve into
+        // earlier ones.
         //
-        // Iterate `load_order_keys` (host-provided order) rather than iterating the resolver
-        // — see comments above and on `SystemPackageResolver` for why.
+        // Iterate `load_order_keys` (host-provided order) rather than iterating the resolver to
+        // ensure expected load order.
         for version_id in load_order_keys {
             let result = telemetry.with_transaction_telemetry(|tx_telemetry| {
                 package_resolution::resolve_packages(

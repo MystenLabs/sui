@@ -286,10 +286,9 @@ pub(crate) fn jit_and_cache_package(
 /// excluded; the JIT translator only direct-resolves into a system pkg when the user has
 /// explicitly linked to that specific pinned version.
 ///
-/// The package being translated is *also* excluded (defensively) — a package must never appear
-/// in its own direct-call set. Same-package calls are resolved via the in-progress vtable in
-/// `try_resolve_direct_function_call`, and mixing self into `system_packages` risks pinning a
-/// stale copy of ourselves via the direct-call path.
+/// The package being translated is *also* excluded defensively: a package currently being loaded
+/// should not appear as a system package upstream to be linked against. This case may happen
+/// during genesis, but otherwise should not occur.
 fn effective_system_packages_for(
     system_packages: &BTreeMap<OriginalId, Arc<Package>>,
     verified_pkg: &verification::ast::Package,

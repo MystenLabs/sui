@@ -79,15 +79,11 @@ impl MoveCache {
     }
 
     /// Register a pinned system package keyed by its `OriginalId`. Returns `true` if newly
-    /// inserted, `false` if a package was already registered at that id (which the system-pkg
-    /// install loop hits naturally when `resolve_packages` returns previously-installed
-    /// siblings as cache hits — caller decides whether to log).
+    /// inserted, `false` if a package was already registered at that id.
     ///
-    /// Only callable during `MoveRuntime` construction, when the caller holds the unique strong
-    /// reference to this `MoveCache` (via `Arc::get_mut` on `runtime.cache`). We use
-    /// `Arc::get_mut` on the inner map (rather than `Arc::make_mut`) so that CoW cloning can't
-    /// silently split the map — if the inner `Arc` were somehow shared, we log and refuse the
-    /// insert rather than diverging the JIT translator's read view from the write view.
+    /// USAGE: This should only be called when creating a `MoveRuntime`, when the caller holds the
+    /// unique strong reference. Otherwise, we may return `false` and log an error because the Arc
+    /// holding the system packages is already held due to concurrency.
     pub(crate) fn add_system_package(&mut self, pkg: Arc<Package>) -> bool {
         use std::collections::btree_map::Entry;
         let id = pkg.runtime.original_id;
