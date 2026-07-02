@@ -17,11 +17,25 @@ pub struct RpcMetrics {
     inflight_requests: IntGaugeVec,
     num_requests: IntCounterVec,
     request_latency: HistogramVec,
+    /// Time a `List*` chunk read spends queued waiting for a
+    /// `spawn_blocking` thread, labelled by method. Captured from just
+    /// before `spawn_blocking` to the first statement inside the closure.
+    pub(crate) blocking_queue_wait_seconds: HistogramVec,
+    /// Wall time of the actual `List*` chunk work run on the blocking
+    /// thread, labelled by method.
+    pub(crate) blocking_work_seconds: HistogramVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
+
+/// Buckets for the `blocking_*_seconds` histograms. The queue wait spans
+/// microseconds (thread immediately available) to tens of seconds (pool
+/// saturated), so use wide exponential buckets: ~0.1 ms to ~52 s.
+fn blocking_sec_buckets() -> Vec<f64> {
+    prometheus::exponential_buckets(0.0001, 2.0, 20).unwrap()
+}
 
 impl RpcMetrics {
     pub fn new(registry: &Registry) -> Self {
@@ -45,6 +59,22 @@ impl RpcMetrics {
                 "Latency of RPC requests per route",
                 &["path"],
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            blocking_queue_wait_seconds: register_histogram_vec_with_registry!(
+                "blocking_queue_wait_seconds",
+                "Time a List* chunk read waits for a spawn_blocking thread, per method",
+                &["method"],
+                blocking_sec_buckets(),
+                registry,
+            )
+            .unwrap(),
+            blocking_work_seconds: register_histogram_vec_with_registry!(
+                "blocking_work_seconds",
+                "Wall time of List* chunk work on a blocking thread, per method",
+                &["method"],
+                blocking_sec_buckets(),
                 registry,
             )
             .unwrap(),

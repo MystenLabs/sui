@@ -169,8 +169,17 @@ fn spawn_transaction_chunk(
     render_contents: bool,
     cancel: CancellationToken,
 ) -> JoinHandle<Result<TransactionChunkDone, RpcError>> {
+    let metrics = service.metrics.clone();
+    let queued_at = Instant::now();
     tokio::task::spawn_blocking(move || {
-        next_transaction_chunk(
+        if let Some(metrics) = &metrics {
+            metrics
+                .blocking_queue_wait_seconds
+                .with_label_values(&["list_transactions"])
+                .observe(queued_at.elapsed().as_secs_f64());
+        }
+        let work = Instant::now();
+        let r = next_transaction_chunk(
             service,
             state,
             read_mask,
@@ -181,7 +190,14 @@ fn spawn_transaction_chunk(
             chunk_item_limit,
             remaining_request_item_limit,
             &cancel,
-        )
+        );
+        if let Some(metrics) = &metrics {
+            metrics
+                .blocking_work_seconds
+                .with_label_values(&["list_transactions"])
+                .observe(work.elapsed().as_secs_f64());
+        }
+        r
     })
 }
 

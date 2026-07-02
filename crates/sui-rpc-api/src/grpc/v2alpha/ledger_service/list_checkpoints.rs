@@ -166,8 +166,17 @@ fn spawn_checkpoint_chunk(
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
 ) -> JoinHandle<Result<CheckpointChunkDone, RpcError>> {
+    let metrics = service.metrics.clone();
+    let queued_at = Instant::now();
     tokio::task::spawn_blocking(move || {
-        next_checkpoint_chunk(
+        if let Some(metrics) = &metrics {
+            metrics
+                .blocking_queue_wait_seconds
+                .with_label_values(&["list_checkpoints"])
+                .observe(queued_at.elapsed().as_secs_f64());
+        }
+        let work = Instant::now();
+        let r = next_checkpoint_chunk(
             service,
             state,
             read_mask,
@@ -177,7 +186,14 @@ fn spawn_checkpoint_chunk(
             chunk_item_limit,
             remaining_request_item_limit,
             &cancel,
-        )
+        );
+        if let Some(metrics) = &metrics {
+            metrics
+                .blocking_work_seconds
+                .with_label_values(&["list_checkpoints"])
+                .observe(work.elapsed().as_secs_f64());
+        }
+        r
     })
 }
 
