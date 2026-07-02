@@ -191,6 +191,7 @@ pub async fn run(
         context.clone(),
     )));
     service.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
+    service.with_read_pool(&prometheus::Registry::new());
 
     info!("starting sui-rpc-api server on {rpc_addr}");
     let server_handle = tokio::spawn(async move { service.start_service(rpc_addr).await });

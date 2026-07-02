@@ -62,6 +62,16 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ledger_history: Option<LedgerHistoryConfig>,
 
+    /// Dedicated OS threads for the RPC RocksDB read pool serving `List*` chunk
+    /// reads off tokio's global blocking pool. Fixed-size, pre-spawned. Default 512.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_pool_threads: Option<usize>,
+
+    /// Bounded backlog for the RPC RocksDB read pool before requests are shed with
+    /// `ResourceExhausted`. Default 512.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_pool_queue_capacity: Option<usize>,
+
     /// Configuration for rendering Objects based on the Display standard
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display: Option<DisplayConfig>,
@@ -107,6 +117,15 @@ impl RpcConfig {
         self.ledger_history
             .as_ref()
             .unwrap_or(&DEFAULT_LEDGER_HISTORY_CONFIG)
+    }
+
+    pub fn read_pool_threads(&self) -> usize {
+        self.read_pool_threads.unwrap_or(DEFAULT_READ_POOL_THREADS)
+    }
+
+    pub fn read_pool_queue_capacity(&self) -> usize {
+        self.read_pool_queue_capacity
+            .unwrap_or(DEFAULT_READ_POOL_QUEUE_CAPACITY)
     }
 
     /// Validate cross-field invariants. Call once at startup to fail fast on a
@@ -247,6 +266,8 @@ impl DisplayConfig {
 }
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 5_000;
+const DEFAULT_READ_POOL_THREADS: usize = 512;
+const DEFAULT_READ_POOL_QUEUE_CAPACITY: usize = 512;
 const DEFAULT_BITMAP_BUCKET_SCAN_BUDGET: usize = 1_024;
 const DEFAULT_CHUNK_BUCKET_SCAN_BUDGET: usize = 256;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;

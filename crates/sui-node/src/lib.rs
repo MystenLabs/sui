@@ -2719,6 +2719,7 @@ async fn build_http_servers(
         }
 
         rpc_service.with_metrics(RpcMetrics::new(prometheus_registry));
+        rpc_service.with_read_pool(prometheus_registry);
         rpc_service.with_subscription_service(subscription_service_handle);
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
