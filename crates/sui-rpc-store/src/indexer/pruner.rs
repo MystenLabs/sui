@@ -34,11 +34,12 @@
 //!   so it — and the greatest `object_version_by_checkpoint` entry
 //!   that resolves to it — is preserved.
 //! - **`object_version_by_checkpoint`** — retracted in lockstep with
-//!   `objects` history: the same effects-driven walk issues a
-//!   per-object range delete clearing every checkpoint-pinned entry
-//!   below the superseding transaction's checkpoint, plus a point
-//!   delete of the tombstone entry when the object was removed. The
-//!   retained set mirrors the `objects` versions kept, so the index
+//!   `objects` history: the same effects-driven walk records per-object
+//!   retractions, then each prune batch deduplicates them to the widest
+//!   needed range delete clearing checkpoint-pinned entries below the
+//!   latest superseding checkpoint, plus a point delete of the tombstone
+//!   entry when the object was removed there.
+//!   The retained set mirrors the `objects` versions kept, so the index
 //!   never points at a pruned version.
 //! - **Ledger-history bitmaps** (`transaction_bitmap`,
 //!   `event_bitmap`) — not deleted directly; advancing the shared
@@ -80,6 +81,7 @@
 //! there is no partial-delete-without-watermark state. Range and
 //! point deletes are idempotent, so a re-run is harmless.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -159,6 +161,47 @@ impl PrunerMetrics {
             )
             .unwrap(),
         })
+    }
+}
+
+/// Collects `object_version_by_checkpoint` retractions for one prune batch.
+///
+/// Hot objects such as Clock and SuiSystemState can be superseded in every
+/// checkpoint. Staging one range tombstone per supersession produces `K`
+/// nested `[id||0, id||cp_1..K)` tombstones with the same start key. RocksDB's
+/// `FragmentedRangeTombstoneList` fragments those into `K^2 / 2`
+/// `(fragment, seqnum)` pairs because each fragment records every covering
+/// tombstone seqnum; that OOMed mainnet fullnodes during memtable flush and
+/// WAL recovery.
+///
+/// Within one write batch these ranges are nested for a given object, so the
+/// widest range (`max cp`) subsumes all narrower ranges and their intermediate
+/// point deletes. On an equal checkpoint, the `removed` flags are ORed: if any
+/// same-checkpoint retraction removed the object, the row at that checkpoint
+/// must be dropped.
+#[derive(Default)]
+struct Retractions(HashMap<ObjectID, (u64, bool)>);
+
+impl Retractions {
+    fn record(&mut self, id: ObjectID, cp: u64, removed: bool) {
+        self.0
+            .entry(id)
+            .and_modify(|(recorded_cp, recorded_removed)| {
+                if cp > *recorded_cp {
+                    *recorded_cp = cp;
+                    *recorded_removed = removed;
+                } else if cp == *recorded_cp {
+                    *recorded_removed |= removed;
+                }
+            })
+            .or_insert((cp, removed));
+    }
+
+    fn stage(self, batch: &mut Batch, schema: &RpcStoreSchema) -> anyhow::Result<()> {
+        for (id, (cp, removed)) in self.0 {
+            retract_object_version_by_checkpoint(batch, schema, id, cp, removed)?;
+        }
+        Ok(())
     }
 }
 
@@ -319,8 +362,8 @@ fn prune_chunk(
         .network_total_transactions;
 
     let mut batch = db.batch();
+    let mut retractions = Retractions::default();
     let mut objects_deleted: u64 = 0;
-
     // Walk each pruned checkpoint and the transactions it contains.
     // Consecutive summaries' `network_total_transactions` partition
     // `[tx_lo, tx_hi)` into per-checkpoint tx ranges, so the containing
@@ -346,17 +389,18 @@ fn prune_chunk(
             };
             for (id, version) in effects.modified_at_versions() {
                 batch.delete(&schema.objects, &objects::Key { id, version })?;
-                // Retract checkpoint-pinned entries older than this
-                // supersession; the entry at `seq` (the object's final
-                // version in this checkpoint) is kept.
-                retract_object_version_by_checkpoint(&mut batch, schema, id, seq, false)?;
+                // Record checkpoint-pinned entries older than this
+                // supersession for per-batch retraction; the entry at
+                // `seq` (the object's final version in this checkpoint)
+                // is kept.
+                retractions.record(id, seq, false);
                 objects_deleted += 1;
             }
             for (id, version) in effects.all_tombstones() {
                 batch.delete(&schema.objects, &objects::Key { id, version })?;
-                // The object was removed in `seq`: drop its tombstone
-                // entry at `seq` too.
-                retract_object_version_by_checkpoint(&mut batch, schema, id, seq, true)?;
+                // The object was removed in `seq`: record that its
+                // tombstone entry at `seq` must be dropped too.
+                retractions.record(id, seq, true);
                 objects_deleted += 1;
             }
             batch.delete(
@@ -391,6 +435,8 @@ fn prune_chunk(
         &U64Be(chunk_ckpt_hi),
     )?;
 
+    retractions.stage(&mut batch, schema)?;
+
     // Advance the persisted floor atomically with the deletes.
     let new = Watermarks {
         tx_seq_lo: tx_hi,
@@ -409,24 +455,29 @@ fn prune_chunk(
     Ok(new)
 }
 
-/// Retract `object_version_by_checkpoint` rows for one object, given a
-/// transaction at checkpoint `cp` that superseded or removed it, in
+/// Retract `object_version_by_checkpoint` rows for one object, given the
+/// greatest checkpoint in a prune batch that superseded or removed it, in
 /// lockstep with the `objects` CF.
 ///
-/// Deletes every checkpoint-pinned entry for `id` strictly older than
-/// `cp` with a single per-object range delete. Once the floor advances
-/// past `cp`, the entry at `cp` (or a newer one) is the floor a
-/// checkpoint-pinned read resolves to, so the older entries can never
-/// be the answer again. Because the chunk only prunes checkpoints below
-/// the new floor, `cp` is itself below the floor, so the kept entry is
-/// never the answer to an in-range read either; it survives only until
-/// its own superseding transaction is pruned in a later chunk.
+/// Deletes every checkpoint-pinned entry for `id` strictly older than `cp`
+/// with a single per-object range delete. Callers coalesce repeated
+/// supersessions for the same object within a batch before calling this helper:
+/// all staged ranges would share `id||0` as their start key and be nested, so
+/// the greatest `cp` subsumes every narrower range. That includes any
+/// intermediate point delete for a removal below `cp`, because the widest range
+/// covers the removed checkpoint row.
 ///
-/// The entry *at* `cp` is kept for a supersession (it is the object's
-/// final live version in `cp`). When `removed` is set, the object was
-/// deleted or wrapped in `cp`: its tombstone entry at `cp` is dropped
-/// too, since nothing at or after the floor can reference a removed
-/// object.
+/// Once the floor advances past `cp`, the entry at `cp` (or a newer one) is the
+/// floor a checkpoint-pinned read resolves to, so the older entries can never
+/// be the answer again. Because the chunk only prunes checkpoints below the new
+/// floor, `cp` is itself below the floor, so the kept entry is never the answer
+/// to an in-range read either; it survives only until its own superseding
+/// transaction is pruned in a later chunk.
+///
+/// The entry *at* `cp` is kept for a supersession (it is the object's final
+/// live version in `cp`). When `removed` is set, the object was deleted or
+/// wrapped in `cp`: its tombstone entry at `cp` is dropped too, since nothing
+/// at or after the floor can reference a removed object.
 fn retract_object_version_by_checkpoint(
     batch: &mut Batch,
     schema: &RpcStoreSchema,
@@ -461,14 +512,14 @@ fn retract_object_version_by_checkpoint(
 ///   `tx_metadata_by_seq` (the only history CF that still carries them)
 ///   over the pruned range, before that range is deleted.
 /// - `object_version_by_checkpoint` — retracted effects-driven through the
-///   same `retract_object_version_by_checkpoint` helper as the standalone
-///   `prune_chunk` (the paired `objects` delete lives in that caller, not
-///   the helper, and the embedded store has no `objects` CF): each effect
-///   carries the checkpoint it was pruned from, so a superseded object
-///   keeps only its supersession-checkpoint row — the anchor a
-///   point-in-time read at the floor resolves to — and a removed object
-///   drops its rows (a later wrap/unwrap re-creation at or above the floor
-///   survives).
+///   same per-batch deduped retraction path as the standalone `prune_chunk`
+///   (the paired `objects` delete lives in that caller, not the helper, and
+///   the embedded store has no `objects` CF): each effect carries the
+///   checkpoint it was pruned from, and repeated retractions for one object
+///   are coalesced to the greatest checkpoint, so a superseded object keeps
+///   only its supersession-checkpoint row — the anchor a point-in-time read at
+///   the floor resolves to — and a removed object drops its rows (a later
+///   wrap/unwrap re-creation at or above the floor survives).
 /// - `transaction_bitmap` / `event_bitmap` — evicted by advancing the
 ///   shared `tx_seq` floor so their compaction filters drop fully-pruned
 ///   buckets on the next natural background compaction.
@@ -503,7 +554,7 @@ pub fn prune_history_cohort(
     }
 
     let mut batch = db.batch();
-
+    let mut retractions = Retractions::default();
     // Unindex the digest reverse map for the pruned `tx_seq` range. The
     // digests live in `tx_metadata_by_seq`; iterate it (seeking to the
     // first present row) rather than point-getting each `tx_seq`, so a
@@ -516,21 +567,23 @@ pub fn prune_history_cohort(
     batch.delete_range(&schema.tx_metadata_by_seq, &U64Be(tx_lo), &U64Be(tx_hi))?;
 
     // Retract `object_version_by_checkpoint` for every object the pruned
-    // checkpoints superseded or removed, reusing the same effects-driven
-    // helper as the standalone `prune_chunk` (its paired `objects` delete
-    // lives in that caller, not the helper, and the embedded store has no
-    // `objects` CF). Each effect carries the checkpoint it was pruned from,
-    // so the retraction keeps each object's anchor at its true supersession
-    // checkpoint -- the row a read pinned at the floor resolves to -- and
-    // drops the older ones; a removed object drops its tombstone too.
+    // checkpoints superseded or removed, reusing the same per-batch deduped
+    // effects-driven path as the standalone `prune_chunk` (its paired
+    // `objects` delete lives in that caller, not the helper, and the embedded
+    // store has no `objects` CF). Each effect carries the checkpoint it was
+    // pruned from, and repeated retractions for one object are coalesced to the
+    // greatest checkpoint, so the retraction keeps each object's anchor at its
+    // true latest supersession checkpoint and drops the older ones; a removed
+    // object drops its tombstone too.
     for (checkpoint, effects) in effects {
         for (id, _version) in effects.modified_at_versions() {
-            retract_object_version_by_checkpoint(&mut batch, schema, id, *checkpoint, false)?;
+            retractions.record(id, *checkpoint, false);
         }
         for (id, _version) in effects.all_tombstones() {
-            retract_object_version_by_checkpoint(&mut batch, schema, id, *checkpoint, true)?;
+            retractions.record(id, *checkpoint, true);
         }
     }
+    retractions.stage(&mut batch, schema)?;
 
     // Advance the persisted floor atomically with the deletes, taking
     // the monotonic max on each axis so a stale lower floor never
@@ -705,6 +758,71 @@ mod tests {
                 .unwrap();
         }
         batch.commit().unwrap();
+    }
+
+    fn seed_checkpoint_versions(
+        db: &Db,
+        schema: &RpcStoreSchema,
+        id: ObjectID,
+        rows: &[(u64, u64)],
+    ) {
+        let mut batch = db.batch();
+        for &(checkpoint, version) in rows {
+            let (k, v) = object_version_by_checkpoint::store(
+                id,
+                checkpoint,
+                sui_types::base_types::SequenceNumber::from_u64(version),
+            );
+            batch
+                .put(&schema.object_version_by_checkpoint, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+    }
+
+    #[test]
+    fn retractions_stage_widest_range_per_object() {
+        let (_dir, db, schema) = fresh_db();
+        let obj = TestCheckpointBuilder::derive_object_id(0);
+        seed_checkpoint_versions(&db, &schema, obj, &[(0, 1), (1, 2), (2, 3)]);
+
+        let mut retractions = Retractions::default();
+        retractions.record(obj, 1, true);
+        retractions.record(obj, 2, false);
+        let mut batch = db.batch();
+        retractions.stage(&mut batch, &schema).unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj, 1).unwrap(),
+            None,
+            "the widest range must cover lower-checkpoint removals",
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj, 2).unwrap(),
+            Some(sui_types::base_types::SequenceNumber::from_u64(3)),
+            "a lower removed=true retraction must not delete the latest anchor",
+        );
+    }
+
+    #[test]
+    fn retractions_or_removed_on_equal_checkpoint() {
+        let (_dir, db, schema) = fresh_db();
+        let obj = TestCheckpointBuilder::derive_object_id(0);
+        seed_checkpoint_versions(&db, &schema, obj, &[(0, 1), (2, 3)]);
+
+        let mut retractions = Retractions::default();
+        retractions.record(obj, 2, false);
+        retractions.record(obj, 2, true);
+        let mut batch = db.batch();
+        retractions.stage(&mut batch, &schema).unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj, 2).unwrap(),
+            None,
+            "same-checkpoint removals must drop the checkpoint row",
+        );
     }
 
     #[test]
