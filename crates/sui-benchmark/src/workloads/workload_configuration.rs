@@ -8,7 +8,7 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWorkloadBuilder};
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
-use crate::workloads::gas_double_spend::GasDoubleSpendWorkloadBuilder;
+use crate::workloads::gas_double_spend::{GasDoubleSpendSubmission, GasDoubleSpendWorkloadBuilder};
 use crate::workloads::party::PartyWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::slow::SlowWorkloadBuilder;
@@ -62,6 +62,7 @@ pub struct WorkloadConfig {
     pub num_contested_objects: u64,
     pub randomized_transaction_concurrency: u64,
     pub gas_double_spend_copies: usize,
+    pub gas_double_spend_submission: GasDoubleSpendSubmission,
     pub target_qps: u64,
     pub in_flight_ratio: u64,
     pub duration: Interval,
@@ -103,6 +104,7 @@ impl WorkloadConfiguration {
                 shared_counter_max_tip,
                 num_contested_objects,
                 gas_double_spend_copies,
+                gas_double_spend_submission,
                 batch_payment_size,
                 adversarial_cfg,
                 expected_failure_type,
@@ -183,6 +185,10 @@ impl WorkloadConfiguration {
                         num_contested_objects: num_contested_objects[i],
                         randomized_transaction_concurrency: 4,
                         gas_double_spend_copies: gas_double_spend_copies[i],
+                        gas_double_spend_submission: GasDoubleSpendSubmission::from_str(
+                            &gas_double_spend_submission[i],
+                        )
+                        .unwrap(),
                         target_qps: target_qps[i],
                         in_flight_ratio: in_flight_ratio[i],
                         duration: duration[i],
@@ -290,6 +296,7 @@ impl WorkloadConfiguration {
             num_contested_objects: _,
             randomized_transaction_concurrency,
             gas_double_spend_copies,
+            gas_double_spend_submission,
             target_qps,
             in_flight_ratio,
             duration,
@@ -447,6 +454,7 @@ impl WorkloadConfiguration {
             in_flight_ratio,
             gas_double_spend_copies,
             reference_gas_price,
+            gas_double_spend_submission,
             duration,
             group,
         );
