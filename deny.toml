@@ -64,6 +64,15 @@ ignore = [
     # `http-types` ASCII invariant notice, no safe upgrade — dev-dependency only,
     # via wiremock 0.5 test mocks; not used to construct auth headers
     "RUSTSEC-2026-0174",
+    # quick-xml 0.38: quadratic duplicate-attribute check (0194) and unbounded
+    # namespace-declaration allocation DoS (0195). Fixed only in quick-xml >= 0.41,
+    # but quick-xml is transitive via object_store, whose latest release (0.14.0)
+    # still requires ^0.40 — no upgrade path yet. In Sui, quick-xml only parses
+    # XML API responses from cloud storage providers (S3/GCS/Azure) via
+    # object_store, not attacker-controlled input. Remove once object_store
+    # releases with quick-xml >= 0.41.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
