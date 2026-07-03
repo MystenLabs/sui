@@ -227,6 +227,71 @@ impl Database {
         }
     }
 
+    /// Returns whether `key` exists, without materializing the value. On tidehunter
+    /// this uses the native `exists` (an index/bloom presence check), which avoids
+    /// the value-record read that `get` performs and is therefore much cheaper.
+    fn contains(
+        &self,
+        cf: &ColumnFamily,
+        key: &[u8],
+        readopts: &ReadOptions,
+    ) -> Result<bool, TypedStoreError> {
+        match (&self.storage, cf) {
+            (Storage::Rocks(db), ColumnFamily::Rocks(_)) => {
+                let rocks_cf = cf.rocks_cf(db);
+                // `key_may_exist_cf_opt` can return false positives but never false
+                // negatives, so it short-circuits the common absent case before the
+                // real point lookup.
+                Ok(db.underlying.key_may_exist_cf_opt(&rocks_cf, key, readopts)
+                    && db
+                        .underlying
+                        .get_pinned_cf_opt(&rocks_cf, key, readopts)
+                        .map_err(typed_store_err_from_rocks_err)?
+                        .is_some())
+            }
+            (Storage::InMemory(db), ColumnFamily::InMemory(cf_name)) => {
+                Ok(db.get(cf_name, key).is_some())
+            }
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
+                .exists(*ks, &transform_th_key(key, prefix))
+                .map_err(typed_store_error_from_th_error),
+            _ => Err(TypedStoreError::RocksDBError(
+                "typed store invariant violation".to_string(),
+            )),
+        }
+    }
+
+    /// Multi-key variant of [`Self::contains`]. On tidehunter each key uses the
+    /// native `exists` presence check, avoiding the value-record reads that
+    /// `multi_get` performs. Other backends answer via `multi_get`.
+    fn multi_contains<I, K>(
+        &self,
+        cf: &ColumnFamily,
+        keys: I,
+        readopts: &ReadOptions,
+    ) -> Result<Vec<bool>, TypedStoreError>
+    where
+        I: IntoIterator<Item = K>,
+        K: AsRef<[u8]>,
+    {
+        match (&self.storage, cf) {
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => keys
+                .into_iter()
+                .map(|k| {
+                    db.exists(*ks, &transform_th_key(k.as_ref(), prefix))
+                        .map_err(typed_store_error_from_th_error)
+                })
+                .collect(),
+            _ => self
+                .multi_get(cf, keys, readopts)
+                .into_iter()
+                .map(|r| r.map(|v| v.is_some()))
+                .collect(),
+        }
+    }
+
     fn multi_get<I, K>(
         &self,
         cf: &ColumnFamily,
@@ -355,24 +420,6 @@ impl Database {
         fail_point!("put-cf-after");
         #[allow(clippy::let_and_return)]
         ret
-    }
-
-    pub fn key_may_exist_cf<K: AsRef<[u8]>>(
-        &self,
-        cf_name: &str,
-        key: K,
-        readopts: &ReadOptions,
-    ) -> bool {
-        match &self.storage {
-            // [`rocksdb::DBWithThreadMode::key_may_exist_cf`] can have false positives,
-            // but no false negatives. We use it to short-circuit the absent case
-            Storage::Rocks(rocks) => {
-                rocks
-                    .underlying
-                    .key_may_exist_cf_opt(&rocks_cf(rocks, cf_name), key, readopts)
-            }
-            _ => true,
-        }
     }
 
     pub(crate) fn write_opt_internal(
@@ -1699,12 +1746,8 @@ where
     #[instrument(level = "trace", skip_all, err)]
     fn contains_key(&self, key: &K) -> Result<bool, TypedStoreError> {
         let key_buf = be_fix_int_ser(key);
-        let readopts = self.opts.readopts();
-        Ok(self.db.key_may_exist_cf(&self.cf, &key_buf, &readopts)
-            && self
-                .db
-                .get(&self.column_family, &key_buf, &readopts)?
-                .is_some())
+        self.db
+            .contains(&self.column_family, &key_buf, &self.opts.readopts())
     }
 
     #[instrument(level = "trace", skip_all, err)]
@@ -1715,8 +1758,27 @@ where
     where
         J: Borrow<K>,
     {
-        let values = self.multi_get_pinned(keys)?;
-        Ok(values.into_iter().map(|v| v.is_some()).collect())
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_multiget_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let perf_ctx = if self.multiget_sample_interval.sample() {
+            Some(RocksDBPerfContext)
+        } else {
+            None
+        };
+        let keys_bytes = keys.into_iter().map(|k| be_fix_int_ser(k.borrow()));
+        let result = self
+            .db
+            .multi_contains(&self.column_family, keys_bytes, &self.opts.readopts());
+        if perf_ctx.is_some() {
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
+        }
+        result
     }
 
     #[instrument(level = "trace", skip_all, err)]
