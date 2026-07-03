@@ -2613,6 +2613,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // for this tx for DoS protection.
                 if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                     let digest = tx.digest();
+                    debug!("Processing transaction: {}", digest);
+
                     if let Some((spam_weight, submitter_client_addrs)) = self
                         .epoch_store
                         .submitted_transaction_cache
@@ -2669,7 +2671,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 }
 
                 if parsed.rejected {
-                    if parsed.transaction.is_user_transaction() {
+                    if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
+                        let digest = tx.digest();
+                        debug!("Transaction rejected: {}", digest);
                         status_updates.push((position, ConsensusTxStatus::Rejected));
                         num_rejected_user_transactions[author] += 1;
                     }
@@ -2798,6 +2802,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // Record the concrete input error as the reject reason so effects
                         // waiters get a terminal, non-retriable error instead of a bare
                         // Dropped with no reason (which clients treat as retriable).
+                        debug!(
+                            "Dropping transaction due to invalid input obejcts: {}",
+                            tx.digest()
+                        );
                         if let Err(e) = tx.transaction_data().input_objects() {
                             self.epoch_store
                                 .set_rejection_vote_reason(position, &e.into());
