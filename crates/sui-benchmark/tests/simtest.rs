@@ -21,6 +21,7 @@ mod test {
     use sui_benchmark::workloads::benchmark_move_base_dir;
     use sui_benchmark::workloads::composite::CompositeWorkloadConfig;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
+    use sui_benchmark::workloads::gas_double_spend::GasDoubleSpendSubmission;
     use sui_benchmark::workloads::workload::ExpectedFailureType;
     use sui_benchmark::workloads::workload_configuration::{
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
@@ -1070,6 +1071,9 @@ mod test {
         num_contested_objects: u64,
         composite_weight: u32,
         composite_config: Option<CompositeWorkloadConfig>,
+        gas_double_spend_weight: u32,
+        gas_double_spend_copies: usize,
+        gas_double_spend_submission: GasDoubleSpendSubmission,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -1100,6 +1104,9 @@ mod test {
                 num_contested_objects: 2,
                 composite_weight: 1,
                 composite_config: Some(CompositeWorkloadConfig::balanced()),
+                gas_double_spend_weight: 0,
+                gas_double_spend_copies: 2,
+                gas_double_spend_submission: GasDoubleSpendSubmission::default(),
             }
         }
     }
@@ -1244,7 +1251,7 @@ mod test {
             party: config.party_weight,
             conflicting_transfer: config.conflicting_transfer_weight,
             composite: config.composite_weight,
-            gas_double_spend: 0,
+            gas_double_spend: config.gas_double_spend_weight,
         };
 
         let workload_config = WorkloadConfig {
@@ -1260,7 +1267,8 @@ mod test {
             shared_counter_max_tip,
             num_contested_objects: config.num_contested_objects,
             randomized_transaction_concurrency: config.randomized_transaction_concurrency,
-            gas_double_spend_copies: 2,
+            gas_double_spend_copies: config.gas_double_spend_copies,
+            gas_double_spend_submission: config.gas_double_spend_submission,
             target_qps,
             in_flight_ratio,
             duration,
