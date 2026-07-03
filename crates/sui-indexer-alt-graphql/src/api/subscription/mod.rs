@@ -8,9 +8,9 @@ use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use futures::StreamExt;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 
 use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::uint53::UInt53;
@@ -20,16 +20,30 @@ use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::EventCursor;
 use crate::api::types::event::filter::EventFilter;
-use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::config::Limits;
 use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
 use crate::scope::Scope;
 use crate::task::streaming::StreamingPackageStore;
 use crate::task::streaming::SubscriptionBroadcast;
 use crate::task::streaming::broadcast_error;
+
+mod transactions;
+
+use transactions::ResumeFrom;
+use transactions::transactions_stream;
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("At most one of `after` or `afterCheckpoint` can be specified")]
+    MutuallyExclusiveResume,
+
+    #[error("Invalid `after` cursor: {0}")]
+    InvalidCursor(String),
+}
 
 #[derive(Default)]
 pub struct Subscription;
@@ -90,6 +104,8 @@ impl Subscription {
 
     /// Subscribe to transactions as they are finalized, with optional filtering.
     ///
+    /// Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number), but not both, to resume from a known point. The subscription first backfills the matching transactions after that point via the scanning API, then continues with the live stream.
+    ///
     /// Each matching transaction is yielded individually as it appears in finalized
     /// checkpoints. Transactions are ordered by checkpoint, then by position within
     /// the checkpoint.
@@ -99,51 +115,47 @@ impl Subscription {
         &self,
         ctx: &Context<'_>,
         filter: Option<TransactionFilter>,
+        after: Option<String>,
+        after_checkpoint: Option<UInt53>,
     ) -> Result<
         impl futures::Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>>,
-        RpcError,
+        RpcError<Error>,
     > {
+        // `after` (resume from a specific transaction) and `afterCheckpoint` (resume from a
+        // checkpoint) are distinct resume modes, not bounds to reconcile, so only one is allowed.
+        if after.is_some() && after_checkpoint.is_some() {
+            return Err(bad_user_input(Error::MutuallyExclusiveResume));
+        }
+
         let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
+        let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
+        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
 
         let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
-        let mut receiver = broadcast.broadcaster().resubscribe();
         let filter = filter.unwrap_or_default();
 
-        Ok(async_stream::stream! {
-            loop {
-                match receiver.recv().await {
-                    Ok(processed) => {
-                        let scope = Scope::for_streamed_checkpoint(
-                            package_store.clone(),
-                            resolver_limits.clone(),
-                            processed.clone(),
-                        );
-                        // TODO(DVX-2050): Pre-filter checkpoints using bloom filters
-                        // before evaluating exact matches, to skip checkpoints with
-                        // no matching transactions.
-                        for tx in &processed.transactions {
-                            if !filter.matches(&tx.contents) {
-                                continue;
-                            }
-                            let cursor = CTransaction::new(OpaqueCursor::new(CursorToken::item(Position::Transactions {
-                                checkpoint: processed.summary.sequence_number,
-                                tx_seq: tx.tx_sequence_number,
-                            })))
-                            .encode_cursor();
-                            yield Transaction::with_contents(scope.clone(), tx.contents.clone())
-                                .map(|transaction| Edge::new(cursor, transaction));
-                        }
-                    }
-                    Err(e) => {
-                        yield Err(broadcast_error(e));
-                        break;
-                    }
-                }
-            }
-        })
+        // Decode `after` here so a bad cursor surfaces as `BadUserInput`. Re-encode to the server's
+        // opaque bytes, the form the scan resumes from.
+        let resume = if let Some(cursor) = after {
+            let opaque = OpaqueCursor::<CursorToken>::decode_cursor(&cursor)
+                .map_err(|_| bad_user_input(Error::InvalidCursor(cursor)))?;
+            Some(ResumeFrom::Cursor(opaque.encode()))
+        } else {
+            after_checkpoint.map(|cp| ResumeFrom::Checkpoint(u64::from(cp)))
+        };
+
+        Ok(transactions_stream(
+            reader.clone(),
+            broadcast.clone(),
+            config.clone(),
+            package_store,
+            resolver_limits,
+            filter,
+            resume,
+        ))
     }
 
     /// Subscribe to events as they are emitted, with optional filtering.

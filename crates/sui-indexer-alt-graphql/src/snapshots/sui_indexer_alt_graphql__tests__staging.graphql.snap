@@ -4153,13 +4153,15 @@ type Subscription {
 	"""
 	Subscribe to transactions as they are finalized, with optional filtering.
 	
+	Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number), but not both, to resume from a known point. The subscription first backfills the matching transactions after that point via the scanning API, then continues with the live stream.
+	
 	Each matching transaction is yielded individually as it appears in finalized
 	checkpoints. Transactions are ordered by checkpoint, then by position within
 	the checkpoint.
 	
 	This subscription is not yet available for use.
 	"""
-	transactions(filter: TransactionFilter): TransactionEdge!
+	transactions(filter: TransactionFilter, after: String, afterCheckpoint: UInt53): TransactionEdge!
 }
 
 """
