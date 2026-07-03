@@ -3762,6 +3762,83 @@ async fn test_simulate_object_funds_insufficient() {
     );
 }
 
+/// Same as `test_simulate_object_funds_sufficient`, but with the in-execution funds check enabled.
+/// This exercises the in-VM path (`check_sufficient_object_funds` native → `check_system_object_available`)
+/// under simulation: the accumulator-root version is sourced from the object store by the dev-inspect
+/// path rather than from consensus assignment. Before that support existed, simulating any
+/// object-funds withdrawal with the flag on tripped the "no assigned version" guard.
+#[sim_test]
+async fn test_simulate_object_funds_sufficient_in_execution() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(1000).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false, false)
+        .await
+        .unwrap();
+    assert!(result.transaction.effects.status().is_ok());
+}
+
+/// The in-execution counterpart to `test_simulate_object_funds_insufficient`. With the flag on, an
+/// oversized withdrawal is rejected by the in-VM native rather than the post-execution checker. The
+/// key regression this guards: simulation completes and returns a normal failed result rather than
+/// hitting the "no assigned version" guard, because the dev-inspect path pins the accumulator root
+/// at its latest version read from the store.
+#[sim_test]
+async fn test_simulate_object_funds_insufficient_in_execution() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(100).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false, false)
+        .await
+        .unwrap();
+    assert!(
+        result.transaction.effects.status().is_err(),
+        "Expected in-execution object-funds insufficiency to fail simulation"
+    );
+}
+
 /// Whether the accumulator root was recorded into effects as a `ReadOnlyRoot` unchanged-consensus
 /// object — which happens exactly when the in-execution check reads it.
 fn accumulator_recorded_as_read_only_root(effects: &TransactionEffects) -> bool {

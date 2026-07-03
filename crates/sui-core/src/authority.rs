@@ -2723,12 +2723,17 @@ impl AuthorityState {
         };
 
         let loaded_runtime_objects = tracking_store.into_read_objects();
-        let unchanged_loaded_runtime_objects =
+        let mut unchanged_loaded_runtime_objects =
             crate::transaction_outputs::unchanged_loaded_runtime_objects(
                 &transaction,
                 &effects,
                 &loaded_runtime_objects,
             );
+        // Dev-inspect reads the accumulator root only to recover its version for the in-execution
+        // funds check; the tracking store captures that metadata read, but it must not surface as a
+        // loaded runtime object. Real execution never records the accumulator root here — when a
+        // withdrawal actually reads it, it is emitted as an unchanged consensus object instead.
+        unchanged_loaded_runtime_objects.retain(|k| k.0 != SUI_ACCUMULATOR_ROOT_OBJECT_ID);
 
         let object_set = {
             let objects = {

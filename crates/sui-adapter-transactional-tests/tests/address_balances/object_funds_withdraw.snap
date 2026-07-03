@@ -1,0 +1,78 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-37:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7782400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 38-40:
+//# run test::obj_vault::new --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 41-43:
+//# programmable --sender A --inputs 1000 object(2,0)
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+mutated: object(0,0), object(2,0)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 4, lines 45-52:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 53-56:
+//# programmable --sender A --dry-run --inputs object(2,0) 500 @A
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+// Insufficient: withdraw 5000 against a settled 1000. Aborts with E_OBJECT_FUNDS_INSUFFICIENT.
+mutated: object(0,0), object(2,0)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 500), (object(5,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 500)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 6, lines 57-62:
+//# programmable --sender A --dry-run --inputs object(2,0) 5000 @A
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+// Cumulative within one transaction: 600 then 600 sums to 1200 > the settled 1000, so the second
+// withdrawal aborts — the in-execution check counts the running total per object, not each
+// withdrawal in isolation.
+Error: expected token //>, got [identifier]
+
+task 7, lines 63-70:
+//# programmable --sender A --dry-run --inputs object(2,0) 600 @A
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+//> 1: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+// A deposit earlier in the same transaction offsets the withdrawal: deposit 500 into the vault, then
+// withdraw 1400. Against the settled 1000 alone the withdrawal is oversized, but the in-transaction
+// deposit raises available funds, so the check compares against the net (1400 - 500 = 900 <= 1000)
+// and succeeds.
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("check_sufficient_object_funds") }, 2) in command 1
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("check_sufficient_object_funds") }, 2) in command 1
+
+task 8, lines 71-77:
+//# programmable --sender A --dry-run --inputs 500 object(2,0) 1400 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+//> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
+// Same shape, but the deposit does not fully cover the excess: deposit 500, withdraw 1600, net
+// 1100 > the settled 1000, so it still aborts.
+mutated: object(0,0), object(2,0)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 900), (object(5,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1400)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 9, lines 78-81:
+//# programmable --sender A --dry-run --inputs 500 object(2,0) 1600 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+//> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("check_sufficient_object_funds") }, 2) in command 2
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("check_sufficient_object_funds") }, 2) in command 2
