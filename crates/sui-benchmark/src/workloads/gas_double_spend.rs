@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, num::NonZeroUsize, sync::Arc};
+use std::{fmt, num::NonZeroUsize, str::FromStr, sync::Arc};
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use tracing::{debug, warn};
 
@@ -23,12 +24,52 @@ use sui_types::{
     transaction::Transaction,
 };
 
+/// How the conflicting copies of a double-spend op are submitted to validators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GasDoubleSpendSubmission {
+    /// Submit each copy independently through the normal transaction path so they race
+    /// against the gas-object lock as separate submissions. This is the default and the
+    /// cleanest way to observe per-copy conflicts.
+    #[default]
+    Direct,
+    /// Pack all copies into a single soft bundle. Soft bundles are not atomic, so the copies
+    /// still contend at execution; this exercises the case where conflicting transactions are
+    /// co-submitted in one bundle.
+    SoftBundle,
+}
+
+impl FromStr for GasDoubleSpendSubmission {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "direct" => Ok(GasDoubleSpendSubmission::Direct),
+            "soft-bundle" | "soft_bundle" | "softbundle" => {
+                Ok(GasDoubleSpendSubmission::SoftBundle)
+            }
+            other => Err(anyhow!(
+                "invalid gas double spend submission mode '{other}'; expected 'direct' or 'soft-bundle'"
+            )),
+        }
+    }
+}
+
+impl fmt::Display for GasDoubleSpendSubmission {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GasDoubleSpendSubmission::Direct => write!(f, "direct"),
+            GasDoubleSpendSubmission::SoftBundle => write!(f, "soft-bundle"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct GasDoubleSpendPayload {
     gas: Gas,
     recipient: SuiAddress,
     copies_per_object: usize,
     reference_gas_price: u64,
+    submission: GasDoubleSpendSubmission,
 }
 
 impl GasDoubleSpendPayload {
@@ -74,15 +115,27 @@ impl Payload for GasDoubleSpendPayload {
     }
 
     fn max_soft_bundles(&self) -> NonZeroUsize {
-        NonZeroUsize::new(self.copies_per_object).unwrap()
+        match self.submission {
+            // Direct submission ignores bundling; each copy is submitted on its own.
+            GasDoubleSpendSubmission::Direct => NonZeroUsize::new(self.copies_per_object).unwrap(),
+            // Keep every copy in a single bundle so they contend within one soft bundle.
+            GasDoubleSpendSubmission::SoftBundle => NonZeroUsize::new(1).unwrap(),
+        }
     }
 
     fn max_soft_bundle_size(&self) -> NonZeroUsize {
-        NonZeroUsize::new(1).unwrap()
+        match self.submission {
+            GasDoubleSpendSubmission::Direct => NonZeroUsize::new(1).unwrap(),
+            // The bundle must be large enough to hold all copies. `copies_per_object` should stay
+            // within the protocol's soft bundle size limit, otherwise the whole bundle is rejected.
+            GasDoubleSpendSubmission::SoftBundle => {
+                NonZeroUsize::new(self.copies_per_object).unwrap()
+            }
+        }
     }
 
     fn use_direct_batch_submission(&self) -> bool {
-        true
+        matches!(self.submission, GasDoubleSpendSubmission::Direct)
     }
 
     async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
@@ -161,11 +214,15 @@ impl fmt::Display for GasDoubleSpendPayload {
     }
 }
 
+/// Builds the gas double-spend workload. Each payload owns a single gas coin and
+/// submits `copies_per_object` conflicting transactions that all try to spend that
+/// coin, so at most one can succeed and the rest are expected to hit lock conflicts.
 #[derive(Debug)]
 pub struct GasDoubleSpendWorkloadBuilder {
     num_payloads: u64,
     copies_per_object: usize,
     reference_gas_price: u64,
+    submission: GasDoubleSpendSubmission,
 }
 
 impl GasDoubleSpendWorkloadBuilder {
@@ -176,10 +233,14 @@ impl GasDoubleSpendWorkloadBuilder {
         in_flight_ratio: u64,
         copies_per_object: usize,
         reference_gas_price: u64,
+        submission: GasDoubleSpendSubmission,
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
+        // At least two copies are required for a spend to actually conflict.
         let copies_per_object = copies_per_object.max(2);
+        // Each op emits `copies_per_object` transactions, so scale the target down by
+        // that factor to keep the total submitted tx rate aligned with `target_qps`.
         let target_qps =
             (workload_weight * target_qps as f32 / copies_per_object as f32).ceil() as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -200,6 +261,7 @@ impl GasDoubleSpendWorkloadBuilder {
                         num_payloads: max_ops,
                         copies_per_object,
                         reference_gas_price,
+                        submission,
                     },
                 )),
             })
@@ -214,8 +276,12 @@ impl WorkloadBuilder<dyn Payload> for GasDoubleSpendWorkloadBuilder {
     }
 
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
+        // Fund each coin to cover the successful transfer plus the computation cost of
+        // every conflicting copy, since all copies are charged before conflicts resolve.
         let amount =
             MAX_GAS_FOR_TESTING + ESTIMATED_COMPUTATION_COST * self.copies_per_object as u64;
+        // One dedicated coin per payload, each with its own fresh keypair, so that a
+        // payload's copies contend only with each other and never across payloads.
         let mut configs = vec![];
         for _ in 0..self.num_payloads {
             let (address, keypair): (SuiAddress, AccountKeyPair) = get_key_pair();
@@ -237,6 +303,7 @@ impl WorkloadBuilder<dyn Payload> for GasDoubleSpendWorkloadBuilder {
             payload_gas,
             copies_per_object: self.copies_per_object,
             reference_gas_price: self.reference_gas_price,
+            submission: self.submission,
         })
     }
 }
@@ -246,6 +313,7 @@ pub struct GasDoubleSpendWorkload {
     payload_gas: Vec<Gas>,
     copies_per_object: usize,
     reference_gas_price: u64,
+    submission: GasDoubleSpendSubmission,
 }
 
 #[async_trait]
@@ -273,6 +341,7 @@ impl Workload<dyn Payload> for GasDoubleSpendWorkload {
                     recipient: SuiAddress::random_for_testing_only(),
                     copies_per_object: self.copies_per_object,
                     reference_gas_price: self.reference_gas_price,
+                    submission: self.submission,
                 }))
             })
             .collect()
