@@ -322,7 +322,7 @@ pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
 /// General error for a subscription interrupted by a gap or catch-up overflow. The specific reason
 /// is logged at the call site; clients only see that they should reconnect and resume.
 #[cfg(any(feature = "staging", test))]
-fn reconnect_error() -> RpcError {
+pub(crate) fn reconnect_error() -> RpcError {
     anyhow::anyhow!(
         "Subscription interrupted. Please reconnect and resume from your last seen checkpoint."
     )
@@ -612,6 +612,22 @@ fn process_transaction(
     cp_sequence_number: u64,
     tx_sequence_number: u64,
 ) -> anyhow::Result<ProcessedTransaction> {
+    let contents = hydrate_executed_transaction(proto, timestamp_ms, cp_sequence_number)?;
+    Ok(ProcessedTransaction {
+        tx_sequence_number,
+        contents: Arc::new(contents),
+    })
+}
+
+/// Deserialize a proto `ExecutedTransaction` (from a streamed checkpoint or the scanning API) into
+/// native transaction contents, tagging it with the checkpoint `timestamp_ms` and `cp_sequence_number`
+/// the proto belongs to (the proto carries these on `timestamp`/`checkpoint` for scanned txs, and the
+/// caller supplies them from the checkpoint summary for streamed txs).
+pub(crate) fn hydrate_executed_transaction(
+    proto: &ProtoExecutedTransaction,
+    timestamp_ms: u64,
+    cp_sequence_number: u64,
+) -> anyhow::Result<NativeTransactionContents> {
     let transaction_data: TransactionData = proto
         .transaction
         .as_ref()
@@ -656,7 +672,7 @@ fn process_transaction(
         })
         .collect::<anyhow::Result<_>>()?;
 
-    let contents = NativeTransactionContents::ExecutedTransaction(
+    Ok(NativeTransactionContents::ExecutedTransaction(
         sui_indexer_alt_reader::kv_loader::ExecutedTransactionData {
             effects: Box::new(effects),
             events,
@@ -668,12 +684,7 @@ fn process_transaction(
             timestamp_ms: Some(timestamp_ms),
             cp_sequence_number: Some(cp_sequence_number),
         },
-    );
-
-    Ok(ProcessedTransaction {
-        tx_sequence_number,
-        contents: Arc::new(contents),
-    })
+    ))
 }
 
 /// Extract package objects from a streamed checkpoint. Returned packages will be
