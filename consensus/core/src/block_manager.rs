@@ -353,6 +353,70 @@ impl BlockManager {
             }
         }
 
+        // When enabled, treat each transaction-vote target block as an additional acceptance
+        // dependency, reusing the same missing-ancestor machinery: the block is suspended until the
+        // target is present, and missing targets are scheduled for fetching.
+        //
+        // TODO(reviewed follow-up): this suspend-until-present approach is GC-bounded (we only
+        // consider targets with round > gc_round) but does not reject vote targets that are not in
+        // the block's causal history, so a Byzantine author could "stamp" arbitrary in-window refs
+        // and force suspension on blocks that may never arrive (within the GC window). A stricter
+        // rule would REJECT any vote target not reachable from the block's ancestors, which
+        // requires causal-history (ancestor) traversal here. That tighter check is intentionally
+        // deferred to a follow-up after review.
+        if self
+            .context
+            .protocol_config
+            .enforce_transaction_vote_dependencies()
+        {
+            // Dedup targets via a set: a block may vote on the same target more than once, and a
+            // vote target may also be an ancestor (already handled above).
+            let vote_targets = block
+                .transaction_votes()
+                .iter()
+                .map(|vote| vote.block_ref)
+                .filter(|target| target.round == GENESIS_ROUND || target.round > gc_round)
+                .filter(|target| !missing_ancestors.contains(target))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            for (found, target) in dag_state
+                .contains_blocks(vote_targets.clone())
+                .into_iter()
+                .zip_debug_eq(vote_targets.iter())
+            {
+                if !found {
+                    missing_ancestors.insert(*target);
+
+                    self.missing_ancestors
+                        .entry(*target)
+                        .or_default()
+                        .insert(block_ref);
+
+                    let target_hostname = &self.context.committee.authority(target.author).hostname;
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .block_manager_missing_ancestors_by_authority
+                        .with_label_values(&[target_hostname])
+                        .inc();
+
+                    if !self.suspended_blocks.contains_key(target) {
+                        ancestors_to_fetch.insert(*target);
+                        if self.missing_blocks.insert(*target) {
+                            self.context
+                                .metrics
+                                .node_metrics
+                                .block_manager_missing_blocks_by_authority
+                                .with_label_values(&[target_hostname])
+                                .inc();
+                        }
+                    }
+                }
+            }
+        }
+
         // Remove the block ref from the `missing_blocks` - if exists - since we now have received the block. The block
         // might still get suspended, but we won't report it as missing in order to not re-fetch.
         self.missing_blocks.remove(&block.reference());
@@ -613,7 +677,7 @@ mod tests {
 
     use crate::{
         CommitDigest,
-        block::{BlockAPI, VerifiedBlock},
+        block::{BlockAPI, BlockTransactionVotes, TestBlock, VerifiedBlock},
         block_manager::BlockManager,
         commit::TrustedCommit,
         context::Context,
@@ -1192,5 +1256,152 @@ mod tests {
         // If the median based timestamp is enabled then all the blocks should be accepted
         assert_eq!(all_blocks, accepted_blocks);
         assert!(missing.is_empty());
+    }
+
+    /// Builds round-1 blocks (one per authority) rooted at genesis. Returns them as VerifiedBlocks
+    /// in author-index order. The block manager treats genesis ancestors as present, so these
+    /// blocks have a complete causal history and can be accepted directly.
+    fn round_1_blocks(genesis_refs: &[BlockRef]) -> Vec<VerifiedBlock> {
+        (0..4)
+            .map(|author| {
+                let block = TestBlock::new(1, author)
+                    .set_ancestors(genesis_refs.to_vec())
+                    .build();
+                VerifiedBlock::new_for_test(block)
+            })
+            .collect()
+    }
+
+    /// With the enforcement flag ON, a block voting on an ABSENT (non-ancestor) target must be
+    /// suspended, and must be unsuspended once that target arrives.
+    #[tokio::test]
+    async fn enforce_transaction_vote_dependencies_suspends_then_unsuspends() {
+        // GIVEN
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_enforce_transaction_vote_dependencies_for_testing(true);
+        context.protocol_config.set_gc_depth_for_testing(10);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let mut block_manager = BlockManager::new(context.clone(), dag_state.clone());
+
+        let dag_builder = DagBuilder::new(context.clone());
+        let genesis_refs = dag_builder.genesis_block_refs();
+
+        let r1 = round_1_blocks(&genesis_refs);
+
+        // Accept authorities 1, 2, 3 at round 1. Hold back authority 0's round-1 block, which will
+        // be the absent transaction-vote target.
+        let (accepted, _missing) =
+            block_manager.try_accept_blocks(vec![r1[1].clone(), r1[2].clone(), r1[3].clone()]);
+        assert_eq!(accepted.len(), 3);
+
+        // A round-2 block by authority 1 whose ancestors (authorities 1, 2, 3 at round 1) are all
+        // present, so it would normally be accepted. It votes on authority 0's round-1 block, which
+        // is NOT an ancestor and is absent.
+        let vote_target = r1[0].reference();
+        let round_2 = TestBlock::new(2, 1)
+            .set_ancestors(vec![
+                r1[1].reference(),
+                r1[2].reference(),
+                r1[3].reference(),
+            ])
+            .set_transaction_votes(vec![BlockTransactionVotes {
+                block_ref: vote_target,
+                rejects: vec![],
+            }])
+            .build();
+        let round_2 = VerifiedBlock::new_for_test(round_2);
+
+        // WHEN
+        let (accepted, missing) = block_manager.try_accept_blocks(vec![round_2.clone()]);
+
+        // THEN the block is suspended on the absent vote target.
+        assert!(accepted.is_empty());
+        assert!(
+            missing.contains(&vote_target),
+            "absent vote target should be reported as missing"
+        );
+        assert_eq!(
+            block_manager.suspended_blocks(),
+            vec![round_2.reference()],
+            "block should be suspended on its absent vote target"
+        );
+        // The suspension must come from the gated vote-dependency branch, not the normal ancestor
+        // path: authority 0 is NOT an ancestor of round_2, so the only way its missing-ancestor
+        // counter is incremented is by treating the vote target as an acceptance dependency. This
+        // confirms the enforcement path actually ran and was not trivially bypassed.
+        let target_hostname = &context.committee.authority(vote_target.author).hostname;
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .block_manager_missing_ancestors_by_authority
+                .with_label_values(&[target_hostname])
+                .get(),
+            1,
+            "the vote target's author should be recorded as a missing acceptance dependency"
+        );
+
+        // WHEN the vote target arrives.
+        let (accepted, _missing) = block_manager.try_accept_blocks(vec![r1[0].clone()]);
+
+        // THEN both the target and the previously suspended block are accepted.
+        let accepted_refs = accepted.iter().map(|b| b.reference()).collect::<Vec<_>>();
+        assert!(accepted_refs.contains(&vote_target));
+        assert!(accepted_refs.contains(&round_2.reference()));
+        assert!(block_manager.is_empty());
+    }
+
+    /// With the enforcement flag OFF (default), a block is accepted regardless of whether its
+    /// transaction-vote targets are present. Pins behavior-neutrality of the default-off path.
+    #[tokio::test]
+    async fn transaction_vote_dependencies_not_enforced_by_default() {
+        // GIVEN
+        let (context, _key_pairs) = Context::new_for_test(4);
+        assert!(
+            !context
+                .protocol_config
+                .enforce_transaction_vote_dependencies()
+        );
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let mut block_manager = BlockManager::new(context.clone(), dag_state.clone());
+
+        let dag_builder = DagBuilder::new(context.clone());
+        let genesis_refs = dag_builder.genesis_block_refs();
+
+        let r1 = round_1_blocks(&genesis_refs);
+
+        // Accept authorities 1, 2, 3 at round 1, hold back authority 0.
+        let (accepted, _missing) =
+            block_manager.try_accept_blocks(vec![r1[1].clone(), r1[2].clone(), r1[3].clone()]);
+        assert_eq!(accepted.len(), 3);
+
+        // A round-2 block voting on the absent authority-0 round-1 block. With the flag OFF, the
+        // absent vote target is ignored and the block is accepted immediately.
+        let round_2 = TestBlock::new(2, 1)
+            .set_ancestors(vec![
+                r1[1].reference(),
+                r1[2].reference(),
+                r1[3].reference(),
+            ])
+            .set_transaction_votes(vec![BlockTransactionVotes {
+                block_ref: r1[0].reference(),
+                rejects: vec![],
+            }])
+            .build();
+        let round_2 = VerifiedBlock::new_for_test(round_2);
+
+        // WHEN
+        let (accepted, missing) = block_manager.try_accept_blocks(vec![round_2.clone()]);
+
+        // THEN the block is accepted and nothing is missing/suspended.
+        assert_eq!(accepted, vec![round_2.clone()]);
+        assert!(missing.is_empty());
+        assert!(block_manager.is_empty());
     }
 }
