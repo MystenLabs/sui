@@ -1825,6 +1825,17 @@ impl AuthorityPerEpochStore {
         }
     }
 
+    #[cfg(test)]
+    pub fn insert_object_locks_for_test(&self, locks: &[(ObjectRef, TransactionDigest)]) {
+        for (object, digest) in locks {
+            self.tables()
+                .expect("test should not cross epoch boundary")
+                .owned_object_locked_transactions
+                .insert(object, &LockDetailsWrapper::from(*digest))
+                .unwrap();
+        }
+    }
+
     pub fn get_signed_transaction(
         &self,
         tx_digest: &TransactionDigest,

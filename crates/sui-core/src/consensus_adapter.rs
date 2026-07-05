@@ -980,7 +980,8 @@ impl ConsensusAdapter {
 
     /// Waits until every consensus position reaches a terminal status (Finalized, Rejected or Dropped).
     /// Returns `None` if any position expired from the status cache before its status was read,
-    /// in which case the submission's outcome is unknown and the caller should resubmit.
+    /// in which case the submit loop treats the sequenced block as already handled and settles with
+    /// `StatusExpired`.
     async fn wait_for_position_statuses(
         &self,
         consensus_positions: &[ConsensusPosition],

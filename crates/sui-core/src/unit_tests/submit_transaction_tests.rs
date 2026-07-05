@@ -554,6 +554,45 @@ async fn test_submit_transaction_consensus_message_processed_with_stale_inputs()
     };
 }
 
+// Test that resubmitting a consensus-processed transaction whose owned input is locked
+// by a different transaction (a dropped conflict loser whose winner has not executed
+// yet, so version validation alone still passes) returns the terminal
+// ObjectLockConflict instead of the retriable TransactionProcessing suppression.
+#[tokio::test]
+async fn test_submit_transaction_consensus_message_processed_with_lock_conflict() {
+    let test_context = TestContext::new().await;
+    let epoch_store = test_context.state.epoch_store_for_testing();
+
+    let loser = test_context.build_test_transaction();
+    let loser_digest = *loser.digest();
+    let request = test_context.build_submit_request(loser);
+
+    // The winner holds the epoch lock on the shared gas object but has not executed.
+    let winner_digest = sui_types::digests::TransactionDigest::random();
+    epoch_store.insert_object_locks_for_test(&[(test_context.gas_object_ref, winner_digest)]);
+    epoch_store.test_insert_user_signature(loser_digest, vec![]);
+
+    let response = test_context
+        .client
+        .submit_transaction(request, None)
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 1);
+    match &response.results[0] {
+        SubmitTxResult::Rejected { error } => {
+            assert!(
+                matches!(
+                    error.as_inner(),
+                    SuiErrorKind::ObjectLockConflict { pending_transaction, .. }
+                        if *pending_transaction == winner_digest
+                ),
+                "expected lock-conflict rejection, got: {error}"
+            );
+        }
+        other => panic!("Expected Rejected response, got {other:?}"),
+    };
+}
+
 #[tokio::test]
 async fn test_submit_transaction_wrong_epoch() {
     let test_context = TestContext::new().await;

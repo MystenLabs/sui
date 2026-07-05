@@ -2699,6 +2699,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             .with_label_values(&["invalid_input"])
                             .inc();
                         status_updates.push((position, ConsensusTxStatus::Dropped));
+                        // Record the concrete input error as the reject reason so effects
+                        // waiters get a terminal, non-retriable error instead of a bare
+                        // Dropped with no reason (which clients treat as retriable).
+                        if let Err(e) = tx.transaction_data().input_objects() {
+                            self.epoch_store
+                                .set_rejection_vote_reason(position, &e.into());
+                        }
                         dropped_transaction_keys.push(parsed.transaction.key());
                         debug_fatal!("Invalid input objects for transaction {}", tx.digest());
                         continue;
