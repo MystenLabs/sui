@@ -2601,6 +2601,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // Note: we no longer have to check protocol_config.ignore_execution_time_observations_after_certs_closed()
                         | ConsensusTransactionKind::ExecutionTimeObservation(_)
                         | ConsensusTransactionKind::NewJWKFetched(_, _, _) => {
+                            // Deterministic drop: the reconfig state is derived from prior
+                            // commits, so all validators ignore this transaction. Record a
+                            // terminal status for user transactions so status waiters are
+                            // not leaked — no consensus-processed signal will ever come for
+                            // them, and epoch termination (the only other backstop) can
+                            // itself stall when reconfiguration is stuck.
+                            if parsed.transaction.is_user_transaction() {
+                                status_updates.push((position, ConsensusTxStatus::Dropped));
+                                self.metrics
+                                    .consensus_handler_dropped_transactions
+                                    .with_label_values(&["end_of_epoch"])
+                                    .inc();
+                            }
                             debug!(
                                 "Ignoring consensus transaction {:?} because of end of epoch",
                                 parsed.transaction.key()
@@ -2653,6 +2666,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // In some edge cases, consensus might resend previously seen certificate after EndOfPublish
                         // An honest validator should not send a new transaction after EndOfPublish. Whether the
                         // transaction is duplicate or not, we filter it out here.
+                        // Deterministic drop (the EndOfPublish set is accumulated from
+                        // prior commits): record a terminal status so waiters are not
+                        // leaked, as with the certs-closed drop above.
+                        status_updates.push((position, ConsensusTxStatus::Dropped));
+                        self.metrics
+                            .consensus_handler_dropped_transactions
+                            .with_label_values(&["end_of_publish"])
+                            .inc();
                         warn!(
                             "Ignoring consensus transaction {:?} from authority {:?}, which already sent EndOfPublish message to consensus",
                             author_name.concise(),
@@ -2672,6 +2693,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 {
                     let tx = tx_with_claims.tx();
                     let Some(owned_object_refs) = owned_object_refs_to_lock(tx_with_claims) else {
+                        // Invalid input object error is deterministic across all validators.
+                        self.metrics
+                            .consensus_handler_dropped_transactions
+                            .with_label_values(&["invalid_input"])
+                            .inc();
+                        status_updates.push((position, ConsensusTxStatus::Dropped));
+                        // Record the concrete input error as the reject reason so effects
+                        // waiters get a terminal, non-retriable error instead of a bare
+                        // Dropped with no reason (which clients treat as retriable).
+                        if let Err(e) = tx.transaction_data().input_objects() {
+                            self.epoch_store
+                                .set_rejection_vote_reason(position, &e.into());
+                        }
+                        dropped_transaction_keys.push(parsed.transaction.key());
                         debug_fatal!("Invalid input objects for transaction {}", tx.digest());
                         continue;
                     };
@@ -2692,7 +2727,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         }
                         Err(e) => {
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
-                            self.metrics.consensus_handler_dropped_transactions.inc();
+                            self.metrics
+                                .consensus_handler_dropped_transactions
+                                .with_label_values(&["lock_conflict"])
+                                .inc();
                             status_updates.push((position, ConsensusTxStatus::Dropped));
                             self.epoch_store.set_rejection_vote_reason(position, &e);
                             dropped_transaction_keys.push(parsed.transaction.key());
@@ -3770,6 +3808,7 @@ mod tests {
                 .consensus_handler
                 .metrics
                 .consensus_handler_dropped_transactions
+                .with_label_values(&["lock_conflict"])
                 .get(),
             1
         );
@@ -3815,6 +3854,212 @@ mod tests {
             epoch_store
                 .is_consensus_message_processed(&loser_key)
                 .unwrap()
+        );
+        // The processed notification resolves for the dropped key as well — this is
+        // the signal consensus adapter waiters block on.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            epoch_store.consensus_messages_processed_notify(vec![loser_key]),
+        )
+        .await
+        .expect("processed notification for dropped transaction should resolve")
+        .unwrap();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_rejected_transaction_sets_status_and_is_not_marked_processed() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
+            .skip_rpc_index_init()
+            .skip_genesis_owner_index()
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let transaction =
+            test_user_transaction(&state, sender, &keypair, gas_object, vec![owned_object]).await;
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+        let key = SequencedConsensusTransactionKey::External(consensus_tx.key());
+
+        let round = 100;
+        let commit = TestConsensusCommit::new(vec![consensus_tx], round as u64, 1_000, 10)
+            .with_rejected_indices([0]);
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(commit)
+            .await;
+
+        // The rejected position receives a terminal Rejected status.
+        let block = BlockRef {
+            author: consensus_config::AuthorityIndex::ZERO,
+            round,
+            digest: Default::default(),
+        };
+        assert!(matches!(
+            epoch_store
+                .consensus_tx_status_cache
+                .notify_read_transaction_status(ConsensusPosition {
+                    epoch: epoch_store.epoch(),
+                    block,
+                    index: 0,
+                })
+                .await,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Rejected)
+        ));
+        // Unlike dropped transactions, a rejected transaction must NOT be marked
+        // consensus-processed: rejection is per-position, and the digest must stay
+        // resubmittable within the epoch so a later occurrence can be finalized.
+        assert!(!epoch_store.is_consensus_message_processed(&key).unwrap());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_user_transaction_ignored_at_epoch_close_sets_dropped_status() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
+            .skip_rpc_index_init()
+            .skip_genesis_owner_index()
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let transaction =
+            test_user_transaction(&state, sender, &keypair, gas_object, vec![owned_object]).await;
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+        let key = SequencedConsensusTransactionKey::External(consensus_tx.key());
+
+        // Close the epoch to the point where consensus certs are no longer accepted.
+        {
+            let mut guard = epoch_store.get_reconfig_state_write_lock_guard();
+            guard.close_all_certs();
+        }
+
+        let round = 100;
+        let commit = TestConsensusCommit::new(vec![consensus_tx], round as u64, 1_000, 10);
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(commit)
+            .await;
+
+        // The ignored position receives a terminal Dropped status so submission and
+        // effects waiters are not leaked until epoch termination.
+        let block = BlockRef {
+            author: consensus_config::AuthorityIndex::ZERO,
+            round,
+            digest: Default::default(),
+        };
+        let status = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            epoch_store
+                .consensus_tx_status_cache
+                .notify_read_transaction_status(ConsensusPosition {
+                    epoch: epoch_store.epoch(),
+                    block,
+                    index: 0,
+                }),
+        )
+        .await
+        .expect("transaction ignored at epoch close should receive a terminal status");
+        assert!(matches!(
+            status,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
+        ));
+        assert!(!epoch_store.is_consensus_message_processed(&key).unwrap());
+        assert_eq!(
+            setup
+                .consensus_handler
+                .metrics
+                .consensus_handler_dropped_transactions
+                .with_label_values(&["end_of_epoch"])
+                .get(),
+            1
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_user_transaction_after_end_of_publish_sets_dropped_status() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
+            .skip_rpc_index_init()
+            .skip_genesis_owner_index()
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let transaction =
+            test_user_transaction(&state, sender, &keypair, gas_object, vec![owned_object]).await;
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+        let key = SequencedConsensusTransactionKey::External(consensus_tx.key());
+
+        // Record that this authority (the block author in TestConsensusCommit) already
+        // sent EndOfPublish, without advancing the reconfig state, so the commit below
+        // exercises the post-EndOfPublish author filter rather than the certs-closed one.
+        epoch_store
+            .end_of_publish
+            .try_lock()
+            .unwrap()
+            .insert_generic(state.name, ());
+
+        let round = 100;
+        let commit = TestConsensusCommit::new(vec![consensus_tx], round as u64, 1_000, 10);
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(commit)
+            .await;
+
+        let block = BlockRef {
+            author: consensus_config::AuthorityIndex::ZERO,
+            round,
+            digest: Default::default(),
+        };
+        let status = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            epoch_store
+                .consensus_tx_status_cache
+                .notify_read_transaction_status(ConsensusPosition {
+                    epoch: epoch_store.epoch(),
+                    block,
+                    index: 0,
+                }),
+        )
+        .await
+        .expect("transaction ignored after EndOfPublish should receive a terminal status");
+        assert!(matches!(
+            status,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
+        ));
+        assert!(!epoch_store.is_consensus_message_processed(&key).unwrap());
+        assert_eq!(
+            setup
+                .consensus_handler
+                .metrics
+                .consensus_handler_dropped_transactions
+                .with_label_values(&["end_of_publish"])
+                .get(),
+            1
         );
     }
 

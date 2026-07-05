@@ -27,8 +27,11 @@ pub(crate) enum ConsensusTxStatus {
     // Transaction is dropped post-consensus.
     // This decision must be consistent across all validators.
     //
-    // Currently, only invalid owned object inputs (using stale versions)
-    // can cause a transaction to be dropped without execution.
+    // A transaction is dropped without execution when it has invalid owned object
+    // inputs (stale versions or conflicts with a locked object), or when it is
+    // ignored during epoch close (consensus certs no longer accepted, or its block
+    // author already sent EndOfPublish). All causes are deterministic functions of
+    // the transaction and prior consensus commits.
     Dropped,
 }
 
