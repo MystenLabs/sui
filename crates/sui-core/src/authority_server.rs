@@ -19,7 +19,7 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry,
 };
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
@@ -970,13 +970,96 @@ impl ValidatorService {
 
             // Suppress resubmission of transactions consensus already processed this epoch:
             // executed transactions whose effects details could not be reconstructed above (e.g.
-            // objects pruned), and sequenced-but-deferred transactions. Rejected is imperfect for
-            // the deferred case, but acceptable since well-behaved clients get Executed before
-            // pruning; this mainly sheds continuous resubmissions from faulty clients.
+            // objects pruned), sequenced-but-deferred transactions, and dropped transactions.
             let consensus_key = SequencedConsensusTransactionKey::External(
                 ConsensusTransactionKey::Certificate(tx_digest),
             );
             if epoch_store.is_consensus_message_processed(&consensus_key)? {
+                // Prefer a concrete, non-retriable error over the generic, retriable
+                // TransactionProcessing suppression. A processed-but-unexecuted digest is
+                // commonly a dropped owned-object conflict loser; surfacing the terminal
+                // error lets the client stop retrying instead of polling for effects that
+                // will never come.
+                //
+                // First check the epoch owned-object lock table with the same conflict
+                // logic the consensus handler uses post-consensus. Locks are never
+                // released within an epoch, so this reports the conflict even before the
+                // winner executes, while the loser's input versions still validate as
+                // live.
+                if let Ok(input_objects) = verified_transaction
+                    .tx()
+                    .data()
+                    .transaction_data()
+                    .input_objects()
+                {
+                    let immutable_object_ids = self
+                        .collect_immutable_object_ids(verified_transaction.tx(), state)
+                        .await?;
+                    let owned_object_refs: Vec<_> = input_objects
+                        .iter()
+                        .filter_map(|obj| match obj {
+                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                                if !immutable_object_ids.contains(&obj_ref.0) =>
+                            {
+                                Some(*obj_ref)
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    let existing_locks =
+                        epoch_store.get_owned_object_locks_map(&owned_object_refs)?;
+                    if let Err(error) = epoch_store.try_acquire_owned_object_locks_post_consensus(
+                        &owned_object_refs,
+                        tx_digest,
+                        &HashMap::new(),
+                        &existing_locks,
+                    ) {
+                        debug!(
+                            ?tx_digest,
+                            "handle_submit_transaction: processed transaction rejected on lock conflict: {error}"
+                        );
+                        metrics
+                            .submission_rejected_transactions
+                            .with_label_values(&[error.to_variant_name()])
+                            .inc();
+                        results[idx] = Some(SubmitTxResult::Rejected { error });
+                        continue;
+                    }
+                }
+                // Then revalidate against live state, which surfaces the terminal
+                // stale-version error once the conflict winner has executed.
+                if let Err(error) =
+                    state.handle_vote_transaction(&epoch_store, verified_transaction.tx().clone())
+                {
+                    // The transaction may have executed while being validated (e.g. it was
+                    // deferred rather than dropped).
+                    if let Some(effects) = state
+                        .get_transaction_cache_reader()
+                        .get_executed_effects(&tx_digest)
+                    {
+                        let effects_digest = effects.digest();
+                        if let Ok(executed_data) = self.complete_executed_data(effects).await {
+                            results[idx] = Some(SubmitTxResult::Executed {
+                                effects_digest,
+                                details: Some(executed_data),
+                            });
+                            continue;
+                        }
+                    }
+                    debug!(
+                        ?tx_digest,
+                        "handle_submit_transaction: processed transaction rejected on revalidation: {error}"
+                    );
+                    metrics
+                        .submission_rejected_transactions
+                        .with_label_values(&[error.to_variant_name()])
+                        .inc();
+                    results[idx] = Some(SubmitTxResult::Rejected { error });
+                    continue;
+                }
+                // Validation passed, so this processed digest may still be executable.
+                // Return retriable TransactionProcessing rather than resubmitting it to consensus.
+                // A later client retry can observe effects or a concrete terminal validation error.
                 metrics
                     .submission_suppressed_already_processed
                     .with_label_values(&[req_type])
