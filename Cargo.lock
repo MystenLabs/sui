@@ -16892,6 +16892,7 @@ dependencies = [
  "bytes",
  "fdlimit",
  "futures",
+ "lru 0.10.1",
  "move-core-types",
  "prometheus",
  "prost 0.14.1",

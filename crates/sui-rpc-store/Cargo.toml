@@ -12,6 +12,7 @@ async-trait.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 fdlimit.workspace = true
+lru.workspace = true
 move-core-types.workspace = true
 prometheus.workspace = true
 prost.workspace = true
