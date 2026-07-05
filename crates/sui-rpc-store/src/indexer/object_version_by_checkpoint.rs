@@ -29,11 +29,14 @@
 //!   object's first in-window change ages out.
 
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::ops::Bound;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use anyhow::Context as _;
 use async_trait::async_trait;
+use lru::LruCache;
 use sui_consistent_store::Batch;
 use sui_consistent_store::Db;
 use sui_consistent_store::DbMap;
@@ -57,6 +60,22 @@ use crate::indexer::checkpoint_input_objects;
 use crate::indexer::checkpoint_output_objects;
 use crate::schema::object_version_by_checkpoint;
 
+/// Upper bound on the number of object ids the [floor cache] holds.
+///
+/// The cache only needs to keep the objects that recur as input floor
+/// candidates -- the hot set (`0x5`, `0x6`, popular shared objects and
+/// packages) that would otherwise pay a redundant `iter_rev` scan on
+/// every checkpoint they appear in. An LRU keeps exactly that hot set
+/// resident and evicts one-off objects, so this bounds the cache to
+/// order-of-a-hundred-MB regardless of how wide the backfill window
+/// `(L, T]` is (an unbounded set over a large window could reach several
+/// GB). A miss (including every miss after an eviction or a restart)
+/// simply falls back to the durable scan, so the capacity is a pure
+/// performance knob with no bearing on correctness.
+///
+/// [floor cache]: ObjectVersionByCheckpoint::floored
+const FLOOR_CACHE_CAPACITY: usize = 1_000_000;
+
 /// Pipeline marker for `object_version_by_checkpoint`.
 ///
 /// `anchor` is the restore anchor `T`, used two ways: the restore impl
@@ -64,9 +83,28 @@ use crate::schema::object_version_by_checkpoint;
 /// produces floor candidates within the backfill window `[L, T]`
 /// (checkpoints at or below `T`). It is `None` for a from-genesis build
 /// (no restore), which has no window and needs no floor rows.
-#[derive(Default)]
 pub struct ObjectVersionByCheckpoint {
     anchor: Option<u64>,
+
+    /// Objects already resolved as input floor candidates during this
+    /// run: each necessarily has a row at a checkpoint strictly below
+    /// any checkpoint still to be committed (either the synthetic floor
+    /// this pipeline wrote at `(id, 0)`, or the prior in-window row the
+    /// fallback scan found). Consulted in [`commit`](Self::commit) to
+    /// skip the `iter_rev` first-appearance scan for objects that
+    /// recur as inputs -- overwhelmingly the frequently-touched objects
+    /// (`0x5`, `0x6`, ...). Bounded by an LRU (see
+    /// [`FLOOR_CACHE_CAPACITY`]). The [`Mutex`] only guards interior
+    /// mutation behind `&self`; commits are sequential and `process`
+    /// never touches the cache, so it is locked once per batch and never
+    /// contended.
+    floored: Mutex<LruCache<ObjectID, ()>>,
+}
+
+impl Default for ObjectVersionByCheckpoint {
+    fn default() -> Self {
+        Self::with_anchor(None)
+    }
 }
 
 /// One staged write produced by [`process`](ObjectVersionByCheckpoint::process).
@@ -93,16 +131,19 @@ impl ObjectVersionByCheckpoint {
     /// Marker for the restore-driver registration: writes `from_restore`
     /// floor rows at the anchor `checkpoint`.
     pub fn for_restore(checkpoint: u64) -> Self {
-        Self {
-            anchor: Some(checkpoint),
-        }
+        Self::with_anchor(Some(checkpoint))
     }
 
     /// Marker for the tip/backfill registration, carrying the restore
     /// anchor `T` (or `None` for a from-genesis build) so the processor
     /// scopes floor candidates to the backfill window `[L, T]`.
     pub fn with_anchor(anchor: Option<u64>) -> Self {
-        Self { anchor }
+        Self {
+            anchor,
+            floored: Mutex::new(LruCache::new(
+                NonZeroUsize::new(FLOOR_CACHE_CAPACITY).expect("FLOOR_CACHE_CAPACITY is non-zero"),
+            )),
+        }
     }
 }
 
@@ -229,6 +270,12 @@ impl sequential::Handler for ObjectVersionByCheckpoint {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().object_version_by_checkpoint;
 
+        // Lock the floor cache once for the whole batch rather than per
+        // floor row. Commits are sequential and `process` never touches
+        // the cache, so the guard is uncontended; `commit` has no
+        // `.await`, so it never crosses a suspend point.
+        let mut floored = self.floored.lock().expect("floor cache mutex poisoned");
+
         let mut count = 0;
         for row in batch {
             match row {
@@ -249,8 +296,10 @@ impl sequential::Handler for ObjectVersionByCheckpoint {
                     // The processor only emits floor candidates within
                     // the backfill window, so all that is left is to
                     // dedup repeated and re-indexed appearances: only the
-                    // object's first appearance writes the floor row.
-                    if is_first_appearance(cf, *id, *checkpoint)? {
+                    // object's first appearance writes the floor row. The
+                    // cache short-circuits the scan for objects that have
+                    // already appeared this run.
+                    if needs_floor(&mut floored, cf, *id, *checkpoint)? {
                         let (k, v) = object_version_by_checkpoint::store(*id, 0, *version);
                         conn.batch.put(cf, &k, &v)?;
                         count += 1;
@@ -275,6 +324,41 @@ pub(crate) fn restored_anchor(db: &Db) -> anyhow::Result<Option<u64>> {
             Some(restore_state::State::Complete(c)) => Some(c.restored_at),
             _ => None,
         }))
+}
+
+/// Whether object `id`'s synthetic floor row should be written at
+/// `checkpoint`, consulting `cache` before the durable
+/// [`is_first_appearance`] scan.
+///
+/// A cache hit means the object has already been resolved as an input
+/// floor candidate earlier this run, so it necessarily has a row below
+/// `checkpoint` (commits advance monotonically) and is not a first
+/// appearance -- return `false` without touching RocksDB. A miss falls
+/// back to the scan; the object is recorded either way so its next
+/// input appearance hits.
+///
+/// The fallback keeps the result correct when the cache cannot answer:
+/// after a restart (empty cache) or an LRU eviction, the scan finds the
+/// floor row a prior run persisted at `(id, 0)` and returns `false`, so
+/// the row is never rewritten with a newer -- and wrong -- version.
+///
+/// The caller holds the cache lock for the batch, so this takes a plain
+/// `&mut` and stays oblivious to the locking.
+fn needs_floor<R: Reader>(
+    cache: &mut LruCache<ObjectID, ()>,
+    cf: &DbMap<object_version_by_checkpoint::Key, object_version_by_checkpoint::Value, R>,
+    id: ObjectID,
+    checkpoint: u64,
+) -> Result<bool, Error> {
+    // `get` rather than `contains` so a hit promotes the entry to
+    // most-recently-used, keeping the hot set (`0x5`, `0x6`, ...)
+    // resident instead of aging out under churn from one-off objects.
+    if cache.get(&id).is_some() {
+        return Ok(false);
+    }
+    let first = is_first_appearance(cf, id, checkpoint)?;
+    cache.put(id, ());
+    Ok(first)
 }
 
 /// Whether `checkpoint` is the object's first appearance in the index:
@@ -546,6 +630,71 @@ mod tests {
         // queried checkpoint, so it must not count as a prior row.
         put(&schema, &db, id, 100, 9);
         assert!(is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
+    }
+
+    fn cache(capacity: usize) -> LruCache<ObjectID, ()> {
+        LruCache::new(NonZeroUsize::new(capacity).unwrap())
+    }
+
+    /// Once an object has been resolved as a floor candidate, the next
+    /// resolution short-circuits on the cache: `needs_floor` returns
+    /// `false` without a scan, even though the durable state (no prior
+    /// row) would otherwise report a first appearance.
+    #[test]
+    fn needs_floor_short_circuits_after_first_resolution() {
+        let (_dir, _db, schema) = fresh_db();
+        let cf = &schema.object_version_by_checkpoint;
+        let mut cache = cache(FLOOR_CACHE_CAPACITY);
+        let id = ObjectID::random();
+
+        // First appearance: no prior row, so the floor is needed and the
+        // object is recorded.
+        assert!(needs_floor(&mut cache, cf, id, 50).unwrap());
+        // A later appearance hits the cache and skips the (still empty)
+        // scan, which on its own would report another first appearance.
+        assert!(is_first_appearance(cf, id, 60).unwrap());
+        assert!(!needs_floor(&mut cache, cf, id, 60).unwrap());
+    }
+
+    /// A cold cache (a fresh run) falls back to the durable scan: an
+    /// object whose floor row a prior run persisted is not re-floored.
+    #[test]
+    fn needs_floor_falls_back_to_scan_on_cold_cache() {
+        let (_dir, db, schema) = fresh_db();
+        let cf = &schema.object_version_by_checkpoint;
+        let mut cache = cache(FLOOR_CACHE_CAPACITY);
+        let id = ObjectID::random();
+
+        // A prior run already recorded a row below the checkpoint.
+        put(&schema, &db, id, 30, 5);
+        assert!(!needs_floor(&mut cache, cf, id, 50).unwrap());
+    }
+
+    /// LRU eviction never causes a duplicate floor write: an evicted
+    /// object that reappears falls back to the scan, which finds the
+    /// floor its earlier resolution persisted and reports "not first".
+    #[test]
+    fn needs_floor_survives_eviction() {
+        let (_dir, db, schema) = fresh_db();
+        let cf = &schema.object_version_by_checkpoint;
+        // Capacity one: a second object evicts the first.
+        let mut cache = cache(1);
+        let a = ObjectID::random();
+        let b = ObjectID::random();
+
+        // `a` is a first appearance; mirror the caller by persisting its
+        // synthetic floor at `(a, 0)`.
+        assert!(needs_floor(&mut cache, cf, a, 10).unwrap());
+        put(&schema, &db, a, 0, 5);
+
+        // `b` is a first appearance too, evicting `a` from the cache.
+        assert!(needs_floor(&mut cache, cf, b, 11).unwrap());
+        put(&schema, &db, b, 0, 7);
+
+        // `a` reappears: the cache no longer holds it, so the scan runs
+        // and finds the persisted `(a, 0)` floor -- not a first
+        // appearance, so no rewrite.
+        assert!(!needs_floor(&mut cache, cf, a, 12).unwrap());
     }
 
     /// End-to-end shape for a pre-window object that first changes
