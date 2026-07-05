@@ -688,10 +688,12 @@ async fn adapter_settles_soft_bundle_on_mixed_position_statuses() {
 }
 
 // If a position expires from the status cache before its status is read (the validator
-// lagged more than the retention window behind consensus), the adapter must handle it
-// like garbage collection and resubmit rather than waiting forever.
+// lagged more than the retention window behind consensus), the submission ends without
+// resubmitting: the block was committed and its commit processed long ago, so a
+// terminal outcome existed and was merely missed. A finalized transaction needs
+// nothing further from this task, and transaction-level retries belong to the client.
 #[tokio::test]
-async fn adapter_resubmits_on_expired_position_status() {
+async fn adapter_settles_without_retry_on_expired_position_status() {
     telemetry_subscribers::init_for_testing();
 
     let mut objects = test_gas_objects();
@@ -704,9 +706,7 @@ async fn adapter_resubmits_on_expired_position_status() {
         .unwrap();
     let epoch_store = state.epoch_store_for_testing();
 
-    // First submission lands in block round 1; the resubmission in a much later round
-    // immune to the expiry below.
-    let client = Arc::new(SequenceOnlyClient::new(vec![1, 10_000]));
+    let client = Arc::new(SequenceOnlyClient::new(vec![1]));
     let adapter = make_consensus_adapter_with_client_for_test(&state, client.clone(), 100);
 
     let consensus_tx =
@@ -724,9 +724,9 @@ async fn adapter_resubmits_on_expired_position_status() {
     let client_clone = client.clone();
     wait_for_condition(move || client_clone.submissions() == 1).await;
 
-    // Expire the first position without ever setting its status. The expiry watch
-    // publishes the previous committed leader round, so two updates are needed for
-    // round 1 to fall out of the retention window.
+    // Expire the position without ever setting its status. The expiry watch publishes
+    // the previous committed leader round, so two updates are needed for round 1 to
+    // fall out of the retention window.
     epoch_store
         .consensus_tx_status_cache
         .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 100);
@@ -734,21 +734,10 @@ async fn adapter_resubmits_on_expired_position_status() {
         .consensus_tx_status_cache
         .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 101);
 
-    // The adapter treats the expired position like garbage collection and resubmits.
-    let client_clone = client.clone();
-    wait_for_condition(move || client_clone.submissions() == 2).await;
-
-    // Settle the resubmitted position.
-    epoch_store
-        .consensus_tx_status_cache
-        .set_transaction_status(
-            test_position(epoch_store.epoch(), 10_000, 0),
-            ConsensusTxStatus::Finalized,
-        );
-
     tokio::time::timeout(Duration::from_secs(10), waiter)
         .await
-        .expect("adapter task should settle after resubmission")
+        .expect("adapter task should settle when its position status expires")
         .unwrap();
+    assert_eq!(client.submissions(), 1);
     assert_eq!(adapter.num_inflight_transactions(), 0);
 }

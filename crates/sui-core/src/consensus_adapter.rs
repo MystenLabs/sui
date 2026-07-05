@@ -649,20 +649,23 @@ impl ConsensusAdapter {
                             {
                                 Some(statuses) => break SequencingOutcome::Sequenced(statuses),
                                 None => {
-                                    // When positions expired before its status was read,
-                                    // resubmit like garbage collection.
-                                    // Duplicates are deduplicated post-consensus,
-                                    // and the processed waiter cancels this loop if the
-                                    // transaction has already finalized.
+                                    // A position expired from the status cache before it
+                                    // was read: the block was committed and its commit
+                                    // processed more than the retention window ago, so a
+                                    // terminal status existed and was merely missed. End
+                                    // the submission instead of resubmitting — a missed
+                                    // Finalized outcome needs nothing further from this
+                                    // task (the digest is durably recorded as processed
+                                    // and will execute), the other outcomes are terminal,
+                                    // and transaction-level retries belong to the client.
                                     debug!(
-                                        "Transaction {transaction_keys:?} status expired before being read. Will be retried."
+                                        "Transaction {transaction_keys:?} status expired before being read. Ending submission."
                                     );
                                     self.metrics
                                         .sequencing_certificate_status
                                         .with_label_values(&[tx_type, "status_expired"])
                                         .inc();
-                                    time::sleep(RETRY_DELAY_STEP).await;
-                                    continue;
+                                    break SequencingOutcome::StatusExpired;
                                 }
                             }
                         }
@@ -717,6 +720,10 @@ impl ConsensusAdapter {
                             .inc();
                     }
                     ProcessedMethod::ConsensusStatusReceived
+                }
+                Either::Right((SequencingOutcome::StatusExpired, _processed_waiter)) => {
+                    processed_via_notify = false;
+                    ProcessedMethod::ConsensusStatusExpired
                 }
                 Either::Right((SequencingOutcome::BlockSequenced, processed_waiter)) => {
                     debug!("Submitted {transaction_keys:?} to consensus");
@@ -1195,6 +1202,7 @@ impl Drop for InflightDropGuard<'_> {
 enum ProcessedMethod {
     ConsensusMessageProcessed,
     ConsensusStatusReceived,
+    ConsensusStatusExpired,
     CheckpointExecuted,
 }
 
@@ -1203,6 +1211,7 @@ impl ProcessedMethod {
         match self {
             ProcessedMethod::ConsensusMessageProcessed => "consensus (processed message)",
             ProcessedMethod::ConsensusStatusReceived => "consensus (transaction status)",
+            ProcessedMethod::ConsensusStatusExpired => "consensus (status expired)",
             ProcessedMethod::CheckpointExecuted => "checkpoint execution",
         }
     }
@@ -1211,6 +1220,7 @@ impl ProcessedMethod {
         match self {
             ProcessedMethod::ConsensusMessageProcessed => "consensus_message",
             ProcessedMethod::ConsensusStatusReceived => "consensus_status",
+            ProcessedMethod::ConsensusStatusExpired => "consensus_status_expired",
             ProcessedMethod::CheckpointExecuted => "checkpoint_execution",
         }
     }
@@ -1223,6 +1233,10 @@ enum SequencingOutcome {
     Sequenced(Vec<ConsensusTxStatus>),
     /// A system-message submission whose block was sequenced.
     BlockSequenced,
+    /// A user-transaction submission whose block was sequenced, but at least one
+    /// position expired from the status cache before its status was read. The
+    /// terminal outcome existed and was missed; nothing further to wait for.
+    StatusExpired,
 }
 
 fn status_label(status: ConsensusTxStatus) -> &'static str {
