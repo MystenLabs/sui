@@ -82,10 +82,12 @@ use crate::storage::RocksDbStore;
 const RPC_STORE_DIR: &str = "rpc_store";
 
 /// Number of in-memory snapshots retained for consistent reads.
-/// Mirrors the standalone `sui-rpc-node` default; since a snapshot is
-/// taken at every checkpoint boundary this is roughly a 32-checkpoint
-/// consistency window.
-const SNAPSHOT_CAPACITY: usize = 32;
+///
+/// Zero disables snapshotting entirely (the synchronizer's
+/// `take_snapshot` becomes a no-op). Today the embedded deployment never
+/// serves point-in-time reads from a RocksDB snapshot so we will disable
+/// it for now.
+const SNAPSHOT_CAPACITY: usize = 0;
 
 fn db_options() -> DbOptions {
     DbOptions {
