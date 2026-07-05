@@ -3848,6 +3848,15 @@ mod tests {
                 .is_consensus_message_processed(&loser_key)
                 .unwrap()
         );
+        // The processed notification resolves for the dropped key as well — this is
+        // the signal consensus adapter waiters block on.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            epoch_store.consensus_messages_processed_notify(vec![loser_key]),
+        )
+        .await
+        .expect("processed notification for dropped transaction should resolve")
+        .unwrap();
     }
 
     #[tokio::test(flavor = "current_thread")]

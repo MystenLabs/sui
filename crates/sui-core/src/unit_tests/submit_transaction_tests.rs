@@ -490,6 +490,70 @@ async fn test_submit_transaction_consensus_message_processed() {
     };
 }
 
+// Test that resubmitting a consensus-processed transaction whose owned inputs are no
+// longer live (e.g. a dropped owned-object conflict loser after the winner executed)
+// returns the concrete, non-retriable validation error instead of the generic,
+// retriable TransactionProcessing suppression.
+#[tokio::test]
+async fn test_submit_transaction_consensus_message_processed_with_stale_inputs() {
+    let test_context = TestContext::new().await;
+    let epoch_store = test_context.state.epoch_store_for_testing();
+
+    // The "loser" spends the gas object at its current version.
+    let loser = test_context.build_test_transaction();
+    let loser_digest = *loser.digest();
+    let request = test_context.build_submit_request(loser);
+
+    // Execute a different transaction spending the same gas object, advancing its
+    // version past the loser's input.
+    let winner_data = TestTransactionBuilder::new(
+        test_context.sender,
+        test_context.gas_object_ref,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(Some(1), test_context.sender)
+    .build();
+    let winner = to_sender_signed_transaction(winner_data, &test_context.keypair);
+    assert_ne!(*winner.digest(), loser_digest);
+    let winner = VerifiedExecutableTransaction::new_from_checkpoint(
+        VerifiedTransaction::new_unchecked(winner),
+        epoch_store.epoch(),
+        1,
+    );
+    test_context
+        .state
+        .try_execute_immediately(&winner, ExecutionEnv::new(), &epoch_store)
+        .unwrap();
+
+    // Mark the loser as consensus-processed, as the commit handler does for dropped
+    // transactions.
+    epoch_store.test_insert_user_signature(loser_digest, vec![]);
+
+    let response = test_context
+        .client
+        .submit_transaction(request, None)
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 1);
+    match &response.results[0] {
+        SubmitTxResult::Rejected { error } => {
+            assert!(
+                matches!(
+                    error.as_inner(),
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectVersionUnavailableForConsumption { .. }
+                    }
+                ),
+                "expected stale-version rejection, got: {error}"
+            );
+        }
+        other => panic!("Expected Rejected response, got {other:?}"),
+    };
+}
+
 #[tokio::test]
 async fn test_submit_transaction_wrong_epoch() {
     let test_context = TestContext::new().await;

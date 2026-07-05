@@ -970,13 +970,50 @@ impl ValidatorService {
 
             // Suppress resubmission of transactions consensus already processed this epoch:
             // executed transactions whose effects details could not be reconstructed above (e.g.
-            // objects pruned), and sequenced-but-deferred transactions. Rejected is imperfect for
-            // the deferred case, but acceptable since well-behaved clients get Executed before
-            // pruning; this mainly sheds continuous resubmissions from faulty clients.
+            // objects pruned), sequenced-but-deferred transactions, and dropped transactions.
             let consensus_key = SequencedConsensusTransactionKey::External(
                 ConsensusTransactionKey::Certificate(tx_digest),
             );
             if epoch_store.is_consensus_message_processed(&consensus_key)? {
+                // Prefer a concrete, non-retriable validation error over the generic,
+                // retriable TransactionProcessing suppression. A processed-but-unexecuted
+                // digest is commonly a dropped owned-object conflict loser whose winner has
+                // executed by now; validating against live state surfaces the terminal
+                // stale-version error so the client stops retrying, instead of polling for
+                // effects that will never come.
+                if let Err(error) =
+                    state.handle_vote_transaction(&epoch_store, verified_transaction.tx().clone())
+                {
+                    // The transaction may have executed while being validated (e.g. it was
+                    // deferred rather than dropped).
+                    if let Some(effects) = state
+                        .get_transaction_cache_reader()
+                        .get_executed_effects(&tx_digest)
+                    {
+                        let effects_digest = effects.digest();
+                        if let Ok(executed_data) = self.complete_executed_data(effects).await {
+                            results[idx] = Some(SubmitTxResult::Executed {
+                                effects_digest,
+                                details: Some(executed_data),
+                            });
+                            continue;
+                        }
+                    }
+                    debug!(
+                        ?tx_digest,
+                        "handle_submit_transaction: processed transaction rejected on revalidation: {error}"
+                    );
+                    metrics
+                        .submission_rejected_transactions
+                        .with_label_values(&[error.to_variant_name()])
+                        .inc();
+                    results[idx] = Some(SubmitTxResult::Rejected { error });
+                    continue;
+                }
+                // Validation passed, so the transaction is pending (deferred) or executed
+                // with pruned effects details. Rejected is imperfect for the deferred case,
+                // but acceptable since well-behaved clients get Executed before pruning;
+                // this mainly sheds continuous resubmissions from faulty clients.
                 metrics
                     .submission_suppressed_already_processed
                     .with_label_values(&[req_type])
