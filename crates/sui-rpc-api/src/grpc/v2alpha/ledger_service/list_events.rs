@@ -11,11 +11,8 @@ use crate::ledger_history::query_options::RangeExhaustion;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use mysten_common::ZipDebugEqIteratorExt;
-use prost_types::FieldMask;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
-use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::Event as ProtoEvent;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
@@ -28,7 +25,6 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::filter::event_filter_to_query;
@@ -36,6 +32,7 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::EventScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedEventRange;
+use crate::read_mask_defaults;
 
 use super::bitmap_scan::PendingBitmapBucket;
 use super::chunked_scan::ChunkArgs;
@@ -59,8 +56,6 @@ use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
 
-const EVENT_READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EVENT;
-
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
 pub(crate) async fn list_events(
@@ -74,7 +69,10 @@ pub(crate) async fn list_events(
     let request_options = request.options;
     let filtered = filter.is_some();
     validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
-    let read_mask = validate_event_read_mask(request.read_mask)?;
+    let read_mask = read_mask_defaults::validate_read_mask::<ProtoEvent>(
+        request.read_mask,
+        read_mask_defaults::EVENT,
+    )?;
     let ledger_history = service.config.ledger_history();
     let endpoint = ledger_history.list_events();
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
@@ -703,16 +701,6 @@ fn tx_seq_digest_rows_for_event_refs(
             }),
         })
         .collect()
-}
-
-fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
-    let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(EVENT_READ_MASK_DEFAULT));
-    read_mask.validate::<ProtoEvent>().map_err(|path| {
-        FieldViolation::new("read_mask")
-            .with_description(format!("invalid read_mask path: {path}"))
-            .with_reason(ErrorReason::FieldInvalid)
-    })?;
-    Ok(FieldMaskTree::from(read_mask))
 }
 
 fn resolve_event_range(

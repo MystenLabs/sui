@@ -259,6 +259,18 @@ impl QueryOptions {
         })
     }
 
+    /// Options for a subscription stream: an unbounded ascending scan with no
+    /// cursor bounds. The ascending direction is consulted by the watermark
+    /// builders; `limit_items` is irrelevant.
+    pub fn subscription() -> Self {
+        Self {
+            limit_items: usize::MAX,
+            ordering: Ordering::Ascending,
+            after: None,
+            before: None,
+        }
+    }
+
     pub fn scan_direction(&self) -> ScanDirection {
         match self.ordering {
             Ordering::Ascending => ScanDirection::Ascending,
