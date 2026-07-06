@@ -84,7 +84,7 @@ struct CheckpointsResult {
 
 fn query_options(limit_items: u32) -> QueryOptions {
     let mut options = QueryOptions::default();
-    options.limit_items = Some(limit_items);
+    options.limit = Some(limit_items);
     options
 }
 
@@ -102,7 +102,7 @@ fn query_options_maybe_after(limit_items: u32, after: Option<Bytes>) -> QueryOpt
 
 fn query_options_descending(limit_items: u32) -> QueryOptions {
     let mut options = query_options(limit_items);
-    options.ordering = Ordering::Descending as i32;
+    options.ordering = Some(Ordering::Descending as i32);
     options
 }
 
@@ -127,7 +127,7 @@ fn query_options_between(limit_items: u32, after: Bytes, before: Bytes) -> Query
 
 fn query_options_between_descending(limit_items: u32, after: Bytes, before: Bytes) -> QueryOptions {
     let mut options = query_options_between(limit_items, after, before);
-    options.ordering = Ordering::Descending as i32;
+    options.ordering = Some(Ordering::Descending as i32);
     options
 }
 
@@ -243,11 +243,40 @@ fn transaction_digest_set(result: &TransactionsResult) -> HashSet<String> {
         .collect()
 }
 
+/// The event's ledger position now lives on the embedded `Event`, not the
+/// enclosing `EventItem`; these accessors read it back for assertions.
+fn event_transaction_digest(item: &EventItem) -> Option<String> {
+    item.event
+        .as_ref()
+        .and_then(|event| event.transaction_digest.clone())
+}
+
+fn event_checkpoint(item: &EventItem) -> Option<u64> {
+    item.event.as_ref().and_then(|event| event.checkpoint)
+}
+
+fn event_index_of(item: &EventItem) -> Option<u32> {
+    item.event.as_ref().and_then(|event| event.event_index)
+}
+
+/// Event read mask requesting the event type plus the ledger-position fields
+/// (`checkpoint`, `transaction_digest`, `event_index`) that the list endpoint
+/// only populates when they are asked for. Used by the event tests, which
+/// assert on those positions.
+fn event_type_and_position_mask() -> FieldMask {
+    FieldMask::from_paths([
+        "event_type",
+        "checkpoint",
+        "transaction_digest",
+        "event_index",
+    ])
+}
+
 fn event_digest_set(result: &EventsResult) -> HashSet<String> {
     result
         .events
         .iter()
-        .filter_map(|e| e.transaction_digest.clone())
+        .filter_map(event_transaction_digest)
         .collect()
 }
 
@@ -284,10 +313,7 @@ async fn list_transactions_result(
             list_transactions_response::Response::End(end_frame) => {
                 assert!(!end, "duplicate end frame");
                 end = true;
-                end_reason = Some(
-                    QueryEndReason::try_from(end_frame.reason)
-                        .expect("valid list_transactions end reason"),
-                );
+                end_reason = Some(end_frame.reason());
             }
             other => panic!("unexpected list_transactions response frame: {other:?}"),
         }
@@ -329,10 +355,7 @@ async fn list_events_result(
             list_events_response::Response::End(end_frame) => {
                 assert!(!end, "duplicate end frame");
                 end = true;
-                end_reason = Some(
-                    QueryEndReason::try_from(end_frame.reason)
-                        .expect("valid list_events end reason"),
-                );
+                end_reason = Some(end_frame.reason());
             }
             other => panic!("unexpected list_events response frame: {other:?}"),
         }
@@ -376,10 +399,7 @@ async fn list_checkpoints_result(
             list_checkpoints_response::Response::End(end_frame) => {
                 assert!(!end, "duplicate end frame");
                 end = true;
-                end_reason = Some(
-                    QueryEndReason::try_from(end_frame.reason)
-                        .expect("valid list_checkpoints end reason"),
-                );
+                end_reason = Some(end_frame.reason());
             }
             other => panic!("unexpected list_checkpoints response frame: {other:?}"),
         }
@@ -698,7 +718,7 @@ fn tx_emit_module_literal(path: &str) -> TransactionLiteral {
 
 fn tx_event_type_literal(path: &str) -> TransactionLiteral {
     let mut et = EventTypeFilter::default();
-    et.r#type = Some(path.to_string());
+    et.event_type = Some(path.to_string());
     tx_include(transaction_predicate::Predicate::EventType(et))
 }
 
@@ -794,7 +814,7 @@ fn ev_emit_module(path: &str) -> EventFilter {
 
 fn ev_event_type(path: &str) -> EventFilter {
     let mut et = EventTypeFilter::default();
-    et.r#type = Some(path.to_string());
+    et.event_type = Some(path.to_string());
     ev_filter(vec![ev_include(event_predicate::Predicate::EventType(et))])
 }
 
@@ -1237,7 +1257,7 @@ async fn test_list_events_unfiltered_and_emit_module_filter() {
     let mut client = new_ledger_client(&cluster).await;
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.options = Some(query_options(100));
     let resp = list_events_result(&mut client, req).await;
     assert_event_cursors(&resp);
@@ -1248,7 +1268,7 @@ async fn test_list_events_unfiltered_and_emit_module_filter() {
     let event_type = resp
         .events
         .iter()
-        .find(|event| event.transaction_digest.as_deref() == Some(event_digest.as_str()))
+        .find(|event| event_transaction_digest(event).as_deref() == Some(event_digest.as_str()))
         .and_then(|event| event.event.as_ref())
         .and_then(|event| event.event_type.as_deref())
         .expect("emitted event type should be present");
@@ -1256,7 +1276,7 @@ async fn test_list_events_unfiltered_and_emit_module_filter() {
 
     let module = format!("{}::emit_test_event", pkg.to_canonical_string(true));
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.filter = Some(ev_emit_module(&module));
     req.options = Some(query_options(100));
     let resp = list_events_result(&mut client, req).await;
@@ -1295,7 +1315,7 @@ async fn test_list_events_query_options_multi_event_tx() {
         let mut client = client.clone();
         async move {
             let mut req = ListEventsRequest::default();
-            req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+            req.read_mask = Some(event_type_and_position_mask());
             req.start_checkpoint = Some(start);
             req.end_checkpoint = Some(end);
             req.filter = Some(filter);
@@ -1336,7 +1356,7 @@ async fn test_list_events_query_options_multi_event_tx() {
 
     let mut client_for_exact = client.clone();
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(ev_emit_module(&module));
@@ -1349,7 +1369,7 @@ async fn test_list_events_query_options_multi_event_tx() {
 
     let mut client_for_bounds = client.clone();
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(ev_emit_module(&module));
@@ -1363,7 +1383,7 @@ async fn test_list_events_query_options_multi_event_tx() {
         let module = module.clone();
         async move {
             let mut req = ListEventsRequest::default();
-            req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+            req.read_mask = Some(event_type_and_position_mask());
             req.start_checkpoint = Some(start);
             req.end_checkpoint = Some(end);
             req.filter = Some(ev_emit_module(&module));
@@ -1389,7 +1409,7 @@ async fn test_list_events_query_options_multi_event_tx() {
         .iter()
         .chain(rp2.events.iter())
         .chain(rp3.events.iter())
-        .map(|event| (event.transaction_digest.clone(), event.event_index))
+        .map(|event| (event_transaction_digest(event), event_index_of(event)))
         .collect();
     let mut deduped = reverse_keys.clone();
     deduped.sort_unstable();
@@ -1398,7 +1418,7 @@ async fn test_list_events_query_options_multi_event_tx() {
 
     let mut client_after_exact = client.clone();
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(ev_emit_module(&module));
@@ -1446,7 +1466,7 @@ async fn test_list_events_filter_predicates() {
         let mut client = client.clone();
         async move {
             let mut req = ListEventsRequest::default();
-            req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+            req.read_mask = Some(event_type_and_position_mask());
             req.filter = Some(filter);
             req.options = Some(query_options(100));
             list_events_result(&mut client, req).await
@@ -1513,7 +1533,7 @@ async fn test_list_events_filter_predicates() {
         "event_stream_head should return only authenticated event"
     );
     assert_eq!(
-        resp.events[0].transaction_digest.as_deref(),
+        event_transaction_digest(&resp.events[0]).as_deref(),
         Some(auth_digest.as_str())
     );
     let event_type = resp.events[0]
@@ -1565,7 +1585,7 @@ async fn test_list_events_combinators() {
     let module = format!("{}::emit_test_event", pkg.to_canonical_string(true));
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.filter = Some(ev_and(vec![ev_sender(sender_a), ev_emit_module(&module)]));
     req.options = Some(query_options(100));
     let resp = list_events_result(&mut client, req).await;
@@ -1580,7 +1600,7 @@ async fn test_list_events_combinators() {
     );
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.filter = Some(ev_filter(vec![
         ev_sender_literal(sender_a),
         ev_not_sender_literal(sender_b),
@@ -1631,7 +1651,7 @@ async fn test_list_events_unanchored_negation() {
     // synthesized EventExtant include actually anchors the term so the driver
     // walks the event space rather than rejecting the filter.
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.filter = Some(ev_not_sender_only_filter(sender_b));
     req.options = Some(query_options(100));
     let resp = list_events_result(&mut client, req).await;
@@ -1648,7 +1668,7 @@ async fn test_list_events_unanchored_negation() {
 
     // Symmetric case: `NOT sender = A` returns B's event.
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.filter = Some(ev_not_sender_only_filter(sender_a));
     req.options = Some(query_options(100));
     let resp = list_events_result(&mut client, req).await;
@@ -1667,7 +1687,7 @@ async fn test_list_events_unanchored_negation() {
     // come back. Exercises the dedup path: the synthetic EventExtant leaf
     // is shared across both terms and must only be scanned once.
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.filter = Some(ev_or(vec![
         vec![ev_not_sender_literal(sender_a)],
         vec![ev_not_sender_literal(sender_b)],
@@ -1853,7 +1873,7 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.start_checkpoint = Some(beyond_tip);
     req.options = Some(query_options(10));
     let resp = list_events_result(&mut client, req).await;
@@ -1886,7 +1906,7 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     assert!(resp.end);
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.filter = Some(ev_sender(never_sender));
     req.options = Some(query_options(10));
     let resp = list_events_result(&mut client, req).await;
@@ -1910,7 +1930,7 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     expect_invalid_list_transactions(&mut client, req).await;
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.start_checkpoint = Some(0);
     req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
     req.filter = Some(ev_event_type("0x1<u64>"));
@@ -1958,7 +1978,7 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     req.start_checkpoint = Some(0);
     req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
     let mut bad_options = query_options(10);
-    bad_options.ordering = 99;
+    bad_options.ordering = Some(99);
     req.options = Some(bad_options);
     expect_invalid_list_transactions(&mut client, req).await;
 
@@ -1971,7 +1991,7 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     expect_invalid_list_transactions(&mut client, req).await;
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.start_checkpoint = Some(0);
     req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
     req.filter = Some(EventFilter::default());
@@ -2011,7 +2031,7 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     list_transactions_result(&mut client, req).await;
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.options = Some(query_options(oversized));
     list_events_result(&mut client, req).await;
 }
@@ -2386,10 +2406,10 @@ async fn test_list_checkpoints_read_masks_and_empty_range() {
 
 // list_checkpoints dedupes cp_seq, so an emitted checkpoint is proven complete:
 // its item watermark must claim its OWN sequence number as the covered boundary
-// (checkpoint_hi == sequence_number ascending, checkpoint_lo == sequence_number
-// descending), not sequence_number ∓ 1. This pins the item path onto
-// `advance_checkpoint_boundary`; the previous (buggy) `advance_boundary_excluding_cp`
-// path under-claimed by one. Also asserts the wire-documented monotonicity.
+// (`checkpoint` == sequence_number, in either ordering), not sequence_number ∓ 1.
+// This pins the item path onto `advance_checkpoint_boundary`; the previous
+// (buggy) `advance_boundary_excluding_cp` path under-claimed by one. Also asserts
+// the wire-documented monotonicity.
 #[sim_test]
 async fn test_list_checkpoints_item_watermark_boundary() {
     let cluster = new_cluster().await;
@@ -2417,18 +2437,14 @@ async fn test_list_checkpoints_item_watermark_boundary() {
         let seq = checkpoint_sequence(item);
         let wm = item.watermark.as_ref().expect("checkpoint item watermark");
         assert_eq!(
-            wm.checkpoint_hi,
+            wm.checkpoint,
             Some(seq),
             "ascending checkpoint item should claim its own sequence number complete"
-        );
-        assert_eq!(
-            wm.checkpoint_lo, None,
-            "ascending item must set only checkpoint_hi"
         );
         if let Some(prev) = prev_hi {
             assert!(
                 seq >= prev,
-                "checkpoint_hi must be non-decreasing ascending"
+                "checkpoint boundary must be non-decreasing ascending"
             );
         }
         prev_hi = Some(seq);
@@ -2450,18 +2466,14 @@ async fn test_list_checkpoints_item_watermark_boundary() {
         let seq = checkpoint_sequence(item);
         let wm = item.watermark.as_ref().expect("checkpoint item watermark");
         assert_eq!(
-            wm.checkpoint_lo,
+            wm.checkpoint,
             Some(seq),
             "descending checkpoint item should claim its own sequence number complete"
-        );
-        assert_eq!(
-            wm.checkpoint_hi, None,
-            "descending item must set only checkpoint_lo"
         );
         if let Some(prev) = prev_lo {
             assert!(
                 seq <= prev,
-                "checkpoint_lo must be non-increasing descending"
+                "checkpoint boundary must be non-increasing descending"
             );
         }
         prev_lo = Some(seq);
@@ -2471,9 +2483,8 @@ async fn test_list_checkpoints_item_watermark_boundary() {
 // The contrast that makes the checkpoint assertion above meaningful: list_events
 // scans WITHIN a checkpoint, so an event at checkpoint C does not prove C
 // complete (more matches may sit at higher event_seqs). The covered boundary
-// must therefore EXCLUDE C itself — checkpoint_hi == C - 1 ascending,
-// checkpoint_lo == C + 1 descending — i.e. the under-claim is correct here and a
-// bug for checkpoints.
+// must therefore EXCLUDE C itself — `checkpoint` == C - 1 ascending, C + 1
+// descending — i.e. the under-claim is correct here and a bug for checkpoints.
 #[sim_test]
 async fn test_list_events_item_watermark_boundary() {
     let cluster = new_cluster().await;
@@ -2487,7 +2498,7 @@ async fn test_list_events_item_watermark_boundary() {
     let mut client = new_ledger_client(&cluster).await;
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(ev_emit_module(&module));
@@ -2496,30 +2507,26 @@ async fn test_list_events_item_watermark_boundary() {
     assert!(!resp.events.is_empty(), "expected matching events");
     let mut prev_hi: Option<u64> = None;
     for item in &resp.events {
-        let cp = item.checkpoint.expect("event item checkpoint");
+        let cp = event_checkpoint(item).expect("event item checkpoint");
         assert!(cp >= 1, "user events are never in the genesis checkpoint");
         let expected_hi = cp - 1;
         let wm = item.watermark.as_ref().expect("event item watermark");
         assert_eq!(
-            wm.checkpoint_hi,
+            wm.checkpoint,
             Some(expected_hi),
             "ascending event item must under-claim its own checkpoint (C - 1)"
-        );
-        assert_eq!(
-            wm.checkpoint_lo, None,
-            "ascending item sets only checkpoint_hi"
         );
         if let Some(prev) = prev_hi {
             assert!(
                 expected_hi >= prev,
-                "event checkpoint_hi must be non-decreasing ascending"
+                "event checkpoint boundary must be non-decreasing ascending"
             );
         }
         prev_hi = Some(expected_hi);
     }
 
     let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.read_mask = Some(event_type_and_position_mask());
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(ev_emit_module(&module));
@@ -2528,22 +2535,18 @@ async fn test_list_events_item_watermark_boundary() {
     assert!(!resp.events.is_empty(), "expected matching events");
     let mut prev_lo: Option<u64> = None;
     for item in &resp.events {
-        let cp = item.checkpoint.expect("event item checkpoint");
+        let cp = event_checkpoint(item).expect("event item checkpoint");
         let expected_lo = cp + 1;
         let wm = item.watermark.as_ref().expect("event item watermark");
         assert_eq!(
-            wm.checkpoint_lo,
+            wm.checkpoint,
             Some(expected_lo),
             "descending event item must under-claim its own checkpoint (C + 1)"
-        );
-        assert_eq!(
-            wm.checkpoint_hi, None,
-            "descending item sets only checkpoint_lo"
         );
         if let Some(prev) = prev_lo {
             assert!(
                 expected_lo <= prev,
-                "event checkpoint_lo must be non-increasing descending"
+                "event checkpoint boundary must be non-increasing descending"
             );
         }
         prev_lo = Some(expected_lo);
@@ -2586,10 +2589,10 @@ async fn test_list_checkpoints_terminal_watermark() {
         .checkpoints
         .last()
         .and_then(|item| item.watermark.as_ref())
-        .and_then(|wm| wm.checkpoint_hi)
-        .expect("last item checkpoint_hi");
+        .and_then(|wm| wm.checkpoint)
+        .expect("last item checkpoint boundary");
     assert!(
-        terminal.checkpoint_hi.is_some_and(|hi| hi >= last_item_hi),
+        terminal.checkpoint.is_some_and(|hi| hi >= last_item_hi),
         "terminal watermark must not regress the covered boundary"
     );
 

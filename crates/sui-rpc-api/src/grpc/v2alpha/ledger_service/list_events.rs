@@ -618,7 +618,6 @@ fn render_event_chunk(
                     ),
                 )
             })?;
-        #[allow(unused_mut)]
         let mut proto_event = service.render_event_to_proto(
             event,
             read_mask,
@@ -629,6 +628,22 @@ fn render_event_chunk(
                 bcs.value = Some(vec![0xDE, 0xAD, 0xBE, 0xEF].into());
             }
         });
+        // The event's ledger position rides on the `Event` message itself
+        // rather than the enclosing `EventItem`; populate each position field
+        // only when the read mask requests it. Authenticated-stream clients that
+        // need to reconstruct the `EventCommitment` leaf ask for these paths.
+        if read_mask.contains(ProtoEvent::CHECKPOINT_FIELD.name) {
+            proto_event.checkpoint = Some(row.checkpoint_number);
+        }
+        if read_mask.contains(ProtoEvent::TRANSACTION_DIGEST_FIELD.name) {
+            proto_event.transaction_digest = Some(row.digest.to_string());
+        }
+        if read_mask.contains(ProtoEvent::TRANSACTION_INDEX_FIELD.name) {
+            proto_event.transaction_index = Some(row.tx_offset as u64);
+        }
+        if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
+            proto_event.event_index = Some(event_ref.event_idx);
+        }
         checkpoint_boundary =
             advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
         let watermark = item_watermark(
@@ -640,10 +655,6 @@ fn render_event_chunk(
 
         let mut item = EventItem::default();
         item.watermark = Some(watermark);
-        item.checkpoint = Some(row.checkpoint_number);
-        item.event_index = Some(event_ref.event_idx);
-        item.transaction_digest = Some(row.digest.to_string());
-        item.transaction_offset = Some(row.tx_offset as u64);
         item.event = Some(proto_event);
 
         let mut response = ListEventsResponse::default();
@@ -819,7 +830,7 @@ fn watermark_response(watermark: Watermark) -> ListEventsResponse {
 
 fn end_response(reason: QueryEndReason) -> ListEventsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListEventsResponse::default();
     response.response = Some(list_events_response::Response::End(end));

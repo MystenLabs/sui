@@ -291,7 +291,7 @@ fn convert_transaction_predicate(
             convert_emit_module(f, &format!("{field_prefix}.emit_module.module"))
         }
         transaction_predicate::Predicate::EventType(f) => {
-            convert_event_type(f, &format!("{field_prefix}.event_type.type"))
+            convert_event_type(f, &format!("{field_prefix}.event_type.event_type"))
         }
         transaction_predicate::Predicate::EventStreamHead(f) => {
             convert_event_stream_head(f, &format!("{field_prefix}.event_stream_head.stream_id"))
@@ -323,7 +323,7 @@ fn convert_event_predicate(
             convert_emit_module(f, &format!("{field_prefix}.emit_module.module"))
         }
         event_predicate::Predicate::EventType(f) => {
-            convert_event_type(f, &format!("{field_prefix}.event_type.type"))
+            convert_event_type(f, &format!("{field_prefix}.event_type.event_type"))
         }
         event_predicate::Predicate::EventStreamHead(f) => {
             convert_event_stream_head(f, &format!("{field_prefix}.event_stream_head.stream_id"))
@@ -423,7 +423,7 @@ fn convert_emit_module(f: &EmitModuleFilter, field: &str) -> Result<Vec<u8>, Rpc
 }
 
 fn convert_event_type(f: &EventTypeFilter, field: &str) -> Result<Vec<u8>, RpcError> {
-    let s = f.r#type.as_deref().ok_or_else(|| {
+    let s = f.event_type.as_deref().ok_or_else(|| {
         FieldViolation::new(field)
             .with_description("type is required")
             .with_reason(ErrorReason::FieldMissing)
