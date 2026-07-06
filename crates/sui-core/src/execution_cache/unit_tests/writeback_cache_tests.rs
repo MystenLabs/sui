@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::default_registry;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+#[cfg(not(tidehunter))]
+use rand::Rng;
+use rand::{SeedableRng, rngs::StdRng};
+#[cfg(not(tidehunter))]
+use std::time::{Duration, Instant};
 use std::{
     collections::{BTreeMap, BTreeSet},
     future::Future,
@@ -11,7 +15,6 @@ use std::{
         Arc,
         atomic::{AtomicU32, Ordering},
     },
-    time::{Duration, Instant},
 };
 use sui_framework::BuiltInFramework;
 use sui_test_transaction_builder::TestTransactionBuilder;
