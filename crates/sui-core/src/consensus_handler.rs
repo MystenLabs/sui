@@ -2674,6 +2674,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         let digest = tx.digest();
                         debug!("Transaction rejected: {}", digest);
                         status_updates.push((position, ConsensusTxStatus::Rejected));
+                        dropped_transaction_keys.push(parsed.transaction.key());
                         num_rejected_user_transactions[author] += 1;
                     }
                     // Skip processing rejected transactions.
