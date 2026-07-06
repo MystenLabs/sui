@@ -52,9 +52,7 @@ use sui_types::executable_transaction::{
 };
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
-};
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::messages_consensus::{
     AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, AuthorityIndex, ConsensusPosition,
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, TimestampMs,
@@ -468,9 +466,6 @@ pub struct AuthorityEpochTables {
     /// Validators that have sent EndOfPublish message in this epoch
     end_of_publish: DBMap<AuthorityName, ()>,
 
-    /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
-    builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
-
     /// Maps non-digest TransactionKeys to the corresponding digest after execution, for use
     /// by checkpoint builder.
     transaction_key_to_digest: DBMap<TransactionKey, TransactionDigest>,
@@ -645,16 +640,6 @@ impl AuthorityEpochTables {
             (
                 "end_of_publish".to_string(),
                 ThConfig::new(104, 1, KeyType::uniform(1)),
-            ),
-            (
-                "builder_digest_to_checkpoint".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(
-                    tx_digest_indexing.clone(),
-                    mutexes * 4,
-                    uniform_key,
-                    lru_bloom_config.clone(),
-                    digest_prefix.clone(),
-                ),
             ),
             (
                 "transaction_key_to_digest".to_string(),
@@ -3115,10 +3100,9 @@ impl AuthorityPerEpochStore {
     pub fn process_constructed_checkpoint(
         &self,
         commit_height: CheckpointHeight,
-        content_info: (CheckpointSummary, CheckpointContents),
+        summary: CheckpointSummary,
     ) {
         let mut consensus_quarantine = self.consensus_quarantine.write();
-        let (summary, transactions) = content_info;
         let sequence_number = summary.sequence_number;
         let summary = BuilderCheckpointSummary {
             summary,
@@ -3126,7 +3110,7 @@ impl AuthorityPerEpochStore {
             position_in_commit: 0,
         };
 
-        consensus_quarantine.insert_builder_summary(sequence_number, summary, transactions);
+        consensus_quarantine.insert_builder_summary(sequence_number, summary);
 
         // Because builder can run behind state sync, the data may be immediately ready to be committed.
         consensus_quarantine
@@ -3135,22 +3119,7 @@ impl AuthorityPerEpochStore {
     }
 
     /// Register genesis checkpoint in builder DB
-    pub fn put_genesis_checkpoint_in_builder(
-        &self,
-        summary: &CheckpointSummary,
-        contents: &CheckpointContents,
-    ) -> SuiResult<()> {
-        let sequence = summary.sequence_number;
-        for transaction in contents.iter() {
-            let digest = transaction.transaction;
-            debug!(
-                "Manually inserting genesis transaction in checkpoint DB: {:?}",
-                digest
-            );
-            self.tables()?
-                .builder_digest_to_checkpoint
-                .insert(&digest, &sequence)?;
-        }
+    pub fn put_genesis_checkpoint_in_builder(&self, summary: &CheckpointSummary) -> SuiResult<()> {
         let builder_summary = BuilderCheckpointSummary {
             summary: summary.clone(),
             checkpoint_height: None,

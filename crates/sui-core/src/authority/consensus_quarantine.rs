@@ -25,7 +25,7 @@ use sui_types::executable_transaction::{
     TrustedExecutableTransactionWithAliases, VerifiedExecutableTransactionWithAliases,
 };
 use sui_types::execution::ExecutionTimeObservationKey;
-use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::AuthorityIndex;
 use sui_types::{
     base_types::{ConsensusObjectSequenceKey, ObjectID},
@@ -489,10 +489,7 @@ pub(crate) struct ConsensusOutputQuarantine {
     highest_executed_checkpoint: CheckpointSequenceNumber,
 
     // Checkpoint Builder output
-    builder_checkpoint_summary:
-        BTreeMap<CheckpointSequenceNumber, (BuilderCheckpointSummary, CheckpointContents)>,
-
-    builder_digest_to_checkpoint: HashMap<TransactionDigest, CheckpointSequenceNumber>,
+    builder_checkpoint_summary: BTreeMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
 
     // Any un-committed next versions are stored here.
     shared_object_next_versions: RefCountedHashMap<ConsensusObjectSequenceKey, SequenceNumber>,
@@ -521,7 +518,6 @@ impl ConsensusOutputQuarantine {
 
             output_queue: VecDeque::new(),
             builder_checkpoint_summary: BTreeMap::new(),
-            builder_digest_to_checkpoint: HashMap::new(),
             shared_object_next_versions: RefCountedHashMap::new(),
             processed_consensus_messages: RefCountedHashMap::new(),
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
@@ -561,15 +557,10 @@ impl ConsensusOutputQuarantine {
         &mut self,
         sequence_number: CheckpointSequenceNumber,
         summary: BuilderCheckpointSummary,
-        contents: CheckpointContents,
     ) {
         debug!(?sequence_number, "inserting builder summary {:?}", summary);
-        for tx in contents.iter() {
-            self.builder_digest_to_checkpoint
-                .insert(tx.transaction, sequence_number);
-        }
         self.builder_checkpoint_summary
-            .insert(sequence_number, (summary, contents));
+            .insert(sequence_number, summary);
     }
 }
 
@@ -616,28 +607,7 @@ impl ConsensusOutputQuarantine {
             .map(|(seq, _)| *seq <= self.highest_executed_checkpoint)
             == Some(true)
         {
-            let (seq, (builder_summary, contents)) =
-                self.builder_checkpoint_summary.pop_first().unwrap();
-
-            for tx in contents.iter() {
-                let digest = &tx.transaction;
-                assert_eq!(
-                    self.builder_digest_to_checkpoint
-                        .remove(digest)
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "transaction {:?} not found in builder_digest_to_checkpoint",
-                                digest
-                            )
-                        }),
-                    seq
-                );
-            }
-
-            batch.insert_batch(
-                &tables.builder_digest_to_checkpoint,
-                contents.iter().map(|tx| (tx.transaction, seq)),
-            )?;
+            let (seq, builder_summary) = self.builder_checkpoint_summary.pop_first().unwrap();
 
             batch.insert_batch(
                 &tables.builder_checkpoint_summary_v2,
@@ -780,19 +750,14 @@ impl ConsensusOutputQuarantine {
 // be found in the database.
 impl ConsensusOutputQuarantine {
     pub(super) fn last_built_summary(&self) -> Option<&BuilderCheckpointSummary> {
-        self.builder_checkpoint_summary
-            .values()
-            .last()
-            .map(|(summary, _)| summary)
+        self.builder_checkpoint_summary.values().last()
     }
 
     pub(super) fn get_built_summary(
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> Option<&BuilderCheckpointSummary> {
-        self.builder_checkpoint_summary
-            .get(&sequence)
-            .map(|(summary, _)| summary)
+        self.builder_checkpoint_summary.get(&sequence)
     }
 
     pub(super) fn is_consensus_message_processed(
@@ -1090,6 +1055,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use sui_types::base_types::ExecutionDigests;
     use sui_types::gas::GasCostSummary;
+    use sui_types::messages_checkpoint::CheckpointContents;
 
     fn make_output(height: u64, round: u64, drained: bool) -> ConsensusCommitOutput {
         let mut output = ConsensusCommitOutput::new(round);
@@ -1105,7 +1071,7 @@ mod tests {
         seq: CheckpointSequenceNumber,
         height: CheckpointHeight,
         protocol_config: &ProtocolConfig,
-    ) -> (BuilderCheckpointSummary, CheckpointContents) {
+    ) -> BuilderCheckpointSummary {
         let contents =
             CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]);
         let summary = CheckpointSummary::new(
@@ -1121,12 +1087,11 @@ mod tests {
             vec![],
             vec![],
         );
-        let builder_summary = BuilderCheckpointSummary {
+        BuilderCheckpointSummary {
             summary,
             checkpoint_height: Some(height),
             position_in_commit: 0,
-        };
-        (builder_summary, contents)
+        }
     }
 
     #[tokio::test]
@@ -1150,8 +1115,8 @@ mod tests {
         // Insert builder summaries for checkpoints 1-4 with checkpoint_height = seq
         let pc = epoch_store.protocol_config();
         for seq in 1..=4 {
-            let (summary, contents) = make_builder_summary(seq, seq, pc);
-            quarantine.insert_builder_summary(seq, summary, contents);
+            let summary = make_builder_summary(seq, seq, pc);
+            quarantine.insert_builder_summary(seq, summary);
         }
 
         // Certify up to checkpoint 4
@@ -1186,8 +1151,8 @@ mod tests {
         // Insert builder summaries for checkpoints 1-5 with checkpoint_height = seq
         let pc = epoch_store.protocol_config();
         for seq in 1..=5 {
-            let (summary, contents) = make_builder_summary(seq, seq, pc);
-            quarantine.insert_builder_summary(seq, summary, contents);
+            let summary = make_builder_summary(seq, seq, pc);
+            quarantine.insert_builder_summary(seq, summary);
         }
 
         // Certify up to checkpoint 5

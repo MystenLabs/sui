@@ -399,7 +399,7 @@ impl CheckpointStore {
             None => {
                 if epoch_store.epoch() == checkpoint.epoch {
                     epoch_store
-                        .put_genesis_checkpoint_in_builder(checkpoint.data(), &contents)
+                        .put_genesis_checkpoint_in_builder(checkpoint.data())
                         .unwrap();
                 } else {
                     debug!(
@@ -1791,7 +1791,7 @@ impl CheckpointBuilder {
 
         self.notify_aggregator.notify_one();
         self.epoch_store
-            .process_constructed_checkpoint(height, new_checkpoint);
+            .process_constructed_checkpoint(height, new_checkpoint.0);
         Ok(())
     }
 
