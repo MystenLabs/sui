@@ -47,12 +47,11 @@ use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::executable_transaction::{
-    TrustedExecutableTransaction, TrustedExecutableTransactionWithAliases,
-    VerifiedExecutableTransaction, VerifiedExecutableTransactionWithAliases,
+    TrustedExecutableTransactionWithAliases, VerifiedExecutableTransaction,
+    VerifiedExecutableTransactionWithAliases,
 };
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
-use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
 };
@@ -69,10 +68,10 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
 };
 use sui_types::sui_system_state::{self, SuiSystemState};
 use sui_types::transaction::{
-    AuthenticatorStateUpdate, DeprecatedWithAliases, InputObjectKind, ProgrammableTransaction,
-    SenderSignedData, StoredExecutionTimeObservations, Transaction, TransactionData,
-    TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
-    VerifiedSignedTransaction, VerifiedTransaction, VerifiedTransactionWithAliases, WithAliases,
+    AuthenticatorStateUpdate, InputObjectKind, ProgrammableTransaction,
+    StoredExecutionTimeObservations, Transaction, TransactionData, TransactionDataAPI,
+    TransactionKey, TransactionKind, TxValidityCheckContext, VerifiedTransaction,
+    VerifiedTransactionWithAliases, WithAliases,
 };
 use tap::TapOptional;
 use tokio::sync::{OnceCell, mpsc};
@@ -277,7 +276,7 @@ impl PartialOrd for ExecutionIndices {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-pub struct ExecutionIndicesWithStats {
+pub struct ExecutionIndicesWithStatsV2 {
     pub index: ExecutionIndices,
     /// Height watermark assigned to this commit.
     /// We use this to determine if a commit has been fully executed.
@@ -285,27 +284,8 @@ pub struct ExecutionIndicesWithStats {
     /// height, we've fully executed the commit.
     pub height: u64,
     pub stats: ConsensusStats,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-pub struct ExecutionIndicesWithStatsV2 {
-    pub index: ExecutionIndices,
-    pub height: u64,
-    pub stats: ConsensusStats,
     pub last_checkpoint_flush_timestamp: u64,
     pub checkpoint_seq: u64,
-}
-
-impl From<ExecutionIndicesWithStats> for ExecutionIndicesWithStatsV2 {
-    fn from(v1: ExecutionIndicesWithStats) -> Self {
-        Self {
-            index: v1.index,
-            height: v1.height,
-            stats: v1.stats,
-            last_checkpoint_flush_timestamp: 0,
-            checkpoint_seq: 0,
-        }
-    }
 }
 
 type ExecutionModuleCache = SyncModuleCache<ResolverWrapper>;
@@ -445,11 +425,6 @@ pub struct AuthorityPerEpochStore {
 #[derive(DBMapUtils)]
 #[cfg_attr(tidehunter, tidehunter)]
 pub struct AuthorityEpochTables {
-    /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    #[default_options_override_fn = "signed_transactions_table_default_config"]
-    signed_transactions:
-        DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
-
     /// Map from ObjectRef to transaction locking that object
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
@@ -468,12 +443,6 @@ pub struct AuthorityEpochTables {
     /// to disk.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    /// No longer used.
-    #[allow(dead_code)]
-    #[deprecated(note = "column family retained only for tidehunter backward compatibility")]
-    transaction_cert_signatures:
-        DBMap<TransactionDigest, sui_types::crypto::AuthorityStrongQuorumSignInfo>,
-
     /// Next available shared object versions for each shared object.
     next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
 
@@ -491,8 +460,6 @@ pub struct AuthorityEpochTables {
     /// represents the index of the latest consensus message this authority processed, running hash of
     /// transactions, and accumulated stats of consensus output.
     /// This field is written by a single process (consensus handler).
-    last_consensus_stats: DBMap<u64, ExecutionIndicesWithStats>,
-
     last_consensus_stats_v2: DBMap<u64, ExecutionIndicesWithStatsV2>,
 
     /// This table contains current reconfiguration state for validator for current epoch
@@ -523,8 +490,6 @@ pub struct AuthorityEpochTables {
     #[rename = "running_root_accumulators"]
     pub running_root_state_hash: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
-    #[cfg(tidehunter)] // tidehunter does not support table deletion yet
-    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
     /// Record of the capabilities advertised by each authority.
     authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
@@ -545,9 +510,6 @@ pub struct AuthorityEpochTables {
     /// find all Jwks for a given round
     active_jwks: DBMap<(u64, (JwkId, JWK)), ()>,
 
-    /// Transactions that are being deferred until some future time
-    deferred_transactions_v2: DBMap<DeferralKey, Vec<TrustedExecutableTransaction>>,
-
     // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
@@ -560,9 +522,6 @@ pub struct AuthorityEpochTables {
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
     pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfirmation>,
-    /// Records the final output of DKG after completion, including the public VSS key and
-    /// any local private shares.
-    pub(crate) dkg_output: DBMap<u64, dkg_v1::Output<PkG, EncG>>,
     /// Holds the value of the next RandomnessRound to be generated.
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
     /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
@@ -577,17 +536,12 @@ pub struct AuthorityEpochTables {
     /// Execution time observations for congestion control.
     pub(crate) execution_time_observations:
         DBMap<(u64, AuthorityIndex), Vec<(ExecutionTimeObservationKey, Duration)>>,
-    deferred_transactions_with_aliases_v2:
-        DBMap<DeferralKey, Vec<DeprecatedWithAliases<TrustedExecutableTransaction>>>,
+    /// Transactions that are being deferred until some future time
     deferred_transactions_with_aliases_v3:
         DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
+    /// Records the final output of DKG after completion, including the public VSS key and
+    /// any local private shares. `None` indicates DKG completed as a failure.
     pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
-}
-
-fn signed_transactions_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
@@ -639,16 +593,6 @@ impl AuthorityEpochTables {
         let sequence_key = KeyType::from_prefix_bits(6 * 8 + 4);
         let configs = vec![
             (
-                "signed_transactions".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(
-                    tx_digest_indexing.clone(),
-                    mutexes,
-                    uniform_key,
-                    lru_bloom_config.clone(),
-                    digest_prefix.clone(),
-                ),
-            ),
-            (
                 "owned_object_locked_transactions".to_string(),
                 ThConfig::new_with_config_indexing(
                     object_ref_indexing,
@@ -678,16 +622,6 @@ impl AuthorityEpochTables {
                 ),
             ),
             (
-                "transaction_cert_signatures".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(
-                    tx_digest_indexing.clone(),
-                    mutexes,
-                    uniform_key,
-                    lru_bloom_config.clone(),
-                    digest_prefix.clone(),
-                ),
-            ),
-            (
                 "next_shared_object_versions_v2".to_string(),
                 ThConfig::new_with_config(32 + 8, mutexes, uniform_key, lru_only_config.clone()),
             ),
@@ -699,10 +633,6 @@ impl AuthorityEpochTables {
                     uniform_key,
                     bloom_config.clone(),
                 ),
-            ),
-            (
-                "last_consensus_stats".to_string(),
-                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
                 "last_consensus_stats_v2".to_string(),
@@ -753,10 +683,6 @@ impl AuthorityEpochTables {
                 ThConfig::new_with_config(8, mutexes, sequence_key, bloom_config.clone()),
             ),
             (
-                "authority_capabilities".to_string(),
-                ThConfig::new(104, mutexes, uniform_key),
-            ),
-            (
                 "authority_capabilities_v2".to_string(),
                 ThConfig::new(104, 1, KeyType::uniform(1)),
             ),
@@ -793,18 +719,6 @@ impl AuthorityEpochTables {
                 ),
             ),
             (
-                "deferred_transactions".to_string(),
-                ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
-            ),
-            (
-                "deferred_transactions_v2".to_string(),
-                ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
-            ),
-            (
-                "deferred_transactions_with_aliases_v2".to_string(),
-                ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
-            ),
-            (
                 "deferred_transactions_with_aliases_v3".to_string(),
                 ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
             ),
@@ -819,10 +733,6 @@ impl AuthorityEpochTables {
             (
                 "dkg_confirmations_v2".to_string(),
                 ThConfig::new(2, 1, KeyType::uniform(1)),
-            ),
-            (
-                "dkg_output".to_string(),
-                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
                 "randomness_next_round".to_string(),
@@ -889,22 +799,15 @@ impl AuthorityEpochTables {
 
     pub fn get_last_consensus_index(&self) -> SuiResult<Option<ExecutionIndices>> {
         Ok(self
-            .last_consensus_stats
+            .last_consensus_stats_v2
             .get(&LAST_CONSENSUS_STATS_ADDR)?
             .map(|s| s.index))
     }
 
     pub fn get_last_consensus_stats(&self) -> SuiResult<Option<ExecutionIndicesWithStatsV2>> {
-        if let Some(v2) = self
-            .last_consensus_stats_v2
-            .get(&LAST_CONSENSUS_STATS_ADDR)?
-        {
-            return Ok(Some(v2));
-        }
         Ok(self
-            .last_consensus_stats
-            .get(&LAST_CONSENSUS_STATS_ADDR)?
-            .map(Into::into))
+            .last_consensus_stats_v2
+            .get(&LAST_CONSENSUS_STATS_ADDR)?)
     }
 
     pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
@@ -926,65 +829,13 @@ impl AuthorityEpochTables {
             .collect())
     }
 
-    fn get_all_deferred_transactions_v2(
+    fn get_all_deferred_transactions(
         &self,
     ) -> SuiResult<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>>> {
         Ok(self
-            .deferred_transactions_v2
+            .deferred_transactions_with_aliases_v3
             .safe_iter()
-            // Load any old items from the deprecated table. These must all have no aliases.
-            .map(|item| {
-                item.map(|(key, txs)| {
-                    (
-                        key,
-                        txs.into_iter()
-                            .map(|tx| {
-                                VerifiedExecutableTransactionWithAliases::no_aliases(tx.into())
-                            })
-                            .collect(),
-                    )
-                })
-            })
-            .chain(
-                self.deferred_transactions_with_aliases_v2
-                    .safe_iter()
-                    // The v2 table contains the deprecated format with SuiAddress instead of u8.
-                    // We convert by preserving the sequence numbers, but using 0 for the indexes.
-                    // This is safe because as long as the fix_checkpoint_signature_mapping flag is
-                    // false (which it must be for all builds that write to the v2 table),
-                    // the indexes will be thrown out when mapping signatures to alias config
-                    // versions.
-                    .map(
-                        |item: Result<
-                            (
-                                DeferralKey,
-                                Vec<DeprecatedWithAliases<TrustedExecutableTransaction>>,
-                            ),
-                            _,
-                        >| {
-                            item.map(|(key, txs)| {
-                                (
-                                    key,
-                                    txs.into_iter()
-                                        .map(|tx| {
-                                            let (inner, aliases) = tx.into_inner();
-                                            let new_aliases =
-                                                aliases.map(|(_addr, seq)| (0u8, seq));
-                                            WithAliases::new(inner, new_aliases).into()
-                                        })
-                                        .collect(),
-                                )
-                            })
-                        },
-                    ),
-            )
-            .chain(
-                self.deferred_transactions_with_aliases_v3
-                    .safe_iter()
-                    .map(|item| {
-                        item.map(|(key, txs)| (key, txs.into_iter().map(Into::into).collect()))
-                    }),
-            )
+            .map(|item| item.map(|(key, txs)| (key, txs.into_iter().map(Into::into).collect())))
             .collect::<Result<_, _>>()?)
     }
 }
@@ -1798,22 +1649,6 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn insert_signed_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
-        Ok(self
-            .tables()?
-            .signed_transactions
-            .insert(transaction.digest(), transaction.serializable_ref())?)
-    }
-
-    #[cfg(test)]
-    pub fn delete_signed_transaction_for_test(&self, transaction: &TransactionDigest) {
-        self.tables()
-            .expect("test should not cross epoch boundary")
-            .signed_transactions
-            .remove(transaction)
-            .unwrap();
-    }
-
     #[cfg(test)]
     pub fn delete_object_locks_for_test(&self, objects: &[ObjectRef]) {
         for object in objects {
@@ -1834,17 +1669,6 @@ impl AuthorityPerEpochStore {
                 .insert(object, &LockDetailsWrapper::from(*digest))
                 .unwrap();
         }
-    }
-
-    pub fn get_signed_transaction(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
-        Ok(self
-            .tables()?
-            .signed_transactions
-            .get(tx_digest)?
-            .map(|t| t.into()))
     }
 
     /// Record that a transaction has been executed in the current epoch.
@@ -3147,7 +2971,7 @@ impl AuthorityPerEpochStore {
     }
 
     fn db_batch(&self) -> SuiResult<DBBatch> {
-        Ok(self.tables()?.last_consensus_stats.batch())
+        Ok(self.tables()?.last_consensus_stats_v2.batch())
     }
 
     #[cfg(test)]
