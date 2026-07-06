@@ -78,10 +78,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
 use typed_store::Map;
-use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, default_db_options};
-use typed_store::rocks::{ReadWriteOptions, read_size_from_env};
+use typed_store::rocks::{DBBatch, DBMap, MetricConf};
+#[cfg(not(tidehunter))]
+use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options, read_size_from_env};
 use typed_store::rocksdb::Options;
 
+#[cfg(not(tidehunter))]
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::consensus_tx_status_cache::{ConsensusTxStatus, ConsensusTxStatusCache};
 use super::epoch_start_configuration::EpochStartConfigTrait;
@@ -539,6 +541,7 @@ pub struct AuthorityEpochTables {
     pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
 }
 
+#[cfg(not(tidehunter))]
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
     DBOptions {
         options: default_db_options()
@@ -561,12 +564,12 @@ impl AuthorityEpochTables {
     }
 
     #[cfg(tidehunter)]
-    pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_with_path(&Self::path(epoch, parent_path), db_options)
+    pub fn open(epoch: EpochId, parent_path: &Path, _db_options: Option<Options>) -> Self {
+        Self::open_with_path(&Self::path(epoch, parent_path))
     }
 
     #[cfg(tidehunter)]
-    pub fn open_with_path(path: &PathBuf, db_options: Option<Options>) -> Self {
+    pub fn open_with_path(path: &Path) -> Self {
         tracing::warn!("AuthorityEpochTables using tidehunter");
         use typed_store::tidehunter_util::{
             KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,

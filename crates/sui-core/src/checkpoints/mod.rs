@@ -41,6 +41,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::{mpsc, watch};
+#[cfg(not(tidehunter))]
 use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -185,6 +186,7 @@ pub struct CheckpointStoreTables {
     full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
 }
 
+#[cfg(not(tidehunter))]
 fn full_checkpoint_content_table_default_config() -> DBOptions {
     DBOptions {
         options: default_db_options().options,

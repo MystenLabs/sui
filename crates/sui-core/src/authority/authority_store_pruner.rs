@@ -5,7 +5,10 @@ use super::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
 use crate::jsonrpc_index::IndexStore;
 use anyhow::anyhow;
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::monitored_scope;
+#[cfg(not(tidehunter))]
+use mysten_metrics::spawn_monitored_task;
+#[cfg(not(tidehunter))]
 use once_cell::sync::Lazy;
 use prometheus::{
     IntCounter, IntGauge, Registry, register_int_counter_with_registry,
@@ -13,14 +16,21 @@ use prometheus::{
 };
 #[cfg(tidehunter)]
 use serde::de::DeserializeOwned;
-use std::cmp::{max, min};
+#[cfg(not(tidehunter))]
+use std::cmp::max;
+use std::cmp::min;
+#[cfg(not(tidehunter))]
 use std::collections::{BTreeSet, HashMap};
+#[cfg(not(tidehunter))]
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
+#[cfg(not(tidehunter))]
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_rpc_store::Store as RpcStore;
+#[cfg(not(tidehunter))]
+use sui_types::base_types::VersionNumber;
 use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -29,15 +39,17 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
 };
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, TransactionDigest, VersionNumber},
+    base_types::{ObjectID, SequenceNumber, TransactionDigest},
     storage::ObjectKey,
 };
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
+#[cfg(not(tidehunter))]
 use typed_store::rocksdb::LiveFile;
 use typed_store::{Map, TypedStoreError};
 
+#[cfg(not(tidehunter))]
 static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
     [
         "objects",
@@ -596,6 +608,7 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    #[cfg(not(tidehunter))]
     fn prune_indexes(
         indexes: Option<&IndexStore>,
         config: &AuthorityStorePruningConfig,
@@ -622,6 +635,7 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    #[cfg(not(tidehunter))]
     async fn prune_executed_tx_digests(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
@@ -764,6 +778,7 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    #[cfg(not(tidehunter))]
     fn compact_next_sst_file(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         delay_days: usize,
@@ -884,6 +899,8 @@ impl AuthorityStorePruner {
 
         #[cfg(tidehunter)]
         {
+            // Index pruning is only implemented for the rocksdb backend.
+            let _ = jsonrpc_index;
             if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints() {
                 let prune_objects = config.num_epochs_to_retain != u64::MAX;
                 tokio::task::spawn(async move {
@@ -1044,10 +1061,10 @@ pub(crate) fn apply_relocation_filter<T: DeserializeOwned>(
             bincode::DefaultOptions::new()
                 .with_big_endian()
                 .with_fixint_encoding()
-                .deserialize(&key)
+                .deserialize(key)
                 .expect("relocation filter deserialization error")
         } else {
-            bcs::from_bytes(&value).expect("relocation filter deserialization error")
+            bcs::from_bytes(value).expect("relocation filter deserialization error")
         };
         if extractor(data) < pruner_watermark.load(Ordering::Relaxed) {
             Decision::Remove
@@ -1060,16 +1077,19 @@ pub(crate) fn apply_relocation_filter<T: DeserializeOwned>(
 #[cfg(test)]
 mod tests {
     use more_asserts as ma;
+    #[cfg(not(tidehunter))]
+    use std::collections::HashSet;
     use std::path::Path;
+    use std::sync::Arc;
+    #[cfg(not(tidehunter))]
     use std::time::Duration;
-    use std::{collections::HashSet, sync::Arc};
     use tracing::log::info;
 
     use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
-    use crate::authority::authority_store_types::{
-        StoreObject, StoreObjectWrapper, get_store_object,
-    };
+    use crate::authority::authority_store_types::get_store_object;
+    #[cfg(not(tidehunter))]
+    use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
     use prometheus::Registry;
     use sui_types::base_types::ObjectDigest;
     use sui_types::effects::TransactionEffects;
@@ -1080,10 +1100,12 @@ mod tests {
         storage::ObjectKey,
     };
     use typed_store::Map;
+    #[cfg(not(tidehunter))]
     use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions, default_db_options};
 
     use super::AuthorityStorePruner;
 
+    #[cfg(not(tidehunter))]
     fn get_keys_after_pruning(path: &Path) -> anyhow::Result<HashSet<ObjectKey>> {
         let perpetual_db_path = path.join(Path::new("perpetual"));
         let cf_names = AuthorityPerpetualTables::describe_tables();
@@ -1114,8 +1136,10 @@ mod tests {
         Ok(after_pruning)
     }
 
+    #[cfg(not(tidehunter))]
     type GenerateTestDataResult = (Vec<ObjectKey>, Vec<ObjectKey>, Vec<ObjectKey>);
 
+    #[cfg(not(tidehunter))]
     fn generate_test_data(
         db: Arc<AuthorityPerpetualTables>,
         num_versions_per_object: u64,
@@ -1172,6 +1196,7 @@ mod tests {
         Ok((to_keep, to_delete, tombstones))
     }
 
+    #[cfg(not(tidehunter))]
     async fn run_pruner(
         path: &Path,
         num_versions_per_object: u64,

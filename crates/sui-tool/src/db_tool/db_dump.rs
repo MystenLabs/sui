@@ -3,6 +3,7 @@
 
 use anyhow::{Ok, anyhow};
 use clap::{Parser, ValueEnum};
+#[cfg(not(tidehunter))]
 use comfy_table::{Cell, ContentArrangement, Row, Table};
 use prometheus::Registry;
 use std::collections::BTreeMap;
@@ -159,6 +160,9 @@ pub fn print_table_metadata(
 
         eprintln!("{}", table);
     }
+    // Table metadata is only available for the rocksdb backend.
+    #[cfg(tidehunter)]
+    let _ = (store_name, epoch, db_path, table_name);
     Ok(())
 }
 
