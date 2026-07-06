@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::u256::{U256, U256_NUM_BYTES};

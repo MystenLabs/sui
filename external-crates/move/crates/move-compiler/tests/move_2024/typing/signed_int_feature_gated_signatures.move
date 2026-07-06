@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that signed integer types are rejected in struct fields, function
 // parameters, return types, and constants in 2024 edition.
 module a::m {

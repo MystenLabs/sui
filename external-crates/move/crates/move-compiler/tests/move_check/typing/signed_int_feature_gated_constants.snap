@@ -6,127 +6,127 @@ info:
   lint: false
 ---
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:6:17
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:3:17
   │
-6 │     const C_I8: i8 = 1i8;
+3 │     const C_I8: i8 = 1i8;
   │                 ^^ signed integer types are under development and should not be used right now.
 
 error[E04012]: invalid type for constant
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:6:17
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:3:17
   │
-6 │     const C_I8: i8 = 1i8;
+3 │     const C_I8: i8 = 1i8;
   │                 ^^
   │                 │
   │                 Unpermitted constant type
   │                 Found: 'i8'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:6:22
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:3:22
   │
-6 │     const C_I8: i8 = 1i8;
+3 │     const C_I8: i8 = 1i8;
   │                      ^^^ signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:7:18
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:4:18
   │
-7 │     const C_I16: i16 = 1i16;
+4 │     const C_I16: i16 = 1i16;
   │                  ^^^ signed integer types are under development and should not be used right now.
 
 error[E04012]: invalid type for constant
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:7:18
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:4:18
   │
-7 │     const C_I16: i16 = 1i16;
+4 │     const C_I16: i16 = 1i16;
   │                  ^^^
   │                  │
   │                  Unpermitted constant type
   │                  Found: 'i16'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:7:24
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:4:24
   │
-7 │     const C_I16: i16 = 1i16;
+4 │     const C_I16: i16 = 1i16;
   │                        ^^^^ signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:8:18
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:5:18
   │
-8 │     const C_I32: i32 = 1i32;
+5 │     const C_I32: i32 = 1i32;
   │                  ^^^ signed integer types are under development and should not be used right now.
 
 error[E04012]: invalid type for constant
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:8:18
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:5:18
   │
-8 │     const C_I32: i32 = 1i32;
+5 │     const C_I32: i32 = 1i32;
   │                  ^^^
   │                  │
   │                  Unpermitted constant type
   │                  Found: 'i32'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:8:24
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:5:24
   │
-8 │     const C_I32: i32 = 1i32;
+5 │     const C_I32: i32 = 1i32;
   │                        ^^^^ signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:9:18
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:6:18
   │
-9 │     const C_I64: i64 = 1i64;
+6 │     const C_I64: i64 = 1i64;
   │                  ^^^ signed integer types are under development and should not be used right now.
 
 error[E04012]: invalid type for constant
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:9:18
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:6:18
   │
-9 │     const C_I64: i64 = 1i64;
+6 │     const C_I64: i64 = 1i64;
   │                  ^^^
   │                  │
   │                  Unpermitted constant type
   │                  Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:9:24
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:6:24
   │
-9 │     const C_I64: i64 = 1i64;
+6 │     const C_I64: i64 = 1i64;
   │                        ^^^^ signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:10:19
-   │
-10 │     const C_I128: i128 = 1i128;
-   │                   ^^^^ signed integer types are under development and should not be used right now.
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:7:19
+  │
+7 │     const C_I128: i128 = 1i128;
+  │                   ^^^^ signed integer types are under development and should not be used right now.
 
 error[E04012]: invalid type for constant
-   ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:10:19
-   │
-10 │     const C_I128: i128 = 1i128;
-   │                   ^^^^
-   │                   │
-   │                   Unpermitted constant type
-   │                   Found: 'i128'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:7:19
+  │
+7 │     const C_I128: i128 = 1i128;
+  │                   ^^^^
+  │                   │
+  │                   Unpermitted constant type
+  │                   Found: 'i128'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:10:26
-   │
-10 │     const C_I128: i128 = 1i128;
-   │                          ^^^^^ signed integer types are under development and should not be used right now.
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:7:26
+  │
+7 │     const C_I128: i128 = 1i128;
+  │                          ^^^^^ signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:11:19
-   │
-11 │     const C_I256: i256 = 1i256;
-   │                   ^^^^ signed integer types are under development and should not be used right now.
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:8:19
+  │
+8 │     const C_I256: i256 = 1i256;
+  │                   ^^^^ signed integer types are under development and should not be used right now.
 
 error[E04012]: invalid type for constant
-   ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:11:19
-   │
-11 │     const C_I256: i256 = 1i256;
-   │                   ^^^^
-   │                   │
-   │                   Unpermitted constant type
-   │                   Found: 'i256'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:8:19
+  │
+8 │     const C_I256: i256 = 1i256;
+  │                   ^^^^
+  │                   │
+  │                   Unpermitted constant type
+  │                   Found: 'i256'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:11:26
-   │
-11 │     const C_I256: i256 = 1i256;
-   │                          ^^^^^ signed integer types are under development and should not be used right now.
+  ┌─ tests/move_check/typing/signed_int_feature_gated_constants.move:8:26
+  │
+8 │     const C_I256: i256 = 1i256;
+  │                          ^^^^^ signed integer types are under development and should not be used right now.

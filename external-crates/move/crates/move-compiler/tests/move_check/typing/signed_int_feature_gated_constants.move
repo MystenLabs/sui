@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that signed integer constants are rejected when the feature is not enabled.
 module a::m {
     const C_I8: i8 = 1i8;

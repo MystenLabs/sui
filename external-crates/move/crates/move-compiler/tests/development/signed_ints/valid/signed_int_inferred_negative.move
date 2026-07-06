@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Unsuffixed negative literals fit into their inferred signed type, including MIN.
 module 0x42::m {
     fun min_i8()   { let _x: i8   = -128; }

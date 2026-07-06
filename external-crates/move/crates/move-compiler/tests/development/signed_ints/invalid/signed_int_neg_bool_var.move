@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Negating a bool through a variable should produce a clear error.
 module 0x42::m {
     fun neg_bool_var() {

@@ -261,9 +261,8 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             let E::Value(sp!(_, Value_::InferredNum(v))) = &inner.exp.value else {
                 unreachable!()
             };
-            let v = *v;
             if let Some(value) =
-                inferred_numerical_value(context, e.exp.loc, v, &e.ty, /* negated */ true)
+                inferred_numerical_value(context, e.exp.loc, *v, &e.ty, /* negated */ true)
             {
                 e.exp.value = E::Value(sp(inner_loc, value));
             } else {

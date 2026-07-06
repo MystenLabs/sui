@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Unsuffixed negative literals whose magnitude exceeds `|MIN|` should be rejected,
 // with a fix-it that suggests the smallest signed type that fits the negated magnitude.
 module 0x42::m {

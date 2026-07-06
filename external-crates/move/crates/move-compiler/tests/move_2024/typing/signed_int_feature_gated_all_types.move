@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that all signed integer types are gated behind the development edition.
 module a::m {
     fun gated_i8() {

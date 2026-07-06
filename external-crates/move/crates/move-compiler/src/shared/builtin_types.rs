@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 pub const ADDRESS: &str = "address";
@@ -71,10 +71,14 @@ macro_rules! define_parse_signed_int {
                 if magnitude > <$signed>::MIN.unsigned_abs() {
                     return Err(signed_overflow_parse_error());
                 }
-                // We can wrap here safely because the only way to get an overflow is if the
-                // magnitude is exactly abs(MIN), in which case the correct negated value is MIN.
-                // In that case, the wrapping negation will also produce the correct value.
-                (magnitude as $signed).wrapping_neg()
+                // `-MIN` isn't representable as a positive signed value, so handle it
+                // explicitly. Every other in-range magnitude fits in the positive half of
+                // `$signed`, so plain negation is safe.
+                if magnitude == <$signed>::MIN.unsigned_abs() {
+                    <$signed>::MIN
+                } else {
+                    -(magnitude as $signed)
+                }
             } else {
                 if magnitude > <$signed>::MAX as $unsigned {
                     return Err(signed_overflow_parse_error());
@@ -105,7 +109,13 @@ pub fn parse_i256(
         if magnitude > max_neg {
             return Err(signed_overflow_parse_error());
         }
-        I256::from_u256_bits(magnitude).wrapping_neg()
+        // `-MIN` isn't representable as a positive `I256`, so handle it explicitly.
+        // Every other in-range magnitude fits in the positive half of `I256`.
+        if magnitude == max_neg {
+            I256::min_value()
+        } else {
+            -I256::from_u256_bits(magnitude)
+        }
     } else {
         if magnitude > max_pos {
             return Err(signed_overflow_parse_error());
