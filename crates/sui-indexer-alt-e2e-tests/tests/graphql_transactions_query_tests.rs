@@ -73,6 +73,19 @@ fn window(edges: &[graphql::Edge<TxNode>]) -> Vec<(String, Option<u64>)> {
         .collect()
 }
 
+/// A cursor as minted before the `CursorToken` migration: Base64 of the JSON-encoded
+/// `tx_sequence_number`.
+fn legacy_cursor(position: u64) -> String {
+    Base64::encode(serde_json::to_vec(&position).unwrap())
+}
+
+/// The `tx_sequence_number` a response cursor points at.
+fn cursor_position(cursor: &str) -> u64 {
+    CursorToken::decode(&Base64::decode(cursor).unwrap())
+        .expect("response cursors are CursorTokens")
+        .position
+}
+
 #[tokio::test]
 async fn test_transactions_query_cursor_pagination() {
     let mut cluster = FullCluster::new().await.unwrap();
@@ -172,4 +185,76 @@ async fn test_transactions_query_cursor_pagination() {
         .unwrap();
     assert!(page.edges.is_empty());
     assert!(!page.page_info.has_next_page);
+}
+
+/// Cursors minted before the `CursorToken` migration are still accepted as `after`/`before`
+/// bounds, while response cursors are always minted in the current format.
+#[tokio::test]
+async fn test_transactions_query_legacy_cursors() {
+    let mut cluster = FullCluster::new().await.unwrap();
+
+    let (a, kp, mut gas) = cluster
+        .funded_account(DEFAULT_GAS_BUDGET * 40)
+        .expect("Failed to fund account");
+    cluster.create_checkpoint().await;
+    for amount in [10u64, 11, 12, 13, 14, 15] {
+        gas = send_sui(&mut cluster, a, &kp, gas, amount).0;
+    }
+    cluster.create_checkpoint().await;
+
+    // Ground truth, paginated without any legacy cursors involved.
+    let all = transactions(&cluster, Some(50), None, None, None)
+        .await
+        .unwrap();
+    let n = all.edges.len();
+    assert!(n >= 6, "expected enough transactions to paginate, got {n}");
+
+    // Spoof legacy encodings of the 1st and 6th transactions' cursors.
+    let after = legacy_cursor(cursor_position(&all.edges[0].cursor));
+    let before = legacy_cursor(cursor_position(&all.edges[5].cursor));
+
+    // Legacy `after` and `before` bound the page like their current-format equivalents, picking
+    // from the front...
+    let page = transactions(
+        &cluster,
+        Some(2),
+        None,
+        Some(after.clone()),
+        Some(before.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(window(&page.edges), window(&all.edges[1..3]));
+    assert!(page.page_info.has_previous_page);
+    assert!(page.page_info.has_next_page);
+
+    // ...and from the back.
+    let page = transactions(
+        &cluster,
+        None,
+        Some(2),
+        Some(after.clone()),
+        Some(before.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(window(&page.edges), window(&all.edges[3..5]));
+    assert!(page.page_info.has_previous_page);
+    assert!(page.page_info.has_next_page);
+
+    // Response cursors decode as `CursorToken`s, even when the request was bounded by legacy
+    // cursors. (The `window` comparisons above already match them against ground-truth cursors.)
+    for edge in &page.edges {
+        cursor_position(&edge.cursor);
+    }
+
+    // A cursor that is neither a `CursorToken` nor a legacy JSON number is rejected cleanly.
+    let garbage = Base64::encode(b"not a cursor");
+    let err = transactions(&cluster, Some(2), None, Some(garbage), None)
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("Invalid cursor"),
+        "unexpected error: {err}"
+    );
 }

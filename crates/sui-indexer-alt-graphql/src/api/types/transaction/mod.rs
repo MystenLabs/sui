@@ -52,6 +52,7 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::extensions::query_limits;
+use crate::pagination::Error as PaginationError;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedTransaction;
@@ -286,9 +287,16 @@ impl Transaction {
     pub(crate) fn paginate_preloaded_transactions(
         scope: Scope,
         transactions: &[ProcessedTransaction],
-        page: &Page<CTransaction>,
+        mut page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<TransactionConnection, RpcError<Error>> {
+        if let Some(after) = page.after().map(remap_legacy_cursor).transpose()? {
+            page.set_after(after);
+        }
+        if let Some(before) = page.before().map(remap_legacy_cursor).transpose()? {
+            page.set_before(before);
+        }
+
         let after = page
             .after()
             .map(|c| CursorToken::decode(c))
@@ -350,9 +358,16 @@ impl Transaction {
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
-        page: Page<CTransaction>,
+        mut page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<TransactionConnection, RpcError> {
+        if let Some(after) = page.after().map(remap_legacy_cursor).transpose()? {
+            page.set_after(after);
+        }
+        if let Some(before) = page.before().map(remap_legacy_cursor).transpose()? {
+            page.set_before(before);
+        }
+
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -479,7 +494,7 @@ impl TransactionConnection {
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
         CursorToken::decode(self)
-            .expect("cursor already validated as ByteCursor")
+            .expect("valid transaction cursor")
             .position
     }
 }
@@ -760,4 +775,70 @@ async fn tx_unfiltered(
 
     let tx_sequence_numbers = (tx_lo..tx_hi).collect();
     Ok(tx_sequence_numbers)
+}
+
+/// Re-encode an input cursor of the legacy format, a base64-encoded `JsonCursor<u64>`, into the
+/// current `CursorToken`.
+fn remap_legacy_cursor(cursor: &CTransaction) -> Result<CTransaction, PaginationError> {
+    if CursorToken::decode(cursor).is_ok() {
+        return Ok(cursor.clone());
+    }
+
+    let position: u64 = serde_json::from_slice(cursor).map_err(|_| PaginationError::BadCursor)?;
+    Ok(ByteCursor::new(
+        CursorToken::item(QueryType::Transactions, 0, position)
+            .encode()
+            .to_vec(),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use async_graphql::connection::CursorType;
+
+    use crate::api::scalars::cursor::JsonCursor;
+
+    use super::*;
+
+    /// The previous definition of `CTransaction` -- cursors handed out before the migration are
+    /// encoded in this format.
+    type LegacyCTransaction = JsonCursor<u64>;
+
+    /// A cursor as minted by the current implementation.
+    fn token_cursor(position: u64) -> CTransaction {
+        ByteCursor::new(
+            CursorToken::item(QueryType::Transactions, 0, position)
+                .encode()
+                .to_vec(),
+        )
+    }
+
+    /// A cursor as minted by the legacy implementation.
+    fn legacy_cursor(position: u64) -> LegacyCTransaction {
+        JsonCursor::new(position)
+    }
+
+    /// Parse a cursor string the way the current scalar accepts it off the wire.
+    fn decode_input(encoded: &str) -> CTransaction {
+        ByteCursor::decode_cursor(encoded).unwrap()
+    }
+
+    #[test]
+    fn test_normalize_legacy_cursor() {
+        let received = decode_input(&legacy_cursor(42).encode_cursor());
+        let normalized = remap_legacy_cursor(&received).unwrap();
+        assert_eq!(normalized, token_cursor(42));
+        assert_eq!(normalized.tx_sequence_number(), 42);
+    }
+
+    #[test]
+    fn test_normalize_current_cursor_unchanged() {
+        let cursor = token_cursor(42);
+        assert_eq!(remap_legacy_cursor(&cursor).unwrap(), cursor);
+    }
+
+    #[test]
+    fn test_normalize_garbage_cursor() {
+        assert!(remap_legacy_cursor(&ByteCursor::new(b"not a cursor".to_vec())).is_err());
+    }
 }

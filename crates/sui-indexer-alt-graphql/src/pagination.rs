@@ -61,6 +61,9 @@ pub(crate) enum End {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
+    #[error("Invalid cursor for connection")]
+    BadCursor,
+
     #[error("Cannot provide both 'first' and 'last' parameters for connection")]
     FirstAndLast,
 
@@ -153,6 +156,14 @@ impl<C> Page<C> {
 
     pub(crate) fn before(&self) -> Option<&C> {
         self.before.as_ref()
+    }
+
+    pub(crate) fn set_after(&mut self, cursor: C) {
+        self.after = Some(cursor);
+    }
+
+    pub(crate) fn set_before(&mut self, cursor: C) {
+        self.before = Some(cursor);
     }
 
     pub(crate) fn limit(&self) -> usize {

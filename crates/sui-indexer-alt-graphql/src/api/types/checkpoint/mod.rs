@@ -245,7 +245,7 @@ impl CheckpointContents {
                 return Ok(Some(Transaction::paginate_preloaded_transactions(
                     self.scope.clone(),
                     &streamed.transactions,
-                    &page,
+                    page,
                     filter,
                 )?));
             }
