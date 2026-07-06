@@ -205,7 +205,16 @@ pub(crate) fn structure(
                 input.remove(m);
             }
         }
-        input.insert(node, D::Input::Reduced(node, vec![post_dom_node]));
+        // SESE collapse: single-exit region, no per-exit choice, so the edge condition
+        // is trivially `True`. When Phase 4 wires V-B for cyclic regions, loop `Reduced`
+        // markers will carry real formulas here; SESE stays at `True`.
+        input.insert(
+            node,
+            D::Input::Reduced(
+                node,
+                vec![(post_dom_node, crate::structuring::predicates::true_())],
+            ),
+        );
     }
 
     let residue_members: HashSet<NodeIndex> = input.keys().copied().collect();

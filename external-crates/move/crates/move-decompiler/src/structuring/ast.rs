@@ -30,10 +30,14 @@ pub enum Input {
     ),
     Code(Label, Code, Option<Label>),
     /// Already-structured abstract node (NMG §IV-C collapse). The structured form lives
-    /// in `structured_blocks[label]`; CFG-wise this node has `succs` as its out-edges.
-    /// Installed by `structure_loop` after a loop body is wrapped, so outer scopes treat
-    /// the loop as a single opaque block.
-    Reduced(Label, Vec<Label>),
+    /// in `structured_blocks[label]`; CFG-wise this node has `succs` as its out-edges,
+    /// each carrying the Boolean formula under which body-flow reached that exit target
+    /// (from the loop-body projection's `reaching_conditions`). Outer scopes read those
+    /// formulas via `region::edge_condition` so the surrounding acyclic structurer builds
+    /// the post-loop `if`/`else` cascade from the propagated reach conditions.
+    ///
+    /// Installed by `structure_loop` after a loop body is wrapped.
+    Reduced(Label, Vec<(Label, crate::structuring::predicates::Formula)>),
 }
 
 /// Provenance for a surviving `Jump`. Each variant names the structurer path that
@@ -113,7 +117,7 @@ impl Input {
                 .collect::<Vec<_>>(),
             Input::Code(lbl, _, Some(to)) => vec![(*lbl, *to)],
             Input::Code(_, _, None) => vec![],
-            Input::Reduced(lbl, succs) => succs.iter().map(|s| (*lbl, *s)).collect(),
+            Input::Reduced(lbl, succs) => succs.iter().map(|(s, _)| (*lbl, *s)).collect(),
         }
     }
 

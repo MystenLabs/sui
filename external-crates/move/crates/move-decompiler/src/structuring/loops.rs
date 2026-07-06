@@ -213,7 +213,13 @@ fn install_reduced_marker(
         .collect();
     succs.sort_by_key(|n| n.index());
     succs.dedup();
-    input.insert(loop_head, D::Input::Reduced(loop_head, succs));
+    // Phase 2 placeholder: each edge carries `True` until Phase 4 threads the real
+    // body-exit formulas through from `compute_loop_exit_formulas`.
+    let succs_with_formulas: Vec<(NodeIndex, crate::structuring::predicates::Formula)> = succs
+        .into_iter()
+        .map(|s| (s, crate::structuring::predicates::true_()))
+        .collect();
+    input.insert(loop_head, D::Input::Reduced(loop_head, succs_with_formulas));
 }
 
 /// Multi-succ loop: synthesize a dispatch local `__dispatch_<N>`, rewrite every
