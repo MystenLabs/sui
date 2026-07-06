@@ -737,6 +737,7 @@ fn is_early_execution_error(status: &ExecutionStatus) -> bool {
         ExecutionStatus::Failure(ExecutionFailure { error, .. }) => matches!(
             error,
             ExecutionErrorKind::CertificateDenied
+                | ExecutionErrorKind::InternalExecutionError
                 | ExecutionErrorKind::InputObjectDeleted
                 | ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. }
                 | ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable

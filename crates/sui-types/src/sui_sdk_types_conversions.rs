@@ -933,6 +933,8 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             crate::execution_status::ExecutionErrorKind::PackageUpgradeError { upgrade_error } => Self::PackageUpgradeError { kind: upgrade_error.into() },
             crate::execution_status::ExecutionErrorKind::WrittenObjectsTooLarge { current_size, max_size } => Self::WrittenObjectsTooLarge { object_size: current_size, max_object_size:max_size },
             crate::execution_status::ExecutionErrorKind::CertificateDenied => Self::CertificateDenied,
+            // Test/antithesis-only; no dedicated SDK kind, map to the generic InvariantViolation.
+            crate::execution_status::ExecutionErrorKind::InternalExecutionError => Self::InvariantViolation,
             crate::execution_status::ExecutionErrorKind::SuiMoveVerificationTimedout => Self::SuiMoveVerificationTimedout,
             crate::execution_status::ExecutionErrorKind::SharedObjectOperationNotAllowed => Self::ConsensusObjectOperationNotAllowed,
             crate::execution_status::ExecutionErrorKind::InputObjectDeleted => Self::InputObjectDeleted,
