@@ -1651,7 +1651,6 @@ impl SuiNode {
                 consensus_adapter.clone(),
                 Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
                 overload_config.admission_queue_capacity_fraction,
-                overload_config.admission_queue_bypass_fraction,
                 overload_config.admission_queue_failover_timeout,
                 inflight_slot_freed_notify,
             ));
