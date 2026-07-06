@@ -115,8 +115,14 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
     #[cfg(not(debug_assertions))]
     let max_maps = 8; // 8Gb of mapped space for prod
     let max_maps = parse_env_usize("TH_MAX_MAPS", 1).unwrap_or(max_maps);
+    // The perpetual DB is value-read-bound under sustained high load: object/tx/effects
+    // value fetches dominate, and once their record-WAL frags age out of the mmap window
+    // the reads fall back to `pread` syscalls. Widen the record-WAL mmap window for
+    // perpetual only (the index is in memory; `max_index_maps` is left unchanged) so more
+    // recent values stay mapped. A 2x window still spilled to syscall after a few hours at
+    // 16k TPS as the working set outgrew it, so use 4x.
     let max_maps = if metric_conf.db_name.starts_with("perpetual") {
-        max_maps * 2
+        max_maps * 4
     } else {
         max_maps
     };
