@@ -959,6 +959,17 @@ impl CheckpointExecutor {
                             env = env.with_insufficient_funds();
                         }
 
+                        // Crash-recovered (poison) transactions are recorded with an
+                        // InternalExecutionError. Reproduce that early error here so the node never
+                        // runs the real logic (which would crash the process again on re-execution).
+                        if let &ExecutionStatus::Failure(ExecutionFailure {
+                            error: ExecutionErrorKind::InternalExecutionError,
+                            ..
+                        }) = effects.status()
+                        {
+                            env = env.with_internal_execution_error();
+                        }
+
                         Some((tx_digest, (txn.clone(), env)))
                     }
                 },

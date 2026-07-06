@@ -805,6 +805,11 @@ pub struct ExecutionEnv {
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
+    /// Set when executing from a source (e.g. a certified checkpoint) whose effects show the
+    /// transaction failed with `InternalExecutionError` (a crash-recovered poison transaction).
+    /// Forces the same early error on re-execution so the node reproduces the effects without
+    /// running the real logic that would crash the process again.
+    pub internal_execution_error: bool,
 }
 
 impl Default for ExecutionEnv {
@@ -814,6 +819,7 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
+            internal_execution_error: false,
         }
     }
 }
@@ -838,6 +844,11 @@ impl ExecutionEnv {
 
     pub fn with_insufficient_funds(mut self) -> Self {
         self.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+        self
+    }
+
+    pub fn with_internal_execution_error(mut self) -> Self {
+        self.internal_execution_error = true;
         self
     }
 
@@ -1472,6 +1483,8 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
         let tx_digest = certificate.digest();
+        let _crash_guard =
+            crate::crash_recovery::register_executing_transaction(*tx_digest, self.name);
 
         if let Some(fork_recovery) = &self.fork_recovery_state
             && let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest)
@@ -1987,11 +2000,38 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
+        // Crash-recovery: a transaction that previously crashed the node is re-executed with an
+        // early error instead of running its real (crashing) logic. It still assigns versions,
+        // executes (as a deterministic failure), advances shared-object versions, and is
+        // checkpointed like any other transaction, so consensus-committed state stays a pure
+        // function of the commit. Two triggers: the local crashed-set (validator re-executing after
+        // its own crash) and the ExecutionEnv flag (executing from a certified checkpoint whose
+        // effects are InternalExecutionError, so the node never runs the crashing logic). Prepended
+        // so the effect status is InternalExecutionError regardless of any other early error.
+        let early_execution_error = if epoch_store.is_crashed_transaction(&tx_digest)
+            || execution_env.internal_execution_error
+        {
+            let mut errors = vec![ExecutionErrorKind::InternalExecutionError];
+            if let Some(existing) = early_execution_error {
+                errors.extend(existing);
+            }
+            NonEmpty::from_vec(errors)
+        } else {
+            early_execution_error
+        };
         let accumulator_version = execution_env.assigned_versions.accumulator_version;
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
         };
+
+        // Inject the simulated crash only when the transaction actually executes (no early error),
+        // mirroring the execution engine's early-exit-on-early-error. A crash-recovered tx takes the
+        // early-error path above (InternalExecutionError) and must not re-crash. The upstream
+        // effects-cache check ensures this only fires on the first execution attempt.
+        if execution_params.is_ok() && !transaction_data.kind().is_system_tx() {
+            crate::crash_recovery::maybe_crash_for_testing(transaction_data);
+        }
 
         // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
         // was deleted.

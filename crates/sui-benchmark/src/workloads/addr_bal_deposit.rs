@@ -204,7 +204,13 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
                     vec![coin_balance, recipient_arg],
                 );
             }
-            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
+            // Seeding transactions do not opt in to crash injection (they carry no crash-opt-in
+            // marker), so they can never be poisoned.
+            let tx_data = tx_builder.ensure_unique().build();
+            let tx = sui_types::transaction::Transaction::from_data_and_signer(
+                tx_data,
+                vec![keypair.as_ref()],
+            );
             let proxy_ref = execution_proxy.clone();
             futures.push(async move {
                 let result = proxy_ref.execute_transaction_block(tx).await;

@@ -403,6 +403,7 @@ impl SharedObjVerManager {
             } else {
                 None
             };
+
         let txn_cancelled = cancellation_info.is_some();
 
         let mut input_object_keys = assignable.non_shared_input_object_keys();
@@ -413,8 +414,6 @@ impl SharedObjVerManager {
         input_object_keys.extend(receiving_object_keys);
 
         if txn_cancelled {
-            // For cancelled transaction due to congestion, assign special versions to all shared objects.
-            // Note that new lamport version does not depend on any shared objects.
             for SharedInputObject {
                 id,
                 initial_shared_version,

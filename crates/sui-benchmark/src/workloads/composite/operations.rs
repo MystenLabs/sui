@@ -45,6 +45,7 @@ pub struct OperationDescriptor {
 
 pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     SharedCounterIncrement::DESCRIPTOR,
+    RequestCrash::DESCRIPTOR,
     SharedCounterRead::DESCRIPTOR,
     RandomnessRead::DESCRIPTOR,
     AddressBalanceDeposit::DESCRIPTOR,
@@ -151,6 +152,42 @@ impl Operation for SharedCounterIncrement {
                 })],
             )
             .unwrap();
+    }
+}
+
+/// Opt the composite transaction in to crash injection by attaching an unused marker argument.
+/// Only transactions carrying this marker are eligible to be poisoned (see
+/// `sui_core::crash_recovery`), so a transaction's poison status is intrinsic to its contents and
+/// consistent across re-executions. Produces no command, so it must not be the only operation.
+pub struct RequestCrash;
+
+impl RequestCrash {
+    pub const NAME: &'static str = "request_crash";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(RequestCrash),
+    };
+}
+
+impl Operation for RequestCrash {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        _resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        builder.pure_bytes(
+            sui_core::crash_recovery::CRASH_OPT_IN_MARKER.to_vec(),
+            /* force_separate */ true,
+        );
     }
 }
 
