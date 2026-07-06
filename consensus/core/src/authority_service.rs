@@ -337,6 +337,12 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     ) -> ConsensusResult<BlockStream> {
         fail_point_async!("consensus-rpc-response");
 
+        // Subscribe before snapshotting past blocks below. This can duplicate
+        // a block in both the subscription stream and snapshot, which is fine.
+        // Otherwise, it is possible to miss a block if it is broadcasted after snapshotting
+        // but before subscribing.
+        let broadcast_rx = self.rx_block_broadcast.resubscribe();
+
         // Find past proposed blocks as the initial blocks to send to the peer.
         //
         // If there are cached blocks in the range which the peer requested, send all of them.
@@ -348,8 +354,10 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         let past_proposed_blocks = {
             let dag_state = self.dag_state.read();
 
-            let mut proposed_blocks =
-                dag_state.get_cached_blocks(self.context.own_index, last_received + 1);
+            // Saturate so an out-of-range round from the peer cannot wrap to 0 and
+            // replay the entire block cache.
+            let mut proposed_blocks = dag_state
+                .get_cached_blocks(self.context.own_index, last_received.saturating_add(1));
             if proposed_blocks.is_empty() {
                 let last_proposed_block = dag_state
                     .get_last_proposed_block()
@@ -370,10 +378,11 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             )
         };
 
+        // Ok to not batch own proposed blocks, which is < 20/s.
         const MAX_BLOCKS_PER_POLL: usize = 1;
         let broadcasted_blocks = BroadcastedBlockStream::new(
             PeerId::Validator(peer),
-            self.rx_block_broadcast.resubscribe(),
+            broadcast_rx,
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         );
@@ -497,13 +506,17 @@ impl SubscriptionCounter {
         }
     }
 
-    fn increment(&self, peer: &PeerId) -> Result<(), ConsensusError> {
+    fn increment(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
         counter.count += 1;
-        *counter
-            .subscriptions_by_peer
-            .entry(peer.clone())
-            .or_insert(0) += 1;
+        let peer_count = {
+            let count = counter
+                .subscriptions_by_peer
+                .entry(peer.clone())
+                .or_default();
+            *count += 1;
+            *count
+        };
 
         match peer {
             PeerId::Validator(authority) => {
@@ -516,27 +529,29 @@ impl SubscriptionCounter {
                     .set(1);
             }
             PeerId::Observer(_) => {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .subscribed_by
-                    .with_label_values(&["observer"])
-                    .inc();
+                // Only count the first subscription from each peer.
+                if peer_count == 1 {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .subscribed_by
+                        .with_label_values(&["observer"])
+                        .inc();
+                }
             }
         }
-
-        Ok(())
     }
 
-    fn decrement(&self, peer: &PeerId) -> Result<(), ConsensusError> {
+    fn decrement(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
-        counter.count -= 1;
-        *counter
+        counter.count = counter.count.saturating_sub(1);
+        let peer_count = counter
             .subscriptions_by_peer
             .entry(peer.clone())
-            .or_insert(0) -= 1;
+            .or_default();
+        *peer_count = peer_count.saturating_sub(1);
 
-        if counter.subscriptions_by_peer[peer] == 0 {
+        if *peer_count == 0 {
             match peer {
                 PeerId::Validator(authority) => {
                     let peer_hostname = &self.context.committee.authority(*authority).hostname;
@@ -557,8 +572,6 @@ impl SubscriptionCounter {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -592,12 +605,7 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
         assert!(max_items_per_poll > 0, "max_items_per_poll must be > 0");
-        if let Err(err) = subscription_counter.increment(&peer) {
-            match err {
-                ConsensusError::Shutdown => {}
-                _ => panic!("Unexpected error: {err}"),
-            }
-        }
+        subscription_counter.increment(&peer);
         Self {
             peer: Some(peer),
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
@@ -666,13 +674,8 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
 
 impl<T> Drop for BroadcastStream<T> {
     fn drop(&mut self) {
-        if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer)
-            && let Err(err) = counter.decrement(peer)
-        {
-            match err {
-                ConsensusError::Shutdown => {}
-                _ => panic!("Unexpected error: {err}"),
-            }
+        if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer) {
+            counter.decrement(peer);
         }
     }
 }
@@ -849,7 +852,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             _peer: crate::network::PeerId,
-            _highest_round_per_authority: Vec<u64>,
+            _highest_round_per_authority: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("Unimplemented")

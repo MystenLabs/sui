@@ -59,23 +59,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let authority_service = self.authority_service.clone();
-        let (mut last_received, gc_round) = {
-            let dag_state = self.dag_state.read();
-            (
-                dag_state.get_last_block_for_authority(peer).round(),
-                dag_state.gc_round(),
-            )
-        };
-
-        // If the latest block we have accepted by an authority is older than the current gc round,
-        // then do not attempt to fetch any blocks from that point as they will simply be skipped. Instead
-        // do attempt to fetch from the gc round.
-        if last_received < gc_round {
-            info!(
-                "Last received block for peer {peer} is older than GC round, {last_received} < {gc_round}, fetching from GC round"
-            );
-            last_received = gc_round;
-        }
+        let dag_state = self.dag_state.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -83,8 +67,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             context,
             network_client,
             authority_service,
+            dag_state,
             peer,
-            last_received,
         )));
     }
 
@@ -114,8 +98,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         context: Arc<Context>,
         network_client: Arc<C>,
         authority_service: Arc<S>,
+        dag_state: Arc<RwLock<DagState>>,
         peer: AuthorityIndex,
-        last_received: Round,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -150,6 +134,18 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 tokio::task::yield_now().await;
             }
             retries += 1;
+
+            // Recompute the resume round from DagState before each connection attempt, so a
+            // reconnection resumes from the latest accepted round rather than re-streaming and
+            // re-verifying blocks that have been accepted since this subscription started.
+            let last_received: Round = {
+                let dag_state = dag_state.read();
+                let gc_round = dag_state.gc_round();
+                dag_state
+                    .get_last_block_for_authority(peer)
+                    .round()
+                    .max(gc_round)
+            };
 
             // Use longer timeout when retry delay is long, to adapt to slow network.
             let request_timeout = MIN_TIMEOUT.max(delay);
@@ -219,8 +215,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 }
                             }
                         }
-                        // Reset retries when a block is received.
+                        // Reset the retry counter and backoff when a block is received, so a peer
+                        // that recovers after flapping reconnects promptly instead of inheriting
+                        // the previously escalated delay.
                         retries = 0;
+                        backoff.reset();
                     }
                     None => {
                         debug!(
@@ -252,11 +251,20 @@ mod test {
         storage::mem_store::MemStore,
     };
 
-    struct SubscriberTestClient {}
+    struct SubscriberTestClient {
+        // Records the `last_received` round passed to each subscribe_blocks() call.
+        subscribe_calls: Mutex<Vec<Round>>,
+    }
 
     impl SubscriberTestClient {
         fn new() -> Self {
-            Self {}
+            Self {
+                subscribe_calls: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn subscribe_calls(&self) -> Vec<Round> {
+            self.subscribe_calls.lock().clone()
         }
     }
 
@@ -274,9 +282,10 @@ mod test {
         async fn subscribe_blocks(
             &self,
             _peer: AuthorityIndex,
-            _last_received: Round,
+            last_received: Round,
             _timeout: Duration,
         ) -> ConsensusResult<BlockStream> {
+            self.subscribe_calls.lock().push(last_received);
             let block_stream = stream::unfold((), |_| async {
                 sleep(Duration::from_millis(1)).await;
                 let block = ExtendedSerializedBlock {
@@ -368,5 +377,62 @@ mod test {
                 }
             );
         }
+    }
+
+    // Regression test: `last_received` must be recomputed from DagState before each connection
+    // attempt. Previously it was captured once at subscribe() time and reused for every reconnect,
+    // causing already-accepted blocks to be re-streamed and re-verified.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_recomputes_resume_round_on_reconnect() {
+        use crate::block::TestBlock;
+
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let network_client = Arc::new(SubscriberTestClient::new());
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service,
+            dag_state.clone(),
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        // Before any block from the peer is accepted, every reconnect resumes from genesis (0).
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        {
+            let recorded = network_client.subscribe_calls();
+            assert!(
+                !recorded.is_empty() && recorded.iter().all(|&r| r == 0),
+                "before a block is accepted, every reconnect should resume from round 0: {recorded:?}"
+            );
+        }
+
+        // Advance the locally accepted round for the peer.
+        const RESUME_ROUND: Round = 10;
+        dag_state.write().accept_block(VerifiedBlock::new_for_test(
+            TestBlock::new(RESUME_ROUND, peer.value() as u32).build(),
+        ));
+
+        // After the block is accepted, reconnects must resume from the advanced round. With the
+        // bug, `last_received` would stay at 0 forever.
+        let mut observed_resume = false;
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            if network_client.subscribe_calls().last() == Some(&RESUME_ROUND) {
+                observed_resume = true;
+                break;
+            }
+        }
+        assert!(
+            observed_resume,
+            "after accepting a block at round {RESUME_ROUND}, the subscriber should resume from it; \
+             recorded resume rounds: {:?}",
+            network_client.subscribe_calls()
+        );
     }
 }
