@@ -15317,6 +15317,7 @@ dependencies = [
  "serde_json",
  "shared-crypto",
  "simulacrum",
+ "sui-config",
  "sui-field-count",
  "sui-framework",
  "sui-futures",
