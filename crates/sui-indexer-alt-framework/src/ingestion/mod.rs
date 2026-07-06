@@ -12,6 +12,7 @@ use sui_futures::service::Service;
 use tokio::sync::mpsc;
 use tracing::warn;
 
+use crate::cohort::DEFAULT_MIN_COHORT_BOUNDARY;
 pub use crate::config::ConcurrencyConfig as IngestConcurrencyConfig;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::error::Error;
@@ -29,9 +30,10 @@ use crate::metrics::IngestionMetrics;
 /// the form [`IngestionService`] stores and the broadcaster consumes.
 /// `Arc`'d (rather than `Box`'d) because `CheckpointStreamingClient`'s
 /// methods take `&self`, so the client can be cheaply cloned and shared
-/// across owners. The `Send + Sync` bounds let it move across task
-/// boundaries and be shared behind a reference when an enclosing
-/// [`IngestionService`] is held across threads.
+/// across owners -- each cohort's [`IngestionService`] gets its own clone.
+/// The `Send + Sync` bounds let it move across task boundaries and be
+/// shared behind a reference when an enclosing [`IngestionService`] is
+/// held across threads.
 pub type ArcStreamingClient = Arc<dyn CheckpointStreamingClient + Send + Sync>;
 
 mod broadcaster;
@@ -59,6 +61,7 @@ pub struct ClientArgs {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
 pub struct IngestionConfig {
     /// Concurrency control for checkpoint ingestion. A plain integer gives fixed concurrency;
     /// an object with `initial`, `min`, and `max` fields enables adaptive concurrency that adjusts
@@ -79,6 +82,12 @@ pub struct IngestionConfig {
 
     /// Timeout for streaming statement (peek/next) operations in milliseconds.
     pub streaming_statement_timeout_ms: u64,
+
+    /// Minimum boundary (in checkpoints) for an ingestion cohort: the closest pipeline in a
+    /// cohort absorbs peers within `max(2 * its distance from the tip, this)`, so nearly
+    /// caught-up pipelines are not fragmented into many tiny cohorts. Defaults to 25,000
+    /// checkpoints when unset.
+    pub min_cohort_boundary: u64,
 }
 
 pub struct IngestionService {
@@ -92,12 +101,13 @@ pub struct IngestionService {
     cohort: usize,
 }
 
-/// Creates the [IngestionService]s that an indexer runs. The factory holds the clients services
-/// are made from; services are only constructed when requested through [Self::create], and every
-/// service is created the same way: it shares the factory's ingestion client (and so reports to
-/// the same metrics -- counters aggregate across services, while latest-checkpoint style gauges
-/// are labeled by cohort so concurrently-running services don't overwrite each other), and it
-/// gets its own clone of the streaming client, if there is one.
+/// Creates the [IngestionService]s that an indexer runs -- one per cohort of pipelines with
+/// similar distances from the network tip. The factory holds the clients services are made from;
+/// services are only constructed when requested through [Self::create], and every service is
+/// created the same way: it shares the factory's ingestion client (and so reports to the same
+/// metrics -- counters aggregate across services, while latest-checkpoint style gauges are labeled
+/// by cohort so concurrently-running services don't overwrite each other), and it gets its own
+/// clone of the streaming client, if there is one.
 pub(crate) struct IngestionFactory {
     /// The ingestion configuration shared by every service this factory creates.
     config: IngestionConfig,
@@ -283,6 +293,11 @@ impl IngestionFactory {
         self.ingestion_client.metrics()
     }
 
+    /// The ingestion configuration shared by every service this factory creates.
+    pub(crate) fn config(&self) -> &IngestionConfig {
+        &self.config
+    }
+
     /// Create an ingestion service for `cohort` from the factory's clients. The cohort labels the
     /// service's ingestion gauges so concurrently-running services don't overwrite each other.
     pub(crate) fn create(&self, cohort: usize) -> IngestionService {
@@ -311,6 +326,7 @@ impl Default for IngestionConfig {
             streaming_backoff_max_batch_size: 10000, // 10000 checkpoints, ~ 40 minutes
             streaming_connection_timeout_ms: 5000,   // 5 seconds
             streaming_statement_timeout_ms: 5000,    // 5 seconds
+            min_cohort_boundary: DEFAULT_MIN_COHORT_BOUNDARY,
         }
     }
 }

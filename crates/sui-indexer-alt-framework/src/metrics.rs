@@ -22,6 +22,9 @@ use tracing::warn;
 use crate::ingestion::error::Error;
 use crate::pipeline::Processor;
 
+/// Prefix used for metric names when no explicit prefix is provided.
+pub(crate) const DEFAULT_METRICS_PREFIX: &str = "indexer";
+
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0,
@@ -177,7 +180,7 @@ pub(crate) struct CheckpointLagMetricReporter {
 
 impl IngestionMetrics {
     pub fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
-        let prefix = prefix.unwrap_or("indexer");
+        let prefix = prefix.unwrap_or(DEFAULT_METRICS_PREFIX);
         let name = |n| format!("{prefix}_{n}");
         Arc::new(Self {
             total_ingested_checkpoints: register_int_counter_with_registry!(
@@ -356,7 +359,7 @@ impl IngestionMetrics {
 
 impl IndexerMetrics {
     pub fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
-        let prefix = prefix.unwrap_or("indexer");
+        let prefix = prefix.unwrap_or(DEFAULT_METRICS_PREFIX);
         let name = |n| format!("{prefix}_{n}");
         Arc::new(Self {
             total_handler_checkpoints_received: register_int_counter_vec_with_registry!(

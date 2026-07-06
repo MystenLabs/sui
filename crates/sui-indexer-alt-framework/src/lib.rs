@@ -9,6 +9,7 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::bail;
 use anyhow::ensure;
+use cohort::cohorts;
 use ingestion::ArcStreamingClient;
 use ingestion::ClientArgs;
 use ingestion::IngestionConfig;
@@ -40,6 +41,7 @@ pub use sui_types as types;
 
 #[cfg(feature = "cluster")]
 pub mod cluster;
+mod cohort;
 pub mod config;
 pub mod ingestion;
 pub mod metrics;
@@ -117,8 +119,8 @@ pub struct Indexer<S: Store> {
     /// Prometheus Metrics.
     metrics: Arc<IndexerMetrics>,
 
-    /// Creates the ingestion service that downloads and disseminates checkpoint data. The service
-    /// is built when the indexer is run.
+    /// Creates the services that download and disseminate checkpoint data -- one per cohort of
+    /// pipelines with similar distances from the network tip, determined in [Self::run].
     ingestion_factory: IngestionFactory,
 
     /// Optional override of the checkpoint lowerbound. When set, pipelines without a committer
@@ -162,8 +164,8 @@ pub struct Indexer<S: Store> {
     /// with the same name isn't added twice.
     added_pipelines: BTreeSet<&'static str>,
 
-    /// Registered pipelines, waiting to be started against the ingestion service when the indexer
-    /// is run.
+    /// Registered pipelines, waiting to be grouped into ingestion cohorts and started when the
+    /// indexer is run.
     pipelines: Vec<PendingPipeline>,
 }
 
@@ -179,19 +181,22 @@ pub(crate) struct Task {
 }
 
 /// A pipeline that has been registered but whose tasks have not been started yet. Pipelines are
-/// held in this form until [Indexer::run], when the ingestion service they subscribe to is
-/// created.
+/// held in this form until [Indexer::run], when they are grouped into ingestion cohorts by how
+/// far behind the network tip they will resume from.
 struct PendingPipeline {
+    /// The pipeline's name, for logging cohort composition.
+    name: &'static str,
+
     /// The checkpoint this pipeline will resume processing from.
     next_checkpoint: u64,
 
-    /// Deferred constructor, invoked in [Indexer::run] once the ingestion service is available to
-    /// subscribe to.
+    /// Deferred constructor, invoked in [Indexer::run] once the pipeline's cohort has an
+    /// ingestion service to subscribe to.
     build: PipelineBuilder,
 }
 
-/// Subscribes a pipeline to the ingestion service and starts the pipeline's tasks, returning the
-/// service handle over those tasks.
+/// Subscribes a pipeline to its cohort's ingestion service and starts the pipeline's tasks,
+/// returning the service handle over those tasks.
 ///
 /// `Sync` is required (in addition to `Send`) because the `Indexer` holding these builders is kept
 /// alive across await points, and the simulator test runtime requires the resulting futures to be
@@ -251,7 +256,10 @@ impl<S: Store> Indexer<S> {
     /// [`ClientArgs`]-driven construction. Callers that supply their own
     /// [`IngestionClientTrait`] / [`CheckpointStreamingClient`] implementations — for example,
     /// when embedding the indexer in a fullnode that already has checkpoint data on hand — hand
-    /// them in here, and the indexer creates its ingestion service from them.
+    /// them in here, and the indexer creates its ingestion services from them.
+    ///
+    /// All the indexer's ingestion services clone `ingestion_client` and report to its metrics
+    /// handle, and each gets its own clone of the streaming client (if any).
     ///
     /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
     /// [`CheckpointStreamingClient`]: crate::ingestion::streaming_client::CheckpointStreamingClient
@@ -354,15 +362,20 @@ impl<S: Store> Indexer<S> {
         self.next_sequential_checkpoint
     }
 
-    /// Start ingesting checkpoints and run all the registered pipelines against a single ingestion
-    /// service. Each pipeline's tasks start here (idle until the service serves them checkpoint
-    /// data), and ingestion begins at the smallest `next_checkpoint` across the pipelines.
+    /// Group the registered pipelines into ingestion cohorts by how far behind the network tip
+    /// they will resume from, and start one ingestion service per cohort. Each cohort ingests
+    /// from the smallest `next_checkpoint` among its members, so pipelines near the tip are not
+    /// held back (through channel backpressure) by pipelines that have a long backfill ahead of
+    /// them.
     ///
     /// Ingestion will stop after consuming the configured `last_checkpoint` if one is provided.
+    /// Note that a pipeline dropping its checkpoint subscription only winds down its own
+    /// cohort's ingestion service; other cohorts keep running.
     pub async fn run(self) -> anyhow::Result<Service> {
         let Self {
             ingestion_factory,
             last_checkpoint,
+            latest_checkpoint,
             enabled_pipelines,
             pipelines,
             ..
@@ -378,26 +391,44 @@ impl<S: Store> Indexer<S> {
 
         ensure!(!pipelines.is_empty(), "No pipelines registered to run");
 
+        let groups = cohorts(
+            pipelines,
+            latest_checkpoint,
+            ingestion_factory.config().min_cohort_boundary,
+        );
+
+        info!(
+            cohorts = groups.len(),
+            latest_checkpoint, "Grouped pipelines into ingestion cohorts"
+        );
+
         let end = last_checkpoint.map_or(Bound::Unbounded, Bound::Included);
 
-        let mut ingestion = ingestion_factory.create(0);
+        let mut service = Service::new();
+        for (cohort, group) in groups.into_iter().enumerate() {
+            let mut ingestion = ingestion_factory.create(cohort);
 
-        let mut start = u64::MAX;
-        let mut members = Vec::with_capacity(pipelines.len());
-        for pending in pipelines {
-            start = start.min(pending.next_checkpoint);
-            members.push((pending.build)(&mut ingestion));
-        }
+            let mut start = u64::MAX;
+            let mut names = Vec::with_capacity(group.len());
+            let mut members = Vec::with_capacity(group.len());
+            for pending in group {
+                start = start.min(pending.next_checkpoint);
+                names.push(pending.name);
+                members.push((pending.build)(&mut ingestion));
+            }
 
-        info!(start, end = last_checkpoint, "Ingestion range");
+            info!(cohort, start, end = last_checkpoint, pipelines = ?names, "Ingestion range");
 
-        let mut service = ingestion
-            .run((Bound::Included(start), end))
-            .await
-            .context("Failed to start ingestion service")?;
+            let mut cohort_service = ingestion
+                .run((Bound::Included(start), end))
+                .await
+                .context("Failed to start ingestion service")?;
 
-        for member in members {
-            service = service.merge(member);
+            for member in members {
+                cohort_service = cohort_service.merge(member);
+            }
+
+            service = service.merge(cohort_service);
         }
 
         Ok(service)
@@ -462,7 +493,7 @@ impl<S: Store> Indexer<S> {
 
 impl<S: ConcurrentStore> Indexer<S> {
     /// Adds a new pipeline to this indexer. Its tasks are started when the indexer is run, and
-    /// will be idle until the ingestion service serves it checkpoint data.
+    /// will be idle until its cohort's ingestion service serves it checkpoint data.
     ///
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
@@ -483,6 +514,7 @@ impl<S: ConcurrentStore> Indexer<S> {
         let task = self.task.clone();
         let metrics = self.metrics.clone();
         self.pipelines.push(PendingPipeline {
+            name: H::NAME,
             next_checkpoint,
             build: Box::new(move |ingestion| {
                 let checkpoint_rx =
@@ -505,7 +537,7 @@ impl<S: ConcurrentStore> Indexer<S> {
 
 impl<T: SequentialStore> Indexer<T> {
     /// Adds a new pipeline to this indexer. Its tasks are started when the indexer is run, and
-    /// will be idle until the ingestion service serves it checkpoint data.
+    /// will be idle until its cohort's ingestion service serves it checkpoint data.
     ///
     /// Sequential pipelines commit checkpoint data in-order which sacrifices throughput, but may be
     /// required to handle pipelines that modify data in-place (where each update is not an insert,
@@ -537,6 +569,7 @@ impl<T: SequentialStore> Indexer<T> {
         let store = self.store.clone();
         let metrics = self.metrics.clone();
         self.pipelines.push(PendingPipeline {
+            name: H::NAME,
             next_checkpoint,
             build: Box::new(move |ingestion| {
                 let checkpoint_rx =
@@ -801,6 +834,33 @@ mod tests {
             .sequential_pipeline(handler, SequentialConfig::default())
             .await
             .unwrap();
+    }
+
+    /// Seed `store` so `near` resumes just past a fake network tip of 100,000 (its distance
+    /// from the tip saturates to zero) while `far` resumes 99,990 checkpoints behind it, and
+    /// return an ingestion directory advertising that tip with checkpoints 0..60 on disk.
+    /// Cohorts are determined by distance from the advertised tip, but ingestion stops at
+    /// `last_checkpoint`. Checkpoint 0 must exist because the ingestion client derives the
+    /// chain identifier from it, and retries indefinitely until it appears.
+    async fn multi_cohort_setup(
+        store: &FallibleMockStore,
+        near: &str,
+        far: &str,
+    ) -> tempfile::TempDir {
+        let mut conn = store.connect().await.unwrap();
+        set_committer_watermark(&mut conn, near, 100_100).await;
+        set_committer_watermark(&mut conn, far, 9).await;
+
+        let temp_dir = init_ingestion_dir(Some(100_000));
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: 0,
+            num_checkpoints: 60,
+            checkpoint_size: 1,
+        })
+        .await;
+
+        temp_dir
     }
 
     macro_rules! assert_out_of_order {
@@ -1694,5 +1754,226 @@ mod tests {
                 "Checkpoint {chkpt} should have been committed (baseline)"
             );
         }
+    }
+
+    /// Pipelines whose distances from the network tip are far apart are split into separate
+    /// ingestion cohorts, each served by its own ingestion service, and the indexer completes
+    /// even though the cohorts' ingestion services finish at different times.
+    #[tokio::test]
+    async fn test_multi_cohort_ingestion() {
+        let registry = Registry::new();
+        let store = FallibleMockStore::default();
+
+        test_pipeline!(A, "near_tip");
+        test_pipeline!(B, "far_behind");
+
+        let temp_dir = multi_cohort_setup(&store, A::NAME, B::NAME).await;
+
+        let mut indexer = Indexer::new(
+            store.clone(),
+            IndexerArgs {
+                last_checkpoint: Some(59),
+                ..Default::default()
+            },
+            ClientArgs {
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(temp_dir.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            IngestionConfig::default(),
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+
+        let ingestion_metrics = indexer.ingestion_metrics().clone();
+        let indexer_metrics = indexer.indexer_metrics().clone();
+        indexer.run().await.unwrap().join().await.unwrap();
+
+        // Both cohorts' services report to the shared metrics; only the lagging cohort had
+        // anything to ingest (the near-tip cohort's range [100_101, 59] is empty).
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 50);
+
+        // The near-tip pipeline received no checkpoints at all, proving it was not subscribed
+        // to the lagging cohort's backfill (unsplit, it would have received all 50).
+        let received = |name| {
+            indexer_metrics
+                .total_handler_checkpoints_received
+                .get_metric_with_label_values(&[name])
+                .unwrap()
+                .get()
+        };
+        assert_eq!(received(A::NAME), 0);
+        assert_eq!(received(B::NAME), 50);
+
+        // The lagging pipeline committed everything up to `last_checkpoint`, while the near-tip
+        // pipeline had nothing to process.
+        let watermark = store.watermark(B::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(59));
+        let watermark = store.watermark(A::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(100_100));
+    }
+
+    /// The client-driven constructor groups pipelines into cohorts too, with all cohorts
+    /// sharing the supplied ingestion client and its metrics handle.
+    #[tokio::test]
+    async fn test_multi_cohort_ingestion_with_clients() {
+        let registry = Registry::new();
+        let store = FallibleMockStore::default();
+
+        test_pipeline!(A, "near_tip");
+        test_pipeline!(B, "far_behind");
+
+        let temp_dir = multi_cohort_setup(&store, A::NAME, B::NAME).await;
+
+        let ingestion_metrics = IngestionMetrics::new(None, &registry);
+        let ingestion_client = IngestionClient::new(
+            IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
+            ingestion_metrics.clone(),
+        )
+        .unwrap();
+
+        let mut indexer = Indexer::with_ingestion_clients(
+            store.clone(),
+            IndexerArgs {
+                last_checkpoint: Some(59),
+                ..Default::default()
+            },
+            ingestion_client,
+            None,
+            IngestionConfig::default(),
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+
+        let indexer_metrics = indexer.indexer_metrics().clone();
+        indexer.run().await.unwrap().join().await.unwrap();
+
+        // Both cohorts' services report to the one shared metrics handle, and only the lagging
+        // cohort's pipeline received checkpoints.
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 50);
+        assert_eq!(
+            indexer_metrics
+                .total_handler_checkpoints_received
+                .get_metric_with_label_values(&[A::NAME])
+                .unwrap()
+                .get(),
+            0
+        );
+
+        let watermark = store.watermark(B::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(59));
+    }
+
+    /// Hard isolation: a pipeline at the tip runs to completion even while a far-behind pipeline in
+    /// a separate cohort is wedged and backpressuring its own ingestion service. Before cohorts,
+    /// both pipelines shared one ingestion service, so the far-behind pipeline's full subscriber
+    /// channel would have throttled the shared broadcaster and held the tip pipeline back too.
+    #[tokio::test]
+    async fn test_near_tip_cohort_progresses_while_far_behind_stalls() {
+        const TIP: u64 = 100;
+
+        let registry = Registry::new();
+        let store = FallibleMockStore::default();
+
+        test_pipeline!(A, "near_tip");
+
+        // The far-behind pipeline's handler blocks every checkpoint in its range (all > 9), so its
+        // cohort's ingestion service fills its subscriber channel and backpressures to a halt. Keep
+        // the release sender alive for the whole test -- dropping it would unblock the handler.
+        let (far_behind, _release) = ControllableHandler::with_limit(9);
+
+        let temp_dir = init_ingestion_dir(Some(TIP));
+        let mut conn = store.connect().await.unwrap();
+        set_committer_watermark(&mut conn, A::NAME, 94).await; // near tip: resumes at 95
+        set_committer_watermark(&mut conn, ControllableHandler::NAME, 9).await; // far behind: resumes at 10
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: 0,
+            num_checkpoints: TIP + 1, // checkpoints [0, TIP]
+            checkpoint_size: 1,
+        })
+        .await;
+
+        let mut indexer = Indexer::new(
+            store.clone(),
+            IndexerArgs {
+                last_checkpoint: Some(TIP),
+                ..Default::default()
+            },
+            ClientArgs {
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(temp_dir.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            // A small cohort boundary splits the near-tip and far-behind pipelines into separate
+            // cohorts without having to generate tens of thousands of checkpoints.
+            IngestionConfig {
+                min_cohort_boundary: 10,
+                ..Default::default()
+            },
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        // Near-tip pipeline: commit promptly so its watermark advances without waiting on the
+        // default collector/watermark intervals.
+        indexer
+            .concurrent_pipeline(
+                A,
+                ConcurrentConfig {
+                    committer: CommitterConfig {
+                        collect_interval_ms: 10,
+                        watermark_interval_ms: 10,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        // Far-behind pipeline: its handler blocks, so it never commits regardless of config.
+        add_concurrent(&mut indexer, far_behind).await;
+
+        let service = indexer.run().await.unwrap();
+
+        // The near-tip cohort ingests [95, 100] and commits to completion even though the
+        // far-behind cohort is wedged. Were the two not isolated, the far-behind pipeline's
+        // backpressure would stall this too and the wait would time out.
+        store
+            .wait_for_watermark(A::NAME, TIP, Duration::from_secs(10))
+            .await;
+
+        // The far-behind pipeline made no progress: still at its initial watermark, nothing
+        // committed -- it is stalled inside its own cohort, not holding the tip pipeline back.
+        assert_eq!(
+            store
+                .watermark(ControllableHandler::NAME)
+                .unwrap()
+                .checkpoint_hi_inclusive,
+            Some(9),
+        );
+        assert!(store.data.get(ControllableHandler::NAME).is_none());
+
+        // The merged service never completes on its own while a cohort is wedged; drop aborts it.
+        drop(service);
     }
 }

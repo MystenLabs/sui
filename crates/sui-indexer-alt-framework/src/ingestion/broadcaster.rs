@@ -391,6 +391,7 @@ mod tests {
 
     use tokio::time::timeout;
 
+    use crate::cohort::DEFAULT_MIN_COHORT_BOUNDARY;
     use crate::ingestion::IngestionConfig;
     use crate::ingestion::ingestion_client::tests::MockIngestionClient;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
@@ -422,6 +423,7 @@ mod tests {
             streaming_backoff_max_batch_size: 16,
             streaming_connection_timeout_ms: 100,
             streaming_statement_timeout_ms: 100,
+            min_cohort_boundary: DEFAULT_MIN_COHORT_BOUNDARY,
         }
     }
 
