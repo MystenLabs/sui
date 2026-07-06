@@ -52,6 +52,26 @@ impl Default for SubmissionAmplification {
 }
 
 impl SubmissionAmplification {
+    // Default values shared between the stress CLI options and simtests, so both
+    // exercise the same duplicate/amplified submission behavior out of the box.
+    pub const DEFAULT_AMPLIFICATION_PROBABILITY: f64 = 0.05;
+    pub const DEFAULT_AMPLIFICATION_VALIDATORS_PER_TX: usize = 3;
+    pub const DEFAULT_DUPLICATE_PROBABILITY: f64 = 0.02;
+    pub const DEFAULT_DUPLICATE_COPIES_PER_VALIDATOR: usize = 2;
+    pub const DEFAULT_VALIDATOR_SELECTION: ValidatorSelection = ValidatorSelection::Random;
+
+    /// Returns an enabled configuration with the default amplification/duplication values,
+    /// unlike `Default::default()` which returns a disabled (no-op) configuration.
+    pub fn default_enabled() -> Self {
+        Self {
+            amplification_probability: Self::DEFAULT_AMPLIFICATION_PROBABILITY,
+            amplification_validators_per_tx: Self::DEFAULT_AMPLIFICATION_VALIDATORS_PER_TX,
+            duplicate_probability: Self::DEFAULT_DUPLICATE_PROBABILITY,
+            duplicate_copies_per_validator: Self::DEFAULT_DUPLICATE_COPIES_PER_VALIDATOR,
+            validator_selection: Self::DEFAULT_VALIDATOR_SELECTION,
+        }
+    }
+
     pub fn new(
         amplification_probability: f64,
         amplification_validators_per_tx: usize,
