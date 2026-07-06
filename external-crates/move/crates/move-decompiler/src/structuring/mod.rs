@@ -10,6 +10,7 @@ pub(crate) mod loops;
 pub(crate) mod predicates;
 pub(crate) mod region;
 pub(crate) mod term_reconstruction;
+pub(crate) mod vb;
 
 use crate::{
     config::{self, print_heading},

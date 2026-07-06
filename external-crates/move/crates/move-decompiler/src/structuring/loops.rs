@@ -14,6 +14,7 @@ use crate::structuring::{
     ast::{self as D},
     graph::Graph,
     region::SinkRendering,
+    vb,
 };
 
 use petgraph::{Direction, graph::NodeIndex};
@@ -33,6 +34,22 @@ pub(super) fn structure_loop(
         println!("structuring loop at node {loop_head:#?}");
     }
     let (loop_nodes, succ_nodes) = graph.find_loop_nodes(loop_head);
+
+    // NMG §V-B: per-exit reach formulas. Consumed in a later phase when `install_reduced_marker`
+    // starts storing them on `Input::Reduced` markers so the outer scope's `edge_condition` can
+    // read them. For now we just compute + debug-print - unused, but keeps the surface live.
+    if config.debug_print.structuring
+        && let Some(formulas) = vb::compute_loop_exit_formulas(input, loop_head, &loop_nodes)
+    {
+        for (target, f) in &formulas {
+            println!(
+                "  exit formula for {} -> {}: {}",
+                loop_head.index(),
+                target.index(),
+                f
+            );
+        }
+    }
 
     // Partition succs into "owned by this loop's scope" (dominated by `loop_head`) and the
     // rest. Only owned succs become part of this loop's structure - unowned ones are
