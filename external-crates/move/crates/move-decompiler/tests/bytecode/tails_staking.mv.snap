@@ -325,47 +325,50 @@ public(friend) fun get_level_counts(l0: &Version, l1: &TailsStakingRegistry): ve
 }
 
 public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: address): u64 {
-    ecosystem::version_check(l0);
-    let l8 = 0u64;
-    let l14 = bag::borrow(&l1.tails_metadata, C8);
-    let l6 = big_vector::length(&l1.staking_infos);
-    if (l6 > 0u64) {
-        let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
-        let l10 = 0u64;
-        let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
-        let l11 = big_vector::get_slice_length(l9);
-        let l4 = 0u64;
-        let (l13, l5, l7);
-        loop {
-            if (l4 < l6) {
-                l13 = big_vector::borrow_from_slice(l9, l4 % l12);
-                if (l13.user == l2) {
-                    l5 = 0u64;
-                    l7 = (&l13.tails).length();
-                    break
-                };
-                if (l4 + 1u64 < l6 && l4 + 1u64 == l10 * l12 + l11) {
-                    l10 = big_vector::get_slice_idx(l9) + 1u64;
-                    l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
-                    l11 = big_vector::get_slice_length(l9);
-                };
-                l4 = l4 + 1u64;
-            } else {
-                unstructured {
-                    goto 'label_143;
+    // Residual gotos to labels 143
+    {
+        ecosystem::version_check(l0);
+        let l8 = 0u64;
+        let l14 = bag::borrow(&l1.tails_metadata, C8);
+        let l6 = big_vector::length(&l1.staking_infos);
+        if (l6 > 0u64) {
+            let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
+            let l10 = 0u64;
+            let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
+            let l11 = big_vector::get_slice_length(l9);
+            let l4 = 0u64;
+            let (l13, l5, l7);
+            loop {
+                if (l4 < l6) {
+                    l13 = big_vector::borrow_from_slice(l9, l4 % l12);
+                    if (l13.user == l2) {
+                        l5 = 0u64;
+                        l7 = (&l13.tails).length();
+                        break
+                    };
+                    if (l4 + 1u64 < l6 && l4 + 1u64 == l10 * l12 + l11) {
+                        l10 = big_vector::get_slice_idx(l9) + 1u64;
+                        l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
+                        l11 = big_vector::get_slice_length(l9);
+                    };
+                    l4 = l4 + 1u64;
+                } else {
+                    unstructured {
+                        goto 'label_143;
+                    }
                 }
+            };
+            while (l5 < l7) {
+                let l15 = (&l13.tails)[l5];
+                if (l14[l15 - 1u64] > l8) {
+                    l8 = l14[l15 - 1u64];
+                };
+                l5 = l5 + 1u64;
             }
         };
-        while (l5 < l7) {
-            let l15 = (&l13.tails)[l5];
-            if (l14[l15 - 1u64] > l8) {
-                l8 = l14[l15 - 1u64];
-            };
-            l5 = l5 + 1u64;
-        }
-    };
-    /* block 143 */;
-    return l8
+        /* block 143 */;
+        return l8
+    }
 }
 
 public(friend) fun get_staking_info(l0: &Version, l1: &TailsStakingRegistry, l2: address): vector<u8> {

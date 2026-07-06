@@ -137,6 +137,40 @@ impl Structured {
         Structured::Jump(GotoSource::ReachingExit, target)
     }
 
+    /// Every `Jump(_, target)` reachable in `self`, as sorted-deduped target labels.
+    /// A non-empty result means the structurer left raw control-flow residue that survived
+    /// every refinement pass - the output will emit `unstructured { goto 'label_N }` for
+    /// each one. Used by the test harness + pretty-printer to surface residue.
+    pub fn collect_jump_targets(&self) -> Vec<u64> {
+        fn walk(s: &Structured, out: &mut Vec<u64>) {
+            match s {
+                Structured::Jump(_, target) => out.push(target.index() as u64),
+                Structured::Seq(items) => items.iter().for_each(|i| walk(i, out)),
+                Structured::CondIf(_, conseq, alt) => {
+                    walk(conseq, out);
+                    if let Some(a) = alt.as_ref().as_ref() {
+                        walk(a, out);
+                    }
+                }
+                Structured::Loop(_, body) => walk(body, out),
+                Structured::Switch(_, _, arms) => arms.iter().for_each(|(_, b)| walk(b, out)),
+                Structured::SelectorMatch(_, arms) => {
+                    arms.iter().for_each(|(_, b)| walk(b, out));
+                }
+                Structured::Block(_)
+                | Structured::Break(_)
+                | Structured::Continue(_)
+                | Structured::Let(_)
+                | Structured::AssignTag(_, _) => {}
+            }
+        }
+        let mut out = Vec::new();
+        walk(self, &mut out);
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// Empty input -> `Seq([])`; single-item input -> that item bare; otherwise -> `Seq`.
     /// Avoids the `Seq([x])` shape that downstream refinements would just unwrap anyway.
     pub fn seq_or_singleton(mut items: Vec<Structured>) -> Structured {

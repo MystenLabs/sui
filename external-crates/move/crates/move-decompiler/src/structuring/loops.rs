@@ -235,7 +235,6 @@ fn emit_dispatch_arms(
     // succs whose body contains nested structure (e.g. an inner loop). Assumes a linear
     // cascade; non-min forks survive as raw `Jump`s for downstream refinements. Arms clone
     // their tails; `compress_dispatch_cascade` folds the duplication later.
-    // TODO: replace with NMG V-B NCD algorithm using `region::reaching_conditions`.
     let owned_set: HashSet<NodeIndex> = owned_succs.iter().copied().collect();
     let cascade_next: HashMap<NodeIndex, NodeIndex> = owned_succs
         .iter()

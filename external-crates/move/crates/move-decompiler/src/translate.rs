@@ -251,7 +251,11 @@ fn function<S: SourceKind>(
         print_heading("input");
         println!("{input:?}");
     }
-    let (structured, unstructured_blocks) = crate::structuring::structure(config, input, entry);
+    let (structured, report) = crate::structuring::structure(config, input, entry);
+    let crate::structuring::UnstructuredReport {
+        dropped_blocks: unstructured_blocks,
+        residual_jumps,
+    } = report;
     if config.debug_print.structured {
         print_heading("structured");
         println!("{}", structured.to_test_string());
@@ -278,6 +282,7 @@ fn function<S: SourceKind>(
         returns,
         code,
         unstructured_blocks,
+        residual_jumps,
     }
 }
 

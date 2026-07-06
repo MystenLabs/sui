@@ -146,7 +146,7 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::structuring::structure(&config, input, 0.into())
     }));
-    let (structured, unstructured) = match result {
+    let (structured, report) = match result {
         Ok(pair) => pair,
         Err(panic) => {
             let msg = panic
@@ -157,14 +157,31 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
             return format!("// STRUCTURING PANICKED: {msg}\n");
         }
     };
-    // Surface unstructured blocks in the snapshot so a regression that silently drops
-    // blocks shows up as a snapshot diff rather than passing on shape match. `.stt`
-    // fixtures pin only the structured form, so the notice goes here.
+    // Surface structurer residue in the snapshot so a regression shows up as a snap diff
+    // rather than silently passing on shape match. Two categories:
+    //   - `dropped_blocks`: input `Block(code)` entries that never got emitted - real
+    //     source missing from the output.
+    //   - `residual_jumps`: surviving `Jump(_, label)` nodes that reach emission - the
+    //     body is present but contains explicit unstructured gotos. `.stt` fixtures pin
+    //     only the structured form, so this notice replaces the inline `goto` rendering
+    //     `to_test_string` produces.
     let body = structured.to_test_string();
-    if unstructured.is_empty() {
-        body
-    } else {
-        let notice: Vec<String> = unstructured.iter().map(|n| n.to_string()).collect();
-        format!("// unstructured blocks: {}\n{body}", notice.join(", "))
+    let mut prelude = String::new();
+    if !report.dropped_blocks.is_empty() {
+        let ids: Vec<String> = report
+            .dropped_blocks
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        prelude.push_str(&format!("// unstructured blocks: {}\n", ids.join(", ")));
     }
+    if !report.residual_jumps.is_empty() {
+        let ids: Vec<String> = report
+            .residual_jumps
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        prelude.push_str(&format!("// residual jumps to: {}\n", ids.join(", ")));
+    }
+    format!("{prelude}{body}")
 }

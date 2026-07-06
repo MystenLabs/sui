@@ -199,21 +199,42 @@ fn function(context: &Context, fun: &Function) -> Doc {
     let header = fun_header_doc(fun);
     let code = &fun.code;
 
-    // Notice for input blocks the structurer received but never emitted. Prepending it
-    // inside the function braces puts the warning right above the recovered source so a
-    // reader of the decompiled file can't miss it.
-    let unstructured_notice: Option<Doc> = if fun.unstructured_blocks.is_empty() {
-        None
-    } else {
+    // Notices for structurer residue. Prepending them inside the function braces puts the
+    // warnings right above the recovered source so a reader of the decompiled file can't
+    // miss them. Two categories:
+    //   - Dropped blocks: input `Block(code)` entries the structurer never emitted - real
+    //     source missing from the function body.
+    //   - Residual jumps: `Structured::Jump(_, label)` nodes that reach output as
+    //     `unstructured { goto 'label_N }` - body present, control flow not fully
+    //     refined.
+    // Both render as `// ...` lines, joined with a hardline so they stack one per line.
+    let mut notice_lines: Vec<Doc> = Vec::new();
+    if !fun.unstructured_blocks.is_empty() {
         let ids = fun
             .unstructured_blocks
             .iter()
             .map(|id| id.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        Some(D::text(format!(
+        notice_lines.push(D::text(format!(
             "// Did not structure and emit blocks {ids}"
-        )))
+        )));
+    }
+    if !fun.residual_jumps.is_empty() {
+        let ids = fun
+            .residual_jumps
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        notice_lines.push(D::text(format!("// Residual gotos to labels {ids}")));
+    }
+    let unstructured_notice: Option<Doc> = if notice_lines.is_empty() {
+        None
+    } else {
+        let mut iter = notice_lines.into_iter();
+        let first = iter.next().unwrap();
+        Some(iter.fold(first, |acc, n| acc.concat(Doc::line()).concat(n)))
     };
 
     // Three cases for the body to avoid double-bracing:
@@ -277,6 +298,7 @@ fn fun_header_doc(fun: &Function) -> Doc {
         returns,
         code: _,
         unstructured_blocks: _,
+        residual_jumps: _,
     } = fun;
 
     let mut prefix_parts: Vec<Doc> = Vec::new();

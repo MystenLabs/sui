@@ -35,14 +35,27 @@ pub(crate) struct StructureContext<'a> {
     pub config: &'a config::Config,
 }
 
+/// Structuring residue report. Both vectors are sorted-deduped; `is_empty()` is true iff
+/// the structurer fully consumed every input block AND emitted no surviving `Jump` nodes.
+#[derive(Default, Clone, Debug)]
+pub(crate) struct UnstructuredReport {
+    /// Input block codes the structurer received but never emitted as a `Block(code)`.
+    /// A non-empty list means real source is missing from the output.
+    pub dropped_blocks: Vec<u64>,
+    /// Targets of `Structured::Jump(_, target)` that survived every refinement pass and
+    /// reach AST emission. Each one renders as `unstructured { goto 'label_N }` in the
+    /// decompiled output - syntactically valid but unstructured residue.
+    pub residual_jumps: Vec<u64>,
+}
+
 pub(crate) fn structure(
     config: &config::Config,
     mut input: BTreeMap<D::Label, D::Input>,
     entry_node: D::Label,
-) -> (D::Structured, Vec<u64>) {
+) -> (D::Structured, UnstructuredReport) {
     // Native functions have empty basic blocks - return early to avoid panicking in Graph::new
     if input.is_empty() {
-        return (D::Structured::Seq(vec![]), vec![]);
+        return (D::Structured::Seq(vec![]), UnstructuredReport::default());
     }
 
     let mut graph = Graph::new(config, &input, entry_node);
@@ -205,9 +218,16 @@ pub(crate) fn structure(
     )
     .expect("structuring failed on top-level function residue after loop collapse");
     flatten_sequence(&mut body);
-    let mut leftover: Vec<u64> = unstructured.into_iter().collect();
-    leftover.sort_unstable();
-    (body, leftover)
+    let mut dropped_blocks: Vec<u64> = unstructured.into_iter().collect();
+    dropped_blocks.sort_unstable();
+    let residual_jumps = body.collect_jump_targets();
+    (
+        body,
+        UnstructuredReport {
+            dropped_blocks,
+            residual_jumps,
+        },
+    )
 }
 
 /// Post-order traversal of the function's dominator tree, rooted at `entry`. Children
