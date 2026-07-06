@@ -137,7 +137,12 @@ pub(super) fn structure_loop(
         unstructured,
     )
     .expect("NMG failed on loop body");
-    let body_with_breaks = insert_breaks(&loop_nodes, loop_head, loop_successor, body);
+    let mut body_with_breaks = insert_breaks(&loop_nodes, loop_head, loop_successor, body);
+    // Phase 3 placeholder: V-B post-pass to convert every remaining owned-succ Jump to
+    // `Break(loop_head)`. Called with an empty exit set here so it's a no-op; Phase 4
+    // will pass the real exit list once the dispatch path is removed and every exit
+    // gets uniform Break treatment.
+    crate::structuring::vb::rewrite_owned_jumps_as_breaks(&mut body_with_breaks, loop_head, &[]);
     let loop_body = vec![body_with_breaks];
 
     let (result, absorbed_succs): (D::Structured, HashSet<NodeIndex>) = if multi_successor_mode {

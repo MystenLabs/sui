@@ -74,6 +74,56 @@ pub(crate) fn compute_loop_exit_formulas(
     Some(out)
 }
 
+/// Rewrite every `Structured::Jump(_, target)` with `target ∈ exit_set` to
+/// `Structured::Break(loop_head)`. Recurs through every containing form
+/// (`Seq`/`CondIf`/`Loop`/`Switch`/`SelectorMatch`).
+///
+/// Used by `structure_loop` in the V-B path: `insert_breaks` already turns the primary
+/// exit into a `Break`; this pass extends that rewriting to *every* body-exit target
+/// regardless of ownership. After V-B the loop is single-exit and the outer scope's
+/// acyclic structuring picks up the per-exit distinction from the `Reduced` marker's
+/// per-edge formulas rather than from a `SelectorMatch`.
+///
+/// `exit_set` is deliberately not a `&HashSet` - callers usually build a small `Vec` of
+/// owned + unowned successors, and the `contains` check on a slice is fine at typical
+/// loop-exit counts (≤ 4 in practice).
+pub(crate) fn rewrite_owned_jumps_as_breaks(
+    node: &mut D::Structured,
+    loop_head: NodeIndex,
+    exit_set: &[NodeIndex],
+) {
+    use D::Structured as S;
+    match node {
+        S::Jump(_, target) if exit_set.contains(target) => {
+            *node = S::Break(loop_head);
+        }
+        S::Seq(items) => {
+            for item in items.iter_mut() {
+                rewrite_owned_jumps_as_breaks(item, loop_head, exit_set);
+            }
+        }
+        S::CondIf(_, conseq, alt) => {
+            rewrite_owned_jumps_as_breaks(conseq, loop_head, exit_set);
+            if let Some(alt_inner) = alt.as_mut().as_mut() {
+                rewrite_owned_jumps_as_breaks(alt_inner, loop_head, exit_set);
+            }
+        }
+        S::Loop(_, body) => rewrite_owned_jumps_as_breaks(body, loop_head, exit_set),
+        S::Switch(_, _, arms) => {
+            for (_, body) in arms.iter_mut() {
+                rewrite_owned_jumps_as_breaks(body, loop_head, exit_set);
+            }
+        }
+        S::SelectorMatch(_, arms) => {
+            for (_, body) in arms.iter_mut() {
+                rewrite_owned_jumps_as_breaks(body, loop_head, exit_set);
+            }
+        }
+        S::Jump(..) | S::Block(_) | S::Break(_) | S::Continue(_) | S::Let(_) | S::AssignTag(..) => {
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,5 +243,58 @@ mod tests {
         );
         // Silence unused if match_b isn't needed (kept above for readability).
         let _ = match_b;
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // rewrite_owned_jumps_as_breaks
+    // ---------------------------------------------------------------------------------------
+
+    #[test]
+    fn rewrites_jumps_to_exit_targets() {
+        // Seq[ Jump(3), Jump(4), Jump(5) ] with exit_set = [3, 4] rewrites to
+        // Seq[ Break(loop_head), Break(loop_head), Jump(5) ].
+        let mut body = D::Structured::Seq(vec![
+            D::Structured::Jump(D::GotoSource::ReachingExit, label(3)),
+            D::Structured::Jump(D::GotoSource::ReachingExit, label(4)),
+            D::Structured::Jump(D::GotoSource::ReachingExit, label(5)),
+        ]);
+        let loop_head = label(0);
+        let exits = vec![label(3), label(4)];
+        rewrite_owned_jumps_as_breaks(&mut body, loop_head, &exits);
+        let D::Structured::Seq(items) = &body else {
+            panic!("expected Seq")
+        };
+        assert!(matches!(items[0], D::Structured::Break(n) if n == loop_head));
+        assert!(matches!(items[1], D::Structured::Break(n) if n == loop_head));
+        assert!(matches!(items[2], D::Structured::Jump(_, n) if n == label(5)));
+    }
+
+    #[test]
+    fn recurs_into_condif_and_loop() {
+        // CondIf(_, Jump(3), Some(Loop(_, Jump(4)))) with exit_set=[3,4] rewrites both.
+        let mut body = D::Structured::CondIf(
+            predicates::true_(),
+            Box::new(D::Structured::Jump(D::GotoSource::ReachingExit, label(3))),
+            Box::new(Some(D::Structured::Loop(
+                label(9),
+                Box::new(D::Structured::Jump(D::GotoSource::ReachingExit, label(4))),
+            ))),
+        );
+        rewrite_owned_jumps_as_breaks(&mut body, label(0), &[label(3), label(4)]);
+        let D::Structured::CondIf(_, then, alt) = &body else {
+            panic!("expected CondIf")
+        };
+        assert!(matches!(**then, D::Structured::Break(n) if n == label(0)));
+        let D::Structured::Loop(_, inner) = alt.as_ref().as_ref().unwrap() else {
+            panic!("expected Loop in alt")
+        };
+        assert!(matches!(**inner, D::Structured::Break(n) if n == label(0)));
+    }
+
+    #[test]
+    fn leaves_non_exit_jumps_alone() {
+        let mut body = D::Structured::Jump(D::GotoSource::ReachingExit, label(99));
+        rewrite_owned_jumps_as_breaks(&mut body, label(0), &[label(3), label(4)]);
+        assert!(matches!(body, D::Structured::Jump(_, n) if n == label(99)));
     }
 }
