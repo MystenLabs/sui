@@ -45,6 +45,7 @@
 //! A gap between backfill and live, or a subscriber that lags the broadcast buffer, disconnects with
 //! `reconnect_error`; the client reconnects and resumes from its last cursor.
 
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -53,6 +54,7 @@ use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use async_stream::stream;
+use backoff::ExponentialBackoff;
 use bytes::Bytes;
 use futures::Stream;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
@@ -177,9 +179,10 @@ fn scan_transactions(
     stream! {
         let mut position = resume;
         loop {
-            let page = reader
-                .list_transactions(build_list_request(&position, &proto_filter))
-                .await?;
+            let page = list_with_retry(scan_backoff(), || {
+                reader.list_transactions(build_list_request(&position, &proto_filter))
+            })
+            .await?;
             let checkpoint_hi = page.checkpoint_hi();
             let has_more = page.has_more();
             let next_cursor = page.last_cursor().cloned();
@@ -345,4 +348,92 @@ fn matching_edges(
         edges.push(Edge::new(cursor, transaction));
     }
     Ok(edges)
+}
+
+/// The backfill scan's retry policy: jittered exponential backoff up to a bounded budget. 60s is the
+/// top of the window where a failure is still plausibly a transient blip/deploy; beyond it we give
+/// up rather than retry indefinitely (per industry retry-budget guidance).
+fn scan_backoff() -> ExponentialBackoff {
+    ExponentialBackoff {
+        initial_interval: Duration::from_millis(100),
+        max_interval: Duration::from_secs(5),
+        max_elapsed_time: Some(Duration::from_secs(60)),
+        ..Default::default()
+    }
+}
+
+/// Run `fetch`, retrying transient failures under `policy`. A rolling indexer deploy (the common
+/// transient outage) is absorbed invisibly; anything still failing once the budget is exhausted
+/// propagates, ending the subscription so the client reconnects and resumes from its cursor.
+async fn list_with_retry<T, F, Fut>(policy: ExponentialBackoff, fetch: F) -> anyhow::Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = anyhow::Result<T>>,
+{
+    backoff::future::retry(policy, || async {
+        fetch().await.map_err(|e| {
+            warn!("list_transactions failed, retrying: {e:#}");
+            backoff::Error::transient(e)
+        })
+    })
+    .await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicU32;
+    use std::sync::atomic::Ordering::SeqCst;
+
+    use super::*;
+
+    /// Fast policy so the tests don't sleep on real backoff intervals.
+    fn test_backoff(budget: Duration) -> ExponentialBackoff {
+        ExponentialBackoff {
+            initial_interval: Duration::from_millis(1),
+            max_interval: Duration::from_millis(5),
+            max_elapsed_time: Some(budget),
+            ..Default::default()
+        }
+    }
+
+    /// Transient failures within the budget are retried, and the operation eventually succeeds.
+    #[tokio::test]
+    async fn list_with_retry_recovers_from_transient_errors() {
+        let attempts = AtomicU32::new(0);
+        let got = list_with_retry(test_backoff(Duration::from_secs(5)), || async {
+            let n = attempts.fetch_add(1, SeqCst);
+            if n < 2 {
+                Err(anyhow::anyhow!("transient outage"))
+            } else {
+                Ok(n)
+            }
+        })
+        .await
+        .expect("should recover within the retry budget");
+
+        assert_eq!(got, 2);
+        assert_eq!(attempts.load(SeqCst), 3, "failed twice, then succeeded");
+    }
+
+    /// A failure that never clears gives up once the budget is exhausted, rather than retrying
+    /// forever.
+    #[tokio::test]
+    async fn list_with_retry_gives_up_after_budget() {
+        let attempts = AtomicU32::new(0);
+        let result: anyhow::Result<u32> =
+            list_with_retry(test_backoff(Duration::from_millis(50)), || async {
+                attempts.fetch_add(1, SeqCst);
+                Err(anyhow::anyhow!("persistent failure"))
+            })
+            .await;
+
+        assert!(
+            result.is_err(),
+            "must give up rather than retry indefinitely"
+        );
+        assert!(
+            attempts.load(SeqCst) >= 2,
+            "should have retried at least once before giving up",
+        );
+    }
 }

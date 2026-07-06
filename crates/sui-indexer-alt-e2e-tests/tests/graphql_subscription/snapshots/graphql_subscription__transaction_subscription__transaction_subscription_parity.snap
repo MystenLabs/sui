@@ -1,0 +1,410 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/transaction_subscription.rs
+expression: live_nodes
+---
+[
+  {
+    "digest": "[digest]",
+    "kind": {
+      "__typename": "ProgrammableTransaction",
+      "commands": {
+        "nodes": [
+          {
+            "__typename": "MoveCallCommand"
+          },
+          {
+            "__typename": "TransferObjectsCommand"
+          }
+        ]
+      },
+      "inputs": {
+        "nodes": [
+          {
+            "__typename": "MoveValue"
+          },
+          {
+            "__typename": "MoveValue"
+          }
+        ]
+      }
+    },
+    "sender": {
+      "address": "[address]"
+    },
+    "signatures": [
+      {
+        "signatureBytes": "[signature]"
+      }
+    ],
+    "gasInput": {
+      "gasBudget": "5000000000",
+      "gasPrice": "1000",
+      "gasSponsor": {
+        "address": "[address]"
+      }
+    },
+    "effects": {
+      "status": "SUCCESS",
+      "lamportVersion": "[lamportVersion]",
+      "epoch": {
+        "epochId": 0
+      },
+      "checkpoint": null,
+      "gasEffects": {
+        "gasObject": {
+          "address": "[address]"
+        },
+        "gasSummary": "[gasSummary]"
+      },
+      "objectChanges": {
+        "nodes": [
+          {
+            "outputState": {
+              "address": "[address]",
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  },
+                  "json": "[json]"
+                }
+              }
+            }
+          },
+          {
+            "outputState": {
+              "address": "[address]",
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Item"
+                  },
+                  "json": "[json]"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "events": {
+        "nodes": []
+      },
+      "dependencies": {
+        "nodes": [
+          {
+            "digest": "[digest]"
+          },
+          {
+            "digest": "[digest]"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "kind": {
+      "__typename": "ProgrammableTransaction",
+      "commands": {
+        "nodes": [
+          {
+            "__typename": "MoveCallCommand"
+          }
+        ]
+      },
+      "inputs": {
+        "nodes": [
+          {
+            "__typename": "OwnedOrImmutable"
+          },
+          {
+            "__typename": "MoveValue"
+          }
+        ]
+      }
+    },
+    "sender": {
+      "address": "[address]"
+    },
+    "signatures": [
+      {
+        "signatureBytes": "[signature]"
+      }
+    ],
+    "gasInput": {
+      "gasBudget": "5000000000",
+      "gasPrice": "1000",
+      "gasSponsor": {
+        "address": "[address]"
+      }
+    },
+    "effects": {
+      "status": "SUCCESS",
+      "lamportVersion": "[lamportVersion]",
+      "epoch": {
+        "epochId": 0
+      },
+      "checkpoint": null,
+      "gasEffects": {
+        "gasObject": {
+          "address": "[address]"
+        },
+        "gasSummary": "[gasSummary]"
+      },
+      "objectChanges": {
+        "nodes": [
+          {
+            "outputState": {
+              "address": "[address]",
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  },
+                  "json": "[json]"
+                }
+              }
+            }
+          },
+          {
+            "outputState": {
+              "address": "[address]",
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Item"
+                  },
+                  "json": "[json]"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "events": {
+        "nodes": []
+      },
+      "dependencies": {
+        "nodes": [
+          {
+            "digest": "[digest]"
+          },
+          {
+            "digest": "[digest]"
+          },
+          {
+            "digest": "[digest]"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "kind": {
+      "__typename": "ProgrammableTransaction",
+      "commands": {
+        "nodes": [
+          {
+            "__typename": "MoveCallCommand"
+          },
+          {
+            "__typename": "TransferObjectsCommand"
+          }
+        ]
+      },
+      "inputs": {
+        "nodes": [
+          {
+            "__typename": "OwnedOrImmutable"
+          },
+          {
+            "__typename": "MoveValue"
+          }
+        ]
+      }
+    },
+    "sender": {
+      "address": "[address]"
+    },
+    "signatures": [
+      {
+        "signatureBytes": "[signature]"
+      }
+    ],
+    "gasInput": {
+      "gasBudget": "5000000000",
+      "gasPrice": "1000",
+      "gasSponsor": {
+        "address": "[address]"
+      }
+    },
+    "effects": {
+      "status": "SUCCESS",
+      "lamportVersion": "[lamportVersion]",
+      "epoch": {
+        "epochId": 0
+      },
+      "checkpoint": null,
+      "gasEffects": {
+        "gasObject": {
+          "address": "[address]"
+        },
+        "gasSummary": "[gasSummary]"
+      },
+      "objectChanges": {
+        "nodes": [
+          {
+            "outputState": {
+              "address": "[address]",
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  },
+                  "json": "[json]"
+                }
+              }
+            }
+          },
+          {
+            "outputState": {
+              "address": "[address]",
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Wrapper"
+                  },
+                  "json": "[json]"
+                }
+              }
+            }
+          },
+          {
+            "outputState": null
+          }
+        ]
+      },
+      "events": {
+        "nodes": []
+      },
+      "dependencies": {
+        "nodes": [
+          {
+            "digest": "[digest]"
+          },
+          {
+            "digest": "[digest]"
+          },
+          {
+            "digest": "[digest]"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "kind": {
+      "__typename": "ProgrammableTransaction",
+      "commands": {
+        "nodes": [
+          {
+            "__typename": "MoveCallCommand"
+          },
+          {
+            "__typename": "TransferObjectsCommand"
+          }
+        ]
+      },
+      "inputs": {
+        "nodes": [
+          {
+            "__typename": "OwnedOrImmutable"
+          },
+          {
+            "__typename": "MoveValue"
+          }
+        ]
+      }
+    },
+    "sender": {
+      "address": "[address]"
+    },
+    "signatures": [
+      {
+        "signatureBytes": "[signature]"
+      }
+    ],
+    "gasInput": {
+      "gasBudget": "5000000000",
+      "gasPrice": "1000",
+      "gasSponsor": {
+        "address": "[address]"
+      }
+    },
+    "effects": {
+      "status": "SUCCESS",
+      "lamportVersion": "[lamportVersion]",
+      "epoch": {
+        "epochId": 0
+      },
+      "checkpoint": null,
+      "gasEffects": {
+        "gasObject": {
+          "address": "[address]"
+        },
+        "gasSummary": "[gasSummary]"
+      },
+      "objectChanges": {
+        "nodes": [
+          {
+            "outputState": {
+              "address": "[address]",
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  },
+                  "json": "[json]"
+                }
+              }
+            }
+          },
+          {
+            "outputState": {
+              "address": "[address]",
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Item"
+                  },
+                  "json": "[json]"
+                }
+              }
+            }
+          },
+          {
+            "outputState": null
+          }
+        ]
+      },
+      "events": {
+        "nodes": []
+      },
+      "dependencies": {
+        "nodes": [
+          {
+            "digest": "[digest]"
+          },
+          {
+            "digest": "[digest]"
+          },
+          {
+            "digest": "[digest]"
+          }
+        ]
+      }
+    }
+  }
+]

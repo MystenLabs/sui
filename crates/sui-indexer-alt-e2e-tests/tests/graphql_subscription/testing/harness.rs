@@ -14,6 +14,8 @@ use fastcrypto::encoding::Encoding;
 use prometheus::Registry;
 use serde_json::Value;
 use serde_json::json;
+use sui_config::RpcConfig;
+use sui_config::rpc_config::LedgerHistoryConfig;
 use sui_futures::service::Service;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
@@ -54,7 +56,16 @@ impl SubscriptionTestCluster {
     /// validator + postgres DB + kv_packages indexer + GraphQL service.
     /// Waits for kv_packages to index the genesis checkpoint so subscriptions are ready.
     pub async fn new() -> Self {
-        let (cluster, _controller) = Self::new_inner(false).await;
+        let (cluster, _controller) = Self::new_inner(false, false).await;
+        cluster
+    }
+
+    /// Same as `new()`, but enables the validator's v2alpha `LedgerService` (bitmap-backed
+    /// `list_transactions`) so the transaction subscription's backfill scan has a data source.
+    /// Requires ledger-history indexing on the validator and the experimental query APIs on the
+    /// GraphQL reader.
+    pub async fn new_with_ledger_history() -> Self {
+        let (cluster, _controller) = Self::new_inner(false, true).await;
         cluster
     }
 
@@ -68,16 +79,27 @@ impl SubscriptionTestCluster {
     /// `disconnect_all()` only severs the stream and leaves recovery reads
     /// untouched.
     pub async fn new_with_disruption_proxy() -> (Self, ProxyController) {
-        Self::new_inner(true).await
+        Self::new_inner(true, false).await
     }
 
-    async fn new_inner(use_proxy: bool) -> (Self, ProxyController) {
+    async fn new_inner(use_proxy: bool, ledger_history: bool) -> (Self, ProxyController) {
         let ingestion_dir = tempfile::tempdir().expect("Failed to create ingestion dir");
-        let validator = TestClusterBuilder::new()
+        let mut builder = TestClusterBuilder::new()
             .with_num_validators(1)
-            .with_data_ingestion_dir(ingestion_dir.path().to_owned())
-            .build()
-            .await;
+            .with_data_ingestion_dir(ingestion_dir.path().to_owned());
+        if ledger_history {
+            // The transaction subscription backfills through the validator's v2alpha
+            // LedgerService (bitmap-backed `list_transactions`), which requires ledger-history
+            // indexing; disable pruning so backfilled checkpoints stay queryable.
+            builder = builder
+                .disable_fullnode_pruning()
+                .with_rpc_config(RpcConfig {
+                    enable_indexing: Some(true),
+                    ledger_history: Some(LedgerHistoryConfig::default()),
+                    ..Default::default()
+                });
+        }
+        let validator = builder.build().await;
 
         let db = TempDb::new().expect("Failed to create TempDb");
         let database_url = db.database().url().clone();
@@ -128,6 +150,9 @@ impl SubscriptionTestCluster {
         // directly so `disconnect_all()` cannot interfere with gap-recovery reads.
         let kv_args = KvArgs {
             ledger_grpc_url: Some(rpc_url.parse().unwrap()),
+            // Enables the v2alpha `list_transactions` reader the transaction subscription
+            // backfill scans through (paired with ledger-history indexing on the validator).
+            experimental_query_apis: Some(ledger_history),
             ..Default::default()
         };
 
