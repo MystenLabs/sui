@@ -53,7 +53,7 @@ use sui_consistent_store::Synchronizer;
 use sui_consistent_store::restore_state;
 use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
+use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::IngestionService;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
@@ -257,7 +257,7 @@ impl Indexer {
         path: impl AsRef<Path>,
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
         pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
@@ -291,7 +291,7 @@ impl Indexer {
         store: Store,
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
         pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,

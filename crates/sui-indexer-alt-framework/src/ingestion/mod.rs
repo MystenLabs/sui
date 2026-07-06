@@ -25,14 +25,14 @@ use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
 
-/// Type alias for a boxed [`CheckpointStreamingClient`] trait object,
+/// Type alias for a shared [`CheckpointStreamingClient`] trait object,
 /// the form [`IngestionService`] stores and the broadcaster consumes.
-/// Boxed (rather than `Arc`'d) because `CheckpointStreamingClient`'s
-/// methods take `&mut self`, so unique ownership is required. The
-/// `Send + Sync` bounds let the boxed client move across task
+/// `Arc`'d (rather than `Box`'d) because `CheckpointStreamingClient`'s
+/// methods take `&self`, so the client can be cheaply cloned and shared
+/// across owners. The `Send + Sync` bounds let it move across task
 /// boundaries and be shared behind a reference when an enclosing
 /// [`IngestionService`] is held across threads.
-pub type BoxedStreamingClient = Box<dyn CheckpointStreamingClient + Send + Sync>;
+pub type ArcStreamingClient = Arc<dyn CheckpointStreamingClient + Send + Sync>;
 
 mod broadcaster;
 mod byte_count;
@@ -84,7 +84,7 @@ pub struct IngestionConfig {
 pub struct IngestionService {
     config: IngestionConfig,
     ingestion_client: IngestionClient,
-    streaming_client: Option<BoxedStreamingClient>,
+    streaming_client: Option<ArcStreamingClient>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     metrics: Arc<IngestionMetrics>,
 }
@@ -122,13 +122,13 @@ impl IngestionService {
     ) -> Result<Self> {
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
         let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
-        let streaming_client: Option<BoxedStreamingClient> =
+        let streaming_client: Option<ArcStreamingClient> =
             args.streaming.streaming_url.map(|uri| {
-                Box::new(GrpcStreamingClient::new(
+                Arc::new(GrpcStreamingClient::new(
                     uri,
                     config.streaming_connection_timeout(),
                     config.streaming_statement_timeout(),
-                )) as BoxedStreamingClient
+                )) as ArcStreamingClient
             });
         Ok(Self::from_clients(
             ingestion_client,
@@ -154,7 +154,7 @@ impl IngestionService {
     /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
     pub fn with_clients(
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         config: IngestionConfig,
         metrics: Arc<IngestionMetrics>,
     ) -> Self {
@@ -167,7 +167,7 @@ impl IngestionService {
     /// construction).
     fn from_clients(
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         config: IngestionConfig,
         metrics: Arc<IngestionMetrics>,
     ) -> Self {
@@ -188,7 +188,7 @@ impl IngestionService {
     /// Return the latest checkpoint number known to the ingestion service, preferably via the
     /// streaming client, and failing that via the ingestion client.
     pub async fn latest_checkpoint_number(&mut self) -> anyhow::Result<u64> {
-        if let Some(streaming_client) = self.streaming_client.as_deref_mut() {
+        if let Some(streaming_client) = self.streaming_client.as_deref() {
             match streaming_client.latest_checkpoint_number().await {
                 Ok(checkpoint_number) => return Ok(checkpoint_number),
                 Err(e) => {
@@ -376,11 +376,11 @@ mod tests {
     /// concrete mock clients (without having to build an `IngestionService`).
     #[cfg(test)]
     async fn latest_checkpoint_number<S>(
-        streaming_client: Option<&mut S>,
+        streaming_client: Option<&S>,
         ingestion_client: &IngestionClient,
     ) -> anyhow::Result<u64>
     where
-        S: CheckpointStreamingClient + Send + ?Sized,
+        S: CheckpointStreamingClient + Send + Sync + ?Sized,
     {
         if let Some(streaming_client) = streaming_client {
             match streaming_client.latest_checkpoint_number().await {
@@ -555,16 +555,16 @@ mod tests {
     #[tokio::test]
     async fn latest_checkpoint_number_no_streaming_client() {
         let client = mock_ingestion_client(FALLBACK);
-        let mut streaming: Option<MockStreamingClient> = None;
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let streaming: Option<MockStreamingClient> = None;
+        let result = latest_checkpoint_number(streaming.as_ref(), &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
     }
 
     #[tokio::test]
     async fn latest_checkpoint_number_from_stream() {
         let client = mock_ingestion_client(FALLBACK);
-        let mut streaming = Some(MockStreamingClient::new([42], None));
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let streaming = Some(MockStreamingClient::new([42], None));
+        let result = latest_checkpoint_number(streaming.as_ref(), &client).await;
         assert_eq!(result.unwrap(), 42);
     }
 
@@ -573,26 +573,26 @@ mod tests {
         let client = mock_ingestion_client(FALLBACK);
         let mut mock = MockStreamingClient::new(std::iter::empty::<u64>(), None);
         mock.insert_error();
-        let mut streaming = Some(mock);
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let streaming = Some(mock);
+        let result = latest_checkpoint_number(streaming.as_ref(), &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
     }
 
     #[tokio::test]
     async fn latest_checkpoint_number_empty_stream_falls_back() {
         let client = mock_ingestion_client(FALLBACK);
-        let mut streaming = Some(MockStreamingClient::new(std::iter::empty::<u64>(), None));
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let streaming = Some(MockStreamingClient::new(std::iter::empty::<u64>(), None));
+        let result = latest_checkpoint_number(streaming.as_ref(), &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
     }
 
     #[tokio::test]
     async fn latest_checkpoint_number_connection_failure_falls_back() {
         let client = mock_ingestion_client(FALLBACK);
-        let mut streaming = Some(
+        let streaming = Some(
             MockStreamingClient::new(std::iter::empty::<u64>(), None).fail_connection_times(1),
         );
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let result = latest_checkpoint_number(streaming.as_ref(), &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
     }
 
@@ -621,7 +621,7 @@ mod tests {
                 }),
                 metrics.clone(),
             ),
-            Some(Box::new(MockStreamingClient::new([STREAM_LATEST], None))),
+            Some(Arc::new(MockStreamingClient::new([STREAM_LATEST], None))),
             IngestionConfig::default(),
             metrics,
         );

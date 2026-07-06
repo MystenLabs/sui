@@ -21,7 +21,7 @@ use tracing::info;
 use tracing::warn;
 
 use crate::config::ConcurrencyConfig;
-use crate::ingestion::BoxedStreamingClient;
+use crate::ingestion::ArcStreamingClient;
 use crate::ingestion::IngestionConfig;
 use crate::ingestion::error::Error;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
@@ -50,7 +50,7 @@ const STREAMING_CATCHUP_THRESHOLD: u64 = 1_000;
 /// ingest concurrency. The task will shut down if the `checkpoints` range completes.
 pub(super) fn broadcaster<R>(
     checkpoints: R,
-    mut streaming_client: Option<BoxedStreamingClient>,
+    streaming_client: Option<ArcStreamingClient>,
     config: IngestionConfig,
     client: IngestionClient,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
@@ -97,7 +97,7 @@ where
             // The ingestion task fill up the gap from checkpoint_hi to ingestion_end (exclusive) while the streaming
             // task covers from ingestion_end to end_cp.
             let (stream_guard, ingestion_end) = setup_streaming_task(
-                &mut streaming_client,
+                &streaming_client,
                 checkpoint_hi,
                 end_cp,
                 &mut streaming_backoff_batch_size,
@@ -196,7 +196,7 @@ fn ingest_and_broadcast_range(
 /// the current checkpoint_hi, and returns a streaming task handle and the `ingestion_end`
 /// telling the main task that ingestion should be used up to this point.
 async fn setup_streaming_task(
-    streaming_client: &mut Option<BoxedStreamingClient>,
+    streaming_client: &Option<ArcStreamingClient>,
     checkpoint_hi: u64,
     end_cp: u64,
     streaming_backoff_batch_size: &mut u64,
@@ -591,7 +591,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..5, // Bounded range
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..5, metrics.clone()),
             subscriber_dest,
@@ -620,7 +620,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..60,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..60, metrics.clone()),
             subscriber_dest,
@@ -655,7 +655,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..30,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..30, metrics.clone()),
             subscriber_dest,
@@ -686,7 +686,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             30..100,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(30..100, metrics.clone()),
             subscriber_dest,
@@ -724,7 +724,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
@@ -759,7 +759,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..10,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..10, metrics.clone()),
             subscriber_dest,
@@ -798,7 +798,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..15,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..15, metrics.clone()),
             subscriber_dest,
@@ -838,7 +838,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
@@ -869,7 +869,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_service) as BoxedStreamingClient),
+            Some(Arc::new(streaming_service)),
             IngestionConfig {
                 streaming_backoff_initial_batch_size: non_zero(5),
                 ..test_config()
@@ -909,7 +909,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             IngestionConfig {
                 streaming_backoff_initial_batch_size: non_zero(5),
                 ..test_config()
@@ -949,7 +949,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..50,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..50, metrics.clone()),
             subscriber_dest,
@@ -985,7 +985,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..50,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..50, metrics.clone()),
             subscriber_dest,
@@ -1043,7 +1043,7 @@ mod tests {
         };
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_service) as BoxedStreamingClient),
+            Some(Arc::new(streaming_service)),
             config,
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
@@ -1086,7 +1086,7 @@ mod tests {
         };
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             config,
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
@@ -1124,7 +1124,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..15,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..15, metrics.clone()),
             subscriber_dest,
