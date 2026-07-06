@@ -12,6 +12,7 @@ use fastcrypto_tbls::{dkg_v1, nodes::PartyId};
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
@@ -32,7 +33,7 @@ use sui_types::{
     messages_consensus::{Round, TimestampMs, VersionedDkgConfirmation},
     signature::GenericSignature,
 };
-use tracing::{debug, info};
+use tracing::debug;
 use typed_store::Map;
 use typed_store::rocks::DBBatch;
 
@@ -41,7 +42,7 @@ use crate::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
-    checkpoints::{CheckpointHeight, PendingCheckpoint, PendingCheckpointV2},
+    checkpoints::{CheckpointHeight, PendingCheckpoint},
     consensus_handler::SequencedConsensusTransactionKey,
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
@@ -56,6 +57,8 @@ use super::*;
 pub(crate) struct ConsensusCommitOutput {
     // Consensus and reconfig state
     consensus_round: Round,
+    // Keeps all the processed consensus messages. It also includes transactions that have been dropped and not scheduled
+    // for execution after failing to acquire the required locks.
     consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>,
     end_of_publish: BTreeSet<AuthorityName>,
     reconfig_state: Option<ReconfigState>,
@@ -69,7 +72,6 @@ pub(crate) struct ConsensusCommitOutput {
 
     // checkpoint state
     pending_checkpoints: Vec<PendingCheckpoint>,
-    pending_checkpoints_v2: Vec<PendingCheckpointV2>,
 
     // random beacon state
     next_randomness_round: Option<(RandomnessRound, TimestampMs)>,
@@ -77,7 +79,7 @@ pub(crate) struct ConsensusCommitOutput {
     dkg_confirmations: BTreeMap<PartyId, VersionedDkgConfirmation>,
     dkg_processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
     dkg_used_message: Option<VersionedUsedProcessedMessages>,
-    dkg_output: Option<dkg_v1::Output<PkG, EncG>>,
+    dkg_output: Option<Option<dkg_v1::Output<PkG, EncG>>>,
 
     // jwk state
     pending_jwks: BTreeSet<(AuthorityName, JwkId, JWK)>,
@@ -92,7 +94,7 @@ pub(crate) struct ConsensusCommitOutput {
         Vec<(ExecutionTimeObservationKey, Duration)>,
     )>,
 
-    // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
+    // Owned object locks acquired post-consensus.
     owned_object_locks: HashMap<ObjectRef, LockDetails>,
 
     // True when the checkpoint queue had no pending roots after this commit's flush.
@@ -139,25 +141,6 @@ impl ConsensusCommitOutput {
 
     fn pending_checkpoint_exists(&self, index: &CheckpointHeight) -> bool {
         self.pending_checkpoints
-            .iter()
-            .any(|cp| cp.height() == *index)
-    }
-
-    fn get_pending_checkpoints_v2(
-        &self,
-        last: Option<CheckpointHeight>,
-    ) -> impl Iterator<Item = &PendingCheckpointV2> {
-        self.pending_checkpoints_v2.iter().filter(move |cp| {
-            if let Some(last) = last {
-                cp.height() > last
-            } else {
-                true
-            }
-        })
-    }
-
-    fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> bool {
-        self.pending_checkpoints_v2
             .iter()
             .any(|cp| cp.height() == *index)
     }
@@ -230,10 +213,6 @@ impl ConsensusCommitOutput {
         self.pending_checkpoints.push(checkpoint);
     }
 
-    pub fn insert_pending_checkpoint_v2(&mut self, checkpoint: PendingCheckpointV2) {
-        self.pending_checkpoints_v2.push(checkpoint);
-    }
-
     pub fn reserve_next_randomness_round(
         &mut self,
         next_randomness_round: RandomnessRound,
@@ -256,7 +235,7 @@ impl ConsensusCommitOutput {
         self.dkg_used_message = Some(used_messages);
     }
 
-    pub fn set_dkg_output(&mut self, output: dkg_v1::Output<PkG, EncG>) {
+    pub fn set_dkg_output(&mut self, output: Option<dkg_v1::Output<PkG, EncG>>) {
         self.dkg_output = Some(output);
     }
 
@@ -385,7 +364,7 @@ impl ConsensusCommitOutput {
                 .map(|used_msgs| (SINGLETON_KEY, used_msgs)),
         )?;
         if let Some(output) = self.dkg_output {
-            batch.insert_batch(&tables.dkg_output, [(SINGLETON_KEY, output)])?;
+            batch.insert_batch(&tables.dkg_output_v2, [(SINGLETON_KEY, output)])?;
         }
 
         batch.insert_batch(
@@ -692,61 +671,32 @@ impl ConsensusOutputQuarantine {
             return Ok(());
         };
 
-        let split_checkpoints_in_consensus_handler = epoch_store
-            .protocol_config()
-            .split_checkpoints_in_consensus_handler();
-
-        if split_checkpoints_in_consensus_handler {
-            // V2: only commit outputs up to the last one where the checkpoint queue
-            // was fully drained (no pending roots). If the queue is empty after an
-            // output, there are no roots that could be lost on restart. Any outputs
-            // after the last drain point stay in the quarantine and get full-replayed
-            // on restart with correct root reconstruction.
-            let mut last_drain_idx = None;
-            for (i, output) in self.output_queue.iter().enumerate() {
-                let stats = output
-                    .consensus_commit_stats
-                    .as_ref()
-                    .expect("consensus_commit_stats must be set");
-                if stats.height > highest_committed_height {
-                    break;
-                }
-                if output.checkpoint_queue_drained {
-                    last_drain_idx = Some(i);
-                }
+        // Only commit outputs up to the last one where the checkpoint queue
+        // was fully drained (no pending roots). If the queue is empty after an
+        // output, there are no roots that could be lost on restart. Any outputs
+        // after the last drain point stay in the quarantine and get full-replayed
+        // on restart with correct root reconstruction.
+        let mut last_drain_idx = None;
+        for (i, output) in self.output_queue.iter().enumerate() {
+            let stats = output
+                .consensus_commit_stats
+                .as_ref()
+                .expect("consensus_commit_stats must be set");
+            if stats.height > highest_committed_height {
+                break;
             }
-            if let Some(idx) = last_drain_idx {
-                for _ in 0..=idx {
-                    let output = self.output_queue.pop_front().unwrap();
-                    info!("committing drain-boundary output");
-                    self.remove_shared_object_next_versions(&output);
-                    self.remove_processed_consensus_messages(&output);
-                    self.remove_congestion_control_debts(&output);
-                    self.remove_owned_object_locks(&output);
-                    output.write_to_batch(epoch_store, batch)?;
-                }
+            if output.checkpoint_queue_drained {
+                last_drain_idx = Some(i);
             }
-        } else {
-            while !self.output_queue.is_empty() {
-                let output = self.output_queue.front().unwrap();
-                let Some(highest_in_commit) = output.get_highest_pending_checkpoint_height() else {
-                    break;
-                };
-
-                if highest_in_commit <= highest_committed_height {
-                    info!(
-                        "committing output with highest pending checkpoint height {:?}",
-                        highest_in_commit
-                    );
-                    let output = self.output_queue.pop_front().unwrap();
-                    self.remove_shared_object_next_versions(&output);
-                    self.remove_processed_consensus_messages(&output);
-                    self.remove_congestion_control_debts(&output);
-                    self.remove_owned_object_locks(&output);
-                    output.write_to_batch(epoch_store, batch)?;
-                } else {
-                    break;
-                }
+        }
+        if let Some(idx) = last_drain_idx {
+            for _ in 0..=idx {
+                let output = self.output_queue.pop_front().unwrap();
+                self.remove_shared_object_next_versions(&output);
+                self.remove_processed_consensus_messages(&output);
+                self.remove_congestion_control_debts(&output);
+                self.remove_owned_object_locks(&output);
+                output.write_to_batch(epoch_store, batch)?;
             }
         }
 
@@ -853,10 +803,6 @@ impl ConsensusOutputQuarantine {
             .map(|(summary, _)| summary)
     }
 
-    pub(super) fn included_transaction_in_checkpoint(&self, digest: &TransactionDigest) -> bool {
-        self.builder_digest_to_checkpoint.contains_key(digest)
-    }
-
     pub(super) fn is_consensus_message_processed(
         &self,
         key: &SequencedConsensusTransactionKey,
@@ -892,7 +838,6 @@ impl ConsensusOutputQuarantine {
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
     /// After crash recovery, quarantine is empty so we naturally fall back to DB.
     pub(super) fn get_owned_object_locks(
         &self,
@@ -950,36 +895,6 @@ impl ConsensusOutputQuarantine {
         self.output_queue
             .iter()
             .any(|output| output.pending_checkpoint_exists(index))
-    }
-
-    pub(super) fn get_pending_checkpoints_v2(
-        &self,
-        last: Option<CheckpointHeight>,
-    ) -> Vec<(CheckpointHeight, PendingCheckpointV2)> {
-        let mut checkpoints = Vec::new();
-        for output in &self.output_queue {
-            checkpoints.extend(
-                output
-                    .get_pending_checkpoints_v2(last)
-                    .map(|cp| (cp.height(), cp.clone())),
-            );
-        }
-        if cfg!(debug_assertions) {
-            let mut prev = None;
-            for (height, _) in &checkpoints {
-                if let Some(prev) = prev {
-                    assert!(prev < *height);
-                }
-                prev = Some(*height);
-            }
-        }
-        checkpoints
-    }
-
-    pub(super) fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> bool {
-        self.output_queue
-            .iter()
-            .any(|output| output.pending_checkpoint_exists_v2(index))
     }
 
     pub(super) fn get_new_jwks(
@@ -1093,7 +1008,7 @@ impl ConsensusOutputQuarantine {
 
         Ok(results
             .into_iter()
-            .zip(shared_input_object_ids)
+            .zip_debug_eq(shared_input_object_ids)
             .filter_map(|(debt, object_id)| debt.map(|debt| (debt, object_id)))
             .map(move |((round, debt), object_id)| {
                 // Stored debts already account for the budget of the round in which
@@ -1224,13 +1139,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_drain_boundary_prevents_premature_commit() {
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_split_checkpoints_in_consensus_handler_for_testing(true);
-        let state = TestAuthorityBuilder::new()
-            .with_protocol_config(protocol_config)
-            .build()
-            .await;
+        let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing();
 
         let metrics = epoch_store.metrics.clone();
@@ -1268,13 +1177,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_drain_boundary_commits_at_safe_point() {
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_split_checkpoints_in_consensus_handler_for_testing(true);
-        let state = TestAuthorityBuilder::new()
-            .with_protocol_config(protocol_config)
-            .build()
-            .await;
+        let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing();
 
         let metrics = epoch_store.metrics.clone();

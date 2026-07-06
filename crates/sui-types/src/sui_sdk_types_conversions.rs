@@ -188,6 +188,8 @@ impl From<crate::object::Owner> for Owner {
                 start_version: start_version.value(),
                 owner: owner.into(),
             },
+            // TODO(Party WIP)
+            crate::object::Owner::Party { .. } => todo!("Party WIP"),
         }
     }
 }
@@ -659,9 +661,20 @@ impl From<crate::effects::AccumulatorWriteV1> for AccumulatorWrite {
             type_tag_core_to_sdk(value.address.ty).unwrap(),
             operation,
             match value.value {
-                crate::effects::AccumulatorValue::Integer(value) => value,
-                crate::effects::AccumulatorValue::IntegerTuple(_, _)
-                | crate::effects::AccumulatorValue::EventDigest(_) => todo!(),
+                crate::effects::AccumulatorValue::Integer(value) => {
+                    sui_sdk_types::AccumulatorValue::Integer(value)
+                }
+                crate::effects::AccumulatorValue::IntegerTuple(a, b) => {
+                    sui_sdk_types::AccumulatorValue::IntegerTuple(a, b)
+                }
+                crate::effects::AccumulatorValue::EventDigest(digests) => {
+                    sui_sdk_types::AccumulatorValue::EventDigest(
+                        digests
+                            .into_iter()
+                            .map(|(idx, digest)| (idx, digest.into()))
+                            .collect(),
+                    )
+                }
             },
         )
     }

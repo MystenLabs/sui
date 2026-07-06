@@ -175,10 +175,10 @@ fn verify_signature(
     };
 
     let mut zklogin_verifier = match service.chain_id().chain() {
-        sui_protocol_config::Chain::Mainnet => sui_crypto::zklogin::ZkloginVerifier::new_mainnet(),
-        sui_protocol_config::Chain::Testnet | sui_protocol_config::Chain::Unknown => {
-            sui_crypto::zklogin::ZkloginVerifier::new_dev()
+        sui_protocol_config::Chain::Mainnet | sui_protocol_config::Chain::Testnet => {
+            sui_crypto::zklogin::ZkloginVerifier::new_mainnet()
         }
+        sui_protocol_config::Chain::Unknown => sui_crypto::zklogin::ZkloginVerifier::new_dev(),
     };
     *zklogin_verifier.jwks_mut() = jwks;
     let mut verifier = sui_crypto::UserSignatureVerifier::new();

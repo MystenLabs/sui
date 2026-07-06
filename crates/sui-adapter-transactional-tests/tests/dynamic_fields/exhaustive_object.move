@@ -10,7 +10,7 @@
 //# publish
 module a::m {
 
-use sui::dynamic_object_field::{add, exists_, borrow, borrow_mut, remove};
+use sui::dynamic_object_field::{add, exists, borrow, borrow_mut, remove};
 
 public struct Obj has key, store {
     id: UID,
@@ -54,9 +54,9 @@ entry fun t1(obj: &mut Obj, ctx: &mut TxContext) {
 
 entry fun t2(obj: &Obj) {
     let id = &obj.id;
-    assert!(exists_<u64>(id, 0u64), 0);
-    assert!(exists_<vector<u8>>(id, b""), 0);
-    assert!(exists_<bool>(id, false), 0);
+    assert!(exists<u64>(id, 0u64), 0);
+    assert!(exists<vector<u8>>(id, b""), 0);
+    assert!(exists<bool>(id, false), 0);
 }
 
 entry fun t3(obj: &Obj) {
@@ -89,9 +89,9 @@ entry fun t6(obj: &mut Obj) {
 
 entry fun t7(obj: &Obj) {
     let id = &obj.id;
-    assert!(!exists_<u64>(id, 0), 0);
-    assert!(!exists_<vector<u8>>(id, b""), 0);
-    assert!(exists_<bool>(id, false), 0);
+    assert!(!exists<u64>(id, 0), 0);
+    assert!(!exists<vector<u8>>(id, b""), 0);
+    assert!(exists<bool>(id, false), 0);
 }
 
 entry fun t8(obj: Obj) {

@@ -6,7 +6,6 @@ use crate::authority::authority_store_pruner::{
 };
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::CheckpointStore;
-use crate::rpc_index::RpcIndexStore;
 use anyhow::Result;
 use bytes::Bytes;
 use futures::future::try_join_all;
@@ -256,7 +255,6 @@ impl DBCheckpointHandler {
         let checkpoint_store = Arc::new(CheckpointStore::new_for_db_checkpoint_handler(
             &db_path.join("checkpoints"),
         ));
-        let rpc_index = RpcIndexStore::new_without_init(&db_path);
         let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
         info!(
             "Pruning db checkpoint in {:?} for epoch: {epoch}",
@@ -265,7 +263,7 @@ impl DBCheckpointHandler {
         AuthorityStorePruner::prune_objects_for_eligible_epochs(
             &perpetual_db,
             &checkpoint_store,
-            Some(&rpc_index),
+            None,
             self.pruning_config.clone(),
             metrics,
             epoch_duration_ms,

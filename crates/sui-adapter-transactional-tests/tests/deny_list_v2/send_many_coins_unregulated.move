@@ -52,10 +52,10 @@ module test::coin {
     }
 }
 
-//# view-object 1,1
+//# view-object 1,3
 
-//# run test::coin::send_1 --args object(1,1) --sender A
+//# run test::coin::send_1 --args object(1,3) --sender A
 
-//# run test::coin::send_10 --args object(1,1) --sender A
+//# run test::coin::send_10 --args object(1,3) --sender A
 
-//# run test::coin::send_100 --args object(1,1) --sender A
+//# run test::coin::send_100 --args object(1,3) --sender A

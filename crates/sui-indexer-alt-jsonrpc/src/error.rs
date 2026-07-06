@@ -141,19 +141,6 @@ pub(crate) fn invalid_params<E: std::error::Error>(err: E) -> RpcError<E> {
     RpcError::InvalidParams(err)
 }
 
-/// Helper function to convert a jsonrpc client error into an `ErrorObject`.
-pub(crate) fn client_error_to_error_object(
-    error: jsonrpsee::core::ClientError,
-) -> ErrorObject<'static> {
-    match error {
-        // `Call` is the only error type that actually conveys meaningful error
-        // from a user calling the method. Other error variants are all more or less
-        // internal errors.
-        jsonrpsee::core::ClientError::Call(e) => e,
-        _ => ErrorObject::owned(INTERNAL_ERROR_CODE, error.to_string(), None::<()>),
-    }
-}
-
 impl ResponseForPanic for PanicHandler {
     type ResponseBody = axum::body::Body;
 

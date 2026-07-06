@@ -92,6 +92,8 @@ pub struct BuildConfig {
     /// The environment that compilation is with respect to (e.g., required to resolve
     /// published dependency IDs).
     pub environment: Environment,
+    /// The Sui flavor instance, providing network-aware system dependency resolution.
+    pub flavor: SuiFlavor,
 }
 
 impl BuildConfig {
@@ -109,6 +111,7 @@ impl BuildConfig {
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
             environment: testnet_environment(),
+            flavor: SuiFlavor::new(),
         }
     }
 
@@ -181,7 +184,7 @@ impl BuildConfig {
     pub async fn build_async(self, path: &Path) -> anyhow::Result<CompiledPackage> {
         let mut root_pkg = self
             .config
-            .package_loader(path, &self.environment)
+            .package_loader(path, &self.environment, self.flavor.clone())
             .load()
             .await?;
 
@@ -201,7 +204,7 @@ impl BuildConfig {
         // we need to block here to compile the package, which requires to fetch dependencies
         let mut root_pkg = self
             .config
-            .package_loader(path, &self.environment)
+            .package_loader(path, &self.environment, self.flavor.clone())
             .load_sync()?;
 
         self.internal_build(&mut root_pkg)
@@ -360,7 +363,11 @@ impl CompiledPackage {
     /// Return the set of Object IDs corresponding to this package's transitive dependencies'
     /// storage package IDs (where to load those packages on-chain).
     pub fn get_dependency_storage_package_ids(&self) -> Vec<ObjectID> {
-        self.dependency_ids.published.values().cloned().collect()
+        self.dependency_ids
+            .published
+            .values()
+            .map(|dep| dep.published_at)
+            .collect()
     }
 
     /// Return a digest of the bytecode modules in this package.
@@ -561,7 +568,11 @@ impl CompiledPackage {
     }
 
     pub fn get_published_dependencies_ids(&self) -> Vec<ObjectID> {
-        self.dependency_ids.published.values().cloned().collect()
+        self.dependency_ids
+            .published
+            .values()
+            .map(|dep| dep.published_at)
+            .collect()
     }
 }
 
@@ -585,21 +596,84 @@ pub enum PublishedAtError {
 
 #[derive(Debug, Clone)]
 pub struct PackageDependencies {
-    /// Set of published dependencies (name and address).
-    pub published: BTreeMap<Symbol, ObjectID>,
-    /// Set of unpublished dependencies (name and address).
-    pub unpublished: BTreeSet<Symbol>,
+    /// Set of published dependencies keyed by package graph ID.
+    pub published: BTreeMap<Symbol, PublishedDependency>,
+    /// Set of unpublished dependencies by package graph ID.
+    pub unpublished: BTreeMap<Symbol, UnpublishedDependency>,
     /// Set of dependencies with invalid `published-at` addresses.
-    pub invalid: BTreeMap<Symbol, String>,
-    /// Set of dependencies that have conflicting `published-at` addresses. The key refers to
-    /// the package, and the tuple refers to the address in the (Move.lock, Move.toml) respectively.
-    pub conflicting: BTreeMap<Symbol, (ObjectID, ObjectID)>,
+    pub invalid: BTreeMap<Symbol, InvalidDependency>,
+    /// Set of dependencies that have conflicting `published-at` addresses.
+    pub conflicting: BTreeMap<Symbol, ConflictingDependency>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PublishedDependency {
+    /// Unique package graph ID used by the compiler and build artifacts.
+    ///
+    /// This may differ from `name` when multiple packages have the same declared package name,
+    /// for example `foo` and `foo_1`.
+    pub id: Symbol,
+    /// Human-readable package name declared by the package.
+    pub name: Symbol,
+    pub published_at: ObjectID,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnpublishedDependency {
+    /// Unique package graph ID used by the compiler and build artifacts.
+    ///
+    /// This may differ from `name` when multiple packages have the same declared package name,
+    /// for example `foo` and `foo_1`.
+    pub id: Symbol,
+    /// Human-readable package name declared by the package.
+    pub name: Symbol,
+}
+
+#[derive(Debug, Clone)]
+pub struct InvalidDependency {
+    /// Unique package graph ID used by the compiler and build artifacts.
+    ///
+    /// This may differ from `name` when multiple packages have the same declared package name,
+    /// for example `foo` and `foo_1`.
+    pub id: Symbol,
+    /// Human-readable package name declared by the package.
+    pub name: Symbol,
+    pub published_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConflictingDependency {
+    /// Unique package graph ID used by the compiler and build artifacts.
+    ///
+    /// This may differ from `name` when multiple packages have the same declared package name,
+    /// for example `foo` and `foo_1`.
+    pub id: Symbol,
+    /// Human-readable package name declared by the package.
+    pub name: Symbol,
+    pub lock_file_address: ObjectID,
+    pub manifest_address: ObjectID,
+}
+
+impl PublishedDependency {
+    pub fn new(id: Symbol, name: Symbol, published_at: ObjectID) -> Self {
+        Self {
+            id,
+            name,
+            published_at,
+        }
+    }
+}
+
+impl UnpublishedDependency {
+    pub fn new(id: Symbol, name: Symbol) -> Self {
+        Self { id, name }
+    }
 }
 
 impl PackageDependencies {
     pub fn new<F: MoveFlavor>(root_pkg: &RootPackage<F>) -> anyhow::Result<Self> {
         let mut published = BTreeMap::new();
-        let mut unpublished = BTreeSet::new();
+        let mut unpublished = BTreeMap::new();
 
         let packages = root_pkg.packages();
 
@@ -607,13 +681,21 @@ impl PackageDependencies {
             if p.is_root() {
                 continue;
             }
+            // The compiler uses package graph IDs as package names, including suffixes for
+            // duplicate declared names, so dependency IDs must use that same key space.
+            let id: Symbol = p.id().as_str().into();
+            let name: Symbol = p.display_name().into();
             if let Some(addresses) = p.published() {
                 published.insert(
-                    p.display_name().into(),
-                    ObjectID::from_address(addresses.published_at.0),
+                    id,
+                    PublishedDependency::new(
+                        id,
+                        name,
+                        ObjectID::from_address(addresses.published_at.0),
+                    ),
                 );
             } else {
-                unpublished.insert(p.display_name().into());
+                unpublished.insert(id, UnpublishedDependency::new(id, name));
             }
         }
 

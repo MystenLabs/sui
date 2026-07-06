@@ -4,9 +4,8 @@
 use crate::db_tool::{DbToolCommand, execute_db_tool_command, print_db_all_tables};
 use crate::{
     ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
-    check_completed_snapshot, download_db_snapshot, download_formal_snapshot,
-    get_latest_available_epoch, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint,
+    check_completed_snapshot, download_formal_snapshot, get_latest_available_epoch, get_object,
+    get_transaction_block, make_clients, restore_from_db_checkpoint,
 };
 use anyhow::Result;
 use consensus_core::storage::{Store, rocksdb_store::RocksDBStore};
@@ -210,72 +209,6 @@ pub enum ToolCommand {
         db_checkpoint_path: PathBuf,
     },
 
-    #[clap(
-        name = "download-db-snapshot",
-        about = "Downloads the legacy database snapshot via cloud object store, outputs to local disk"
-    )]
-    DownloadDBSnapshot {
-        #[clap(long = "epoch", conflicts_with = "latest")]
-        epoch: Option<u64>,
-        #[clap(
-            long = "path",
-            help = "the path to write the downloaded snapshot files"
-        )]
-        path: PathBuf,
-        /// skip downloading indexes dir
-        #[clap(long = "skip-indexes")]
-        skip_indexes: bool,
-        /// Number of parallel downloads to perform. Defaults to 50, max 200.
-        #[clap(long = "num-parallel-downloads")]
-        num_parallel_downloads: Option<usize>,
-        /// Network to download snapshot for. Defaults to "mainnet".
-        /// If `--snapshot-bucket` or `--archive-bucket` is not specified,
-        /// the value of this flag is used to construct default bucket names.
-        #[clap(long = "network", default_value = "mainnet")]
-        network: Chain,
-        /// Snapshot bucket name. If not specified, defaults are
-        /// based on value of `--network` flag.
-        #[clap(long = "snapshot-bucket", conflicts_with = "no_sign_request")]
-        snapshot_bucket: Option<String>,
-        /// Snapshot bucket type
-        #[clap(
-            long = "snapshot-bucket-type",
-            conflicts_with = "no_sign_request",
-            help = "Required if --no-sign-request is not set"
-        )]
-        snapshot_bucket_type: Option<ObjectStoreType>,
-        /// Path to snapshot directory on local filesystem.
-        /// Only applicable if `--snapshot-bucket-type` is "file".
-        #[clap(
-            long = "snapshot-path",
-            help = "only used for testing, when --snapshot-bucket-type=FILE"
-        )]
-        snapshot_path: Option<PathBuf>,
-        /// If true, no authentication is needed for snapshot restores
-        #[clap(
-            long = "no-sign-request",
-            conflicts_with_all = &["snapshot_bucket", "snapshot_bucket_type"],
-            help = "if set, no authentication is needed for snapshot restore"
-        )]
-        no_sign_request: bool,
-        /// Download snapshot of the latest available epoch.
-        /// If `--epoch` is specified, then this flag gets ignored.
-        #[clap(
-            long = "latest",
-            conflicts_with = "epoch",
-            help = "defaults to latest available snapshot in chosen bucket"
-        )]
-        latest: bool,
-        /// If false (default), log level will be overridden to "off",
-        /// and output will be reduced to necessary status information.
-        #[clap(long = "verbose")]
-        verbose: bool,
-        /// Number of retries for failed HTTP requests when downloading snapshot files.
-        /// Defaults to 3 retries. Set to 0 to disable retries.
-        #[clap(long = "max-retries", default_value = "3")]
-        max_retries: usize,
-    },
-
     // Restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
     /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
     /// epoch 20+, and for testnet this is epoch 12+
@@ -343,6 +276,9 @@ pub enum ToolCommand {
         /// Defaults to 3 retries. Set to 0 to disable retries.
         #[clap(long = "max-retries", default_value = "3")]
         max_retries: usize,
+        /// Port for the Prometheus metrics server. Defaults to 9184.
+        #[clap(long = "metrics-port", default_value = "9184")]
+        metrics_port: u16,
     },
 
     #[clap(name = "replay")]
@@ -369,6 +305,25 @@ pub enum ToolCommand {
         chain: Option<String>,
         #[command(subcommand)]
         cmd: ReplayToolCommand,
+    },
+
+    /// Interactive shell for navigating the validator database.
+    #[command(name = "db-shell")]
+    DbShell(crate::db_shell::DbShellArgs),
+
+    /// Interactive Rhai shell for inspecting a TideHunter database.
+    #[cfg(all(feature = "tideconsole", not(windows)))]
+    #[command(name = "tideconsole")]
+    TideConsole {
+        /// Path to a TideHunter database directory to open on startup (bound to variable 'db').
+        #[arg(short, long)]
+        db: Option<PathBuf>,
+        /// Rhai snippet to evaluate non-interactively, then exit.
+        #[arg(short, long)]
+        exec: Option<String>,
+        /// Path to a Rhai script file to evaluate non-interactively, then exit.
+        #[arg(short, long)]
+        script: Option<PathBuf>,
     },
 }
 
@@ -437,7 +392,7 @@ impl ToolCommand {
                 start_commit,
                 end_commit,
             } => {
-                let rocks_db_store = RocksDBStore::new(&db_path, true);
+                let rocks_db_store = RocksDBStore::new(&db_path);
 
                 let start_commit = start_commit.unwrap_or(0);
                 let end_commit = end_commit.unwrap_or(u32::MAX);
@@ -659,6 +614,7 @@ impl ToolCommand {
                 latest,
                 verbose,
                 max_retries,
+                metrics_port,
             } => {
                 if !verbose {
                     tracing_handle
@@ -788,162 +744,7 @@ impl ToolCommand {
                     network,
                     verify,
                     max_retries,
-                )
-                .await?;
-            }
-            ToolCommand::DownloadDBSnapshot {
-                epoch,
-                path,
-                skip_indexes,
-                num_parallel_downloads,
-                network,
-                snapshot_bucket,
-                snapshot_bucket_type,
-                snapshot_path,
-                no_sign_request,
-                latest,
-                verbose,
-                max_retries,
-            } => {
-                if no_sign_request {
-                    anyhow::bail!(
-                        "The --no-sign-request flag is no longer supported. \
-                        Please use S3 or GCS buckets with --snapshot-bucket-type and --snapshot-bucket instead. \
-                        For more information, see: https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots"
-                    );
-                }
-                if !verbose {
-                    tracing_handle
-                        .update_log("off")
-                        .expect("Failed to update log level");
-                }
-                let num_parallel_downloads = num_parallel_downloads.unwrap_or(50).min(200);
-                let snapshot_bucket =
-                    snapshot_bucket.or_else(|| match (network, no_sign_request) {
-                        (Chain::Mainnet, false) => Some(
-                            env::var("MAINNET_DB_SIGNED_BUCKET")
-                                .unwrap_or("mysten-mainnet-snapshots".to_string()),
-                        ),
-                        (Chain::Mainnet, true) => env::var("MAINNET_DB_UNSIGNED_BUCKET").ok(),
-                        (Chain::Testnet, true) => env::var("TESTNET_DB_UNSIGNED_BUCKET").ok(),
-                        (Chain::Testnet, _) => Some(
-                            env::var("TESTNET_DB_SIGNED_BUCKET")
-                                .unwrap_or("mysten-testnet-snapshots".to_string()),
-                        ),
-                        (Chain::Unknown, _) => {
-                            panic!("Cannot generate default snapshot bucket for unknown network");
-                        }
-                    });
-
-                let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok();
-                let snapshot_bucket_type = if no_sign_request {
-                    ObjectStoreType::S3
-                } else {
-                    snapshot_bucket_type
-                        .expect("You must set either --snapshot-bucket-type or --no-sign-request")
-                };
-                let snapshot_store_config = if no_sign_request {
-                    let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {
-                        if network == Chain::Mainnet {
-                            Some("https://db-snapshot.mainnet.sui.io".to_string())
-                        } else if network == Chain::Testnet {
-                            Some("https://db-snapshot.testnet.sui.io".to_string())
-                        } else {
-                            None
-                        }
-                    });
-                    ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::S3),
-                        aws_endpoint: aws_endpoint.filter(|s| !s.is_empty()),
-                        aws_virtual_hosted_style_request: env::var(
-                            "AWS_SNAPSHOT_VIRTUAL_HOSTED_REQUESTS",
-                        )
-                        .ok()
-                        .and_then(|b| b.parse().ok())
-                        .unwrap_or(no_sign_request),
-                        object_store_connection_limit: 200,
-                        no_sign_request,
-                        ..Default::default()
-                    }
-                } else {
-                    match snapshot_bucket_type {
-                        ObjectStoreType::S3 => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::S3),
-                            bucket: snapshot_bucket.filter(|s| !s.is_empty()),
-                            aws_access_key_id: env::var("AWS_SNAPSHOT_ACCESS_KEY_ID").ok(),
-                            aws_secret_access_key: env::var("AWS_SNAPSHOT_SECRET_ACCESS_KEY").ok(),
-                            aws_region: env::var("AWS_SNAPSHOT_REGION").ok(),
-                            aws_endpoint: aws_endpoint.filter(|s| !s.is_empty()),
-                            aws_virtual_hosted_style_request: env::var(
-                                "AWS_SNAPSHOT_VIRTUAL_HOSTED_REQUESTS",
-                            )
-                            .ok()
-                            .and_then(|b| b.parse().ok())
-                            .unwrap_or(no_sign_request),
-                            object_store_connection_limit: 200,
-                            no_sign_request,
-                            ..Default::default()
-                        },
-                        ObjectStoreType::GCS => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::GCS),
-                            bucket: snapshot_bucket,
-                            google_service_account: env::var(
-                                "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
-                            )
-                            .ok(),
-                            google_project_id: env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_PROJECT_ID")
-                                .ok(),
-                            object_store_connection_limit: 200,
-                            no_sign_request,
-                            ..Default::default()
-                        },
-                        ObjectStoreType::Azure => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::Azure),
-                            bucket: snapshot_bucket,
-                            azure_storage_account: env::var("AZURE_SNAPSHOT_STORAGE_ACCOUNT").ok(),
-                            azure_storage_access_key: env::var("AZURE_SNAPSHOT_STORAGE_ACCESS_KEY")
-                                .ok(),
-                            object_store_connection_limit: 200,
-                            no_sign_request,
-                            ..Default::default()
-                        },
-                        ObjectStoreType::File => {
-                            if snapshot_path.is_some() {
-                                ObjectStoreConfig {
-                                    object_store: Some(ObjectStoreType::File),
-                                    directory: snapshot_path,
-                                    ..Default::default()
-                                }
-                            } else {
-                                panic!(
-                                    "--snapshot-path must be specified for --snapshot-bucket-type=file"
-                                );
-                            }
-                        }
-                    }
-                };
-
-                let latest_available_epoch =
-                    latest.then_some(get_latest_available_epoch(&snapshot_store_config).await?);
-                let epoch_to_download = epoch.or(latest_available_epoch).expect(
-                    "Either pass epoch with --epoch <epoch_num> or use latest with --latest",
-                );
-
-                if let Err(e) =
-                    check_completed_snapshot(&snapshot_store_config, epoch_to_download).await
-                {
-                    panic!(
-                        "Aborting snapshot restore: {}, snapshot may not be uploaded yet",
-                        e
-                    );
-                }
-                download_db_snapshot(
-                    &path,
-                    epoch_to_download,
-                    snapshot_store_config,
-                    skip_indexes,
-                    num_parallel_downloads,
-                    max_retries,
+                    metrics_port,
                 )
                 .await?;
             }
@@ -957,6 +758,14 @@ impl ToolCommand {
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
+            }
+            ToolCommand::DbShell(args) => {
+                tokio::task::spawn_blocking(move || crate::db_shell::run(args)).await??;
+            }
+            #[cfg(all(feature = "tideconsole", not(windows)))]
+            ToolCommand::TideConsole { db, exec, script } => {
+                tokio::task::spawn_blocking(move || crate::tideconsole_cmd::run(db, exec, script))
+                    .await??;
             }
         };
         Ok(())

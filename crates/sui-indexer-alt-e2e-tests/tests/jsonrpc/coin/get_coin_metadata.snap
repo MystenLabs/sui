@@ -13,13 +13,13 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 22655600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 72:
-//# view-object 1,1
+//# view-object 1,2
 Owner: Immutable
 Version: 2
 Contents: sui::coin::CoinMetadata<Test::fake::FAKE> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(1,1),
+            bytes: fake(1,2),
         },
     },
     decimals: 8u8,
@@ -96,13 +96,13 @@ Contents: sui::coin::CoinMetadata<Test::fake::FAKE> {
 }
 
 task 3, line 74:
-//# view-object 1,2
+//# view-object 1,4
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::CoinMetadata<Test::real::REAL> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(1,2),
+            bytes: fake(1,4),
         },
     },
     decimals: 255u8,
@@ -179,13 +179,13 @@ Contents: sui::coin::CoinMetadata<Test::real::REAL> {
 }
 
 task 4, line 76:
-//# view-object 1,4
+//# view-object 1,3
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::TreasuryCap<Test::real::REAL> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(1,4),
+            bytes: fake(1,3),
         },
     },
     total_supply: sui::balance::Supply<Test::real::REAL> {
@@ -208,7 +208,7 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
+    "id": "0x2cef583566e8952f16b80a645bb90318aaebc683c79e9ff01733fe533f201b7d"
   }
 }
 
@@ -223,7 +223,7 @@ Response: {
     "symbol": "FAKE",
     "description": "A coin that is fake",
     "iconUrl": "https://fake.com",
-    "id": "0x6e8a3c64dec1d08ef6bb52234d477b4599bf77f6b113ee0830009be6c740adf9"
+    "id": "0x12d87dcf93977dc2aedf49c894dea2f55dadd2e91beb562f06eda007ecf79340"
   }
 }
 
@@ -247,9 +247,9 @@ Response: {
 }
 
 task 10, lines 104-105:
-//# programmable --sender A --inputs object(1,4) object(1,2)
+//# programmable --sender A --inputs object(1,3) object(1,4)
 //> 0: Test::real::update_metadata_name(Input(0),Input(1));
-mutated: object(0,0), object(1,2), object(1,4)
+mutated: object(0,0), object(1,3), object(1,4)
 gas summary: computation_cost: 1000000, storage_cost: 4780400,  storage_rebate: 4702500, non_refundable_storage_fee: 47500
 
 task 11, line 107:
@@ -267,13 +267,13 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
+    "id": "0x2cef583566e8952f16b80a645bb90318aaebc683c79e9ff01733fe533f201b7d"
   }
 }
 
 task 13, line 115:
-//# transfer-object 1,2 --sender A --recipient B
-mutated: object(0,0), object(1,2)
+//# transfer-object 1,4 --sender A --recipient B
+mutated: object(0,0), object(1,4)
 gas summary: computation_cost: 1000000, storage_cost: 3078000,  storage_rebate: 3047220, non_refundable_storage_fee: 30780
 
 task 14, line 117:
@@ -291,16 +291,16 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
+    "id": "0x2cef583566e8952f16b80a645bb90318aaebc683c79e9ff01733fe533f201b7d"
   }
 }
 
 task 16, lines 125-126:
-//# programmable --sender B --inputs object(1,2)
+//# programmable --sender B --inputs object(1,4)
 //> 0: Test::real::wrap_coin_metadata(Input(0));
 created: object(16,0)
 mutated: object(0,1)
-wrapped: object(1,2)
+wrapped: object(1,4)
 gas summary: computation_cost: 1000000, storage_cost: 2948800,  storage_rebate: 2069100, non_refundable_storage_fee: 20900
 
 task 17, line 128:

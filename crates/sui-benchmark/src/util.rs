@@ -66,6 +66,7 @@ pub async fn publish_basics_package(
         let transaction = TestTransactionBuilder::new(sender, current_gas, gas_price)
             .publish_examples("basics")
             .await
+            .ensure_unique()
             .build_and_sign(keypair);
         tracing::info!(
             "Publishing basics package with tx digest {:?} (attempt {})",
@@ -73,11 +74,8 @@ pub async fn publish_basics_package(
             retry
         );
 
-        let (client_type, execution_result) = proxy.execute_transaction_block(transaction).await;
-        tracing::debug!(
-            "Executed publish_basics_package transaction via {:?}",
-            client_type
-        );
+        let execution_result = proxy.execute_transaction_block(transaction).await;
+        tracing::debug!("Executed publish_basics_package transaction");
 
         match execution_result {
             Ok(effects) => {

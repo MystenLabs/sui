@@ -21,7 +21,7 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
-    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
+    metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
@@ -67,7 +67,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
@@ -105,6 +105,9 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
             );
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
         // note: old versions do not report timings.
         (
             inner_temp_store,
@@ -119,7 +122,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
@@ -139,7 +142,7 @@ impl executor::Executor for Executor {
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
         let gas_coins = gas.payment;
-        if skip_all_checks {
+        let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
@@ -173,14 +176,18 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
             )
+        };
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
         }
+        (inner_temp_store, gas_status, effects, result)
     }
 
     fn execute_transaction_to_effects_and_execution_error(
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
@@ -218,6 +225,9 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
             );
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
         (inner_temp_store, gas_status, effects, vec![], result)
     }
 
@@ -225,7 +235,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         epoch_id: EpochId,
         epoch_timestamp_ms: u64,
         transaction_digest: &TransactionDigest,
@@ -258,6 +268,7 @@ impl executor::Executor for Executor {
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
+        _protocol_config: &ProtocolConfig,
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r> {
         Box::new(TypeLayoutResolver::new(&self.0, store))
@@ -280,5 +291,37 @@ impl verifier::Verifier for Verifier<'_> {
         meter: &mut dyn Meter,
     ) -> SuiResult<()> {
         run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
+    }
+}
+
+fn log_execution_error(transaction_digest: TransactionDigest, error: &ExecutionError) {
+    use sui_types::execution_status::ExecutionErrorKind as K;
+
+    match error.kind() {
+        K::InvariantViolation | K::VMInvariantViolation => {
+            tracing::error!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "INVARIANT VIOLATION! Source: {:?}",
+                error.source(),
+            );
+        }
+        K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Verification Error. Source: {:?}",
+                error.source(),
+            );
+        }
+        K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Publish/Upgrade Error. Source: {:?}",
+                error.source(),
+            );
+        }
+        _ => (),
     }
 }

@@ -6,21 +6,25 @@ use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{NetworkKeyPair, NetworkPublicKey};
-use consensus_types::block::BlockRef;
-use futures::{Stream, StreamExt as _, stream};
+use consensus_types::block::{BlockRef, Round};
+use futures::{Stream, StreamExt as _};
 use mysten_network::{Multiaddr, callback::CallbackLayer};
 use parking_lot::RwLock;
 use tokio_stream::Iter;
-use tonic::{Request, Response, Streaming};
+use tonic::{Request, Response};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
-use tracing::{debug, trace};
+use tracing::{debug, info, trace, warn};
 
 use crate::{
     CommitRange, Context,
     error::{ConsensusError, ConsensusResult},
     network::{
-        ObserverBlockStream, ObserverNetworkClient, PeerId, metrics_layer::MetricsCallbackMaker,
-        observer::block_stream_request::Command, to_host_port_str, tonic_network::Channel,
+        ObserverBlockStream, ObserverNetworkClient, PeerId,
+        metrics_layer::MetricsCallbackMaker,
+        to_host_port_str,
+        tonic_network::{
+            Channel, MAX_FETCH_RESPONSE_BYTES, chunk_blocks, max_fetch_blocks_response_bytes,
+        },
         tonic_tls::certificate_server_name,
     },
 };
@@ -30,43 +34,41 @@ use super::{ObserverNetworkService, tonic_gen::observer_service_server::Observer
 // Observer block streaming messages
 #[derive(Clone, prost::Message)]
 pub(crate) struct BlockStreamRequest {
-    #[prost(oneof = "block_stream_request::Command", tags = "1, 2")]
-    pub(crate) command: Option<block_stream_request::Command>,
-}
-
-pub(crate) mod block_stream_request {
-    #[derive(Clone, PartialEq, prost::Oneof)]
-    pub(crate) enum Command {
-        #[prost(message, tag = "1")]
-        Start(super::StartBlockStream),
-        #[prost(message, tag = "2")]
-        Stop(super::StopBlockStream),
-    }
-}
-
-#[derive(Clone, PartialEq, prost::Message)]
-pub(crate) struct StartBlockStream {
     #[prost(uint64, repeated, tag = "1")]
     pub(crate) highest_round_per_authority: Vec<u64>,
 }
 
-#[derive(Clone, PartialEq, prost::Message)]
-pub(crate) struct StopBlockStream {}
+/// Auxiliary data carried alongside blocks in the observer stream.
+/// Currently used for randomness signatures; extensible for future use.
+#[derive(Clone, prost::Message)]
+pub(crate) struct AuxiliaryData {
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub(crate) randomness_signatures: Vec<Bytes>,
+}
 
 #[derive(Clone, prost::Message)]
 pub(crate) struct BlockStreamResponse {
-    #[prost(bytes = "bytes", tag = "1")]
-    pub(crate) block: Bytes,
-    // The highest commit index produced by this node. This is not guaranteed to be a finalized or stored commit.
-    #[prost(uint64, tag = "2")]
-    pub(crate) highest_commit_index: u64,
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub(crate) blocks: Vec<Bytes>,
+    #[prost(message, optional, tag = "2")]
+    pub(crate) auxiliary_data: Option<AuxiliaryData>,
 }
 
 // Observer fetch messages
 #[derive(Clone, prost::Message)]
 pub(crate) struct FetchBlocksRequest {
     #[prost(bytes = "vec", repeated, tag = "1")]
-    pub(crate) block_refs: Vec<Vec<u8>>,
+    block_refs: Vec<Vec<u8>>,
+    // The round per authority after which blocks should be fetched. The vector represents the round
+    // for each authority and its length should be the same as the committee size.
+    // When this field is non-empty, additional ancestors of the requested blocks can be fetched.
+    #[prost(uint32, repeated, tag = "2")]
+    fetch_after_rounds: Vec<Round>,
+    // When true, missing ancestors of the requested blocks will be fetched as well.
+    // When false, additional blocks are fetched depth-first from the requested block authorities.
+    // This field is only meaningful when fetch_after_rounds is non-empty.
+    #[prost(bool, tag = "3")]
+    fetch_missing_ancestors: bool,
 }
 
 #[derive(Clone, prost::Message)]
@@ -94,7 +96,6 @@ pub(crate) struct FetchCommitsResponse {
 /// Information about an observer peer connection, set in request extensions by the server.
 #[derive(Clone, Debug)]
 pub(crate) struct ObserverPeerInfo {
-    #[allow(unused)]
     pub(crate) public_key: NetworkPublicKey,
 }
 
@@ -117,7 +118,7 @@ impl ChannelPool {
     fn new(context: Arc<Context>) -> Self {
         // Only allow to connect to peers that are within this pool.
         let mut observer_peers = BTreeMap::new();
-        for peer in &context.parameters.tonic.observer_peers {
+        for peer in &context.parameters.observer.peers {
             observer_peers.insert(peer.public_key.clone(), peer.address.clone());
         }
         Self {
@@ -148,7 +149,7 @@ impl ChannelPool {
                 .authority(authority)
                 .network_key
                 .clone(),
-            PeerId::Observer(node_id) => node_id.clone(),
+            PeerId::Observer(node_id) => (*node_id).clone(),
         };
 
         // Check if the peer is in the observer peers pool. If not return an error.
@@ -227,7 +228,6 @@ impl TonicObserverClient {
         }
     }
 
-    #[allow(unused)]
     async fn get_client(
         &self,
         peer: PeerId,
@@ -261,13 +261,9 @@ impl ObserverNetworkClient for TonicObserverClient {
     ) -> ConsensusResult<ObserverBlockStream> {
         let mut client = self.get_client(peer.clone(), timeout).await?;
 
-        let request = Request::new(stream::once(async move {
-            BlockStreamRequest {
-                command: Some(Command::Start(StartBlockStream {
-                    highest_round_per_authority,
-                })),
-            }
-        }));
+        let request = Request::new(BlockStreamRequest {
+            highest_round_per_authority,
+        });
         let response = client
             .stream_blocks(request)
             .await
@@ -279,9 +275,9 @@ impl ObserverNetworkClient for TonicObserverClient {
                 let peer_cloned = peer.clone();
                 async move {
                     match b {
-                        Ok(response) => Some(super::ObserverBlockStreamItem {
-                            block: response.block,
-                            highest_commit_index: response.highest_commit_index,
+                        Ok(response) => Some(super::ObserverStreamItem {
+                            blocks: response.blocks,
+                            auxiliary_data: response.auxiliary_data.unwrap_or_default(),
                         }),
                         Err(e) => {
                             debug!("Network error received from {:?}: {e:?}", peer_cloned);
@@ -295,26 +291,101 @@ impl ObserverNetworkClient for TonicObserverClient {
 
     async fn fetch_blocks(
         &self,
-        _peer: PeerId,
-        _block_refs: Vec<BlockRef>,
-        _timeout: Duration,
+        peer: PeerId,
+        block_refs: Vec<BlockRef>,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
+        timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
-        // TODO: Implement block fetching for observers
-        Err(ConsensusError::NetworkRequest(
-            "fetch_blocks not yet implemented".to_string(),
-        ))
+        let mut client = self.get_client(peer, timeout).await?;
+        let max_allowed_bytes =
+            max_fetch_blocks_response_bytes(&self.context, &block_refs, &fetch_after_rounds);
+        let mut request = Request::new(FetchBlocksRequest {
+            block_refs: block_refs
+                .iter()
+                .filter_map(|r| match bcs::to_bytes(r) {
+                    Ok(serialized) => Some(serialized),
+                    Err(e) => {
+                        debug!("Failed to serialize block ref {:?}: {e:?}", r);
+                        None
+                    }
+                })
+                .collect(),
+            fetch_after_rounds,
+            fetch_missing_ancestors,
+        });
+        request.set_timeout(timeout);
+
+        let mut stream = client
+            .fetch_blocks(request)
+            .await
+            .map_err(|e| {
+                if e.code() == tonic::Code::DeadlineExceeded {
+                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
+                } else {
+                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
+                }
+            })?
+            .into_inner();
+
+        let mut blocks = vec![];
+        let mut total_fetched_bytes = 0;
+        loop {
+            match stream.message().await {
+                Ok(Some(response)) => {
+                    for b in &response.blocks {
+                        total_fetched_bytes += b.len();
+                    }
+                    blocks.extend(response.blocks);
+                    if total_fetched_bytes > max_allowed_bytes {
+                        info!(
+                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
+                            total_fetched_bytes, max_allowed_bytes,
+                        );
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    break;
+                }
+                Err(e) => {
+                    if blocks.is_empty() {
+                        if e.code() == tonic::Code::DeadlineExceeded {
+                            return Err(ConsensusError::NetworkRequestTimeout(format!(
+                                "fetch_blocks failed mid-stream: {e:?}"
+                            )));
+                        }
+                        return Err(ConsensusError::NetworkRequest(format!(
+                            "fetch_blocks failed mid-stream: {e:?}"
+                        )));
+                    } else {
+                        warn!("fetch_blocks failed mid-stream: {e:?}");
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(blocks)
     }
 
     async fn fetch_commits(
         &self,
-        _peer: PeerId,
-        _commit_range: CommitRange,
-        _timeout: Duration,
+        peer: PeerId,
+        commit_range: CommitRange,
+        timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-        // TODO: Implement commit fetching for observers
-        Err(ConsensusError::NetworkRequest(
-            "fetch_commits not yet implemented".to_string(),
-        ))
+        let mut client = self.get_client(peer, timeout).await?;
+        let mut request = Request::new(FetchCommitsRequest {
+            start: commit_range.start(),
+            end: commit_range.end(),
+        });
+        request.set_timeout(timeout);
+        let response = client
+            .fetch_commits(request)
+            .await
+            .map_err(|e| ConsensusError::NetworkRequest(format!("fetch_commits failed: {e:?}")))?;
+        let response = response.into_inner();
+        Ok((response.commits, response.certifier_blocks))
     }
 }
 
@@ -335,23 +406,9 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
     type StreamBlocksStream =
         Pin<Box<dyn Stream<Item = Result<BlockStreamResponse, tonic::Status>> + Send>>;
 
-    /// Handles block streaming requests from observers.
-    ///
-    /// # Authentication
-    /// This method requires TLS client certificate authentication. The observer's
-    /// public key must be present in the request extensions as `ObserverPeerInfo`.
-    /// If authentication fails, returns `Status::Unauthenticated`.
-    ///
-    /// # Arguments
-    /// * `request` - The streaming request containing observer commands
-    ///
-    /// # Returns
-    /// A stream of blocks matching the observer's request, or an error if:
-    /// - The observer is not authenticated (missing peer info)
-    /// - The underlying service returns an error
     async fn stream_blocks(
         &self,
-        request: Request<Streaming<BlockStreamRequest>>,
+        request: Request<BlockStreamRequest>,
     ) -> Result<Response<Self::StreamBlocksStream>, tonic::Status> {
         let peer_id = request
             .extensions()
@@ -363,26 +420,7 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
                 )
             })?;
 
-        let mut request_stream = request.into_inner();
-        let first_request = match request_stream.next().await {
-            Some(Ok(r)) => r,
-            Some(Err(e)) => {
-                debug!("stream_blocks() request from {:?} failed: {e:?}", peer_id);
-                return Err(tonic::Status::invalid_argument("Request error"));
-            }
-            None => {
-                return Err(tonic::Status::invalid_argument("Missing request"));
-            }
-        };
-
-        let highest_round_per_authority = match first_request.command {
-            Some(block_stream_request::Command::Start(start)) => start.highest_round_per_authority,
-            _ => {
-                return Err(tonic::Status::invalid_argument(
-                    "First request must be a Start command",
-                ));
-            }
-        };
+        let highest_round_per_authority = request.into_inner().highest_round_per_authority;
 
         let block_stream = self
             .service
@@ -392,8 +430,12 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
 
         let response_stream = block_stream.map(|item| {
             Ok(BlockStreamResponse {
-                block: item.block,
-                highest_commit_index: item.highest_commit_index,
+                blocks: item.blocks,
+                auxiliary_data: if item.auxiliary_data.randomness_signatures.is_empty() {
+                    None
+                } else {
+                    Some(item.auxiliary_data)
+                },
             })
         });
 
@@ -404,22 +446,82 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
 
     async fn fetch_blocks(
         &self,
-        _request: Request<FetchBlocksRequest>,
+        request: Request<FetchBlocksRequest>,
     ) -> Result<Response<Self::FetchBlocksStream>, tonic::Status> {
-        // TODO: Implement fetch_blocks for observer nodes
-        Err(tonic::Status::unimplemented(
-            "fetch_blocks not yet implemented for observers",
-        ))
+        let peer_id = request
+            .extensions()
+            .get::<ObserverPeerInfo>()
+            .map(|info| info.public_key.clone())
+            .ok_or_else(|| {
+                tonic::Status::unauthenticated(
+                    "Observer peer info not found in request. TLS authentication required.",
+                )
+            })?;
+        let inner = request.into_inner();
+        let block_refs = inner
+            .block_refs
+            .into_iter()
+            .filter_map(|serialized| match bcs::from_bytes(&serialized) {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    debug!("Failed to deserialize block ref {:?}: {e:?}", serialized);
+                    None
+                }
+            })
+            .collect();
+        let fetch_after_rounds = inner.fetch_after_rounds;
+        let fetch_missing_ancestors = inner.fetch_missing_ancestors;
+        let blocks = self
+            .service
+            .handle_fetch_blocks(
+                peer_id,
+                block_refs,
+                fetch_after_rounds,
+                fetch_missing_ancestors,
+            )
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+        let responses: std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>> =
+            chunk_blocks(blocks, MAX_FETCH_RESPONSE_BYTES)
+                .into_iter()
+                .map(|blocks| Ok(FetchBlocksResponse { blocks }))
+                .collect::<Vec<_>>()
+                .into_iter();
+        let stream = tokio_stream::iter(responses);
+        Ok(Response::new(stream))
     }
 
     async fn fetch_commits(
         &self,
-        _request: Request<FetchCommitsRequest>,
+        request: Request<FetchCommitsRequest>,
     ) -> Result<Response<FetchCommitsResponse>, tonic::Status> {
-        // TODO: Implement fetch_commits for observer nodes
-        Err(tonic::Status::unimplemented(
-            "fetch_commits not yet implemented for observers",
-        ))
+        let peer_id = request
+            .extensions()
+            .get::<ObserverPeerInfo>()
+            .map(|info| info.public_key.clone())
+            .ok_or_else(|| {
+                tonic::Status::unauthenticated(
+                    "Observer peer info not found in request. TLS authentication required.",
+                )
+            })?;
+        let request = request.into_inner();
+        let (commits, certifier_blocks) = self
+            .service
+            .handle_fetch_commits(peer_id, (request.start..=request.end).into())
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+        let commits = commits
+            .into_iter()
+            .map(|c| c.serialized().clone())
+            .collect();
+        let certifier_blocks = certifier_blocks
+            .into_iter()
+            .map(|b| b.serialized().clone())
+            .collect();
+        Ok(Response::new(FetchCommitsResponse {
+            commits,
+            certifier_blocks,
+        }))
     }
 }
 
@@ -430,10 +532,9 @@ mod tests {
     use bytes::Bytes;
     use consensus_config::PeerRecord;
     use consensus_types::block::Round;
-    use futures::StreamExt as _;
+    use futures::{StreamExt as _, stream};
     use parking_lot::Mutex;
 
-    use super::block_stream_request::Command;
     use crate::{
         context::Context,
         network::{ExtendedSerializedBlock, ObserverNetworkService, test_network::TestService},
@@ -457,7 +558,6 @@ mod tests {
                 .map(|i| block_for_round(i as Round))
                 .collect::<Vec<_>>();
             s.add_own_blocks(own_blocks);
-            s.set_highest_commit_index(42);
         }
 
         let observer_peer_id = keys[0].0.public().clone();
@@ -467,24 +567,17 @@ mod tests {
             .await
             .unwrap();
 
-        let blocks: Vec<_> = block_stream.collect().await;
+        let blocks: Vec<Bytes> = block_stream
+            .flat_map(|item| stream::iter(item.blocks))
+            .collect()
+            .await;
 
         assert_eq!(blocks.len(), 100);
-        assert_eq!(blocks[0].block, Bytes::from(vec![1u8; 16]));
-        assert_eq!(blocks[0].highest_commit_index, 42);
-        assert_eq!(blocks[99].block, Bytes::from(vec![100u8; 16]));
-        assert_eq!(blocks[99].highest_commit_index, 42);
-
-        for block_item in &blocks {
-            assert_eq!(block_item.highest_commit_index, 42);
-        }
+        assert_eq!(blocks[0], Bytes::from(vec![1u8; 16]));
+        assert_eq!(blocks[99], Bytes::from(vec![100u8; 16]));
 
         assert_eq!(service.lock().handle_stream_blocks.len(), 1);
         assert_eq!(service.lock().handle_stream_blocks[0], observer_peer_id);
-
-        let commands = service.lock().stream_commands_received.lock().clone();
-        assert_eq!(commands.len(), 1);
-        assert!(matches!(commands[0], Command::Start(_)));
     }
 
     #[tokio::test]
@@ -498,7 +591,6 @@ mod tests {
                 .map(|i| block_for_round(i as Round))
                 .collect::<Vec<_>>();
             s.add_own_blocks(own_blocks);
-            s.set_highest_commit_index(50);
         }
 
         let observer_peer_id = keys[0].0.public().clone();
@@ -510,13 +602,14 @@ mod tests {
             .await
             .unwrap();
 
-        let blocks: Vec<_> = block_stream.collect().await;
+        let blocks: Vec<Bytes> = block_stream
+            .flat_map(|item| stream::iter(item.blocks))
+            .collect()
+            .await;
 
         assert_eq!(blocks.len(), 50);
-        assert_eq!(blocks[0].block, Bytes::from(vec![51u8; 16]));
-        assert_eq!(blocks[0].highest_commit_index, 50);
-        assert_eq!(blocks[49].block, Bytes::from(vec![100u8; 16]));
-        assert_eq!(blocks[49].highest_commit_index, 50);
+        assert_eq!(blocks[0], Bytes::from(vec![51u8; 16]));
+        assert_eq!(blocks[49], Bytes::from(vec![100u8; 16]));
     }
 
     /// End-to-end test using TonicManager to set up a proper observer server and client.
@@ -536,8 +629,8 @@ mod tests {
 
         // Set up validator 0 with observer server
         let mut parameters = context.parameters.clone();
-        parameters.tonic.observer_server_port = Some(OBSERVER_PORT);
-        parameters.tonic.observer_peers = vec![PeerRecord {
+        parameters.observer.server_port = Some(OBSERVER_PORT);
+        parameters.observer.peers = vec![PeerRecord {
             public_key: keys[0].0.public(),
             address: Multiaddr::from_str(&format!("/ip4/127.0.0.1/udp/{}", OBSERVER_PORT)).unwrap(),
         }];
@@ -559,7 +652,6 @@ mod tests {
                 .map(|i| block_for_round(i as Round))
                 .collect::<Vec<_>>();
             s.add_own_blocks(own_blocks);
-            s.set_highest_commit_index(25);
         }
 
         // Start the observer server
@@ -580,12 +672,16 @@ mod tests {
         let mut stream = result.unwrap();
         let mut count = 0;
         while let Some(item) = stream.next().await {
-            // Verify the blocks are in the expected range (rounds 11-50)
-            assert!(item.block.len() == 16);
-            assert_eq!(item.highest_commit_index, 25);
-            count += 1;
+            for block in item.blocks {
+                // Verify the blocks are in the expected range (rounds 11-50)
+                assert!(block.len() == 16);
+                count += 1;
+                if count >= 40 {
+                    break; // We expect 40 blocks (rounds 11-50)
+                }
+            }
             if count >= 40 {
-                break; // We expect 40 blocks (rounds 11-50)
+                break;
             }
         }
         assert_eq!(count, 40);

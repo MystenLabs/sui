@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use consensus_config::{ObserverParameters, Parameters as ConsensusParameters};
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use sui_config::node::{
@@ -24,6 +25,7 @@ use sui_config::{
 use sui_protocol_config::Chain;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
+use sui_types::node_role::FullNodeSyncMode;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
@@ -43,13 +45,12 @@ pub struct ValidatorConfigBuilder {
     data_ingestion_dir: Option<PathBuf>,
     policy_config: Option<PolicyConfig>,
     firewall_config: Option<RemoteFirewallConfig>,
-    max_submit_position: Option<usize>,
-    submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2: bool,
     funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     chain_override: Option<Chain>,
     state_sync_config: Option<StateSyncConfig>,
+    observer_config: Option<ObserverParameters>,
 }
 
 impl ValidatorConfigBuilder {
@@ -116,19 +117,6 @@ impl ValidatorConfigBuilder {
         self
     }
 
-    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
-        self.max_submit_position = Some(max_submit_position);
-        self
-    }
-
-    pub fn with_submit_delay_step_override_millis(
-        mut self,
-        submit_delay_step_override_millis: u64,
-    ) -> Self {
-        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
-        self
-    }
-
     pub fn with_global_state_hash_v2_enabled(mut self, enabled: bool) -> Self {
         self.global_state_hash_v2 = enabled;
         self
@@ -155,6 +143,11 @@ impl ValidatorConfigBuilder {
         self
     }
 
+    pub fn with_observer_config(mut self, config: ObserverParameters) -> Self {
+        self.observer_config = Some(config);
+        self
+    }
+
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
@@ -171,14 +164,24 @@ impl ValidatorConfigBuilder {
         let network_address = validator.network_address;
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(key_path);
         let localhost = local_ip_utils::localhost_for_testing();
+        let parameters = self
+            .observer_config
+            .map(|observer_config| ConsensusParameters {
+                observer: ObserverParameters {
+                    server_port: observer_config
+                        .server_port
+                        .or_else(|| Some(local_ip_utils::get_available_port(&localhost))),
+                    allowlist: observer_config.allowlist,
+                    peers: observer_config.peers,
+                },
+                ..Default::default()
+            });
         let consensus_config = ConsensusConfig {
             db_path: consensus_db_path,
             db_retention_epochs: None,
             db_pruner_period_secs: None,
             max_pending_transactions: None,
-            max_submit_position: self.max_submit_position,
-            submit_delay_step_override_millis: self.submit_delay_step_override_millis,
-            parameters: Default::default(),
+            parameters,
             listen_address: None,
             external_address: None,
         };
@@ -218,6 +221,7 @@ impl ValidatorConfigBuilder {
         };
 
         NodeConfig {
+            recent_submission_dedup_window_ms: None,
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
             network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(validator.network_key_pair)),
             account_key_pair: KeyPairWithPath::new(validator.account_key_pair),
@@ -230,6 +234,7 @@ impl ValidatorConfigBuilder {
                 .to_socket_addr()
                 .unwrap(),
             consensus_config: Some(consensus_config),
+            fullnode_sync_mode: None,
             remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             sync_post_process_one_tx: false,
@@ -270,6 +275,7 @@ impl ValidatorConfigBuilder {
             execution_cache: self.execution_cache_config.unwrap_or_default(),
             run_with_range: None,
             jsonrpc_server_type: None,
+            disable_json_rpc: false,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             state_accumulator_v2: self.global_state_hash_v2,
@@ -320,11 +326,13 @@ pub struct FullnodeConfigBuilder {
     fw_config: Option<RemoteFirewallConfig>,
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
+    disable_json_rpc: bool,
     sync_post_process_one_tx: bool,
     chain_override: Option<Chain>,
     transaction_driver_config: Option<TransactionDriverConfig>,
     rpc_config: Option<sui_config::RpcConfig>,
     state_sync_config: Option<StateSyncConfig>,
+    observer_config: Option<ObserverParameters>,
 }
 
 impl FullnodeConfigBuilder {
@@ -372,6 +380,11 @@ impl FullnodeConfigBuilder {
 
     pub fn with_disable_pruning(mut self, disable_pruning: bool) -> Self {
         self.disable_pruning = disable_pruning;
+        self
+    }
+
+    pub fn with_disable_json_rpc(mut self, disable_json_rpc: bool) -> Self {
+        self.disable_json_rpc = disable_json_rpc;
         self
     }
 
@@ -471,6 +484,11 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_observer_config(mut self, config: ObserverParameters) -> Self {
+        self.observer_config = Some(config);
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -490,6 +508,34 @@ impl FullnodeConfigBuilder {
         let config_directory = self
             .config_directory
             .unwrap_or_else(|| mysten_common::tempdir().unwrap().keep());
+
+        let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(&key_path);
+
+        let fullnode_sync_mode = self
+            .observer_config
+            .as_ref()
+            .filter(|c| !c.peers.is_empty())
+            .map(|_| FullNodeSyncMode::ConsensusObserver);
+
+        // Create consensus config, if observer config is provided.
+        let consensus_config = self.observer_config.map(|observer_config| ConsensusConfig {
+            db_path: consensus_db_path,
+            db_retention_epochs: None,
+            db_pruner_period_secs: None,
+            max_pending_transactions: None,
+            parameters: Some(ConsensusParameters {
+                observer: ObserverParameters {
+                    server_port: observer_config
+                        .server_port
+                        .or_else(|| Some(local_ip_utils::get_available_port(&ip))),
+                    allowlist: observer_config.allowlist,
+                    peers: observer_config.peers,
+                },
+                ..Default::default()
+            }),
+            listen_address: None,
+            external_address: None,
+        });
 
         let p2p_config = {
             let seed_peers = network_config
@@ -553,6 +599,7 @@ impl FullnodeConfigBuilder {
         };
 
         NodeConfig {
+            recent_submission_dedup_window_ms: None,
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator_config.key_pair),
             account_key_pair: KeyPairWithPath::new(validator_config.account_key_pair),
             worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
@@ -574,7 +621,8 @@ impl FullnodeConfigBuilder {
                 .admin_interface_port
                 .unwrap_or(local_ip_utils::get_available_port(&localhost)),
             json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
-            consensus_config: None,
+            fullnode_sync_mode,
+            consensus_config,
             remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             sync_post_process_one_tx: self.sync_post_process_one_tx,
@@ -618,6 +666,7 @@ impl FullnodeConfigBuilder {
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
             jsonrpc_server_type: None,
+            disable_json_rpc: self.disable_json_rpc,
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
             execution_cache: ExecutionCacheConfig::default(),

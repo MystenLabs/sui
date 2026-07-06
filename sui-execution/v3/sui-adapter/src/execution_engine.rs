@@ -12,7 +12,6 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
-    use mysten_common::debug_fatal;
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
@@ -23,7 +22,7 @@ mod checked {
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
-    use sui_types::metrics::LimitsMetrics;
+    use sui_types::metrics::ExecutionMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::randomness_state::{
@@ -99,7 +98,7 @@ mod checked {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -185,52 +184,7 @@ mod checked {
         );
 
         let status = if let Err(error) = &execution_result {
-            // Elaborate errors in logs if they are unexpected or their status is terse.
-            use ExecutionErrorKind as K;
-            match error.kind() {
-                K::InvariantViolation | K::VMInvariantViolation => {
-                    if protocol_config.debug_fatal_on_move_invariant_violation() {
-                        debug_fatal!(
-                            "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
-                            transaction_digest,
-                            error.source_ref(),
-                        );
-                    } else {
-                        #[skip_checked_arithmetic]
-                        tracing::error!(
-                            kind = ?error.kind(),
-                            tx_digest = ?transaction_digest,
-                            "INVARIANT VIOLATION! Source: {:?}",
-                            error.source_ref(),
-                        );
-                    }
-                }
-
-                K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Verification Error. Source: {:?}",
-                        error.source_ref(),
-                    );
-                }
-
-                K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Publish/Upgrade Error. Source: {:?}",
-                        error.source_ref(),
-                    )
-                }
-
-                _ => (),
-            };
-
-            let (status, command) = error.to_execution_status();
-            ExecutionStatus::new_failure(status, command)
+            ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
             ExecutionStatus::Success
         };
@@ -284,7 +238,7 @@ mod checked {
     pub fn execute_genesis_state_update(
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         move_vm: &Arc<MoveVM>,
         tx_context: Rc<RefCell<TxContext>>,
         input_objects: CheckedInputObjects,
@@ -326,7 +280,7 @@ mod checked {
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -357,11 +311,12 @@ mod checked {
                     let mut execution_result: ResultWithTimings<
                         Mode::ExecutionResults,
                         ExecutionError,
-                    > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => {
-                            Err((ExecutionError::new(early_execution_error, None), vec![]))
-                        }
-                        ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
+                    > = match execution_params.into_early_errors() {
+                        Some(early_execution_errors) => Err((
+                            ExecutionError::new(early_execution_errors.head, None),
+                            vec![],
+                        )),
+                        None => execution_loop::<Mode>(
                             store,
                             temporary_store,
                             transaction_kind,
@@ -512,7 +467,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Result<(), ExecutionError> {
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
 
@@ -524,7 +479,7 @@ mod checked {
             effects_estimated_size,
             protocol_config.max_serialized_tx_effects_size_bytes(),
             protocol_config.max_serialized_tx_effects_size_bytes_system_tx(),
-            metrics.excessive_estimated_effects_size
+            metrics.limits_metrics.excessive_estimated_effects_size
         ) {
             LimitThresholdCrossed::None => Ok(()),
             LimitThresholdCrossed::Soft(_, limit) => {
@@ -550,7 +505,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Result<(), ExecutionError> {
         if let (Some(normal_lim), Some(system_lim)) = (
             protocol_config.max_size_written_objects_as_option(),
@@ -563,7 +518,7 @@ mod checked {
                 written_objects_size,
                 normal_lim,
                 system_lim,
-                metrics.excessive_written_objects_size
+                metrics.limits_metrics.excessive_written_objects_size
             ) {
                 LimitThresholdCrossed::None => (),
                 LimitThresholdCrossed::Soft(_, limit) => {
@@ -597,7 +552,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let result = match transaction_kind {
@@ -1003,7 +958,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let params = AdvanceEpochParams {
@@ -1108,7 +1063,7 @@ mod checked {
         move_vm: &MoveVM,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) {
         let digest = tx_ctx.borrow().digest();
@@ -1182,7 +1137,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {
@@ -1326,7 +1281,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {
@@ -1398,7 +1353,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {

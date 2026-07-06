@@ -9,6 +9,7 @@ use async_graphql::Object;
 use async_graphql::connection::Connection;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
+use sui_types::digests::CheckpointDigest;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
@@ -27,37 +28,50 @@ use crate::api::types::checkpoint::filter::cp_by_epoch;
 use crate::api::types::checkpoint::filter::cp_unfiltered;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas::GasCostSummary;
+use crate::api::types::transaction;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
 use crate::error::RpcError;
+use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
+use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("Cannot specify both `sequenceNumber` and `digest` on `Query.checkpoint`")]
+    BothBoundsSet,
+}
+
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
     pub(crate) scope: Scope,
+    /// Pre-processed data from streaming. When set, checkpoint fields are resolved from
+    /// this data instead of fetching from the database.
+    pub(crate) streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
 #[derive(Clone)]
 struct CheckpointContents {
-    // TODO: Remove when the scope is used in a nested field.
-    #[allow(unused)]
     scope: Scope,
     contents: Option<(
         CheckpointSummary,
         NativeCheckpointContents,
         AuthorityStrongQuorumSignInfo,
     )>,
+    /// When set, transactions are resolved from this streamed data instead of the database.
+    streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-pub(crate) type CCheckpoint = JsonCursor<u64>;
+pub type CCheckpoint = JsonCursor<u64>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -89,7 +103,11 @@ impl Checkpoint {
 
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<CheckpointContents, RpcError> {
-        CheckpointContents::fetch(ctx, self.scope.clone(), self.sequence_number).await
+        if let Some(processed) = &self.streamed_data {
+            CheckpointContents::from_streamed_checkpoint(self.scope.clone(), processed)
+        } else {
+            CheckpointContents::fetch(ctx, self.scope.clone(), self.sequence_number).await
+        }
     }
 }
 
@@ -206,11 +224,12 @@ impl CheckpointContents {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError<transaction::Error>>> {
         async {
             let Some((summary, _, _)) = &self.contents else {
                 return Ok(None);
             };
+
             let pagination: &PaginationConfig = ctx.data()?;
             let limits = pagination.limits("Checkpoint", "transactions");
             let page = Page::from_params(limits, first, after, last, before)?;
@@ -219,11 +238,22 @@ impl CheckpointContents {
                 at_checkpoint: Some(UInt53::from(summary.sequence_number)),
                 ..Default::default()
             }) else {
-                return Ok(Some(Connection::new(false, false)));
+                return Ok(Some(Connection::new(false, false).into()));
             };
 
+            if let Some(streamed) = &self.streamed_data {
+                return Ok(Some(Transaction::paginate_preloaded_transactions(
+                    self.scope.clone(),
+                    &streamed.transactions,
+                    &page,
+                    filter,
+                )?));
+            }
+
             Ok(Some(
-                Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+                Transaction::paginate(ctx, self.scope.clone(), page, filter)
+                    .await
+                    .map_err(upcast)?,
             ))
         }
         .await
@@ -245,7 +275,28 @@ impl Checkpoint {
         (sequence_number <= scope_checkpoint).then_some(Self {
             scope,
             sequence_number,
+            streamed_data: None,
         })
+    }
+
+    /// Resolve a checkpoint by its digest. Translates the digest to a sequence number via the
+    /// configured KV reader, then delegates to `with_sequence_number` so all downstream resolvers
+    /// behave the same as the sequence-number path.
+    pub(crate) async fn by_digest(
+        ctx: &Context<'_>,
+        scope: Scope,
+        digest: CheckpointDigest,
+    ) -> Result<Option<Self>, RpcError> {
+        let kv_loader: &KvLoader = ctx.data()?;
+        let Some(sequence_number) = kv_loader
+            .load_one_checkpoint_seq_by_digest(digest)
+            .await
+            .context("Failed to look up checkpoint by digest")?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Self::with_sequence_number(scope, Some(sequence_number)))
     }
 
     /// Paginate through checkpoints with filters applied.
@@ -309,6 +360,26 @@ impl CheckpointContents {
             .await
             .context("Failed to fetch checkpoint contents")?;
 
-        Ok(Self { scope, contents })
+        Ok(Self {
+            scope,
+            contents,
+            streamed_data: None,
+        })
+    }
+
+    /// Construct from pre-processed streamed checkpoint data.
+    fn from_streamed_checkpoint(
+        scope: Scope,
+        processed: &Arc<ProcessedCheckpoint>,
+    ) -> Result<Self, RpcError> {
+        Ok(Self {
+            scope,
+            contents: Some((
+                processed.summary.clone(),
+                processed.contents.clone(),
+                processed.signature.clone(),
+            )),
+            streamed_data: Some(Arc::clone(processed)),
+        })
     }
 }

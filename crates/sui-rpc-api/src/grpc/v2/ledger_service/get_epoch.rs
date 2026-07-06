@@ -4,8 +4,8 @@
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcService;
+use crate::error::EpochNotFoundError;
 use prost_types::FieldMask;
-use sui_protocol_config::ProtocolConfigValue;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
@@ -18,7 +18,7 @@ use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::EpochId;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
-pub const READ_MASK_DEFAULT: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
+pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EPOCH;
 
 #[tracing::instrument(skip(service))]
 pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEpochResponse> {
@@ -41,16 +41,22 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
 
     let epoch = request.epoch.unwrap_or(current_epoch);
 
-    if read_mask.contains(Epoch::EPOCH_FIELD.name) {
-        message.set_epoch(epoch);
-    }
-
     // Fetch epoch info, if indexing is available.
     let mut epoch_info = service
         .reader
         .inner()
         .indexes()
-        .and_then(|indexes| indexes.get_epoch_info(epoch).ok().flatten());
+        .map(|indexes| indexes.get_epoch_info(epoch))
+        .transpose()?
+        .flatten();
+
+    if epoch != current_epoch && epoch_info.is_none() {
+        return Err(EpochNotFoundError::new(epoch).into());
+    }
+
+    if read_mask.contains(Epoch::EPOCH_FIELD.name) {
+        message.set_epoch(epoch);
+    }
 
     let system_state = if epoch == current_epoch {
         Some(current_system_state)
@@ -194,26 +200,64 @@ fn get_protocol_config(
 }
 
 pub fn protocol_config_to_proto(config: sui_protocol_config::ProtocolConfig) -> ProtocolConfig {
-    let protocol_version = config.version.as_u64();
-    let attributes = config
-        .attr_map()
-        .into_iter()
-        .filter_map(|(k, maybe_v)| {
-            maybe_v.map(move |v| {
-                let v = match v {
-                    ProtocolConfigValue::u16(x) => x.to_string(),
-                    ProtocolConfigValue::u32(y) => y.to_string(),
-                    ProtocolConfigValue::u64(z) => z.to_string(),
-                    ProtocolConfigValue::bool(b) => b.to_string(),
-                };
-                (k, v)
-            })
-        })
-        .collect();
-    let feature_flags = config.feature_map().into_iter().collect();
+    use prost_types::value::Kind;
+
     let mut message = ProtocolConfig::default();
-    message.protocol_version = Some(protocol_version);
-    message.feature_flags = feature_flags;
-    message.attributes = attributes;
+    message.set_protocol_version(config.version.as_u64());
+
+    // Set deprecated feature flags to the exact feature_map the protocol config gives us
+    message.set_feature_flags(config.feature_map());
+
+    // Load configs (today this is just the `attributes`), rendered to a `Value`. Render emits
+    // explicit `NullValue`s for fields unset at this protocol version; filter them out so the
+    // public `configs` map only carries values that are actually configured.
+    let mut configs = config
+        .render::<prost_types::Value>(&mut mysten_common::rpc_format::Unmetered)
+        .expect("render to prost Value should succeed")
+        .into_iter()
+        // filter out NULLs
+        .filter(|(_, v)| !matches!(v.kind, None | Some(Kind::NullValue(_))))
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    // For backwards compatibility, render attributes to strings, complex types are json
+    // stringified
+    message.set_attributes(
+        configs
+            .iter()
+            .filter_map(|(k, v)| match &v.kind {
+                Some(Kind::NullValue(_)) => None,
+                Some(Kind::NumberValue(n)) => Some((k.to_owned(), n.to_string())),
+                Some(Kind::StringValue(s)) => Some((k.to_owned(), s.to_owned())),
+                Some(Kind::BoolValue(b)) => Some((k.to_owned(), b.to_string())),
+                Some(Kind::StructValue(s)) => Some((
+                    k.to_owned(),
+                    serde_json::to_string(&sui_rpc::_serde::StructSerializer(s)).unwrap(),
+                )),
+                Some(Kind::ListValue(list)) => Some((
+                    k.to_owned(),
+                    serde_json::to_string(&sui_rpc::_serde::ListValueSerializer(list)).unwrap(),
+                )),
+                None => None,
+            })
+            .collect(),
+    );
+
+    // Convert feature flags to a `Value` then merge with other attributes
+    for (k, v) in config
+        .feature_map()
+        .into_iter()
+        .map(|(key, value)| (key, prost_types::Value::from(value)))
+    {
+        let old = configs.insert(k, v);
+
+        debug_assert!(
+            old.is_none(),
+            "feature flags and attributes can't have keys which are the same"
+        );
+    }
+
+    // Set the joined set of attributes and feature flags
+    message.set_configs(configs);
+
     message
 }

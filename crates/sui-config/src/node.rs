@@ -30,6 +30,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::node_role::{FullNodeSyncMode, NodeRole};
 use sui_types::supported_protocol_versions::{Chain, SupportedProtocolVersions};
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
@@ -84,6 +85,12 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
 
+    /// The sync mode for full nodes.
+    /// When `None` is provided and this is a full node then the default is used which is `StateSyncOnly`.
+    /// For validator nodes this is expected to be `None`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fullnode_sync_mode: Option<FullNodeSyncMode>,
+
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
@@ -103,6 +110,16 @@ pub struct NodeConfig {
     /// - 'http' for an http based service
     /// - 'both' for both a websocket and http based service (deprecated)
     pub jsonrpc_server_type: Option<ServerType>,
+
+    /// When true, the JSON-RPC HTTP service is not started. This only stops the
+    /// node from serving JSON-RPC requests; it is independent of JSON-RPC
+    /// indexing (see `enable_index_processing`), which continues to run. This
+    /// lets a node keep indexing while no longer exposing the JSON-RPC service,
+    /// and it does not affect the gRPC/REST service served on the same address.
+    /// Defaults to false so the service stays enabled unless explicitly turned
+    /// off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub disable_json_rpc: bool,
 
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
@@ -234,6 +251,11 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
+
+    /// Window (ms) during which a given transaction is allowed into consensus at most once, to
+    /// suppress duplicate resubmissions. Defaults to 1000ms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recent_submission_dedup_window_ms: Option<u64>,
 
     /// Allow overriding the chain for testing purposes. For instance, it allows you to
     /// create a test network that believes it is mainnet or testnet. Attempting to
@@ -757,8 +779,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "EveFrontier".to_string(),
         "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
-        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5".to_string(), // test Gamma Prime, external partner
-        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu".to_string(), // Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_Bpct2JyBg".to_string(), // test Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_4HdQTpt3E".to_string(), // Gamma Prime, external partner
     ]);
 
     // providers that are available for mainnet and testnet.
@@ -778,6 +800,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "EveFrontier".to_string(),
         "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_Bpct2JyBg".to_string(), // test Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_4HdQTpt3E".to_string(), // Gamma Prime, external partner
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -849,6 +873,12 @@ impl NodeConfig {
         self.protocol_key_pair.authority_keypair()
     }
 
+    /// Window during which a given transaction is allowed into consensus at most once, used to
+    /// suppress duplicate resubmissions at the submission handler.
+    pub fn recent_submission_dedup_window(&self) -> Duration {
+        Duration::from_millis(self.recent_submission_dedup_window_ms.unwrap_or(1000))
+    }
+
     pub fn worker_key_pair(&self) -> &NetworkKeyPair {
         match self.worker_key_pair.keypair() {
             SuiKeyPair::Ed25519(kp) => kp,
@@ -881,6 +911,10 @@ impl NodeConfig {
         self.db_path.join("db_checkpoints")
     }
 
+    pub fn db_store_path(&self) -> PathBuf {
+        self.db_path().join("store")
+    }
+
     pub fn archive_path(&self) -> PathBuf {
         self.db_path.join("archive")
     }
@@ -897,6 +931,40 @@ impl NodeConfig {
         self.consensus_config.as_ref()
     }
 
+    /// Returns the node role as declared by configuration. This is the
+    /// *intended* role used for one-time startup decisions (e.g. whether to
+    /// create RPC servers or index stores). The authoritative per-epoch role
+    /// lives on `AuthorityPerEpochStore::node_role()`.
+    pub fn intended_node_role(&self) -> NodeRole {
+        let has_consensus_config = self.consensus_config.is_some();
+
+        match (self.fullnode_sync_mode, has_consensus_config) {
+            (Some(FullNodeSyncMode::ConsensusObserver), _) => {
+                assert!(
+                    self.has_observer_config_peers(),
+                    "Observer peers must be configured when sync mode is ConsensusObserver"
+                );
+                NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+            }
+            (Some(FullNodeSyncMode::StateSyncOnly), true) => {
+                panic!("Consensus config should not be set for a StateSyncOnly full node");
+            }
+            (Some(FullNodeSyncMode::StateSyncOnly), false) => {
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            }
+            (None, false) => NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly),
+            (None, true) => NodeRole::Validator,
+        }
+    }
+
+    pub fn has_observer_config_peers(&self) -> bool {
+        self.consensus_config
+            .as_ref()
+            .and_then(|c| c.parameters.as_ref())
+            .map(|p| !p.observer.peers.is_empty())
+            .unwrap_or(false)
+    }
+
     pub fn genesis(&self) -> Result<&genesis::Genesis> {
         self.genesis.genesis()
     }
@@ -911,6 +979,7 @@ impl NodeConfig {
             .map(|config| ArchiveReaderConfig {
                 ingestion_url: config.ingestion_url.clone(),
                 remote_store_options: config.remote_store_options.clone(),
+                remote_store_headers: config.remote_store_headers.clone(),
                 download_concurrency: NonZeroUsize::new(config.concurrency)
                     .unwrap_or(NonZeroUsize::new(5).unwrap()),
                 remote_store_config: ObjectStoreConfig::default(),
@@ -919,6 +988,13 @@ impl NodeConfig {
 
     pub fn jsonrpc_server_type(&self) -> ServerType {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
+    }
+
+    /// Whether the JSON-RPC HTTP service should be served. This gates only the
+    /// JSON-RPC endpoints; the gRPC/REST service and JSON-RPC indexing are
+    /// unaffected.
+    pub fn json_rpc_enabled(&self) -> bool {
+        !self.disable_json_rpc
     }
 
     pub fn rpc(&self) -> Option<&crate::RpcConfig> {
@@ -953,15 +1029,6 @@ pub struct ConsensusConfig {
     /// Default to 20_000 inflight limit, assuming 20_000 txn tps * 1 sec consensus latency.
     pub max_pending_transactions: Option<usize>,
 
-    /// When defined caps the calculated submission position to the max_submit_position. Even if the
-    /// is elected to submit from a higher position than this, it will "reset" to the max_submit_position.
-    pub max_submit_position: Option<usize>,
-
-    /// The submit delay step to consensus defined in milliseconds. When provided it will
-    /// override the current back off logic otherwise the default backoff logic will be applied based
-    /// on consensus latency estimates.
-    pub submit_delay_step_override_millis: Option<u64>,
-
     pub parameters: Option<ConsensusParameters>,
 
     /// Override for the consensus network listen address.
@@ -985,11 +1052,6 @@ impl ConsensusConfig {
 
     pub fn max_pending_transactions(&self) -> usize {
         self.max_pending_transactions.unwrap_or(20_000)
-    }
-
-    pub fn submit_delay_step_override(&self) -> Option<Duration> {
-        self.submit_delay_step_override_millis
-            .map(Duration::from_millis)
     }
 
     pub fn db_retention_epochs(&self) -> u64 {
@@ -1279,6 +1341,7 @@ pub struct ArchiveReaderConfig {
     pub download_concurrency: NonZeroUsize,
     pub ingestion_url: Option<String>,
     pub remote_store_options: Vec<(String, String)>,
+    pub remote_store_headers: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1295,6 +1358,11 @@ pub struct StateArchiveConfig {
         deserialize_with = "deserialize_remote_store_options"
     )]
     pub remote_store_options: Vec<(String, String)>,
+    /// Default headers (name, value) attached to every archive store request,
+    /// e.g. `x-goog-user-project` to bill a GCS requester-pays bucket. Unlike
+    /// `remote_store_options`, these are HTTP headers, not object-store config keys.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub remote_store_headers: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1362,11 +1430,6 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_check_system_overload_at_signing")]
     pub check_system_overload_at_signing: bool,
 
-    // When set to true, transaction execution may be rejected when the validator
-    // is overloaded.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub check_system_overload_at_execution: bool,
-
     // Reject a transaction if transaction manager queue length is above this threshold.
     // 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
     #[serde(default = "default_max_transaction_manager_queue_length")]
@@ -1376,6 +1439,31 @@ pub struct AuthorityOverloadConfig {
     // is above the threshold.
     #[serde(default = "default_max_transaction_manager_per_object_queue_length")]
     pub max_transaction_manager_per_object_queue_length: usize,
+
+    // Fraction of max_pending_transactions that determines the admission queue
+    // capacity. During congestion, the queue evicts the lowest gas price entries
+    // to make room for higher ones. Capacity = max_pending_transactions * fraction.
+    #[serde(default = "default_admission_queue_capacity_fraction")]
+    pub admission_queue_capacity_fraction: f64,
+
+    // Fraction of max_pending_transactions below which the admission queue is
+    // bypassed (transactions are submitted directly to consensus). Above this
+    // threshold, transactions go through the priority queue.
+    #[serde(default = "default_admission_queue_bypass_fraction")]
+    pub admission_queue_bypass_fraction: f64,
+
+    // Enables use of a gas-price-based priority queue for load shedding of
+    // transactions at admission time. If false, when consensus is saturated, transactions
+    // are rejected with TooManyTransactionsPendingConsensus.
+    #[serde(default = "default_admission_queue_enabled")]
+    pub admission_queue_enabled: bool,
+
+    // Failover timeout for the admission queue. If the queue has not made forward
+    // progress (draining an entry or observing an empty queue) within this window,
+    // it is presumed stuck and new transactions bypass it (using the same saturation
+    // reject behavior as when the queue is disabled) until progress resumes.
+    #[serde(default = "default_admission_queue_failover_timeout")]
+    pub admission_queue_failover_timeout: Duration,
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
@@ -1418,6 +1506,22 @@ fn default_max_transaction_manager_per_object_queue_length() -> usize {
     2000
 }
 
+fn default_admission_queue_capacity_fraction() -> f64 {
+    0.5
+}
+
+fn default_admission_queue_bypass_fraction() -> f64 {
+    0.9
+}
+
+fn default_admission_queue_enabled() -> bool {
+    true
+}
+
+fn default_admission_queue_failover_timeout() -> Duration {
+    Duration::from_secs(30)
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -1430,10 +1534,13 @@ impl Default for AuthorityOverloadConfig {
                 default_min_load_shedding_percentage_above_hard_limit(),
             safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
             check_system_overload_at_signing: true,
-            check_system_overload_at_execution: false,
             max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),
+            admission_queue_capacity_fraction: default_admission_queue_capacity_fraction(),
+            admission_queue_bypass_fraction: default_admission_queue_bypass_fraction(),
+            admission_queue_enabled: default_admission_queue_enabled(),
+            admission_queue_failover_timeout: default_admission_queue_failover_timeout(),
         }
     }
 }
@@ -1891,6 +1998,111 @@ remote-store-options:
         // Clean up
         std::fs::remove_file(&service_account_file).ok();
         std::fs::remove_file(&aws_key_file).ok();
+    }
+
+    mod intended_node_role_tests {
+        use super::*;
+        use crate::ConsensusConfig;
+        use consensus_config::Parameters as ConsensusParameters;
+        use fastcrypto::ed25519::Ed25519KeyPair;
+        use sui_types::node_role::{FullNodeSyncMode, NodeRole};
+
+        fn fullnode_template_config() -> NodeConfig {
+            const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
+            serde_yaml::from_str(TEMPLATE).unwrap()
+        }
+
+        fn minimal_consensus_config() -> ConsensusConfig {
+            ConsensusConfig {
+                db_path: PathBuf::from("/tmp/consensus"),
+                db_retention_epochs: None,
+                db_pruner_period_secs: None,
+                max_pending_transactions: None,
+                parameters: Default::default(),
+                listen_address: None,
+                external_address: None,
+            }
+        }
+
+        fn consensus_config_with_observer_peers() -> ConsensusConfig {
+            let mut config = minimal_consensus_config();
+            let kp = Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32]));
+            let peer = consensus_config::PeerRecord {
+                public_key: consensus_config::NetworkPublicKey::new(kp.public().clone()),
+                address: "/ip4/127.0.0.1/udp/8080".parse().unwrap(),
+            };
+            let mut params = ConsensusParameters::default();
+            params.observer.peers = vec![peer];
+            config.parameters = Some(params);
+            config
+        }
+
+        #[test]
+        fn validator_with_consensus_config() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = None;
+
+            assert_eq!(config.intended_node_role(), NodeRole::Validator);
+        }
+
+        #[test]
+        fn fullnode_explicit_state_sync() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = None;
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::StateSyncOnly);
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            );
+        }
+
+        #[test]
+        fn fullnode_implicit_state_sync() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = None;
+            config.fullnode_sync_mode = None;
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            );
+        }
+
+        #[test]
+        fn fullnode_consensus_observer() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(consensus_config_with_observer_peers());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+            );
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "Consensus config should not be set for a StateSyncOnly full node"
+        )]
+        fn state_sync_with_consensus_config_panics() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::StateSyncOnly);
+
+            config.intended_node_role();
+        }
+
+        #[test]
+        #[should_panic(expected = "Observer peers must be configured")]
+        fn observer_without_peers_panics() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+
+            config.intended_node_role();
+        }
     }
 }
 

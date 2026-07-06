@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
   ┌─ tests/move_check/liveness/dead_refs_nested_invalid.move:9:17
   │
 4 │         let x_ref = &mut x;
@@ -14,7 +14,7 @@ error[E07002]: mutable ownership violated
 9 │             _ = x;
   │                 ^ Invalid copy of variable 'x'
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/liveness/dead_refs_nested_invalid.move:19:20
    │
 15 │         let x_ref = &mut x;
@@ -23,7 +23,7 @@ error[E07002]: mutable ownership violated
 19 │                _ = x;
    │                    ^ Invalid copy of variable 'x'
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/liveness/dead_refs_nested_invalid.move:29:71
    │
 27 │         let x_ref = &mut x;

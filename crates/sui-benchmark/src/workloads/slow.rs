@@ -99,7 +99,7 @@ impl SlowTestPayload {
                 .unwrap();
         }
 
-        tx_builder.build_and_sign(account.key())
+        tx_builder.ensure_unique().build_and_sign(account.key())
     }
 }
 
@@ -217,8 +217,9 @@ impl Workload<dyn Payload> for SlowWorkload {
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish_async(path)
             .await
+            .ensure_unique()
             .build_and_sign(gas.2.as_ref());
-        let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
+        let execution_result = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.unwrap();
         let created = effects.created();
         // should only create the package object, upgrade cap, shared obj.

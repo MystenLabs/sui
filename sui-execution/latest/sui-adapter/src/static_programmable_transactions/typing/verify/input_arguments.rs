@@ -9,8 +9,8 @@ use crate::{
     },
     static_programmable_transactions::{
         env::Env,
-        loading::ast::{ObjectMutability, Type},
-        typing::ast::{self as T, BytesConstraint, ObjectArg},
+        loading::ast::Type,
+        typing::ast::{self as T, BytesConstraint},
     },
 };
 use indexmap::IndexSet;
@@ -18,7 +18,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     coin::{COIN_MODULE_NAME, SEND_FUNDS_FUNC_NAME},
-    error::{ExecutionError, SafeIndex, command_argument_error},
+    error::{ExecutionErrorTrait, SafeIndex, command_argument_error},
     execution_status::{CommandArgumentError, ExecutionErrorKind},
     id::RESOLVED_SUI_ID,
     transfer::RESOLVED_RECEIVING_STRUCT,
@@ -38,29 +38,13 @@ impl Context {
         let objects = txn
             .objects
             .iter()
-            .map(|object_input| match &object_input.arg {
-                ObjectArg::ImmObject(_) => ObjectUsage {
-                    allow_by_value: false,
-                    allow_by_mut_ref: false,
-                },
-                ObjectArg::OwnedObject(_) => ObjectUsage {
-                    allow_by_value: true,
-                    allow_by_mut_ref: true,
-                },
-                ObjectArg::SharedObject { mutability, .. } => ObjectUsage {
-                    allow_by_value: match mutability {
-                        ObjectMutability::Mutable => true,
-                        ObjectMutability::Immutable => false,
-                        // NonExclusiveWrite can be taken by value, but unless it is re-shared
-                        // with no mutations, the transaction will abort.
-                        ObjectMutability::NonExclusiveWrite => true,
-                    },
-                    allow_by_mut_ref: match mutability {
-                        ObjectMutability::Mutable => true,
-                        ObjectMutability::Immutable => false,
-                        ObjectMutability::NonExclusiveWrite => true,
-                    },
-                },
+            .map(|object_input| {
+                let allow_by_value = object_input.arg.refined_permissions.can_use_mutably();
+                let allow_by_mut_ref = object_input.arg.refined_permissions.can_use_mutably();
+                ObjectUsage {
+                    allow_by_value,
+                    allow_by_mut_ref,
+                }
             })
             .collect();
         Self { objects }
@@ -74,7 +58,10 @@ impl Context {
 /// 2. That any `Object` arguments are used validly. This means mutable references are taken only
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects or with
 ///    `sui::coin::send_funds`.
-pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    txn: &T::Transaction,
+) -> Result<(), Mode::Error> {
     let T::Transaction {
         gas_payment: _,
         bytes,
@@ -83,6 +70,7 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
         pure,
         receiving,
         withdrawal_compatibility_conversions: _,
+        original_command_len: _,
         commands,
     } = txn;
     for pure in pure {
@@ -105,7 +93,7 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
 fn check_pure_input<Mode: ExecutionMode>(
     bytes: &IndexSet<Vec<u8>>,
     pure: &T::PureInput,
-) -> Result<(), ExecutionError> {
+) -> Result<(), Mode::Error> {
     let T::PureInput {
         original_input_index,
         byte_index,
@@ -128,7 +116,7 @@ fn check_pure_bytes<Mode: ExecutionMode>(
     command_arg_idx: u16,
     bytes: &[u8],
     constraint: &Type,
-) -> Result<(), ExecutionError> {
+) -> Result<(), Mode::Error> {
     assert_invariant!(
         !matches!(constraint, Type::Reference(_, _)),
         "references should not be added as a constraint"
@@ -136,11 +124,11 @@ fn check_pure_bytes<Mode: ExecutionMode>(
     if Mode::allow_arbitrary_values() {
         return Ok(());
     }
-    let Some(layout) = primitive_serialization_layout(constraint)? else {
+    let Some(layout) = primitive_serialization_layout::<Mode::Error>(constraint)? else {
         let msg = format!(
             "Invalid usage of `Pure` argument for a non-primitive argument type at index {command_arg_idx}.",
         );
-        return Err(ExecutionError::new_with_source(
+        return Err(Mode::Error::new_with_source(
             ExecutionErrorKind::command_argument_error(
                 CommandArgumentError::InvalidUsageOfPureArg,
                 command_arg_idx,
@@ -152,9 +140,9 @@ fn check_pure_bytes<Mode: ExecutionMode>(
     Ok(())
 }
 
-fn primitive_serialization_layout(
+fn primitive_serialization_layout<E: ExecutionErrorTrait>(
     param_ty: &Type,
-) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
+) -> Result<Option<PrimitiveArgumentLayout>, E> {
     Ok(match param_ty {
         Type::Signer => return Ok(None),
         Type::Reference(_, _) => {
@@ -170,14 +158,15 @@ fn primitive_serialization_layout(
         Type::Address => Some(PrimitiveArgumentLayout::Address),
 
         Type::Vector(v) => {
-            let info_opt = primitive_serialization_layout(&v.element_type)?;
+            let info_opt = primitive_serialization_layout::<E>(&v.element_type)?;
             info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
         }
         Type::Datatype(dt) => {
             let resolved = dt.qualified_ident();
             // is option of a string
             if resolved == RESOLVED_STD_OPTION && dt.type_arguments.len() == 1 {
-                let info_opt = primitive_serialization_layout(dt.type_arguments.first().unwrap())?;
+                let info_opt =
+                    primitive_serialization_layout::<E>(dt.type_arguments.first().unwrap())?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
             } else if dt.type_arguments.is_empty() {
                 if resolved == RESOLVED_SUI_ID {
@@ -196,7 +185,7 @@ fn primitive_serialization_layout(
     })
 }
 
-fn check_receiving_input(receiving: &T::ReceivingInput) -> Result<(), ExecutionError> {
+fn check_receiving_input<E: ExecutionErrorTrait>(receiving: &T::ReceivingInput) -> Result<(), E> {
     let T::ReceivingInput {
         original_input_index: _,
         object_ref: _,
@@ -204,22 +193,25 @@ fn check_receiving_input(receiving: &T::ReceivingInput) -> Result<(), ExecutionE
         constraint,
     } = receiving;
     let BytesConstraint { command, argument } = constraint;
-    check_receiving(*argument, ty).map_err(|e| e.with_command_index(*command as usize))
+    check_receiving::<E>(*argument, ty).map_err(|e| e.with_command_index(*command as usize))
 }
 
-fn check_receiving(command_arg_idx: u16, constraint: &Type) -> Result<(), ExecutionError> {
+fn check_receiving<E: ExecutionErrorTrait>(
+    command_arg_idx: u16,
+    constraint: &Type,
+) -> Result<(), E> {
     if is_valid_receiving(constraint) {
         Ok(())
     } else {
-        Err(command_argument_error(
-            CommandArgumentError::TypeMismatch,
-            command_arg_idx as usize,
-        ))
+        Err(
+            command_argument_error(CommandArgumentError::TypeMismatch, command_arg_idx as usize)
+                .into(),
+        )
     }
 }
 
-pub fn is_valid_pure_type(constraint: &Type) -> Result<bool, ExecutionError> {
-    Ok(primitive_serialization_layout(constraint)?.is_some())
+pub fn is_valid_pure_type<E: ExecutionErrorTrait>(constraint: &Type) -> Result<bool, E> {
+    Ok(primitive_serialization_layout::<E>(constraint)?.is_some())
 }
 
 /// Returns true if a type is a `Receiving<t>` where `t` has `key`
@@ -236,7 +228,11 @@ pub fn is_valid_receiving(constraint: &Type) -> bool {
 // Object usage
 //**************************************************************************************************
 
-fn command(env: &Env, context: &mut Context, sp!(_, c): &T::Command) -> Result<(), ExecutionError> {
+fn command<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    context: &mut Context,
+    sp!(_, c): &T::Command,
+) -> Result<(), Mode::Error> {
     match &c.command {
         T::Command__::MoveCall(mc) => {
             check_obj_usages(context, &mc.arguments)?;
@@ -276,17 +272,20 @@ fn command(env: &Env, context: &mut Context, sp!(_, c): &T::Command) -> Result<(
 }
 
 // Checks for valid by-mut-ref and by-value usage of input objects
-fn check_obj_usages(
+fn check_obj_usages<E: ExecutionErrorTrait>(
     context: &mut Context,
     arguments: &[T::Argument],
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     for arg in arguments {
         check_obj_usage(context, arg)?;
     }
     Ok(())
 }
 
-fn check_obj_usage(context: &mut Context, arg: &T::Argument) -> Result<(), ExecutionError> {
+fn check_obj_usage<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    arg: &T::Argument,
+) -> Result<(), E> {
     match &arg.value.0 {
         T::Argument__::Borrow(true, l) => check_obj_by_mut_ref(context, arg.idx, l),
         T::Argument__::Use(T::Usage::Move(l)) => check_by_value(context, arg.idx, l),
@@ -302,11 +301,11 @@ fn check_obj_usage(context: &mut Context, arg: &T::Argument) -> Result<(), Execu
 }
 
 // Checks for valid by-mut-ref usage of input objects
-fn check_obj_by_mut_ref(
+fn check_obj_by_mut_ref<E: ExecutionErrorTrait>(
     context: &mut Context,
     arg_idx: u16,
     location: &T::Location,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     match location {
         T::Location::WithdrawalInput(_)
         | T::Location::PureInput(_)
@@ -319,7 +318,8 @@ fn check_obj_by_mut_ref(
                 Err(command_argument_error(
                     CommandArgumentError::InvalidObjectByMutRef,
                     arg_idx as usize,
-                ))
+                )
+                .into())
             } else {
                 Ok(())
             }
@@ -328,11 +328,11 @@ fn check_obj_by_mut_ref(
 }
 
 // Checks for valid by-value usage of input objects
-fn check_by_value(
+fn check_by_value<E: ExecutionErrorTrait>(
     context: &mut Context,
     arg_idx: u16,
     location: &T::Location,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     match location {
         T::Location::GasCoin
         | T::Location::Result(_, _)
@@ -345,7 +345,8 @@ fn check_by_value(
                 Err(command_argument_error(
                     CommandArgumentError::InvalidObjectByValue,
                     arg_idx as usize,
-                ))
+                )
+                .into())
             } else {
                 Ok(())
             }
@@ -354,14 +355,14 @@ fn check_by_value(
 }
 
 // Checks for no by value usage of gas
-fn check_gas_by_values(arguments: &[T::Argument]) -> Result<(), ExecutionError> {
+fn check_gas_by_values<E: ExecutionErrorTrait>(arguments: &[T::Argument]) -> Result<(), E> {
     for arg in arguments {
         check_gas_by_value(arg)?;
     }
     Ok(())
 }
 
-fn check_gas_by_value(arg: &T::Argument) -> Result<(), ExecutionError> {
+fn check_gas_by_value<E: ExecutionErrorTrait>(arg: &T::Argument) -> Result<(), E> {
     match &arg.value.0 {
         T::Argument__::Use(T::Usage::Move(l)) => check_gas_by_value_loc(arg.idx, l),
         // We do not care about the read/freeze case since they cannot move an object input
@@ -372,12 +373,16 @@ fn check_gas_by_value(arg: &T::Argument) -> Result<(), ExecutionError> {
     }
 }
 
-fn check_gas_by_value_loc(idx: u16, location: &T::Location) -> Result<(), ExecutionError> {
+fn check_gas_by_value_loc<E: ExecutionErrorTrait>(
+    idx: u16,
+    location: &T::Location,
+) -> Result<(), E> {
     match location {
         T::Location::GasCoin => Err(command_argument_error(
             CommandArgumentError::InvalidGasCoinUsage,
             idx as usize,
-        )),
+        )
+        .into()),
         T::Location::TxContext
         | T::Location::ObjectInput(_)
         | T::Location::WithdrawalInput(_)

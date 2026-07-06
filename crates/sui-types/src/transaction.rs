@@ -22,8 +22,8 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
     SuiSignatureInner, ToFromBytes, default_hash,
 };
-use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
-use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
+use crate::digests::{AdditionalConsensusStateDigest, SenderSignedDataDigest};
+use crate::digests::{ChainIdentifier, ConsensusCommitDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::funds_accumulator::{FUNDS_ACCUMULATOR_MODULE_NAME, WITHDRAWAL_SPLIT_FUNC_NAME};
 use crate::gas_coin::GAS;
@@ -55,7 +55,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
-use mysten_common::{assert_reachable, debug_fatal};
+use mysten_common::{ZipDebugEqIteratorExt, assert_reachable, debug_fatal};
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
@@ -970,10 +970,10 @@ pub struct ProgrammableTransaction {
     pub commands: Vec<Command>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 static GASLESS_TOKENS_FOR_TESTING: RwLock<Vec<(String, u64)>> = RwLock::new(Vec::new());
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 pub fn add_gasless_token_for_testing(type_string: String, min_transfer: u64) {
     GASLESS_TOKENS_FOR_TESTING
         .write()
@@ -981,7 +981,7 @@ pub fn add_gasless_token_for_testing(type_string: String, min_transfer: u64) {
         .push((type_string, min_transfer));
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 pub fn clear_gasless_tokens_for_testing() {
     GASLESS_TOKENS_FOR_TESTING.write().unwrap().clear();
 }
@@ -1120,10 +1120,8 @@ pub fn get_gasless_allowed_token_types(config: &ProtocolConfig) -> Arc<BTreeMap<
     apply_test_token_overrides(arc)
 }
 
-/// Merges debug-only token overrides into the cached map.
-/// In release builds this is a no-op that returns the input unchanged.
 fn apply_test_token_overrides(base: Arc<BTreeMap<TypeTag, u64>>) -> Arc<BTreeMap<TypeTag, u64>> {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "testing")]
     {
         let overrides = GASLESS_TOKENS_FOR_TESTING.read().unwrap();
         if !overrides.is_empty() {
@@ -1357,8 +1355,9 @@ impl ProgrammableMoveCall {
             ))
         );
 
-        for (type_arg_constraint, type_input) in
-            type_arg_constraints.iter().zip(&self.type_arguments)
+        for (type_arg_constraint, type_input) in type_arg_constraints
+            .iter()
+            .zip_debug_eq(&self.type_arguments)
         {
             let Some(type_arg_constraint) = type_arg_constraint else {
                 continue;
@@ -2082,7 +2081,9 @@ impl TransactionKind {
         Ok(input_objects)
     }
 
-    fn get_funds_withdrawals<'a>(&'a self) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
+    pub fn get_funds_withdrawals<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
         let TransactionKind::ProgrammableTransaction(pt) = &self else {
             return Either::Left(iter::empty());
         };
@@ -2100,6 +2101,10 @@ impl TransactionKind {
             return Either::Left(iter::empty());
         };
         Either::Right(pt.coin_reservation_obj_refs())
+    }
+
+    pub fn has_coin_reservations(&self) -> bool {
+        self.get_coin_reservation_obj_refs().next().is_some()
     }
 
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
@@ -2700,6 +2705,10 @@ impl TransactionData {
                 | Owner::ConsensusAddressOwner {
                     start_version: initial_shared_version,
                     ..
+                }
+                | Owner::Party {
+                    start_version: initial_shared_version,
+                    ..
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,
@@ -2885,6 +2894,15 @@ pub trait TransactionDataAPI {
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
 
+    /// Like `process_funds_withdrawals_for_signing`, but excludes the implicit gas payment
+    /// withdrawal. This is used during gas selection estimation to avoid double-counting the
+    /// gas budget when determining available address balance.
+    fn process_funds_withdrawals_for_estimation(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
+
     /// Like `process_funds_withdrawals_for_signing`, but must only be called on a certified
     /// transaction, i.e. one that is known to be valid.
     fn process_funds_withdrawals_for_execution(
@@ -2901,8 +2919,6 @@ pub trait TransactionDataAPI {
     ) -> Vec<ParsedObjectRefWithdrawal>;
 
     fn validity_check(&self, context: &TxValidityCheckContext<'_>) -> SuiResult;
-
-    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
     /// Check if the transaction is compliant with sponsorship.
     fn check_sponsorship(&self) -> UserInputResult;
@@ -3037,47 +3053,15 @@ impl TransactionDataAPI for TransactionDataV1 {
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
-        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
+        self.accumulate_funds_withdrawals(chain_identifier, coin_resolver, true)
+    }
 
-        for withdraw in self.parsed_coin_reservations(chain_identifier) {
-            // During signing, use latest accumulator version (None).
-            let withdrawal_arg =
-                coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw, None)?;
-            withdraws.push(withdrawal_arg);
-        }
-
-        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
-
-        // Accumulate all withdraws per account.
-        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag)> = BTreeMap::new();
-        for withdraw in withdraws {
-            let reserved_amount = match &withdraw.reservation {
-                Reservation::MaxAmountU64(amount) => {
-                    assert!(*amount > 0, "verified in validity check");
-                    *amount
-                }
-            };
-
-            let account_address = withdraw.owner_for_withdrawal(self);
-            let type_tag = withdraw.type_arg.to_type_tag();
-            let account_id =
-                AccumulatorValue::get_field_id(account_address, &type_tag).map_err(|e| {
-                    UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    }
-                })?;
-
-            let (current_amount, _) = withdraw_map
-                .entry(account_id)
-                .or_insert_with(|| (0, type_tag));
-            *current_amount = current_amount.checked_add(reserved_amount).ok_or(
-                UserInputError::InvalidWithdrawReservation {
-                    error: "Balance withdraw reservation overflow".to_string(),
-                },
-            )?;
-        }
-
-        Ok(withdraw_map)
+    fn process_funds_withdrawals_for_estimation(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+        self.accumulate_funds_withdrawals(chain_identifier, coin_resolver, false)
     }
 
     fn process_funds_withdrawals_for_execution(
@@ -3464,13 +3448,6 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
 
-        self.validity_check_no_gas_check(config)?;
-        Ok(())
-    }
-
-    // Keep all the logic for validity here, we need this for dry run where the gas
-    // may not be provided and created "on the fly"
-    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
 
         if config.enable_gasless() && self.is_gasless_transaction() {
@@ -3478,12 +3455,14 @@ impl TransactionDataAPI for TransactionDataV1 {
                 debug_fatal!("gasless transaction is not a ProgrammableTransaction");
                 return Err(UserInputError::Unsupported(
                     "Gasless transactions must be programmable transactions".to_string(),
-                ));
+                )
+                .into());
             };
             pt.validate_gasless_transaction(config)?;
         }
 
-        self.check_sponsorship()
+        self.check_sponsorship()?;
+        Ok(())
     }
 
     /// Check if the transaction is sponsored (namely gas owner != sender)
@@ -3560,6 +3539,60 @@ impl TransactionDataAPI for TransactionDataV1 {
 }
 
 impl TransactionDataV1 {
+    fn accumulate_funds_withdrawals(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+        include_gas_payment: bool,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
+
+        for withdraw in self.parsed_coin_reservations(chain_identifier) {
+            let withdrawal_arg =
+                coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw, None)?;
+            withdraws.push(withdrawal_arg);
+        }
+
+        if include_gas_payment {
+            withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
+        }
+
+        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag)> = BTreeMap::new();
+        for withdraw in withdraws {
+            let reserved_amount = match &withdraw.reservation {
+                Reservation::MaxAmountU64(amount) => {
+                    if *amount == 0 {
+                        return Err(UserInputError::InvalidWithdrawReservation {
+                            error: "Balance withdraw reservation amount must be non-zero"
+                                .to_string(),
+                        });
+                    }
+                    *amount
+                }
+            };
+
+            let account_address = withdraw.owner_for_withdrawal(self);
+            let type_tag = withdraw.type_arg.to_type_tag();
+            let account_id =
+                AccumulatorValue::get_field_id(account_address, &type_tag).map_err(|e| {
+                    UserInputError::InvalidWithdrawReservation {
+                        error: e.to_string(),
+                    }
+                })?;
+
+            let (current_amount, _) = withdraw_map
+                .entry(account_id)
+                .or_insert_with(|| (0, type_tag));
+            *current_amount = current_amount.checked_add(reserved_amount).ok_or(
+                UserInputError::InvalidWithdrawReservation {
+                    error: "Balance withdraw reservation overflow".to_string(),
+                },
+            )?;
+        }
+
+        Ok(withdraw_map)
+    }
+
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
         if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             Some(if self.sender() != self.gas_owner() {
@@ -3874,6 +3907,22 @@ impl SenderSignedData {
             }
             .into()
         );
+
+        if context.config.enable_gasless() && tx_data.is_gasless_transaction() {
+            let gasless_max = context.config.get_gasless_max_tx_size_bytes();
+            fp_ensure!(
+                tx_size as u64 <= gasless_max,
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::SizeLimitExceeded {
+                        limit: format!(
+                            "serialized gasless transaction size exceeded maximum of {gasless_max}"
+                        ),
+                        value: tx_size.to_string(),
+                    }
+                }
+                .into()
+            );
+        }
 
         tx_data.validity_check(context)?;
 
@@ -4240,58 +4289,8 @@ impl SignedTransaction {
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedTransaction {
-    pub fn certificate_digest(&self) -> CertificateDigest {
-        let mut digest = DefaultHash::default();
-        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
-        let hash = digest.finalize();
-        CertificateDigest::new(hash.into())
-    }
-
     pub fn gas_price(&self) -> u64 {
         self.data().transaction_data().gas_price()
-    }
-
-    // TODO: Eventually we should remove all calls to verify_signature
-    // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signatures_authenticated(
-        &self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-    ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(
-            self.data(),
-            committee.epoch(),
-            verify_params,
-            zklogin_inputs_cache,
-            vec![],
-        )?;
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
-    }
-
-    pub fn try_into_verified_for_testing(
-        self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(
-            committee,
-            verify_params,
-            Arc::new(VerifiedDigestCache::new_empty()),
-        )?;
-        Ok(VerifiedCertificate::new_from_verified(self))
-    }
-
-    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
     }
 }
 

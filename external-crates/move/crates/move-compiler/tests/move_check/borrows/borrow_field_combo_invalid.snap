@@ -21,7 +21,7 @@ error[E07001]: referential transparency violated
 25 │         let f1 = &inner.f1;
    │                  ^^^^^^^^^ Invalid immutable borrow at field 'f1'.
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/borrows/borrow_field_combo_invalid.move:36:18
    │
 35 │         let c; if (cond) c = copy inner else c = &mut outer.s1;
@@ -29,7 +29,7 @@ error[E07002]: mutable ownership violated
 36 │         let f1 = &mut inner.f1;
    │                  ^^^^^^^^^^^^^ Invalid mutable borrow at field 'f1'.
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/borrows/borrow_field_combo_invalid.move:47:18
    │
 46 │         let c; if (cond) c = id_mut(copy inner) else c = &mut outer.s1;

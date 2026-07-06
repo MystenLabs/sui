@@ -12,6 +12,7 @@ use crate::workloads::workload::{
 };
 use crate::workloads::{Gas, GasCoinConfig, Workload, WorkloadBuilderInfo, WorkloadParams};
 use async_trait::async_trait;
+use mysten_common::ZipDebugEqIteratorExt;
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use std::fmt;
@@ -247,7 +248,7 @@ impl Workload<dyn Payload> for ExpectedFailureWorkload {
         }
         let refs: Vec<(Vec<Gas>, Gas)> = transfer_gas
             .into_iter()
-            .zip(transfer_tokens.iter())
+            .zip_debug_eq(transfer_tokens.iter())
             .map(|(g, t)| (g, t.clone()))
             .collect();
         refs.iter()

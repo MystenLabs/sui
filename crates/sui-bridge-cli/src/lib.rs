@@ -10,6 +10,7 @@ use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use fastcrypto::hash::{HashFunction, Keccak256};
 use move_core_types::ident_str;
+use mysten_common::ZipDebugEqIteratorExt;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::Intent;
@@ -346,7 +347,7 @@ fn encode_call_data(function_selector: &str, params: &[String]) -> Vec<u8> {
     assert_eq!(param_types.len(), params.len(), "Invalid number of params");
 
     let mut tokens = vec![];
-    for (param, param_type) in params.iter().zip(param_types.iter()) {
+    for (param, param_type) in params.iter().zip_debug_eq(param_types.iter()) {
         let token = match param_type.to_lowercase().as_str() {
             "uint256" => {
                 DynSolValue::Uint(U256::from_str_radix(param, 10).expect("Invalid U256"), 256)

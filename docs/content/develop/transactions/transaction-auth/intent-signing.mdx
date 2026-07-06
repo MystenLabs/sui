@@ -1,0 +1,145 @@
+---
+title: Intent Signing
+description: Intent signing provides a compact domain separator to data signed by both user and authority signatures. Data that each signature commits to is called an intent message, which all signatures on Sui must include. 
+keywords: [ intent, signing, intent signatures, intent message, domain separators, compact structs, signing standard, compact domain separator, user signatures, authority signatures, proof of possession, generate proof of possession ]
+---
+
+An intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message rather than the message itself.
+
+The intent signing standard provides a compact domain separator to the data being signed for both user signatures and authority signatures. It has several benefits:
+
+- The intent scope is replaced by a `u8` representation instead of a Rust struct tag name string.
+
+- In addition to the intent scope, you can commit other important domain separators as well (such as intent version and app ID).
+
+- The data itself no longer needs to implement the `Signable` trait, it just needs to implement `Serialize`.
+
+- All signatures can adopt the same intent message structure, including both user signatures (only to commit to `TransactionData`) and authority signature (commits to all internal intent scopes such as `TransactionEffects`, `ProofOfPossession`, and `SenderSignedTransaction`).
+
+## Structs
+
+The `IntentMessage` struct consists of the intent and the serialized data value.
+
+```rust
+pub struct IntentMessage<T> {
+  pub intent: Intent,
+  pub value: T,
+}
+```
+
+To create an intent struct, include the `IntentScope` (type of message), `IntentVersion` (version the network supports), and `AppId` (application the signature refers to).
+
+```rust
+pub struct Intent {
+  scope: IntentScope,
+  version: IntentVersion,
+  app_id: AppId,
+}
+```
+
+For detailed field definitions, see the enum definitions in the source code:
+
+<ImportContent source="crates/shared-crypto/src/intent.rs" mode="code" enumeration="IntentScope,IntentVersion,AppId,HashingIntentScope" />
+
+The serialization of an `Intent` is a 3-byte array where each field is represented by a byte.
+
+The serialization of an `IntentMessage<T>` is the 3 bytes of the intent concatenated with the BCS serialized message.
+
+## User signature
+
+To create a user signature, construct an intent message first, then sign the 32-byte Blake2b-256 hash of its BCS serialization (`hash(intent || message)`). The signer does not sign the raw transaction bytes. It signs the hash of the structured `IntentMessage`, whose BCS serialization is the 3-byte intent followed by the BCS bytes of the transaction data. The signed digest therefore commits to both the intent and the message.
+
+The following examples demonstrate this:
+
+<Tabs groupId="language">
+
+<TabItem value="rust" label="Rust">
+
+```rust
+let intent = Intent::default();
+let intent_msg = IntentMessage::new(intent, data);
+let signature = Signature::new_secure(&intent_msg, signer);
+```
+
+</TabItem>
+
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+const intentMessage = messageWithIntent('TransactionData', transactionBytes);
+const signature = await this.sign(intentMessage);
+```
+
+</TabItem>
+</Tabs>
+
+Under the hood, the `new_secure` method in Rust and the `signData` method in TypeScript do the following:
+
+1.  Serialize the intent message as the 3-byte intent concatenated with the BCS serialized bytes of the transaction data.
+
+1.  Apply Blake2b hash to get the 32-byte digest.
+
+1.  Pass the digest to the signing API for each corresponding scheme of the signer. The supported signature schemes are pure Ed25519, ECDSA Secp256k1, and ECDSA Secp256r1. See [Sui Signatures](/develop/transactions/transaction-auth/auth-overview#signature-requirements) for requirements of each scheme.
+
+## Authority signature
+
+The authority signature is created using the protocol key. It does not use the external Blake2b-256 prehash that user signatures use. Instead, `AuthoritySignature::new_secure` BCS-serializes the `IntentMessage`, appends the 8-byte epoch, and passes the resulting `BCS(IntentMessage) || epoch` bytes directly to the BLS signer. In other words, the authority signs `intent || message || epoch`. Verification reconstructs the same bytes from the `IntentMessage` and the epoch, then checks them against the authority protocol public key, so the epoch is bound into every authority signature.
+
+Authority signatures use the internal intent scopes, such as `TransactionEffects`, `ProofOfPossession`, and `SenderSignedTransaction`. For all available intent scopes, see the `IntentScope` enum in [`crates/shared-crypto/src/intent.rs`](https://github.com/MystenLabs/sui/blob/main/crates/shared-crypto/src/intent.rs).
+
+### Generating proof of possession for an authority
+
+When an authority requests to join the network, the protocol public key and its proof of possession (PoP) are required. PoP is required to prevent [rogue key attack](https://crypto.stanford.edu/~dabo/pubs/papers/BLSmultisig).
+
+The proof of possession is a BLS signature created using the authority protocol private key, committed over the following message: `intent || pubkey || address || epoch`. The values are as follows:
+
+- `intent`: Serialized to `[5, 0, 0]` representing an intent with scope as `Proof of Possession`, `version` as `V0`, and `app_id` as `Sui`.
+
+- `pubkey`: The serialized public key bytes of the authority BLS protocol key.
+
+- `address`: The account address associated with the authority account key.
+
+- `epoch`: Serialized to `[0, 0, 0, 0, 0, 0, 0, 0]`.
+
+To generate a proof of possession in Rust, see [`generate_proof_of_possession`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/crypto.rs) in `crates/sui-types/src/crypto.rs`. That function builds the intent message with `Intent::sui_app(IntentScope::ProofOfPossession)`, sets the message to the protocol public key bytes concatenated with the authority account address, and signs it with the authority protocol key. For test vectors, see `fn test_proof_of_possession`.
+
+## Verifying signatures in Move
+
+You can verify a personal-message signature onchain using the `sui::ed25519` or `sui::ecdsa_k1` module:
+
+```move
+use sui::ed25519;
+
+public fun verify_personal_message(
+    signature: vector<u8>,
+    public_key: vector<u8>,
+    message: vector<u8>,
+) {
+    // The client signs: Blake2b-256(BCS(IntentMessage { intent: Intent::personal_message(), value: PersonalMessage { message } }))
+    // The intent prefix for PersonalMessage is [3, 0, 0]
+    assert!(
+        ed25519::ed25519_verify(&signature, &public_key, &message),
+        0
+    );
+}
+```
+
+On the client side (TypeScript), produce the signature:
+
+```typescript
+const { signature } = await wallet.signPersonalMessage({
+  message: new TextEncoder().encode('Hello from Sui'),
+});
+```
+
+:::tip
+
+When you sign application or offchain messages (for example, login challenges or authorization payloads), structure the message so it cannot be replayed or misused in another context. Include a domain or app identifier, a chain or package identifier, the explicit purpose of the message, a nonce or request ID, and a timestamp or maximum age so the verifier can reject stale or replayed messages. See [Frontend and transaction signing](/develop/security/best-practices#frontend-and-transaction-signing) for details.
+
+:::
+
+:::info
+
+This page covers Sui transaction intent signing (the cryptographic envelope format). For cross-chain bridge integrations, see the [Wormhole](https://wormhole.com/docs/) or [Axelar](https://docs.axelar.dev/) documentation.
+
+:::

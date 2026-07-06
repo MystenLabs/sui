@@ -16,9 +16,11 @@ use sui_rpc::proto::sui::rpc::v2::ObjectReference;
 use sui_rpc::proto::sui::rpc::v2::ProgrammableTransaction;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
+use sui_rpc::proto::sui::rpc::v2::TransactionExpiration as ProtoTransactionExpiration;
 use sui_rpc::proto::sui::rpc::v2::TransactionKind;
 use sui_rpc::proto::sui::rpc::v2::TransferObjects;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
+use sui_rpc::proto::sui::rpc::v2::simulate_transaction_request::TransactionChecks as ProtoTransactionChecks;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_expiration::TransactionExpirationKind;
 use sui_rpc_api::Client;
@@ -119,6 +121,57 @@ async fn resolve_transaction_simple_transfer() {
 
     assert!(effects.status().is_ok());
     assert_eq!(effects_from_simulation, effects);
+}
+
+#[sim_test]
+async fn simulate_transaction_read_mask_selects_command_outputs_without_transaction() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+    let (sender, mut gas) = test_cluster.wallet.get_one_account().await.unwrap();
+    gas.sort_by_key(|object_ref| object_ref.0);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .pay_sui(vec![SuiAddress::random_for_testing_only()], vec![500])
+        .unwrap();
+    let transaction_data = TransactionData::new_programmable(
+        sender,
+        vec![gas[0]],
+        builder.finish(),
+        50_000_000,
+        test_cluster.wallet.get_reference_gas_price().await.unwrap(),
+    );
+
+    let mut transaction = Transaction::default();
+    transaction.bcs = Some(Bcs::serialize(&transaction_data).unwrap());
+
+    let mut request = SimulateTransactionRequest::new(transaction);
+    request.set_checks(ProtoTransactionChecks::Enabled);
+    request.read_mask = Some(FieldMask {
+        paths: vec!["command_outputs".to_owned()],
+    });
+
+    let response = alpha_client
+        .simulate_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    // This mask is intentionally narrow. The command outputs require VM execution data, but the
+    // executed transaction wrapper is expensive and should stay absent unless explicitly requested.
+    assert!(response.transaction.is_none());
+    assert_eq!(response.command_outputs.len(), 2);
+    assert!(!response.command_outputs[0].mutated_by_ref.is_empty());
+    assert!(!response.command_outputs[0].return_values.is_empty());
+    assert!(response.command_outputs[1].mutated_by_ref.is_empty());
+    assert!(response.command_outputs[1].return_values.is_empty());
 }
 
 #[sim_test]
@@ -810,4 +863,136 @@ async fn test_gas_selection_with_address_balance() {
         resolved.transaction().transaction().expiration().kind(),
         TransactionExpirationKind::ValidDuring
     );
+}
+
+#[sim_test]
+async fn simulate_transaction_with_valid_during_expiration() {
+    let _guard = sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_address_balance_gas_payments_for_testing();
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let mut client = sui_rpc::Client::new(test_cluster.rpc_url()).unwrap();
+    let chain_id = test_cluster.get_chain_identifier();
+    let receiver = test_cluster.get_address_1();
+
+    // Fund the receiver's address balance with enough SUI to cover the gas budget.
+    let txn = sui_test_transaction_builder::make_transfer_sui_address_balance_transaction(
+        &test_cluster.wallet,
+        Some(receiver),
+        100_000_000_000,
+    )
+    .await;
+    super::super::execute_transaction(&mut client, &txn).await;
+
+    let current_epoch = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().epoch_store_for_testing().epoch());
+
+    let supplied_nonce: u32 = 0xdead_beef;
+    let supplied_chain_str = sui_sdk_types::Digest::new(*chain_id.as_bytes()).to_string();
+
+    let mut transaction = Transaction::default();
+    {
+        let ptb = transaction.kind_mut().programmable_transaction_mut();
+        ptb.set_inputs(vec![Input::default().with_object_id("0x6")]);
+        ptb.set_commands(vec![Command::from(
+            MoveCall::default()
+                .with_package("0x2")
+                .with_module("clock")
+                .with_function("timestamp_ms")
+                .with_arguments(vec![Argument::new_input(0)]),
+        )])
+    }
+    transaction.set_sender(receiver.to_string());
+    transaction.set_expiration(
+        ProtoTransactionExpiration::default()
+            .with_kind(TransactionExpirationKind::ValidDuring)
+            .with_epoch(current_epoch.saturating_add(1))
+            .with_min_epoch(current_epoch)
+            .with_chain(supplied_chain_str.clone())
+            .with_nonce(supplied_nonce),
+    );
+
+    let resolved = client
+        .execution_client()
+        .simulate_transaction(
+            SimulateTransactionRequest::new(transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    // The transaction must simulate successfully and have used the address balance for gas.
+    assert!(resolved.transaction().effects().status().success());
+    assert!(
+        resolved
+            .transaction()
+            .transaction()
+            .gas_payment()
+            .objects()
+            .is_empty()
+    );
+
+    // The supplied `ValidDuring` expiration must round-trip through the conversion unchanged.
+    let resolved_expiration = resolved.transaction().transaction().expiration();
+    assert_eq!(
+        resolved_expiration.kind(),
+        TransactionExpirationKind::ValidDuring
+    );
+    assert_eq!(resolved_expiration.epoch, Some(current_epoch + 1));
+    assert_eq!(resolved_expiration.min_epoch, Some(current_epoch));
+    assert!(resolved_expiration.min_timestamp.is_none());
+    assert!(resolved_expiration.max_timestamp.is_none());
+    assert_eq!(
+        resolved_expiration.chain.as_deref(),
+        Some(supplied_chain_str.as_str())
+    );
+    assert_eq!(resolved_expiration.nonce, Some(supplied_nonce));
+
+    // The BCS-encoded `TransactionData` must also carry the supplied `ValidDuring` expiration.
+    let (transaction_data, _, _) = proto_to_response(resolved);
+    assert!(matches!(
+        transaction_data.expiration(),
+        sui_types::transaction::TransactionExpiration::ValidDuring {
+            min_epoch: Some(min),
+            max_epoch: Some(max),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain,
+            nonce,
+        } if *min == current_epoch
+            && *max == current_epoch + 1
+            && *chain == chain_id
+            && *nonce == supplied_nonce
+    ));
+}
+
+#[test]
+fn valid_during_transaction_expiration_round_trips_through_proto() {
+    use sui_types::transaction::TransactionExpiration;
+
+    let chain = sui_types::digests::ChainIdentifier::from(
+        sui_types::digests::CheckpointDigest::new([7u8; 32]),
+    );
+    let original = TransactionExpiration::ValidDuring {
+        min_epoch: Some(42),
+        max_epoch: Some(43),
+        min_timestamp: Some(1_700_000_000_123),
+        max_timestamp: Some(1_700_000_999_456),
+        chain,
+        nonce: 0xc0ffee,
+    };
+
+    let proto = ProtoTransactionExpiration::from(original);
+    let round_tripped = TransactionExpiration::try_from(&proto).unwrap();
+
+    assert_eq!(round_tripped, original);
 }

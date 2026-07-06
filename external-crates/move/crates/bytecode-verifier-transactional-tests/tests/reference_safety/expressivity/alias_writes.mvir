@@ -2,9 +2,9 @@
 
 //# publish
 
-module 0x2.borrow_local_twice {
+mvir 0x2::borrow_local_twice {
 
-t() {
+fun t() {
     let a: u64;
     let x: &mut u64;
     let y: &mut u64;
@@ -21,9 +21,9 @@ label b0:
 
 //# publish
 
-module 0x3.borrow_local_twice_reverse {
+mvir 0x3::borrow_local_twice_reverse {
 
-t() {
+fun t() {
     let a: u64;
     let x: &mut u64;
     let y: &mut u64;
@@ -40,9 +40,9 @@ label b0:
 
 //# publish
 
-module 0x4.borrow_local_and_copy_ref {
+mvir 0x4::borrow_local_and_copy_ref {
 
-t() {
+fun t() {
     let a: u64;
     let x: &mut u64;
     let y: &mut u64;
@@ -59,9 +59,9 @@ label b0:
 
 //# publish
 
-module 0x5.borrow_local_and_copy_ref_reverse {
+mvir 0x5::borrow_local_and_copy_ref_reverse {
 
-t() {
+fun t() {
     let a: u64;
     let x: &mut u64;
     let y: &mut u64;

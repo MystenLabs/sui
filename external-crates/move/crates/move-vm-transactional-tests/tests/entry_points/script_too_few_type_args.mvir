@@ -1,7 +1,7 @@
 //# run
-module 0x42.m {
+mvir 0x42::m {
 
-entry foo<T>() { // too few type arguments
+entry fun foo<T>() { // too few type arguments
 label b0:
     return;
 }

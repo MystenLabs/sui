@@ -30,20 +30,19 @@ use sui_types::transaction::{
 };
 
 use crate::errors::Error;
-use crate::types::ConstructionMetadata;
+use crate::types::{AuxData, ConstructionMetadata};
 pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
-use consolidate_to_fungible::consolidate_to_fungible_pt;
-pub(crate) use consolidate_to_fungible::get_validator_pool_id;
+pub(crate) use consolidate_to_fungible::consolidate_to_fungible_pt;
 pub use merge_and_redeem::MergeAndRedeemFungibleStakedSui;
-use merge_and_redeem::merge_and_redeem_fss_pt;
+pub(crate) use merge_and_redeem::merge_and_redeem_fss_pt;
 pub use pay_coin::PayCoin;
-pub(crate) use pay_coin::pay_coin_pt;
+pub(crate) use pay_coin::{pay_coin_gasless_pt, pay_coin_pt};
 pub use pay_sui::PaySui;
-use pay_sui::{pay_sui_pt_ab_gas, pay_sui_pt_coin_gas};
+pub(crate) use pay_sui::{pay_sui_pt_ab_gas, pay_sui_pt_coin_gas};
 pub use stake::Stake;
-use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
+pub(crate) use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
 pub use withdraw_stake::WithdrawStake;
-use withdraw_stake::withdraw_stake_pt;
+pub(crate) use withdraw_stake::withdraw_stake_pt;
 
 mod consolidate_to_fungible;
 mod merge_and_redeem;
@@ -66,6 +65,9 @@ pub struct TransactionObjectData {
     /// Refers to the sum of the `Coin<SUI>` balance of the coins participating in the transaction;
     /// either as gas or as objects.
     pub total_sui_balance: i128,
+    /// Gas budget. The PayCoin free-tier ("gasless") path sets this to `0` (with empty `gas_coins`)
+    /// as the sentinel that the node confirmed free-tier eligibility — no priced path produces a
+    /// zero budget. See [`TransactionObjectData::is_gasless`].
     pub budget: u64,
     /// Amount to withdraw from address balance for payment
     pub address_balance_withdrawal: u64,
@@ -74,7 +76,29 @@ pub struct TransactionObjectData {
     pub fss_object_count: Option<u64>,
     /// Pool tokens to redeem. None = redeem all.
     /// Used by MergeAndRedeemFungibleStakedSui.
+    ///
+    /// Forward-compat-only field: surfaced in metadata responses for older
+    /// clients, but new code reads `redeem_plan` exclusively when building
+    /// the payload. See `ConstructionMetadata::redeem_token_amount`.
     pub redeem_token_amount: Option<u64>,
+    /// Mode-aware redeem plan (used by `MergeAndRedeemFungibleStakedSui`).
+    /// `None` for other operations.
+    pub redeem_plan: Option<crate::types::RedeemPlan>,
+    /// Quote-time epoch to bind the transaction to (used by amount-sensitive
+    /// `MergeAndRedeemFungibleStakedSui` modes). `None` for other operations.
+    pub bind_epoch: Option<u64>,
+}
+
+impl TransactionObjectData {
+    /// Free-tier ("gasless") sentinel. The PayCoin gasless path sets `budget == 0` with no gas
+    /// coins after the node confirms free-tier eligibility during simulation (see
+    /// `pay_coin::PayCoin::try_fetch_needed_objects`). No priced path ever produces a zero budget,
+    /// so this uniquely identifies a gasless transaction without needing a dedicated field. Callers
+    /// use it to zero the gas price, which is what makes the on-chain tx recognized as gasless
+    /// (`price == 0`).
+    pub fn is_gasless(&self) -> bool {
+        self.gas_coins.is_empty() && self.budget == 0
+    }
 }
 
 #[async_trait]
@@ -89,7 +113,7 @@ pub trait TryConstructTransaction {
 }
 
 #[enum_dispatch(TryConstructTransaction)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum InternalOperation {
     PaySui(PaySui),
     PayCoin(PayCoin),
@@ -115,9 +139,37 @@ impl InternalOperation {
         }
     }
 
+    /// Derive the out-of-band `AuxData` for this operation: the
+    /// handful of Rosetta-level labels `/parse` cannot reconstruct from the PTB
+    /// (PayCoin currency, FSS validator, FSS redeem mode + cap). `/metadata`
+    /// calls this to populate the wrapper.
+    pub fn aux(&self) -> AuxData {
+        match self {
+            InternalOperation::PayCoin(p) => AuxData::PayCoin {
+                currency: p.currency.clone(),
+            },
+            InternalOperation::ConsolidateAllStakedSuiToFungible(c) => AuxData::Consolidate {
+                validator: c.validator,
+            },
+            InternalOperation::MergeAndRedeemFungibleStakedSui(m) => AuxData::MergeAndRedeem {
+                validator: m.validator,
+                redeem_mode: m.redeem_mode.clone(),
+                amount: m.amount,
+            },
+            // Fully reconstructable from the PTB — no aux data needed.
+            InternalOperation::PaySui(_)
+            | InternalOperation::Stake(_)
+            | InternalOperation::WithdrawStake(_) => AuxData::None,
+        }
+    }
+
     /// Combine with ConstructionMetadata to form the TransactionData
     pub fn try_into_data(self, metadata: ConstructionMetadata) -> Result<TransactionData, Error> {
         let use_addr_balance_gas = metadata.gas_coins.is_empty();
+        // Gasless ("free tier"): no gas coins and a zeroed gas price. `metadata` zeroes the gas
+        // price for the gasless case, so this uniquely distinguishes it from priced address-balance
+        // gas (which keeps `gas_price > 0`). Only PayCoin produces this shape.
+        let is_gasless = use_addr_balance_gas && metadata.gas_price == 0;
         let withdrawal = metadata.address_balance_withdrawal;
         let pt = match self {
             Self::PaySui(PaySui {
@@ -158,15 +210,27 @@ impl InternalOperation {
                 let currency = &metadata
                     .currency
                     .ok_or(anyhow!("metadata.coin_type is needed to PayCoin"))?;
-                pay_coin_pt(
-                    sender,
-                    recipients,
-                    amounts,
-                    &metadata.objects,
-                    &metadata.party_objects,
-                    withdrawal,
-                    currency,
-                )?
+                if is_gasless {
+                    pay_coin_gasless_pt(
+                        sender,
+                        recipients,
+                        amounts,
+                        &metadata.objects,
+                        &metadata.party_objects,
+                        withdrawal,
+                        currency,
+                    )?
+                } else {
+                    pay_coin_pt(
+                        sender,
+                        recipients,
+                        amounts,
+                        &metadata.objects,
+                        &metadata.party_objects,
+                        withdrawal,
+                        currency,
+                    )?
+                }
             }
             InternalOperation::Stake(Stake {
                 sender,
@@ -227,8 +291,15 @@ impl InternalOperation {
             }
             InternalOperation::MergeAndRedeemFungibleStakedSui(
                 MergeAndRedeemFungibleStakedSui { sender, .. },
-            ) => merge_and_redeem_fss_pt(sender, metadata.objects, metadata.redeem_token_amount)?,
+            ) => {
+                let plan = metadata.redeem_plan.as_ref().ok_or(anyhow!(
+                    "redeem_plan required for MergeAndRedeemFungibleStakedSui"
+                ))?;
+                merge_and_redeem_fss_pt(sender, metadata.objects, plan)?
+            }
         };
+
+        let bind_epoch = metadata.bind_epoch;
 
         if metadata.gas_coins.is_empty() {
             let chain_id_str = metadata
@@ -242,7 +313,20 @@ impl InternalOperation {
                 .ok_or(anyhow!("epoch required for address-balance gas"))?;
             let nonce = rand::thread_rng().r#gen::<u32>();
 
-            Ok(TransactionData::new_programmable_with_address_balance_gas(
+            // For amount-sensitive plans, verify the metadata epoch matches
+            // the rate-quote epoch — otherwise the rate the off-chain quote
+            // used has rolled over since metadata fetch.
+            if let Some(want) = bind_epoch
+                && want != epoch
+            {
+                return Err(anyhow!(
+                    "redeem plan was quoted for epoch {want} but signing in epoch {epoch}; \
+                     re-fetch /construction/metadata"
+                )
+                .into());
+            }
+
+            let mut data = TransactionData::new_programmable_with_address_balance_gas(
                 metadata.sender,
                 pt,
                 metadata.budget,
@@ -250,15 +334,50 @@ impl InternalOperation {
                 chain_id,
                 epoch,
                 nonce,
-            ))
+            );
+
+            // The default `new_programmable_with_address_balance_gas` sets
+            // `ValidDuring { min_epoch: epoch, max_epoch: epoch + 1 }`, so the
+            // tx can still execute in `epoch + 1` against a different exchange
+            // rate. Tighten to `min == max == bind_epoch` for amount-sensitive
+            // plans. This stays replay-protected (a one-epoch range satisfies
+            // `TransactionExpiration::is_replay_protected`, see
+            // `sui-types/src/transaction.rs::is_replay_protected`).
+            if let Some(want) = bind_epoch {
+                use sui_types::transaction::{TransactionDataAPI, TransactionExpiration};
+                if let TransactionExpiration::ValidDuring {
+                    chain,
+                    nonce,
+                    min_timestamp,
+                    max_timestamp,
+                    ..
+                } = *data.expiration()
+                {
+                    *data.expiration_mut() = TransactionExpiration::ValidDuring {
+                        min_epoch: Some(want),
+                        max_epoch: Some(want),
+                        min_timestamp,
+                        max_timestamp,
+                        chain,
+                        nonce,
+                    };
+                }
+            }
+
+            Ok(data)
         } else {
-            Ok(TransactionData::new_programmable(
+            let mut data = TransactionData::new_programmable(
                 metadata.sender,
                 metadata.gas_coins,
                 pt,
                 metadata.budget,
                 metadata.gas_price,
-            ))
+            );
+            if let Some(epoch) = bind_epoch {
+                use sui_types::transaction::{TransactionDataAPI, TransactionExpiration};
+                *data.expiration_mut() = TransactionExpiration::Epoch(epoch);
+            }
+            Ok(data)
         }
     }
 }

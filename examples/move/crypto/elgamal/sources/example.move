@@ -38,7 +38,7 @@ fun fiat_shamir_challenge(
     a2: &Element<G1>,
     a3: &Element<G1>,
 ): Element<Scalar> {
-    let mut to_hash = vector::empty<u8>();
+    let mut to_hash = vector[];
     to_hash.append(*bytes(pk1));
     to_hash.append(*bytes(pk2));
     to_hash.append(*bytes(&enc1.ephemeral));

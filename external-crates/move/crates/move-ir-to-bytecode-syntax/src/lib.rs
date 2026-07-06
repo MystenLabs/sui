@@ -32,13 +32,13 @@
 //!   | bytearray // immutable, arbitrarily sized array of bytes
 //!
 //! d ∈ ModuleAlias ::=
-//!   | m         // module name that is an alias to a declared module, addr.m
+//!   | m         // module name that is an alias to a declared module, addr::m
 //!   | Self      // current module
 //!
 //! t ∈ BaseType ::=
-//!   | g     // ground type
-//!   | k#d.n // struct 'n' declared in the module referenced by 'd' with kind 'k'
-//!           // the kind 'k' cannot differ from the declared kind
+//!   | g      // ground type
+//!   | k#d::n // struct 'n' declared in the module referenced by 'd' with kind 'k'
+//!            // the kind 'k' cannot differ from the declared kind
 //!
 //! 𝛕 ∈ Type ::=
 //!   | t      // base type
@@ -82,7 +82,7 @@
 //!   | v
 //!   | o
 //!   | r
-//!   | n { f_1: e_1, ... , f_j: e_j } // type: '𝛕-list -> k#Self.n'
+//!   | n { f_1: e_1, ... , f_j: e_j } // type: '𝛕-list -> k#Self::n'
 //!                                    // "constructor" for 'n'
 //!                                    // "packs" the values, binding them to the fields, and creates a new instance of 'n'
 //!                                    // 'n' must be declared in the current module
@@ -121,7 +121,7 @@
 //! call ∈ Call ::=
 //!   | mop
 //!   | builtin
-//!   | d.p(e_1, ..., e_j) // procedure 'p' defined in the module referenced by 'd'
+//!   | d::p(e_1, ..., e_j) // procedure 'p' defined in the module referenced by 'd'
 //!
 //! c ∈ Cmd ::=
 //!   | x = e                               // assign the result of evaluating 'e' to 'x'
@@ -134,7 +134,7 @@
 //!   | continue                            // return to the top of a loop
 //!   | return e_1, ..., e_n                // return values from procedure
 //!   | n { f_1: x_1, ... , f_j: x_j } = e  // "de-constructor" for 'n'
-//!                                         // "unpacks" a struct value 'e: _#Self.n'
+//!                                         // "unpacks" a struct value 'e: _#Self::n'
 //!                                         // value for 'f_i' is bound to local 'x_i'
 //! ```
 //!
@@ -152,28 +152,28 @@
 //! ## Imports
 //!```text
 //! idecl ∈ Import ::=
-//!   | import addr.m_1 as m_2; // imports 'addr.m_1' with the alias 'm_2'
-//!   | import addr.m_1;        // imports 'addr.m_1' with the alias 'm_1'
+//!   | import addr::m_1 as m_2; // imports 'addr::m_1' with the alias 'm_2'
+//!   | import addr::m_1;        // imports 'addr::m_1' with the alias 'm_1'
 //! ```
 //! ## Modules
 //! ```text
 //! sdecl ∈ StructDecl ::=
-//!   | resource n { f_1: t_1, ..., f_j: t_j } // declaration of a resource struct
-//!   | struct n { f_1: t_1, ..., f_j: t_j }   // declaration of a non-resource (value) struct
-//!                                            // s.t. any 't_i' is not of resource kind
+//!   | public struct n { f_1: t_1, ..., f_j: t_j } // declaration of a struct;
+//!                                                 // currently `public` is the only supported visibility
 //!
 //! body ∈ ProcedureBody ::=
 //!  | let x_1; ... let x_j; s // The locals declared in this procedure, and the code for that procedure
 //!
 //! pdecl ∈ ProcedureDecl ::=
-//!   | (public?) p(x_1: 𝛕_1, ..., x_j: 𝛕_j): 𝛕-list { body } // declaration of a defined procedure
-//!                                                          // the procedure may be public, or internal to the module
-//!   | native (public?) p(x_1: 𝛕_1, ..., x_j: 𝛕_j): 𝛕-list; // declaration of a native procedure
-//!                                                         // the implementation is provided by the VM
-//!                                                         // the procedure may be public, or internal to the module
+//!   | (public?) fun p(x_1: 𝛕_1, ..., x_j: 𝛕_j): 𝛕-list { body } // declaration of a defined procedure
+//!                                                              // the procedure may be public, or internal to the module
+//!   | native (public?) fun p(x_1: 𝛕_1, ..., x_j: 𝛕_j): 𝛕-list; // declaration of a native procedure
+//!                                                             // the implementation is provided by the VM
+//!                                                             // the procedure may be public, or internal to the module
 //!
 //! mdecl ∈ ModuleDecl ::=
-//!   | module m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j pdecl_1 ... pdecl_k }
+//!   | mvir m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j pdecl_1 ... pdecl_k } // module declaration; `mvir` (rather than Move source's `module`)
+//!                                                                            // makes it visually obvious that a snippet is IR, not source
 //! ```
 //!
 //! ## Transaction Scripts

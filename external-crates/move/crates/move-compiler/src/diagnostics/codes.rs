@@ -18,8 +18,46 @@ pub enum Severity {
 /// An optional prefix to distinguish between different types of warnings (internal vs. possibly
 /// multiple externally provided ones).
 pub type ExternalPrefix = Option<&'static str>;
+
+/// Wildcard sentinel for category/code fields in a [`DiagnosticsID`] filter key.
+/// When used as the category, matches all categories; when used as the code, matches all codes
+/// within a category.
+pub const DIAGNOSTIC_FILTER_WILDCARD: u8 = u8::MAX;
+
 /// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.
-pub type DiagnosticsID = (ExternalPrefix, u8, u8);
+/// Also used as a filter key with [`ANY`] wildcards for category/code.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct DiagnosticsID {
+    pub prefix: ExternalPrefix,
+    pub category: u8,
+    pub code: u8,
+}
+
+impl DiagnosticsID {
+    pub const fn exact(prefix: ExternalPrefix, category: u8, code: u8) -> Self {
+        Self {
+            prefix,
+            category,
+            code,
+        }
+    }
+
+    pub const fn category(prefix: ExternalPrefix, category: u8) -> Self {
+        Self {
+            prefix,
+            category,
+            code: DIAGNOSTIC_FILTER_WILDCARD,
+        }
+    }
+
+    pub const fn all(prefix: ExternalPrefix) -> Self {
+        Self {
+            prefix,
+            category: DIAGNOSTIC_FILTER_WILDCARD,
+            code: DIAGNOSTIC_FILTER_WILDCARD,
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct DiagnosticInfo {
@@ -140,7 +178,7 @@ codes!(
     Uncategorized: [
         DeprecatedWillBeRemoved: { msg: "DEPRECATED. will be removed", severity: Warning },
         DeprecatedSpecItem: { msg: "DEPRECATED. unexpected spec item", severity: NonblockingError },
-        UnableToMigrate: { msg: "unable to migrate", severity: NonblockingError },
+        UnableToMigrate: { msg: "migration failed", severity: NonblockingError },
     ],
     // syntax errors
     Syntax: [
@@ -178,7 +216,7 @@ codes!(
         InvalidFunction: { msg: "invalid 'fun' declaration", severity: NonblockingError },
         InvalidStruct: { msg: "invalid 'struct' declaration", severity: NonblockingError },
         InvalidSpec: { msg: "invalid 'spec' declaration", severity: NonblockingError },
-        InvalidName: { msg: "invalid name", severity: BlockingError },
+        InvalidName: { msg: "invalid declaration name", severity: BlockingError },
         InvalidFriendDeclaration:
             { msg: "invalid 'friend' declaration", severity: NonblockingError },
         InvalidAcquiresItem: { msg: "invalid 'acquires' item", severity: NonblockingError },
@@ -231,7 +269,7 @@ codes!(
         ExpectedSingleType: { msg: "expected a single type", severity: BlockingError },
         SubtypeError: { msg: "invalid subtype", severity: BlockingError },
         JoinError: { msg: "incompatible types", severity: BlockingError },
-        RecursiveType: { msg: "invalid type. recursive type found", severity: BlockingError },
+        RecursiveType: { msg: "recursive type not allowed", severity: BlockingError },
         ExpectedSpecificType: { msg: "expected specific type", severity: BlockingError },
         UninferredType: { msg: "cannot infer type", severity: BlockingError },
         ScriptSignature: { msg: "invalid script signature", severity: NonblockingError },
@@ -246,7 +284,7 @@ codes!(
         CyclicInstantiation:
             { msg: "cyclic type instantiation", severity: NonblockingError },
         MissingAcquires: { msg: "missing acquires annotation", severity: NonblockingError },
-        InvalidNum: { msg: "invalid number after type inference", severity: NonblockingError },
+        InvalidNum: { msg: "numeric literal out of range", severity: NonblockingError },
         NonInvocablePublicScript: {
             msg: "script function cannot be invoked with this signature \
                 (NOTE: this may become an error in the future)",
@@ -270,7 +308,7 @@ codes!(
         DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
         InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
         MissingLiteralType:
-            { msg: "unable to determine principal type for literal", severity: Warning },
+            { msg: "unable to determine literal's type", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -285,15 +323,15 @@ codes!(
     // errors for move rules. mostly cfgir/borrows
     ReferenceSafety: [
         RefTrans: { msg: "referential transparency violated", severity: BlockingError },
-        MutOwns: { msg: "mutable ownership violated", severity: NonblockingError },
+        MutOwns: { msg: "mutable borrow rule violated", severity: NonblockingError },
         Dangling: {
-            msg: "invalid operation, could create dangling a reference",
+            msg: "invalid operation, could create a dangling reference",
             severity: NonblockingError,
         },
         InvalidReturn:
             { msg: "invalid return of locally borrowed state", severity: NonblockingError },
-        InvalidTransfer: { msg: "invalid transfer of references", severity: NonblockingError },
-        AmbiguousVariableUsage: { msg: "ambiguous usage of variable", severity: NonblockingError },
+        InvalidTransfer: { msg: "invalid reference transfer", severity: NonblockingError },
+        AmbiguousVariableUsage: { msg: "ambiguous variable usage", severity: NonblockingError },
     ],
     CodeGeneration: [
         UnfoldableConstant: { msg: "cannot compute constant value", severity: NonblockingError },
@@ -325,6 +363,7 @@ codes!(
             { msg: "unknown bytecode instruction function", severity: NonblockingError },
         ValueWarning: { msg: "issue with attribute value", severity: Warning },
         AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
+        UnfulfilledExpectation: { msg: "unfulfilled '#[expect(...)]'", severity: Warning },
     ],
     Tests: [
         TestFailed: { msg: "test failure", severity: BlockingError },
@@ -415,7 +454,11 @@ impl DiagnosticInfo {
     }
 
     pub fn id(&self) -> DiagnosticsID {
-        (self.external_prefix, self.category, self.code)
+        DiagnosticsID {
+            prefix: self.external_prefix,
+            category: self.category,
+            code: self.code,
+        }
     }
 
     pub fn message(&self) -> &'static str {

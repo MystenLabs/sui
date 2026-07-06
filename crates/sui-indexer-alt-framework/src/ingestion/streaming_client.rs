@@ -33,6 +33,17 @@ pub struct CheckpointStream {
 pub trait CheckpointStreamingClient {
     /// Returns the CheckpointStream and chain id.
     async fn connect(&mut self) -> Result<CheckpointStream>;
+
+    /// Returns the latest checkpoint number available from the streaming source.
+    async fn latest_checkpoint_number(&mut self) -> Result<u64> {
+        let mut stream = self.connect().await?;
+
+        match stream.stream.next().await {
+            Some(Ok(checkpoint)) => Ok(checkpoint.summary.sequence_number),
+            Some(Err(e)) => Err(e),
+            None => Err(Error::StreamingError(anyhow!("Stream ended unexpectedly"))),
+        }
+    }
 }
 
 #[derive(clap::Args, Clone, Debug, Default)]
@@ -43,6 +54,7 @@ pub struct StreamingClientArgs {
 }
 
 /// gRPC-based implementation of the CheckpointStreamingClient trait.
+#[derive(Clone)]
 pub struct GrpcStreamingClient {
     uri: Uri,
     connection_timeout: Duration,
@@ -62,7 +74,9 @@ impl GrpcStreamingClient {
 #[async_trait]
 impl CheckpointStreamingClient for GrpcStreamingClient {
     async fn connect(&mut self) -> Result<CheckpointStream> {
-        let endpoint = Endpoint::from(self.uri.clone()).connect_timeout(self.connection_timeout);
+        let endpoint = Endpoint::from(self.uri.clone())
+            .connect_timeout(self.connection_timeout)
+            .timeout(self.connection_timeout);
 
         let mut client = SubscriptionServiceClient::connect(endpoint)
             .await
@@ -87,16 +101,30 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
             .map_err(|e| Error::StreamingError(anyhow!("Chain ID parse error: {e}")))?
             .into();
 
-        let stream = response.into_inner().map(|result| match result {
-            Ok(response) => response
-                .checkpoint
-                .context("Checkpoint data missing in response")
-                .and_then(|checkpoint| {
-                    Checkpoint::try_from(&checkpoint).context("Failed to parse checkpoint")
-                })
-                .map_err(Error::StreamingError),
-            Err(e) => Err(Error::RpcClientError(e)),
-        });
+        let stream = response
+            .into_inner()
+            .map(|result| async move {
+                match result {
+                    Ok(response) => {
+                        let checkpoint = response
+                            .checkpoint
+                            .context("Checkpoint data missing in response")
+                            .map_err(Error::StreamingError)?;
+                        // Proto -> Checkpoint conversion is multi-ms of CPU work;
+                        // offload to the blocking pool so it doesn't stall the reactor.
+                        // Combined with `.buffered(4)` below, up to 4 decodes can run
+                        // concurrently while new bytes keep flowing from gRPC.
+                        tokio::task::spawn_blocking(move || {
+                            Checkpoint::try_from(&checkpoint).context("Failed to parse checkpoint")
+                        })
+                        .await
+                        .map_err(|e| Error::StreamingError(anyhow!("decode task panicked: {e}")))?
+                        .map_err(Error::StreamingError)
+                    }
+                    Err(e) => Err(Error::RpcClientError(e)),
+                }
+            })
+            .buffered(4);
         let stream = wrap_stream(stream, self.statement_timeout);
 
         Ok(CheckpointStream { stream, chain_id })
@@ -118,6 +146,68 @@ fn wrap_stream(
         })
         .boxed();
     tokio_stream::StreamExt::peekable(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::SocketAddr;
+    use std::time::Duration;
+
+    use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
+    use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
+    use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
+    use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceServer;
+    use tonic::transport::Server;
+
+    use super::*;
+
+    /// A gRPC server that accepts connections but never responds to
+    /// subscribe_checkpoints, simulating a stalled RPC handshake.
+    struct HangingSubscriptionService;
+
+    #[tonic::async_trait]
+    impl SubscriptionService for HangingSubscriptionService {
+        async fn subscribe_checkpoints(
+            &self,
+            _request: tonic::Request<SubscribeCheckpointsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<
+                BoxStream<'static, std::result::Result<SubscribeCheckpointsResponse, Status>>,
+            >,
+            Status,
+        > {
+            futures::future::pending().await
+        }
+    }
+
+    #[tokio::test]
+    async fn subscribe_checkpoints_times_out_on_stalled_server() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr: SocketAddr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+            Server::builder()
+                .add_service(SubscriptionServiceServer::new(HangingSubscriptionService))
+                .serve_with_incoming(incoming)
+                .await
+                .unwrap();
+        });
+
+        let timeout = Duration::from_millis(200);
+        let uri: Uri = format!("http://{addr}").parse().unwrap();
+        let mut client = GrpcStreamingClient::new(uri, timeout, timeout);
+
+        let start = std::time::Instant::now();
+        let result = client.connect().await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err(), "expected timeout error");
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "connect() took {elapsed:?}, should have timed out in ~200ms"
+        );
+    }
 }
 
 #[cfg(test)]

@@ -83,9 +83,9 @@ fun test_div_ceil() {
     integer_tests::test_div_ceil!(MAX, CASES);
 }
 
-#[test, expected_failure(arithmetic_error, location = std::u8)]
+#[test, expected_failure(arithmetic_error, location = std::u32)]
 fun test_div_ceil_error() {
-    1u8.div_ceil(0);
+    1u32.div_ceil(0);
 }
 
 #[test]

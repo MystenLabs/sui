@@ -15,7 +15,7 @@ use crate::{
             values::{Local, Locals, Value},
         },
         linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
-        loading::ast::{Datatype, ObjectMutability},
+        loading::ast::{Datatype, DeserializedPackage, PackagePayload},
         typing::ast::{self as T, Type},
     },
 };
@@ -47,6 +47,7 @@ use move_vm_runtime::{
     },
     validation::verification::ast::Package as VerifiedPackage,
 };
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
 use quick_cache::unsync::Cache as QCache;
@@ -73,16 +74,16 @@ use sui_types::{
         SuiAddress, TxContext,
     },
     effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
-    error::{ExecutionError, SafeIndex, command_argument_error},
+    error::{ExecutionError, ExecutionErrorTrait, SafeIndex, command_argument_error},
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
     execution_status::{CommandArgumentError, ExecutionErrorKind, PackageUpgradeError},
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     move_package::{
         MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
         normalize_deserialized_modules,
     },
-    object::{MoveObject, Object, Owner},
+    object::{MoveObject, Object, ObjectPermissions, Owner},
     storage::{BackingPackageStore, DenyListResult, PackageObject, get_package_objects},
 };
 use sui_verifier::INIT_FN_NAME;
@@ -153,8 +154,8 @@ macro_rules! charge_gas {
 // Helper macro to manage Move VM cache for different linkage contexts. If the given linkage is
 // found the VM is reused, otherwise a new VM is created and inserted into the cache.
 macro_rules! with_vm {
-    ($self:ident, $linkage:expr, $body:expr) => {{
-        let link_context = $linkage.linkage_context()?;
+    ($self:ident, $linkage:expr, $error:ty, $body:expr) => {{
+        let link_context = $linkage.linkage_context::<$error>()?;
         let linkage_hash = link_context.to_linkage_hash();
         let mut vm = if let Some((_, vm)) = $self.executable_vm_cache.remove(&linkage_hash) {
             vm
@@ -184,7 +185,7 @@ pub struct CtxValue(Value);
 pub struct InputObjectMetadata {
     pub newly_created: bool,
     pub id: ObjectID,
-    pub mutability: ObjectMutability,
+    pub refined_permissions: ObjectPermissions,
     pub owner: Owner,
     pub version: SequenceNumber,
     pub type_: Type,
@@ -247,10 +248,13 @@ enum ResolvedLocation<'a> {
 }
 
 /// Maintains all runtime state specific to programmable transactions
-pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension> {
-    pub env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
+pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension, Mode>
+where
+    Mode: ExecutionMode,
+{
+    pub env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
     /// Metrics for reporting exceeded limits
-    pub metrics: Arc<LimitsMetrics>,
+    pub metrics: Arc<ExecutionMetrics>,
     pub native_extensions: NativeExtensions<'env>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
@@ -312,13 +316,15 @@ impl Locations {
     }
 }
 
-impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
-    Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
+impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension, Mode>
+    Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension, Mode>
+where
+    Mode: ExecutionMode,
 {
     #[instrument(name = "Context::new", level = "trace", skip_all)]
     pub fn new(
-        env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
-        metrics: Arc<LimitsMetrics>,
+        env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
+        metrics: Arc<ExecutionMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
         payment_location: Option<GasPayment>,
@@ -327,7 +333,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,
         pure_input_metadata: Vec<T::PureInput>,
         receiving_input_metadata: Vec<T::ReceivingInput>,
-    ) -> Result<Self, ExecutionError>
+    ) -> Result<Self, Mode::Error>
     where
         'pc: 'state,
     {
@@ -376,7 +382,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                         let metadata = InputObjectMetadata {
                             newly_created: true,
                             id,
-                            mutability: ObjectMutability::Mutable,
+                            refined_permissions: ObjectPermissions::ALL,
                             owner: Owner::AddressOwner(sui_address),
                             version: SequenceNumber::new(),
                             type_: ty,
@@ -389,7 +395,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                         env,
                         &mut input_object_map,
                         gas_coin_id,
-                        ObjectMutability::Mutable,
+                        ObjectPermissions::ALL,
                         ty,
                     )?,
                 };
@@ -459,7 +465,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     pub(crate) fn record_gas_coin_transfer(
         &mut self,
         transfer: GasCoinTransfer,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Mode::Error> {
         // send funds transfer ==> accumulators/address balances are enabled
         assert_invariant!(
             !matches!(transfer, GasCoinTransfer::SendFunds { .. })
@@ -473,7 +479,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         Ok(())
     }
 
-    pub fn finish<Mode: ExecutionMode>(mut self) -> Result<ExecutionResults, ExecutionError> {
+    pub fn finish(mut self) -> Result<ExecutionResults, Mode::Error> {
         assert_invariant!(
             !self.locations.tx_context_value.local(0)?.is_invalid()?,
             "tx context value should be present"
@@ -514,17 +520,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             let InputObjectMetadata {
                 newly_created,
                 id,
-                mutability,
+                refined_permissions,
                 owner,
                 version,
                 type_,
             } = metadata;
-            match mutability {
-                ObjectMutability::Immutable => continue,
-                // It is illegal to mutate NonExclusiveWrites, but they are passed as &mut T,
-                // so we need to treat them as mutable here. After execution, we check if they
-                // have been mutated, and abort the tx if they have.
-                ObjectMutability::NonExclusiveWrite | ObjectMutability::Mutable => (),
+            if !refined_permissions.can_use_mutably() {
+                continue;
             }
 
             if newly_created {
@@ -565,9 +567,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         let tx_digest = ref_context.borrow().digest();
 
         let object_runtime: ObjectRuntime = native_extensions
-            .try_borrow_mut().map_err(|_| make_invariant_violation!(
+            .try_borrow_mut()
+            .map_err(|_| {
+                make_invariant_violation!(
                 "Should be able to borrow object runtime native extension at the end of execution"
-            ))?
+            )
+            })?
             .remove()
             .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))?;
 
@@ -587,6 +592,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 .all(|id| !created_object_ids.contains(id)),
             "Loaded input objects should not be in the created objects set"
         );
+        // TODO generalize post transaction checks using permissions
 
         assert_invariant!(
             remaining_events.is_empty(),
@@ -665,7 +671,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             written_objects.insert(id, package_obj);
         }
 
-        execution::context::finish(
+        Ok(execution::context::finish(
             env.protocol_config,
             env.state_view,
             gas_charger,
@@ -680,7 +686,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             accumulator_events,
             settlement_input_sui,
             settlement_output_sui,
-        )
+        )?)
     }
 
     pub fn take_user_events(
@@ -690,7 +696,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         function_def_idx: FunctionDefinitionIndex,
         instr_length: u16,
         linkage: &ExecutableLinkage,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Mode::Error> {
         let events = object_runtime_mut!(self)?.take_user_events();
         let Some(num_events) = self.user_events.len().checked_add(events.len()) else {
             invariant_violation!("usize overflow, too many events emitted")
@@ -717,7 +723,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 };
                 Ok((version_mid.clone(), *tag, bytes))
             })
-            .collect::<Result<Vec<_>, ExecutionError>>()?;
+            .collect::<Result<Vec<_>, Mode::Error>>()?;
         self.user_events.extend(new_events);
         Ok(())
     }
@@ -731,9 +737,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     /// it needs to be able to create a VM over any newly published packages as the `init`
     /// functions in those packages may have created objects of types defined in those packages.
     fn make_writeout_vm<I>(
-        env: &Env,
+        env: &Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
         writes: I,
-    ) -> Result<(MoveVM<'extension>, ExecutableLinkage), ExecutionError>
+    ) -> Result<(MoveVM<'extension>, ExecutableLinkage), Mode::Error>
     where
         I: IntoIterator<Item = MoveObjectType>,
     {
@@ -743,11 +749,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             .map(ObjectID::from)
             .collect::<BTreeSet<_>>();
 
-        let ty_linkage = ExecutableLinkage::type_linkage(&tys_addrs, env.linkable_store)?;
+        let ty_linkage = ExecutableLinkage::type_linkage::<_, Mode::Error>(
+            env.linkage_analysis.config().clone(),
+            &tys_addrs,
+            env.linkable_store,
+        )?;
         env.vm
             .make_vm(
                 &env.linkable_store.package_store,
-                ty_linkage.linkage_context()?,
+                ty_linkage.linkage_context::<Mode::Error>()?,
             )
             .map_err(|e| env.convert_linked_vm_error(e, &ty_linkage))
             .map(|vm| (vm, ty_linkage))
@@ -758,11 +768,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     /// the types requested may have only been created during the execution of the transaction and
     /// therefore will not be present in the `resolution_vm`.
     fn load_type_and_layout_from_struct_for_writeout(
-        env: &Env,
+        env: &Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
         vm: &MoveVM,
         linkage: &ExecutableLinkage,
         tag: StructTag,
-    ) -> Result<(Type, move_core_types::runtime_value::MoveTypeLayout), ExecutionError> {
+    ) -> Result<(Type, move_core_types::runtime_value::MoveTypeLayout), Mode::Error> {
         let type_tag = TypeTag::Struct(Box::new(tag));
         let vm_type = vm
             .load_type(&type_tag)
@@ -778,11 +788,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     // Arguments and Values
     //
 
-    fn location(
-        &mut self,
-        usage: UsageKind,
-        location: T::Location,
-    ) -> Result<Value, ExecutionError> {
+    fn location(&mut self, usage: UsageKind, location: T::Location) -> Result<Value, Mode::Error> {
         let resolved = self.locations.resolve(location)?;
         let mut local = match resolved {
             ResolvedLocation::Local(l) => l,
@@ -830,14 +836,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         })
     }
 
-    fn location_usage(&mut self, usage: T::Usage) -> Result<Value, ExecutionError> {
+    fn location_usage(&mut self, usage: T::Usage) -> Result<Value, Mode::Error> {
         match usage {
             T::Usage::Move(location) => self.location(UsageKind::Move, location),
             T::Usage::Copy { location, .. } => self.location(UsageKind::Copy, location),
         }
     }
 
-    fn argument_value(&mut self, sp!(_, (arg_, _)): T::Argument) -> Result<Value, ExecutionError> {
+    fn argument_value(&mut self, sp!(_, (arg_, _)): T::Argument) -> Result<Value, Mode::Error> {
         match arg_ {
             T::Argument__::Use(usage) => self.location_usage(usage),
             // freeze is a no-op for references since the value does not track mutability
@@ -846,12 +852,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             T::Argument__::Read(usage) => {
                 let reference = self.location_usage(usage)?;
                 charge_gas!(self, charge_read_ref, &reference)?;
-                reference.read_ref()
+                Ok(reference.read_ref()?)
             }
         }
     }
 
-    pub fn argument<V>(&mut self, arg: T::Argument) -> Result<V, ExecutionError>
+    pub fn argument<V>(&mut self, arg: T::Argument) -> Result<V, Mode::Error>
     where
         VMValue: VMValueCast<V>,
     {
@@ -863,14 +869,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         Ok(value)
     }
 
-    pub fn arguments<V>(&mut self, args: Vec<T::Argument>) -> Result<Vec<V>, ExecutionError>
+    pub fn arguments<V>(&mut self, args: Vec<T::Argument>) -> Result<Vec<V>, Mode::Error>
     where
         VMValue: VMValueCast<V>,
     {
         args.into_iter().map(|arg| self.argument(arg)).collect()
     }
 
-    pub fn result(&mut self, result: Vec<Option<CtxValue>>) -> Result<(), ExecutionError> {
+    pub fn result(&mut self, result: Vec<Option<CtxValue>>) -> Result<(), Mode::Error> {
         self.locations
             .results
             .push(Locals::new(result.into_iter().map(|v| v.map(|v| v.0)))?);
@@ -882,7 +888,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         is_move_call: bool,
         num_args: usize,
         num_return: usize,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Mode::Error> {
         let move_gas_status = self.gas_charger.move_gas_status_mut();
         let before_size = move_gas_status.stack_size_current();
         // Pop all of the arguments
@@ -907,11 +913,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         Ok(())
     }
 
-    pub fn copy_value(&mut self, value: &CtxValue) -> Result<CtxValue, ExecutionError> {
+    pub fn copy_value(&mut self, value: &CtxValue) -> Result<CtxValue, Mode::Error> {
         Ok(CtxValue(copy_value(self.gas_charger, self.env, &value.0)?))
     }
 
-    pub fn new_coin(&mut self, amount: u64) -> Result<CtxValue, ExecutionError> {
+    pub fn new_coin(&mut self, amount: u64) -> Result<CtxValue, Mode::Error> {
         let id = self.tx_context.borrow_mut().fresh_id();
         object_runtime_mut!(self)?
             .new_id(id)
@@ -919,7 +925,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         Ok(CtxValue(Value::coin(id, amount)))
     }
 
-    pub fn destroy_coin(&mut self, coin: CtxValue) -> Result<u64, ExecutionError> {
+    pub fn destroy_coin(&mut self, coin: CtxValue) -> Result<u64, Mode::Error> {
         let (id, amount) = coin.0.unpack_coin()?;
         object_runtime_mut!(self)?
             .delete_id(id)
@@ -927,7 +933,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         Ok(amount)
     }
 
-    pub fn new_upgrade_cap(&mut self, version_id: ObjectID) -> Result<CtxValue, ExecutionError> {
+    pub fn new_upgrade_cap(&mut self, version_id: ObjectID) -> Result<CtxValue, Mode::Error> {
         let id = self.tx_context.borrow_mut().fresh_id();
         object_runtime_mut!(self)?
             .new_id(id)
@@ -954,19 +960,21 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         function: T::LoadedFunction,
         args: Vec<CtxValue>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> Result<Vec<CtxValue>, ExecutionError> {
-        with_vm!(self, &function.linkage, |vm: &mut MoveVM<'env>| {
+    ) -> Result<Vec<CtxValue>, Mode::Error> {
+        with_vm!(self, &function.linkage, Mode::Error, |vm: &mut MoveVM<
+            'env,
+        >| {
             let ty_args = function
                 .type_arguments
                 .iter()
                 .map(|ty| {
                     let tag: TypeTag = ty.clone().try_into().map_err(|e| {
-                        ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, e)
+                        Mode::Error::new_with_source(ExecutionErrorKind::VMInvariantViolation, e)
                     })?;
                     vm.load_type(&tag)
                         .map_err(|e| self.env.convert_linked_vm_error(e, &function.linkage))
                 })
-                .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, Mode::Error>>()?;
             let result = self.execute_function_bypass_visibility_with_vm(
                 vm,
                 &function.original_mid,
@@ -983,7 +991,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 function.instruction_length,
                 &function.linkage,
             )?;
-            Ok::<Vec<CtxValue>, ExecutionError>(result)
+            Ok::<Vec<CtxValue>, Mode::Error>(result)
         })
     }
 
@@ -996,7 +1004,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         args: Vec<CtxValue>,
         linkage: &ExecutableLinkage,
         tracer: &mut Option<MoveTraceBuilder>,
-    ) -> Result<Vec<CtxValue>, ExecutionError> {
+    ) -> Result<Vec<CtxValue>, Mode::Error> {
         let gas_status = self.gas_charger.move_gas_status_mut();
         let values = vm
             .execute_function_bypass_visibility(
@@ -1015,39 +1023,29 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     // Publish and Upgrade
     //
 
-    // is_upgrade is used for gas charging. Assumed to be a new publish if false.
-    pub fn deserialize_modules(
+    pub fn deserialize_package(
         &mut self,
-        module_bytes: &[Vec<u8>],
-        is_upgrade: bool,
-    ) -> Result<Vec<CompiledModule>, ExecutionError> {
-        assert_invariant!(
-            !module_bytes.is_empty(),
-            "empty package is checked in transaction input checker"
-        );
-        let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
-        if is_upgrade {
-            self.gas_charger.charge_upgrade_package(total_bytes)?
-        } else {
-            self.gas_charger.charge_publish_package(total_bytes)?
-        }
-
-        let binary_config = self.env.protocol_config.binary_config(None);
-        let modules = module_bytes
-            .iter()
-            .map(|b| {
-                CompiledModule::deserialize_with_config(b, &binary_config)
-                    .map_err(|e| e.finish(Location::Undefined))
-            })
-            .collect::<VMResult<Vec<CompiledModule>>>()
-            .map_err(|e| self.env.convert_vm_error(e))?;
-        Ok(modules)
+        package_payload: PackagePayload,
+        dep_ids: &[ObjectID],
+    ) -> Result<DeserializedPackage, Mode::Error> {
+        Ok(match package_payload {
+            PackagePayload::Deserialized(deserialized_pkg) => deserialized_pkg,
+            PackagePayload::Serialized(module_bytes) => {
+                // This assertion is also checked in the call to `deserialize_modules`, but we
+                // want to check it here first to keep existing behavior around checking this
+                // invariant before the charge on pre-existing pathways.
+                assert_invariant!(
+                    !module_bytes.is_empty(),
+                    "empty package is checked in transaction input checker"
+                );
+                let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
+                self.gas_charger.charge_publish_package(total_bytes)?;
+                self.env.deserialize_package(&module_bytes, dep_ids)?
+            }
+        })
     }
 
-    fn fetch_package(
-        &mut self,
-        dependency_id: &ObjectID,
-    ) -> Result<Rc<MovePackage>, ExecutionError> {
+    fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<Rc<MovePackage>, Mode::Error> {
         let [fetched_package] = self.fetch_packages(&[*dependency_id])?.try_into().map_err(
             |_| {
                 make_invariant_violation!(
@@ -1061,7 +1059,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     fn fetch_packages(
         &mut self,
         dependency_ids: &[ObjectID],
-    ) -> Result<Vec<Rc<MovePackage>>, ExecutionError> {
+    ) -> Result<Vec<Rc<MovePackage>>, Mode::Error> {
         let mut fetched = vec![];
         let mut missing = vec![];
 
@@ -1071,7 +1069,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         for id in &dependency_ids {
             match self.env.linkable_store.get_move_package(id) {
                 Err(e) => {
-                    return Err(ExecutionError::new_with_source(
+                    return Err(Mode::Error::new_with_source(
                         ExecutionErrorKind::PublishUpgradeMissingDependency,
                         e,
                     ));
@@ -1100,7 +1098,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                     .collect::<Vec<_>>()
                     .join(", ")
             );
-            Err(ExecutionError::new_with_source(
+            Err(Mode::Error::new_with_source(
                 ExecutionErrorKind::PublishUpgradeMissingDependency,
                 msg,
             ))
@@ -1113,7 +1111,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         pkg: &MovePackage,
         modules: &[CompiledModule],
         linkage: &ExecutableLinkage,
-    ) -> Result<(VerifiedPackage, MoveVM<'env>), ExecutionError> {
+    ) -> Result<(VerifiedPackage, MoveVM<'env>), Mode::Error> {
         let serialized_pkg = pkg.into_serialized_move_package().map_err(|e| {
             make_invariant_violation!("Failed to serialize package for verification: {}", e)
         })?;
@@ -1154,7 +1152,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         modules: &[CompiledModule],
         linkage: &ExecutableLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Mode::Error> {
         for module in modules {
             let Some((fdef_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str())
             else {
@@ -1215,14 +1213,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         Ok(())
     }
 
-    pub fn publish_and_init_package<Mode: ExecutionMode>(
+    pub fn publish_and_init_package(
         &mut self,
         mut modules: Vec<CompiledModule>,
         dep_ids: &[ObjectID],
         linkage: ResolvedLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> Result<ObjectID, ExecutionError> {
-        let original_id = if <Mode>::packages_are_predefined() {
+    ) -> Result<ObjectID, Mode::Error> {
+        let original_id = if Mode::packages_are_predefined() {
             // do not calculate or substitute id for predefined packages
             (*modules.safe_get(0)?.self_id().address()).into()
         } else {
@@ -1275,7 +1273,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         current_package_id: ObjectID,
         upgrade_ticket_policy: u8,
         linkage: ResolvedLinkage,
-    ) -> Result<ObjectID, ExecutionError> {
+    ) -> Result<ObjectID, Mode::Error> {
         // Check that this package ID points to a package and get the package we're upgrading.
         let current_move_package = self.fetch_package(&current_package_id)?;
 
@@ -1339,7 +1337,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         });
         if new_module_has_init {
             // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
-            return Err(ExecutionError::new_with_source(
+            return Err(Mode::Error::new_with_source(
                 ExecutionErrorKind::FeatureNotYetSupported,
                 "`init` in new modules on upgrade is not yet supported",
             ));
@@ -1362,7 +1360,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         recipient: Owner,
         ty: Type,
         object: CtxValue,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Mode::Error> {
         self.transfer_object_(recipient, ty, object, /* end of transaction */ false)
     }
 
@@ -1372,7 +1370,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         ty: Type,
         object: CtxValue,
         end_of_transaction: bool,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Mode::Error> {
         let tag = TypeTag::try_from(ty)
             .map_err(|_| make_invariant_violation!("Unable to convert Type to TypeTag"))?;
         let TypeTag::Struct(tag) = tag else {
@@ -1389,19 +1387,21 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     // Dev Inspect tracking
     //
 
+    #[allow(clippy::type_complexity)]
     pub fn argument_updates(
         &mut self,
         args: Vec<T::Argument>,
-    ) -> Result<Vec<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, ExecutionError> {
+    ) -> Result<Vec<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, Mode::Error> {
         args.into_iter()
             .filter_map(|arg| self.argument_update(arg).transpose())
             .collect()
     }
 
+    #[allow(clippy::type_complexity)]
     fn argument_update(
         &mut self,
         sp!(_, (arg, ty)): T::Argument,
-    ) -> Result<Option<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, ExecutionError> {
+    ) -> Result<Option<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, Mode::Error> {
         use sui_types::transaction::Argument as TxArgument;
         let ty = match ty {
             Type::Reference(true, inner) => (*inner).clone(),
@@ -1488,23 +1488,19 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         &self,
         results: &[CtxValue],
         result_tys: &T::ResultType,
-    ) -> Result<Vec<(Vec<u8>, TypeTag)>, ExecutionError> {
+    ) -> Result<Vec<(Vec<u8>, TypeTag)>, Mode::Error> {
         assert_invariant!(
             results.len() == result_tys.len(),
             "results and result types should match"
         );
         results
             .iter()
-            .zip(result_tys)
+            .zip_debug_eq(result_tys)
             .map(|(v, ty)| self.tracked_result(&v.0, ty.clone()))
             .collect()
     }
 
-    fn tracked_result(
-        &self,
-        result: &Value,
-        ty: Type,
-    ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
+    fn tracked_result(&self, result: &Value, ty: Type) -> Result<(Vec<u8>, TypeTag), Mode::Error> {
         let inner_value;
         let (v, ty) = match ty {
             Type::Reference(_, inner) => {
@@ -1564,34 +1560,40 @@ impl CtxValue {
     }
 }
 
-fn load_object_arg(
+fn load_object_arg<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env,
+    env: &Env<Mode>,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     input: T::ObjectInput,
-) -> Result<(T::InputIndex, InputObjectMetadata, Value), ExecutionError> {
+) -> Result<(T::InputIndex, InputObjectMetadata, Value), Mode::Error> {
     let id = input.arg.id();
-    let mutability = input.arg.mutability();
-    let (metadata, value) =
-        load_object_arg_impl(meter, env, input_object_map, id, mutability, input.ty)?;
+    let refined_permissions = input.arg.refined_permissions;
+    let (metadata, value) = load_object_arg_impl(
+        meter,
+        env,
+        input_object_map,
+        id,
+        refined_permissions,
+        input.ty,
+    )?;
     Ok((input.original_input_index, metadata, value))
 }
 
-fn load_object_arg_impl(
+fn load_object_arg_impl<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env,
+    env: &Env<Mode>,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
-    mutability: ObjectMutability,
+    refined_permissions: ObjectPermissions,
     ty: T::Type,
-) -> Result<(InputObjectMetadata, Value), ExecutionError> {
+) -> Result<(InputObjectMetadata, Value), Mode::Error> {
     let obj = env.read_object(&id)?;
     let owner = obj.owner.clone();
     let version = obj.version();
     let object_metadata = InputObjectMetadata {
         newly_created: false,
         id,
-        mutability,
+        refined_permissions,
         owner: owner.clone(),
         version,
         type_: ty.clone(),
@@ -1625,11 +1627,11 @@ fn load_object_arg_impl(
     Ok((object_metadata, v))
 }
 
-fn load_withdrawal_arg(
+fn load_withdrawal_arg<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env,
+    env: &Env<Mode>,
     withdrawal: &T::WithdrawalInput,
-) -> Result<Value, ExecutionError> {
+) -> Result<Value, Mode::Error> {
     let T::WithdrawalInput {
         original_input_index: _,
         ty: _,
@@ -1642,12 +1644,12 @@ fn load_withdrawal_arg(
     Ok(loaded)
 }
 
-fn load_pure_value(
+fn load_pure_value<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env,
+    env: &Env<Mode>,
     bytes: &[u8],
     metadata: &T::PureInput,
-) -> Result<Value, ExecutionError> {
+) -> Result<Value, Mode::Error> {
     let loaded = Value::deserialize(env, bytes, metadata.ty.clone())?;
     // ByteValue::Receiving { id, version } => Value::receiving(*id, *version),
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
@@ -1655,11 +1657,11 @@ fn load_pure_value(
     Ok(loaded)
 }
 
-fn load_receiving_value(
+fn load_receiving_value<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env,
+    env: &Env<Mode>,
     metadata: &T::ReceivingInput,
-) -> Result<Value, ExecutionError> {
+) -> Result<Value, Mode::Error> {
     let (id, version, _) = metadata.object_ref;
     let loaded = Value::receiving(id, version);
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
@@ -1667,10 +1669,14 @@ fn load_receiving_value(
     Ok(loaded)
 }
 
-fn copy_value(meter: &mut GasCharger, env: &Env, value: &Value) -> Result<Value, ExecutionError> {
+fn copy_value<Mode: ExecutionMode>(
+    meter: &mut GasCharger,
+    env: &Env<Mode>,
+    value: &Value,
+) -> Result<Value, Mode::Error> {
     charge_gas_!(meter, env, charge_copy_loc, value)?;
     charge_gas_!(meter, env, charge_pop, value)?;
-    value.copy()
+    Ok(value.copy()?)
 }
 
 /// The max budget was deducted from the gas coin at the beginning of the transaction,
@@ -1888,7 +1894,7 @@ fn balance_change_accumulator_event(
 /// This function assumes proper generation of has_public_transfer, either from the abilities of
 /// the StructTag, or from the runtime correctly propagating from the inputs
 unsafe fn create_written_object<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<Mode>,
     objects_modified_at: &BTreeMap<ObjectID, LoadedRuntimeObject>,
     id: ObjectID,
     type_: Type,
@@ -1958,27 +1964,27 @@ pub fn subst_signature(
     })
 }
 
-pub enum EitherError {
+pub enum EitherError<E: ExecutionErrorTrait = ExecutionError> {
     CommandArgument(CommandArgumentError),
-    Execution(ExecutionError),
+    Execution(E),
 }
 
-impl From<ExecutionError> for EitherError {
+impl<E: ExecutionErrorTrait> From<ExecutionError> for EitherError<E> {
     fn from(e: ExecutionError) -> Self {
-        EitherError::Execution(e)
+        EitherError::Execution(e.into())
     }
 }
 
-impl From<CommandArgumentError> for EitherError {
+impl<E: ExecutionErrorTrait> From<CommandArgumentError> for EitherError<E> {
     fn from(e: CommandArgumentError) -> Self {
         EitherError::CommandArgument(e)
     }
 }
 
-impl EitherError {
-    pub fn into_execution_error(self, command_index: usize) -> ExecutionError {
+impl<E: ExecutionErrorTrait> EitherError<E> {
+    pub fn into_execution_error(self, command_index: usize) -> E {
         match self {
-            EitherError::CommandArgument(e) => command_argument_error(e, command_index),
+            EitherError::CommandArgument(e) => command_argument_error(e, command_index).into(),
             EitherError::Execution(e) => e,
         }
     }
@@ -2541,7 +2547,10 @@ fn assert_expected_move_object_type(
         "Actual type arg length does not match expected. \
        actual: {actual:?} vs expected: {expected:?}",
     );
-    for (actual_ty, expected_ty) in actual_type_arguments.iter().zip(&expected_type_arguments) {
+    for (actual_ty, expected_ty) in actual_type_arguments
+        .iter()
+        .zip_debug_eq(&expected_type_arguments)
+    {
         assert_expected_type(actual_ty, expected_ty)?;
     }
     Ok(())
@@ -2597,7 +2606,10 @@ fn assert_expected_data_type(
         "Actual type arg length does not match expected. \
        actual: {actual:?} vs expected: {expected:?}",
     );
-    for (actual_ty, expected_ty) in actual_type_arguments.iter().zip(expected_type_arguments) {
+    for (actual_ty, expected_ty) in actual_type_arguments
+        .iter()
+        .zip_debug_eq(expected_type_arguments)
+    {
         assert_expected_type(actual_ty, expected_ty)?;
     }
     Ok(())

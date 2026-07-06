@@ -87,7 +87,7 @@ impl TestRunner {
         for _ in 0..num {
             let gas_object_id = ObjectID::random();
             let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-            authority_state.insert_genesis_object(gas_object).await;
+            authority_state.insert_genesis_object(gas_object);
             gas_object_ids.push(gas_object_id);
         }
 
@@ -227,11 +227,10 @@ impl TestRunner {
         &mut self,
         executable: VerifiedExecutableTransaction,
     ) -> TransactionEffects {
-        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         assign_versions_and_schedule(&self.authority_state, &executable).await;
         let effects = self
             .authority_state
-            .wait_for_transaction_execution_for_testing(&executable, &epoch_store)
+            .wait_for_transaction_execution_for_testing(&executable)
             .await;
 
         if self.aggressive_pruning_enabled {

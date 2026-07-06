@@ -1,7 +1,7 @@
 //# run
-module 0x6.m {
+mvir 0x6::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u8 & 0u8 == 0u8, 1000);
     assert(0u64 & 0u64 == 0u64, 1001);
@@ -53,9 +53,9 @@ label b0:
 }
 
 //# run
-module 0x22.m {
+mvir 0x22::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u8 | 0u8 == 0u8, 2000);
     assert(0u64 | 0u64 == 0u64, 2001);
@@ -106,9 +106,9 @@ label b0:
 }
 
 //# run
-module 0x8.m {
+mvir 0x8::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u8 ^ 0u8 == 0u8, 3000);
     assert(0u64 ^ 0u64 == 0u64, 3001);

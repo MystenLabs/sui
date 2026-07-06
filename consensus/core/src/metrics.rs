@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use prometheus::{
-    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    exponential_buckets, register_histogram_vec_with_registry, register_histogram_with_registry,
+    Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry, exponential_buckets, register_gauge_vec_with_registry, register_gauge_with_registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
@@ -139,12 +140,14 @@ pub(crate) struct NodeMetrics {
     pub(crate) synchronizer_fetch_failures: IntCounterVec,
     pub(crate) synchronizer_skipped_fetch_requests: IntCounterVec,
     pub(crate) synchronizer_process_fetched_failures: IntCounterVec,
+    pub(crate) synchronizer_periodic_sync_decision: IntCounterVec,
     pub(crate) network_received_excluded_ancestors_from_authority: IntCounterVec,
     pub(crate) network_excluded_ancestors_sent_to_fetch: IntCounterVec,
     pub(crate) network_excluded_ancestors_count_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
+    pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
@@ -166,6 +169,10 @@ pub(crate) struct NodeMetrics {
     pub(crate) quorum_receive_latency: Histogram,
     pub(crate) block_receive_delay: IntCounterVec,
     pub(crate) reputation_scores: IntGaugeVec,
+    pub(crate) leader_schedule_total_scores: IntGaugeVec,
+    pub(crate) leader_schedule_normalized_scores: GaugeVec,
+    pub(crate) leader_schedule_last_num_leaders: IntGauge,
+    pub(crate) leader_schedule_average_num_leaders: Gauge,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
     pub(crate) block_suspensions: IntCounterVec,
@@ -208,12 +215,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) round_tracker_last_propagation_delay: IntGauge,
     pub(crate) round_prober_request_errors: IntCounterVec,
     pub(crate) certifier_gc_round: IntGauge,
-    pub(crate) certifier_block_latency: HistogramVec,
     pub(crate) certifier_own_reject_votes: IntCounterVec,
-    pub(crate) certifier_output_blocks: IntCounterVec,
-    pub(crate) certifier_rejected_transactions: IntCounterVec,
-    pub(crate) certifier_accepted_transactions: IntCounterVec,
-    pub(crate) certifier_missing_ancestor_during_certification: IntCounterVec,
     pub(crate) finalizer_buffered_commits: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
@@ -458,6 +460,12 @@ impl NodeMetrics {
                 &["peer", "type"],
                 registry,
             ).unwrap(),
+            synchronizer_periodic_sync_decision: register_int_counter_vec_with_registry!(
+                "synchronizer_periodic_sync_decision",
+                "Decision to run periodic sync",
+                &["decision", "reason"],
+                registry,
+            ).unwrap(),
             network_received_excluded_ancestors_from_authority: register_int_counter_vec_with_registry!(
                 "network_received_excluded_ancestors_from_authority",
                 "Number of excluded ancestors received from each authority.",
@@ -492,31 +500,6 @@ impl NodeMetrics {
                 &["authority", "source", "error"],
                 registry,
             ).unwrap(),
-            certifier_block_latency: register_histogram_vec_with_registry!(
-                "certifier_block_latency",
-                "The latency of a block being certified by the transaction certifier. The block's authority is the label",
-                &["authority"],
-                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            ).unwrap(),
-            certifier_rejected_transactions: register_int_counter_vec_with_registry!(
-                "certifier_rejected_transactions",
-                "Number of transactions rejected by authority in transaction certifier",
-                &["authority"],
-                registry,
-            ).unwrap(),
-            certifier_accepted_transactions: register_int_counter_vec_with_registry!(
-                "certifier_accepted_transactions",
-                "Number of transactions accepted by authority in transaction certifier",
-                &["authority"],
-                registry,
-            ).unwrap(),
-            certifier_missing_ancestor_during_certification: register_int_counter_vec_with_registry!(
-                "certifier_missing_ancestor_during_certification",
-                "Number of missing ancestors during certification",
-                &["reason"],
-                registry,
-            ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(
                 "rejected_blocks",
                 "Number of blocks rejected before verifications",
@@ -527,6 +510,12 @@ impl NodeMetrics {
                 "subscribed_blocks",
                 "Number of blocks received from each peer before verification",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            observer_subscribed_blocks_batch_size: register_histogram_with_registry!(
+                "observer_subscribed_blocks_batch_size",
+                "The number of blocks received from a peer before verification in a single batch",
+                NUM_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             verified_blocks: register_int_counter_vec_with_registry!(
@@ -633,6 +622,28 @@ impl NodeMetrics {
                 "reputation_scores",
                 "Reputation scores for each authority",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_total_scores: register_int_gauge_vec_with_registry!(
+                "leader_schedule_total_scores",
+                "LeaderScheduleV3 running per-authority score over the scoring window. Each commit contributes voted_for_stake * certified_by_stake (stake^2 units)",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_normalized_scores: register_gauge_vec_with_registry!(
+                "leader_schedule_normalized_scores",
+                "LeaderScheduleV3 per-authority total score divided by (running sum of per-commit leader stake) * committee total stake. Stake^2 over stake^2; a fraction with no stake dimension",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_last_num_leaders: register_int_gauge_with_registry!(
+                "leader_schedule_last_num_leaders",
+                "LeaderScheduleV3 number of leader-round blocks in the most recently scored commit",
+                registry,
+            ).unwrap(),
+            leader_schedule_average_num_leaders: register_gauge_with_registry!(
+                "leader_schedule_average_num_leaders",
+                "LeaderScheduleV3 moving average of the number of leaders per commit across the scoring window",
                 registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(
@@ -874,12 +885,6 @@ impl NodeMetrics {
                 "certifier_own_reject_votes",
                 "Number of own reject votes against each peer authority",
                 &["authority"],
-                registry
-            ).unwrap(),
-            certifier_output_blocks: register_int_counter_vec_with_registry!(
-                "certifier_output_blocks",
-                "Number of output blocks certified by the certifier, grouped by type.",
-                &["type"],
                 registry
             ).unwrap(),
             finalizer_buffered_commits: register_int_gauge_with_registry!(

@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/deny_module_level.move:4:13
+  │
+2 │ #[deny(unused_variable)]
+  │        --------------- the lint level is defined here
+3 │ module 0x42::m {
+4 │     fun foo(a: u64) {
+  │             ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+
+error[E09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/deny_module_level.move:5:13
+  │
+2 │ #[deny(unused_variable)]
+  │        --------------- the lint level is defined here
+  ·
+5 │         let x;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+
+error[E09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/deny_module_level.move:8:13
+  │
+2 │ #[deny(unused_variable)]
+  │        --------------- the lint level is defined here
+  ·
+8 │     fun bar(b: u64) {
+  │             ^ Unused parameter 'b'. Consider removing or prefixing with an underscore: '_b'
+
+error[E09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/deny_module_level.move:9:13
+  │
+2 │ #[deny(unused_variable)]
+  │        --------------- the lint level is defined here
+  ·
+9 │         let y;
+  │             ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'

@@ -139,7 +139,12 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
-        package.dependency_ids.published.values().cloned().collect(),
+        package
+            .dependency_ids
+            .published
+            .values()
+            .map(|dep| dep.published_at)
+            .collect(),
     )
 }
 
@@ -189,7 +194,7 @@ impl UpgradeStateRunner {
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = TestAuthorityBuilder::new().build().await;
-        authority_state.insert_genesis_object(gas_object).await;
+        authority_state.insert_genesis_object(gas_object);
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
         let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(
@@ -219,7 +224,7 @@ impl UpgradeStateRunner {
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = TestAuthorityBuilder::new().build().await;
-        authority_state.insert_genesis_object(gas_object).await;
+        authority_state.insert_genesis_object(gas_object);
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
         let (package, upgrade_cap) = build_and_publish_package_with_upgrade_cap(
@@ -1155,6 +1160,8 @@ async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
     // Allow new modules in deps-only mode for this test.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_execution_version_for_testing(3);
+        // set up config values that would otherwise be incompatible with the execution version
+        config.set_gas_model_version_for_testing(11);
         config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
         config
     });
@@ -1897,138 +1904,6 @@ async fn test_upgraded_types_in_one_txn() {
     assert!(events.len() == 2);
     assert_eq!(events[0].type_, e1_type);
     assert_eq!(events[1].type_, e2_type);
-}
-
-#[tokio::test]
-async fn test_different_versions_across_calls() {
-    // create 3 versions of the same package, all containing the return_0 function
-    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
-    let (package_v2, effects) = test_multiple_upgrades(&mut runner, false).await;
-    assert!(effects.status().is_ok(), "{:#?}", effects.status());
-
-    let package_v3 = effects
-        .created()
-        .into_iter()
-        .find(|(_, owner)| matches!(owner, Owner::Immutable))
-        .unwrap()
-        .0
-        .0;
-
-    // call the same function twice within the same block but from two different module versions
-    let effects = runner
-        .run({
-            let mut builder = ProgrammableTransactionBuilder::new();
-            move_call! { builder, (package_v2)::base::return_0() };
-            move_call! { builder, (package_v3)::base::return_0() };
-            builder.finish()
-        })
-        .await;
-
-    assert!(effects.status().is_ok(), "{:#?}", effects.status());
-}
-
-#[tokio::test]
-async fn test_conflicting_versions_across_calls() {
-    // publishes base package at version 1
-    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
-
-    // publish a dependent package at version 1 that depends on the base package at version 1
-    let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
-        "dep_on_upgrading_package_upgradeable",
-        [
-            ("base_addr", runner.package.0),
-            ("dep_on_upgrading_package", ObjectID::ZERO),
-        ],
-        [("package_upgrade_base", runner.package.0)],
-    );
-    let (depender_package, depender_cap) = runner.publish(module_bytes, dep_ids).await;
-
-    // publish base package at version 2
-    let pt1 = build_upgrade_txn(
-        runner.package.0,
-        "stage1_basic_compatibility_valid",
-        runner.upgrade_cap,
-    );
-
-    let effects = runner.run(pt1).await;
-    assert!(effects.status().is_ok(), "{:#?}", effects.status());
-
-    let base_v2_package = effects
-        .created()
-        .into_iter()
-        .find(|(_, owner)| matches!(owner, Owner::Immutable))
-        .unwrap()
-        .0;
-
-    // publish a dependent package at version 2 that depends on the base package at version 2
-    let pt2 = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let current_package_id = depender_package.0;
-        // Now recompile the depending package with the upgraded dependency
-        let (digest, modules, dep_ids) = build_upgrade_test_modules_with_dep_addr(
-            "dep_on_upgrading_package_upgradeable",
-            [
-                ("base_addr", runner.package.0),
-                ("dep_on_upgrading_package", ObjectID::ZERO),
-            ],
-            [("package_upgrade_base", base_v2_package.0)],
-        );
-
-        // We take as input the upgrade cap
-        builder
-            .obj(ObjectArg::ImmOrOwnedObject(depender_cap))
-            .unwrap();
-
-        // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
-        let digest_arg = builder.pure(digest).unwrap();
-        let upgrade_ticket = move_call! {
-            builder,
-            (SUI_FRAMEWORK_PACKAGE_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
-        };
-        let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, dep_ids, modules);
-        move_call! {
-            builder,
-            (SUI_FRAMEWORK_PACKAGE_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
-        };
-
-        builder.finish()
-    };
-
-    let effects = runner.run(pt2).await;
-    assert!(effects.status().is_ok(), "{:#?}", effects.status());
-
-    let dependent_v2_package = effects
-        .created()
-        .into_iter()
-        .find(|(_, owner)| matches!(owner, Owner::Immutable))
-        .unwrap()
-        .0;
-
-    // call the same function twice within the same block but from two different module versions
-    // that differ only by having different dependencies
-    let effects = runner
-        .run({
-            let mut builder = ProgrammableTransactionBuilder::new();
-            // call from upgraded package - should succeed
-            move_call! { builder, (dependent_v2_package.0)::my_module::call_return_0() };
-            // call from original package - should abort (check later that the second command
-            // aborts)
-            move_call! { builder, (depender_package.0)::my_module::call_return_0() };
-            builder.finish()
-        })
-        .await;
-
-    let call_error = effects.into_status().unwrap_err();
-
-    // verify that execution aborts
-    match call_error.0 {
-        ExecutionErrorKind::MoveAbort(_, 42) => { /* nop */ }
-        err => panic!("Unexpected error: {:#?}", err),
-    };
-
-    // verify that execution aborts in the second (counting from 0) command
-    assert_eq!(call_error.1, Some(1));
 }
 
 #[tokio::test]

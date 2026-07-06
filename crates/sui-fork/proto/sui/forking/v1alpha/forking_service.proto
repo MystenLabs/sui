@@ -1,0 +1,56 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+package sui.forking.v1alpha;
+
+// Administrative service for controlling a forked Sui network.
+service ForkingService {
+  // Advance the forked network's clock by a given duration.
+  rpc AdvanceClock(AdvanceClockRequest) returns (AdvanceClockResponse);
+
+  // Seal pending transactions into a new checkpoint.
+  rpc AdvanceCheckpoint(AdvanceCheckpointRequest) returns (AdvanceCheckpointResponse);
+
+  // Return the current state of the forked network.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+message AdvanceClockRequest {
+  // Duration in milliseconds to advance the clock. Defaults to 1 if unset.
+  optional uint64 duration_ms = 1;
+}
+
+message AdvanceClockResponse {
+  // Clock timestamp after advancing (milliseconds since Unix epoch).
+  uint64 timestamp_ms = 1;
+
+  // Digest of the ConsensusCommitPrologue transaction that advanced the clock.
+  string tx_digest = 2;
+}
+
+message AdvanceCheckpointRequest {}
+
+message AdvanceCheckpointResponse {
+  // Sequence number of the newly created checkpoint.
+  uint64 checkpoint_sequence_number = 1;
+
+  // Timestamp embedded in the checkpoint (milliseconds since Unix epoch).
+  uint64 timestamp_ms = 2;
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  // Current epoch of the forked network.
+  uint64 epoch = 1;
+
+  // Latest checkpoint sequence number.
+  uint64 checkpoint_sequence_number = 2;
+
+  // Current clock timestamp (milliseconds since Unix epoch).
+  uint64 timestamp_ms = 3;
+
+  // The upstream checkpoint at which the fork was created.
+  uint64 forked_at_checkpoint = 4;
+}

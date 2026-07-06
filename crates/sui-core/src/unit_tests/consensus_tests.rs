@@ -7,7 +7,13 @@ use std::time::Duration;
 use super::*;
 use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
 
-use crate::consensus_test_utils::make_consensus_adapter_for_test;
+use crate::authority::consensus_tx_status_cache::{
+    CONSENSUS_STATUS_RETENTION_ROUNDS, ConsensusTxStatus,
+};
+use crate::consensus_test_utils::{
+    make_consensus_adapter_for_test, make_consensus_adapter_for_test_with_submit_limit,
+    make_consensus_adapter_with_client_for_test,
+};
 use crate::mock_consensus::with_block_status;
 use consensus_core::BlockStatus;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
@@ -16,8 +22,10 @@ use move_core_types::{account_address::AccountAddress, ident_str};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng, thread_rng};
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key};
+use sui_types::error::SuiErrorKind;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
@@ -74,7 +82,7 @@ pub async fn test_user_transactions_with_gas_objects(
     };
     for gas_object in gas_objects {
         // Object digest may be different in genesis than originally generated.
-        let gas_object = authority.get_object(&gas_object.id()).await.unwrap();
+        let gas_object = authority.get_object(&gas_object.id()).unwrap();
         // Make a sample transaction.
         let module = "object_basics";
         let function = "create";
@@ -122,10 +130,10 @@ pub async fn test_user_transaction(
     let rgp = epoch_store.reference_gas_price();
 
     // Object digest may be different in genesis than originally generated.
-    let gas_object = authority.get_object(&gas_object.id()).await.unwrap();
+    let gas_object = authority.get_object(&gas_object.id()).unwrap();
     let mut input_objs = vec![];
     for obj in input_objects {
-        input_objs.push(authority.get_object(&obj.id()).await.unwrap());
+        input_objs.push(authority.get_object(&obj.id()).unwrap());
     }
 
     let mut object_args: Vec<_> = input_objs
@@ -264,6 +272,64 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
 }
 
 #[sim_test]
+async fn system_message_bypasses_exhausted_submit_semaphore() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut objects = test_gas_objects();
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
+    let state = init_state_with_objects(objects).await;
+    let user_tx = test_user_transactions(&state, shared_object)
+        .await
+        .pop()
+        .unwrap();
+    let epoch_store = state.epoch_store_for_testing();
+
+    // Zero submit permits: any transaction that must acquire the submit semaphore
+    // blocks indefinitely. The one mock block status is reserved for the system
+    // message, which is the only submission expected to reach consensus.
+    let adapter = make_consensus_adapter_for_test_with_submit_limit(
+        state.clone(),
+        HashSet::new(),
+        false,
+        vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
+        0,
+    );
+
+    // A user transaction cannot acquire a permit, so it blocks.
+    let user_consensus_tx =
+        ConsensusTransaction::new_user_transaction_v2_message(&state.name, user_tx.into());
+    let mut user_waiter = adapter
+        .submit(
+            user_consensus_tx,
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), &mut user_waiter)
+            .await
+            .is_err(),
+        "user transaction must block on the exhausted submit semaphore"
+    );
+    // The submission is parked on the semaphore forever; abort it so it does not
+    // outlive the test.
+    user_waiter.abort();
+
+    // The system message bypasses the semaphore and completes.
+    let end_of_publish = ConsensusTransaction::new_end_of_publish(state.name);
+    let system_waiter = adapter
+        .submit(end_of_publish, None, &epoch_store, None, None)
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(10), system_waiter)
+        .await
+        .expect("system message must not block on an exhausted submit semaphore")
+        .unwrap();
+}
+
+#[sim_test]
 async fn submit_checkpoint_signature_to_consensus_adapter() {
     telemetry_subscribers::init_for_testing();
 
@@ -380,7 +446,7 @@ async fn submit_empty_array_of_transactions_to_consensus_adapter() {
         .unwrap();
     waiter.await.unwrap();
 
-    let consensus_position = rx_consensus_position.await.unwrap();
+    let consensus_position = rx_consensus_position.await.unwrap().unwrap();
     assert_eq!(
         consensus_position,
         vec![ConsensusPosition {
@@ -389,4 +455,289 @@ async fn submit_empty_array_of_transactions_to_consensus_adapter() {
             index: PING_TRANSACTION_INDEX,
         }]
     );
+}
+
+// When a transaction that is requesting a consensus position (e.g. mfp) has already been
+// processed via consensus output, the adapter must NOT resubmit it. Instead it reports that
+// the transaction is already processing, so the caller can return a retriable error to the
+// client rather than a (now meaningless) consensus position.
+#[tokio::test]
+async fn submit_already_processed_transaction_returns_processing_error() {
+    telemetry_subscribers::init_for_testing();
+
+    // Initialize an authority with gas and a shared object, then build a user transaction.
+    let mut objects = test_gas_objects();
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
+    let state = init_state_with_objects(objects).await;
+    let transaction = test_user_transactions(&state, shared_object)
+        .await
+        .into_iter()
+        .next()
+        .unwrap();
+    let epoch_store = state.epoch_store_for_testing();
+    let tx_digest = *transaction.tx().digest();
+
+    // Simulate the transaction already appearing in consensus output before this submission.
+    epoch_store.test_insert_user_signature(tx_digest, vec![]);
+
+    // A mock block status receiver is provided so that, if the adapter were to (incorrectly)
+    // submit, it could complete and return positions, surfacing the regression as a failure.
+    let adapter = make_consensus_adapter_for_test(
+        state.clone(),
+        HashSet::new(),
+        false,
+        vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
+    );
+
+    let consensus_tx =
+        ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+
+    let result = adapter
+        .submit_and_get_positions(vec![consensus_tx], &epoch_store, None)
+        .await;
+
+    match result {
+        Err(err) => assert!(
+            matches!(
+                err.as_inner(),
+                SuiErrorKind::TransactionProcessing { digest, .. } if *digest == tx_digest
+            ),
+            "expected TransactionProcessing error, got: {err}"
+        ),
+        Ok(positions) => {
+            panic!("expected TransactionProcessing error, got positions: {positions:?}")
+        }
+    }
+}
+
+fn test_block_ref(round: u32) -> BlockRef {
+    BlockRef {
+        author: consensus_config::AuthorityIndex::ZERO,
+        round,
+        digest: Default::default(),
+    }
+}
+
+fn test_position(
+    epoch: sui_types::base_types::EpochId,
+    round: u32,
+    index: u16,
+) -> ConsensusPosition {
+    ConsensusPosition {
+        epoch,
+        block: test_block_ref(round),
+        index,
+    }
+}
+
+/// Test client that sequences every submission but never fires processed notifications,
+/// mimicking the real consensus path for a transaction that reaches consensus output
+/// without being finalized (voted rejected, or dropped post-consensus): the commit
+/// handler assigns the position a terminal status but never records the digest as
+/// consensus-processed. The nth submission lands in a block with `block_rounds[n]`
+/// (clamped to the last entry), making resubmissions observable as distinct positions.
+struct SequenceOnlyClient {
+    block_rounds: Vec<u32>,
+    submission_count: std::sync::atomic::AtomicUsize,
+}
+
+impl SequenceOnlyClient {
+    fn new(block_rounds: Vec<u32>) -> Self {
+        Self {
+            block_rounds,
+            submission_count: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    fn submissions(&self) -> usize {
+        self.submission_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+#[async_trait::async_trait]
+impl ConsensusClient for SequenceOnlyClient {
+    async fn submit(
+        &self,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
+        let n = self
+            .submission_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let round = self.block_rounds[n.min(self.block_rounds.len() - 1)];
+        let positions = (0..transactions.len())
+            .map(|index| test_position(epoch_store.epoch(), round, index as u16))
+            .collect();
+        Ok((
+            positions,
+            with_block_status(BlockStatus::Sequenced(test_block_ref(round))),
+        ))
+    }
+}
+
+async fn wait_for_condition(mut condition: impl FnMut() -> bool) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !condition() {
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("condition not reached in time");
+}
+
+// A transaction that consensus sequences but votes to reject never gets its digest
+// recorded as consensus-processed. The adapter must settle the submission via the
+// per-position Rejected status instead of holding its inflight slot and submit
+// semaphore permit until end of epoch.
+#[tokio::test]
+async fn adapter_settles_submission_on_rejected_position_status() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut objects = test_gas_objects();
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
+    let state = init_state_with_objects(objects).await;
+    let transaction = test_user_transactions(&state, shared_object)
+        .await
+        .pop()
+        .unwrap();
+    let epoch_store = state.epoch_store_for_testing();
+
+    let client = Arc::new(SequenceOnlyClient::new(vec![1]));
+    let adapter = make_consensus_adapter_with_client_for_test(&state, client, 100);
+
+    let consensus_tx =
+        ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+    let waiter = adapter
+        .submit(
+            consensus_tx,
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+            None,
+            None,
+        )
+        .unwrap();
+
+    // The commit handler's side of the contract: the sequenced position receives a
+    // terminal status.
+    epoch_store
+        .consensus_tx_status_cache
+        .set_transaction_status(
+            test_position(epoch_store.epoch(), 1, 0),
+            ConsensusTxStatus::Rejected,
+        );
+
+    tokio::time::timeout(Duration::from_secs(10), waiter)
+        .await
+        .expect("adapter task should settle when its position is rejected")
+        .unwrap();
+    assert_eq!(adapter.num_inflight_transactions(), 0);
+}
+
+// A soft bundle settles once every position has a terminal status, even when the
+// outcomes are mixed and some transactions are never recorded as processed.
+#[tokio::test]
+async fn adapter_settles_soft_bundle_on_mixed_position_statuses() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut objects = test_gas_objects();
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
+    let state = init_state_with_objects(objects).await;
+    let transactions = test_user_transactions(&state, shared_object).await;
+    let epoch_store = state.epoch_store_for_testing();
+
+    let client = Arc::new(SequenceOnlyClient::new(vec![1]));
+    let adapter = make_consensus_adapter_with_client_for_test(&state, client, 100);
+
+    let consensus_transactions = transactions
+        .into_iter()
+        .take(2)
+        .map(|tx| ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into()))
+        .collect::<Vec<_>>();
+    let waiter = adapter
+        .submit_batch(
+            &consensus_transactions,
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+            None,
+            None,
+        )
+        .unwrap();
+
+    epoch_store
+        .consensus_tx_status_cache
+        .set_transaction_status(
+            test_position(epoch_store.epoch(), 1, 0),
+            ConsensusTxStatus::Finalized,
+        );
+    epoch_store
+        .consensus_tx_status_cache
+        .set_transaction_status(
+            test_position(epoch_store.epoch(), 1, 1),
+            ConsensusTxStatus::Rejected,
+        );
+
+    tokio::time::timeout(Duration::from_secs(10), waiter)
+        .await
+        .expect("adapter task should settle when all bundle positions have terminal statuses")
+        .unwrap();
+    assert_eq!(adapter.num_inflight_transactions(), 0);
+}
+
+// If a position expires from the status cache before its status is read (the validator
+// lagged more than the retention window behind consensus), the submission ends without
+// resubmitting: the block was committed and its commit processed long ago, so a
+// terminal outcome existed and was merely missed. A finalized transaction needs
+// nothing further from this task, and transaction-level retries belong to the client.
+#[tokio::test]
+async fn adapter_settles_without_retry_on_expired_position_status() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut objects = test_gas_objects();
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
+    let state = init_state_with_objects(objects).await;
+    let transaction = test_user_transactions(&state, shared_object)
+        .await
+        .pop()
+        .unwrap();
+    let epoch_store = state.epoch_store_for_testing();
+
+    let client = Arc::new(SequenceOnlyClient::new(vec![1]));
+    let adapter = make_consensus_adapter_with_client_for_test(&state, client.clone(), 100);
+
+    let consensus_tx =
+        ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+    let waiter = adapter
+        .submit(
+            consensus_tx,
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+            None,
+            None,
+        )
+        .unwrap();
+
+    let client_clone = client.clone();
+    wait_for_condition(move || client_clone.submissions() == 1).await;
+
+    // Expire the position without ever setting its status. The expiry watch publishes
+    // the previous committed leader round, so two updates are needed for round 1 to
+    // fall out of the retention window.
+    epoch_store
+        .consensus_tx_status_cache
+        .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 100);
+    epoch_store
+        .consensus_tx_status_cache
+        .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 101);
+
+    tokio::time::timeout(Duration::from_secs(10), waiter)
+        .await
+        .expect("adapter task should settle when its position status expires")
+        .unwrap();
+    assert_eq!(client.submissions(), 1);
+    assert_eq!(adapter.num_inflight_transactions(), 0);
 }

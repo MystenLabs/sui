@@ -24,6 +24,7 @@ use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, fetch_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
 use json_to_table::{Orientation, json_to_table};
+use mysten_common::ZipDebugEqIteratorExt;
 use num_bigint::BigUint;
 use rand::Rng;
 use rand::SeedableRng;
@@ -534,7 +535,7 @@ impl KeyToolCommand {
                     sig_verify_result: "".to_string(),
                 };
 
-                for (sig, i) in sigs.iter().zip(bitmap) {
+                for (sig, i) in sigs.iter().zip_debug_eq(bitmap) {
                     let (pk, w) = pks
                         .get(i as usize)
                         .ok_or(anyhow!("Invalid public keys index".to_string()))?;
@@ -769,7 +770,7 @@ impl KeyToolCommand {
                     multisig: vec![],
                 };
 
-                for (pk, w) in pks.into_iter().zip(weights.into_iter()) {
+                for (pk, w) in pks.into_iter().zip_debug_eq(weights.into_iter()) {
                     output.multisig.push(MultiSigOutput {
                         address: Into::<SuiAddress>::into(&pk),
                         public_base64_key: pk.encode_base64(),
@@ -863,7 +864,7 @@ impl KeyToolCommand {
                 let intent_msg = IntentMessage::new(intent, msg);
                 let raw_intent_msg: String = Base64::encode(bcs::to_bytes(&intent_msg)?);
                 let mut hasher = DefaultHash::default();
-                hasher.update(bcs::to_bytes(&intent_msg)?);
+                bcs::serialize_into(&mut hasher, &intent_msg)?;
                 let digest = hasher.finalize().digest;
                 let sui_signature = context
                     .sign_secure(&address.into(), &intent_msg.value, intent_msg.intent)
@@ -902,7 +903,7 @@ impl KeyToolCommand {
                     Base64::encode(bcs::to_bytes(&intent_msg)?)
                 );
                 let mut hasher = DefaultHash::default();
-                hasher.update(bcs::to_bytes(&intent_msg)?);
+                bcs::serialize_into(&mut hasher, &intent_msg)?;
                 let digest = hasher.finalize().digest;
                 info!("Digest to sign: {:?}", Base64::encode(digest));
 
@@ -1390,6 +1391,13 @@ impl From<PublicKey> for Key {
             flag: pk.flag(),
             peer_id: anemo_styling(&pk),
         }
+    }
+}
+
+impl Key {
+    pub(crate) fn with_mnemonic(mut self, mnemonic: Option<String>) -> Self {
+        self.mnemonic = mnemonic;
+        self
     }
 }
 

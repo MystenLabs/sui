@@ -197,6 +197,7 @@ impl Mimir<remote_write::TimeSeries> {
 pub mod tests {
     use crate::prom_to_mimir::Mimir;
     use crate::remote_write;
+    use mysten_common::ZipDebugEqIteratorExt;
     use prometheus::proto;
 
     // protobuf stuff
@@ -373,10 +374,10 @@ pub mod tests {
         ];
         for (mf, expected_ts) in tests {
             // TODO stop using state directly
-            for (actual, expected) in Mimir::from(mf).state.into_iter().zip(expected_ts) {
+            for (actual, expected) in Mimir::from(mf).state.into_iter().zip_debug_eq(expected_ts) {
                 assert_eq!(actual.labels, expected.labels);
                 for (actual_sample, expected_sample) in
-                    actual.samples.into_iter().zip(expected.samples)
+                    actual.samples.into_iter().zip_debug_eq(expected.samples)
                 {
                     assert_eq!(
                         actual_sample.value, expected_sample.value,

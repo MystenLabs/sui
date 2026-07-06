@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 22 tasks
 
@@ -14,23 +15,23 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 gas summary: computation_cost: 1000000, storage_cost: 22002000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 74-76:
-//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(2,0)
-mutated: object(0,0), object(1,1)
+mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
 task 3, lines 77-79:
-//# run test::regulated_coin::partial_wrap --args object(1,1) --sender A
+//# run test::regulated_coin::partial_wrap --args object(1,5) --sender A
 created: object(3,0)
-mutated: object(0,0), object(1,1)
+mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4119200,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
 task 4, lines 80-82:
-//# run test::regulated_coin::partial_wrap --args object(1,1) --sender A
+//# run test::regulated_coin::partial_wrap --args object(1,5) --sender A
 created: object(4,0)
-mutated: object(0,0), object(1,1)
+mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4119200,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
@@ -48,7 +49,7 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, lines 89-91:
-//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 Error: Error checking transaction input objects: Coin type is globally paused for use: object(1,0)::regulated_coin::REGULATED_COIN
 
 task 8, lines 92-94:
@@ -77,7 +78,7 @@ Error: Transaction Effects Status: Coin type is globally paused for use: test::r
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
 
 task 13, lines 108-110:
-//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 Error: Error checking transaction input objects: Coin type is globally paused for use: object(1,0)::regulated_coin::REGULATED_COIN
 
 task 14, lines 111-113:
@@ -98,15 +99,15 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17, lines 120-122:
-//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
 
 task 18, lines 123-126:
-//# run test::regulated_coin::full_wrap --args object(1,1) --sender A
+//# run test::regulated_coin::full_wrap --args object(1,5) --sender A
 created: object(18,0)
 mutated: object(0,0)
-wrapped: object(1,1)
+wrapped: object(1,5)
 gas summary: computation_cost: 1000000, storage_cost: 2644800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
 task 19, line 127:
@@ -121,7 +122,7 @@ Epoch advanced: 2
 task 21, line 132:
 //# run test::regulated_coin::unwrap --args object(18,0) --sender A
 mutated: object(0,0)
-unwrapped: object(1,1)
+unwrapped: object(1,5)
 deleted: object(18,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2618352, non_refundable_storage_fee: 26448

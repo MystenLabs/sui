@@ -30,6 +30,7 @@ use sui_rpc_resolver::package_store::RpcPackageStore;
 
 use crate::config::IndexerConfig;
 use crate::config::OutputStoreConfig;
+use crate::handlers::system_package_eviction::SYSTEM_PACKAGE_EVICTION_PIPELINE;
 use crate::handlers::system_package_eviction::SystemPackageEviction;
 use crate::metrics::Metrics;
 use crate::progress_monitoring::spawn_snowflake_monitors;
@@ -67,7 +68,7 @@ pub async fn build_analytics_indexer(
 
     let mut pipeline_filter = indexer_args.pipeline;
     if !pipeline_filter.is_empty() {
-        pipeline_filter.push("SystemPackageEviction".to_string());
+        pipeline_filter.push(SYSTEM_PACKAGE_EVICTION_PIPELINE.to_string());
     }
 
     let adjusted_indexer_args = IndexerArgs {

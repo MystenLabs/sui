@@ -25,6 +25,7 @@ use tokio::sync::OnceCell;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::digest::Digest;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::owner_kind::OwnerKind;
 use crate::api::scalars::sui_address::SuiAddress;
@@ -49,7 +50,9 @@ use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::owner::Owner;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction_object::TransactionObject;
 use crate::config::Limits;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
@@ -171,6 +174,24 @@ impl DynamicField {
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
     pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Option<Result<String, RpcError>> {
         self.super_.digest(ctx).await.ok()?
+    }
+
+    /// How this object was referenced by a specific transaction.
+    ///
+    /// Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+    ///
+    /// The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+    ///
+    /// Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+    pub(crate) async fn as_transaction_object(
+        &self,
+        ctx: &Context<'_>,
+        transaction_digest: Option<Digest>,
+    ) -> Option<Result<TransactionObject, RpcError>> {
+        self.super_
+            .as_transaction_object(ctx, transaction_digest)
+            .await
+            .ok()?
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -415,7 +436,7 @@ impl DynamicField {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         self.super_
             .received_transactions(ctx, first, after, last, before, filter)
             .await
@@ -565,10 +586,10 @@ impl DynamicField {
 
         #[async_trait]
         impl sui_display::v2::Store for NopStore {
-            async fn object(
+            async fn latest(
                 &self,
                 _: AccountAddress,
-            ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+            ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
                 bail!("Dynamic loads not supported")
             }
         }
@@ -576,10 +597,8 @@ impl DynamicField {
         let limits: &Limits = ctx.data()?;
         let limits = limits.display();
 
-        let root = sui_display::v2::OwnedSlice {
-            layout: MoveTypeLayout::Bool,
-            bytes: bcs::to_bytes(&false).unwrap(),
-        };
+        let root =
+            sui_display::v2::OwnedSlice::new(MoveTypeLayout::Bool, bcs::to_bytes(&false).unwrap());
 
         let parsed =
             sui_display::v2::Name::parse(limits, &literal).map_err(|e| bad_user_input(e.into()))?;

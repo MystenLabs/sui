@@ -1,0 +1,16 @@
+#!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Stub `npm` used by sui_move_format_tests/missing_tool_npm_present_no_tty.
+# Only `npm --version` should ever be called (by `sui move format`'s probe);
+# the install path must be aborted because stdin is not a TTY. Any other
+# invocation here would indicate a regression.
+
+if [ "$1" = "--version" ]; then
+    echo "10.0.0"
+    exit 0
+fi
+
+echo "ERROR: stub npm should not have been invoked with: $*" >&2
+exit 99

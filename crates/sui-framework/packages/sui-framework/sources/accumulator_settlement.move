@@ -110,7 +110,7 @@ fun hash_two_to_one_u256(left: u256, right: u256): u256 {
 }
 
 fun new_stream_head(new_root: u256, event_count_delta: u64, checkpoint_seq: u64): EventStreamHead {
-    let mut initial_mmr = vector::empty();
+    let mut initial_mmr = vector[];
     add_to_mmr(new_root, &mut initial_mmr);
     EventStreamHead {
         mmr: initial_mmr,
@@ -144,7 +144,7 @@ fun settle_events(
 
 #[test]
 fun test_mmr_addition() {
-    let mut mmr = vector::empty();
+    let mut mmr = vector[];
     let fixed_leaf: u256 = 2;
 
     // Initial MMR should be empty
@@ -152,22 +152,22 @@ fun test_mmr_addition() {
 
     // Round 1: Add first element - should be at position 0
     add_to_mmr(fixed_leaf, &mut mmr);
-    assert!(vector::map_ref!(&mmr, |x| *x == 0) == 
+    assert!(vector::map_ref!(&mmr, |x| *x == 0) ==
             vector[false]);
 
     // Round 2: Add second element - should trigger merge and clear position 0
     add_to_mmr(fixed_leaf, &mut mmr);
-    assert!(vector::map_ref!(&mmr, |x| *x == 0) == 
+    assert!(vector::map_ref!(&mmr, |x| *x == 0) ==
             vector[true, false]);
 
     // Round 3: Add third element - should place at position 0
     add_to_mmr(fixed_leaf, &mut mmr);
-    assert!(vector::map_ref!(&mmr, |x| *x == 0) == 
+    assert!(vector::map_ref!(&mmr, |x| *x == 0) ==
             vector[false, false]);
 
     // Round 4: Add fourth element - should trigger cascade merge to position 2
     add_to_mmr(fixed_leaf, &mut mmr);
-    assert!(vector::map_ref!(&mmr, |x| *x == 0) == 
+    assert!(vector::map_ref!(&mmr, |x| *x == 0) ==
             vector[true, true, false]);
 
     // Verify the final hash represents all 4 elements
@@ -179,7 +179,7 @@ fun test_mmr_addition() {
 
 #[test]
 fun test_mmr_with_different_values() {
-    let mut mmr = vector::empty();
+    let mut mmr = vector[];
 
     // Create different u256 values like we would get from different events
     let val1: u256 = 1;
@@ -213,7 +213,7 @@ fun test_mmr_with_different_values() {
 
 #[test]
 fun test_mmr_digest_compat_with_rust() {
-    let mut mmr = vector::empty();
+    let mut mmr = vector[];
     let count = 8;
 
     let mut i = 0;

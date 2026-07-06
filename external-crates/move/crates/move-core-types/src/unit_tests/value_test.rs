@@ -11,6 +11,10 @@ use crate::{
 };
 use serde_json::json;
 
+fn deser_annotated_value(blob: &[u8], layout: &A::MoveTypeLayout) -> A::MoveValue {
+    bcs::from_bytes_seed(layout, blob).unwrap()
+}
+
 #[test]
 fn check_layout_size() {
     assert_eq!(std::mem::size_of::<R::MoveTypeLayout>(), 16);
@@ -51,11 +55,10 @@ fn struct_deserialization() {
         .collect(),
     };
 
-    let deser_typed_value = A::MoveValue::simple_deserialize(
+    let deser_typed_value = deser_annotated_value(
         &ser,
         &A::MoveTypeLayout::Struct(Box::new(struct_type_layout)),
-    )
-    .unwrap();
+    );
     let typed_value = A::MoveStruct::new(struct_type, field_values);
 
     assert_eq!(
@@ -164,11 +167,10 @@ fn enum_deserialization() {
         json!([1, [8, false, 0]])
     );
 
-    let deser_typed_value = A::MoveValue::simple_deserialize(
+    let deser_typed_value = deser_annotated_value(
         &ser,
         &A::MoveTypeLayout::Enum(Box::new(enum_type_layout.clone())),
-    )
-    .unwrap();
+    );
     let typed_value = A::MoveVariant {
         type_: enum_type.clone(),
         variant_name: ident_str!("Variant1").to_owned(),
@@ -192,11 +194,8 @@ fn enum_deserialization() {
     let ser1 = R::MoveValue::Variant(runtime_value.clone())
         .simple_serialize()
         .unwrap();
-    let deser1_typed_value = A::MoveValue::simple_deserialize(
-        &ser1,
-        &A::MoveTypeLayout::Enum(Box::new(enum_type_layout)),
-    )
-    .unwrap();
+    let deser1_typed_value =
+        deser_annotated_value(&ser1, &A::MoveTypeLayout::Enum(Box::new(enum_type_layout)));
     let typed_value = A::MoveVariant {
         type_: enum_type,
         variant_name: ident_str!("Variant2").to_owned(),

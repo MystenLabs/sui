@@ -200,7 +200,7 @@ impl DBOptions {
         self
     }
 
-    // Optimize tables receiving significant insertions without any deletions.
+    // Optimize tables receiving significant insertions without any deletions, using FIFO compaction.
     // These tables are dropped with the DBs, for example the epoch and consensus DBs.
     pub fn optimize_for_no_deletion(mut self) -> DBOptions {
         // Increase write buffer size to 256MiB.

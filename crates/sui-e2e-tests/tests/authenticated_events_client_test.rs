@@ -22,7 +22,6 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 
 fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
-        authenticated_events_indexing: Some(true),
         enable_indexing: Some(true),
         ..Default::default()
     }
@@ -516,17 +515,32 @@ async fn test_client_pruned_checkpoint_error() {
         .await;
 
     let Err(e) = result else {
-        panic!("Expected error for pruned checkpoint, but stream creation succeeded");
+        panic!(
+            "Expected error resuming from an unmodifiable checkpoint, but stream creation succeeded"
+        );
     };
 
-    assert!(
-        matches!(
-            e,
-            sui_light_client::authenticated_events::ClientError::RpcError(_)
+    // Two outcomes are valid for resuming at a checkpoint that didn't emit
+    // any events on this stream:
+    //   * `RpcError` (NotFound) — the checkpoint was actually pruned before
+    //     the resume request landed.
+    //   * `InternalError` carrying "EventStreamHead was not updated" — the
+    //     checkpoint is still retained but never modified the head, so the
+    //     server returned a non-inclusion proof and the client surfaces it
+    //     as an internal error.
+    // The test relies on cluster pruning to flush a stale checkpoint within
+    // the 2-epoch window, but cluster timing is not strict; both shapes
+    // confirm the client refused to silently resume from a checkpoint with
+    // no committed head update.
+    use sui_light_client::authenticated_events::ClientError;
+    match &e {
+        ClientError::RpcError(status) if status.code() == tonic::Code::NotFound => {}
+        ClientError::InternalError(msg) if msg.contains("EventStreamHead was not updated") => {}
+        other => panic!(
+            "Expected RpcError(NotFound) or InternalError(\"...not updated...\"), got: {:?}",
+            other
         ),
-        "Expected RpcError for pruned checkpoint, got: {:?}",
-        e
-    );
+    }
 }
 
 #[sim_test]
@@ -707,7 +721,6 @@ async fn test_client_pagination_limit_forward_progress() {
     let config = sui_light_client::authenticated_events::ClientConfig::new(
         5,                                     /* page_size */
         std::time::Duration::from_millis(100), /* poll_interval */
-        2,                                     /* max_pagination_iterations */
         std::time::Duration::from_secs(30),    /* rpc_timeout */
     )
     .unwrap();

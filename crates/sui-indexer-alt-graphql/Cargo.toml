@@ -16,9 +16,11 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 async-graphql = { workspace = true, features = ["dataloader", "tracing"] }
+async-stream.workspace = true
 async-graphql-axum.workspace = true
 async-graphql-value.workspace = true
 async-trait.workspace = true
+backoff.workspace = true
 # axum.workspace = true
 # axum-extra.workspace = true
 axum = { version = "0.7", default-features = false, features = [ "macros", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query", "ws", ] }
@@ -27,8 +29,8 @@ bcs.workspace = true
 chrono.workspace = true
 clap.workspace = true
 const-str.workspace = true
+dashmap.workspace = true
 diesel.workspace = true
-diesel-async.workspace = true
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 futures.workspace = true
@@ -46,12 +48,11 @@ telemetry-subscribers.workspace = true
 thiserror.workspace = true
 timeout-tracing.workspace = true
 tokio.workspace = true
+tokio-stream.workspace = true
 toml.workspace = true
 tonic.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
-tracing-error.workspace = true
-tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
 
@@ -61,7 +62,6 @@ move-disassembler.workspace = true
 move-ir-types.workspace = true
 
 bin-version.workspace = true
-sui-default-config.workspace = true
 sui-display.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt-metrics.workspace = true
@@ -72,7 +72,7 @@ sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc.workspace = true
-sui-rpc-api.workspace = true
+sui-rpc-cursor.workspace = true
 sui-sdk-types.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true
@@ -81,6 +81,9 @@ sui-types.workspace = true
 insta.workspace = true
 reqwest.workspace = true
 regex.workspace = true
+sui-package-resolver = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber.workspace = true
 
 [features]
 staging = []

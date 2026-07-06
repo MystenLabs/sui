@@ -1,0 +1,603 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! These tests use `#[tokio::test]` rather than the workspace-standard simulator test
+//! attribute because the harness needs a real Postgres `TempDb` and a real
+//! `TestClusterBuilder` validator, neither of which works inside the simulator's
+//! deterministic runtime.
+
+use async_graphql::connection::CursorType;
+use serde_json::json;
+use sui_indexer_alt_graphql::CCheckpoint;
+use tokio_stream::StreamExt;
+
+use crate::testing::SubscriptionTestCluster;
+use crate::testing::checkpoint_seq;
+use crate::testing::checkpoint_tx_digests;
+use crate::testing::drain_until_stalled;
+use crate::testing::graphql_redactions;
+use crate::testing::object_wrapping_harness;
+use crate::testing::transfer_coins;
+use crate::testing::wait_for_matching_item;
+
+#[tokio::test]
+async fn test_subscription_sequential() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let items: Vec<_> = cluster
+        .subscribe("subscription { checkpoints { node { sequenceNumber } } }")
+        .await
+        .take(3)
+        .collect()
+        .await;
+
+    let seqs: Vec<u64> = items.iter().map(checkpoint_seq).collect();
+    assert!(seqs.windows(2).all(|w| w[1] == w[0] + 1), "{seqs:?}");
+}
+
+#[tokio::test]
+async fn test_subscription_cursor() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let items: Vec<_> = cluster
+        .subscribe("subscription { checkpoints { cursor node { sequenceNumber } } }")
+        .await
+        .take(3)
+        .collect()
+        .await;
+
+    for item in &items {
+        let edge = &item["data"]["checkpoints"];
+        let cursor = edge["cursor"].as_str().unwrap();
+        let seq = edge["node"]["sequenceNumber"].as_u64().unwrap();
+        assert_eq!(cursor, CCheckpoint::new(seq).encode_cursor());
+    }
+}
+
+#[tokio::test]
+async fn test_subscription_fields() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let item = cluster
+        .subscribe(
+            r#"subscription {
+                checkpoints {
+                    node {
+                        sequenceNumber
+                        digest
+                        contentDigest
+                        timestamp
+                        networkTotalTransactions
+                        rollingGasSummary {
+                            computationCost
+                            storageCost
+                            storageRebate
+                            nonRefundableStorageFee
+                        }
+                        epoch {
+                            epochId
+                        }
+                        validatorSignatures {
+                            signature
+                            signersMap
+                        }
+                    }
+                }
+            }"#,
+        )
+        .await
+        .next()
+        .await
+        .unwrap();
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("subscription_fields", item);
+    });
+}
+
+#[tokio::test]
+async fn test_subscription_transactions() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                checkpoints {
+                    node {
+                        sequenceNumber
+                        transactions(filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                sender { address }
+                                gasInput { gasBudget }
+                                effects {
+                                    status
+                                    balanceChanges {
+                                        nodes {
+                                            amount
+                                            coinType { repr }
+                                            owner { address }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "sender": sender.to_string() })),
+        )
+        .await;
+    // Prime the stream so it's actively subscribed before mutations happen.
+    let digests = transfer_coins(&mut cluster.validator, &[1000]).await;
+    let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("subscription_transactions", item);
+    });
+}
+
+#[tokio::test]
+async fn test_subscription_transactions_pagination_first() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                checkpoints {
+                    node {
+                        sequenceNumber
+                        transactions(first: 1, filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    status
+                                    balanceChanges {
+                                        nodes {
+                                            amount
+                                            coinType { repr }
+                                        }
+                                    }
+                                }
+                            }
+                            edges { cursor }
+                            pageInfo { hasNextPage hasPreviousPage }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "sender": sender.to_string() })),
+        )
+        .await;
+    let digests = transfer_coins(&mut cluster.validator, &[100, 100]).await;
+    let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("subscription_transactions_pagination_first", item);
+    });
+}
+
+#[tokio::test]
+async fn test_subscription_transactions_pagination_last() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                checkpoints {
+                    node {
+                        sequenceNumber
+                        transactions(last: 1, filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    status
+                                    balanceChanges {
+                                        nodes {
+                                            amount
+                                            coinType { repr }
+                                        }
+                                    }
+                                }
+                            }
+                            edges { cursor }
+                            pageInfo { hasNextPage hasPreviousPage }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "sender": sender.to_string() })),
+        )
+        .await;
+    let digests = transfer_coins(&mut cluster.validator, &[100, 100]).await;
+    let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("subscription_transactions_pagination_last", item);
+    });
+}
+
+// --- Object resolution tests ---
+
+#[tokio::test]
+async fn test_subscription_object_create() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = object_wrapping_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                checkpoints {
+                    node {
+                        sequenceNumber
+                        transactions(filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    objectChanges {
+                                        nodes {
+                                            inputState {
+                                                address
+                                                version
+                                                digest
+                                                asMoveObject {
+                                                    contents { type { repr } }
+                                                }
+                                            }
+                                            outputState {
+                                                address
+                                                version
+                                                digest
+                                                asMoveObject {
+                                                    contents { type { repr } }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "sender": sender.to_string() })),
+        )
+        .await;
+
+    let (digest, _) =
+        object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
+    let item = wait_for_matching_item(&mut stream, &[digest], checkpoint_tx_digests).await;
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("subscription_object_create", item);
+    });
+}
+
+#[tokio::test]
+async fn test_subscription_object_lifecycle() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = object_wrapping_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                checkpoints {
+                    node {
+                        sequenceNumber
+                        transactions(filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    objectChanges {
+                                        nodes {
+                                            inputState {
+                                                address
+                                                version
+                                                digest
+                                                asMoveObject {
+                                                    contents { type { repr } }
+                                                }
+                                            }
+                                            outputState {
+                                                address
+                                                version
+                                                digest
+                                                asMoveObject {
+                                                    contents { type { repr } }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "sender": sender.to_string() })),
+        )
+        .await;
+
+    let (d1, item) =
+        object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
+    let cp1 = wait_for_matching_item(&mut stream, &[d1], checkpoint_tx_digests).await;
+
+    let (d2, item) =
+        object_wrapping_harness::update_item(&mut cluster.validator, package_id, item, 100).await;
+    let cp2 = wait_for_matching_item(&mut stream, &[d2], checkpoint_tx_digests).await;
+
+    let (d3, wrapper) =
+        object_wrapping_harness::wrap_item(&mut cluster.validator, package_id, item).await;
+    let cp3 = wait_for_matching_item(&mut stream, &[d3], checkpoint_tx_digests).await;
+
+    let (d4, _) =
+        object_wrapping_harness::unwrap_wrapper(&mut cluster.validator, package_id, wrapper).await;
+    let cp4 = wait_for_matching_item(&mut stream, &[d4], checkpoint_tx_digests).await;
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("subscription_object_lifecycle", [cp1, cp2, cp3, cp4]);
+    });
+}
+
+/// Tests that `contents.json` resolves for streamed objects using the indexer-backed
+/// package store for type layout resolution.
+#[tokio::test]
+async fn test_subscription_object_json() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = object_wrapping_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                checkpoints {
+                    node {
+                        transactions(filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    objectChanges {
+                                        nodes {
+                                            inputState {
+                                                asMoveObject {
+                                                    contents {
+                                                        type { repr }
+                                                        json
+                                                    }
+                                                }
+                                            }
+                                            outputState {
+                                                asMoveObject {
+                                                    contents {
+                                                        type { repr }
+                                                        json
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "sender": sender.to_string() })),
+        )
+        .await;
+
+    let (d1, item) =
+        object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
+    let cp1 = wait_for_matching_item(&mut stream, &[d1], checkpoint_tx_digests).await;
+
+    let (d2, item) =
+        object_wrapping_harness::update_item(&mut cluster.validator, package_id, item, 100).await;
+    let cp2 = wait_for_matching_item(&mut stream, &[d2], checkpoint_tx_digests).await;
+
+    let (d3, wrapper) =
+        object_wrapping_harness::wrap_item(&mut cluster.validator, package_id, item).await;
+    let cp3 = wait_for_matching_item(&mut stream, &[d3], checkpoint_tx_digests).await;
+
+    let (d4, _) =
+        object_wrapping_harness::unwrap_wrapper(&mut cluster.validator, package_id, wrapper).await;
+    let cp4 = wait_for_matching_item(&mut stream, &[d4], checkpoint_tx_digests).await;
+
+    let mut settings = graphql_redactions();
+    settings.add_redaction(".**.json.id", "[id]");
+    settings.add_redaction(".**.json.item.id", "[id]");
+    settings.bind(|| {
+        insta::assert_json_snapshot!("subscription_object_json", [cp1, cp2, cp3, cp4]);
+    });
+}
+
+// --- Gap recovery tests ---
+
+/// Forces a reconnect blackout via the proxy and asserts the subscriber sees a
+/// contiguous sequence of checkpoints across it (gap recovery filled the
+/// missing range from kv-rpc). `ledger_grpc_url` bypasses the proxy, so
+/// recovery reads aren't blocked.
+#[tokio::test]
+async fn test_subscription_recovers_from_upstream_disconnect() {
+    let (cluster, proxy) = SubscriptionTestCluster::new_with_disruption_proxy().await;
+
+    let mut stream = cluster
+        .subscribe("subscription { checkpoints { node { sequenceNumber } } }")
+        .await;
+
+    // Healthy streaming.
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    let second = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(second, first + 1);
+
+    // Blackout: graphql can't reconnect.
+    proxy.block_connections();
+    proxy.disconnect_all();
+
+    // Let the validator advance so a real gap forms, then drain whatever
+    // graphql had pushed before the disconnect took effect.
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let drained = drain_until_stalled(&mut stream).await;
+    let last_seen = drained.last().map(checkpoint_seq).unwrap_or(second);
+    let validator_tip = cluster.validator_checkpoint_tip();
+    assert!(
+        validator_tip > last_seen + 1,
+        "validator did not advance during blackout: tip={validator_tip}, last_seen={last_seen}",
+    );
+
+    // Resume.
+    proxy.allow_connections();
+
+    // First item signals reconnect + recovery have started. The validator's
+    // tip at this moment bounds the reconnect tip from above, so reading
+    // past it crosses from recovery into post-recovery live items.
+    let mut received = vec![checkpoint_seq(&stream.next().await.unwrap())];
+    let resume_tip = cluster.validator_checkpoint_tip();
+    while *received.last().unwrap() < resume_tip + 20 {
+        received.push(checkpoint_seq(&stream.next().await.unwrap()));
+    }
+
+    assert_eq!(
+        received[0],
+        last_seen + 1,
+        "non-contiguous resume: last_seen={last_seen}, first received={}",
+        received[0],
+    );
+    assert!(
+        received.windows(2).all(|w| w[1] == w[0] + 1),
+        "post-resume not contiguous: {received:?}",
+    );
+}
+
+// --- Checkpoints resume tests ---
+
+#[tokio::test]
+async fn test_subscription_resume_with_after_cursor() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let resume_seq = cluster.validator_checkpoint_tip();
+    let cursor = CCheckpoint::new(resume_seq).encode_cursor();
+    let query = format!(
+        r#"subscription {{ checkpoints(after: "{cursor}") {{ node {{ sequenceNumber }} }} }}"#,
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    let second = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(first, resume_seq + 1);
+    assert_eq!(second, first + 1);
+}
+
+#[tokio::test]
+async fn test_subscription_resume_with_after_checkpoint() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let resume_seq = cluster.validator_checkpoint_tip();
+    let query = format!(
+        "subscription {{ checkpoints(afterCheckpoint: {resume_seq}) {{ node {{ sequenceNumber }} }} }}",
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    let second = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(first, resume_seq + 1);
+    assert_eq!(second, first + 1);
+}
+
+#[tokio::test]
+async fn test_subscription_resume_long_backfill() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let resume_seq = cluster.validator_checkpoint_tip();
+
+    // Let the validator produce ~120 more checkpoints to exercise a substantial Phase 1 scan.
+    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+    let validator_tip = cluster.validator_checkpoint_tip();
+
+    let query = format!(
+        "subscription {{ checkpoints(afterCheckpoint: {resume_seq}) {{ node {{ sequenceNumber }} }} }}",
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    // Drain past `validator_tip` so the contiguity check spans both backfill and live.
+    let mut received = vec![checkpoint_seq(&stream.next().await.unwrap())];
+    while *received.last().unwrap() < validator_tip + 20 {
+        received.push(checkpoint_seq(&stream.next().await.unwrap()));
+    }
+
+    assert_eq!(received[0], resume_seq + 1);
+    assert!(received.windows(2).all(|w| w[1] == w[0] + 1));
+}
+
+#[tokio::test]
+async fn test_subscription_resume_with_both_args_uses_max() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let mut first_stream = cluster
+        .subscribe("subscription { checkpoints { node { sequenceNumber } } }")
+        .await;
+    let lower = checkpoint_seq(&first_stream.next().await.unwrap());
+    let higher = checkpoint_seq(&first_stream.next().await.unwrap());
+    drop(first_stream);
+    assert_eq!(higher, lower + 1);
+
+    // Resume must pick the higher of `after` (lower) and `afterCheckpoint` (higher).
+    let cursor = CCheckpoint::new(lower).encode_cursor();
+    let query = format!(
+        r#"subscription {{ checkpoints(after: "{cursor}", afterCheckpoint: {higher}) {{ node {{ sequenceNumber }} }} }}"#,
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(first, higher + 1);
+}
+
+#[tokio::test]
+async fn test_subscription_resume_resolves_packages_in_backfill() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = object_wrapping_harness::publish(&mut cluster.validator).await;
+
+    // Capture the tip BEFORE creating the item so the item lands past `resume_from`.
+    let resume_from = cluster.validator_checkpoint_tip();
+    let (item_digest, _) =
+        object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
+
+    // Wait so the new subscription's receiver pins past the item; it can only arrive via scan.
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+    // Backfilled checkpoints must resolve Move types via the streaming_packages → DB fall-through.
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            checkpoints(afterCheckpoint: {resume_from}) {{
+                node {{
+                    sequenceNumber
+                    transactions(filter: {{ sentAddress: $sender }}) {{
+                        nodes {{
+                            digest
+                            effects {{
+                                objectChanges {{
+                                    nodes {{
+                                        outputState {{ asMoveObject {{ contents {{ json }} }} }}
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, Some(json!({ "sender": sender.to_string() })))
+        .await;
+    let item = wait_for_matching_item(&mut stream, &[item_digest], checkpoint_tx_digests).await;
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("subscription_resume_resolves_packages_in_backfill", item);
+    });
+}

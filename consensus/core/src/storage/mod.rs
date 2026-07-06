@@ -37,6 +37,15 @@ pub trait Store: Send + Sync {
         start_round: Round,
     ) -> ConsensusResult<Vec<VerifiedBlock>>;
 
+    /// Reads blocks for an authority in [start_round, end_round), up to limit.
+    fn scan_blocks_by_author_in_range(
+        &self,
+        author: AuthorityIndex,
+        start_round: Round,
+        end_round: Round,
+        limit: usize,
+    ) -> ConsensusResult<Vec<VerifiedBlock>>;
+
     // The method returns the last `num_of_rounds` rounds blocks by author in round ascending order.
     // When a `before_round` is defined then the blocks of round `<=before_round` are returned. If not
     // then the max value for round will be used as cut off.

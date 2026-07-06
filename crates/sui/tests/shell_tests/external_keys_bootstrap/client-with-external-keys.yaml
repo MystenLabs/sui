@@ -1,0 +1,26 @@
+---
+keystore:
+  File: "./sui.keystore"
+external_keys:
+  External: "config/external.keystore"
+envs:
+  - alias: testnet
+    rpc: "http://bogus.invalid/"
+    ws: ~
+    basic_auth: ~
+    chain_id: 4c78adac
+  - alias: mainnet
+    rpc: "http://bogus.invalid/"
+    ws: ~
+    basic_auth: ~
+    chain_id: 35834a8a
+  - alias: devnet
+    rpc: "http://bogus.invalid/"
+    ws: ~
+    basic_auth: ~
+  - alias: local
+    rpc: "http://bogus.invalid/"
+    ws: ~
+    basic_auth: ~
+active_env: testnet
+active_address: ~

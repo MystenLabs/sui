@@ -82,9 +82,7 @@ impl TestSetup {
 
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-        setup_authority_state
-            .insert_genesis_object(gas_object.clone())
-            .await;
+        setup_authority_state.insert_genesis_object(gas_object.clone());
 
         let package = build_and_publish_test_package(
             &setup_authority_state,
@@ -179,19 +177,17 @@ impl TestSetup {
         genesis_objects.push(TestSetup::convert_to_genesis_obj(
             self.setup_authority_state
                 .get_object(&self.package.0)
-                .await
                 .unwrap(),
         ));
         genesis_objects.push(TestSetup::convert_to_genesis_obj(
             self.setup_authority_state
                 .get_object(&self.gas_object_id)
-                .await
                 .unwrap(),
         ));
 
         for obj in objects {
             genesis_objects.push(TestSetup::convert_to_genesis_obj(
-                self.setup_authority_state.get_object(obj).await.unwrap(),
+                self.setup_authority_state.get_object(obj).unwrap(),
             ));
         }
         genesis_objects
@@ -228,17 +224,13 @@ async fn test_congestion_control_execution_cancellation() {
         .with_protocol_config(test_setup.protocol_config.clone())
         .build()
         .await;
-    authority_state
-        .insert_genesis_objects(&genesis_objects)
-        .await;
+    authority_state.insert_genesis_objects(&genesis_objects);
     let authority_state_2 = TestAuthorityBuilder::new()
         .with_reference_gas_price(TEST_ONLY_GAS_PRICE)
         .with_protocol_config(test_setup.protocol_config.clone())
         .build()
         .await;
-    authority_state_2
-        .insert_genesis_objects(&genesis_objects)
-        .await;
+    authority_state_2.insert_genesis_objects(&genesis_objects);
 
     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
     // Set initial cost of 10 for shared_object_1, which with 0% target_utilization and 0 burst limit
@@ -286,7 +278,6 @@ async fn test_congestion_control_execution_cancellation() {
         .unwrap();
     let owned_object_ref = authority_state
         .get_object(&owned_object.0)
-        .await
         .unwrap()
         .compute_object_reference();
     let arg3 = txn_builder
@@ -314,7 +305,9 @@ async fn test_congestion_control_execution_cancellation() {
     )];
     let commit = TestConsensusCommit::new(consensus_transactions, 1, 0, 0);
 
-    consensus_handler.handle_consensus_commit(commit).await;
+    consensus_handler
+        .handle_consensus_commit_for_test(commit)
+        .await;
 
     // Wait for captured transactions to be available
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;

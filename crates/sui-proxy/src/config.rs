@@ -38,9 +38,12 @@ pub struct RemoteWriteConfig {
     pub pool_max_idle_per_host: usize,
 }
 
-/// DynamicPeerValidationConfig controls what sui-node & sui-bridge binaries that are functioning as a validator that we'll speak with.
-/// Peer in this case is peers within the consensus committee, for each epoch.  This membership is determined dynamically
-/// for each epoch via json-rpc calls to a full node.
+/// DynamicPeerValidationConfig controls what sui-node, sui-bridge, and hashi-server
+/// binaries (each functioning as a node in a Sui-anchored network) we'll accept
+/// metrics from. Peer membership is determined dynamically via json-rpc calls to a
+/// full node — sui validator set and bridge committee come from fixed RPC methods,
+/// hashi membership comes from reading the on-chain `Hashi` shared object
+/// when `hashi_object_id` is set.
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -60,6 +63,10 @@ pub struct DynamicPeerValidationConfig {
     /// private key for tls
     /// please use an absolute path
     pub private_key: Option<String>,
+
+    /// `hashi::hashi::Hashi` shared object id. When set, the resolver discovers
+    /// hashi committee members from chain and adds them to the allowlist.
+    pub hashi_object_id: Option<String>,
 }
 
 /// StaticPeerValidationConfig, unlike the DynamicPeerValidationConfig, is not determined dynamically from rpc

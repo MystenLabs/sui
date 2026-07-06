@@ -3,38 +3,38 @@
 
 //# publish
 
-module 0x2.loopy {
+mvir 0x2::loopy {
 
-struct List has copy, drop {
+public struct List has copy, drop {
     dummy: bool,
 }
 
-struct Node has copy, drop {
+public struct Node has copy, drop {
     val: u8,
-    next: Self.List,
+    next: Self::List,
 }
 
-node(l: &mut Self.List): &mut Self.Node {
+fun node(l: &mut Self::List): &mut Self::Node {
 label l0:
     abort 0;
 }
 
-is_end(l: &Self.List): bool {
+fun is_end(l: &Self::List): bool {
 label l0:
    abort 0;
 }
 
 
-t(cond: bool, s:  Self.List): Self.List {
-    let cur: &mut Self.List;
+fun t(cond: bool, s:  Self::List): Self::List {
+    let cur: &mut Self::List;
 label l0:
     cur = &mut s;
 label loop_cond:
     jump_if_false (move(cond)) loop_end;
 label loop_body:
     // we don't see `Node::next` in the abstract state, only .*
-    cur = &mut (Self.node(move(cur))).Node::next;
-    cond = Self.is_end(freeze(copy(cur)));
+    cur = &mut (Self::node(move(cur))).Node::next;
+    cond = Self::is_end(freeze(copy(cur)));
     jump loop_cond;
 label loop_end:
     return *move(cur);

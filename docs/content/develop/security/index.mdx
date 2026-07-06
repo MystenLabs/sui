@@ -1,0 +1,24 @@
+---
+title: Security
+description: Overview of security best practices on Sui.
+keywords: [ security, security best practices ]
+draft: true
+---
+
+Review security best practices for building on Sui to help protect your smart contracts and applications.
+
+:::caution
+
+Shared objects are not an authorization boundary. Anyone can submit a transaction that references a shared object, so any privileged code path that touches a shared object must enforce authorization with Move-level checks. For example, require a capability argument, validate `tx_context::sender()`, or check object ownership. Never assume that access to a shared object is restricted. See [Access control](/develop/security/best-practices#access-control).
+
+:::
+
+:::note
+
+An upgradeable package's `UpgradeCap` controls all of its future behavior. Treat the `UpgradeCap` as a security-critical capability: whoever holds it can change your published logic. Secure its custody (for example, multisig) or make the package immutable when appropriate. See [Security best practices](/develop/security/best-practices) for packages security guidance.
+
+:::
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList />

@@ -1,0 +1,29 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module simplify_zero_compare {
+    public fun lit_eq () {
+        return l0 == 0u64
+    }
+
+    public fun lit_ge () {
+        return l0 <= 0u64
+    }
+
+    public fun lit_gt () {
+        return l0 < 0u64
+    }
+
+    public fun lit_le () {
+        return l0 >= 0u64
+    }
+
+    public fun lit_lt () {
+        return l0 > 0u64
+    }
+
+    public fun lit_neq () {
+        return l0 != 0u64
+    }
+
+}

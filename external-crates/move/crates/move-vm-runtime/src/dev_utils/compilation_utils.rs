@@ -8,7 +8,7 @@ use move_binary_format::{file_format::CompiledModule, file_format_common::VERSIO
 use move_compiler::{
     Compiler as MoveCompiler,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::warning_filters::WarningFiltersBuilder,
+    diagnostics::filter::unused_for_test_filter_scope,
     editions::{Edition, Flavor},
     shared::{NumericalAddress, PackageConfig},
 };
@@ -85,7 +85,7 @@ pub fn compile_packages_in_file(filename: &str, dependencies: &[&str]) -> Vec<St
     )
     .set_default_config(PackageConfig {
         is_dependency: false,
-        warning_filter: WarningFiltersBuilder::unused_warnings_filter_for_test(),
+        warning_filter: unused_for_test_filter_scope(),
         flavor: Flavor::Sui,
         edition: Edition::E2024_ALPHA,
     })

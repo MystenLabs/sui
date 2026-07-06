@@ -27,8 +27,11 @@ pub(crate) enum ConsensusTxStatus {
     // Transaction is dropped post-consensus.
     // This decision must be consistent across all validators.
     //
-    // Currently, only invalid owned object inputs (using stale versions)
-    // can cause a transaction to be dropped without execution.
+    // A transaction is dropped without execution when it has invalid owned object
+    // inputs (stale versions or conflicts with a locked object), or when it is
+    // ignored during epoch close (consensus certs no longer accepted, or its block
+    // author already sent EndOfPublish). All causes are deterministic functions of
+    // the transaction and prior consensus commits.
     Dropped,
 }
 
@@ -75,28 +78,54 @@ impl ConsensusTxStatusCache {
         }
     }
 
+    /// Single-update convenience wrapper around [`Self::set_transaction_statuses`].
+    /// Production code uses the batched form; this is retained for tests.
+    #[cfg(test)]
     pub(crate) fn set_transaction_status(&self, pos: ConsensusPosition, status: ConsensusTxStatus) {
-        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow()
-            && pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= last_committed_leader_round
-        {
-            // Ignore stale status updates.
-            return;
-        }
+        self.set_transaction_statuses(vec![(pos, status)]);
+    }
 
-        let mut inner = self.inner.write();
-        let old_status = inner.transaction_status.insert(pos, status);
-        if let Some(old_status) = old_status
-            && old_status != status
+    /// Batched form of `set_transaction_status`: applies all updates under a
+    /// single write lock and issues the notifications after the lock is released.
+    /// The consensus commit handler uses this to replace a per-transaction lock
+    /// acquisition (and a notify held across the write lock) with one acquisition
+    /// per commit. Semantics are otherwise identical: stale updates are dropped, a
+    /// conflicting status for an already-recorded position panics, and every applied
+    /// update is notified.
+    pub(crate) fn set_transaction_statuses(
+        &self,
+        updates: Vec<(ConsensusPosition, ConsensusTxStatus)>,
+    ) {
+        // The committed leader round is constant for the duration of a commit, so
+        // read it once for the whole batch rather than per update.
+        let last_committed_leader_round = *self.last_committed_leader_round_rx.borrow();
+        let mut to_notify = Vec::with_capacity(updates.len());
         {
-            panic!(
-                "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
-                pos, old_status, status
-            );
+            let mut inner = self.inner.write();
+            for (pos, status) in updates {
+                if let Some(last_committed_leader_round) = last_committed_leader_round
+                    && pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS
+                        <= last_committed_leader_round
+                {
+                    // Ignore stale status updates.
+                    continue;
+                }
+                let old_status = inner.transaction_status.insert(pos, status);
+                if let Some(old_status) = old_status
+                    && old_status != status
+                {
+                    panic!(
+                        "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
+                        pos, old_status, status
+                    );
+                }
+                debug!("Transaction status is set for {}: {:?}", pos, status);
+                to_notify.push((pos, status));
+            }
         }
-
-        // All code paths leading to here should have set the status.
-        debug!("Transaction status is set for {}: {:?}", pos, status);
-        self.status_notify_read.notify(&pos, &status);
+        for (pos, status) in to_notify {
+            self.status_notify_read.notify(&pos, &status);
+        }
     }
 
     /// Given a known previous status provided by `old_status`, this function will return a new
@@ -135,10 +164,7 @@ impl ConsensusTxStatusCache {
         }
     }
 
-    pub(crate) async fn update_last_committed_leader_round(
-        &self,
-        last_committed_leader_round: u32,
-    ) {
+    pub(crate) fn update_last_committed_leader_round(&self, last_committed_leader_round: u32) {
         debug!(
             "Updating last committed leader round: {}",
             last_committed_leader_round
@@ -259,15 +285,11 @@ mod tests {
         cache.set_transaction_status(tx_pos, ConsensusTxStatus::Finalized);
 
         // Set initial leader round which doesn't GC anything.
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 1)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 1);
 
         // Update with round that will trigger GC using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 1)
         // This will expire transactions up to and including round 1
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2);
 
         // Try to read status - should be expired
         let result = cache.notify_read_transaction_status(tx_pos).await;
@@ -288,9 +310,7 @@ mod tests {
         }
 
         // Set initial leader round which doesn't GC anything.
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2);
 
         // No rounds should be cleaned up yet since this was the initial update
         {
@@ -305,9 +325,7 @@ mod tests {
 
         // Update that triggers GC using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
         // This will expire transactions up to and including round 2
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 3)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 3);
 
         // Verify rounds 1-2 are cleaned up, 3-5 remain
         {
@@ -322,9 +340,7 @@ mod tests {
 
         // Another update using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 3) for GC
         // This will expire transactions up to and including round 3
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 4)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 4);
 
         // Verify rounds 1-3 are cleaned up, 4-5 remain
         {

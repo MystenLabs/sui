@@ -29,7 +29,7 @@ error[E03009]: unbound variable
    │                                            Unbound variable 'y'
    │                                            Did you mean: 'o'
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:11:33
    │
 11 │          Option::Other { x: mut y<u64> } => y,
@@ -73,7 +73,7 @@ error[E01002]: unexpected token
 14 │          _x @ mut Option::Some(false) => false,
    │               ^^^ Invalid 'mut' keyword on non-variable pattern
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:15:10
    │
 15 │          mut Option::None => false,

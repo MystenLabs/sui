@@ -1,0 +1,32 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E10008]: ambiguous attribute value
+  ┌─ tests/move_check/warning_suppression/conflict_deny_allow_all.move:2:8
+  │
+2 │ #[deny(all)]
+  │        ^^^ Conflicting filter for 'all' specified in the same attribute
+3 │ #[allow(all)]
+  │         --- Conflicting filter for 'all' specified here
+
+error[E09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/conflict_deny_allow_all.move:5:13
+  │
+2 │ #[deny(all)]
+  │        --- the lint level is defined here
+  ·
+5 │     fun foo(a: u64) {
+  │             ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+
+error[E09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/conflict_deny_allow_all.move:6:13
+  │
+2 │ #[deny(all)]
+  │        --- the lint level is defined here
+  ·
+6 │         let x;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'

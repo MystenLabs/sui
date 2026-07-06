@@ -65,7 +65,7 @@ struct ParsedDocument {
 
 struct Usage {
     input: input::Usage,
-    payload: payload::Usage,
+    payload: Option<payload::Usage>,
     output: output::Usage,
 }
 
@@ -107,8 +107,10 @@ impl Extension for QueryLimitsCheckerExt {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        let &ContentLength(length) = ctx.data_unchecked();
-        if length > self.limits.max_payload_size() as u64 {
+        // ContentLength is not available for WebSocket subscriptions (no HTTP body).
+        if let Some(&ContentLength(length)) = ctx.data_opt()
+            && length > self.limits.max_payload_size() as u64
+        {
             Err(Error::new_global(ErrorKind::PayloadSizeOverall {
                 limit: self.limits.max_payload_size(),
                 actual: length,
@@ -148,20 +150,36 @@ impl Extension for QueryLimitsCheckerExt {
             return Ok(res);
         };
 
-        let &ContentLength(length) = ctx.data_unchecked();
+        let content_length = ctx.data_opt::<ContentLength>().map(|cl| cl.0);
         let pagination_config: &PaginationConfig = ctx.data_unchecked();
 
         let _guard = self.metrics.limits_validation_latency.start_timer();
 
         let input = input::check(self.limits.as_ref(), &doc)?;
 
-        let payload = payload::check(
-            self.limits.as_ref(),
-            length,
-            &ctx.schema_env.registry,
-            &doc,
-            &var,
-        )?;
+        // Payload check requires ContentLength, which is not available for WebSocket
+        // subscriptions. The input and output checks still apply.
+        let payload = if let Some(length) = content_length {
+            let payload = payload::check(
+                self.limits.as_ref(),
+                length,
+                &ctx.schema_env.registry,
+                &doc,
+                &var,
+            )?;
+
+            self.metrics.total_payload_size.observe(length as f64);
+            self.metrics
+                .query_payload_size
+                .observe(payload.query_payload_size as f64);
+            self.metrics
+                .tx_payload_size
+                .observe(payload.tx_payload_size as f64);
+
+            Some(payload)
+        } else {
+            None
+        };
 
         let output = output::check(
             self.limits.as_ref(),
@@ -173,13 +191,6 @@ impl Extension for QueryLimitsCheckerExt {
 
         self.metrics.input_depth.observe(input.depth as f64);
         self.metrics.input_nodes.observe(input.nodes as f64);
-        self.metrics.total_payload_size.observe(length as f64);
-        self.metrics
-            .query_payload_size
-            .observe(payload.query_payload_size as f64);
-        self.metrics
-            .tx_payload_size
-            .observe(payload.tx_payload_size as f64);
         self.metrics.output_nodes.observe(output.nodes as f64);
 
         if let Some(ShowUsage(_)) = ctx.data_opt() {

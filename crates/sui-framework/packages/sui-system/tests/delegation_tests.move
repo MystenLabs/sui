@@ -9,6 +9,7 @@ use sui::table::Table;
 use sui_system::staking_pool::{Self, StakedSui, PoolTokenExchangeRate};
 use sui_system::test_runner;
 use sui_system::validator_builder;
+use sui_system::validator_preset;
 use sui_system::validator_set;
 
 const VALIDATOR_ADDR_1: address = @1;
@@ -631,6 +632,59 @@ fun remove_inactive_stake_from_inactive_candidate() {
 
     // Check that the stake is withdrawn fully.
     assert_eq!(runner.set_sender(validator_address).sui_balance(), 100 * MIST_PER_SUI);
+
+    runner.finish();
+}
+
+#[test]
+fun remove_multiple_validators() {
+    let mut runner = test_runner::new().validators_initial_stake(100).validators_count(1).build();
+    let validators = vector[
+        validator_preset::preset(1),
+        validator_preset::preset(2),
+        validator_preset::preset(3),
+    ];
+
+    // Get 3 validators, stake 100 SUI to each, request their addition to the validator set.
+    validators.do_ref!(|preset| {
+        let addr = preset.account_address();
+        runner.set_sender(addr);
+        let validator = validator_builder::from_preset(*preset).build(runner.ctx());
+
+        runner.add_validator_candidate(validator);
+        runner.stake_with(addr, 100);
+        runner.add_validator();
+    });
+
+    // Advance epoch, skip rewards.
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // Make sure all of them are in the active set.
+    runner.system_tx!(|system, _| {
+        validators.do_ref!(|preset| {
+            assert!(system.validators().is_active_validator(preset.account_address()));
+        });
+    });
+
+    // Request removal of first two.
+    2u64.do!(|i| {
+        let addr = validators[i].account_address();
+        runner.set_sender(addr).remove_validator();
+    });
+
+    // Advance epoch, skip rewards.
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // Make sure that the validators got removed correctly.
+    // Verifies that the sorting on the pending removals is performed correctly.
+    runner.system_tx!(|system, _| {
+        2u64.do!(|i| {
+            let addr = validators[i].account_address();
+            assert!(!system.validators().is_active_validator(addr));
+        });
+
+        assert!(system.validators().is_active_validator(validators[2].account_address()));
+    });
 
     runner.finish();
 }

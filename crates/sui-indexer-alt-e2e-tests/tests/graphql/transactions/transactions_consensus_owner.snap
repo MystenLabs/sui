@@ -35,15 +35,15 @@ Response: {
     "sentByA": {
       "edges": [
         {
-          "cursor": "MQ==",
+          "cursor": "CAIQARgAIAE=",
           "node": {
-            "digest": "FT42es4ZJobrXXLf5oVGtFtk69AaydrtHKR34hzUsQLk"
+            "digest": "BRt87zhiL5c9dFr38gjvhF3gmRh7iUYZUcfokRzVYSxo"
           }
         },
         {
-          "cursor": "Mg==",
+          "cursor": "CAIQARgAIAI=",
           "node": {
-            "digest": "61uSLPFvHtzYKpe9P51cYYv2n6dGuJvoj1RUFC1Evxr6"
+            "digest": "7425XHh77rijYLf2ZktyFTcFn9ThZbLPcrenkGokkM6Q"
           }
         }
       ]
@@ -51,9 +51,9 @@ Response: {
     "affectedB": {
       "edges": [
         {
-          "cursor": "MQ==",
+          "cursor": "CAIQARgAIAE=",
           "node": {
-            "digest": "FT42es4ZJobrXXLf5oVGtFtk69AaydrtHKR34hzUsQLk"
+            "digest": "BRt87zhiL5c9dFr38gjvhF3gmRh7iUYZUcfokRzVYSxo"
           }
         }
       ]
@@ -61,9 +61,9 @@ Response: {
     "affectedC": {
       "edges": [
         {
-          "cursor": "Mg==",
+          "cursor": "CAIQARgAIAI=",
           "node": {
-            "digest": "61uSLPFvHtzYKpe9P51cYYv2n6dGuJvoj1RUFC1Evxr6"
+            "digest": "7425XHh77rijYLf2ZktyFTcFn9ThZbLPcrenkGokkM6Q"
           }
         }
       ]

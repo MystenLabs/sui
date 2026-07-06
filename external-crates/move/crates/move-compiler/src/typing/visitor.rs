@@ -1,11 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 use crate::{
     command_line::compiler::Visitor,
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::filter::FilterScope,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast::{self as N, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
@@ -17,7 +17,7 @@ use move_proc_macros::growing_stack;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
-pub trait TypingVisitor: Send + Sync {
+pub trait TypingVisitor: Send + Sync + Any {
     fn visit(&self, env: &CompilationEnv, program: &T::Program);
 
     fn visitor(self) -> Visitor
@@ -45,7 +45,7 @@ pub enum LValueKind {
 }
 
 pub trait TypingVisitorContext {
-    fn push_warning_filter_scope(&mut self, filters: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filters: FilterScope);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum
@@ -76,7 +76,7 @@ pub trait TypingVisitorContext {
     }
 
     fn visit_module(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) {
-        self.push_warning_filter_scope(mdef.warning_filter);
+        self.push_warning_filter_scope(mdef.warning_filter.clone());
         if self.visit_module_custom(ident, mdef) {
             self.pop_warning_filter_scope();
             return;
@@ -117,7 +117,7 @@ pub trait TypingVisitorContext {
         struct_name: DatatypeName,
         sdef: &N::StructDefinition,
     ) {
-        self.push_warning_filter_scope(sdef.warning_filter);
+        self.push_warning_filter_scope(sdef.warning_filter.clone());
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -150,7 +150,7 @@ pub trait TypingVisitorContext {
         enum_name: DatatypeName,
         edef: &N::EnumDefinition,
     ) {
-        self.push_warning_filter_scope(edef.warning_filter);
+        self.push_warning_filter_scope(edef.warning_filter.clone());
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -210,7 +210,7 @@ pub trait TypingVisitorContext {
         constant_name: ConstantName,
         cdef: &T::Constant,
     ) {
-        self.push_warning_filter_scope(cdef.warning_filter);
+        self.push_warning_filter_scope(cdef.warning_filter.clone());
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -234,7 +234,7 @@ pub trait TypingVisitorContext {
         function_name: FunctionName,
         fdef: &T::Function,
     ) {
-        self.push_warning_filter_scope(fdef.warning_filter);
+        self.push_warning_filter_scope(fdef.warning_filter.clone());
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;
@@ -569,7 +569,7 @@ impl<V: TypingVisitor + 'static> From<V> for TypingVisitorObj {
     }
 }
 
-impl<V: TypingVisitorConstructor + Send + Sync> TypingVisitor for V {
+impl<V: TypingVisitorConstructor + Send + Sync + 'static> TypingVisitor for V {
     fn visit(&self, env: &CompilationEnv, program: &T::Program) {
         Self::visit(env, program)
     }
@@ -615,7 +615,7 @@ macro_rules! simple_visitor {
         impl crate::typing::visitor::TypingVisitorContext for Context<'_> {
             fn push_warning_filter_scope(
                 &mut self,
-                filters: crate::diagnostics::warning_filters::WarningFilters,
+                filters: crate::diagnostics::filter::FilterScope,
             ) {
                 self.reporter.push_warning_filter_scope(filters)
             }
@@ -650,7 +650,7 @@ pub trait TypingMutVisitorConstructor: Send + Sync {
 }
 
 pub trait TypingMutVisitorContext {
-    fn push_warning_filter_scope(&mut self, filter: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filter: FilterScope);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum
@@ -685,7 +685,7 @@ pub trait TypingMutVisitorContext {
     }
 
     fn visit_module(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) {
-        self.push_warning_filter_scope(mdef.warning_filter);
+        self.push_warning_filter_scope(mdef.warning_filter.clone());
         if self.visit_module_custom(ident, mdef) {
             self.pop_warning_filter_scope();
             return;
@@ -726,7 +726,7 @@ pub trait TypingMutVisitorContext {
         struct_name: DatatypeName,
         sdef: &mut N::StructDefinition,
     ) {
-        self.push_warning_filter_scope(sdef.warning_filter);
+        self.push_warning_filter_scope(sdef.warning_filter.clone());
         if self.visit_struct_custom(module, struct_name, sdef) {
             self.pop_warning_filter_scope();
             return;
@@ -759,7 +759,7 @@ pub trait TypingMutVisitorContext {
         enum_name: DatatypeName,
         edef: &mut N::EnumDefinition,
     ) {
-        self.push_warning_filter_scope(edef.warning_filter);
+        self.push_warning_filter_scope(edef.warning_filter.clone());
         if self.visit_enum_custom(module, enum_name, edef) {
             self.pop_warning_filter_scope();
             return;
@@ -817,7 +817,7 @@ pub trait TypingMutVisitorContext {
         constant_name: ConstantName,
         cdef: &mut T::Constant,
     ) {
-        self.push_warning_filter_scope(cdef.warning_filter);
+        self.push_warning_filter_scope(cdef.warning_filter.clone());
         if self.visit_constant_custom(module, constant_name, cdef) {
             self.pop_warning_filter_scope();
             return;
@@ -841,7 +841,7 @@ pub trait TypingMutVisitorContext {
         function_name: FunctionName,
         fdef: &mut T::Function,
     ) {
-        self.push_warning_filter_scope(fdef.warning_filter);
+        self.push_warning_filter_scope(fdef.warning_filter.clone());
         if self.visit_function_custom(module, function_name, fdef) {
             self.pop_warning_filter_scope();
             return;

@@ -1,0 +1,8 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+assertion_line: 21
+---
+'loop_0: loop {
+    { 0 }
+    continue 'loop_0;
+}

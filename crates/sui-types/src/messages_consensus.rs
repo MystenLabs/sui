@@ -27,7 +27,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The index of an authority in the consensus committee.
@@ -470,7 +469,6 @@ pub enum ConsensusTransactionKind {
 impl ConsensusTransactionKind {
     pub fn as_user_transaction(&self) -> Option<&Transaction> {
         match self {
-            ConsensusTransactionKind::UserTransaction(tx) => Some(tx),
             ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.tx()),
             _ => None,
         }
@@ -478,7 +476,6 @@ impl ConsensusTransactionKind {
 
     pub fn into_user_transaction(self) -> Option<Transaction> {
         match self {
-            ConsensusTransactionKind::UserTransaction(tx) => Some(*tx),
             ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.into_tx()),
             _ => None,
         }
@@ -523,7 +520,7 @@ impl VersionedDkgMessage {
 
     pub fn create(
         dkg_version: u64,
-        party: Arc<dkg_v1::Party<bls12381::G2Element, bls12381::G2Element>>,
+        party: &dkg_v1::Party<bls12381::G2Element, bls12381::G2Element>,
     ) -> FastCryptoResult<VersionedDkgMessage> {
         assert_eq!(dkg_version, 1, "BUG: invalid DKG version");
         let msg = party.create_message(&mut rand::thread_rng())?;
@@ -561,10 +558,10 @@ impl VersionedDkgConfirmation {
         }
     }
 
-    pub fn unwrap_v1(&self) -> &dkg_v1::Confirmation<bls12381::G2Element> {
+    pub fn as_v1(&self) -> Option<&dkg_v1::Confirmation<bls12381::G2Element>> {
         match self {
-            VersionedDkgConfirmation::V1(msg) => msg,
-            _ => panic!("BUG: expected V1 confirmation"),
+            VersionedDkgConfirmation::V1(msg) => Some(msg),
+            _ => None,
         }
     }
 
@@ -616,23 +613,6 @@ impl ConsensusTransaction {
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::CapabilityNotificationV2(capabilities),
-        }
-    }
-
-    pub fn new_mysticeti_certificate(
-        round: u64,
-        offset: u64,
-        certificate: CertifiedTransaction,
-    ) -> Self {
-        let mut hasher = DefaultHasher::new();
-        let tx_digest = certificate.digest();
-        tx_digest.hash(&mut hasher);
-        round.hash(&mut hasher);
-        offset.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
         }
     }
 
@@ -764,12 +744,8 @@ impl ConsensusTransaction {
     }
 
     pub fn is_user_transaction(&self) -> bool {
-        // CertifiedTransaction is unused and not accepted now.
-        matches!(
-            self.kind,
-            ConsensusTransactionKind::UserTransaction(_)
-                | ConsensusTransactionKind::UserTransactionV2(_)
-        )
+        // CertifiedTransaction and UserTransaction are unused and not accepted now.
+        matches!(self.kind, ConsensusTransactionKind::UserTransactionV2(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {

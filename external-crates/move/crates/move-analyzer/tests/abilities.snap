@@ -1,0 +1,27 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== abilities.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'AllAbilities', start: 18, end: 30
+Def: 'AllAbilities', line: 2, def char: 18
+TypeDef: 'AllAbilities', line: 2, char: 18
+On Hover:
+public struct Abilities::abilities::AllAbilities has key, copy, drop, store {}
+
+-- test 1 -------------------
+use line: 5, use_ndx: 0
+Use: 'CopyKey', start: 18, end: 25
+Def: 'CopyKey', line: 4, def char: 18
+TypeDef: 'CopyKey', line: 4, char: 18
+On Hover:
+public struct Abilities::abilities::CopyKey has key, copy {}
+
+-- test 2 -------------------
+use line: 7, use_ndx: 0
+Use: 'CopyDropStore', start: 18, end: 31
+Def: 'CopyDropStore', line: 6, def char: 18
+TypeDef: 'CopyDropStore', line: 6, char: 18
+On Hover:
+public struct Abilities::abilities::CopyDropStore has copy, drop, store {}

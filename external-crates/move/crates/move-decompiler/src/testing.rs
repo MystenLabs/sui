@@ -50,6 +50,11 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
 
             match parts.as_slice() {
                 ["cond", a, b, c] => match (a.parse::<u32>(), b.parse::<u32>(), c.parse::<u32>()) {
+                    // Match the translate.rs normalization: a `cond` whose two arms target
+                    // the same label is a `code` with a dead condition.
+                    (Ok(a), Ok(b), Ok(c)) if b == c => {
+                        nodes.push(In::Code(a.into(), a.into(), Some(b.into())))
+                    }
                     (Ok(a), Ok(b), Ok(c)) => {
                         nodes.push(In::Condition(a.into(), a.into(), b.into(), c.into()))
                     }
@@ -125,6 +130,41 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
         return "Expected an entry point `0`, but none was found".to_owned();
     }
     let config = crate::config::Config::default();
-    let structured = crate::structuring::structure(&config, input, 0.into());
-    structured.to_test_string()
+    // `run_structuring_test` exercises the structurer in isolation on a tiny `.stt` fixture
+    // - there's no `terms` map (term reconstruction is part of `translate.rs`, not the
+    // structurer). Pass an empty map; `bodies_equivalent` treats every block with no entry
+    // in `terms` as "no body to compare", drops them all via `filter_map`, and the resulting
+    // empty s1/s2 lists trivially compare equal - i.e., the guard is bypassed. That's the
+    // right behavior for these `.stt` shape tests: they pin the structurer's CFG-to-AST
+    // mapping, and the content-level guard would only mask the shape regressions they
+    // exist to catch.
+    //
+    // Some fixtures pin known-pathological CFGs that the current structurer can't handle
+    // (e.g. tangled multi-loop residues that need NMG V-B). `catch_unwind` turns the panic
+    // into a stable snap so the suite still runs and the failure surfaces as a diff rather
+    // than a process-killing crash.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::structuring::structure(&config, input, 0.into())
+    }));
+    let (structured, unstructured) = match result {
+        Ok(pair) => pair,
+        Err(panic) => {
+            let msg = panic
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "<non-string panic payload>".to_string());
+            return format!("// STRUCTURING PANICKED: {msg}\n");
+        }
+    };
+    // Surface unstructured blocks in the snapshot so a regression that silently drops
+    // blocks shows up as a snapshot diff rather than passing on shape match. `.stt`
+    // fixtures pin only the structured form, so the notice goes here.
+    let body = structured.to_test_string();
+    if unstructured.is_empty() {
+        body
+    } else {
+        let notice: Vec<String> = unstructured.iter().map(|n| n.to_string()).collect();
+        format!("// unstructured blocks: {}\n{body}", notice.join(", "))
+    }
 }

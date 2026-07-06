@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 17 tasks
+processed 12 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -12,19 +12,19 @@ Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 0,
-      "digest": "9ZKWB9QuscTRoaHBeV9Zd9DFFQc2KhcGpRUyZhTSfveD",
+      "digest": "AjtRex7uYg6od8T4Zzoyqy3d2nB8jiWEgnt6KCSpFq7r",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "MA==",
-          "endCursor": "MA=="
+          "startCursor": "CAIQARgAIAA=",
+          "endCursor": "CAIQARgAIAA="
         },
         "edges": [
           {
-            "cursor": "MA==",
+            "cursor": "CAIQARgAIAA=",
             "node": {
-              "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+              "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
               "sender": null
             }
           }
@@ -92,55 +92,55 @@ Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 1,
-      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
+      "digest": "Fu4fFRc6qhFANg2jCMnYvBJTyZox9qt59Gf7Qw29oTC7",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "MQ==",
-          "endCursor": "NQ=="
+          "startCursor": "CAIQARgAIAE=",
+          "endCursor": "CAIQARgAIAU="
         },
         "edges": [
           {
-            "cursor": "MQ==",
+            "cursor": "CAIQARgAIAE=",
             "node": {
-              "digest": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
+              "digest": "5iUmf7DhkKHzsVFoCdD241kkwpeBDBSnq7ThaayXcxk1",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "Mg==",
+            "cursor": "CAIQARgAIAI=",
             "node": {
-              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
+              "digest": "HpVFGU6ushMZyioAfD2eyoRWEPrEGaMsGAdSJCuPbV3y",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "Mw==",
+            "cursor": "CAIQARgAIAM=",
             "node": {
-              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
+              "digest": "3q6y5zRegeqFGYcS267FFFBE18QhFs6sMMmk8R4JShBk",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "NA==",
+            "cursor": "CAIQARgAIAQ=",
             "node": {
-              "digest": "NkZ3De14nDiWinjmboEQyFqo4fgbG9NJ8t5BTv748nL",
+              "digest": "2zRFPLtJs5ben5iuDUsSYRpf8iLBsMfTg2c8SAQMe51H",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "NQ==",
+            "cursor": "CAIQARgAIAU=",
             "node": {
-              "digest": "7haBSoW7wEi7TP2iaNiiiRHPo6bUXSLoJDf62TvLUKsv",
+              "digest": "Gy3Fx1BSSCcaW2fEgFxdRq1BiqhebnvfkanGdecRf3eu",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -152,57 +152,57 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "MQ==",
-          "endCursor": "Ng=="
+          "startCursor": "CAIQARgAIAE=",
+          "endCursor": "CAIQARgAIAY="
         },
         "edges": [
           {
-            "cursor": "MQ==",
+            "cursor": "CAIQARgAIAE=",
             "node": {
-              "digest": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
+              "digest": "5iUmf7DhkKHzsVFoCdD241kkwpeBDBSnq7ThaayXcxk1",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "Mg==",
+            "cursor": "CAIQARgAIAI=",
             "node": {
-              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
+              "digest": "HpVFGU6ushMZyioAfD2eyoRWEPrEGaMsGAdSJCuPbV3y",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "Mw==",
+            "cursor": "CAIQARgAIAM=",
             "node": {
-              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
+              "digest": "3q6y5zRegeqFGYcS267FFFBE18QhFs6sMMmk8R4JShBk",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "NA==",
+            "cursor": "CAIQARgAIAQ=",
             "node": {
-              "digest": "NkZ3De14nDiWinjmboEQyFqo4fgbG9NJ8t5BTv748nL",
+              "digest": "2zRFPLtJs5ben5iuDUsSYRpf8iLBsMfTg2c8SAQMe51H",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "NQ==",
+            "cursor": "CAIQARgAIAU=",
             "node": {
-              "digest": "7haBSoW7wEi7TP2iaNiiiRHPo6bUXSLoJDf62TvLUKsv",
+              "digest": "Gy3Fx1BSSCcaW2fEgFxdRq1BiqhebnvfkanGdecRf3eu",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           },
           {
-            "cursor": "Ng==",
+            "cursor": "CAIQARgAIAY=",
             "node": {
               "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
               "sender": null
@@ -215,173 +215,6 @@ Response: {
 }
 
 task 11, lines 77-92:
-//# run-graphql --cursors 1
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": true,
-          "hasNextPage": true,
-          "startCursor": "Mg==",
-          "endCursor": "NA=="
-        },
-        "edges": [
-          {
-            "cursor": "Mg=="
-          },
-          {
-            "cursor": "Mw=="
-          },
-          {
-            "cursor": "NA=="
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 12, lines 94-109:
-//# run-graphql --cursors 1 5
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": true,
-          "hasNextPage": true,
-          "startCursor": "Mg==",
-          "endCursor": "Mw=="
-        },
-        "edges": [
-          {
-            "cursor": "Mg==",
-            "node": {
-              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          },
-          {
-            "cursor": "Mw==",
-            "node": {
-              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 13, lines 111-126:
-//# run-graphql --cursors 1 5
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": true,
-          "hasNextPage": true,
-          "startCursor": "Mw==",
-          "endCursor": "NA=="
-        },
-        "edges": [
-          {
-            "cursor": "Mw==",
-            "node": {
-              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          },
-          {
-            "cursor": "NA==",
-            "node": {
-              "digest": "NkZ3De14nDiWinjmboEQyFqo4fgbG9NJ8t5BTv748nL",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 14, lines 128-143:
-//# run-graphql --cursors 3
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": false,
-          "hasNextPage": true,
-          "startCursor": "MQ==",
-          "endCursor": "Mg=="
-        },
-        "edges": [
-          {
-            "cursor": "MQ==",
-            "node": {
-              "digest": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          },
-          {
-            "cursor": "Mg==",
-            "node": {
-              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 15, lines 145-160:
-//# run-graphql --cursors 6
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": false,
-          "hasNextPage": false,
-          "startCursor": null,
-          "endCursor": null
-        },
-        "edges": []
-      }
-    }
-  }
-}
-
-task 16, lines 162-177:
 //# run-graphql
 Response: {
   "data": {

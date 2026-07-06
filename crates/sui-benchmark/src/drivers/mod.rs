@@ -167,8 +167,15 @@ impl BenchmarkStats {
             ]);
         let mut row = Row::new();
         row.add_cell(Cell::new(self.duration.as_secs()));
-        row.add_cell(Cell::new(self.num_success_txes / self.duration.as_secs()));
-        row.add_cell(Cell::new(self.num_success_cmds / self.duration.as_secs()));
+        let duration_secs = self.duration.as_secs_f64().max(1.0);
+        row.add_cell(Cell::new(format!(
+            "{:.2}",
+            self.num_success_txes as f64 / duration_secs
+        )));
+        row.add_cell(Cell::new(format!(
+            "{:.2}",
+            self.num_success_cmds as f64 / duration_secs
+        )));
         row.add_cell(Cell::new(
             (100 * self.num_error_txes) as f32
                 / (self.num_error_txes + self.num_success_txes) as f32,

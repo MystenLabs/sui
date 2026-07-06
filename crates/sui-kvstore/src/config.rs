@@ -1,19 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
-use sui_default_config::DefaultConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
+use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::{self as framework};
 use tracing::warn;
 
 use crate::bigtable::client::PoolConfig;
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+/// Default maximum rows per BigTable write batch. Matches the official Google
+/// Java client default.
+pub(crate) const DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH: usize = 100;
+
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
     pub committer: CommitterLayer,
@@ -32,8 +40,8 @@ pub struct IndexerConfig {
     pub bigtable_pool: BigtablePoolLayer,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct BigtablePoolLayer {
     /// Number of channels to create at startup (default: 10).
     pub initial_pool_size: Option<usize>,
@@ -98,8 +106,8 @@ impl BigtablePoolLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
@@ -122,10 +130,11 @@ impl CommitterLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
+    pub ingestion: Option<PipelineIngestionLayer>,
     /// Maximum rows per BigTable batch for this pipeline.
     pub max_rows: Option<usize>,
     /// Per-pipeline rate limit (rows per second). Overrides the default
@@ -140,13 +149,28 @@ pub struct ConcurrentLayer {
     pub committer_channel_size: Option<usize>,
 }
 
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct PipelineIngestionLayer {
+    pub subscriber_channel_size: Option<usize>,
+}
+
 impl ConcurrentLayer {
+    pub(crate) fn max_rows_or_default(&self) -> usize {
+        self.max_rows.unwrap_or(DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH)
+    }
+
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
         ConcurrentConfig {
             committer: if let Some(c) = self.committer {
                 c.finish(base.committer)
             } else {
                 base.committer
+            },
+            ingestion: if let Some(i) = self.ingestion {
+                i.finish(base.ingestion)
+            } else {
+                base.ingestion
             },
             pruner: None,
             fanout: self.fanout.or(base.fanout),
@@ -160,8 +184,79 @@ impl ConcurrentLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+impl PipelineIngestionLayer {
+    pub fn finish(self, base: pipeline::IngestionConfig) -> pipeline::IngestionConfig {
+        pipeline::IngestionConfig {
+            subscriber_channel_size: self
+                .subscriber_channel_size
+                .or(base.subscriber_channel_size),
+        }
+    }
+}
+
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct SequentialLayer {
+    // Framework sequential surface — mirrors the fields actually read by
+    // `sui_indexer_alt_framework::pipeline::sequential`.
+    pub committer: Option<CommitterLayer>,
+    pub ingestion: Option<PipelineIngestionLayer>,
+    pub fanout: Option<ConcurrencyConfig>,
+    pub min_eager_rows: Option<usize>,
+    pub max_pending_rows: Option<usize>,
+    pub max_batch_checkpoints: Option<usize>,
+    pub processor_channel_size: Option<usize>,
+    pub pipeline_depth: Option<usize>,
+
+    // sui-kvstore-specific config extensions
+
+    // Controls the concurrency of the bitmap flushes. The framework doesn't
+    // perform commits for sequential pipelines concurrently, but our store
+    // implementation doesn't actually write to the database on commit for
+    // the bitmap pipelines. The store buffers the bitmaps for the current
+    // working "bucket" ranges internally, merges in rows from each framework
+    // batch on commit (parallelized on background tasks), then finally flushes
+    // the updated bitmaps to bigtable concurrently. Same semantic as
+    // `ConcurrentLayer::write_concurrency`.
+    pub write_concurrency: Option<usize>,
+    /// Maximum rows per in-handler BigTable write RPC. Same semantic as
+    /// `ConcurrentLayer::max_rows`.
+    pub max_rows: Option<usize>,
+    /// Per-pipeline rate limit (rows per second). Overrides the default
+    /// `IndexerConfig::max_rows_per_second` when set.
+    pub max_rows_per_second: Option<u64>,
+}
+
+impl SequentialLayer {
+    pub(crate) fn max_rows_or_default(&self) -> usize {
+        self.max_rows.unwrap_or(DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH)
+    }
+
+    pub fn finish(self, base: ConcurrentConfig) -> SequentialConfig {
+        let committer = if let Some(c) = self.committer {
+            c.finish(base.committer)
+        } else {
+            base.committer
+        };
+        SequentialConfig {
+            committer,
+            ingestion: if let Some(i) = self.ingestion {
+                i.finish(base.ingestion)
+            } else {
+                base.ingestion
+            },
+            fanout: self.fanout.or(base.fanout),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
+            max_batch_checkpoints: self.max_batch_checkpoints,
+            processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
+            pipeline_depth: self.pipeline_depth,
+        }
+    }
+}
+
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineLayer {
     pub checkpoints: ConcurrentLayer,
     pub checkpoints_by_digest: ConcurrentLayer,
@@ -174,21 +269,26 @@ pub struct PipelineLayer {
     pub packages_by_id: ConcurrentLayer,
     pub packages_by_checkpoint: ConcurrentLayer,
     pub system_packages: ConcurrentLayer,
+    pub tx_seq_digest: ConcurrentLayer,
+    pub transaction_bitmap_index: SequentialLayer,
+    pub event_bitmap_index: SequentialLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
 /// serialized and deserialized by `serde`.
-#[DefaultConfig]
-#[derive(Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct IngestionConfig {
-    pub checkpoint_buffer_size: usize,
     pub ingest_concurrency: framework::config::ConcurrencyConfig,
     pub retry_interval_ms: u64,
-    pub streaming_backoff_initial_batch_size: usize,
+    pub streaming_backoff_initial_batch_size: NonZeroUsize,
     pub streaming_backoff_max_batch_size: usize,
     pub streaming_connection_timeout_ms: u64,
     pub streaming_statement_timeout_ms: u64,
+
+    /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
+    /// per-pipeline `ingestion.subscriber-channel-size`.
+    pub checkpoint_buffer_size: Option<usize>,
 }
 
 impl Default for IngestionConfig {
@@ -200,21 +300,28 @@ impl Default for IngestionConfig {
 impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
     fn from(config: framework::ingestion::IngestionConfig) -> Self {
         Self {
-            checkpoint_buffer_size: config.checkpoint_buffer_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,
             streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            checkpoint_buffer_size: None,
         }
     }
 }
 
 impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
     fn from(config: IngestionConfig) -> Self {
+        if config.checkpoint_buffer_size.is_some() {
+            warn!(
+                "Config field `checkpoint-buffer-size` is deprecated and ignored. Remove it from \
+                 your config; set `subscriber-channel-size` under each pipeline's `ingestion` \
+                 section if you need to override the default."
+            );
+        }
+
         framework::ingestion::IngestionConfig {
-            checkpoint_buffer_size: config.checkpoint_buffer_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,
             streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,

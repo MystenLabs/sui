@@ -9,6 +9,7 @@ use std::{
 
 use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tracing::{debug, trace, warn};
@@ -238,7 +239,7 @@ impl BlockManager {
             .read()
             .contains_blocks(block_refs.clone())
             .into_iter()
-            .zip(block_refs.iter())
+            .zip_debug_eq(block_refs.iter())
         {
             if found || self.suspended_blocks.contains_key(block_ref) {
                 continue;
@@ -316,7 +317,7 @@ impl BlockManager {
         for (found, ancestor) in dag_state
             .contains_blocks(ancestors.clone())
             .into_iter()
-            .zip(ancestors.iter())
+            .zip_debug_eq(ancestors.iter())
         {
             if !found {
                 missing_ancestors.insert(*ancestor);

@@ -29,7 +29,7 @@ use crate::{
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
     linearizer::Linearizer,
     storage::mem_store::MemStore,
-    transaction_certifier::TransactionCertifier,
+    transaction_vote_tracker::TransactionVoteTracker,
     universal_committer::{
         UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
     },
@@ -40,7 +40,7 @@ use crate::{
 pub struct CommitTestFixture {
     pub context: Arc<Context>,
     pub linearizer: Linearizer,
-    pub transaction_certifier: TransactionCertifier,
+    pub transaction_vote_tracker: TransactionVoteTracker,
     pub commit_finalizer: CommitFinalizer,
 
     dag_state: Arc<RwLock<DagState>>,
@@ -69,25 +69,23 @@ impl CommitTestFixture {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
 
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
-        let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
         );
         let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(
             context.clone(),
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             commit_sender,
         );
 
         Self {
             context,
             linearizer,
-            transaction_certifier,
+            transaction_vote_tracker,
             commit_finalizer,
             dag_state,
             block_manager,
@@ -123,19 +121,19 @@ impl CommitTestFixture {
         Arc::new(context.with_authority_index(AuthorityIndex::new_for_test(authority_index)))
     }
 
-    // Adds the blocks to the transaction certifier and then tries to accept them via BlockManager.
+    // Adds the blocks to the transaction vote tracker and then tries to accept them via BlockManager.
     /// This registers the blocks for reject vote tracking (with no reject votes).
     pub fn try_accept_blocks(&mut self, blocks: Vec<VerifiedBlock>) {
-        self.transaction_certifier
+        self.transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         self.block_manager.try_accept_blocks(blocks);
     }
 
-    /// Adds blocks to the transaction certifier and dag state.
+    /// Adds blocks to the transaction vote tracker and dag state.
     /// This registers the blocks for reject vote tracking (with no reject votes).
     pub fn add_blocks(&self, blocks: Vec<VerifiedBlock>) {
         let blocks_and_votes = blocks.iter().map(|b| (b.clone(), vec![])).collect();
-        self.transaction_certifier
+        self.transaction_vote_tracker
             .add_voted_blocks(blocks_and_votes);
         self.dag_state.write().accept_blocks(blocks);
     }
@@ -145,7 +143,7 @@ impl CommitTestFixture {
         blocks_and_votes: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
     ) {
         let blocks = blocks_and_votes.iter().map(|(b, _)| b.clone()).collect();
-        self.transaction_certifier
+        self.transaction_vote_tracker
             .add_voted_blocks(blocks_and_votes);
         self.dag_state.write().accept_blocks(blocks);
     }
@@ -235,6 +233,8 @@ pub fn assert_commit_sequences_match(
             shortest_sequence.len()
         );
 
+        #[allow(clippy::disallowed_methods)]
+        // Intentional zip: comparing prefix between sequences of varying lengths
         for (commit_index, (c1, c2)) in commit_sequence
             .iter()
             .zip(shortest_sequence.iter())

@@ -1085,11 +1085,11 @@ impl Operation for CoinReservationWithdraw {
             .accumulator_root
             .expect("AccumulatorRoot version not resolved");
 
-        let withdraw_amount = if account_state.sui_balance == 0 {
-            1
-        } else {
-            account_state.sui_balance
-        };
+        // Use the seeded amount rather than `account_state.sui_balance`, which reflects total
+        // coin balance (including gas objects), not the accumulator balance. The partner always
+        // deposits back the full withdrawal amount, so the accumulator always has exactly
+        // `address_balance_amount * 100` MIST when a withdrawal is possible.
+        let withdraw_amount = std::cmp::max(1, resources.address_balance_amount * 100);
 
         let sui_balance_type = Balance::type_tag(GAS::type_tag());
         let accumulator_obj_id =
@@ -1107,11 +1107,27 @@ impl Operation for CoinReservationWithdraw {
             .obj(ObjectArg::ImmOrOwnedObject(object_ref))
             .unwrap();
 
-        // Don't call coin::redeem_funds explicitly - the compatibility layer
-        // (convert_withdrawal_compatibility_ptb_arguments) will automatically
-        // convert the withdrawal to a Coin when needed.
-        let recipient = SuiAddress::random_for_testing_only();
-        builder.transfer_arg(recipient, withdrawal_arg);
+        // The compatibility layer implicitly inserts coin::redeem_funds for this withdrawal,
+        // converting it to a Coin<SUI>. We then convert to Balance<SUI> and send to the
+        // partner's accumulator so the partner can do a future CoinReservationWithdraw.
+        // Simply transferring a Coin<SUI> would only give the partner a coin object, not
+        // accumulator balance.
+        let coin_balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("into_balance").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdrawal_arg],
+        );
+
+        let partner_arg = builder.pure(account_state.partner_address).unwrap();
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![coin_balance, partner_arg],
+        );
     }
 }
 

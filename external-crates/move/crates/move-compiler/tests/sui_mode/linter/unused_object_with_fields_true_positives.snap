@@ -1,0 +1,94 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:13:23
+   │
+13 │     public fun unused(_c: &OwnerCap) {}
+   │                       ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:16:31
+   │
+16 │     public fun let_underscore(c: &OwnerCap) { let _ = c; }
+   │                               ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:19:33
+   │
+19 │     public fun returned_as_root(c: &OwnerCap): &OwnerCap { c }
+   │                                 ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:22:35
+   │
+22 │     public fun unpack_all_ignored(o: &ValueCap) {
+   │                                   ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:27:36
+   │
+27 │     public fun unpack_bound_unused(o: &ValueCap) {
+   │                                    ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:34:33
+   │
+34 │     public fun join_then_return(c1: &OwnerCap, c2: &OwnerCap, cond: bool): &OwnerCap {
+   │                                 ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:34:48
+   │
+34 │     public fun join_then_return(c1: &OwnerCap, c2: &OwnerCap, cond: bool): &OwnerCap {
+   │                                                ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:42:9
+   │
+42 │         a: &Inner,
+   │         ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:52:36
+   │
+52 │     public fun loop_bare_back_edge(c1: &OwnerCap, c2: &OwnerCap, n: u64): &OwnerCap {
+   │                                    ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:52:51
+   │
+52 │     public fun loop_bare_back_edge(c1: &OwnerCap, c2: &OwnerCap, n: u64): &OwnerCap {
+   │                                                   ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:63:35
+   │
+63 │     public fun freeze_bare_return(c: &mut OwnerCap): &OwnerCap { freeze(c) }
+   │                                   ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

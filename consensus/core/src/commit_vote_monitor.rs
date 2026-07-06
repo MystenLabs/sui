@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::Mutex;
 
 use crate::{
@@ -11,6 +12,21 @@ use crate::{
     commit::GENESIS_COMMIT_INDEX,
     context::Context,
 };
+
+// Is used to calculate the threshold for blocking blocks or triggering sync
+// when the local commit index is lagging too far from the quorum commit index.
+pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
+
+/// When a node is lagging behind peers in commits, we expect commit sync to be
+/// triggered to catch up.
+pub(crate) fn is_commit_lagging(
+    context: &Context,
+    local_commit_index: CommitIndex,
+    quorum_commit_index: CommitIndex,
+) -> bool {
+    local_commit_index + context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
+        < quorum_commit_index
+}
 
 /// Monitors the progress of consensus commits across the network.
 pub(crate) struct CommitVoteMonitor {
@@ -46,7 +62,7 @@ impl CommitVoteMonitor {
         let highest_voted_commits = self.highest_voted_commits.lock();
         let mut highest_voted_commits = highest_voted_commits
             .iter()
-            .zip(self.context.committee.authorities())
+            .zip_debug_eq(self.context.committee.authorities())
             .map(|(commit_index, (_, a))| (*commit_index, a.stake))
             .collect::<Vec<_>>();
         // Sort by commit index then stake, in descending order.

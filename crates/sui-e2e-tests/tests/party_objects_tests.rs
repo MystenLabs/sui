@@ -501,13 +501,8 @@ async fn party_object_read() {
         .build();
     let signed_transfer = test_cluster.sign_transaction(&transfer_transaction).await;
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-    test_cluster
-        .submit_and_execute(signed_transfer.clone(), Some(client_ip))
-        .await
-        .unwrap();
-
     let (transfer_effects, _) = test_cluster
-        .submit_and_execute(signed_transfer.clone(), None)
+        .submit_and_execute(signed_transfer.clone(), Some(client_ip))
         .await
         .unwrap();
     all_digests.push(*signed_transfer.digest());

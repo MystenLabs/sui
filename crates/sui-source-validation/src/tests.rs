@@ -863,7 +863,12 @@ async fn upgrade_package(
     let with_unpublished_deps = false;
     let package_bytes = package.get_package_bytes(with_unpublished_deps);
     let package_digest = package.get_package_digest(with_unpublished_deps).to_vec();
-    let package_deps = package.dependency_ids.published.into_values().collect();
+    let package_deps = package
+        .dependency_ids
+        .published
+        .into_values()
+        .map(|dep| dep.published_at)
+        .collect();
 
     upgrade_package_with_wallet(
         context,
@@ -1006,7 +1011,9 @@ async fn write_published_toml(
     let env_name = Chain::Testnet.as_str().to_string();
     let chain_id = get_testnet_chain_identifier().to_string();
     let env = Environment::new(env_name, chain_id.clone());
-    let mut root_pkg: RootPackage<SuiFlavor> = PackageLoader::new(pkg_path, env).load().await?;
+    let mut root_pkg: RootPackage<SuiFlavor> = PackageLoader::new(pkg_path, env, SuiFlavor::new())
+        .load()
+        .await?;
     root_pkg.write_publish_data(move_package_alt::schema::Publication {
         chain_id,
         addresses: PublishAddresses {

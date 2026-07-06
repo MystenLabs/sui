@@ -56,7 +56,7 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     object::{Object, Owner},
     storage::get_module_by_id,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
@@ -246,7 +246,7 @@ pub struct LocalExec {
     // Debug events
     pub exec_store_events: Arc<Mutex<Vec<ExecutionStoreEvent>>>,
     // Debug events
-    pub metrics: Arc<LimitsMetrics>,
+    pub metrics: Arc<ExecutionMetrics>,
     // Used for fetching data from the network or remote store
     pub fetcher: Fetchers,
 
@@ -384,7 +384,7 @@ impl LocalExec {
     ) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
         let fetcher = remote_fetcher.unwrap_or(RemoteFetcher::new(client.clone()));
 
@@ -412,7 +412,7 @@ impl LocalExec {
     ) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
         let state = NodeStateDump::read_from_file(&PathBuf::from(path))?;
         let current_protocol_version = state.protocol_version;
@@ -789,8 +789,8 @@ impl LocalExec {
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
         let (inner_store, gas_status, effects, _timings, result) = executor
             .execute_transaction_to_effects_and_execution_error(
@@ -845,7 +845,7 @@ impl LocalExec {
         tx_info: &OnChainTransactionInfo,
         transaction_kind: &TransactionKind,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         expensive_checks: bool,
         input_objects: InputObjects,
     ) -> anyhow::Result<()> {
@@ -867,8 +867,8 @@ impl LocalExec {
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
         if let ProgrammableTransaction(pt) = transaction_kind {
             trace!(
@@ -877,6 +877,7 @@ impl LocalExec {
                 Pretty(&FullPTB {
                     ptb: pt.clone(),
                     results: transform_command_results_to_annotated(
+                        protocol_config,
                         executor,
                         &self.clone(),
                         executor.dev_inspect_transaction(
@@ -984,14 +985,14 @@ impl LocalExec {
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
         let (_, _, effects, _timings, exec_res) = executor
             .execute_transaction_to_effects_and_execution_error(
                 &store,
                 &protocol_config,
-                Arc::new(LimitsMetrics::new(&Registry::new())),
+                Arc::new(ExecutionMetrics::new(&Registry::new())),
                 true,
                 execution_params,
                 &executed_epoch,

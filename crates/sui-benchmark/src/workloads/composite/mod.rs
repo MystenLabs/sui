@@ -36,7 +36,10 @@ use std::time::Duration;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::TypeTag;
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::balance::Balance;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GAS;
@@ -75,12 +78,13 @@ fn authenticated_events_disabled(protocol_config: Option<&ProtocolConfig>) -> bo
 
 macro_rules! update_gas {
     ($gas:expr, $effects:expr) => {{
-        let (new_gas_ref, _) = $effects.gas_object();
-        if new_gas_ref.0 == ObjectID::ZERO {
-            info!("No gas object, skipping update");
+        // Look up the tracked gas coin by ObjectID rather than reading whatever
+        // `gas_object()` reports — IFFW short-circuits leave `gas_object() == None`
+        // but the input coin is still version-bumped in `mutated()`.
+        let Some(new_gas_ref) = $effects.updated_gas($gas.0) else {
+            info!("No gas object in effects, skipping update");
             return;
-        }
-        assert_eq!($gas.0, new_gas_ref.0, "ObjectIDs must match");
+        };
         info!(
             "Updating gas object from {:?} to {:?} for tx {:?}",
             $gas,
@@ -145,14 +149,22 @@ pub struct OperationSetStats {
     pub insufficient_funds_count: u64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CompositionMetrics {
     stats: HashMap<OperationSet, OperationSetStats>,
 }
 
+impl Default for CompositionMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CompositionMetrics {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            stats: HashMap::new(),
+        }
     }
 
     pub fn sum_all(&self) -> OperationSetStats {
@@ -277,6 +289,10 @@ pub struct CompositeWorkloadConfig {
     pub shared_counter_hotness: f32,
     pub address_balance_amount: u64,
     pub address_balance_gas_probability: f32,
+    /// Probability that a tx's gas payment is built as a mix of a real coin and a coin-reservation
+    /// digest entry (in randomized order). Exercises the gas-smashing path that combines an
+    /// `ObjectRef` gas coin with an address-balance reservation.
+    pub mixed_gas_payment_probability: f32,
     pub conflicting_transaction_probability: f32,
     pub alias_tx_probability: f32,
     pub alias_txs_before_revoke: u32,
@@ -302,6 +318,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(ObjectBalanceOverdraw::NAME, 0.1);
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
+        probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -366,6 +383,7 @@ impl Default for CompositeWorkloadConfig {
             shared_counter_hotness: 0.5,
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.5,
+            mixed_gas_payment_probability: 0.05,
             conflicting_transaction_probability: 0.1,
             alias_tx_probability: 0.0,
             alias_txs_before_revoke: 3,
@@ -414,6 +432,7 @@ pub struct CompositePayload {
     metrics: Arc<Mutex<CompositionMetrics>>,
     nonce_counter: AtomicU32,
     alias_state: Option<AliasState>,
+    partner_address: SuiAddress,
 }
 
 /// Tracks the lifecycle of an alias revoke-and-re-add cycle for a single payload.
@@ -474,6 +493,10 @@ enum BatchTxKind {
 #[derive(Clone)]
 struct BatchTxInfo {
     gas_idx: usize,
+    /// Index of a second real gas coin used by this tx (only populated by the
+    /// mixed-payment branch when it claims a spare from `current_batch_gas`). Its
+    /// tracked version must also be refreshed from effects.
+    extra_gas_idx: Option<usize>,
     op_set: OperationSet,
     kind: BatchTxKind,
 }
@@ -569,6 +592,7 @@ impl CompositePayload {
                             ResourceRequest::AddressBalance
                                 | ResourceRequest::ObjectBalance
                                 | ResourceRequest::AccumulatorRoot
+                                | ResourceRequest::CoinReservation
                         )
                     })
                 });
@@ -620,7 +644,7 @@ impl CompositePayload {
             }
         }
 
-        (tx_builder.build_and_sign(keypair), op_set)
+        (tx_builder.ensure_unique().build_and_sign(keypair), op_set)
     }
 
     fn generate_alias_transaction(
@@ -652,6 +676,7 @@ impl CompositePayload {
                             CallArg::Pure(bcs::to_bytes(&alias_state.alias_address).unwrap()),
                         ],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair);
                 alias_state.cycle_state = AliasRevokeCycleState::RemovePending { tx_digest: None };
                 (
@@ -663,6 +688,7 @@ impl CompositePayload {
             AliasRevokeCycleState::Active { .. } => {
                 let data = TestTransactionBuilder::new(sender, gas, rgp)
                     .transfer_sui(None, sender)
+                    .ensure_unique()
                     .build();
                 let tx = Transaction::from_data_and_signer(
                     data,
@@ -677,6 +703,7 @@ impl CompositePayload {
             AliasRevokeCycleState::Revoked => {
                 let data = TestTransactionBuilder::new(sender, gas, rgp)
                     .transfer_sui(None, sender)
+                    .ensure_unique()
                     .build();
                 let tx = Transaction::from_data_and_signer(
                     data,
@@ -705,6 +732,7 @@ impl CompositePayload {
                             CallArg::Pure(bcs::to_bytes(&alias_state.alias_address).unwrap()),
                         ],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair);
                 alias_state.cycle_state = AliasRevokeCycleState::AddPending { tx_digest: None };
                 (
@@ -724,6 +752,7 @@ impl CompositePayload {
             tx,
             BatchTxInfo {
                 gas_idx,
+                extra_gas_idx: None,
                 op_set,
                 kind,
             },
@@ -918,14 +947,25 @@ impl Payload for CompositePayload {
         self.current_batch_num_conflicting_transactions = 0;
         let mut transactions = Vec::with_capacity(batch_size + 1);
 
-        let account_state =
-            AccountState::new(sender, &self.fullnode_proxies, self.pool.balance_pool).await;
+        let account_state = AccountState::new(
+            sender,
+            &self.fullnode_proxies,
+            self.pool.balance_pool,
+            self.partner_address,
+        )
+        .await;
 
         let mut used_gas = vec![];
 
         let mut rng = get_rng();
 
+        // Spare gas coins available beyond the per-tx allocation and the optional alias
+        // slot. The mixed-payment branch can claim these to build 2-real-coin payments.
+        let alias_offset = if alias_tx_needed { 1 } else { 0 };
+        let mut next_spare_gas_idx = batch_size + alias_offset;
+
         for (i, gas) in current_batch_gas.iter().take(batch_size).enumerate() {
+            let mut extra_gas_idx_opt: Option<usize> = None;
             let builder = if !address_balance_gas_disabled
                 && rng.gen_bool(self.config.address_balance_gas_probability as f64)
             {
@@ -937,6 +977,40 @@ impl Payload for CompositePayload {
                     current_epoch,
                     nonce,
                 )
+            } else if !address_balance_gas_disabled
+                && rng.gen_bool(self.config.mixed_gas_payment_probability as f64)
+            {
+                used_gas.push(i);
+                // Mix 1-2 real coins with 1-2 coin-reservation digest entries and shuffle.
+                // When such a tx is cancelled for insufficient funds (IFFW), each
+                // address-balance entry left in the payment list is settled as a Split
+                // against the (possibly depleted) accumulator: the gas-smashing path under test.
+                let sui_balance_type = Balance::type_tag(GAS::type_tag());
+                let accumulator_obj_id = AccumulatorValue::get_field_id(sender, &sui_balance_type)
+                    .expect("Failed to compute accumulator object ID");
+                // Sized in the same order of magnitude as the AB amount: large enough that
+                // concurrent overdraw can leave it underfunded, but not so large that signing
+                // or scheduling rejects it. base+1 gives the second fake coin a distinct digest.
+                let base_reservation = std::cmp::max(1, self.config.address_balance_amount * 10);
+
+                let mut payment = vec![*gas];
+                if rng.gen_bool(0.5) && next_spare_gas_idx < current_batch_gas.len() {
+                    payment.push(current_batch_gas[next_spare_gas_idx]);
+                    extra_gas_idx_opt = Some(next_spare_gas_idx);
+                    next_spare_gas_idx += 1;
+                }
+                let num_fakes = if rng.gen_bool(0.5) { 2 } else { 1 };
+                for k in 0..num_fakes {
+                    let fake_coin = ParsedObjectRefWithdrawal::new(
+                        *accumulator_obj_id.inner(),
+                        current_epoch,
+                        base_reservation + k as u64,
+                    )
+                    .encode(SequenceNumber::new(), self.pool.chain_identifier);
+                    payment.push(fake_coin);
+                }
+                payment.shuffle(&mut rng);
+                TestTransactionBuilder::new_with_gas_objects(sender, payment, rgp)
             } else {
                 used_gas.push(i);
                 TestTransactionBuilder::new(sender, *gas, rgp)
@@ -946,6 +1020,7 @@ impl Payload for CompositePayload {
                 self.generate_transaction(builder, &account_state, &keypair, current_epoch);
             self.current_batch_txs.push(BatchTxInfo {
                 gas_idx: i,
+                extra_gas_idx: extra_gas_idx_opt,
                 op_set,
                 kind: BatchTxKind::Normal,
             });
@@ -966,6 +1041,7 @@ impl Payload for CompositePayload {
                     self.generate_transaction(builder, &account_state, &keypair, current_epoch);
                 self.current_batch_txs.push(BatchTxInfo {
                     gas_idx: *gas_idx,
+                    extra_gas_idx: None,
                     op_set,
                     kind: BatchTxKind::Normal,
                 });
@@ -1047,6 +1123,9 @@ impl Payload for CompositePayload {
                         metrics.record_abort(tx_info.op_set.clone());
                     }
                     update_gas!(&mut gas.0[tx_info.gas_idx], effects);
+                    if let Some(extra_idx) = tx_info.extra_gas_idx {
+                        update_gas!(&mut gas.0[extra_idx], effects);
+                    }
                 }
                 BatchedTransactionStatus::PermanentFailure { error } => {
                     permanent_failure_count += 1;
@@ -1082,6 +1161,7 @@ impl Payload for CompositePayload {
                 >= self.current_batch_num_conflicting_transactions + expected_alias_failure_count,
             "failure count should sometimes be greater than or equal to the number of conflicting transactions"
         );
+
         self.current_batch_txs.clear();
     }
 }
@@ -1090,6 +1170,7 @@ pub struct AccountState {
     pub sender: SuiAddress,
     pub sui_balance: u64,
     pub pool_balance: u64,
+    pub partner_address: SuiAddress,
 }
 
 impl AccountState {
@@ -1097,6 +1178,7 @@ impl AccountState {
         sender: SuiAddress,
         fullnode_proxies: &Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         balance_pool: Option<(ObjectID, SequenceNumber)>,
+        partner_address: SuiAddress,
     ) -> Self {
         let mut retries = 0;
         while retries < 3 {
@@ -1121,12 +1203,14 @@ impl AccountState {
                 sender,
                 sui_balance,
                 pool_balance,
+                partner_address,
             };
         }
         Self {
             sender,
             sui_balance: 0,
             pool_balance: 0,
+            partner_address,
         }
     }
 }
@@ -1333,8 +1417,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
         let transaction = TestTransactionBuilder::new(head.1, head.0, gas_price)
             .publish_async(path)
             .await
+            .ensure_unique()
             .build_and_sign(head.2.as_ref());
-        let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
+        let execution_result = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.expect("Package publish should succeed");
 
         let mut treasury_cap_ref = None;
@@ -1367,10 +1452,11 @@ impl Workload<dyn Payload> for CompositeWorkload {
         for (gas, sender, keypair) in tail.iter() {
             let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .call_counter_create(self.package_id.unwrap())
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = execution_proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = proxy_ref.execute_transaction_block(transaction).await;
+                let execution_result = proxy_ref.execute_transaction_block(transaction).await;
                 let (obj_ref, owner) = execution_result.unwrap().created()[0].clone();
                 let initial_shared_version = match owner {
                     Owner::Shared {
@@ -1461,11 +1547,11 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         vec![coin_balance, recipient_arg],
                     );
                 }
-                let tx = tx_builder.build_and_sign(keypair.as_ref());
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
                 let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
-                    let (_, execution_result) = proxy_ref.execute_transaction_block(tx).await;
+                    let execution_result = proxy_ref.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("Seed deposit should succeed");
                     (idx, effects)
                 });
@@ -1484,9 +1570,10 @@ impl Workload<dyn Payload> for CompositeWorkload {
             let gas = &mut multi_gas[0];
             let tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .move_call(self.package_id.unwrap(), "balance_pool", "create", vec![])
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
 
-            let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
+            let execution_result = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Balance pool creation should succeed");
 
             update_gas!(gas, effects);
@@ -1541,9 +1628,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     vec![pool_arg, coin_balance],
                 );
             }
-            let tx = tx_builder.build_and_sign(keypair.as_ref());
+            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
-            let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
+            let execution_result = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Balance pool seed should succeed");
             update_gas!(gas, effects);
             info!("Seeded balance pool");
@@ -1560,9 +1647,10 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         "create_cap",
                         vec![cap_ref.into()],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair.as_ref());
 
-                let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
+                let execution_result = execution_proxy.execute_transaction_block(tx).await;
                 let effects = execution_result.expect("TestCoinCap creation should succeed");
 
                 self.init_gas[0].0 = effects.gas_object().0;
@@ -1599,9 +1687,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     vec![value_arg],
                 );
             }
-            let tx = tx_builder.build_and_sign(keypair.as_ref());
+            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
-            let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
+            let execution_result = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Immutable object creation should succeed");
             update_gas!(gas, effects);
 
@@ -1663,9 +1751,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
                             vec![balance, recipient_arg],
                         );
                     }
-                    let tx = tx_builder.build_and_sign(keypair.as_ref());
+                    let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
-                    let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
+                    let execution_result = execution_proxy.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("TEST_COIN seed deposit should succeed");
                     update_gas!(gas, effects);
                 }
@@ -1715,10 +1803,10 @@ impl Workload<dyn Payload> for CompositeWorkload {
                             mutability: SharedObjectMutability::Mutable,
                         })],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair.as_ref());
 
-                let (_, execution_result) =
-                    execution_proxy.execute_transaction_block(enable_tx).await;
+                let execution_result = execution_proxy.execute_transaction_block(enable_tx).await;
                 let effects = execution_result.expect("Address alias enable should succeed");
                 update_gas!(gas, effects);
 
@@ -1776,10 +1864,10 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         .collect();
                     builder.transfer_args(*sender, new_coin_args);
                 }
-                let tx = tx_builder.build_and_sign(keypair.as_ref());
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
                 let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
-                    let (_, execution_result) = proxy_ref.execute_transaction_block(tx).await;
+                    let execution_result = proxy_ref.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("Seed deposit should succeed");
                     (idx, effects)
                 });
@@ -1848,6 +1936,27 @@ impl Workload<dyn Payload> for CompositeWorkload {
             panic!("Address balance gas probability is set to 0 but address balance amount is 0");
         }
 
+        // Collect all payload addresses for pairing
+        let payload_addresses: Vec<SuiAddress> = self
+            .payload_gas
+            .iter()
+            .map(|(_, sender, _)| *sender)
+            .collect();
+
+        // Pair payloads: 0↔1, 2↔3, etc. If odd number, last one pairs with first.
+        let get_partner_address = |i: usize| -> SuiAddress {
+            let partner_idx = if i.is_multiple_of(2) {
+                if i + 1 < payload_addresses.len() {
+                    i + 1
+                } else {
+                    0
+                }
+            } else {
+                i - 1
+            };
+            payload_addresses[partner_idx]
+        };
+
         let mut payloads: Vec<Box<dyn Payload>> = vec![];
         for i in 0..self.num_payloads {
             let gas = self.payload_gas[i as usize].clone();
@@ -1864,6 +1973,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         cycle_state: AliasRevokeCycleState::NeedAdd,
                     },
                 );
+            let partner_address = get_partner_address(i as usize);
             payloads.push(Box::new(CompositePayload {
                 config: config.clone(),
                 fullnode_proxies: fullnode_proxies.clone(),
@@ -1875,6 +1985,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 metrics: self.metrics.clone(),
                 nonce_counter: AtomicU32::new(0),
                 alias_state,
+                partner_address,
             }));
         }
 

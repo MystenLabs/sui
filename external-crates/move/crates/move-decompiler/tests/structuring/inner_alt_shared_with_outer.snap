@@ -1,0 +1,16 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+assertion_line: 21
+---
+{ 0 }
+{ 1 }
+if (1) {
+    { 2 }
+    if (2) {
+        { 3 }
+    }
+}
+if <(!__c1 | (__c1 & !__c2))> {
+    { 4 }
+}
+{ 5 }

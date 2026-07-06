@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
+use async_graphql::connection::Edge;
+use async_graphql::connection::EmptyFields;
+use async_graphql::connection::PageInfo;
 use async_graphql::dataloader::DataLoader;
 use diesel::QueryableByName;
 use diesel::sql_types::BigInt;
@@ -19,6 +21,8 @@ use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionC
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::QueryType;
 use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
@@ -26,7 +30,7 @@ use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionExpiration;
 
 use crate::api::scalars::base64::Base64;
-use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::id::Id;
@@ -45,9 +49,12 @@ use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
+use crate::task::streaming::ProcessedTransaction;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
@@ -64,7 +71,18 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub(crate) type CTransaction = JsonCursor<u64>;
+pub type CTransaction = ByteCursor;
+
+pub(crate) struct TransactionConnection {
+    pub edges: Vec<Edge<String, Transaction, EmptyFields>>,
+    pub page_info: PageInfo,
+}
+
+#[derive(thiserror::Error, Debug, Clone)]
+pub(crate) enum Error {
+    #[error("Invalid input cursor")]
+    BadCursor,
+}
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -105,6 +123,24 @@ impl Transaction {
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<TransactionContents, RpcError> {
         self.contents.fetch(ctx, self.digest).await
+    }
+}
+
+#[Object]
+impl TransactionConnection {
+    /// Information to aid in pagination.
+    async fn page_info(&self) -> &PageInfo {
+        &self.page_info
+    }
+
+    /// A list of edges.
+    async fn edges(&self) -> &[Edge<String, Transaction, EmptyFields>] {
+        &self.edges
+    }
+
+    /// A list of nodes.
+    async fn nodes(&self) -> Vec<&Transaction> {
+        self.edges.iter().map(|e| &e.node).collect()
     }
 }
 
@@ -220,8 +256,73 @@ impl Transaction {
     pub(crate) fn with_digest(scope: Scope, digest: TransactionDigest) -> Self {
         Self {
             digest,
-            contents: TransactionContents::empty(scope),
+            contents: TransactionContents::empty(scope.with_active_transaction_digest(digest)),
         }
+    }
+
+    /// Construct a fully-inflated transaction with already-hydrated contents. The digest is
+    /// read from `contents`, which keeps it consistent with the contents anchored on the scope.
+    pub(crate) fn with_contents(
+        scope: Scope,
+        contents: Arc<NativeTransactionContents>,
+    ) -> Result<Self, RpcError> {
+        let digest = contents.digest()?;
+        Ok(Self {
+            digest,
+            contents: TransactionContents {
+                scope: scope.with_active_transaction_contents(digest, contents.clone()),
+                contents: Some(contents),
+            },
+        })
+    }
+
+    /// Paginate over pre-loaded transactions, applying in-memory filtering.
+    ///
+    /// Used when transaction data is already available (e.g. from streaming) and doesn't
+    /// require database queries. Cursors encode `tx_sequence_number` for consistency with
+    /// the query API, enabling clients to continue paginating via queries.
+    ///
+    // TODO(DVX-2068): Add cursor consistency test between subscriptions and query API.
+    pub(crate) fn paginate_preloaded_transactions(
+        scope: Scope,
+        transactions: &[ProcessedTransaction],
+        page: &Page<CTransaction>,
+        filter: TransactionFilter,
+    ) -> Result<TransactionConnection, RpcError<Error>> {
+        let after = page
+            .after()
+            .map(|c| CursorToken::decode(c))
+            .transpose()
+            .map_err(|_| bad_user_input(Error::BadCursor))?
+            .map(|c| c.position);
+        let before = page
+            .before()
+            .map(|c| CursorToken::decode(c))
+            .transpose()
+            .map_err(|_| bad_user_input(Error::BadCursor))?
+            .map(|c| c.position);
+
+        let filtered: Vec<_> = transactions
+            .iter()
+            .filter(|tx| filter.matches(&tx.contents))
+            .filter(|tx| after.is_none_or(|a| tx.tx_sequence_number >= a))
+            .filter(|tx| before.is_none_or(|b| tx.tx_sequence_number <= b))
+            .take(page.limit_with_overhead())
+            .collect();
+
+        page.paginate_results(
+            filtered,
+            |tx| {
+                ByteCursor::new(
+                    CursorToken::item(QueryType::Transactions, 0, tx.tx_sequence_number)
+                        .encode()
+                        .to_vec(),
+                )
+            },
+            |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
+        )
+        .map(Into::into)
+        .map_err(upcast)
     }
 
     /// Load the transaction from the store, and return it fully inflated (with contents already
@@ -232,18 +333,15 @@ impl Transaction {
         scope: Scope,
         digest: Digest,
     ) -> Result<Option<Self>, RpcError> {
-        let contents = TransactionContents::empty(scope)
+        let fetched = TransactionContents::empty(scope.clone())
             .fetch(ctx, digest.into())
             .await?;
 
-        let Some(tx) = &contents.contents else {
+        let Some(contents) = fetched.contents else {
             return Ok(None);
         };
 
-        Ok(Some(Self {
-            digest: tx.digest()?,
-            contents,
-        }))
+        Ok(Some(Self::with_contents(scope, contents)?))
     }
 
     /// Cursor based pagination through transactions with filters applied.
@@ -254,7 +352,7 @@ impl Transaction {
         scope: Scope,
         page: Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<Connection<String, Transaction>, RpcError> {
+    ) -> Result<TransactionConnection, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -264,7 +362,7 @@ impl Transaction {
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(Connection::new(false, false));
+            return Ok(TransactionConnection::empty());
         };
 
         let TransactionFilter {
@@ -294,9 +392,16 @@ impl Transaction {
 
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| JsonCursor::new(*s),
+            |(s, _)| {
+                ByteCursor::new(
+                    CursorToken::item(QueryType::Transactions, 0, *s)
+                        .encode()
+                        .to_vec(),
+                )
+            },
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
+        .map(Into::into)
     }
 }
 
@@ -319,6 +424,16 @@ impl TransactionContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+
+        // Reuse contents anchored on the scope by a parent resolver (streaming and indexed
+        // alike both anchor with hydrated contents when they have them).
+        if let Some(contents) = self.scope.active_transaction_contents_for(digest) {
+            return Ok(Self {
+                scope: self.scope.clone(),
+                contents: Some(contents.clone()),
+            });
+        }
+
         let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
             return Ok(self.clone());
         };
@@ -347,9 +462,25 @@ impl TransactionContents {
     }
 }
 
+impl TransactionConnection {
+    fn empty() -> Self {
+        Self {
+            edges: vec![],
+            page_info: PageInfo {
+                has_previous_page: false,
+                has_next_page: false,
+                start_cursor: None,
+                end_cursor: None,
+            },
+        }
+    }
+}
+
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
-        *self.deref()
+        CursorToken::decode(self)
+            .expect("cursor already validated as ByteCursor")
+            .position
     }
 }
 
@@ -360,6 +491,25 @@ impl From<TransactionEffects> for Transaction {
         Self {
             digest: fx.digest,
             contents: TransactionContents { scope, contents },
+        }
+    }
+}
+
+impl From<Connection<String, Transaction>> for TransactionConnection {
+    /// Convert a stock async-graphql `Connection` (as produced by the PG path's
+    /// `Page::paginate_results`) into the custom shape. Cursors are derived from edges, matching
+    /// stock semantics.
+    fn from(conn: Connection<String, Transaction>) -> Self {
+        let start_cursor = conn.edges.first().map(|e| e.cursor.clone());
+        let end_cursor = conn.edges.last().map(|e| e.cursor.clone());
+        Self {
+            edges: conn.edges,
+            page_info: PageInfo {
+                has_previous_page: conn.has_previous_page,
+                has_next_page: conn.has_next_page,
+                start_cursor,
+                end_cursor,
+            },
         }
     }
 }

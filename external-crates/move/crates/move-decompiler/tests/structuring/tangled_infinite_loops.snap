@@ -1,0 +1,5 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+assertion_line: 21
+---
+// STRUCTURING PANICKED: structuring failed on top-level function residue after loop collapse

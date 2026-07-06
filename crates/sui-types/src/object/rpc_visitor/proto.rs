@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::annotated_value as A;
-use prost_types::Struct;
 use prost_types::Value;
-use prost_types::value::Kind;
 
 use crate::object::rpc_visitor as RV;
 
@@ -35,121 +33,28 @@ impl ProtoVisitor {
             &mut RV::RpcVisitor::<Value, _>::new(RV::LocalMeter::new(&mut self.bound, MAX_DEPTH)),
         )
     }
-}
 
-impl RV::Format for Value {
-    type Vec = Vec<Value>;
-    type Map = Struct;
-
-    fn is_null(&self) -> bool {
-        matches!(self.kind, Some(Kind::NullValue(_)))
-    }
-
-    fn is_bool(&self) -> bool {
-        self.as_bool().is_some()
-    }
-
-    fn is_number(&self) -> bool {
-        matches!(self.kind, Some(Kind::NumberValue(_)))
-    }
-
-    fn is_string(&self) -> bool {
-        self.as_string().is_some()
-    }
-
-    fn is_array(&self) -> bool {
-        self.as_array().is_some()
-    }
-
-    fn is_object(&self) -> bool {
-        self.as_object().is_some()
-    }
-
-    fn as_bool(&self) -> Option<bool> {
-        if let Some(Kind::BoolValue(b)) = &self.kind {
-            Some(*b)
-        } else {
-            None
-        }
-    }
-
-    fn as_string(&self) -> Option<&str> {
-        if let Some(Kind::StringValue(value)) = &self.kind {
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    fn as_array(&self) -> Option<&Self::Vec> {
-        if let Some(Kind::ListValue(value)) = &self.kind {
-            Some(&value.values)
-        } else {
-            None
-        }
-    }
-
-    fn as_object(&self) -> Option<&Self::Map> {
-        if let Some(Kind::StructValue(value)) = &self.kind {
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    fn null<M: RV::Meter>(meter: &mut M) -> Result<Self, RV::MeterError> {
-        meter.charge(std::mem::size_of::<Value>())?;
-        Ok(Kind::NullValue(0).into())
-    }
-
-    fn bool<M: RV::Meter>(meter: &mut M, value: bool) -> Result<Self, RV::MeterError> {
-        meter.charge(std::mem::size_of::<Value>())?;
-        Ok(Self::from(value))
-    }
-
-    fn number<M: RV::Meter>(meter: &mut M, value: u32) -> Result<Self, RV::MeterError> {
-        meter.charge(std::mem::size_of::<Value>())?;
-        Ok(Self::from(value))
-    }
-
-    fn string<M: RV::Meter>(meter: &mut M, value: String) -> Result<Self, RV::MeterError> {
-        meter.charge(std::mem::size_of::<Value>() + value.len())?;
-        Ok(Self::from(value))
-    }
-
-    fn vec<M: RV::Meter>(meter: &mut M, value: Self::Vec) -> Result<Self, RV::MeterError> {
-        meter.charge(std::mem::size_of::<Value>())?;
-        Ok(Self::from(value))
-    }
-
-    fn map<M: RV::Meter>(meter: &mut M, value: Self::Map) -> Result<Self, RV::MeterError> {
-        meter.charge(std::mem::size_of::<Value>())?;
-        Ok(Self::from(Kind::StructValue(value)))
-    }
-
-    fn vec_push_element<M: RV::Meter>(
-        _meter: &mut M,
-        vec: &mut Self::Vec,
-        value: Self,
-    ) -> Result<(), RV::MeterError> {
-        vec.push(value);
-        Ok(())
-    }
-
-    fn map_push_field<M: RV::Meter>(
-        meter: &mut M,
-        map: &mut Self::Map,
-        key: String,
-        value: Self,
-    ) -> Result<(), RV::MeterError> {
-        meter.charge(key.len())?;
-        map.fields.insert(key, value);
-        Ok(())
+    /// Like `deserialize_value`, but draws from an externally-owned size
+    /// budget so that callers rendering many values into one response can
+    /// share a single aggregate cap. The budget is decremented in place; if
+    /// it is exhausted, deserialization fails with `MeterError::TooBig`.
+    pub fn deserialize_value_with_budget(
+        bytes: &[u8],
+        layout: &A::MoveTypeLayout,
+        size_budget: &mut usize,
+    ) -> Result<Value, RV::Error> {
+        A::MoveValue::visit_deserialize(
+            bytes,
+            layout,
+            &mut RV::RpcVisitor::<Value, _>::new(RV::LocalMeter::new(size_budget, MAX_DEPTH)),
+        )
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use prost_types::value::Kind;
+
     use crate::object::rpc_visitor::proto::*;
 
     use crate::object::bounded_visitor::tests::layout_;

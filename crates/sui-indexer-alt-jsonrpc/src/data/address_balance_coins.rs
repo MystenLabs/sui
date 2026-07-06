@@ -80,6 +80,10 @@ pub(crate) async fn try_resolve_address_balance_object(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<Option<Object>, anyhow::Error> {
+    if !super::latest_feature_flag(ctx, "enable_coin_reservation_obj_refs").await? {
+        return Ok(None);
+    }
+
     let Some(chain_identifier) = ctx.chain_identifier() else {
         return Ok(None);
     };

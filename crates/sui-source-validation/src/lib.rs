@@ -8,6 +8,7 @@ use move_compiler::compiled_unit::NamedCompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_package_alt::schema::Environment;
 use move_symbol_pool::Symbol;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::{HashMap, HashSet};
 use sui_move_build::CompiledPackage;
 use sui_rpc_api::Client;
@@ -146,7 +147,7 @@ impl ValidationMode {
         let resps =
             future::join_all(addrs.iter().copied().map(|a| verifier.pkg_for_address(a))).await;
 
-        for (storage_id, pkg) in addrs.into_iter().zip(resps) {
+        for (storage_id, pkg) in addrs.into_iter().zip_debug_eq(resps) {
             let pkg = pkg?;
 
             let module_map = pkg.serialized_module_map();
@@ -445,5 +446,9 @@ fn substitute_root_address(
 
 /// The on-chain addresses for a source package's dependencies
 fn dependency_addresses(package: &CompiledPackage) -> impl Iterator<Item = AccountAddress> + '_ {
-    package.dependency_ids.published.values().map(|id| **id)
+    package
+        .dependency_ids
+        .published
+        .values()
+        .map(|dep| AccountAddress::from(dep.published_at))
 }

@@ -51,7 +51,8 @@ impl TransactionExecutionService for RpcService {
     }
 }
 
-pub const EXECUTE_TRANSACTION_READ_MASK_DEFAULT: &str = "effects";
+pub const EXECUTE_TRANSACTION_READ_MASK_DEFAULT: &str =
+    crate::read_mask_defaults::EXECUTE_TRANSACTION;
 // Current maximum number of supported UserSignature's,
 // one for the sender and one for an optional sponsor
 const MAX_NUMBER_OF_SIGNATURES: usize = 2;

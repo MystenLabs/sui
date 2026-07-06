@@ -1,6 +1,6 @@
 //# publish
-module 0x5.A {
-    public ones_tens(f: u64): u64 * u64 {
+mvir 0x5::A {
+    public fun ones_tens(f: u64): u64 * u64 {
         let k: u64;
         let m: u64;
     label b0:
@@ -12,16 +12,16 @@ module 0x5.A {
 
 
 //# run
-module 0x43.m {
-import 0x5.A;
+mvir 0x43::m {
+import 0x5::A;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
     let y: u64;
     let z: u64;
 label b0:
     x = 143;
-    y, z = A.ones_tens(move(x));
+    y, z = A::ones_tens(move(x));
     assert(move(y) == 3, 42);
     assert(move(z) == 40, 42);
     return;

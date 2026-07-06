@@ -3,6 +3,8 @@
 
 use std::rc::Rc;
 
+use mysten_common::ZipDebugEqIteratorExt;
+
 use crate::{
     execution_mode::ExecutionMode,
     sp,
@@ -16,10 +18,7 @@ use crate::{
         },
     },
 };
-use sui_types::{
-    coin::RESOLVED_COIN_STRUCT, error::ExecutionError,
-    funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
-};
+use sui_types::{coin::RESOLVED_COIN_STRUCT, funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT};
 
 struct Context<'txn> {
     objects: Vec<&'txn T::Type>,
@@ -45,17 +44,16 @@ impl<'txn> Context<'txn> {
     }
 }
 
-/// Verifies the correctness of the typing on the AST
-/// - All object inputs have key
-/// - All pure inputs are valid types
-/// - All receiving inputs types have key
-/// - All commands are well formed with correct argument/result types
 /// - All dropped result values have the `drop` ability
-pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
-    verify_::<Mode>(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))
+pub fn verify<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    txn: &T::Transaction,
+) -> Result<(), Mode::Error> {
+    Ok(verify_::<Mode>(env, txn)
+        .map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))?)
 }
 
-fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
+fn verify_<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<()> {
     let context = Context::new(txn);
     let T::Transaction {
         gas_payment: _,
@@ -65,6 +63,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
         pure,
         receiving,
         withdrawal_compatibility_conversions,
+        original_command_len: _,
         commands,
     } = txn;
     for obj in objects {
@@ -79,7 +78,13 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
     for r in receiving {
         receiving_input(r)?;
     }
+    let mut prev_index = 0;
     for c in commands {
+        debug_assert!(
+            prev_index <= c.idx,
+            "command indices should be monotonically increasing"
+        );
+        prev_index = prev_index.max(c.idx);
         command::<Mode>(env, &context, c)?;
     }
     for (withdrawal, conversion) in withdrawal_compatibility_conversions {
@@ -114,7 +119,7 @@ fn withdrawal_input(ty: &T::Type) -> anyhow::Result<()> {
 fn pure_input<Mode: ExecutionMode>(p: &T::PureInput) -> anyhow::Result<()> {
     if !Mode::allow_arbitrary_values() {
         anyhow::ensure!(
-            input_arguments::is_valid_pure_type(&p.ty)?,
+            input_arguments::is_valid_pure_type::<Mode::Error>(&p.ty)?,
             "pure type must be valid"
         );
     }
@@ -130,7 +135,7 @@ fn receiving_input(r: &T::ReceivingInput) -> anyhow::Result<()> {
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<Mode>,
     context: &Context,
     sp!(_, c): &T::Command,
 ) -> anyhow::Result<()> {
@@ -152,7 +157,7 @@ fn command<Mode: ExecutionMode>(
                 parameters.len(),
                 arguments.len()
             );
-            for (arg, param) in arguments.iter().zip(parameters) {
+            for (arg, param) in arguments.iter().zip_debug_eq(parameters) {
                 argument(env, context, arg, param)?;
             }
             anyhow::ensure!(
@@ -161,7 +166,7 @@ fn command<Mode: ExecutionMode>(
                 return_.len(),
                 result_tys.len()
             );
-            for (actual, expected) in return_.iter().zip(result_tys) {
+            for (actual, expected) in return_.iter().zip_debug_eq(result_tys) {
                 anyhow::ensure!(
                     actual == expected,
                     "return type mismatch. Expected {expected:?}, got {actual:?}"
@@ -288,7 +293,7 @@ fn command<Mode: ExecutionMode>(
         c.drop_values.len(),
         result_tys.len()
     );
-    for (drop_value, result_ty) in c.drop_values.iter().copied().zip(result_tys) {
+    for (drop_value, result_ty) in c.drop_values.iter().copied().zip_debug_eq(result_tys) {
         // drop value ==> `ty: drop`
         assert_invariant!(
             !drop_value || result_ty.abilities().has_drop(),
@@ -298,8 +303,8 @@ fn command<Mode: ExecutionMode>(
     Ok(())
 }
 
-fn argument(
-    env: &Env,
+fn argument<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &Context,
     sp!(_, (arg__, ty)): &T::Argument,
     param: &T::Type,
@@ -363,7 +368,11 @@ fn argument(
     Ok(())
 }
 
-fn usage(env: &Env, context: &Context, u: &T::Usage) -> anyhow::Result<T::Type> {
+fn usage<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    context: &Context,
+    u: &T::Usage,
+) -> anyhow::Result<T::Type> {
     match u {
         T::Usage::Move(l)
         | T::Usage::Copy {
@@ -373,7 +382,11 @@ fn usage(env: &Env, context: &Context, u: &T::Usage) -> anyhow::Result<T::Type> 
     }
 }
 
-fn location(env: &Env, context: &Context, l: T::Location) -> anyhow::Result<T::Type> {
+fn location<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    context: &Context,
+    l: T::Location,
+) -> anyhow::Result<T::Type> {
     Ok(match l {
         T::Location::TxContext => env.tx_context_type()?,
         T::Location::GasCoin => env.gas_coin_type()?,
@@ -410,8 +423,8 @@ fn location(env: &Env, context: &Context, l: T::Location) -> anyhow::Result<T::T
     })
 }
 
-fn withdrawal_compatibility_conversion(
-    env: &Env,
+fn withdrawal_compatibility_conversion<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &Context,
     withdrawal_location: T::Location,
     conv: &T::WithdrawalCompatibilityConversion,

@@ -1,0 +1,26 @@
+{
+  "messaging": {
+    "repo": "MystenLabs/sui-stack-messaging",
+    "branch": "main",
+    "sourcePath": "docs/sui-stack-messaging",
+    "targetPath": "sui-stack/messaging",
+    "transforms": ["frontmatter", "admonitions", "nav-header", "toc", "links"],
+    "linkPrefix": "/sui-stack/messaging",
+    "exclude": [],
+    "fileMap": {
+      "Installation.md": "installation.mdx",
+      "Setup.md": "setup.mdx",
+      "Examples.md": "examples.mdx",
+      "APIRef.md": "api-reference.mdx",
+      "Encryption.md": "encryption.mdx",
+      "Security.md": "security.mdx",
+      "Relayer.md": "relayer.mdx",
+      "Attachments.md": "attachments.mdx",
+      "ArchiveRecovery.md": "archive-recovery.mdx",
+      "GroupDiscovery.md": "group-discovery.mdx",
+      "Extending.md": "extending.mdx",
+      "Testing.md": "testing.mdx",
+      "CommunityContributed.md": "community-contributed.mdx"
+    }
+  }
+}

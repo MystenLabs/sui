@@ -221,6 +221,8 @@ pub(crate) struct AccumulatorSettlementTxBuilder {
     updates: BTreeMap<AccumulatorObjId, Update>,
     // addresses is only used for lookups.
     addresses: HashMap<AccumulatorObjId, AccumulatorAddress>,
+    num_deposits: u64,
+    num_withdrawals: u64,
 }
 
 impl AccumulatorSettlementTxBuilder {
@@ -231,8 +233,9 @@ impl AccumulatorSettlementTxBuilder {
         tx_index_offset: u64,
     ) -> Self {
         let mut updates = BTreeMap::<_, _>::new();
-
         let mut addresses = HashMap::<_, _>::new();
+        let mut num_deposits = 0u64;
+        let mut num_withdrawals = 0u64;
 
         for (tx_index, effect) in ckpt_effects.iter().enumerate() {
             let tx = effect.transaction_digest();
@@ -280,6 +283,7 @@ impl AccumulatorSettlementTxBuilder {
 
                 match operation {
                     AccumulatorOperation::Merge => {
+                        num_deposits += 1;
                         entry.merge.accumulate_into(
                             value,
                             checkpoint_seq,
@@ -287,6 +291,7 @@ impl AccumulatorSettlementTxBuilder {
                         );
                     }
                     AccumulatorOperation::Split => {
+                        num_withdrawals += 1;
                         entry.split.accumulate_into(
                             value,
                             checkpoint_seq,
@@ -297,11 +302,20 @@ impl AccumulatorSettlementTxBuilder {
             }
         }
 
-        Self { updates, addresses }
+        Self {
+            updates,
+            addresses,
+            num_deposits,
+            num_withdrawals,
+        }
     }
 
-    pub fn num_updates(&self) -> usize {
-        self.updates.len()
+    pub fn num_deposits(&self) -> u64 {
+        self.num_deposits
+    }
+
+    pub fn num_withdrawals(&self) -> u64 {
+        self.num_withdrawals
     }
 
     /// Returns a unified map of funds changes for all accounts.
@@ -328,7 +342,9 @@ impl AccumulatorSettlementTxBuilder {
         checkpoint_height: u64,
         checkpoint_seq: u64,
     ) -> Vec<TransactionKind> {
-        let Self { updates, addresses } = self;
+        let Self {
+            updates, addresses, ..
+        } = self;
 
         let build_one_settlement_txn = |idx: u64, updates: &mut Vec<(AccumulatorObjId, Update)>| {
             let (total_input_sui, total_output_sui) =
@@ -458,16 +474,7 @@ pub fn build_accumulator_barrier_tx(
 ) -> TransactionKind {
     let num_settlements = settlement_effects.len() as u64;
 
-    let (objects_created, objects_destroyed) = settlement_effects
-        .iter()
-        .flat_map(|effects| effects.object_changes())
-        .fold((0u64, 0u64), |(created, destroyed), change| {
-            match change.id_operation {
-                IDOperation::Created => (created + 1, destroyed),
-                IDOperation::Deleted => (created, destroyed + 1),
-                IDOperation::None => (created, destroyed),
-            }
-        });
+    let (objects_created, objects_destroyed) = count_accumulator_object_changes(settlement_effects);
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let root = builder
@@ -499,6 +506,21 @@ pub fn build_accumulator_barrier_tx(
     );
 
     TransactionKind::ProgrammableSystemTransaction(builder.finish())
+}
+
+pub(crate) fn count_accumulator_object_changes(
+    settlement_effects: &[TransactionEffects],
+) -> (u64, u64) {
+    settlement_effects
+        .iter()
+        .flat_map(|effects| effects.object_changes())
+        .fold((0u64, 0u64), |(created, destroyed), change| {
+            match change.id_operation {
+                IDOperation::Created => (created + 1, destroyed),
+                IDOperation::Deleted => (created, destroyed + 1),
+                IDOperation::None => (created, destroyed),
+            }
+        })
 }
 
 #[cfg(test)]

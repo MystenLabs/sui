@@ -1,12 +1,12 @@
 //# run
-module 0x42.m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
     let e_imm1: &u64;
     let e_mut2: &mut u64;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     vec_push_back<u64>(&mut v, 0);
     vec_push_back<u64>(&mut v, 1);
 
@@ -18,14 +18,14 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
     let e_mut1: &mut u64;
     let e_imm2: &u64;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     vec_push_back<u64>(&mut v, 0);
     vec_push_back<u64>(&mut v, 1);
 
@@ -37,14 +37,14 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
     let e_mut1: &mut u64;
     let e_mut2: &mut u64;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     vec_push_back<u64>(&mut v, 0);
     vec_push_back<u64>(&mut v, 1);
 

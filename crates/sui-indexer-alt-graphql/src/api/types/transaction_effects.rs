@@ -20,6 +20,7 @@ use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::BalanceChange as GrpcBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects as NativeTransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::ExecutionStatus as NativeExecutionStatus;
 use sui_types::signature::GenericSignature;
@@ -41,6 +42,7 @@ use crate::api::types::execution_error::ExecutionError;
 use crate::api::types::gas_effects::GasEffects;
 use crate::api::types::object_change::ObjectChange;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::TransactionContents;
 use crate::api::types::unchanged_consensus_object::UnchangedConsensusObject;
 use crate::error::RpcError;
@@ -119,6 +121,21 @@ impl EffectsContents {
                 .map(|effects| match effects.status() {
                     NativeExecutionStatus::Success => ExecutionStatus::Success,
                     NativeExecutionStatus::Failure(_) => ExecutionStatus::Failure,
+                })
+                .map_err(RpcError::from),
+        )
+    }
+
+    /// The schema version of the effects struct.
+    async fn version(&self) -> Option<Result<i32, RpcError>> {
+        let content = self.contents.as_ref()?;
+
+        Some(
+            content
+                .effects()
+                .map(|effects| match effects {
+                    NativeTransactionEffects::V1(_) => 1i32,
+                    NativeTransactionEffects::V2(_) => 2,
                 })
                 .map_err(RpcError::from),
         )
@@ -203,12 +220,17 @@ impl EffectsContents {
                 let page = Page::from_params(limits, first, after, last, before)?;
 
                 let events = content.events()?;
+                let transaction_digest = content.digest()?;
+                let timestamp_ms = content.timestamp_ms();
+                // Anchor the parent transaction (with hydrated contents) onto each yielded
+                // Event's scope, so descendant resolvers like `IAddressable.asTransactionObject`
+                // default to it and `*Contents::fetch` short-circuits via the scope.
+                let event_scope = self
+                    .scope
+                    .with_active_transaction_contents(transaction_digest, content.clone());
                 page.paginate_indices(events.len(), |i| {
-                    let transaction_digest = content.digest()?;
-                    let timestamp_ms = content.timestamp_ms();
-
                     Ok(Event {
-                        scope: self.scope.clone(),
+                        scope: event_scope.clone(),
                         native: events[i].clone(),
                         transaction_digest,
                         sequence_number: i as u64,
@@ -448,7 +470,7 @@ impl EffectsContents {
         after: Option<CDependency>,
         last: Option<u64>,
         before: Option<CDependency>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         let content = self.contents.as_ref()?;
 
         Some(
@@ -465,6 +487,7 @@ impl EffectsContents {
                         dependencies[i],
                     ))
                 })
+                .map(Into::into)
             }
             .await,
         )
@@ -472,6 +495,23 @@ impl EffectsContents {
 }
 
 impl TransactionEffects {
+    /// Construct a fully-inflated TransactionEffects with already-hydrated contents. The digest
+    /// is read from `contents`, which keeps it consistent with the contents anchored on the
+    /// scope.
+    pub(crate) fn with_contents(
+        scope: Scope,
+        contents: Arc<NativeTransactionContents>,
+    ) -> Result<Self, RpcError> {
+        let digest = contents.digest()?;
+        Ok(Self {
+            digest,
+            contents: EffectsContents {
+                scope: scope.with_active_transaction_contents(digest, contents.clone()),
+                contents: Some(contents),
+            },
+        })
+    }
+
     /// Create a new TransactionEffects from an ExecutedTransaction.
     pub(crate) fn from_executed_transaction(
         scope: Scope,
@@ -485,18 +525,7 @@ impl TransactionEffects {
             signatures,
         )
         .context("Failed to create TransactionContents from ExecutedTransaction")?;
-
-        let digest = contents
-            .digest()
-            .context("Failed to get digest from transaction contents")?;
-
-        Ok(Self {
-            digest,
-            contents: EffectsContents {
-                scope,
-                contents: Some(Arc::new(contents)),
-            },
-        })
+        Self::with_contents(scope, Arc::new(contents))
     }
 
     /// Load the effects from the store, and return it fully inflated (with contents already
@@ -507,23 +536,20 @@ impl TransactionEffects {
         scope: Scope,
         digest: Digest,
     ) -> Result<Option<Self>, RpcError> {
-        let contents = EffectsContents::empty(scope)
+        let fetched = EffectsContents::empty(scope.clone())
             .fetch(ctx, digest.into())
             .await?;
 
-        let Some(tx) = &contents.contents else {
+        let Some(contents) = fetched.contents else {
             return Ok(None);
         };
 
-        Ok(Some(Self {
-            digest: tx.digest()?,
-            contents,
-        }))
+        Ok(Some(Self::with_contents(scope, contents)?))
     }
 }
 
 impl EffectsContents {
-    fn empty(scope: Scope) -> Self {
+    pub(crate) fn empty(scope: Scope) -> Self {
         Self {
             scope,
             contents: None,
@@ -541,6 +567,16 @@ impl EffectsContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+
+        // Reuse contents anchored on the scope by a parent resolver (streaming and indexed
+        // alike both anchor with hydrated contents when they have them).
+        if let Some(contents) = self.scope.active_transaction_contents_for(digest) {
+            return Ok(Self {
+                scope: self.scope.clone(),
+                contents: Some(contents.clone()),
+            });
+        }
+
         let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
             return Ok(self.clone());
         };
@@ -572,7 +608,6 @@ impl EffectsContents {
 impl From<Transaction> for TransactionEffects {
     fn from(tx: Transaction) -> Self {
         let TransactionContents { scope, contents } = tx.contents;
-
         Self {
             digest: tx.digest,
             contents: EffectsContents { scope, contents },

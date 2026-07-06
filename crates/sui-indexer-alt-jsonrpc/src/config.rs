@@ -1,19 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
-use jsonrpsee::http_client::HeaderMap;
-use jsonrpsee::http_client::HeaderValue;
-use jsonrpsee::http_client::HttpClient;
-use jsonrpsee::http_client::HttpClientBuilder;
-use sui_default_config::DefaultConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 
 pub use sui_name_service::NameServiceConfig;
-
-pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
 #[derive(Debug)]
 pub struct RpcConfig {
@@ -40,9 +34,8 @@ pub struct RpcConfig {
     pub package_resolver: sui_package_resolver::Limits,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct RpcLayer {
     pub objects: ObjectsLayer,
     pub dynamic_fields: DynamicFieldsLayer,
@@ -95,9 +88,8 @@ pub struct ObjectsConfig {
     pub obj_retry_interval_ms: u64,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ObjectsLayer {
     pub max_multi_get_objects: Option<usize>,
     pub default_page_size: Option<usize>,
@@ -123,9 +115,8 @@ pub struct DynamicFieldsConfig {
     pub max_page_size: usize,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct DynamicFieldsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
@@ -148,9 +139,8 @@ pub struct TransactionsConfig {
     pub tx_retry_interval_ms: u64,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct TransactionsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
@@ -158,9 +148,8 @@ pub struct TransactionsLayer {
     pub tx_retry_interval_ms: Option<u64>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct NameServiceLayer {
     pub package_address: Option<SuiAddress>,
     pub registry_id: Option<ObjectID>,
@@ -177,9 +166,8 @@ pub struct CoinsConfig {
     pub max_page_size: usize,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CoinsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
@@ -193,17 +181,15 @@ pub struct NodeConfig {
     pub max_request_size: u32,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct NodeLayer {
     pub header_value: Option<String>,
     pub max_request_size: Option<u32>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PackageResolverLayer {
     pub max_type_argument_depth: usize,
     pub max_type_argument_width: usize,
@@ -308,22 +294,6 @@ impl CoinsLayer {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
         }
-    }
-}
-
-impl NodeConfig {
-    pub fn client(&self, fullnode_rpc_url: url::Url) -> anyhow::Result<HttpClient> {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            CLIENT_SDK_TYPE_HEADER,
-            HeaderValue::from_str(&self.header_value)?,
-        );
-
-        HttpClientBuilder::default()
-            .max_request_size(self.max_request_size)
-            .set_headers(headers)
-            .build(&fullnode_rpc_url)
-            .context("Failed to initialize fullnode RPC client")
     }
 }
 

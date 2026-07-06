@@ -42,19 +42,22 @@ pub(crate) mod filter;
 mod lookups;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
-pub(crate) struct EventCursor {
+pub struct EventCursor {
     #[serde(rename = "t")]
     pub tx_sequence_number: u64,
     #[serde(rename = "e")]
     pub ev_sequence_number: u64,
 }
 
-pub(crate) type CEvent = JsonCursor<EventCursor>;
+pub type CEvent = JsonCursor<EventCursor>;
 
 #[derive(Clone)]
 pub(crate) struct Event {
     pub(crate) scope: Scope,
-    pub(crate) native: NativeEvent,
+    /// Shared `Arc` so that multiple subscribers receiving events from the same
+    /// streamed checkpoint avoid a deep clone per yield. Cloning an `Event` is then
+    /// just an atomic refcount bump on the `native` field.
+    pub(crate) native: Arc<NativeEvent>,
     /// Digest of the transaction that emitted this event
     pub(crate) transaction_digest: TransactionDigest,
     /// Position of this event within the transaction's events list (0-indexed)

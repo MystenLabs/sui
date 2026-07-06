@@ -10,7 +10,6 @@ publish = false
 [dependencies]
 bcs.workspace = true
 serde.workspace = true
-once_cell.workspace = true
 tracing.workspace = true
 
 sui-types.workspace = true

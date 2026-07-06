@@ -12,6 +12,8 @@ async fn test_create_coin_registry_object() {
     let _guard =
         sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_execution_version_for_testing(3);
+            // set up config values that would otherwise be incompatible with the execution version
+            config.set_gas_model_version_for_testing(11);
             // The new consensus handler requires these flags, and they are irrelevant to the test
             config.set_ignore_execution_time_observations_after_certs_closed_for_testing(true);
             config.set_record_time_estimate_processed_for_testing(true);
@@ -20,6 +22,7 @@ async fn test_create_coin_registry_object() {
             config.set_cancel_for_failed_dkg_early_for_testing(true);
             config.set_use_mfp_txns_in_load_initial_object_debts_for_testing(true);
             config.set_authority_capabilities_v2_for_testing(true);
+            config.set_split_checkpoints_in_consensus_handler_for_testing(true);
             config
         });
 

@@ -32,7 +32,7 @@ function useMobileSidebarSafe() {
 
 function NavbarItems({ items }) {
   return (
-    <div className="flex flex-[8_1_0%] items-center justify-start gap-8 min-[1100px]:gap-16">
+    <div className="navbar-left-items">
       {items.map((item, i) => (
         <ErrorCauseBoundary
           key={i}
@@ -63,6 +63,13 @@ function NavbarContentLayout({ left, right }) {
 
 function SearchLauncher() {
   const [open, setOpen] = React.useState(false);
+
+  // Allow other components (e.g. getting-started search bar) to open the modal
+  React.useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("open-search-modal", handler);
+    return () => window.removeEventListener("open-search-modal", handler);
+  }, []);
 
   return (
     <>
@@ -109,10 +116,10 @@ function KapaButton() {
     <button
       type="button"
       onClick={handleClick}
-      className="kapa-trigger-btn flex items-center gap-2.5 cursor-pointer bg-white text-gray-900 font-semibold text-base px-5 py-2.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors mx-2"
+      className="kapa-trigger-btn flex items-center gap-2.5 cursor-pointer bg-white text-gray-900 font-semibold text-base px-5 py-2.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
     >
       <img src="/img/logo.svg" alt="" width="23" height="23" />
-      Ask Sui AI
+      <span className="hidden min-[1400px]:inline">Ask Sui AI</span>
     </button>
   );
 }
@@ -133,7 +140,7 @@ export default function NavbarContent() {
         </>
       }
       right={
-        <div className="flex items-center gap-3">
+        <div className="navbar-right-controls flex items-center flex-shrink-0">
           <NavbarItems items={rightItems} />
           <ThemeToggle />
           <KapaButton />

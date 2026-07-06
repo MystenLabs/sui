@@ -46,6 +46,33 @@ ignore = [
     "RUSTSEC-2025-0057",
     # bincode unmaintained - maintainers consider 1.3.3 complete, used by anemo and sui crates
     "RUSTSEC-2025-0141",
+    # lru 0.10.1 `IterMut` unsoundness. Unreachable in Sui: grep across the workspace
+    # confirms zero `LruCache::iter_mut()` call sites. Upgrading to >=0.16.3 is a
+    # 6-major-version API jump across ~20 files with no security benefit because the
+    # unsound path is not called. Revisit if anyone adds an `LruCache::iter_mut` usage.
+    "RUSTSEC-2026-0002",
+    # rand 0.8.5 unsoundness when a custom logger invokes rand reentrantly during
+    # thread-local RNG init. Not triggerable in Sui: logging uses tracing/tracing-subscriber
+    # which never calls rand during setup. Migrating rand 0.8 -> 0.9 would require ~316
+    # call-site edits across ~143 files in Sui alone, plus cascading updates in fastcrypto,
+    # walrus, seal, and other downstream consumers. Deferred pending a coordinated
+    # ecosystem-wide bump (likely driven by fastcrypto first).
+    "RUSTSEC-2026-0097",
+    # `proc-macro-error2` is unmaintained, no safe upgrade — transitive via
+    # alloy-sol-macro (sui-bridge ethereum stack); waiting for alloy to migrate
+    "RUSTSEC-2026-0173",
+    # `http-types` ASCII invariant notice, no safe upgrade — dev-dependency only,
+    # via wiremock 0.5 test mocks; not used to construct auth headers
+    "RUSTSEC-2026-0174",
+    # quick-xml 0.38: quadratic duplicate-attribute check (0194) and unbounded
+    # namespace-declaration allocation DoS (0195). Fixed only in quick-xml >= 0.41,
+    # but quick-xml is transitive via object_store, whose latest release (0.14.0)
+    # still requires ^0.40 — no upgrade path yet. In Sui, quick-xml only parses
+    # XML API responses from cloud storage providers (S3/GCS/Azure) via
+    # object_store, not attacker-controlled input. Remove once object_store
+    # releases with quick-xml >= 0.41.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

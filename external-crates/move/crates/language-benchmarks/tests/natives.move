@@ -1,4 +1,4 @@
-module 0x1::bench {
+module 0x2::bench {
 
     //
     // Global helpers
@@ -11,7 +11,7 @@ module 0x1::bench {
     // `natives` benchmark
     //
     fun test_vector_ops<T>(mut x1: T, mut x2: T): (T, T) {
-        let mut v: vector<T> = vector::empty();
+        let mut v: vector<T> = vector[];
         check(v.length() == 0, 100);
         v.push_back(x1);
         check(v.length() == 1, 101);
@@ -32,11 +32,11 @@ module 0x1::bench {
         test_vector_ops<u128>(1u128, 2u128);
         test_vector_ops<bool>(true, false);
         test_vector_ops<address>(@0x1, @0x2);
-        test_vector_ops<vector<u8>>(vector::empty(), vector::empty());
+        test_vector_ops<vector<u8>>(vector[], vector[]);
     }
 
     public fun bench_vector_ops() {
-        let mut i = 0;
+        let mut i: u64 = 0;
         // 300 is the number of loops to make the benchmark run for a couple of minutes,
         // which is an eternity.
         // Adjust according to your needs, it's just a reference

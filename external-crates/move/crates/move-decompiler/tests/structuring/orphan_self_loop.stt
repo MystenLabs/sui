@@ -1,0 +1,11 @@
+// An entry self-loop with an orphan self-loop node that's unreachable from the entry. The
+// structurer only walks nodes reachable from `entry`, so node 1 is invisible to it and the
+// output is just the entry's loop. The `// unstructured blocks` notice doesn't fire for
+// unreachable nodes - dead bytecode in the input is excluded from the detection set (see
+// the `reachable` filter in `mod.rs::structure`).
+//
+//   ->0     ->1
+//    \_|     \_|
+
+code,0,0
+code,1,1

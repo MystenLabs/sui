@@ -4,11 +4,11 @@
 use move_symbol_pool::Symbol;
 
 use crate::{
-    cfgir::visitor::CFGIRVisitor,
+    cfgir::visitor::{AbstractInterpreterVisitor, CFGIRVisitor},
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{DiagnosticInfo, Severity, custom},
-        warning_filters::WarningFilter,
+        codes::{DiagnosticInfo, DiagnosticsID, Severity, custom},
+        filter::FilterName,
     },
     typing::visitor::TypingVisitor,
 };
@@ -25,6 +25,7 @@ pub mod unnecessary_conditional;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
+pub mod unused_return_value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -176,26 +177,37 @@ lints!(
         "combinable_comparisons",
         "comparison operations condition can be simplified"
     ),
+    (
+        UnusedReturnValue,
+        LinterDiagnosticCategory::Suspicious,
+        "unused_return_value",
+        "return value of a non-mutating call is discarded"
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
-pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
-    (
-        Some(ALLOW_ATTR_CATEGORY.into()),
+pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
+    let mut filters: Vec<(FilterName, Vec<DiagnosticsID>)> = vec![(
+        Symbol::from(crate::diagnostics::filter::FILTER_ALL),
+        vec![DiagnosticsID::all(Some(LINT_WARNING_PREFIX))],
+    )];
+    filters.extend(
         STYLE_WARNING_FILTERS
             .iter()
             .map(|(category, code, filter_name)| {
-                WarningFilter::code(
-                    Some(LINT_WARNING_PREFIX),
-                    *category,
-                    *code,
-                    Some(filter_name),
+                (
+                    Symbol::from(*filter_name),
+                    vec![DiagnosticsID::exact(
+                        Some(LINT_WARNING_PREFIX),
+                        *category,
+                        *code,
+                    )],
                 )
-            })
-            .collect(),
-    )
+            }),
+    );
+    (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
@@ -215,6 +227,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                unused_return_value::UnusedReturnValue.visitor(),
             ]
         }
     }

@@ -523,9 +523,6 @@ advance_epoch
 update_validator_positions_and_calculate_total_stake
 	fun
 	0x3::validator_set
-effectuate_staged_metadata
-	fun
-	0x3::validator_set
 derive_reference_gas_price
 	public fun
 	0x3::validator_set
@@ -565,16 +562,7 @@ is_active_validator_by_sui_address
 is_duplicate_with_active_validator
 	fun
 	0x3::validator_set
-is_duplicate_validator
-	public(package) fun
-	0x3::validator_set
-count_duplicates_vec
-	fun
-	0x3::validator_set
 is_duplicate_with_pending_validator
-	fun
-	0x3::validator_set
-count_duplicates_tablevec
 	fun
 	0x3::validator_set
 get_candidate_or_active_validator_mut
@@ -631,17 +619,8 @@ process_validator_departure
 clean_report_records_leaving_validator
 	fun
 	0x3::validator_set
-sort_removal_list
-	fun
-	0x3::validator_set
-process_pending_stakes_and_withdraws
-	fun
-	0x3::validator_set
 calculate_total_stakes
 	public(package) fun
-	0x3::validator_set
-adjust_stake_and_gas_price
-	fun
 	0x3::validator_set
 compute_reward_adjustments
 	fun
@@ -1052,6 +1031,9 @@ active_validator_addresses_ref
 	public fun
 	0x3::sui_system
 active_validator_voting_powers
+	public fun
+	0x3::sui_system
+active_validator_stake_amount
 	public fun
 	0x3::sui_system
 calculate_rewards
@@ -1489,13 +1471,22 @@ borrow_mut
 remove
 	public fun
 	0x2::dynamic_field
+exists
+	public fun
+	0x2::dynamic_field
+remove_opt
+	public fun
+	0x2::dynamic_field
+replace
+	public fun
+	0x2::dynamic_field
+exists_with_type
+	public fun
+	0x2::dynamic_field
 exists_
 	public fun
 	0x2::dynamic_field
 remove_if_exists
-	public fun
-	0x2::dynamic_field
-exists_with_type
 	public fun
 	0x2::dynamic_field
 field_info
@@ -2320,13 +2311,22 @@ borrow_mut
 remove
 	public fun
 	0x2::dynamic_object_field
-exists_
+exists
 	public fun
 	0x2::dynamic_object_field
 exists_with_type
 	public fun
 	0x2::dynamic_object_field
 id
+	public fun
+	0x2::dynamic_object_field
+remove_opt
+	public fun
+	0x2::dynamic_object_field
+replace
+	public fun
+	0x2::dynamic_object_field
+exists_
 	public fun
 	0x2::dynamic_object_field
 internal_add
@@ -3250,9 +3250,6 @@ has_access
 uid_mut_as_owner
 	public fun
 	0x2::kiosk
-set_allow_extensions
-	public fun
-	0x2::kiosk
 uid
 	public fun
 	0x2::kiosk
@@ -3293,6 +3290,9 @@ purchase_cap_item
 	public fun
 	0x2::kiosk
 purchase_cap_min_price
+	public fun
+	0x2::kiosk
+set_allow_extensions
 	public fun
 	0x2::kiosk
 Extension
@@ -3362,6 +3362,12 @@ push_front
 	public fun
 	0x2::linked_table
 push_back
+	public fun
+	0x2::linked_table
+insert_before
+	public fun
+	0x2::linked_table
+insert_after
 	public fun
 	0x2::linked_table
 borrow
@@ -3748,6 +3754,15 @@ g_div
 g_neg
 	public fun
 	0x2::ristretto255
+verify_bulletproofs_with_dst_ristretto255
+	public fun
+	0x2::rangeproofs
+verify_bulletproofs_ristretto255
+	public fun
+	0x2::rangeproofs
+verify_bulletproofs_with_dst_ristretto255_internal
+	fun
+	0x2::rangeproofs
 TableVec
 	public struct
 	0x2::table_vec
@@ -5017,9 +5032,6 @@ Permit
 permit
 	public fun
 	0x1::internal
-empty
-	public fun
-	0x1::vector
 length
 	public fun
 	0x1::vector
@@ -5039,9 +5051,6 @@ destroy_empty
 	public fun
 	0x1::vector
 swap
-	public fun
-	0x1::vector
-singleton
 	public fun
 	0x1::vector
 reverse
@@ -5075,6 +5084,12 @@ take
 	public fun
 	0x1::vector
 flatten
+	public fun
+	0x1::vector
+empty
+	public fun
+	0x1::vector
+singleton
 	public fun
 	0x1::vector
 Option

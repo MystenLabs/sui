@@ -15,7 +15,7 @@ use crate::{
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::filter::FilterScope,
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
     parser::ast::{self as P, ConstantName},
@@ -30,7 +30,10 @@ use move_symbol_pool::Symbol;
 
 use im::OrdMap;
 use lsp_types::Position;
-use std::{cmp, collections::BTreeMap};
+use std::{
+    cmp,
+    collections::{BTreeMap, BTreeSet},
+};
 
 /// Data used during anlysis over typed AST
 pub struct TypingAnalysisContext<'a> {
@@ -63,6 +66,16 @@ pub struct TypingAnalysisContext<'a> {
     pub expression_scope: OrdMap<Symbol, LocalDef>,
     /// IDE Annotation Information from the Compiler
     pub compiler_analysis_info: &'a CompilerAnalysisInfo,
+    /// Tracks the root (outermost) macro call location for the current expansion chain.
+    /// Used to disambiguate MacroCallInfo lookups for nested macro calls.
+    pub current_macro_call_loc: Option<Loc>,
+    /// During macro inlining, synthetic binds are introduced for macro by-value arguments
+    /// (e.g., `let temp = receiver`, where `temp` stands in for some macro argument `$x`
+    /// and shares the same location as `$x`). We have to keep track of these to avoid
+    /// overwriting information collected when analyzing macro function with information
+    /// collected when inlining this function (which would be both wrong and non-deterministic
+    /// in case macro is inlined multiple times).
+    pub macro_by_value_lvalue_locs: BTreeSet<Loc>,
 }
 
 /// Definition of a local (or parameter)
@@ -699,11 +712,53 @@ impl TypingAnalysisContext<'_> {
         }
         self.visit_exp(&arm.rhs);
     }
+
+    /// Process compiler metadata for a macro by-value argument.
+    ///
+    /// During macro inlining, by-value arguments are represented as synthetic
+    /// bindings, such as `let $x = receiver`. Analyze the RHS as the call-site
+    /// expression, and remember the synthetic LHS location so the same binding can
+    /// be ignored if it is later encountered while traversing the expanded macro
+    /// body.
+    fn visit_macro_by_value_arg(&mut self, seq_item: &T::SequenceItem) {
+        match &seq_item.value {
+            T::SequenceItem_::Bind(lvalues, _, e) => {
+                debug_assert!(
+                    lvalues.value.len() == 1,
+                    "macro by-value arguments should bind exactly one lvalue"
+                );
+                let Some(lvalue) = lvalues.value.first() else {
+                    self.visit_exp(e);
+                    return;
+                };
+                match &lvalue.value {
+                    T::LValue_::Var { var, .. } => {
+                        self.macro_by_value_lvalue_locs.insert(var.loc);
+                    }
+                    T::LValue_::Ignore => (),
+                    T::LValue_::Unpack(..)
+                    | T::LValue_::BorrowUnpack(..)
+                    | T::LValue_::UnpackVariant(..)
+                    | T::LValue_::BorrowUnpackVariant(..) => {
+                        debug_assert!(false, "macro by-value arguments should be variables");
+                    }
+                }
+                self.visit_exp(e);
+            }
+            _ => {
+                debug_assert!(
+                    false,
+                    "macro by-value arguments should be represented as binds"
+                );
+                self.visit_seq_item(seq_item);
+            }
+        }
+    }
 }
 
 impl TypingVisitorContext for TypingAnalysisContext<'_> {
     // Nothing to do -- we're not producing errors.
-    fn push_warning_filter_scope(&mut self, _filter: WarningFilters) {}
+    fn push_warning_filter_scope(&mut self, _filter: FilterScope) {}
 
     // Nothing to do -- we're not producing errors.
     fn pop_warning_filter_scope(&mut self) {}
@@ -1002,11 +1057,21 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             );
         }
 
-        match &fdef.body.value {
-            T::FunctionBody_::Defined(seq) => {
+        if fdef.macro_.is_some() {
+            if let Some(seq) = self
+                .compiler_analysis_info
+                .macro_function_bodies
+                .get(&(module, function_name))
+            {
                 self.visit_seq(fdef.body.loc, seq);
             }
-            T::FunctionBody_::Macro | T::FunctionBody_::Native => {}
+        } else {
+            match &fdef.body.value {
+                T::FunctionBody_::Defined(seq) => {
+                    self.visit_seq(fdef.body.loc, seq);
+                }
+                T::FunctionBody_::Macro | T::FunctionBody_::Native => {}
+            }
         }
         // process return types
         self.visit_type(None, &fdef.signature.return_type);
@@ -1030,6 +1095,15 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                     ty,
                     unused_binding: _,
                 } => {
+                    // Skip synthetic macro receiver binds such as `let $x = receiver`.
+                    // Their lvalue locations are macro parameter locations, not real
+                    // call-site definitions, so recording them would corrupt hover/use-def
+                    // information for the macro definition.
+                    if matches!(kind, LValueKind::Bind)
+                        && self.macro_by_value_lvalue_locs.contains(&var.loc)
+                    {
+                        continue;
+                    }
                     match kind {
                         LValueKind::Bind => {
                             self.add_local_def(
@@ -1199,34 +1273,109 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                     };
                     true
                 }
-                TE::Unit { .. }
-                | TE::Builtin(_, _)
-                | TE::Vector(_, _, _, _)
-                | TE::IfElse(_, _, _)
-                | TE::While(_, _, _)
-                | TE::Loop { .. }
-                | TE::NamedBlock(_, _)
-                | TE::Block(_)
-                | TE::Assign(_, _, _)
-                | TE::Mutate(_, _)
-                | TE::Return(_)
-                | TE::Abort(_)
-                | TE::Give(_, _)
-                | TE::Continue(_)
-                | TE::Dereference(_)
-                | TE::UnaryExp(_, _)
-                | TE::BinopExp(_, _, _, _)
-                | TE::ExpList(_)
-                | TE::Value(_)
-                | TE::TempBorrow(_, _)
-                | TE::Cast(_, _)
-                | TE::Annotate(_, _)
-                | TE::UnresolvedError => false,
+                // All remaining expression types are handled here rather than
+                // delegating to the default visit_exp traversal. This is necessary
+                // because the macro and lambda handlers in visit_exp_custom set state
+                // (traverse_only, current_macro_call_loc) that must persist throughout
+                // the entire expression traversal. If visit_exp_inner returns false,
+                // visit_exp_custom also returns false, and the default visit_exp
+                // traversal runs AFTER the state has been restored — defeating the
+                // macro/lambda state management.
+                TE::Block(seq) | TE::NamedBlock(_, seq) => {
+                    visitor.visit_seq(exp.exp.loc, seq);
+                    true
+                }
+                TE::IfElse(e1, e2, e3_opt) => {
+                    visitor.visit_exp(e1);
+                    visitor.visit_exp(e2);
+                    if let Some(e3) = e3_opt {
+                        visitor.visit_exp(e3);
+                    }
+                    true
+                }
+                TE::While(_, e1, e2) | TE::Mutate(e1, e2) => {
+                    visitor.visit_exp(e1);
+                    visitor.visit_exp(e2);
+                    true
+                }
+                TE::Assign(lvalues, ty_ann, e) => {
+                    visitor.visit_exp(e);
+                    for lvalue in lvalues.value.iter() {
+                        visitor.visit_lvalue(&LValueKind::Assign, lvalue);
+                    }
+                    ty_ann
+                        .iter()
+                        .flatten()
+                        .for_each(|ty| visitor.visit_type(Some(exp_loc), ty));
+                    true
+                }
+                TE::Loop { body, .. } => {
+                    visitor.visit_exp(body);
+                    true
+                }
+                TE::Return(e)
+                | TE::Abort(e)
+                | TE::Give(_, e)
+                | TE::Dereference(e)
+                | TE::UnaryExp(_, e)
+                | TE::TempBorrow(_, e) => {
+                    visitor.visit_exp(e);
+                    true
+                }
+                TE::BinopExp(e1, _, ty, e2) => {
+                    visitor.visit_type(Some(exp_loc), ty);
+                    visitor.visit_exp(e1);
+                    visitor.visit_exp(e2);
+                    true
+                }
+                TE::Builtin(bf, e) => {
+                    visitor.visit_exp(e);
+                    use T::BuiltinFunction_ as BF;
+                    match &bf.value {
+                        BF::Freeze(t) => visitor.visit_type(Some(exp_loc), t),
+                        BF::Assert(_) => (),
+                    }
+                    true
+                }
+                TE::Vector(_, _, ty, e) => {
+                    visitor.visit_type(Some(exp_loc), ty);
+                    visitor.visit_exp(e);
+                    true
+                }
+                TE::ExpList(list) => {
+                    for l in list {
+                        match l {
+                            T::ExpListItem::Single(e, ty) => {
+                                visitor.visit_exp(e);
+                                visitor.visit_type(Some(exp_loc), ty);
+                            }
+                            T::ExpListItem::Splat(_, e, tys) => {
+                                visitor.visit_exp(e);
+                                tys.iter()
+                                    .for_each(|ty| visitor.visit_type(Some(exp_loc), ty));
+                            }
+                        }
+                    }
+                    true
+                }
+                TE::Cast(e, ty) | TE::Annotate(e, ty) => {
+                    visitor.visit_exp(e);
+                    visitor.visit_type(Some(exp_loc), ty);
+                    true
+                }
+                TE::Unit { .. } | TE::Value(_) | TE::Continue(_) | TE::UnresolvedError => true,
             }
         }
 
         let expanded_lambda = self.compiler_analysis_info.is_expanded_lambda(&exp.exp.loc);
-        if let Some(macro_call_info) = self.compiler_analysis_info.get_macro_info(&exp.exp.loc) {
+        // Compute the root_call_loc for MacroCallInfo disambiguation:
+        // if we're already inside a macro expansion, use the existing root;
+        // otherwise this is the outermost call, so use exp.exp.loc as root.
+        let root_call_loc = self.current_macro_call_loc.unwrap_or(exp.exp.loc);
+        if let Some(macro_call_info) = self
+            .compiler_analysis_info
+            .get_macro_info(&exp.exp.loc, root_call_loc)
+        {
             debug_assert!(!expanded_lambda, "Compiler info issue");
             let MacroCallInfo {
                 module,
@@ -1234,14 +1383,23 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                 method_name,
                 type_arguments,
                 by_value_args,
+                root_call_loc: info_root,
             } = macro_call_info.clone();
             self.process_module_call(&module, &name, method_name, &type_arguments, None);
-            by_value_args.iter().for_each(|a| self.visit_seq_item(a));
+            let old_macro_by_value_lvalue_locs = self.macro_by_value_lvalue_locs.clone();
+            by_value_args
+                .iter()
+                .for_each(|a| self.visit_macro_by_value_arg(a));
             let old_traverse_mode = self.traverse_only;
+            let old_macro_call_loc = self.current_macro_call_loc;
+            // Set root for nested macro lookups
+            self.current_macro_call_loc = Some(info_root);
             // stop adding new use-defs etc.
             self.traverse_only = true;
             let result = visit_exp_inner(self, exp);
             self.traverse_only = old_traverse_mode;
+            self.current_macro_call_loc = old_macro_call_loc;
+            self.macro_by_value_lvalue_locs = old_macro_by_value_lvalue_locs;
             result
         } else if expanded_lambda {
             let old_traverse_mode = self.traverse_only;

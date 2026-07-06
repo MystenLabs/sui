@@ -7,11 +7,14 @@
 //! creates the required tables, and tears everything down when done.
 //! Tests require `gcloud`, `cbt`, and the BigTable emulator on PATH.
 
+use std::collections::HashSet;
+use std::ops::Range;
 use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
 use futures::TryStreamExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::FieldMask;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -19,14 +22,22 @@ use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_inverted_index::Watermarked;
+use sui_inverted_index::eval_bitmap_query_stream;
 use sui_keys::keystore::AccountKeystore;
+use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
+use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
+use sui_kvstore::BitmapIndexSpec;
+use sui_kvstore::BitmapQuery;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
-use sui_kvstore::tables::{checkpoints, epochs, transactions};
+use sui_kvstore::ScanDirection;
+use sui_kvstore::tables::{checkpoints, epochs, event_bitmap_index, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
 use sui_kvstore::testing::create_tables;
@@ -49,6 +60,7 @@ use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::ObjectKey;
+use sui_types::transaction::CallArg;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
@@ -123,6 +135,34 @@ struct TestHarness {
     _emulator: BigTableEmulator,
 }
 
+fn bitmap_query_stream(
+    client: &BigTableClient,
+    query: BitmapQuery,
+    range: Range<u64>,
+    spec: BitmapIndexSpec,
+    direction: ScanDirection,
+) -> impl futures::Stream<Item = Result<u64>> + Send + 'static {
+    let source = BigTableBitmapSource::new(client.clone(), spec);
+    let stream = eval_bitmap_query_stream(
+        source,
+        query,
+        range,
+        spec.bucket_size,
+        direction,
+        u64::MAX,
+        |_| {},
+    );
+    use futures::TryStreamExt;
+    stream
+        .map_err(anyhow::Error::new)
+        .try_filter_map(|m| async move {
+            Ok(match m {
+                Watermarked::Item(v) => Some(v),
+                Watermarked::Watermark(_) => None,
+            })
+        })
+}
+
 impl TestHarness {
     async fn new() -> Result<Self> {
         require_bigtable_emulator();
@@ -172,13 +212,13 @@ impl TestHarness {
             IndexerConfig::default(),
             PipelineLayer::default(),
             Chain::Unknown,
+            &ALPHA_PIPELINE_NAMES,
             &registry,
         )
         .await
         .context("Failed to create BigTableIndexer")?;
 
         let mut service = bigtable_indexer
-            .indexer
             .run()
             .await
             .context("Failed to run indexer")?;
@@ -228,11 +268,17 @@ impl TestHarness {
             let mut interval = interval(Duration::from_millis(100));
             loop {
                 interval.tick().await;
-                let ok = self.client.get_watermark().await.is_ok_and(|wm| {
-                    wm.is_some_and(|wm| {
-                        wm.checkpoint_hi_inclusive >= checkpoint && wm.epoch_hi_inclusive >= epoch
-                    })
-                });
+                let ok = self
+                    .client
+                    .get_watermark_for_pipelines(&ALL_PIPELINE_NAMES)
+                    .await
+                    .is_ok_and(|wm| {
+                        wm.is_some_and(|wm| {
+                            wm.checkpoint_hi_inclusive
+                                .is_some_and(|cp| cp >= checkpoint)
+                                && wm.epoch_hi_inclusive >= epoch
+                        })
+                    });
                 if ok {
                     break;
                 }
@@ -257,6 +303,29 @@ impl TestHarness {
         let tx_data = TestTransactionBuilder::new(sender, gas_object, gas_price)
             .publish_examples("basics")
             .await
+            .build();
+
+        let signed_tx = to_sender_signed_transaction(tx_data, keystore.export(&sender)?);
+
+        grpc_execute_transaction(&mut self.grpc_client, &signed_tx).await?;
+
+        Ok(signed_tx)
+    }
+
+    /// Build, sign, and execute an event-emitting call from the basics package.
+    async fn emit_clock_event(&mut self, package_id: ObjectID) -> Result<Transaction> {
+        let sender = self.cluster.get_address_0();
+        let keystore = &self.cluster.wallet.config.keystore;
+
+        let coins = get_all_coins(&mut self.grpc_client, sender).await?;
+        let gas_object = coins
+            .first()
+            .context("No coins available for sender")?
+            .compute_object_reference();
+
+        let gas_price = self.cluster.get_reference_gas_price().await;
+        let tx_data = TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .move_call(package_id, "clock", "access", vec![CallArg::CLOCK_IMM])
             .build();
 
         let signed_tx = to_sender_signed_transaction(tx_data, keystore.export(&sender)?);
@@ -330,7 +399,7 @@ async fn test_indexer_e2e() -> Result<()> {
         tx_checkpoints.push(cp);
     }
 
-    let max_checkpoint = *tx_checkpoints.iter().max().unwrap().max(&publish_cp);
+    let mut max_checkpoint = *tx_checkpoints.iter().max().unwrap().max(&publish_cp);
 
     // Wait for all pipelines to catch up via the same path GraphQL uses.
     harness.wait_for_watermark(max_checkpoint, 0).await?;
@@ -400,8 +469,8 @@ async fn test_indexer_e2e() -> Result<()> {
     assert_eq!(batch_response.transactions.len(), tx_digests.len());
     for ((digest, indexed), grpc_result) in tx_digests
         .iter()
-        .zip(transactions.iter())
-        .zip(batch_response.transactions.into_iter())
+        .zip_debug_eq(transactions.iter())
+        .zip_debug_eq(batch_response.transactions.into_iter())
     {
         let grpc_transaction = grpc_result.to_result().unwrap_or_else(|status| {
             panic!("batch_get_transactions failed for {digest}: {status:?}")
@@ -442,8 +511,8 @@ async fn test_indexer_e2e() -> Result<()> {
     assert_eq!(ulro_response.transactions.len(), tx_digests.len());
     for ((digest, indexed), grpc_result) in tx_digests
         .iter()
-        .zip(transactions.iter())
-        .zip(ulro_response.transactions.into_iter())
+        .zip_debug_eq(transactions.iter())
+        .zip_debug_eq(ulro_response.transactions.into_iter())
     {
         let grpc_transaction = grpc_result.to_result().unwrap_or_else(|status| {
             panic!("batch_get_transactions failed for {digest}: {status:?}")
@@ -468,7 +537,7 @@ async fn test_indexer_e2e() -> Result<()> {
     let checkpoint_numbers: Vec<_> = transactions
         .iter()
         .map(|td| td.checkpoint_number)
-        .collect::<std::collections::HashSet<_>>()
+        .collect::<HashSet<_>>()
         .into_iter()
         .collect();
 
@@ -486,7 +555,7 @@ async fn test_indexer_e2e() -> Result<()> {
         let content_digests: Vec<_> = contents.iter().map(|ed| ed.transaction).collect();
         let expected: Vec<_> = tx_digests
             .iter()
-            .zip(&tx_checkpoints)
+            .zip_debug_eq(&tx_checkpoints)
             .filter(|(_, cp_num)| **cp_num == summary.sequence_number)
             .map(|(d, _)| *d)
             .collect();
@@ -555,6 +624,26 @@ async fn test_indexer_e2e() -> Result<()> {
 
     // For a newly published (non-upgrade) package, original_id == package_id
     let original_id = package_id;
+
+    let clock_event_tx = harness.emit_clock_event(package_id).await?;
+    let clock_event_digest = *clock_event_tx.digest();
+    let clock_event_cp_resp = harness
+        .grpc_client
+        .ledger_client()
+        .get_transaction(
+            GetTransactionRequest::default()
+                .with_digest(clock_event_digest.to_string())
+                .with_read_mask(FieldMask::from_paths(["checkpoint"])),
+        )
+        .await
+        .context("get_transaction RPC failed for clock event tx")?;
+    let clock_event_cp = clock_event_cp_resp
+        .into_inner()
+        .transaction
+        .and_then(|t| t.checkpoint)
+        .context("clock event tx missing checkpoint")?;
+    max_checkpoint = max_checkpoint.max(clock_event_cp);
+    harness.wait_for_watermark(max_checkpoint, 0).await?;
 
     // get_package_original_ids: resolve package_id → original_id
     let orig_ids = harness
@@ -680,6 +769,134 @@ async fn test_indexer_e2e() -> Result<()> {
     assert!(partial.summary.is_some(), "summary should be present");
     assert!(partial.signatures.is_none(), "signatures should be absent");
     assert!(partial.contents.is_none(), "contents should be absent");
+
+    // -- tx_seq_digest pipeline: verify tx_sequence_number resolution --
+    // Every transaction we indexed should be resolvable via resolve_tx_digests.
+    // Gather all tx_sequence_numbers from the checkpoints we saw.
+    let mut all_tx_seqs: Vec<u64> = Vec::new();
+    for cp in &checkpoints {
+        let summary = cp.summary.as_ref().unwrap();
+        let contents = cp.contents.as_ref().unwrap();
+        let tx_lo = summary.network_total_transactions - contents.size() as u64;
+        for i in 0..contents.size() {
+            all_tx_seqs.push(tx_lo + i as u64);
+        }
+    }
+    let resolved_digests = harness
+        .bigtable_client()
+        .resolve_tx_digests(&all_tx_seqs)
+        .await?;
+    // Every tx_seq from these checkpoints should resolve
+    assert_eq!(
+        resolved_digests.len(),
+        all_tx_seqs.len(),
+        "all tx_sequence_numbers should resolve to digests"
+    );
+    assert!(
+        resolved_digests.iter().all(|r| r.is_some()),
+        "every tx_seq should resolve to Some(TxSeqDigestData)"
+    );
+    // The resolved digests should include our known transfer digests
+    let resolved_digest_set: HashSet<_> = resolved_digests
+        .iter()
+        .filter_map(|r| r.map(|data| data.digest))
+        .collect();
+    for d in &tx_digests {
+        assert!(
+            resolved_digest_set.contains(d),
+            "tx_seq_digest pipeline should contain digest {d}"
+        );
+    }
+
+    // -- transaction bitmap pipeline: verify scan returns matching tx_sequence_numbers --
+    // The transaction bitmap index indexes at tx_sequence_number granularity.
+    // Query the Sender dimension for our sender address — should find our txns.
+    {
+        let sender = harness.cluster.get_address_0();
+        let sender_dim_key = sui_inverted_index::encode_dimension_key(
+            sui_inverted_index::IndexDimension::Sender,
+            sender.as_ref(),
+        );
+        let first_cp = publish_cp
+            .min(clock_event_cp)
+            .min(*tx_checkpoints.iter().min().unwrap());
+        let tx_range = harness
+            .bigtable_client()
+            .checkpoint_to_tx_range(first_cp..max_checkpoint + 1)
+            .await?;
+        let bitmap_tx_seqs: Vec<_> = tx_range.clone().collect();
+        let bitmap_resolved_digests = harness
+            .bigtable_client()
+            .resolve_tx_digests(&bitmap_tx_seqs)
+            .await?;
+        let known_sender_digests: HashSet<_> = tx_digests
+            .iter()
+            .copied()
+            .chain([publish_digest, clock_event_digest])
+            .collect();
+
+        let matching_tx_seqs = bitmap_query_stream(
+            harness.bigtable_client(),
+            BitmapQuery::scan(sender_dim_key.clone())?,
+            tx_range.clone(),
+            BitmapIndexSpec::tx(),
+            ScanDirection::Ascending,
+        )
+        .try_collect::<Vec<_>>()
+        .await?;
+
+        // Our known sender transactions should map to tx_seqs that appear in the scan.
+        for (i, resolved) in bitmap_resolved_digests.iter().enumerate() {
+            let Some(data) = resolved.as_ref().copied() else {
+                continue;
+            };
+            let tx_seq = bitmap_tx_seqs[i];
+            if known_sender_digests.contains(&data.digest) {
+                assert!(
+                    matching_tx_seqs.contains(&tx_seq),
+                    "bitmap index should contain tx_seq {tx_seq} for sender {sender}"
+                );
+            }
+        }
+
+        let event_range = event_bitmap_index::event_seq_lo(tx_range.start)
+            ..event_bitmap_index::event_seq_lo(tx_range.end);
+        let matching_event_seqs = bitmap_query_stream(
+            harness.bigtable_client(),
+            BitmapQuery::scan(sender_dim_key)?,
+            event_range,
+            BitmapIndexSpec::event(),
+            ScanDirection::Ascending,
+        )
+        .try_collect::<Vec<_>>()
+        .await?;
+
+        let mut clock_event_count = 0;
+        for (i, resolved) in bitmap_resolved_digests.iter().enumerate() {
+            let Some(data) = resolved.as_ref().copied() else {
+                continue;
+            };
+            if !known_sender_digests.contains(&data.digest) {
+                continue;
+            }
+
+            let tx_seq = bitmap_tx_seqs[i];
+            if data.digest == clock_event_digest {
+                clock_event_count += data.event_count;
+            }
+            for event_idx in 0..data.event_count {
+                let event_seq = event_bitmap_index::encode_event_seq(tx_seq, event_idx);
+                assert!(
+                    matching_event_seqs.contains(&event_seq),
+                    "event bitmap index should contain event_seq {event_seq} for sender {sender}"
+                );
+            }
+        }
+        assert!(
+            clock_event_count > 0,
+            "clock event transaction should emit at least one event"
+        );
+    }
 
     // -- Column-filtered epoch partial reads --
     // Fetch epoch with only small scalar columns — no system_state.

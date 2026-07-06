@@ -5,8 +5,9 @@ use std::convert::Infallible;
 use tonic::server::NamedService;
 use tower::Service;
 
-pub mod alpha;
+pub mod deadline;
 pub mod v2;
+pub mod v2alpha;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -38,6 +39,11 @@ impl Services {
         self.router = self
             .router
             .route_service(&format!("/{}/{{*rest}}", S::NAME), svc);
+        self
+    }
+
+    pub fn merge_router(mut self, router: axum::Router) -> Self {
+        self.router = self.router.merge(router);
         self
     }
 

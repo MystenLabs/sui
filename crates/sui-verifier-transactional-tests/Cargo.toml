@@ -9,7 +9,7 @@ edition = "2024"
 
 [dev-dependencies]
 datatest-stable.workspace = true
-sui-transactional-test-runner.workspace = true
+sui-transactional-test-runner = { workspace = true, features = ["testing"] }
 
 [[test]]
 name = "tests"

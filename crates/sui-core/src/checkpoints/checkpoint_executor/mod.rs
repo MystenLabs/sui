@@ -19,15 +19,17 @@
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
 use futures::StreamExt;
-use mysten_common::{debug_fatal, fatal};
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal, fatal, izip_debug_eq};
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Instant};
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::RandomnessRound;
-use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    node_role::{FullNodeSyncMode, NodeRole},
+};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
@@ -43,7 +45,7 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use tap::{TapFallible, TapOptional};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
@@ -193,7 +195,7 @@ pub struct CheckpointExecutor {
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
-    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+    subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 }
 
 impl CheckpointExecutor {
@@ -205,7 +207,9 @@ impl CheckpointExecutor {
         backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
-        subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+        subscription_service_checkpoint_sender: Option<
+            tokio::sync::broadcast::Sender<Arc<Checkpoint>>,
+        >,
     ) -> Self {
         Self {
             epoch_store,
@@ -382,7 +386,10 @@ impl CheckpointExecutor {
             mysten_metrics::monitored_scope("CheckpointExecutor::parallel_step");
 
         // Note: only `execute_transactions_from_synced_checkpoint` has end-of-epoch logic.
-        let ckpt_state = if self.state.is_fullnode(&self.epoch_store)
+        // For nodes that are not running consensus (Full nodes with checkpoint state sync only), always
+        // execute transactions via synced checkpoints. The rest of nodes should attempt only to verify the locally
+        // build checkpoints as those should (potentially) be already executed.
+        let ckpt_state = if !self.epoch_store.node_role().runs_consensus()
             || checkpoint.is_last_checkpoint_of_epoch()
         {
             self.execute_transactions_from_synced_checkpoint(checkpoint, &mut pipeline_handle)
@@ -405,10 +412,19 @@ impl CheckpointExecutor {
 
         let seq = ckpt_state.data.checkpoint.sequence_number;
 
-        let batch = self
+        let mut batch = self
             .state
             .get_cache_commit()
             .build_db_batch(self.epoch_store.epoch(), &ckpt_state.data.tx_digests);
+
+        // Stamp the highest-committed-checkpoint watermark into the same batch
+        // as the outputs, so it lands atomically with the object writes. This
+        // gives consumers that read the live object set directly (the embedded
+        // rpc-store restore) a watermark that never lags the durable objects,
+        // unlike the separately-bumped `highest_executed` watermark below.
+        self.state
+            .get_cache_commit()
+            .set_highest_committed_checkpoint_in_batch(&mut batch, seq);
 
         finish_stage!(pipeline_handle, BuildDbBatch);
 
@@ -463,8 +479,7 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, FinalizeCheckpoint);
 
         if let Some(checkpoint_data) = ckpt_state.full_data.take() {
-            self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data)
-                .await;
+            self.enqueue_to_subscription_service(checkpoint_data);
         }
 
         finish_stage!(pipeline_handle, UpdateRpcIndex);
@@ -501,6 +516,9 @@ impl CheckpointExecutor {
 
     // On validators, checkpoints have often already been constructed locally, in which
     // case we can skip many steps of the checkpoint execution process.
+    // If the node is a validator, then the checkpoint execution state will not contain the full data.
+    // If the node is a full node that has consensus state sync enabled, then the full data will be populated as they are required
+    // by downstream components.
     #[instrument(level = "info", skip_all)]
     async fn verify_locally_built_checkpoint(
         &self,
@@ -520,6 +538,9 @@ impl CheckpointExecutor {
 
         let Some(locally_built_checkpoint) = locally_built_checkpoint else {
             // fall back to tx-by-tx execution path if we are catching up.
+            self.metrics
+                .checkpoint_executor_validator_sync_fallback_path
+                .inc();
             return self
                 .execute_transactions_from_synced_checkpoint(checkpoint, pipeline_handle)
                 .await;
@@ -546,6 +567,24 @@ impl CheckpointExecutor {
                 .unwrap()
         };
 
+        // Observer fullnodes have already executed these transactions through consensus,
+        // but still need the fullnode side effects that the synced path normally performs.
+        if matches!(
+            self.epoch_store.node_role(),
+            NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+        ) {
+            pipeline_handle
+                .skip_to(PipelineStage::FinalizeTransactions)
+                .await;
+
+            let (state, tx_data) =
+                self.load_checkpoint_transactions(checkpoint, Some(state_hasher));
+
+            return self
+                .finalize_executed_checkpoint_transactions(state, &tx_data, pipeline_handle)
+                .await;
+        }
+
         let checkpoint_contents = self
             .checkpoint_store
             .get_checkpoint_contents(&checkpoint.content_digest)
@@ -561,21 +600,17 @@ impl CheckpointExecutor {
             .skip_to(PipelineStage::FinalizeTransactions)
             .await;
 
-        // Currently this code only runs on validators, where this method call does nothing.
-        // But in the future, fullnodes may follow the mysticeti dag and build their own checkpoints.
         self.insert_finalized_transactions(&tx_digests, sequence_number);
 
         pipeline_handle.skip_to(PipelineStage::BuildDbBatch).await;
 
-        CheckpointExecutionState::new_with_global_state_hasher(
-            CheckpointExecutionData {
-                checkpoint,
-                checkpoint_contents,
-                tx_digests,
-                fx_digests,
-            },
-            state_hasher,
-        )
+        let ckpt_data = CheckpointExecutionData {
+            checkpoint,
+            checkpoint_contents,
+            tx_digests,
+            fx_digests,
+        };
+        CheckpointExecutionState::new_with_global_state_hasher(ckpt_data, state_hasher)
     }
 
     #[instrument(level = "info", skip_all)]
@@ -584,11 +619,10 @@ impl CheckpointExecutor {
         checkpoint: VerifiedCheckpoint,
         pipeline_handle: &mut PipelineHandle,
     ) -> CheckpointExecutionState {
-        let sequence_number = checkpoint.sequence_number;
-        let (mut ckpt_state, tx_data, unexecuted_tx_digests) = {
+        let (ckpt_state, tx_data, unexecuted_tx_digests) = {
             let _scope =
                 mysten_metrics::monitored_scope("CheckpointExecutor::execute_transactions");
-            let (ckpt_state, tx_data) = self.load_checkpoint_transactions(checkpoint);
+            let (ckpt_state, tx_data) = self.load_checkpoint_transactions(checkpoint, None);
             let unexecuted_tx_digests = self.schedule_transaction_execution(&ckpt_state, &tx_data);
             (ckpt_state, tx_data, unexecuted_tx_digests)
         };
@@ -610,32 +644,20 @@ impl CheckpointExecutor {
             self.execute_change_epoch_tx(&tx_data).await;
         }
 
-        // Collect index batches from post-processing and commit atomically.
-        // This must happen AFTER execute_change_epoch_tx (so that all transactions
-        // including the end-of-epoch tx have completed post-processing) and BEFORE
-        // insert_finalized_transactions (so that index data is available when
-        // transactions_executed_in_checkpoint_notify fires).
-        {
-            let mut raw_batches = Vec::new();
-            let mut cache_updates = Vec::new();
-            for tx_digest in &ckpt_state.data.tx_digests {
-                if let Some((raw_batch, cu)) = self.state.await_post_processing(tx_digest).await {
-                    raw_batches.push(raw_batch);
-                    cache_updates.push(cu);
-                }
-            }
-            if !raw_batches.is_empty()
-                && let Some(indexes) = &self.state.indexes
-            {
-                let mut db_batch = indexes.new_db_batch();
-                db_batch
-                    .concat(raw_batches)
-                    .expect("failed to build index batch");
-                indexes
-                    .commit_index_batch(db_batch, cache_updates)
-                    .expect("failed to commit index batch");
-            }
-        }
+        self.finalize_executed_checkpoint_transactions(ckpt_state, &tx_data, pipeline_handle)
+            .await
+    }
+
+    async fn finalize_executed_checkpoint_transactions(
+        &self,
+        mut ckpt_state: CheckpointExecutionState,
+        tx_data: &CheckpointTransactionData,
+        pipeline_handle: &mut PipelineHandle,
+    ) -> CheckpointExecutionState {
+        let sequence_number = ckpt_state.data.checkpoint.sequence_number;
+
+        self.commit_post_processing_index_batches(&ckpt_state.data.tx_digests)
+            .await;
 
         let _scope = mysten_metrics::monitored_scope("CheckpointExecutor::finalize_checkpoint");
 
@@ -652,24 +674,51 @@ impl CheckpointExecutor {
         // The early versions of the hasher (prior to effectsv2) rely on db
         // state, so we must wait until all transactions have been executed
         // before accumulating the checkpoint.
-        ckpt_state.state_hasher = Some(
-            self.global_state_hasher
-                .accumulate_checkpoint(&tx_data.effects, sequence_number, &self.epoch_store)
-                .expect("epoch cannot have ended"),
-        );
+        if ckpt_state.state_hasher.is_none() {
+            ckpt_state.state_hasher = Some(
+                self.global_state_hasher
+                    .accumulate_checkpoint(&tx_data.effects, sequence_number, &self.epoch_store)
+                    .expect("epoch cannot have ended"),
+            );
+        }
 
         finish_stage!(pipeline_handle, FinalizeTransactions);
 
-        ckpt_state.full_data = self.process_checkpoint_data(&ckpt_state.data, &tx_data);
+        ckpt_state.full_data = self.process_checkpoint_data(&ckpt_state.data, tx_data);
 
         finish_stage!(pipeline_handle, ProcessCheckpointData);
 
         ckpt_state
     }
 
+    // Collect index batches from post-processing and commit atomically.
+    // This must happen AFTER all transactions have completed execution and BEFORE
+    // insert_finalized_transactions (so that index data is available when
+    // transactions_executed_in_checkpoint_notify fires).
+    async fn commit_post_processing_index_batches(&self, tx_digests: &[TransactionDigest]) {
+        let mut raw_batches = Vec::new();
+        let mut cache_updates = Vec::new();
+        for tx_digest in tx_digests {
+            if let Some((raw_batch, cu)) = self.state.await_post_processing(tx_digest).await {
+                raw_batches.push(raw_batch);
+                cache_updates.push(cu);
+            }
+        }
+        if !raw_batches.is_empty()
+            && let Some(indexes) = &self.state.indexes
+        {
+            let mut db_batch = indexes.new_db_batch();
+            db_batch
+                .concat(raw_batches)
+                .expect("failed to build index batch");
+            indexes
+                .commit_index_batch(db_batch, cache_updates)
+                .expect("failed to commit index batch");
+        }
+    }
+
     fn checkpoint_data_enabled(&self) -> bool {
         self.subscription_service_checkpoint_sender.is_some()
-            || self.state.rpc_index.is_some()
             || self.config.data_ingestion_dir.is_some()
     }
 
@@ -712,35 +761,22 @@ impl CheckpointExecutor {
         )
         .expect("failed to load checkpoint data");
 
-        if self.state.rpc_index.is_some() || self.config.data_ingestion_dir.is_some() {
-            let checkpoint_data = checkpoint.clone().into();
-            // Index the checkpoint. this is done out of order and is not written and committed to the
-            // DB until later (committing must be done in-order)
-            if let Some(rpc_index) = &self.state.rpc_index {
-                let mut layout_resolver = self.epoch_store.executor().type_layout_resolver(
-                    Box::new(PackageStoreWithFallback::new(
-                        self.state.get_backing_package_store(),
-                        &checkpoint_data,
-                    )),
-                );
-
-                rpc_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut());
-            }
-
-            if let Some(path) = &self.config.data_ingestion_dir {
-                store_checkpoint_locally(path, &checkpoint_data)
-                    .expect("failed to store checkpoint locally");
-            }
+        if let Some(path) = &self.config.data_ingestion_dir {
+            store_checkpoint_locally(path, &checkpoint)
+                .expect("failed to store checkpoint locally");
         }
 
         Some(checkpoint)
     }
 
     // Load all required transaction and effects data for the checkpoint.
+    // When `state_hasher` is provided the returned `CheckpointExecutionState`
+    // carries the hasher (used by the verify-locally-built-checkpoint path).
     #[instrument(level = "info", skip_all)]
     fn load_checkpoint_transactions(
         &self,
         checkpoint: VerifiedCheckpoint,
+        state_hasher: Option<GlobalStateHash>,
     ) -> (CheckpointExecutionState, CheckpointTransactionData) {
         let seq = checkpoint.sequence_number;
         let epoch = checkpoint.epoch;
@@ -750,6 +786,11 @@ impl CheckpointExecutor {
             .get_checkpoint_contents(&checkpoint.content_digest)
             .expect("db error")
             .expect("checkpoint contents not found");
+
+        let checkpoint_state = |data| match state_hasher {
+            Some(hasher) => CheckpointExecutionState::new_with_global_state_hasher(data, hasher),
+            None => CheckpointExecutionState::new(data),
+        };
 
         // attempt to load full checkpoint contents in bulk
         // Tolerate db error in case of data corruption.
@@ -770,7 +811,7 @@ impl CheckpointExecutor {
 
             full_contents
                 .into_iter()
-                .zip(checkpoint_contents.iter())
+                .zip_debug_eq(checkpoint_contents.iter())
                 .for_each(|(execution_data, digests)| {
                     let tx_digest = digests.transaction;
                     let fx_digest = digests.effects;
@@ -792,7 +833,7 @@ impl CheckpointExecutor {
                 .multi_get_executed_effects_digests(&tx_digests);
 
             (
-                CheckpointExecutionState::new(CheckpointExecutionData {
+                checkpoint_state(CheckpointExecutionData {
                     checkpoint,
                     checkpoint_contents,
                     tx_digests,
@@ -840,7 +881,7 @@ impl CheckpointExecutor {
                 .multi_get_executed_effects_digests(&tx_digests);
 
             (
-                CheckpointExecutionState::new(CheckpointExecutionData {
+                checkpoint_state(CheckpointExecutionData {
                     checkpoint,
                     checkpoint_contents,
                     tx_digests,
@@ -862,7 +903,7 @@ impl CheckpointExecutor {
 
         // Find unexecuted transactions and their expected effects digests
         let (unexecuted_tx_digests, unexecuted_txns): (Vec<_>, Vec<_>) = itertools::multiunzip(
-            itertools::izip!(
+            izip_debug_eq!(
                 tx_data.transactions.iter(),
                 ckpt_state.data.tx_digests.iter(),
                 ckpt_state.data.fx_digests.iter(),
@@ -1060,23 +1101,18 @@ impl CheckpointExecutor {
         );
     }
 
-    /// If configured, commit the pending index updates for the provided checkpoint as well as
-    /// enqueuing the checkpoint to the subscription service
+    /// Publish the checkpoint to the broadcast stream so its downstream
+    /// consumers (the RPC subscription service and the embedded rpc-store
+    /// indexer) can pick it up.
     #[instrument(level = "info", skip_all)]
-    async fn commit_index_updates_and_enqueue_to_subscription_service(
-        &self,
-        checkpoint: Checkpoint,
-    ) {
-        if let Some(rpc_index) = &self.state.rpc_index {
-            rpc_index
-                .commit_update_for_checkpoint(checkpoint.summary.sequence_number)
-                .expect("failed to update rpc_indexes");
-        }
-
-        if let Some(sender) = &self.subscription_service_checkpoint_sender
-            && let Err(e) = sender.send(checkpoint).await
-        {
-            warn!("unable to send checkpoint to subscription service: {e}");
+    fn enqueue_to_subscription_service(&self, checkpoint: Checkpoint) {
+        // Best-effort, non-blocking publish to the broadcast stream. A send
+        // error just means there are no live subscribers right now, which is
+        // fine: subscribers (the RPC subscription service and the embedded
+        // rpc-store indexer) recover any checkpoints they miss by fetching from
+        // the local stores.
+        if let Some(sender) = &self.subscription_service_checkpoint_sender {
+            let _ = sender.send(Arc::new(checkpoint));
         }
     }
 

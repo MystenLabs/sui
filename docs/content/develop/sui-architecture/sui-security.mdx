@@ -1,0 +1,67 @@
+---
+title: Security
+description: Assets on Sui, including coins and tokens, are types of objects, and can only be used by their owners unless otherwise defined according to predefined logic in a smart contract.
+keywords: [ security, security guarantees, asset security, asset owners, object security, security architecture ]
+---
+
+Sui is designed to provide high security guarantees to asset owners. Assets on Sui, including coins and tokens, are types of [objects](/develop/sui-architecture/object-model), and can only be used by their owners unless otherwise defined according to predefined logic in a smart contract. Every smart contract can be audited, and the network can process them correctly even if some [validators](/develop/sui-architecture/consensus) do not follow the protocol correctly. This is known as fault tolerance.
+
+Sui's security features guarantee certain properties for objects:
+
+1. Only the owner of an object can authorize a [transaction](/develop/transactions/txn-overview) that operates on the object. Authorization is performed through the use of a private signature key that is known only to the object owner.
+
+1. Everyone can operate on [shared](/develop/objects/object-ownership/shared) objects or [immutable](/develop/objects/object-ownership/immutable) objects, but additional access control logic can be implemented by a smart contract.
+
+1. Transactions operate on objects according to predefined rules set by the smart contract creator that defined the object type.
+
+1. Once a transaction is finalized, its effects, namely changes to the objects it operates on or new objects created, are persisted. The resulting objects are available for further processing.
+
+1. All operations in Sui can be audited to ensure all objects have been correctly processed. This implies all operations on Sui are public, and you might wish to use multiple different addresses to protect your privacy.
+
+## Security architecture {#security-architecture}
+
+The Sui network is operated by a [set of validators](/develop/sui-architecture/consensus) that process [transactions](/develop/transactions/txn-overview). They reach agreement on which transactions submitted and processed on the network are valid and should be finalized through [consensus](/develop/sui-architecture/consensus).
+
+Consensus tolerates a fraction of faulty validators through the use of Byzantine fault tolerant broadcast. Sui maintains all security properties if over 2/3 of all validators operate properly. However, a number of auditing properties are maintained even if this number becomes greater than 2/3.
+
+### Addresses and ownership {#addresses-and-ownership}
+
+A Sui transaction is valid only when the owner of all objects in the transaction digitally signs it with their private signature key. As a result, no other party can operate on your owned assets undetected, even if some validators are faulty.
+
+A private signature key corresponds to a public address on the Sui network that can be used to send a user objects and tokens, or allow smart contracts to define custom access control logic. Keep your signature key private and do not share it with anyone else.
+
+A user might have one or more addresses corresponding to multiple signature keys for convenience or privacy reasons. An address does not need any preregistration. You should be careful to check the recipient address of transfers, or parties involved in any other operations, as sending objects to an incorrect address might have irrevocable effects.
+
+### Smart contracts define objects and their logic {#smart-contracts}
+
+All objects have a type that is defined within a Sui smart contract. Sui provides a few system contracts, such as those used to manage the SUI native token. Anyone can also write and submit custom smart contracts. A transaction on an object can only call operations defined in the smart contract that defined the object and is constrained by the logic in the contract.
+
+Ensure that transactions that operate on your objects use smart contracts you trust, that you or others you trust have audited, and understand the logic they define. Sui smart contracts are defined as immutable objects to allow third parties to audit them and prevent their modification to increase security assurance.
+
+The Move smart contract language is designed with ease of audit and verification in mind. You might be interested in the [introduction to smart contracts in Move](/develop/write-move/sui-move-concepts).
+
+Shared objects allow multiple users to operate on them through transactions that might include some of their owned objects as well as one or more shared objects. These shared objects represent data and logic used to implement protocols that mediate between different users in a safe way according to the smart contract that defined the type of shared object. However, the smart contract might define additional restrictions on how different addresses might use shared objects.
+
+### Transaction finality {#transaction-finality}
+
+A valid transaction submitted to all validators has to be [certified](/develop/sui-architecture/consensus) and its certificate also has to be submitted to all validators before it can be finalized. 2/3 of the validators must finalize the transaction before it is added to the network's permanent history and its result can be used by other transactions. This process ensures safety, meaning that faulty validators cannot convince correct validators of incorrect state, and liveness, meaning that faulty validators cannot prevent transaction processing.
+
+All transactions cost gas, a type of object required to cover the cost of processing by the network. A valid transaction might result in successful execution or an aborted execution. An execution might abort because of a condition within the smart contract defining the object or because it has run out of sufficient gas to pay for the cost of execution.
+
+In cases of success, the effects of the operation are finalized; otherwise, the state of objects in the transaction is not changed. However, some amount of gas is always charged to alleviate denial-of-service attacks on the system as a whole.
+
+A user client can submit a transaction and its certificate itself or rely on third-party services to submit the transaction and interact with validators. Such third parties do not need private signature keys and cannot forge transactions on the users' behalf. They can reassure a user client that a transaction has been finalized through a set of signatures received from the validators attesting to the transaction's finality and its effects. After that point, you can be assured the transaction's result is persisted onchain.
+
+### Auditing and privacy {#auditing-and-privacy}
+
+You can read all objects stored by each validator as well as the historical record of transactions they have processed that led to these objects. Validators provide cryptographic evidence of the full history of transactions that contributed to an object's state. User clients can request and validate this history of evidence to ensure all operations were correct and verify the result of the collective agreement between validators. Services that operate full replicas and mirror the state of one or more validators perform such audits routinely.
+
+The public auditability of Sui implies that all transactions and assets within Sui are publicly visible. If you are mindful of your privacy, you might use multiple addresses to benefit from some degree of pseudonymity, or third-party custodial or non-custodial services. Specific smart contracts with additional cryptographic privacy protections can also be provided by third parties.
+
+### Censorship resistance and openness {#censorship-resistance-openness}
+
+Sui uses delegated proof-of-stake to periodically determine its set of validators. SUI tokens are locked and delegated in each epoch to determine the committee of validators for the next epoch. Anyone with over a minimum amount of delegated stake can [operate a Sui validator](/operators/validator/validator-config).
+
+Validators provide [rewards](/operators/validator/validator-rewards) through gas fee income to users that [stake their Sui](/develop/sui-architecture/tokenomics-overview) to support them as validators. Validators with poor reliability, and in turn the users that delegated their stake to them, might receive a lower reward. User stake cannot be confiscated.
+
+This mechanism ensures that validators are accountable to Sui users and can be rotated out at the first sign of unreliability or misbehavior, including noticed attempts to censor valid transactions. Through choices of validators, Sui users have a meaningful say on the future evolution of the network.

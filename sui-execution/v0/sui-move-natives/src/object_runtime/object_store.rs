@@ -17,7 +17,7 @@ use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::VMMemoryLimitExceededSubStatusCode,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
 };
@@ -54,7 +54,7 @@ struct Inner<'a> {
     // Local protocol config used to enforce limits
     constants: LocalProtocolConfig,
     // Metrics for reporting exceeded limits
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
@@ -126,6 +126,9 @@ impl Inner<'_> {
                     Owner::ConsensusAddressOwner { .. } => {
                         unimplemented!("ConsensusAddressOwner does not exist for this execution version")
                     }
+                    Owner::Party { .. } => {
+                        unimplemented!("Party does not exist for this execution version")
+                    }
                 };
                 match object.data {
                     Data::Package(_) => {
@@ -148,7 +151,9 @@ impl Inner<'_> {
                 self.constants.object_runtime_max_num_cached_objects,
                 self.constants
                     .object_runtime_max_num_cached_objects_system_tx,
-                self.metrics.excessive_object_runtime_cached_objects
+                self.metrics
+                    .limits_metrics
+                    .excessive_object_runtime_cached_objects
             ) {
                 return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                     .with_message(format!(
@@ -240,7 +245,7 @@ impl<'a> ObjectStore<'a> {
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         is_metered: bool,
         constants: LocalProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Self {
         Self {
             inner: Inner {
@@ -318,7 +323,10 @@ impl<'a> ObjectStore<'a> {
                     self.constants.object_runtime_max_num_store_entries,
                     self.constants
                         .object_runtime_max_num_store_entries_system_tx,
-                    self.inner.metrics.excessive_object_runtime_store_entries
+                    self.inner
+                        .metrics
+                        .limits_metrics
+                        .excessive_object_runtime_store_entries
                 ) {
                     return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                         .with_message(format!(
@@ -371,7 +379,10 @@ impl<'a> ObjectStore<'a> {
             self.constants.object_runtime_max_num_store_entries,
             self.constants
                 .object_runtime_max_num_store_entries_system_tx,
-            self.inner.metrics.excessive_object_runtime_store_entries
+            self.inner
+                .metrics
+                .limits_metrics
+                .excessive_object_runtime_store_entries
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(

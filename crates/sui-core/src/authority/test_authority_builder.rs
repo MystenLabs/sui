@@ -20,7 +20,7 @@ use crate::execution_cache::build_execution_cache;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::rpc_index::RpcIndexStore;
+use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -70,8 +70,7 @@ pub struct TestAuthorityBuilder<'a> {
     cache_config: Option<ExecutionCacheConfig>,
     chain_override: Option<Chain>,
     dev_inspect_disabled: bool,
-    /// Skip full RPC index initialization (use for tests that don't need RPC endpoints)
-    skip_rpc_index_init: bool,
+    recent_submission_dedup_window_ms: Option<u64>,
     /// Skip genesis owner/dynamic-field indexing (use for tests that don't query owned objects)
     skip_genesis_owner_index: bool,
 }
@@ -163,13 +162,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
-    /// Skip full RPC index initialization. This is much faster for tests
-    /// that don't need RPC endpoint functionality.
-    pub fn skip_rpc_index_init(mut self) -> Self {
-        self.skip_rpc_index_init = true;
-        self
-    }
-
     /// Skip genesis owner/dynamic-field indexing. This is much faster for tests
     /// that don't query owned objects via RPC (e.g., get_owned_objects).
     pub fn skip_genesis_owner_index(mut self) -> Self {
@@ -207,14 +199,20 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
+    pub fn with_recent_submission_dedup_window_ms(mut self, window_ms: u64) -> Self {
+        assert!(
+            self.recent_submission_dedup_window_ms
+                .replace(window_ms)
+                .is_none()
+        );
+        self
+    }
+
     pub async fn build(self) -> Arc<AuthorityState> {
         // `_guard` must be declared here so it is not dropped before
         // `AuthorityPerEpochStore::new` is called
         //
         // Only create a guard if an explicit protocol_config was provided.
-        // If no protocol_config is provided, the caller is responsible for setting up
-        // any necessary protocol config overrides (e.g., disable_preconsensus_locking=false
-        // for tests that use the Quorum Driver flow with extract_cert).
         let _guard = self
             .protocol_config
             .clone()
@@ -330,6 +328,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .unwrap_or(0),
             0,
             Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
+            None,
         )
         .expect("failed to create authority per epoch store");
 
@@ -359,25 +358,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             )))
         };
 
-        let rpc_index = if self.disable_indexer {
-            None
-        } else if self.skip_rpc_index_init {
-            Some(Arc::new(RpcIndexStore::new_without_init(&path)))
-        } else {
-            Some(Arc::new(
-                RpcIndexStore::new(
-                    &path,
-                    &authority_store,
-                    &checkpoint_store,
-                    &epoch_store,
-                    &cache_traits.backing_package_store,
-                    pruner_watermarks.checkpoint_id.clone(),
-                    sui_config::RpcConfig::default(),
-                )
-                .await,
-            ))
-        };
-
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let authority_overload_config = self.authority_overload_config.unwrap_or_default();
@@ -395,6 +375,9 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.authority_overload_config = authority_overload_config;
         config.authority_store_pruning_config = pruning_config;
         config.dev_inspect_disabled = self.dev_inspect_disabled;
+        if let Some(window_ms) = self.recent_submission_dedup_window_ms {
+            config.recent_submission_dedup_window_ms = Some(window_ms);
+        }
 
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         let policy_config = config.policy_config.clone();
@@ -414,7 +397,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             epoch_store.clone(),
             committee_store,
             index_store,
-            rpc_index,
+            None,
             checkpoint_store,
             &registry,
             genesis_objects_for_index,
@@ -437,7 +420,8 @@ impl<'a> TestAuthorityBuilder<'a> {
                 Arc::downgrade(&epoch_store),
                 consensus_client,
                 randomness::Handle::new_stub(),
-                config.protocol_key_pair(),
+                Some(config.protocol_key_pair()),
+                RandomnessRoundReceiverHandle::new_for_testing(),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
@@ -464,7 +448,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                 ExecutionEnv::new(),
                 &state.epoch_store_for_testing(),
             )
-            .await
             .unwrap();
 
         let batch = state

@@ -1,26 +1,26 @@
 //# publish
-module 0x42.M {
-    public num(): u64 {
+mvir 0x42::M {
+    public fun num(): u64 {
         label b0:
             return 42;
     }
 }
 
 //# publish
-unpublishable module 0x42.N {
-    public num(): u64 {
+unpublishable mvir 0x42::N {
+    public fun num(): u64 {
         label b0:
             return 42;
     }
 }
 
 //# run
-module 0x43.m {
-import 0x42.M;
-    entry foo() {
+mvir 0x43::m {
+import 0x42::M;
+    entry fun foo() {
         let a: u64;
     label b0:
-        a = M.num();
+        a = M::num();
         assert(copy(a) == 42, 41);
         return;
     }

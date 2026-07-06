@@ -21,7 +21,7 @@ use crate::errors::Error;
 
 use super::{TransactionObjectData, TryConstructTransaction, simulate_transaction};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ConsolidateAllStakedSuiToFungible {
     pub sender: SuiAddress,
     pub validator: SuiAddress,
@@ -109,6 +109,8 @@ impl TryConstructTransaction for ConsolidateAllStakedSuiToFungible {
             address_balance_withdrawal: 0,
             fss_object_count: Some(fss_count as u64),
             redeem_token_amount: None,
+            redeem_plan: None,
+            bind_epoch: None,
         })
     }
 }

@@ -21,6 +21,8 @@ use std::{
     io::Cursor,
 };
 
+pub use crate::compressed::runtime as compressed_layouts;
+
 /// In the `WithTypes` configuration, a Move struct gets serialized into a Serde struct with this name
 pub const MOVE_STRUCT_NAME: &str = "struct";
 
@@ -225,10 +227,6 @@ impl MoveStruct {
         Self(value)
     }
 
-    pub fn simple_deserialize(blob: &[u8], ty: &MoveStructLayout) -> AResult<Self> {
-        Ok(bcs::from_bytes_seed(ty, blob)?)
-    }
-
     /// Like `MoveValue::visit_deserialize` (see for details), but specialized to visiting a struct
     /// (the `blob` is known to be a serialized Move struct, and the layout is a
     /// `MoveStructLayout`).
@@ -276,10 +274,6 @@ impl MoveStruct {
 impl MoveVariant {
     pub fn new(tag: u16, fields: Vec<MoveValue>) -> Self {
         Self { tag, fields }
-    }
-
-    pub fn simple_deserialize(blob: &[u8], ty: &MoveEnumLayout) -> AResult<Self> {
-        Ok(bcs::from_bytes_seed(ty, blob)?)
     }
 
     pub fn decorate(self, layout: &A::MoveEnumLayout) -> A::MoveVariant {

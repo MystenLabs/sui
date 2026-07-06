@@ -11,9 +11,12 @@ pub mod logging;
 pub mod moving_window;
 pub mod random;
 pub mod random_util;
+pub mod rpc_format;
 pub mod sync;
+pub mod zip_debug_eq;
 
 pub use random_util::tempdir;
+pub use zip_debug_eq::ZipDebugEqIteratorExt;
 
 #[inline(always)]
 pub fn in_integration_test() -> bool {

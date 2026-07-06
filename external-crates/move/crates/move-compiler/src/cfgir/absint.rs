@@ -20,6 +20,12 @@ pub trait AbstractDomain: Clone + Sized {
 pub trait TransferFunctions {
     type State: AbstractDomain;
 
+    /// Called before any commands in the block are executed, with the block's pre-state.
+    fn start_block(&mut self, _label: Label, _pre: &Self::State) {}
+
+    /// Called after all commands in the block have been executed, with the block's post-state.
+    fn finish_block(&mut self, _label: Label, _post: &Self::State) {}
+
     /// Execute local@instr found at index local@index in the current basic block from pre-state
     /// local@pre.
     /// Should return an AnalysisError if executing the instruction is unsuccessful, and () if
@@ -39,16 +45,37 @@ pub trait TransferFunctions {
     ) -> Diagnostics;
 }
 
+/// The pre- and post-states of a block, as observed at the fixpoint of the analysis. The
+/// post-state is `None` if the block was never processed (e.g. unreachable).
+pub struct BlockStates<State> {
+    pub pre: State,
+    pub post: Option<State>,
+}
+
 pub fn analyze_function<C: CFG, TF: TransferFunctions>(
     transfer_functions: &mut TF,
     cfg: &C,
     initial_state: TF::State,
 ) -> (BTreeMap<Label, TF::State>, Diagnostics) {
+    let (states, diags) = analyze_function_with_post_states(transfer_functions, cfg, initial_state);
+    let pre_states = states
+        .into_iter()
+        .map(|(lbl, BlockStates { pre, .. })| (lbl, pre))
+        .collect();
+    (pre_states, diags)
+}
+
+/// Like [`analyze_function`] but exposes both the pre- and post-state of every block.
+pub fn analyze_function_with_post_states<C: CFG, TF: TransferFunctions>(
+    transfer_functions: &mut TF,
+    cfg: &C,
+    initial_state: TF::State,
+) -> (BTreeMap<Label, BlockStates<TF::State>>, Diagnostics) {
     fn collect_states_and_diagnostics<State>(
         map: BTreeMap<Label, absint::BlockInvariant<(State, Option<Rc<Diagnostics>>)>>,
-    ) -> (BTreeMap<Label, State>, Diagnostics) {
+    ) -> (BTreeMap<Label, BlockStates<State>>, Diagnostics) {
         let mut diags = Diagnostics::new();
-        let final_states = map
+        let states = map
             .into_iter()
             .map(|(lbl, inv)| {
                 let absint::BlockInvariant {
@@ -56,14 +83,20 @@ pub fn analyze_function<C: CFG, TF: TransferFunctions>(
                     post,
                 } = inv;
                 debug_assert!(_pre_diags.is_none());
-                // can be None for empty blocks
-                if let absint::BlockPostCondition::Processed((_, Some(rc_diags))) = post {
-                    diags.extend(Rc::into_inner(rc_diags).unwrap());
-                }
-                (lbl, pre)
+                // `post` is `Unprocessed` for empty / unreachable blocks.
+                let post = match post {
+                    absint::BlockPostCondition::Processed((post, post_diags)) => {
+                        if let Some(rc_diags) = post_diags {
+                            diags.extend(Rc::into_inner(rc_diags).unwrap());
+                        }
+                        Some(post)
+                    }
+                    absint::BlockPostCondition::Unprocessed => None,
+                };
+                (lbl, BlockStates { pre, post })
             })
             .collect();
-        (final_states, diags)
+        (states, diags)
     }
 
     let mut interpreter = AbstractInterpreter { transfer_functions };
@@ -104,20 +137,25 @@ impl<TF: TransferFunctions> absint::AbstractInterpreter for AbstractInterpreter<
 
     fn visit_block_pre_execution(
         &mut self,
-        _block_id: Self::BlockId,
+        block_id: Self::BlockId,
         invariant: &mut absint::BlockInvariant<(TF::State, Option<Rc<Diagnostics>>)>,
     ) -> Result<(), Self::Error> {
         // each block needs its own unique Diagnostics, so set to None to be then initialized
         // in the `execute`
         invariant.pre.1 = None;
+        self.transfer_functions
+            .start_block(block_id, &invariant.pre.0);
         Ok(())
     }
 
     fn visit_block_post_execution(
         &mut self,
-        _block_id: Self::BlockId,
-        _invariant: &mut absint::BlockInvariant<Self::State>,
+        block_id: Self::BlockId,
+        invariant: &mut absint::BlockInvariant<Self::State>,
     ) -> Result<(), Self::Error> {
+        if let absint::BlockPostCondition::Processed((post, _)) = &invariant.post {
+            self.transfer_functions.finish_block(block_id, post);
+        }
         Ok(())
     }
 

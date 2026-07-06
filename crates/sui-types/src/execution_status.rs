@@ -3,7 +3,7 @@
 
 use crate::ObjectID;
 use crate::base_types::SuiAddress;
-use crate::error::{ExecutionError, ExecutionErrorTrait};
+use crate::error::{BoxError, ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait};
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,12 @@ pub struct ExecutionFailure {
     pub command: Option<CommandIndex>,
 }
 
+impl ExecutionFailure {
+    pub fn new(error: ExecutionErrorKind, command: Option<CommandIndex>) -> Self {
+        ExecutionFailure { error, command }
+    }
+}
+
 impl From<ExecutionError> for ExecutionFailure {
     fn from(value: ExecutionError) -> Self {
         Self {
@@ -47,6 +53,14 @@ impl Display for ExecutionFailure {
 }
 
 impl ExecutionErrorTrait for ExecutionFailure {
+    fn new(
+        failure: ExecutionFailure,
+        _source: Option<BoxError>,
+        _metadata: ExecutionErrorMetadata,
+    ) -> Self {
+        failure
+    }
+
     fn with_command_index(self, command: CommandIndex) -> Self {
         Self {
             command: Some(command),
@@ -58,9 +72,6 @@ impl ExecutionErrorTrait for ExecutionFailure {
     }
     fn command(&self) -> Option<CommandIndex> {
         self.command
-    }
-    fn source_ref(&self) -> Option<&(dyn Error + 'static)> {
-        None
     }
 }
 
@@ -451,11 +462,8 @@ impl Display for MoveLocation {
 }
 
 impl ExecutionStatus {
-    pub fn new_failure(
-        error: ExecutionErrorKind,
-        command: Option<CommandIndex>,
-    ) -> ExecutionStatus {
-        ExecutionStatus::Failure(ExecutionFailure { error, command })
+    pub fn new_failure(failure: ExecutionFailure) -> ExecutionStatus {
+        ExecutionStatus::Failure(failure)
     }
 
     pub fn is_ok(&self) -> bool {

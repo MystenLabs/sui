@@ -1,0 +1,29 @@
+---
+title: Epochs and Reconfiguration
+description: Epochs define time periods on Sui where the validator set remains unchanged. Reconfiguration adjusts network parameters at epoch boundaries.
+keywords: [ epochs, reconfiguration, validators, object versioning ]
+---
+
+On Sui, an epoch is a period of time defined by the network. During this time, the Sui [validator](/operators/validator/validator-config) set and their stakes remain unchanged. On both [Mainnet](/develop/sui-architecture/networks) and [Testnet](/develop/sui-architecture/networks), an epoch is about 24 hours. Epochs on Devnet are 1 hour. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes.
+
+Epoch values are included in the metadata of all [transactions](/develop/transactions/txn-overview). A transaction is only valid if executed before its expiration epoch.
+
+## Reconfiguration
+
+Reconfiguration is a critical process occurring at the end of each epoch. It involves several key steps to adjust the network for the upcoming epoch:
+
+1. **Finalizing transactions and checkpoints:** The network reaches consensus on the final set of transactions and checkpoints for the current epoch. This ensures all validators have an identical state at epoch conclusion.
+
+    - **Synchronous moment:** This is the only fully synchronous event in the network, crucial for maintaining consistency.
+
+1. **Distribution of gas rewards:** Computation gas fees are distributed to the validator staking reward pool, from which stakers can withdraw. Storage fees are allocated to a storage fund, playing a vital role in the [Sui tokenomics](/develop/sui-architecture/tokenomics-overview).
+
+1. **Validator set change:** Any pending staking and unstaking requests during the epoch are finalized and reflected in the validators' stake distribution. Any pending validator change requests are processed, including adding new validators and removing existing validators. This is the sole opportunity for altering the validator set and stake distribution.
+
+1. **Protocol upgrade:** If agreed upon by 2f+1 validators, the network might upgrade to a new protocol version, encompassing new features, bug fixes, and updates to Move framework libraries.
+
+## Object versioning across epochs
+
+Sui's [object versioning](/develop/objects/versioning) ensures that each object update writes a new version. For address-owned and immutable objects, transactions reference a specific object version. For consensus-managed objects, including shared objects and consensus-address-owned party objects, consensus determines the next version during scheduling.
+
+Applications should avoid submitting conflicting transactions that use the same owned object concurrently. Depending on how validator reservations are split, one transaction might be rejected because the object version is already reserved, or competing transactions can equivocate the object until the next epoch. Prefer a single [programmable transaction block](/develop/transactions/ptbs/building-ptb) for related operations, or use SDK/client execution helpers that manage object and gas coin concurrency for you.

@@ -12,9 +12,11 @@ anyhow.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 tokio.workspace = true
-tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 
 [lints]
 workspace = true

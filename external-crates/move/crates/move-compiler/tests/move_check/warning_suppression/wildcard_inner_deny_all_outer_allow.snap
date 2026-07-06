@@ -1,0 +1,31 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E09008]: unused function
+  ┌─ tests/move_check/warning_suppression/wildcard_inner_deny_all_outer_allow.move:5:9
+  │
+4 │     #[deny(all)]
+  │            --- the lint level is defined here
+5 │     fun denied(a: u64) {
+  │         ^^^^^^ The non-'public', non-'entry' function 'denied' is never called. Consider removing it.
+
+error[E09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/wildcard_inner_deny_all_outer_allow.move:5:16
+  │
+4 │     #[deny(all)]
+  │            --- the lint level is defined here
+5 │     fun denied(a: u64) {
+  │                ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+
+error[E09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/wildcard_inner_deny_all_outer_allow.move:6:13
+  │
+4 │     #[deny(all)]
+  │            --- the lint level is defined here
+5 │     fun denied(a: u64) {
+6 │         let x;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'

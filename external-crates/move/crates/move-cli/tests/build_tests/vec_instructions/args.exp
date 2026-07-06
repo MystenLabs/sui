@@ -9,7 +9,7 @@ public vec_ops_post() {
 L0:	v#1#0: vector<u64>
 L1:	y#1#0: &mut u64
 B0:
-	0: VecPack(2, 0)
+	0: LdConst[0](vector<u64>: 00)
 	1: StLoc[0](v#1#0: vector<u64>)
 	2: MutBorrowLoc[0](v#1#0: vector<u64>)
 	3: LdU64(0)
@@ -52,5 +52,8 @@ B3:
 	37: Ret
 }
 
+Constants [
+	0 => vector<u64>: 00
+]
 }
 

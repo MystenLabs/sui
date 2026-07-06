@@ -11,7 +11,7 @@
 module Test::M1 {
 
     public entry fun push_n_items(n: u64) {
-        let mut v: vector<u64> = vector::empty();
+        let mut v: vector<u64> = vector[];
         let mut i = 0;
         while (i < n) {
             vector::push_back(&mut v, i);

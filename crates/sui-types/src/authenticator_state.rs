@@ -3,6 +3,7 @@
 
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
+use mysten_common::ZipDebugEqIteratorExt;
 use serde::{Deserialize, Serialize};
 
 use crate::base_types::SequenceNumber;
@@ -60,7 +61,7 @@ fn string_bytes_ord(a: &str, b: &str) -> std::cmp::Ordering {
         return std::cmp::Ordering::Greater;
     }
 
-    for (a_byte, b_byte) in a_bytes.iter().zip(b_bytes.iter()) {
+    for (a_byte, b_byte) in a_bytes.iter().zip_debug_eq(b_bytes.iter()) {
         if a_byte < b_byte {
             return std::cmp::Ordering::Less;
         }

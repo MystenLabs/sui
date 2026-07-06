@@ -12,6 +12,7 @@ use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use itertools::Itertools;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::bridge::Bridge;
 
@@ -40,7 +41,6 @@ use sui_types::{
     object::Owner,
     storage::InputKey,
 };
-use tracing::instrument;
 use typed_store::rocks::DBBatch;
 
 pub(crate) mod cache_types;
@@ -155,6 +155,18 @@ pub trait ExecutionCacheCommit: Send + Sync {
     /// Build a DBBatch containing the given transaction outputs.
     fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch;
 
+    /// Stage the highest-committed-checkpoint watermark into `batch` so it is
+    /// written atomically with that checkpoint's transaction outputs. Called by
+    /// CheckpointExecutor between [`Self::build_db_batch`] and
+    /// [`Self::commit_transaction_outputs`]. Unlike the checkpoint store's
+    /// separately-bumped `highest_executed` watermark, this stays consistent
+    /// with the durable object set across an unclean stop.
+    fn set_highest_committed_checkpoint_in_batch(
+        &self,
+        batch: &mut Batch,
+        checkpoint: CheckpointSequenceNumber,
+    );
+
     /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
     /// written durably before marking a checkpoint as finalized.
@@ -217,7 +229,7 @@ pub trait ObjectCacheRead: Send + Sync {
         let objects = self
             .multi_get_objects_by_key(&object_refs.iter().map(ObjectKey::from).collect::<Vec<_>>());
         let mut result = Vec::new();
-        for (object_opt, object_ref) in objects.into_iter().zip(object_refs) {
+        for (object_opt, object_ref) in objects.into_iter().zip_debug_eq(object_refs) {
             match object_opt {
                 None => {
                     let live_objref = self._get_live_objref(object_ref.0)?;
@@ -268,7 +280,7 @@ pub trait ObjectCacheRead: Send + Sync {
                 InputKey::Package { id } => Either::Right((idx, id)),
             });
 
-        for ((idx, (id, version)), has_key) in move_object_keys.iter().zip(
+        for ((idx, (id, version)), has_key) in move_object_keys.iter().zip_debug_eq(
             self.multi_object_exists_by_key(
                 &move_object_keys
                     .iter()
@@ -436,29 +448,6 @@ pub trait TransactionCacheRead: Send + Sync {
             .expect("multi-get must return correct number of items")
     }
 
-    #[instrument(level = "trace", skip_all)]
-    fn get_transactions_and_serialized_sizes(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<(VerifiedTransaction, usize)>>> {
-        let txns = self.multi_get_transaction_blocks(digests);
-        txns.into_iter()
-            .map(|txn| {
-                txn.map(|txn| {
-                    // Note: if the transaction is read from the db, we are wasting some
-                    // effort relative to reading the raw bytes from the db instead of
-                    // calling serialized_size. However, transactions should usually be
-                    // fetched from cache.
-                    match txn.serialized_size() {
-                        Ok(size) => Ok(((*txn).clone(), size)),
-                        Err(e) => Err(e),
-                    }
-                })
-                .transpose()
-            })
-            .collect::<Result<Vec<_>, _>>()
-    }
-
     fn multi_get_executed_effects_digests(
         &self,
         digests: &[TransactionDigest],
@@ -490,7 +479,7 @@ pub trait TransactionCacheRead: Send + Sync {
         }
 
         let effects = self.multi_get_effects(&fetch_digests);
-        for (i, effects) in fetch_indices.into_iter().zip(effects.into_iter()) {
+        for (i, effects) in fetch_indices.into_iter().zip_debug_eq(effects.into_iter()) {
             results[i] = effects;
         }
 
@@ -581,7 +570,7 @@ pub trait TransactionCacheRead: Send + Sync {
                 .await;
             self.multi_get_effects(&effects_digests)
                 .into_iter()
-                .zip(digests)
+                .zip_debug_eq(digests)
                 .map(|(e, digest)| {
                     e.ok_or_else(|| {
                         SuiError::from(SuiErrorKind::TransactionEffectsNotFound { digest: *digest })

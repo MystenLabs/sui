@@ -20,7 +20,12 @@
 
 
 import * as fs from 'fs';
-import { FRAME_LIFETIME, ModuleInfo } from './utils';
+import {
+    FRAME_LIFETIME,
+    ModuleInfo,
+    streamDecompressedLines,
+    getDecoder,
+} from './utils';
 import {
     IRuntimeCompoundValue,
     RuntimeValueType,
@@ -38,9 +43,9 @@ import {
     IFileLoc,
     IFileInfo,
     ILoc,
-    IDebugInfoFunction
+    IDebugInfoFunction,
 } from './debug_info_utils';
-import { decompress } from 'fzstd';
+import { logger } from "@vscode/debugadapter";
 
 
 // Data types corresponding to trace file JSON schema.
@@ -241,11 +246,6 @@ interface JSONTraceEvent {
     External?: JSONTraceExt;
 }
 
-interface JSONTraceRootObject {
-    events: JSONTraceEvent[];
-    version: number;
-}
-
 // Runtime data types.
 
 /**
@@ -286,6 +286,32 @@ export enum TraceEventKind {
 }
 
 /**
+ * Kinds of non-fatal trace/source debug-info mismatches.
+ */
+enum TraceDiagnosticKind {
+    MissingSourceModule = 'MissingSourceModule',
+    MissingSourceFunction = 'MissingSourceFunction',
+    MissingCodeMapSourceFile = 'MissingCodeMapSourceFile',
+    MissingInlinedSourceMap = 'MissingInlinedSourceMap',
+}
+
+/**
+ * Warning produced while translating a trace to available debug info.
+ * Inserted into the trace during parsing to be emitted
+ * during debugging session.
+ */
+export interface TraceDiagnostic {
+    /**
+     * Opaque UI de-duplication key chosen by each diagnostic kind.
+     */
+    key: string;
+    /**
+     * User-facing warning text.
+     */
+    message: string;
+}
+
+/**
  * Trace event types containing relevant data.
  */
 export type TraceEvent =
@@ -297,6 +323,11 @@ export type TraceEvent =
     | {
         type: TraceEventKind.OpenFrame,
         id: number,
+        /**
+         * Owning real frame for virtual inlined frames; used when a real frame is
+         * forced to disassembly after some virtual frames have already been emitted.
+         */
+        containingRealFrameID?: number,
         name: string,
         srcFileHash: string
         bcodeFileHash?: string,
@@ -304,8 +335,19 @@ export type TraceEvent =
         localsTypes: string[],
         localsNames: ILocalInfo[],
         paramValues: RuntimeValueType[]
+        srcFunctionNameLoc?: ILoc
+        bcodeFunctionNameLoc?: ILoc
         optimizedSrcLines: number[]
         optimizedBcodeLines?: number[]
+        /**
+         * Source is unavailable or unsafe for this frame; force bytecode view
+         * and do not allow switching back to source while this frame is active.
+         */
+        forceDisassembly?: boolean
+        /**
+         * Warnings to emit when this event is reached.
+         */
+        diagnostics?: TraceDiagnostic[]
     }
     | { type: TraceEventKind.CloseFrame, id: number }
     | {
@@ -421,6 +463,14 @@ interface ITraceGenFrameInfo {
      */
     funName: string;
     /**
+     * Module containing the function represented by the frame.
+     */
+    modInfo: ModuleInfo;
+    /**
+     * Whether this real frame's source view has been disabled.
+     */
+    forceDisassembly?: boolean;
+    /**
     * Information for a given function in a source file.
     */
     srcFunEntry: IDebugInfoFunction;
@@ -428,6 +478,34 @@ interface ITraceGenFrameInfo {
     * Information for a given function in a disassembled byc file.
     */
     bcodeFunEntry?: IDebugInfoFunction;
+}
+
+/**
+ * Result of one inlined-frame transition step for an instruction.
+ */
+interface IProcessInstructionMacroStepResult {
+    /**
+     * Whether this instruction popped a virtual frame for a macro defined in a different file.
+     */
+    differentFileVirtualFramePop: boolean;
+    /**
+     * File hash whose source debug info is unavailable for inlined frame handling.
+     */
+    missingSourceMapFileHash?: string;
+}
+
+/**
+ * Internal representation of a processed OpenFrame trace event.
+ */
+interface ITranslatedOpenFrame {
+    /**
+     * Internal event added to the parsed trace.
+     */
+    event: Extract<TraceEvent, { type: TraceEventKind.OpenFrame }>;
+    /**
+     * Frame information kept while translating subsequent trace events.
+     */
+    frameInfo: ITraceGenFrameInfo;
 }
 
 /**
@@ -454,36 +532,11 @@ export const EXT_EVENT_FRAME_ID = Number.MAX_SAFE_INTEGER - 4;
 
 
 /**
- * Splits decompressed trace file data into lines without creating a large intermediate string.
- * This avoids hitting JavaScript's maximum string length limit for large trace files.
- *
- * @param decompressed the decompressed buffer containing trace data
- * @returns array of strings representing lines from the trace file
- */
-function splitTraceFileLines(decompressed: Uint8Array): string[] {
-    const NEWLINE_BYTE = 0x0A;
-    const decoder = new TextDecoder();
-    const lines: string[] = [];
-
-    let lineStart = 0;
-
-    for (let i = 0; i <= decompressed.length; i++) {
-        if (i === decompressed.length || decompressed[i] === NEWLINE_BYTE) {
-            // end of the buffer or a new line
-            if (i > lineStart) {
-                const lineBytes = decompressed.slice(lineStart, i);
-                const line = decoder.decode(lineBytes).trimEnd();
-                lines.push(line);
-            }
-            lineStart = i + 1;
-        }
-    }
-
-    return lines;
-}
-
-/**
  * Reads a Move VM execution trace from a JSON file.
+ *
+ * The compressed file is read in full but decompressed and parsed one line at
+ * a time via `streamDecompressedLines`, so peak memory is proportional to the
+ * kept events (small) rather than the raw trace size (potentially multi-GB).
  *
  * @param traceFilePath path to the trace JSON file.
  * @param srcDebugInfosHashMap a map from file hash to debug info.
@@ -501,22 +554,31 @@ export async function readTrace(
     bcodeDebugInfosModMap: Map<string, IDebugInfo>,
     filesMap: Map<string, IFileInfo>,
 ): Promise<ITrace> {
-    const buf = Buffer.from(fs.readFileSync(traceFilePath));
-    const decompressed = await decompress(buf);
-    const lines = splitTraceFileLines(decompressed);
-    const [header, ...rest] = lines;
-    const jsonVersion: number = JSON.parse(header).version;
-    const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
-        return JSON.parse(line);
-    });
-
-    const traceJSON: JSONTraceRootObject = {
-        events: jsonEvents,
-        version: jsonVersion,
-    };
-    if (traceJSON.events.length === 0) {
-        throw new Error('Trace contains no events');
+    const buf = fs.readFileSync(traceFilePath);
+    const u8 = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    const decoder = await getDecoder();
+    // Push/Pop effects that don't contain references are only used by
+    // extendLifetimeIfReference, which is a no-op for non-reference values.
+    // Skipping these at the byte level avoids expensive TextDecoder +
+    // JSON.parse on potentially very large lines in big traces.
+    function skipPushPopWithoutRef(lineBytes: Buffer): boolean {
+        if (lineBytes.indexOf('{"Effect":{"Push"') === 0 ||
+            lineBytes.indexOf('{"Effect":{"Pop"') === 0) {
+            return !lineBytes.includes('Ref');
+        }
+        return false;
     }
+
+    const lineIterator = streamDecompressedLines(u8, decoder, skipPushPopWithoutRef);
+
+    // First line is the version header — skip it.
+    const headerResult = lineIterator.next();
+    if (headerResult.done) {
+        throw new Error('Empty trace file');
+    }
+
+    let eventCount = 0;
+    let lastProgressTime = Date.now();
     const events: TraceEvent[] = [];
     // We compute the end of lifetime for a local variable as follows.
     // When a given local variable is read or written in an effect, we set the end of its lifetime
@@ -542,7 +604,14 @@ export async function readTrace(
     const tracedBcodeLines = new Map<string, Set<number>>();
     // stack of frame infos OpenFrame and popped on CloseFrame
     const frameInfoStack: ITraceGenFrameInfo[] = [];
-    for (const event of traceJSON.events) {
+    for (const line of lineIterator) {
+        eventCount++;
+        const event = JSON.parse(line) as JSONTraceEvent;
+        const now = Date.now();
+        if (now - lastProgressTime >= 5000) {
+            logger.log(`Processing trace: ${eventCount} events parsed so far...`);
+            lastProgressTime = now;
+        }
         if (event.OpenFrame) {
             const localsTypes = [];
             const frame = event.OpenFrame.frame;
@@ -588,65 +657,21 @@ export async function readTrace(
                     + modInfo.addr
                     + ' not found');
             }
-            const srcFunEntry = debugInfo.functions.get(frame.function_name);
-            if (!srcFunEntry) {
-                throw new Error('Cannot find function entry in debug info for function '
-                    + frame.function_name
-                    + ' in module '
-                    + modInfo.name
-                    + ' in package '
-                    + modInfo.addr
-                    + ' when processing OpenFrame event');
-            }
-
-            const srcFileHash = debugInfo.fileHash;
-            const optimizedSrcLines = debugInfo.optimizedLines;
-            // there may be no disassembly info
-            let bcodeFileHash = undefined;
-            let optimizedBcodeLines = undefined;
-            let bcodeFunEntry = undefined;
-            let bcodeFilePath = undefined;
-            const bcodeMap = bcodeDebugInfosModMap.get(JSON.stringify(modInfo));
-            if (bcodeMap) {
-                bcodeFileHash = bcodeMap.fileHash;
-                optimizedBcodeLines = bcodeMap.optimizedLines;
-                bcodeFunEntry = bcodeMap.functions.get(frame.function_name);
-                const currentBCodeFile = filesMap.get(bcodeMap.fileHash);
-                if (currentBCodeFile) {
-                    bcodeFilePath = currentBCodeFile.path;
-                }
-
-            }
-            events.push({
-                type: TraceEventKind.OpenFrame,
-                id: frame.frame_id,
-                name: frame.function_name,
-                srcFileHash,
-                bcodeFileHash,
-                isNative: frame.is_native,
+            const sourceDebugInfoMissing = !srcDebugInfosHashMap.has(debugInfo.fileHash);
+            const translatedFrame = translateOpenFrame(
+                frame,
+                modInfo,
+                debugInfo,
+                bcodeDebugInfosModMap,
                 localsTypes,
-                localsNames: srcFunEntry.localsInfo,
                 paramValues,
-                optimizedSrcLines,
-                optimizedBcodeLines
-            });
-            const currentSrcFile = filesMap.get(debugInfo.fileHash);
-
-            if (!currentSrcFile) {
-                throw new Error(`Cannot find file with hash: ${debugInfo.fileHash}`);
-            }
-            frameInfoStack.push({
-                ID: frame.frame_id,
-                srcFilePath: currentSrcFile.path,
-                bcodeFilePath,
-                srcFileHash,
-                bcodeFileHash,
-                optimizedSrcLines,
-                optimizedBcodeLines: optimizedBcodeLines,
-                funName: frame.function_name,
-                srcFunEntry,
-                bcodeFunEntry
-            });
+                filesMap,
+                sourceDebugInfoMissing,
+                events[events.length - 1],
+                frameInfoStack[frameInfoStack.length - 1]
+            );
+            events.push(translatedFrame.event);
+            frameInfoStack.push(translatedFrame.frameInfo);
         } else if (event.CloseFrame) {
             // Extend lifetimes of locals referenced by return values
             for (const returnValue of event.CloseFrame.return_) {
@@ -658,13 +683,17 @@ export async function readTrace(
                 type: TraceEventKind.CloseFrame,
                 id: event.CloseFrame.frame_id
             });
+            const closingFrameInfo = frameInfoStack[frameInfoStack.length - 1];
+            if (closingFrameInfo.forceDisassembly) {
+                // Cover virtual frames emitted after the mismatch by applying the
+                // final frame policy when the owning real frame closes.
+                markVirtualOpenFramesForceDisassembly(events, event.CloseFrame.frame_id);
+            }
             frameInfoStack.pop();
         } else if (event.Instruction) {
             const name = event.Instruction.instruction;
             let frameInfo = frameInfoStack[frameInfoStack.length - 1];
             const srcPCLocs = frameInfo.srcFunEntry.pcLocs;
-            // if map does not contain an entry for a PC that can be found in the trace file,
-            // it means that the position of the last PC in the source map should be used
             const instSrcFileLoc = event.Instruction.pc >= srcPCLocs.length
                 ? srcPCLocs[srcPCLocs.length - 1]
                 : srcPCLocs[event.Instruction.pc];
@@ -675,29 +704,44 @@ export async function readTrace(
                     ? bcodePCLocs[bcodePCLocs.length - 1]
                     : bcodePCLocs[event.Instruction.pc];
             }
-
-            const differentFileVirtualFramePop = processInstructionIfMacro(
+            const missingSourceMapFileHash = processInstructionIfMacro(
                 srcDebugInfosHashMap,
                 events,
                 frameInfoStack,
-                event.Instruction.pc,
                 instSrcFileLoc
             );
 
-            if (differentFileVirtualFramePop) {
-                // if we pop a virtual frame for a macro defined in a different file,
-                // we may still land in a macro defined in the same file, in which case
-                // we need to push another virtual frame for this instruction right away
-                processInstructionIfMacro(
-                    srcDebugInfosHashMap,
+            if (missingSourceMapFileHash) {
+                if (!instBcodeFileLoc || !frameInfo.bcodeFunEntry) {
+                    // if we have neither source nor bytecode available,
+                    // then it's a real unrecoverable error
+                    const modID = frameInfo.modInfo.addr + '::' + frameInfo.modInfo.name;
+                    throw new Error('Cannot fall back to bytecode for missing inlined source map with hash: '
+                        + missingSourceMapFileHash
+                        + ' in function '
+                        + modID
+                        + '::'
+                        + frameInfo.funName
+                        + ' at PC '
+                        + event.Instruction.pc);
+                }
+                // Attribute the mismatch to the real frame owning this instruction.
+                const realFrameInfo = containingRealFrameInfo(frameInfoStack);
+                // Bytecode remains safe, but source/inline locations for this real
+                // frame are no longer reliable enough to select.
+                markFrameForceDisassembly(
                     events,
-                    frameInfoStack,
-                    event.Instruction.pc,
-                    instSrcFileLoc
+                    realFrameInfo,
+                    TraceDiagnosticKind.MissingInlinedSourceMap,
                 );
             }
 
-            recordTracedLine(filesMap, tracedSrcLines, instSrcFileLoc);
+            if (!missingSourceMapFileHash) {
+                // Source is confirmed to be available, so we can record the line,
+                // otherwise calling this function makes no sense and it would
+                // immediately throw an error
+                recordTracedLine(filesMap, tracedSrcLines, instSrcFileLoc);
+            }
             if (instBcodeFileLoc) {
                 recordTracedLine(filesMap, tracedBcodeLines, instBcodeFileLoc);
             }
@@ -896,7 +940,202 @@ export async function readTrace(
             }
         }
     }
+    if (eventCount === 0) {
+        throw new Error('Trace contains no events');
+    }
     return { events, localLifetimeEnds, tracedSrcLines, tracedBcodeLines };
+}
+
+/**
+ * Converts a JSON OpenFrame into internal trace event/frame info.
+ */
+function translateOpenFrame(
+    frame: JSONTraceFrame,
+    modInfo: ModuleInfo,
+    debugInfo: IDebugInfo,
+    bcodeDebugInfosModMap: Map<string, IDebugInfo>,
+    localsTypes: string[],
+    paramValues: RuntimeValueType[],
+    filesMap: Map<string, IFileInfo>,
+    sourceDebugInfoMissing: boolean,
+    previousEvent: TraceEvent | undefined,
+    callerFrame: ITraceGenFrameInfo | undefined,
+): ITranslatedOpenFrame {
+    let srcFunEntry = debugInfo.functions.get(frame.function_name);
+    let srcFileHash = debugInfo.fileHash;
+    let optimizedSrcLines = debugInfo.optimizedLines;
+    let currentSrcFile = filesMap.get(debugInfo.fileHash);
+
+    // there may be no disassembly info
+    const bcodeMap = bcodeDebugInfosModMap.get(JSON.stringify(modInfo));
+    let bcodeFileHash = undefined;
+    let optimizedBcodeLines = undefined;
+    let bcodeFunEntry = undefined;
+    let bcodeFilePath = undefined;
+    if (bcodeMap) {
+        bcodeFileHash = bcodeMap.fileHash;
+        optimizedBcodeLines = bcodeMap.optimizedLines;
+        bcodeFunEntry = bcodeMap.functions.get(frame.function_name);
+        const currentBCodeFile = filesMap.get(bcodeMap.fileHash);
+        if (currentBCodeFile) {
+            bcodeFilePath = currentBCodeFile.path;
+        }
+    }
+
+    let forceDisassembly = sourceDebugInfoMissing;
+    let diagnostics: TraceDiagnostic[] | undefined = undefined;
+    if (sourceDebugInfoMissing) {
+        diagnostics = [openFrameDiagnostic(
+            TraceDiagnosticKind.MissingSourceModule,
+            modInfo,
+            frame.function_name,
+            previousEvent,
+            callerFrame,
+        )];
+    }
+    if (!srcFunEntry) {
+        if (!bcodeMap || !bcodeFunEntry) {
+            // if we have neither source nor bytecode debug info for the function,
+            // then we have a real problem
+            throw new Error('Cannot find function entry in debug info for function '
+                + frame.function_name
+                + ' in module '
+                + modInfo.name
+                + ' in package '
+                + modInfo.addr
+                + ' when processing OpenFrame event');
+        }
+
+        // Source debug info is stale or incomplete. The frame remains forced to disassembly,
+        // but trace translation still needs PC/local metadata, so use bytecode metadata
+        // as the primary function entry for this frame.
+        srcFunEntry = bcodeFunEntry;
+        forceDisassembly = true;
+        const diagnosticKind = debugInfo.functionsWithMissingCodeMapSourceFiles.has(frame.function_name)
+            ? TraceDiagnosticKind.MissingCodeMapSourceFile
+            : TraceDiagnosticKind.MissingSourceFunction;
+        diagnostics = [openFrameDiagnostic(diagnosticKind, modInfo, frame.function_name, previousEvent, callerFrame)];
+    }
+
+    if (!currentSrcFile) {
+        // IDebugInfo is only created after its primary file hash is verified to be present in filesMap.
+        // Hitting this error means a real problem and not a recoverable source/bytecode mismatch.
+        throw new Error(`Cannot find file with hash: ${srcFileHash}`);
+    }
+
+    return {
+        event: {
+            type: TraceEventKind.OpenFrame,
+            id: frame.frame_id,
+            name: frame.function_name,
+            srcFileHash,
+            bcodeFileHash,
+            isNative: frame.is_native,
+            localsTypes,
+            localsNames: srcFunEntry.localsInfo,
+            paramValues,
+            // Before the first instruction in this frame, display the function name
+            // rather than the function range start, which may be optimized away.
+            srcFunctionNameLoc: srcFunEntry.functionNameLoc,
+            bcodeFunctionNameLoc: bcodeFunEntry?.functionNameLoc,
+            optimizedSrcLines,
+            optimizedBcodeLines,
+            forceDisassembly,
+            diagnostics,
+        },
+        frameInfo: {
+            ID: frame.frame_id,
+            srcFilePath: currentSrcFile.path,
+            bcodeFilePath,
+            srcFileHash,
+            bcodeFileHash,
+            optimizedSrcLines,
+            optimizedBcodeLines,
+            funName: frame.function_name,
+            modInfo,
+            forceDisassembly,
+            srcFunEntry,
+            bcodeFunEntry,
+        }
+    };
+}
+
+/**
+ * Builds a warning attached to an OpenFrame event.
+ */
+function openFrameDiagnostic(
+    kind: TraceDiagnosticKind,
+    modInfo: ModuleInfo,
+    functionName: string,
+    previousEvent: TraceEvent | undefined,
+    callerFrame: ITraceGenFrameInfo | undefined,
+): TraceDiagnostic {
+    return {
+        key: openFrameDiagnosticKey(kind, modInfo, functionName, previousEvent, callerFrame),
+        message: openFrameDiagnosticMessage(kind, modInfo, functionName),
+    };
+}
+
+/**
+ * Builds user-facing warning text for an OpenFrame diagnostic.
+ */
+function openFrameDiagnosticMessage(
+    kind: TraceDiagnosticKind,
+    modInfo: ModuleInfo,
+    functionName: string,
+): string {
+    const modID = modInfo.addr + '::' + modInfo.name;
+    const functionID = modID + '::' + functionName;
+    switch (kind) {
+        case TraceDiagnosticKind.MissingSourceModule:
+            return 'Source debug info for '
+                + modID
+                + ' is unavailable; showing disassembly for this module.';
+        case TraceDiagnosticKind.MissingCodeMapSourceFile:
+            return 'Source debug info for '
+                + functionID
+                + ' references a source file that is unavailable; showing disassembly for this frame.';
+        case TraceDiagnosticKind.MissingSourceFunction:
+            return 'Source debug info for '
+                + functionID
+                + ' does not match the trace; showing disassembly for this frame.';
+        case TraceDiagnosticKind.MissingInlinedSourceMap:
+            return 'Source debug info for '
+                + functionID
+                + ' references inlined source debug info that is unavailable; showing disassembly for this frame.';
+    }
+}
+
+/**
+ * Builds a de-duplication key for OpenFrame warnings.
+ */
+function openFrameDiagnosticKey(
+    kind: TraceDiagnosticKind,
+    modInfo: ModuleInfo,
+    functionName: string,
+    previousEvent: TraceEvent | undefined,
+    callerFrame: ITraceGenFrameInfo | undefined,
+): string {
+    const modID = modInfo.addr + '::' + modInfo.name;
+    if (kind === TraceDiagnosticKind.MissingSourceModule) {
+        return kind
+            + ':'
+            + modID;
+    }
+    const baseKey = kind
+        + ':'
+        + modID
+        + '::'
+        + functionName;
+    // Prefer callsite-specific keys so loops warn once, but distinct callsites still warn.
+    if (previousEvent?.type === TraceEventKind.Instruction
+        && (previousEvent.kind === TraceInstructionKind.CALL
+            || previousEvent.kind === TraceInstructionKind.CALL_GENERIC)
+        && callerFrame?.bcodeFileHash) {
+        return baseKey + ':' + callerFrame.bcodeFileHash + ':' + previousEvent.pc;
+    }
+    // If callsite data is unavailable, fall back to callee-only de-duplication.
+    return baseKey;
 }
 
 /**
@@ -914,6 +1153,8 @@ function recordTracedLine(
 ) {
     const file = filesMap.get(floc.fileHash);
     if (!file) {
+        // PC locations are built only from code-map entries whose files are verified to exist in filesMap.
+        // Hitting this error means a real problem and not a recoverable source/bytecode mismatch.
         throw new Error('Cannot find file with hash: '
             + floc.fileHash
             + ' when recording traced line');
@@ -924,27 +1165,164 @@ function recordTracedLine(
 }
 
 /**
- * Additional processing of an instruction if it's detected that it belongs
- * to an inlined macro. If this is the case, then virtual frames may be pushed
- * to the stack or popped from it.
+ * Returns the nearest non-virtual frame in the trace-generation stack.
+ */
+function containingRealFrameInfo(frameInfoStack: ITraceGenFrameInfo[]): ITraceGenFrameInfo {
+    for (let i = frameInfoStack.length - 1; i >= 0; i--) {
+        const id = frameInfoStack[i].ID;
+        if (id !== INLINED_FRAME_ID_SAME_FILE && id !== INLINED_FRAME_ID_DIFFERENT_FILE) {
+            return frameInfoStack[i];
+        }
+    }
+    throw new Error('Cannot find real frame in trace-generation stack');
+}
+
+/**
+ * Returns whether a real frame has source function metadata for inlined-frame handling.
+ */
+function hasSourceFunctionDebugInfo(
+    sourceMapsHashMap: Map<string, IDebugInfo>,
+    realFrameInfo: ITraceGenFrameInfo,
+): boolean {
+    return sourceMapsHashMap.has(realFrameInfo.srcFileHash)
+        && realFrameInfo.srcFunEntry !== realFrameInfo.bcodeFunEntry;
+}
+
+/**
+ * Marks a real frame as forced to disassembly for the whole frame lifetime.
+ */
+function markFrameForceDisassembly(
+    events: TraceEvent[],
+    realFrameInfo: ITraceGenFrameInfo,
+    diagnosticKind: TraceDiagnosticKind,
+): void {
+    const openFrameEvent = findOpenFrameEvent(events, realFrameInfo.ID);
+    if (!openFrameEvent) {
+        throw new Error('Cannot find OpenFrame event for frame ID: ' + realFrameInfo.ID);
+    }
+    if (!openFrameEvent.forceDisassembly) {
+        openFrameEvent.forceDisassembly = true;
+        realFrameInfo.forceDisassembly = true;
+        openFrameEvent.diagnostics = [
+            ...(openFrameEvent.diagnostics ?? []),
+            openFrameDiagnostic(diagnosticKind, realFrameInfo.modInfo, realFrameInfo.funName, undefined, undefined),
+        ];
+    }
+}
+
+/**
+ * Finds the nearest OpenFrame event with the given frame ID.
+ */
+function findOpenFrameEvent(
+    events: TraceEvent[],
+    frameID: number,
+): Extract<TraceEvent, { type: TraceEventKind.OpenFrame }> | undefined {
+    for (let i = events.length - 1; i >= 0; i--) {
+        const event = events[i];
+        if (event.type === TraceEventKind.OpenFrame && event.id === frameID) {
+            return event;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Returns whether a frame ID belongs to a synthetic inlined frame.
+ */
+function isVirtualFrameID(frameID: number): boolean {
+    return frameID === INLINED_FRAME_ID_SAME_FILE || frameID === INLINED_FRAME_ID_DIFFERENT_FILE;
+}
+
+/**
+ * After a forced real frame closes, marks all virtual OpenFrames it owned.
+ */
+function markVirtualOpenFramesForceDisassembly(events: TraceEvent[], realFrameID: number): void {
+    for (let i = events.length - 1; i >= 0; i--) {
+        const event = events[i];
+        if (event.type === TraceEventKind.OpenFrame && event.id === realFrameID) {
+            return;
+        }
+        if (isVirtualOpenFrameForFrame(event, realFrameID)) {
+            event.forceDisassembly = true;
+        }
+    }
+    throw new Error('Cannot find OpenFrame event for frame ID: ' + realFrameID);
+}
+
+/**
+ * Returns whether a virtual OpenFrame event belongs to the given real frame.
+ */
+function isVirtualOpenFrameForFrame(
+    event: TraceEvent,
+    realFrameID: number,
+): event is Extract<TraceEvent, { type: TraceEventKind.OpenFrame }> {
+    return event.type === TraceEventKind.OpenFrame
+        && isVirtualFrameID(event.id)
+        && event.containingRealFrameID === realFrameID;
+}
+
+/**
+ * Processes inlined-frame transitions for one instruction, if it maps to macro
+ * code. A transition that pops a different-file virtual frame may require one
+ * follow-up pass for the same instruction.
  *
  * @param sourceMapsHashMap a map from file hash to a source map.
  * @param events trace events.
  * @param frameInfoStack stack of frame infos used during trace generation.
- * @param instPC PC of the instruction.
  * @param instSrcFileLoc location of the instruction in the source file.
- * @returns `true` if this instruction caused a pop of a virtual frame for
- * an inlined macro defined in a different file, `false` otherwise.
+ * @returns file hash whose source debug info is unavailable, if fallback is needed.
  */
 function processInstructionIfMacro(
     sourceMapsHashMap: Map<string, IDebugInfo>,
     events: TraceEvent[],
     frameInfoStack: ITraceGenFrameInfo[],
-    instPC: number,
     instSrcFileLoc: IFileLoc
-): boolean {
+): string | undefined {
+    const realFrameInfo = containingRealFrameInfo(frameInfoStack);
+    // Inlined-frame synthesis uses source function bounds. Frames translated
+    // from bytecode fallback metadata cannot safely drive macro frame changes.
+    if (!hasSourceFunctionDebugInfo(sourceMapsHashMap, realFrameInfo)) {
+        return undefined;
+    }
+
+    const firstResult = processSingleInstructionIfMacro(
+        sourceMapsHashMap,
+        events,
+        frameInfoStack,
+        instSrcFileLoc,
+    );
+    if (firstResult.missingSourceMapFileHash) {
+        return firstResult.missingSourceMapFileHash;
+    }
+    if (firstResult.differentFileVirtualFramePop) {
+        // After popping back from a different-file macro, the same instruction
+        // may still need a same-file virtual frame opened immediately.
+        return processSingleInstructionIfMacro(
+            sourceMapsHashMap,
+            events,
+            frameInfoStack,
+            instSrcFileLoc,
+        ).missingSourceMapFileHash;
+    }
+    return undefined;
+}
+
+/**
+ * Performs one inlined-frame transition check for one instruction.
+ */
+function processSingleInstructionIfMacro(
+    sourceMapsHashMap: Map<string, IDebugInfo>,
+    events: TraceEvent[],
+    frameInfoStack: ITraceGenFrameInfo[],
+    instSrcFileLoc: IFileLoc
+): IProcessInstructionMacroStepResult {
     let frameInfo = frameInfoStack[frameInfoStack.length - 1];
     const fid = frameInfo.ID;
+    const realFrameID = containingRealFrameInfo(frameInfoStack).ID;
+    const result: IProcessInstructionMacroStepResult = {
+        differentFileVirtualFramePop: false,
+        missingSourceMapFileHash: undefined,
+    };
     if (instSrcFileLoc.fileHash !== frameInfo.srcFileHash) {
         // This indicates that we are going to an instruction in the same function
         // but in a different file, which can happen due to macro inlining.
@@ -992,16 +1370,13 @@ function processInstructionIfMacro(
                 type: TraceEventKind.CloseFrame,
                 id: fid
             });
-            return true;
+            result.differentFileVirtualFramePop = true;
+            return result;
         } else {
             const sourceMap = sourceMapsHashMap.get(instSrcFileLoc.fileHash);
             if (!sourceMap) {
-                throw new Error('Cannot find source map for file with hash: '
-                    + instSrcFileLoc.fileHash
-                    + ' when frame switching within frame '
-                    + fid
-                    + ' at PC '
-                    + instPC);
+                result.missingSourceMapFileHash = instSrcFileLoc.fileHash;
+                return result;
             }
             if (frameInfo.ID === INLINED_FRAME_ID_DIFFERENT_FILE) {
                 events.push({
@@ -1016,6 +1391,7 @@ function processInstructionIfMacro(
                 events.push({
                     type: TraceEventKind.OpenFrame,
                     id: INLINED_FRAME_ID_DIFFERENT_FILE,
+                    containingRealFrameID: realFrameID,
                     name: '__inlined__',
                     srcFileHash: instSrcFileLoc.fileHash,
                     // bytecode file hash stays the same for inlined frames
@@ -1040,8 +1416,9 @@ function processInstructionIfMacro(
                 optimizedBcodeLines: frameInfo.optimizedBcodeLines,
                 // same function name and source map as before since we are in the same function
                 funName: frameInfo.funName,
+                modInfo: frameInfo.modInfo,
                 srcFunEntry: frameInfo.srcFunEntry,
-                bcodeFunEntry: frameInfo.bcodeFunEntry
+                bcodeFunEntry: frameInfo.bcodeFunEntry,
             });
         }
     } else if (frameInfo.ID !== INLINED_FRAME_ID_DIFFERENT_FILE) {
@@ -1076,6 +1453,7 @@ function processInstructionIfMacro(
                 events.push({
                     type: TraceEventKind.OpenFrame,
                     id: INLINED_FRAME_ID_SAME_FILE,
+                    containingRealFrameID: realFrameID,
                     name: '__inlined__',
                     srcFileHash: instSrcFileLoc.fileHash,
                     bcodeFileHash: frameInfo.bcodeFileHash,
@@ -1097,8 +1475,9 @@ function processInstructionIfMacro(
                     optimizedSrcLines: frameInfo.optimizedSrcLines,
                     optimizedBcodeLines: frameInfo.optimizedBcodeLines,
                     funName: frameInfo.funName,
+                    modInfo: frameInfo.modInfo,
                     srcFunEntry: frameInfo.srcFunEntry,
-                    bcodeFunEntry: frameInfo.bcodeFunEntry
+                    bcodeFunEntry: frameInfo.bcodeFunEntry,
                 });
             } // else we are already in an inlined frame, so we don't need to do anything
         } else {
@@ -1120,7 +1499,7 @@ function processInstructionIfMacro(
             } // else we are not in an inlined frame, so we don't need to do anything
         }
     }
-    return false;
+    return result;
 }
 
 

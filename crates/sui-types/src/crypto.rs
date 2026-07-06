@@ -43,7 +43,7 @@ use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::ser::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_with::{Bytes, serde_as};
+use serde_with::{Bytes, DeserializeAs, serde_as};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -751,8 +751,7 @@ impl<'de> Deserialize<'de> for Signature {
             let s = String::deserialize(deserializer)?;
             Base64::decode(&s).map_err(|e| Error::custom(e.to_string()))?
         } else {
-            let data: Vec<u8> = Vec::deserialize(deserializer)?;
-            data
+            Bytes::deserialize_as(deserializer)?
         };
 
         Self::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))
@@ -774,7 +773,7 @@ impl Signature {
         // itself that computes the BCS hash of the Rust type prefix and `struct TransactionData`.
         // (See `fn digest` in `impl Message for SenderSignedData`).
         let mut hasher = DefaultHash::default();
-        hasher.update(bcs::to_bytes(&value).expect("Message serialization should not fail"));
+        bcs::serialize_into(&mut hasher, &value).expect("Message serialization should not fail");
 
         Signer::sign(secret, &hasher.finalize().digest)
     }
@@ -1043,7 +1042,7 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         T: Serialize,
     {
         let mut hasher = DefaultHash::default();
-        hasher.update(bcs::to_bytes(&value).expect("Message serialization should not fail"));
+        bcs::serialize_into(&mut hasher, &value).expect("Message serialization should not fail");
         let digest = hasher.finalize().digest;
 
         let (sig, pk) = &self.get_verification_inputs()?;

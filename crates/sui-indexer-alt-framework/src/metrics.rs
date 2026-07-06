@@ -63,7 +63,6 @@ pub struct IngestionMetrics {
     pub total_ingested_bytes: IntCounter,
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
-    pub total_ingested_permanent_errors: IntCounterVec,
     pub total_streamed_checkpoints: IntCounter,
     pub total_skipped_streamed_checkpoints: IntCounter,
     pub total_out_of_order_streamed_checkpoints: IntCounter,
@@ -78,6 +77,8 @@ pub struct IngestionMetrics {
     pub ingested_checkpoint_timestamp_lag: Histogram,
 
     pub ingested_checkpoint_latency: Histogram,
+    pub ingested_chain_id_latency: Histogram,
+    pub ingested_latest_checkpoint_latency: Histogram,
 
     pub ingestion_concurrency_limit: IntGauge,
     pub ingestion_concurrency_inflight: IntGauge,
@@ -205,8 +206,7 @@ impl IngestionMetrics {
             .unwrap(),
             total_ingested_bytes: register_int_counter_with_registry!(
                 name("total_ingested_bytes"),
-                "Total number of bytes fetched from the remote store, this metric will not \
-                be updated when data are fetched over gRPC.",
+                "Total number of bytes fetched from the remote store",
                 registry,
             )
             .unwrap(),
@@ -222,14 +222,6 @@ impl IngestionMetrics {
                 name("total_ingested_not_found_retries"),
                 "Total number of retries due to the not found errors while fetching data from the \
                  remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_permanent_errors: register_int_counter_vec_with_registry!(
-                name("total_ingested_permanent_errors"),
-                "Total number of permanent errors encountered while fetching data from the \
-                 remote store, which cause the ingestion service to shutdown",
-                &["reason"],
                 registry,
             )
             .unwrap(),
@@ -303,6 +295,20 @@ impl IngestionMetrics {
                 registry,
             )
             .unwrap(),
+            ingested_chain_id_latency: register_histogram_with_registry!(
+                name("ingested_chain_id_latency"),
+                "Time taken to fetch the chain identifier, including retries",
+                INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            ingested_latest_checkpoint_latency: register_histogram_with_registry!(
+                name("ingested_latest_checkpoint_latency"),
+                "Time taken to fetch the latest checkpoint number, including retries",
+                INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             ingestion_concurrency_limit: register_int_gauge_with_registry!(
                 name("ingestion_concurrency_limit"),
                 "Current adaptive concurrency limit for checkpoint ingestion",
@@ -326,7 +332,12 @@ impl IngestionMetrics {
         reason: &str,
         error: Error,
     ) -> backoff::Error<Error> {
-        warn!(checkpoint, reason, "Retrying due to error: {error}");
+        warn!(
+            checkpoint,
+            reason,
+            "Retrying due to error: {}",
+            error_with_sources(&error)
+        );
 
         self.total_ingested_transient_retries
             .with_label_values(&[reason])
@@ -797,6 +808,33 @@ impl CheckpointLagMetricReporter {
     }
 }
 
+/// Render an error together with its [`std::error::Error::source`] chain. Several wrappers
+/// (object_store, reqwest, anyhow) already inline their source's message in their own `Display`,
+/// so we skip any source whose message is already contained in its parent's message to avoid
+/// repetition, and append only genuinely-new sources. This surfaces the underlying `io::Error`
+/// ("Connection refused" / "operation timed out") that is otherwise hidden behind reqwest's terse
+/// "error sending request" leaf.
+fn error_with_sources(mut err: &dyn std::error::Error) -> String {
+    let mut out = String::new();
+    let mut next = err.to_string();
+
+    let mut prefix = "";
+    while let Some(src) = err.source() {
+        err = src;
+        let msg = err.to_string();
+        if !next.contains(&msg) {
+            out.push_str(prefix);
+            out.push_str(&next);
+            prefix = ": ";
+            next = msg;
+        }
+    }
+
+    out.push_str(prefix);
+    out.push_str(&next);
+    out
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Arc;
@@ -813,5 +851,53 @@ pub(crate) mod tests {
     /// Construct IngestionMetrics for test purposes.
     pub fn test_ingestion_metrics() -> Arc<IngestionMetrics> {
         IngestionMetrics::new(None, &Registry::new())
+    }
+
+    #[test]
+    fn test_error_with_sources_dedupes_inlined_and_appends_new() {
+        /// Leaf error with no source — mimics the underlying `io::Error`.
+        #[derive(thiserror::Error, Debug)]
+        #[error("operation timed out")]
+        struct Leaf;
+
+        /// Wrapper whose `Display` does NOT inline its source — mimics reqwest's
+        /// terse "error sending request" that hides the real source.
+        #[derive(thiserror::Error, Debug)]
+        #[error("error sending request")]
+        struct Terse(#[source] Leaf);
+
+        /// Wrapper whose `Display` DOES inline its source — mimics object_store.
+        #[derive(thiserror::Error, Debug)]
+        #[error("Error performing GET: {0}")]
+        struct Inlining(#[source] Terse);
+
+        // The already-inlined "error sending request" fragment is not repeated, but the
+        // genuinely-new "operation timed out" source (hidden behind the terse leaf) is appended.
+        let err = Inlining(Terse(Leaf));
+        assert_eq!(
+            error_with_sources(&err),
+            "Error performing GET: error sending request: operation timed out"
+        );
+    }
+
+    #[test]
+    fn test_error_with_sources_dedupes_inlined_mid_message() {
+        /// Leaf error with no source.
+        #[derive(thiserror::Error, Debug)]
+        #[error("operation timed out")]
+        struct Leaf;
+
+        /// Wrapper that inlines its source in the *middle* of its `Display`, not as a suffix.
+        #[derive(thiserror::Error, Debug)]
+        #[error("failed [{0}] while fetching")]
+        struct MidInlining(#[source] Leaf);
+
+        // The inlined source is contained in its parent's message, so it is not appended again
+        // even though the parent's message does not end with it.
+        let err = MidInlining(Leaf);
+        assert_eq!(
+            error_with_sources(&err),
+            "failed [operation timed out] while fetching"
+        );
     }
 }

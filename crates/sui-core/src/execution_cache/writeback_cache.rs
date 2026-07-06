@@ -54,9 +54,10 @@ use dashmap::DashMap;
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use futures::{FutureExt, future::BoxFuture};
 use moka::sync::SegmentedCache as MokaCache;
-use mysten_common::debug_fatal;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::{debug_fatal, debug_fatal_no_invariant};
 use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -1381,36 +1382,75 @@ impl WritebackCache {
     }
 }
 
+fn account_amount_from_object(account_obj: &Object) -> u128 {
+    let (_, AccumulatorValue::U128(value)) =
+        account_obj.data.try_as_move().unwrap().try_into().unwrap();
+    value.value
+}
+
 impl AccountFundsRead for WritebackCache {
-    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber) {
+    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> u128 {
+        ObjectCacheRead::get_object(self, account_id.inner())
+            .map(|account_obj| account_amount_from_object(&account_obj))
+            .unwrap_or(0)
+    }
+
+    fn get_consistent_latest_account_amount_and_version(
+        &self,
+        account_id: &AccumulatorObjId,
+    ) -> (u128, SequenceNumber) {
+        // Settlement is not atomic. A settlement transaction writes the accumulator
+        // objects at version V+1 first, and then a later barrier transaction bumps the
+        // root from V to V+1. A reader that observes the state in between sees
+        // post-settlement account objects alongside the pre-settlement root version,
+        // and reading the "latest" account can therefore disagree with the root we
+        // just captured.
+        //
+        // We handle this with two pieces:
+        //
+        // 1. MVCC read capped at the captured root version (see the call site below).
+        //    By construction of the settlement/barrier ordering, every account object's
+        //    version is <= the root version after the corresponding barrier runs, so
+        //    capping at the captured root strips away any newer-settlement writes that
+        //    have raced ahead of the barrier. The returned amount is the balance at or
+        //    before the captured root version, even if the account object has a newer
+        //    latest version by the time this method returns.
+        //
+        // 2. Root-version stability check (pre == post). `get_account_amount_at_version`
+        //    is only safe to call when the target version has not been pruned. Pruning
+        //    is tied to root advancement, so by reading the root before and after the
+        //    MVCC read and retrying on mismatch, we ensure that no root advance (and
+        //    therefore no pruning of the version we read at) could have happened while
+        //    we were reading — the data we read is still live in the system (memory or
+        //    db) throughout the call.
         let mut pre_root_version =
             ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                 .unwrap()
                 .version();
         let mut loop_iter = 0;
         loop {
-            let account_obj = ObjectCacheRead::get_object(self, account_id.inner());
-            if let Some(account_obj) = account_obj {
-                let (_, AccumulatorValue::U128(value)) =
-                    account_obj.data.try_as_move().unwrap().try_into().unwrap();
-                return (value.value, account_obj.version());
-            }
+            loop_iter += 1;
+            // Safe because of (1) and (2) above: the stability check below bounds the
+            // lifetime of `pre_root_version` to a window in which no pruning happens.
+            let value = self.get_account_amount_at_version(account_id, pre_root_version);
             let post_root_version =
                 ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                     .unwrap()
                     .version();
             if pre_root_version == post_root_version {
-                return (0, pre_root_version);
+                if loop_iter > 3 {
+                    debug_fatal_no_invariant!(
+                        "Root version stabilized after {} iterations during MVCC read",
+                        loop_iter
+                    );
+                }
+                return (value, pre_root_version);
             }
             debug!(
-                "Root version changed from {} to {} while reading account amount, retrying",
+                "Root version changed from {} to {} during MVCC read, retrying",
                 pre_root_version, post_root_version
             );
             pre_root_version = post_root_version;
-            loop_iter += 1;
-            if loop_iter >= 3 {
-                debug_fatal!("Unable to get a stable version after 3 iterations");
-            }
         }
     }
 
@@ -1420,13 +1460,9 @@ impl AccountFundsRead for WritebackCache {
         version: SequenceNumber,
     ) -> u128 {
         let account_obj = self.find_object_lt_or_eq_version(*account_id.inner(), version);
-        if let Some(account_obj) = account_obj {
-            let (_, AccumulatorValue::U128(value)) =
-                account_obj.data.try_as_move().unwrap().try_into().unwrap();
-            value.value
-        } else {
-            0
-        }
+        account_obj
+            .map(|account_obj| account_amount_from_object(&account_obj))
+            .unwrap_or(0)
     }
 }
 
@@ -1435,6 +1471,17 @@ impl ExecutionCacheAPI for WritebackCache {}
 impl ExecutionCacheCommit for WritebackCache {
     fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch {
         self.build_db_batch(epoch, digests)
+    }
+
+    fn set_highest_committed_checkpoint_in_batch(
+        &self,
+        batch: &mut Batch,
+        checkpoint: CheckpointSequenceNumber,
+    ) {
+        self.store
+            .perpetual_tables
+            .set_highest_committed_checkpoint(&mut batch.1, checkpoint)
+            .expect("db error");
     }
 
     fn commit_transaction_outputs(
@@ -2015,7 +2062,7 @@ impl TransactionCacheRead for WritebackCache {
                     .into_iter()
                     .map(|o| o.map(Arc::new))
                     .collect();
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached.transactions.insert(digest, None, *ticket).ok();
                     }
@@ -2078,7 +2125,7 @@ impl TransactionCacheRead for WritebackCache {
                     .record_db_multi_get("executed_effects_digests", remaining.len())
                     .multi_get_executed_effects_digests(&remaining_digests)
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .executed_effects_digests
@@ -2139,7 +2186,7 @@ impl TransactionCacheRead for WritebackCache {
                     .record_db_multi_get("transaction_effects", remaining.len())
                     .multi_get_effects(remaining_digests.iter())
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .transaction_effects
@@ -2260,7 +2307,7 @@ impl TransactionCacheRead for WritebackCache {
                     .store
                     .multi_get_events(&remaining_digests)
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .transaction_events

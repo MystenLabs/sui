@@ -13,7 +13,7 @@ error[E07001]: referential transparency violated
 13 │         let x = &s;
    │                 ^^ Invalid borrow of variable 's'
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/borrows/borrow_local_combo_invalid.move:23:9
    │
 20 │         if (cond) f = &mut s.f else f = &mut other.f;
@@ -38,7 +38,7 @@ error[E07001]: referential transparency violated
 38 │         let y = &s;
    │                 ^^ Invalid borrow of variable 's'
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/borrows/borrow_local_combo_invalid.move:48:9
    │
 46 │         if (cond) x = &mut s else x = other;

@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::TransactionNotFoundError;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -24,7 +25,7 @@ use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::full_checkpoint_content::ObjectSet;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
-pub const READ_MASK_DEFAULT: &str = "digest";
+pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
 
 #[tracing::instrument(skip(service))]
 pub fn get_transaction(
@@ -164,7 +165,7 @@ pub fn batch_get_transactions(
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
-fn render_executed_transaction(
+pub(crate) fn render_executed_transaction(
     service: &RpcService,
     crate::reader::TransactionRead {
         digest,
@@ -216,7 +217,7 @@ fn render_executed_transaction(
             .inner()
             .multi_get_objects_by_key(&object_keys)
             .into_iter()
-            .zip(object_keys.into_iter())
+            .zip_debug_eq(object_keys.into_iter())
         {
             if let Some(o) = o {
                 objects.insert(o);

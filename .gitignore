@@ -45,6 +45,7 @@ node_modules
 .tsbuildinfo
 *.tsbuildinfo
 .turbo
+.pnpm-store/
 
 # App build directories
 dist/
@@ -58,7 +59,6 @@ coverage/
 test-results/
 playwright-report/
 playwright/.cache/
-*.snap.new
 
 # logs
 wallet.log.*
@@ -80,3 +80,4 @@ lcov.info
 
 .sparse
 docs/content/documentation.json
+.cache-external-docs/

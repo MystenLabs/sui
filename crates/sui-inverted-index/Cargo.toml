@@ -1,0 +1,27 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "sui-inverted-index"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+version.workspace = true
+
+[lib]
+path = "src/mod.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
+bcs.workspace = true
+futures.workspace = true
+move-core-types.workspace = true
+roaring.workspace = true
+sui-types.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+sui-test-transaction-builder.workspace = true

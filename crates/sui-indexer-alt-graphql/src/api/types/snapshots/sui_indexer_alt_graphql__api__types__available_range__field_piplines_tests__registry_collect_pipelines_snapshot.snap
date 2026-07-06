@@ -38,6 +38,9 @@ Address.addressAt
 Address.asObject
   => {"obj_versions"}
 
+Address.asTransactionObject
+  => {}
+
 Address.balance
   => {"consistent"}
 
@@ -266,6 +269,9 @@ CoinMetadata.version
 CoinMetadata.digest
   => {}
 
+CoinMetadata.asTransactionObject
+  => {}
+
 CoinMetadata.balance
   => {"consistent"}
 
@@ -429,6 +435,9 @@ DynamicField.version
   => {}
 
 DynamicField.digest
+  => {}
+
+DynamicField.asTransactionObject
   => {}
 
 DynamicField.balance
@@ -687,6 +696,9 @@ IAddressable.address
   => {}
 
 IAddressable.addressAt
+  => {}
+
+IAddressable.asTransactionObject
   => {}
 
 IAddressable.balance
@@ -956,6 +968,9 @@ MoveObject.asCoinMetadata
 MoveObject.asDynamicField
   => {}
 
+MoveObject.asTransactionObject
+  => {}
+
 MoveObject.balance
   => {"consistent"}
 
@@ -1032,6 +1047,9 @@ MovePackage.version
   => {}
 
 MovePackage.digest
+  => {}
+
+MovePackage.asTransactionObject
   => {}
 
 MovePackage.balance
@@ -1218,6 +1236,9 @@ Object.asMoveObject
   => {}
 
 Object.asMovePackage
+  => {}
+
+Object.asTransactionObject
   => {}
 
 Object.balance
@@ -1490,6 +1511,9 @@ Query.type
 Query.simulateTransaction
   => {}
 
+Query.verifySignature
+  => {}
+
 Query.verifyZkLoginSignature
   => {}
 
@@ -1619,6 +1643,9 @@ SharedInput.initialSharedVersion
 SharedInput.mutable
   => {}
 
+SignatureVerifyResult.success
+  => {}
+
 SimulationResult.effects
   => {}
 
@@ -1674,6 +1701,9 @@ TransactionEffects.checkpoint
   => {}
 
 TransactionEffects.status
+  => {}
+
+TransactionEffects.version
   => {}
 
 TransactionEffects.lamportVersion

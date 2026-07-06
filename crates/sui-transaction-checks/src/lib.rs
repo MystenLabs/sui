@@ -14,7 +14,9 @@ mod checked {
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
+    use sui_types::gas::SuiGasStatusAPI;
     use sui_types::metrics::BytecodeVerifierMetrics;
+    use sui_types::object::ObjectPermission;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
@@ -367,7 +369,9 @@ mod checked {
                             .into()
                         )
                     }
-                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
+                    Owner::Shared { .. }
+                    | Owner::ConsensusAddressOwner { .. }
+                    | Owner::Party { .. } => {
                         fp_bail!(UserInputError::NotSharedObjectError.into())
                     }
                     Owner::Immutable => fp_bail!(
@@ -533,6 +537,13 @@ mod checked {
         object: &Object,
         system_transaction: bool,
     ) -> UserInputResult {
+        // Defense-in-depth: Owner::Party is not yet supported.
+        if matches!(object.owner, Owner::Party { .. }) {
+            return Err(UserInputError::Unsupported(
+                "Party-owned objects are not yet supported".to_string(),
+            ));
+        }
+
         match object_kind {
             InputObjectKind::MovePackage(package_id) => {
                 fp_ensure!(
@@ -593,7 +604,9 @@ mod checked {
                             parent_id: owner.into(),
                         });
                     }
-                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
+                    Owner::Shared { .. }
+                    | Owner::ConsensusAddressOwner { .. }
+                    | Owner::Party { .. } => {
                         // This object is a mutable consensus object. However the transaction
                         // specifies it as an owned object. This is inconsistent.
                         return Err(UserInputError::NotOwnedObjectError);
@@ -671,15 +684,57 @@ mod checked {
                             }
                         )
                     }
+
+                    Owner::Party {
+                        start_version: actual_initial_shared_version,
+                        permissions,
+                    } => {
+                        fp_ensure!(
+                            input_initial_shared_version == *actual_initial_shared_version,
+                            UserInputError::SharedObjectStartingVersionMismatch
+                        );
+                        // Check the owner has permissions for this kind of mutability
+                        let sender_permissions = permissions.permissions_for(owner);
+                        match mutability {
+                            SharedObjectMutability::Immutable => {
+                                // TODO better error kind here
+                                fp_ensure!(
+                                    sender_permissions.can_use_immutably(),
+                                    UserInputError::IncorrectUserSignature {
+                                        error: format!(
+                                            "Sender address {owner:?} does not have immutable access permissions for object {object_id:?} with party ownership. The required permission is {}, but the permissions for the sender for this object are {sender_permissions}",
+                                            ObjectPermission::ImmutableUsage,
+                                        ),
+                                    }
+                                )
+                            }
+                            SharedObjectMutability::Mutable => {
+                                // TODO better error kind here
+                                fp_ensure!(
+                                    sender_permissions.can_use_mutably(),
+                                    UserInputError::IncorrectUserSignature {
+                                        error: format!(
+                                            "Sender address {owner:?} does not have mutable access permissions for object {object_id:?} with party ownership. The required permission is {}, but the permissions for the sender for this object are {sender_permissions}",
+                                            ObjectPermission::MutableUsage,
+                                        ),
+                                    }
+                                )
+                            }
+                            SharedObjectMutability::NonExclusiveWrite => {
+                                // TODO(Party WIP)
+                                todo!("Party WIP")
+                            }
+                        }
+                    }
                 }
             }
         };
         Ok(())
     }
 
-    /// Verify that all Move object inputs in a gasless transaction are Coin<T>
-    /// where T is in the allowlist.
-    fn check_gasless_object_inputs(
+    /// Verify that all Move object inputs in a gasless transaction are `Coin<T>`
+    /// where `T` is in the allowlist.
+    pub fn check_gasless_object_inputs(
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
     ) -> UserInputResult<()> {
@@ -695,7 +750,10 @@ mod checked {
             }
             match object.owner() {
                 Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => (),
-                Owner::Immutable | Owner::Shared { .. } | Owner::ObjectOwner(_) => {
+                Owner::Immutable
+                | Owner::Shared { .. }
+                | Owner::ObjectOwner(_)
+                | Owner::Party { .. } => {
                     return Err(UserInputError::Unsupported(
                         "Gasless transactions only support owned object inputs".to_string(),
                     ));

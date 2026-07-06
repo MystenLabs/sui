@@ -7,6 +7,7 @@ use sui_indexer_alt_framework::types::object::Owner;
 
 pub(crate) mod cp_bloom_blocks;
 pub(crate) mod cp_blooms;
+pub(crate) mod cp_digests;
 pub(crate) mod cp_sequence_numbers;
 pub(crate) mod ev_emit_mod;
 pub(crate) mod ev_struct_inst;

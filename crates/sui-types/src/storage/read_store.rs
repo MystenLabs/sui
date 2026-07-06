@@ -22,6 +22,7 @@ use crate::transaction::{TransactionData, VerifiedTransaction};
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use mysten_common::ZipDebugEqIteratorExt;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap};
@@ -31,7 +32,6 @@ use typed_store_error::TypedStoreError;
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
     Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
-pub type AuthenticatedEventRecord = (u64, u64, u32, u32, crate::event::Event);
 
 pub trait ReadStore: ObjectStore {
     //
@@ -200,7 +200,7 @@ pub trait ReadStore: ObjectStore {
         let mut events = self
             .multi_get_events(&event_tx_digests)
             .into_iter()
-            .zip(event_tx_digests)
+            .zip_debug_eq(event_tx_digests)
             .map(|(maybe_event, tx_digest)| {
                 maybe_event
                     .ok_or_else(|| Error::missing(format!("missing event for tx {tx_digest}")))
@@ -209,7 +209,7 @@ pub trait ReadStore: ObjectStore {
             .collect::<Result<HashMap<_, _>>>()?;
 
         let mut transactions = Vec::with_capacity(txns.len());
-        for (tx, fx) in txns.into_iter().zip(effects) {
+        for (tx, fx) in txns.into_iter().zip_debug_eq(effects) {
             let events = fx.events_digest().map(|_event_digest| {
                 events
                     .remove(fx.transaction_digest())
@@ -667,6 +667,27 @@ pub trait RpcStateReader:
 }
 
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
+pub type LedgerTxSeqDigestIterator<'a> =
+    Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
+pub type LedgerBitmapBucketIterator<'a> =
+    Box<dyn Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>> + 'a>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LedgerTxSeqDigest {
+    pub tx_sequence_number: u64,
+    pub digest: TransactionDigest,
+    pub event_count: u32,
+    /// Zero-based position of this transaction within its checkpoint.
+    pub tx_offset: u32,
+    pub checkpoint_number: CheckpointSequenceNumber,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LedgerBitmapBucket {
+    pub bucket_id: u64,
+    pub bitmap: roaring::RoaringBitmap,
+}
+
 pub trait RpcIndexes: Send + Sync {
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>>;
 
@@ -677,10 +698,16 @@ pub trait RpcIndexes: Send + Sync {
         cursor: Option<OwnedObjectInfo>,
     ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>;
 
+    /// Iterate the dynamic fields owned by `parent`. Dynamic-field objects live
+    /// in the same owned-object index as address-owned objects (under the
+    /// object-owner key, sorted by `(type, object id)`), so the [`DynamicFieldKey`]
+    /// cursor carries the field's type alongside its id -- the full sort
+    /// position -- letting the scan seek straight to it, as in
+    /// [`owned_objects_iter`](Self::owned_objects_iter).
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
-        cursor: Option<ObjectID>,
+        cursor: Option<DynamicFieldKey>,
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>>;
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
@@ -703,16 +730,40 @@ pub trait RpcIndexes: Send + Sync {
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
 
-    fn authenticated_event_iter(
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>>;
+
+    fn ledger_tx_seq_digest_multi_get(
         &self,
-        stream_id: SuiAddress,
-        start_checkpoint: u64,
-        start_accumulator_version: Option<u64>,
-        start_transaction_idx: Option<u32>,
-        start_event_idx: Option<u32>,
-        end_checkpoint: u64,
-        limit: u32,
-    ) -> Result<Box<dyn Iterator<Item = Result<AuthenticatedEventRecord, TypedStoreError>> + '_>>;
+        tx_seqs: &[u64],
+    ) -> Result<Vec<Option<LedgerTxSeqDigest>>> {
+        tx_seqs
+            .iter()
+            .map(|tx_seq| self.ledger_tx_seq_digest(*tx_seq))
+            .collect()
+    }
+
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerTxSeqDigestIterator<'_>>;
+
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>>;
+
+    fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -724,17 +775,22 @@ pub struct OwnedObjectInfo {
     pub version: SequenceNumber,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct DynamicFieldKey {
     pub parent: ObjectID,
     pub field_id: ObjectID,
+    /// The dynamic field object's Move type. The owned-object index sorts by
+    /// `(type, object id)`, so this is needed -- together with `field_id` -- to
+    /// resume a paginated scan at this entry.
+    pub object_type: StructTag,
 }
 
 impl DynamicFieldKey {
-    pub fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID) -> Self {
+    pub fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID, object_type: StructTag) -> Self {
         Self {
             parent: parent.into(),
             field_id,
+            object_type,
         }
     }
 }
@@ -761,7 +817,8 @@ pub struct CoinInfo {
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BalanceInfo {
-    pub balance: u64,
+    pub coin_balance: u64,
+    pub address_balance: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

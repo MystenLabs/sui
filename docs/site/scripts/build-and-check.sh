@@ -14,7 +14,9 @@ fi
 
 # Pre-build generation steps
 echo "Running pre-build generation..."
+node scripts/validate-gasless-tokens.mjs || { echo "❌ validate-gasless-tokens failed"; exit 1; }
 node scripts/generate-import-context.js || { echo "❌ generate-import-context failed"; exit 1; }
+node scripts/generate-resolved-pages.js || { echo "❌ generate-resolved-pages failed"; exit 1; }
 node scripts/grpc-download.js || { echo "❌ grpc-download failed"; exit 1; }
 docusaurus graphql-to-doc:beta && node scripts/remove-no-desc.mjs ../content/references/sui-api/sui-graphql/beta/reference || { echo "❌ graphql-to-doc step failed"; exit 1; }
 node scripts/getopenrpcspecs.js || { echo "❌ getopenrpcspecs failed"; exit 1; }
@@ -44,7 +46,10 @@ done
 ## Generate markdown, llms.txt, and check relative link files 
 node scripts/copy-markdown-files.js || { echo "❌ copy-markdown-files failed"; exit 1; }
 node src/shared/js/generate-llmstxt.mjs build/markdown/ --sitemap build/sitemap.xml --build-dir build --output static/llms.txt || { echo "❌ generate-llmstxt failed"; exit 1; }
-node src/shared/js/check-links.mjs ../content || { echo "❌ generate-llmstxt failed"; exit 1; }
+cp static/llms.txt build/llms.txt
+cp static/llms-full.txt build/llms-full.txt
+node scripts/create-markdown-index-duplicates.js || { echo "❌ create-markdown-index-duplicates failed"; exit 1; }
+node src/shared/js/check-links.mjs ../content || { echo "❌ check-links failed"; exit 1; }
 
 BUILD_EXIT=${PIPESTATUS[0]}
 

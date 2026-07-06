@@ -3,13 +3,14 @@
 
 use std::{
     collections::{BTreeMap, VecDeque},
-    ops::Bound::Included,
+    ops::Bound::{Excluded, Included},
     time::Duration,
 };
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_macros::fail_point;
 use typed_store::{
     DBMapUtils, Map as _,
@@ -55,18 +56,14 @@ impl RocksDBStore {
 
     /// Creates a new instance of RocksDB storage.
     #[cfg(not(tidehunter))]
-    pub fn new(path: &str, use_fifo_compaction: bool) -> Self {
+    pub fn new(path: &str) -> Self {
         // Consensus data has high write throughput (all transactions) and is rarely read
         // (only during recovery and when helping peers catch up).
         let db_options =
-            default_db_options().optimize_db_for_write_throughput(2, use_fifo_compaction);
+            default_db_options().optimize_db_for_write_throughput(2, /* unlimited */ true);
         let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
-        let cf_options = if use_fifo_compaction {
-            default_db_options().optimize_for_no_deletion()
-        } else {
-            default_db_options().optimize_for_write_throughput()
-        };
+        let cf_options = default_db_options().optimize_for_no_deletion();
         let column_family_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
                 Self::BLOCKS_CF.to_string(),
@@ -93,7 +90,7 @@ impl RocksDBStore {
     }
 
     #[cfg(tidehunter)]
-    pub fn new(path: &str, _use_fifo_compaction: bool) -> Self {
+    pub fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
         use typed_store::tidehunter_util::{
             KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_mutex_count,
@@ -148,7 +145,8 @@ impl RocksDBStore {
         Self::open_tables_read_write(
             path.into(),
             MetricConf::new("consensus")
-                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0))
+                .with_th_batch_compression(),
             configs.into_iter().collect(),
         )
     }
@@ -225,7 +223,7 @@ impl Store for RocksDBStore {
             .collect::<Vec<_>>();
         let serialized = self.blocks.multi_get(keys)?;
         let mut blocks = vec![];
-        for (key, serialized) in refs.iter().zip(serialized) {
+        for (key, serialized) in refs.iter().zip_debug_eq(serialized) {
             if let Some(serialized) = serialized {
                 let signed_block: SignedBlock =
                     bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
@@ -255,17 +253,30 @@ impl Store for RocksDBStore {
         author: AuthorityIndex,
         start_round: Round,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
+        self.scan_blocks_by_author_in_range(author, start_round, Round::MAX, usize::MAX)
+    }
+
+    fn scan_blocks_by_author_in_range(
+        &self,
+        author: AuthorityIndex,
+        start_round: Round,
+        end_round: Round,
+        limit: usize,
+    ) -> ConsensusResult<Vec<VerifiedBlock>> {
         let mut refs = vec![];
         for kv in self.digests_by_authorities.safe_range_iter((
             Included((author, start_round, BlockDigest::MIN)),
-            Included((author, Round::MAX, BlockDigest::MAX)),
+            Excluded((author, end_round, BlockDigest::MIN)),
         )) {
             let ((author, round, digest), _) = kv?;
             refs.push(BlockRef::new(round, author, digest));
+            if refs.len() >= limit {
+                break;
+            }
         }
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = Vec::with_capacity(refs.len());
-        for (r, block) in refs.into_iter().zip(results.into_iter()) {
+        for (r, block) in refs.into_iter().zip_debug_eq(results.into_iter()) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );
@@ -298,7 +309,7 @@ impl Store for RocksDBStore {
         let refs_slice = refs.make_contiguous();
         let results = self.read_blocks(refs_slice)?;
         let mut blocks = vec![];
-        for (r, block) in refs.into_iter().zip(results.into_iter()) {
+        for (r, block) in refs.into_iter().zip_debug_eq(results.into_iter()) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );

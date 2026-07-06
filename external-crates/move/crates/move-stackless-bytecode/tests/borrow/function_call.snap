@@ -1184,11 +1184,14 @@ public fun option::none<#0>(): option::Option<#0> {
 public fun option::some<#0>($t0|e: #0): option::Option<#0> {
      var $t1: #0
      var $t2: vector<#0>
-     var $t3: option::Option<#0>
+     var $t3: &mut vector<#0>
+     var $t4: option::Option<#0>
   0: $t1 := move($t0)
-  1: $t2 := vector::singleton<#0>($t1)
-  2: $t3 := pack option::Option<#0>($t2)
-  3: return $t3
+  1: $t2 := vector::empty<#0>()
+  2: $t3 := borrow_local($t2)
+  3: vector::push_back<#0>($t3, $t1)
+  4: $t4 := pack option::Option<#0>($t2)
+  5: return $t4
 }
 
 
@@ -3989,10 +3992,13 @@ public fun option::none<#0>(): option::Option<#0> {
 [variant baseline]
 public fun option::some<#0>($t0|e: #0): option::Option<#0> {
      var $t1: vector<#0>
-     var $t2: option::Option<#0>
-  0: $t1 := vector::singleton<#0>($t0)
-  1: $t2 := pack option::Option<#0>($t1)
-  2: return $t2
+     var $t2: &mut vector<#0>
+     var $t3: option::Option<#0>
+  0: $t1 := vector::empty<#0>()
+  1: $t2 := borrow_local($t1)
+  2: vector::push_back<#0>($t2, $t0)
+  3: $t3 := pack option::Option<#0>($t1)
+  4: return $t3
 }
 
 

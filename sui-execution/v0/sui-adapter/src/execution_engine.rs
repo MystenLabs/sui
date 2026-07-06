@@ -29,7 +29,7 @@ mod checked {
     use sui_types::gas_coin::GAS;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
-    use sui_types::metrics::LimitsMetrics;
+    use sui_types::metrics::ExecutionMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::storage::BackingStore;
@@ -64,7 +64,7 @@ mod checked {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
     ) -> (
@@ -109,44 +109,7 @@ mod checked {
         );
 
         let status = if let Err(error) = &execution_result {
-            // Elaborate errors in logs if they are unexpected or their status is terse.
-            use ExecutionErrorKind as K;
-            match error.kind() {
-                K::InvariantViolation | K::VMInvariantViolation => {
-                    #[skip_checked_arithmetic]
-                    tracing::error!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "INVARIANT VIOLATION! Source: {:?}",
-                        error.source_ref(),
-                    );
-                }
-
-                K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Verification Error. Source: {:?}",
-                        error.source_ref(),
-                    );
-                }
-
-                K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Publish/Upgrade Error. Source: {:?}",
-                        error.source_ref(),
-                    )
-                }
-
-                _ => (),
-            };
-
-            let (status, command) = error.to_execution_status();
-            ExecutionStatus::new_failure(status, command)
+            ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
             ExecutionStatus::Success
         };
@@ -190,7 +153,7 @@ mod checked {
     pub fn execute_genesis_state_update(
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         move_vm: &Arc<MoveVM>,
         tx_context: &mut TxContext,
         input_objects: CheckedInputObjects,
@@ -221,7 +184,7 @@ mod checked {
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
     ) -> (
@@ -242,11 +205,11 @@ mod checked {
         // we must still ensure an effect is committed and all objects versions incremented
         let result = gas_charger.charge_input_objects(temporary_store);
         let mut result = result.and_then(|()| {
-            let mut execution_result = match execution_params {
-                ExecutionOrEarlyError::Err(early_execution_error) => {
-                    Err(ExecutionError::new(early_execution_error, None))
+            let mut execution_result = match execution_params.into_early_errors() {
+                Some(early_execution_errors) => {
+                    Err(ExecutionError::new(early_execution_errors.head, None))
                 }
-                ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
+                None => execution_loop::<Mode>(
                     temporary_store,
                     transaction_kind,
                     tx_ctx,
@@ -267,7 +230,7 @@ mod checked {
                 effects_estimated_size,
                 protocol_config.max_serialized_tx_effects_size_bytes(),
                 protocol_config.max_serialized_tx_effects_size_bytes_system_tx(),
-                metrics.excessive_estimated_effects_size
+                metrics.limits_metrics.excessive_estimated_effects_size
             ) {
                 LimitThresholdCrossed::None => (),
                 LimitThresholdCrossed::Soft(_, limit) => {
@@ -300,7 +263,7 @@ mod checked {
                         written_objects_size,
                         normal_lim,
                         system_lim,
-                        metrics.excessive_written_objects_size
+                        metrics.limits_metrics.excessive_written_objects_size
                     ) {
                         LimitThresholdCrossed::None => (),
                         LimitThresholdCrossed::Soft(_, limit) => {
@@ -388,7 +351,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
@@ -643,7 +606,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Result<(), ExecutionError> {
         let params = AdvanceEpochParams {
             epoch: change_epoch.epoch,
@@ -766,7 +729,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Result<(), ExecutionError> {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();

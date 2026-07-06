@@ -8,12 +8,16 @@ use anyhow::Context;
 use async_graphql::dataloader::Loader;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
+use futures::future::try_join_all;
 use prost_types::FieldMask;
 use sui_indexer_alt_schema::checkpoints::StoredCheckpoint;
+use sui_indexer_alt_schema::checkpoints::StoredCpDigest;
+use sui_indexer_alt_schema::schema::cp_digests;
 use sui_indexer_alt_schema::schema::kv_checkpoints;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::crypto::AuthorityQuorumSignInfo;
+use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
 
@@ -25,6 +29,10 @@ use crate::pg_reader::PgReader;
 /// Key for fetching a checkpoint's content by its sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CheckpointKey(pub u64);
+
+/// Key for resolving a checkpoint's sequence number from its digest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CheckpointDigestKey(pub CheckpointDigest);
 
 #[async_trait::async_trait]
 impl Loader<CheckpointKey> for PgReader {
@@ -105,8 +113,7 @@ impl Loader<CheckpointKey> for LedgerGrpcReader {
             return Ok(HashMap::new());
         }
 
-        let mut results = HashMap::new();
-        for key in keys {
+        let futures = keys.iter().map(|key| async {
             let request = proto::GetCheckpointRequest::by_sequence_number(key.0).with_read_mask(
                 FieldMask::from_paths(["summary.bcs", "signature", "contents.bcs"]),
             );
@@ -139,12 +146,49 @@ impl Loader<CheckpointKey> for LedgerGrpcReader {
                         AuthorityQuorumSignInfo::from(sdk_sig)
                     };
 
-                    results.insert(*key, (summary, contents, signature));
+                    Ok(Some((*key, (summary, contents, signature))))
                 }
-                Err(status) if status.code() == tonic::Code::NotFound => continue,
-                Err(e) => return Err(e.into()),
+                Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
+                Err(e) => Err(Error::from(e)),
             }
+        });
+
+        let results: Vec<_> = try_join_all(futures).await?;
+        Ok(results.into_iter().flatten().collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<CheckpointDigestKey> for PgReader {
+    type Value = u64;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[CheckpointDigestKey],
+    ) -> Result<HashMap<CheckpointDigestKey, Self::Value>, Error> {
+        use cp_digests::dsl as c;
+
+        if keys.is_empty() {
+            return Ok(HashMap::new());
         }
-        Ok(results)
+
+        let mut conn = self.connect().await?;
+
+        let digests: BTreeSet<Vec<u8>> = keys.iter().map(|k| k.0.inner().to_vec()).collect();
+        let rows: Vec<StoredCpDigest> = conn
+            .results(c::cp_digests.filter(c::cp_digest.eq_any(digests)))
+            .await?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| {
+                let bytes: [u8; 32] = r.cp_digest.try_into().ok()?;
+                Some((
+                    CheckpointDigestKey(CheckpointDigest::new(bytes)),
+                    r.cp_sequence_number as u64,
+                ))
+            })
+            .collect())
     }
 }

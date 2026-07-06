@@ -1,9 +1,9 @@
 // can borrow immutable after mutable
 
 //# publish
-module 0x2.direct {
+mvir 0x2::direct {
 
-    t() {
+    fun t() {
         let a: u64;
         let rmut: &mut u64;
         let rimm: &u64;
@@ -19,9 +19,9 @@ module 0x2.direct {
 }
 
 //# publish
-module 0x3.copy_and_freeze {
+mvir 0x3::copy_and_freeze {
 
-    t() {
+    fun t() {
         let a: u64;
         let rmut: &mut u64;
         let rimm: &u64;

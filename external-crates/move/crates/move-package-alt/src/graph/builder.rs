@@ -3,13 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::{Pinned, PinnedDependencyInfo},
+    dependency::{Pinned, PinnedDependency},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     logging::user_note,
     package::{
-        EnvironmentName, Package, lockfile::Lockfiles, package_loader::PackageConfig,
-        package_lock::PackageSystemLock, paths::PackagePath,
+        EnvironmentName, Package,
+        lockfile::Lockfiles,
+        package_loader::PackageConfig,
+        package_lock::PackageSystemLock,
+        paths::{PackagePath, canonical_identity},
     },
     schema::{Environment, PackageID, PackageName},
 };
@@ -59,11 +62,11 @@ struct PackageCache<F: MoveFlavor> {
 
 pub struct PackageGraphBuilder<'a, F: MoveFlavor> {
     cache: PackageCache<F>,
-    config: &'a PackageConfig,
+    config: &'a PackageConfig<F>,
 }
 
 impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
-    pub fn new(config: &'a PackageConfig) -> Self {
+    pub fn new(config: &'a PackageConfig<F>) -> Self {
         Self {
             cache: PackageCache::new(),
             config,
@@ -172,7 +175,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
                     .dep_for_self()
                     .clone();
 
-                let dep = PinnedDependencyInfo::from_combined(dep.clone(), pin);
+                let dep = PinnedDependency::from_combined(dep.clone(), pin);
 
                 inner.add_edge(*source_index, *target_index, dep.clone());
             }
@@ -210,13 +213,13 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
             .add_transitive_manifest_deps(root, env, graph.clone(), visited, mtx)
             .await?;
 
-        let inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo> =
+        let inner: DiGraph<Arc<Package<F>>, PinnedDependency> =
             graph.lock().expect("unpoisoned").map(
                 |_, node: &Option<Arc<Package<F>>>| {
                     let n = node.clone();
                     n.expect("add_transitive_packages removes all `None`s before returning")
                 },
-                |_, e: &PinnedDependencyInfo| e.clone(),
+                |_, e: &PinnedDependency| e.clone(),
             );
 
         let package_ids = Self::create_ids(&inner);
@@ -230,7 +233,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
     /// Assign unique identifiers to each node. In the case that there is no overlap, the
     /// identifier should be the same as the package's name.
     fn create_ids(
-        graph: &DiGraph<Arc<Package<F>>, PinnedDependencyInfo>,
+        graph: &DiGraph<Arc<Package<F>>, PinnedDependency>,
     ) -> BiBTreeMap<PackageID, NodeIndex> {
         let mut name_to_suffix: BTreeMap<PackageName, u8> = BTreeMap::new();
         let mut node_to_id: BiBTreeMap<PackageID, NodeIndex> = BiBTreeMap::new();
@@ -275,31 +278,34 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         &self,
         package: Arc<Package<F>>,
         env: &Environment,
-        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PinnedDependencyInfo>>>,
-        visited: Arc<Mutex<BTreeMap<(EnvironmentName, PackagePath), NodeIndex>>>,
+        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PinnedDependency>>>,
+        visited: Arc<Mutex<BTreeMap<(EnvironmentName, PathBuf), NodeIndex>>>,
         mtx: &PackageSystemLock,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
+        // Key by canonical identity (absolute path) so two relative spellings of the same
+        // directory share a graph node.
         let index = match visited
             .lock()
             .expect("unpoisoned")
-            .entry((env.name().clone(), package.path().clone()))
+            .entry((env.name().clone(), package.path().canonical_identity()))
         {
             Entry::Occupied(entry) => return Ok(*entry.get()),
             Entry::Vacant(entry) => *entry.insert(graph.lock().expect("unpoisoned").add_node(None)),
         };
 
         // pin dependencies
-        let pinned = PinnedDependencyInfo::pin::<F>(
+        let pinned = PinnedDependency::pin(
             package.dep_for_self(),
             package.direct_deps().clone(),
-            env.id(),
+            env,
+            &*self.config.flavor,
         )
         .await
         .map_err(|err| PackageError::DepError {
             dep: package
                 .dep_for_self()
-                .unfetched_path()
+                .unfetched_path(env.id())
                 .to_string_lossy()
                 .to_string(),
             err: Box::new(err),
@@ -312,7 +318,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
             let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
             let fetched = self
                 .cache
-                .fetch(dep.as_ref(), &new_env, mtx, self.config)
+                .fetch(dep.pinned(), &new_env, mtx, self.config)
                 .await?;
 
             let future = self.add_transitive_manifest_deps(
@@ -349,19 +355,21 @@ impl<F: MoveFlavor> PackageCache<F> {
         }
     }
 
-    /// Return a reference to a cached [Package], loading it if necessary
+    /// Return a reference to a cached [Package], loading it if necessary.
     pub async fn fetch(
         &self,
         dep: &Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
-        config: &PackageConfig,
+        config: &PackageConfig<F>,
     ) -> PackageResult<Arc<Package<F>>> {
+        // Key by canonical identity so two relative spellings of the same dep dir share a cache
+        // entry (the cleaned unfetched path can be relative when the root path is relative).
         let cell = self
             .cache
             .lock()
             .expect("unpoisoned")
-            .entry(dep.unfetched_path())
+            .entry(canonical_identity(&dep.unfetched_path(env.id())))
             .or_default()
             .clone();
 
@@ -380,7 +388,7 @@ impl<F: MoveFlavor> PackageCache<F> {
                 Ok(node)
             }
             Err(e) => Err(PackageError::DepError {
-                dep: dep.unfetched_path().display().to_string(),
+                dep: dep.unfetched_path(env.id()).display().to_string(),
                 err: Box::new(e),
             }),
         }

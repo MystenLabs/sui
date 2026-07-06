@@ -227,6 +227,71 @@ impl Database {
         }
     }
 
+    /// Returns whether `key` exists, without materializing the value. On tidehunter
+    /// this uses the native `exists` (an index/bloom presence check), which avoids
+    /// the value-record read that `get` performs and is therefore much cheaper.
+    fn contains(
+        &self,
+        cf: &ColumnFamily,
+        key: &[u8],
+        readopts: &ReadOptions,
+    ) -> Result<bool, TypedStoreError> {
+        match (&self.storage, cf) {
+            (Storage::Rocks(db), ColumnFamily::Rocks(_)) => {
+                let rocks_cf = cf.rocks_cf(db);
+                // `key_may_exist_cf_opt` can return false positives but never false
+                // negatives, so it short-circuits the common absent case before the
+                // real point lookup.
+                Ok(db.underlying.key_may_exist_cf_opt(&rocks_cf, key, readopts)
+                    && db
+                        .underlying
+                        .get_pinned_cf_opt(&rocks_cf, key, readopts)
+                        .map_err(typed_store_err_from_rocks_err)?
+                        .is_some())
+            }
+            (Storage::InMemory(db), ColumnFamily::InMemory(cf_name)) => {
+                Ok(db.get(cf_name, key).is_some())
+            }
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
+                .exists(*ks, &transform_th_key(key, prefix))
+                .map_err(typed_store_error_from_th_error),
+            _ => Err(TypedStoreError::RocksDBError(
+                "typed store invariant violation".to_string(),
+            )),
+        }
+    }
+
+    /// Multi-key variant of [`Self::contains`]. On tidehunter each key uses the
+    /// native `exists` presence check, avoiding the value-record reads that
+    /// `multi_get` performs. Other backends answer via `multi_get`.
+    fn multi_contains<I, K>(
+        &self,
+        cf: &ColumnFamily,
+        keys: I,
+        readopts: &ReadOptions,
+    ) -> Result<Vec<bool>, TypedStoreError>
+    where
+        I: IntoIterator<Item = K>,
+        K: AsRef<[u8]>,
+    {
+        match (&self.storage, cf) {
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => keys
+                .into_iter()
+                .map(|k| {
+                    db.exists(*ks, &transform_th_key(k.as_ref(), prefix))
+                        .map_err(typed_store_error_from_th_error)
+                })
+                .collect(),
+            _ => self
+                .multi_get(cf, keys, readopts)
+                .into_iter()
+                .map(|r| r.map(|v| v.is_some()))
+                .collect(),
+        }
+    }
+
     fn multi_get<I, K>(
         &self,
         cf: &ColumnFamily,
@@ -259,15 +324,14 @@ impl Database {
                 .map(|r| Ok(r.map(GetResult::InMemory)))
                 .collect(),
             #[cfg(tidehunter)]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => {
-                let res = keys.into_iter().map(|k| {
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => keys
+                .into_iter()
+                .map(|k| {
                     db.get(*ks, &transform_th_key(k.as_ref(), prefix))
                         .map_err(typed_store_error_from_th_error)
-                });
-                res.into_iter()
-                    .map(|r| r.map(|item| item.map(GetResult::TideHunter)))
-                    .collect()
-            }
+                        .map(|item| item.map(|bytes| GetResult::TideHunter(bytes.into_owned())))
+                })
+                .collect(),
             _ => unreachable!("typed store invariant violation"),
         }
     }
@@ -358,24 +422,6 @@ impl Database {
         ret
     }
 
-    pub fn key_may_exist_cf<K: AsRef<[u8]>>(
-        &self,
-        cf_name: &str,
-        key: K,
-        readopts: &ReadOptions,
-    ) -> bool {
-        match &self.storage {
-            // [`rocksdb::DBWithThreadMode::key_may_exist_cf`] can have false positives,
-            // but no false negatives. We use it to short-circuit the absent case
-            Storage::Rocks(rocks) => {
-                rocks
-                    .underlying
-                    .key_may_exist_cf_opt(&rocks_cf(rocks, cf_name), key, readopts)
-            }
-            _ => true,
-        }
-    }
-
     pub(crate) fn write_opt_internal(
         &self,
         batch: StorageWriteBatch,
@@ -421,6 +467,29 @@ impl Database {
                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         }
         Ok(())
+    }
+
+    /// Wait for tidehunter background threads to finish.
+    ///
+    /// Consumes the `Arc<Database>`. Caller must ensure no other clones of this
+    /// `Arc<Database>` (e.g. via `DBMap::db`) are alive — otherwise the inner
+    /// `Arc<TideHunterDb>` strong count will not reach zero and the wait will
+    /// poll until it panics.
+    #[cfg(tidehunter)]
+    pub fn wait_for_tidehunter_background_threads(self: Arc<Self>) {
+        let strong = Arc::strong_count(&self);
+        if strong != 1 {
+            println!(
+                "WARNING: wait_for_tidehunter_background_threads called with Arc<Database> strong_count={} (expected 1); other clones will keep the inner tidehunter Db alive and the wait may panic on timeout",
+                strong,
+            );
+        }
+        let Storage::TideHunter(th_arc) = &self.storage else {
+            return;
+        };
+        let th_arc = th_arc.clone();
+        drop(self);
+        th_arc.wait_for_background_threads_to_finish();
     }
 
     #[cfg(tidehunter)]
@@ -525,6 +594,9 @@ pub struct MetricConf {
     pub read_sample_interval: SamplingInterval,
     pub write_sample_interval: SamplingInterval,
     pub iter_sample_interval: SamplingInterval,
+    /// When true and the database is opened with the tidehunter backend, each
+    /// committed `WriteBatch` is written as a single lz4-compressed WAL entry.
+    pub enable_th_batch_compression: bool,
 }
 
 impl MetricConf {
@@ -537,16 +609,18 @@ impl MetricConf {
             read_sample_interval: SamplingInterval::default(),
             write_sample_interval: SamplingInterval::default(),
             iter_sample_interval: SamplingInterval::default(),
+            enable_th_batch_compression: false,
         }
     }
 
-    pub fn with_sampling(self, read_interval: SamplingInterval) -> Self {
-        Self {
-            db_name: self.db_name,
-            read_sample_interval: read_interval,
-            write_sample_interval: SamplingInterval::default(),
-            iter_sample_interval: SamplingInterval::default(),
-        }
+    pub fn with_sampling(mut self, read_interval: SamplingInterval) -> Self {
+        self.read_sample_interval = read_interval;
+        self
+    }
+
+    pub fn with_th_batch_compression(mut self) -> Self {
+        self.enable_th_batch_compression = true;
+        self
     }
 }
 const CF_METRICS_REPORT_PERIOD_SECS: u64 = 30;
@@ -1145,7 +1219,7 @@ impl<K, V> DBMap<K, V> {
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
+                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound, prefix);
                     iter.reverse();
                     Ok(Box::new(transform_th_iterator(
                         iter,
@@ -1155,6 +1229,76 @@ impl<K, V> DBMap<K, V> {
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
+        }
+    }
+
+    /// Iterates the whole table as a consistent point-in-time snapshot.
+    /// Equivalent to `snapshot_iterator_with_bounds(None, None, false)`.
+    pub fn snapshot_iterator(&self) -> DbIterator<'_, (K, V)>
+    where
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
+    {
+        self.snapshot_iterator_with_bounds(None, None, false)
+    }
+
+    /// Iterates the table as a consistent point-in-time snapshot, optionally
+    /// bounded and/or reversed.
+    ///
+    /// RocksDB and in-memory iterators are already snapshot-consistent from the
+    /// moment they are created, so this delegates to the regular iterators. The
+    /// tidehunter backend's live iterator is not stable under concurrent writes,
+    /// so this opens a short-lived checkpoint and iterates that frontier instead;
+    /// the returned iterator owns the checkpoint, pinning the snapshot for its
+    /// lifetime.
+    ///
+    /// Bound semantics match the regular iterators: forward is `[lower, upper)`
+    /// (upper exclusive), reverse is `[lower, upper]` (both inclusive).
+    pub fn snapshot_iterator_with_bounds(
+        &self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+        reverse: bool,
+    ) -> DbIterator<'_, (K, V)>
+    where
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
+    {
+        #[cfg(tidehunter)]
+        if let Storage::TideHunter(db) = &self.db.storage {
+            let ColumnFamily::TideHunter((ks, prefix)) = &self.column_family else {
+                unreachable!("storage backend invariant violation");
+            };
+            // Mirror the bound computation of the regular iterators so the snapshot
+            // observes the same key range: forward via `iterator_bounds` (upper
+            // exclusive), reverse via an inclusive range.
+            let (lower, upper) = if reverse {
+                iterator_bounds_with_range::<K>((
+                    lower_bound
+                        .as_ref()
+                        .map(Bound::Included)
+                        .unwrap_or(Bound::Unbounded),
+                    upper_bound
+                        .as_ref()
+                        .map(Bound::Included)
+                        .unwrap_or(Bound::Unbounded),
+                ))
+            } else {
+                iterator_bounds(lower_bound, upper_bound)
+            };
+            let mut iter = db.checkpoint().iterator(*ks);
+            apply_range_bounds(&mut iter, lower, upper, prefix);
+            if reverse {
+                iter.reverse();
+            }
+            return Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()));
+        }
+        if reverse {
+            // Infallible across all backends; only the `Result` shape differs.
+            self.reversed_safe_iter_with_bounds(lower_bound, upper_bound)
+                .expect("reversed iterator construction is infallible")
+        } else {
+            self.safe_iter_with_bounds(lower_bound, upper_bound)
         }
     }
 }
@@ -1602,12 +1746,8 @@ where
     #[instrument(level = "trace", skip_all, err)]
     fn contains_key(&self, key: &K) -> Result<bool, TypedStoreError> {
         let key_buf = be_fix_int_ser(key);
-        let readopts = self.opts.readopts();
-        Ok(self.db.key_may_exist_cf(&self.cf, &key_buf, &readopts)
-            && self
-                .db
-                .get(&self.column_family, &key_buf, &readopts)?
-                .is_some())
+        self.db
+            .contains(&self.column_family, &key_buf, &self.opts.readopts())
     }
 
     #[instrument(level = "trace", skip_all, err)]
@@ -1618,8 +1758,27 @@ where
     where
         J: Borrow<K>,
     {
-        let values = self.multi_get_pinned(keys)?;
-        Ok(values.into_iter().map(|v| v.is_some()).collect())
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_multiget_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let perf_ctx = if self.multiget_sample_interval.sample() {
+            Some(RocksDBPerfContext)
+        } else {
+            None
+        };
+        let keys_bytes = keys.into_iter().map(|k| be_fix_int_ser(k.borrow()));
+        let result = self
+            .db
+            .multi_contains(&self.column_family, keys_bytes, &self.opts.readopts());
+        if perf_ctx.is_some() {
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
+        }
+        result
     }
 
     #[instrument(level = "trace", skip_all, err)]
@@ -1829,7 +1988,7 @@ where
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound, prefix);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
@@ -1862,7 +2021,7 @@ where
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound, prefix);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
@@ -2047,8 +2206,19 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 }
 
 // Drops a database if there is no other handle to it, with retries and timeout.
-#[cfg(not(tidehunter))]
-pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
+// Detects the storage variant (RocksDB vs. tidehunter) from the directory
+// contents and dispatches to the matching cleanup. Both variants coexist in
+// tidehunter builds — some stores (e.g. rpc-index) are pure RocksDB even when
+// the tidehunter feature is enabled elsewhere in the binary.
+pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
+    #[cfg(tidehunter)]
+    if is_tidehunter_db(&path) {
+        return safe_drop_tidehunter_db(path, timeout).await;
+    }
+    safe_drop_rocksdb(path, timeout).await
+}
+
+async fn safe_drop_rocksdb(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
         ..Default::default()
@@ -2058,14 +2228,21 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
             Ok(()) => return Ok(()),
             Err(err) => match backoff.next_backoff() {
                 Some(duration) => tokio::time::sleep(duration).await,
-                None => return Err(err),
+                None => return Err(std::io::Error::other(err)),
             },
         }
     }
 }
 
 #[cfg(tidehunter)]
-pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
+fn is_tidehunter_db(path: &Path) -> bool {
+    // `shape.yaml` is written by TideHunterDb::open and is the canonical marker
+    // for a tidehunter DB directory; RocksDB never creates it.
+    path.join("shape.yaml").exists()
+}
+
+#[cfg(tidehunter)]
+async fn safe_drop_tidehunter_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
         ..Default::default()

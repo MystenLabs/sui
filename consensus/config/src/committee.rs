@@ -25,14 +25,15 @@ pub type Stake = u64;
 pub struct Committee {
     /// The epoch number of this committee
     epoch: Epoch,
-    /// Total stake in the committee.
-    total_stake: Stake,
-    /// The quorum threshold (2f+1).
-    quorum_threshold: Stake,
-    /// The validity threshold (f+1).
-    validity_threshold: Stake,
     /// Protocol and network info of each authority.
     authorities: Vec<Authority>,
+    /// Total stakes in the committee.
+    total_stake: Stake,
+
+    /// Thresholds related to different fault tolerances.
+    quorum_threshold: Stake,
+    certification_threshold: Stake,
+    validity_threshold: Stake,
 }
 
 impl Committee {
@@ -58,8 +59,91 @@ impl Committee {
 
         Self {
             epoch,
+            authorities,
             total_stake,
             quorum_threshold,
+            validity_threshold,
+
+            // Equivalent to quorum_threshold in v2, and unused anyway.
+            certification_threshold: quorum_threshold,
+        }
+    }
+
+    /// Constructs a committee with thresholds derived from a hybrid fault budget
+    /// (`malicious_stake = f`, `crash_stake = c`).
+    ///
+    /// Nominally, the total stake is `nominal_total_stake = 5f + 3c + 1`;
+    /// and the thresholds evaluate to:
+    ///
+    /// - `validity_threshold       = f + 1`
+    /// - `certification_threshold  = 2f + c + 1`
+    /// - `quorum_threshold         = 4f + 2c + 1`
+    ///
+    /// But the actual total stakes specified by the authorities may differ
+    /// from the nominal total stake computed above. We will scale `f` and `c`
+    /// from the nominal value to the largest possible values where intersection
+    /// properties still hold. Then the thresholds are computed with scaled `f` and `c`.
+    pub fn new_v3(
+        epoch: Epoch,
+        authorities: Vec<Authority>,
+        malicious_stake: Stake,
+        crash_stake: Stake,
+    ) -> Self {
+        assert!(!authorities.is_empty(), "Committee cannot be empty!");
+        assert!(
+            authorities.len() < u32::MAX as usize,
+            "Too many authorities ({})!",
+            authorities.len()
+        );
+
+        let actual_total_stake: Stake = authorities.iter().map(|a| a.stake).sum();
+        assert_ne!(actual_total_stake, 0, "Total stake cannot be zero!");
+
+        // Compute v3 thresholds.
+        let base_stake = 5 * malicious_stake + 3 * crash_stake;
+        let (f, c) = if base_stake > 0 {
+            // Scale malicious and crash stakes to the real committee stake.
+            // Use truncating division to get realistic fault budgets.
+            let scale = |nominal: Stake| -> Stake {
+                nominal
+                    .checked_mul(actual_total_stake - 1)
+                    .unwrap_or_else(|| panic!("Overflowed: {} {}", nominal, actual_total_stake - 1))
+                    .checked_div(base_stake)
+                    .unwrap_or_else(|| panic!("Division error: {} {}", nominal, base_stake))
+            };
+            (scale(malicious_stake), scale(crash_stake))
+        } else {
+            // If both fault budgets are zero, there's nothing to scale.
+            (0, 0)
+        };
+
+        let validity_threshold = f + 1;
+        let certification_threshold = 2 * f + c + 1;
+        let quorum_threshold = actual_total_stake - f - c;
+
+        // Ensure intersection between committed certification and quorum thresholds.
+        assert!(
+            certification_threshold + quorum_threshold >= actual_total_stake + f + 1,
+            "Stake-safety invariant violated: \
+                committed_cert ({certification_threshold}) + \
+                quorum ({quorum_threshold}) < \
+                actual_total_stake ({actual_total_stake}) + f ({f}) + 1"
+        );
+
+        // Ensure a committed certificate survives with the intersection between quorum thresholds.
+        assert!(
+            quorum_threshold * 2 >= actual_total_stake + f + certification_threshold,
+            "Stake-safety invariant violated: \
+                quorum_threshold ({quorum_threshold}) * 2 < \
+                actual_total_stake ({actual_total_stake}) + f ({f}) + \
+                certification_threshold ({certification_threshold})"
+        );
+
+        Self {
+            epoch,
+            total_stake: actual_total_stake,
+            quorum_threshold,
+            certification_threshold,
             validity_threshold,
             authorities,
         }
@@ -80,6 +164,10 @@ impl Committee {
         self.quorum_threshold
     }
 
+    pub fn certification_threshold(&self) -> Stake {
+        self.certification_threshold
+    }
+
     pub fn validity_threshold(&self) -> Stake {
         self.validity_threshold
     }
@@ -97,6 +185,13 @@ impl Committee {
             .iter()
             .enumerate()
             .map(|(i, a)| (AuthorityIndex(i as u32), a))
+    }
+
+    /// Returns the authorities as a slice, preserving their order (and hence
+    /// their `AuthorityIndex` values). Useful for rebuilding a `Committee` with
+    /// different threshold parameters while keeping the same authority set.
+    pub fn authorities_slice(&self) -> &[Authority] {
+        &self.authorities
     }
 
     // -----------------------------------------------------------------------
@@ -220,7 +315,7 @@ impl<T> IndexMut<AuthorityIndex> for Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::local_committee_and_keys;
+    use crate::{local_committee_and_keys, local_committee_and_keys_with_test_options};
 
     #[test]
     fn committee_basic() {
@@ -243,29 +338,196 @@ mod tests {
     }
 
     #[test]
-    fn committee_different_sizes() {
-        let epoch = 100;
-
-        {
-            let num_of_authorities = 11;
-            let authority_stakes = (1..=num_of_authorities).map(|_| 1 as Stake).collect();
-            let (committee, _) = local_committee_and_keys(epoch, authority_stakes);
-
-            // AND ensure thresholds are calculated correctly.
-            assert_eq!(committee.total_stake(), 11);
-            assert_eq!(committee.quorum_threshold(), 8);
-            assert_eq!(committee.validity_threshold(), 4);
+    fn committee_thresholds_across_sizes() {
+        struct Case {
+            n: usize,
+            stake: Stake,
+            total: Stake,
+            quorum: Stake,
+            validity: Stake,
         }
+        let cases = [
+            Case {
+                n: 11,
+                stake: 1,
+                total: 11,
+                quorum: 8,
+                validity: 4,
+            },
+            Case {
+                n: 12,
+                stake: 10,
+                total: 120,
+                quorum: 81,
+                validity: 40,
+            },
+        ];
 
-        {
-            let num_of_authorities = 12;
-            let authority_stakes = (1..=num_of_authorities).map(|_| 10 as Stake).collect();
-            let (committee, _) = local_committee_and_keys(epoch, authority_stakes);
-
-            // AND ensure thresholds are calculated correctly.
-            assert_eq!(committee.total_stake(), 120);
-            assert_eq!(committee.quorum_threshold(), 81);
-            assert_eq!(committee.validity_threshold(), 40);
+        for case in cases {
+            let stakes = vec![case.stake; case.n];
+            let (committee, _) = local_committee_and_keys(100, stakes);
+            assert_eq!(committee.total_stake(), case.total);
+            assert_eq!(committee.quorum_threshold(), case.quorum);
+            assert_eq!(committee.validity_threshold(), case.validity);
         }
+    }
+
+    fn create_committee_with_total_stake(num_authorities: usize, total_stake: Stake) -> Committee {
+        // Spreads `total_stake` across `num_authorities` (sandbox-safe addresses).
+        // The last authority absorbs the remainder so the sum is exact.
+        assert!(num_authorities > 0);
+        let per = total_stake / num_authorities as Stake;
+        let mut stakes = vec![per; num_authorities];
+        *stakes.last_mut().unwrap() = total_stake - per * (num_authorities as Stake - 1);
+        let (committee, _) = local_committee_and_keys_with_test_options(0, stakes, false);
+        assert_eq!(committee.total_stake(), total_stake);
+        committee
+    }
+
+    #[test]
+    fn committee_v3_thresholds_across_actual_stakes() {
+        // Thresholds follow:
+        //   f_scaled = floor(f_nominal * (actual - 1) / (5f + 3c))
+        //   c_scaled likewise
+        //   validity      = f_scaled + 1
+        //   certification = 2 * f_scaled + c_scaled + 1
+        //   quorum        = actual - f_scaled - c_scaled
+        // The formulas depend on total stake and the nominal f, c — not on the
+        // number of authorities, so cases below also vary `num_authorities`.
+        // `new_v3` asserts stake-safety invariants internally, so each case
+        // below exercises those invariants too.
+        struct Case {
+            name: &'static str,
+            num_authorities: usize,
+            actual: Stake,
+            malicious: Stake,
+            crash: Stake,
+            validity: Stake,
+            cert: Stake,
+            quorum: Stake,
+        }
+        let cases = [
+            // Actual == nominal budget (5f + 3c + 1 with f=c=1250): no scaling.
+            Case {
+                name: "no scaling",
+                num_authorities: 4,
+                actual: 10_001,
+                malicious: 1_250,
+                crash: 1_250,
+                validity: 1_251,
+                cert: 3_751,
+                quorum: 7_501,
+            },
+            // Tight boundary: actual == nominal + 1, truncation keeps f and c
+            // at the nominal values.
+            Case {
+                name: "tight boundary",
+                num_authorities: 7,
+                actual: 10_002,
+                malicious: 1_250,
+                crash: 1_250,
+                validity: 1_251,
+                cert: 3_751,
+                quorum: 7_502,
+            },
+            // Non-integer scale factor.
+            Case {
+                name: "scale with remainder",
+                num_authorities: 10,
+                actual: 15_000,
+                malicious: 1_250,
+                crash: 1_250,
+                validity: 1_875,
+                cert: 5_623,
+                quorum: 11_252,
+            },
+            // Aggressive scaling: tiny nominal f=c=1 with large actual stake
+            // forces f_scaled = c_scaled = 2500.
+            Case {
+                name: "aggressive scaling",
+                num_authorities: 5,
+                actual: 20_002,
+                malicious: 1,
+                crash: 1,
+                validity: 2_501,
+                cert: 7_501,
+                quorum: 15_002,
+            },
+            // Crash-only: f_nominal=0 ⇒ f_scaled=0; only crash faults scaled.
+            Case {
+                name: "crash-only (f=0)",
+                num_authorities: 4,
+                actual: 10_000,
+                malicious: 0,
+                crash: 1_000,
+                validity: 1,
+                cert: 3_334,
+                quorum: 6_667,
+            },
+            // Byzantine-only: c_nominal=0 ⇒ c_scaled=0; only malicious faults
+            // scaled.
+            Case {
+                name: "byzantine-only (c=0)",
+                num_authorities: 6,
+                actual: 10_000,
+                malicious: 1_000,
+                crash: 0,
+                validity: 2_000,
+                cert: 3_999,
+                quorum: 8_001,
+            },
+        ];
+
+        for case in cases {
+            let seed = create_committee_with_total_stake(case.num_authorities, case.actual);
+            let committee = Committee::new_v3(
+                seed.epoch(),
+                seed.authorities_slice().to_vec(),
+                case.malicious,
+                case.crash,
+            );
+            assert_eq!(committee.size(), case.num_authorities, "{}", case.name);
+            assert_eq!(committee.total_stake(), case.actual, "{}", case.name);
+            assert_eq!(
+                committee.validity_threshold(),
+                case.validity,
+                "{}",
+                case.name
+            );
+            assert_eq!(
+                committee.certification_threshold(),
+                case.cert,
+                "{}",
+                case.name
+            );
+            assert_eq!(committee.quorum_threshold(), case.quorum, "{}", case.name);
+        }
+    }
+
+    #[test]
+    fn committee_v3_no_fault_budget_single_authority() {
+        // f=c=0: single trusted authority, all thresholds collapse to 1.
+        let (seed, _) = local_committee_and_keys_with_test_options(0, vec![100 as Stake], false);
+        let committee = Committee::new_v3(seed.epoch(), seed.authorities_slice().to_vec(), 0, 0);
+        assert_eq!(committee.validity_threshold(), 1);
+        assert_eq!(committee.certification_threshold(), 1);
+        assert_eq!(committee.quorum_threshold(), 100);
+    }
+
+    #[test]
+    #[should_panic(expected = "Total stake cannot be zero!")]
+    fn committee_v3_zero_actual_stake_panics() {
+        let zero_stake_authorities: Vec<Authority> = {
+            let (seed, _) =
+                local_committee_and_keys_with_test_options(0, vec![1 as Stake; 4], false);
+            seed.authorities_slice()
+                .iter()
+                .map(|a| Authority {
+                    stake: 0,
+                    ..a.clone()
+                })
+                .collect()
+        };
+        Committee::new_v3(0, zero_stake_authorities, 1_250, 1_250);
     }
 }

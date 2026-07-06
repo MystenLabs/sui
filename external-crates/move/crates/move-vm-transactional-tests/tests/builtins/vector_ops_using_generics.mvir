@@ -1,11 +1,11 @@
 //# publish
 
-module 0x42.Tests {
+mvir 0x42::Tests {
 
-    public test<T: copy + drop>(x: T) {
+    public fun test<T: copy + drop>(x: T) {
         let v: vector<T>;
         label l0:
-        v = vec_pack_0<T>();
+        v = vector<T; 0>();
         assert(vec_len<T>(&v) == 0, 42);
         vec_push_back<T>(&mut v, copy(x));
         vec_push_back<T>(&mut v, copy(x));
@@ -14,7 +14,7 @@ module 0x42.Tests {
         _ = vec_mut_borrow<T>(&mut v, 0);
         _ = vec_pop_back<T>(&mut v);
         _ = vec_pop_back<T>(&mut v);
-        vec_unpack_0<T>(move(v));
+        vector<T; 0>() = move(v);
         return;
     }
 }

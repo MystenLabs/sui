@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 21 tasks
+processed 22 tasks
 
 init:
 A: object(0,0)
@@ -111,28 +111,21 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
     v: 0u64,
 }
 
-task 15, lines 101-103:
+task 15, lines 102-103:
 //# programmable --sender A
-//> 0: Test_V2::M1::baz();
-//> 1: Test_V3::M1::baz();
-created: object(15,0), object(15,1)
+//> Test_V2::M1::baz();
+created: object(15,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 16, line 105:
-//# view-object 15,1
-Owner: Shared( 10 )
-Version: 10
-Contents: Test_DepDepV1::DepDepM1::Obj {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(15,1),
-        },
-    },
-    v: 7u64,
-}
+task 16, lines 105-106:
+//# programmable --sender A
+//> Test_V3::M1::baz();
+created: object(16,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 17, lines 107-112:
+task 17, line 108:
 //# view-object 15,0
 Owner: Shared( 10 )
 Version: 10
@@ -142,20 +135,33 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
             bytes: fake(15,0),
         },
     },
+    v: 7u64,
+}
+
+task 18, lines 110-115:
+//# view-object 16,0
+Owner: Shared( 11 )
+Version: 11
+Contents: Test_DepDepV1::DepDepM1::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(16,0),
+        },
+    },
     v: 0u64,
 }
 
-task 18, lines 114-120:
+task 19, lines 117-123:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepDepV1 --sender A
 Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
 
-task 19, lines 122-128:
+task 20, lines 125-131:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 --sender A
 Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
 
-task 20, lines 130-134:
+task 21, lines 133-137:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV1 --sender A
 Error: Transaction Effects Status: Publish/Upgrade Error, Dependency downgrade. Indirect (transitive) dependency of published or upgraded package has been assigned an on-chain version that is less than the version required by one of the package's transitive dependencies.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeDependencyDowngrade, source: None, command: Some(1) } }

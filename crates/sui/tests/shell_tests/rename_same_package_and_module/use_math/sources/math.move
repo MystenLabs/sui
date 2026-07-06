@@ -4,6 +4,6 @@
 module use_math::both;
 
 public fun foo() {
-  math_a::math::a();
-  math_b::math::a();
+  let _ = math_a::math::a();
+  let _ = math_b::math::a();
 }

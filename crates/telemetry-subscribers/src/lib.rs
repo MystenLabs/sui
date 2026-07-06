@@ -15,7 +15,8 @@ use opentelemetry_sdk::{
     trace::{BatchSpanProcessor, ShouldSample, TracerProvider},
 };
 use span_latency_prom::PrometheusSpanLatencyLayer;
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{
     env,
@@ -29,7 +30,8 @@ use tracing::{Level, error, info};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{
-    EnvFilter, Layer, Registry, filter,
+    EnvFilter, Layer, Registry,
+    filter::{self, FilterExt},
     fmt::{self, format::Pretty},
     layer::SubscriberExt,
     reload,
@@ -42,12 +44,125 @@ mod file_exporter;
 pub mod span_latency_prom;
 mod test_layer;
 
+/// Global filter layer that rejects callsites above the configured levels at registration time.
+///
+/// Without this, per-layer filtering causes the Registry to return `Interest::always()` for
+/// every callsite. That means trace-level `#[instrument]` spans are allocated in the slab,
+/// have their per-layer filters walked, and are immediately discarded — all at significant cost.
+/// The same applies to events below the env filter threshold.
+///
+/// By rejecting high-verbosity callsites globally, `Span::new` short-circuits to
+/// `Span::none()` and event macros short-circuit before formatting arguments.
+struct GlobalLevelFilter {
+    max_span_level: LevelFilter,
+    /// The maximum event level any layer will accept. Loaded from the EnvFilter's
+    /// max_level_hint and updated via a shared atomic when the filter is reloaded.
+    max_event_level: Arc<std::sync::atomic::AtomicU8>,
+}
+
+impl GlobalLevelFilter {
+    fn load_max_event_level(&self) -> LevelFilter {
+        level_filter_from_u8(self.max_event_level.load(Ordering::Relaxed))
+    }
+
+    fn exceeds_max_level(&self, metadata: &tracing::Metadata<'_>) -> bool {
+        if metadata.is_span() {
+            LevelFilter::from_level(*metadata.level()) > self.max_span_level
+        } else {
+            let max = self.load_max_event_level();
+            !max.eq(&LevelFilter::OFF) && LevelFilter::from_level(*metadata.level()) > max
+        }
+    }
+}
+
+fn level_filter_to_u8(lf: LevelFilter) -> u8 {
+    match lf {
+        LevelFilter::OFF => 0,
+        LevelFilter::ERROR => 1,
+        LevelFilter::WARN => 2,
+        LevelFilter::INFO => 3,
+        LevelFilter::DEBUG => 4,
+        LevelFilter::TRACE => 5,
+    }
+}
+
+fn level_filter_from_u8(v: u8) -> LevelFilter {
+    match v {
+        0 => LevelFilter::OFF,
+        1 => LevelFilter::ERROR,
+        2 => LevelFilter::WARN,
+        3 => LevelFilter::INFO,
+        4 => LevelFilter::DEBUG,
+        _ => LevelFilter::TRACE,
+    }
+}
+
+impl<S: tracing::Subscriber> Layer<S> for GlobalLevelFilter {
+    fn register_callsite(
+        &self,
+        metadata: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        if self.exceeds_max_level(metadata) {
+            tracing::subscriber::Interest::never()
+        } else {
+            // Return always() for passing callsites. The final interest will be
+            // determined by the Registry (which returns sometimes() when per-layer
+            // filters are present). We intentionally do NOT override enabled() —
+            // doing so would add an extra check to every enabled() walk, which the
+            // per-layer filters already handle. For dynamic env filter reloads,
+            // rebuild_interest_cache() re-calls register_callsite with our updated
+            // atomic max_event_level.
+            tracing::subscriber::Interest::always()
+        }
+    }
+
+    fn max_level_hint(&self) -> Option<LevelFilter> {
+        let event = self.load_max_event_level();
+        Some(std::cmp::max(self.max_span_level, event))
+    }
+}
+
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+/// Output format for a per-target log route (see [`TelemetryConfig::log_tails`]). Inferred
+/// from the route's file extension.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum LogFormat {
+    Json,
+    #[default]
+    Text,
+}
+
+impl LogFormat {
+    /// Infer the output format from a log file's extension: the common newline-delimited
+    /// JSON extensions `jsonl` and `ndjson` (case-insensitive) select [`LogFormat::Json`];
+    /// every other extension (including `.json` and `.log`) and none default to
+    /// [`LogFormat::Text`].
+    fn from_path(path: &Path) -> Self {
+        if let Some(ext) = path.extension().and_then(|ext| ext.to_str())
+            && (ext.eq_ignore_ascii_case("jsonl") || ext.eq_ignore_ascii_case("ndjson"))
+        {
+            LogFormat::Json
+        } else {
+            LogFormat::Text
+        }
+    }
+}
+
+/// A per-target output route: *additionally* write `target`'s logs to `file`. Configured via
+/// the `RUST_LOG_TAILS` env var, e.g. `graphql_request=/var/log/sui/graphql_request.jsonl`.
+#[derive(Clone, Debug)]
+pub struct LogTail {
+    pub target: String,
+    pub format: LogFormat,
+    pub file: PathBuf,
+}
 
 /// Configuration for different logging/tracing options
 /// ===
 /// - json_log_output: Output JSON logs to stdout only.
+/// - log_tails: Additional per-target log files via RUST_LOG_TAILS.
 /// - log_file: If defined, write output to a file starting with this name, ex app.log
 /// - log_level: error/warn/info/debug/trace, defaults to info
 #[derive(Default, Clone, Debug)]
@@ -61,20 +176,26 @@ pub struct TelemetryConfig {
     pub log_file: Option<String>,
     /// Log level to set, defaults to info
     pub log_string: Option<String>,
-    /// Span level - what level of spans should be created.  Note this is not same as logging level
-    /// If set to None, then defaults to INFO
-    pub span_level: Option<Level>,
+    /// Span level - what level of spans should be created.  Note this is not same as logging level.
+    /// If set to None, then defaults to INFO. Use LevelFilter::OFF to disable all spans.
+    pub span_level: Option<LevelFilter>,
     /// Set a panic hook
     pub panic_hook: bool,
     /// Crash on panic
     pub crash_on_panic: bool,
     /// Optional Prometheus registry - if present, all enabled span latencies are measured
     pub prom_registry: Option<prometheus::Registry>,
+    /// Disable the PrometheusSpanLatencyLayer even when a prom_registry is set.
+    pub disable_span_latency: bool,
     pub sample_rate: f64,
     /// Add directive to include trace logs with provided target
     pub trace_target: Option<Vec<String>>,
     /// Print unadorned logs from the target on standard error if this is a tty
     pub user_info_target: Vec<String>,
+    /// Per-target output routing — one [`LogTail`] per entry — populated from the
+    /// `RUST_LOG_TAILS` env var. See [`TelemetryConfig::with_log_tail`] for how each tail
+    /// is emitted.
+    pub log_tails: Vec<LogTail>,
     // Sets the subscriber created by this config to be the global default. Defaults to true if not set.
     pub set_global_default: bool,
     // Add error layer to capture trace spans. Defaults to false if not set.
@@ -87,6 +208,9 @@ pub struct TelemetryConfig {
 #[allow(dead_code)]
 pub struct TelemetryGuards {
     worker_guard: WorkerGuard,
+    /// Flush guards for any per-target log files (`RUST_LOG_TAILS`). Held so the
+    /// background writer threads keep flushing until the guards are dropped.
+    file_guards: Vec<WorkerGuard>,
     provider: Option<TracerProvider>,
     subscriber: Option<DefaultGuard>,
 }
@@ -95,6 +219,7 @@ impl TelemetryGuards {
     fn new(
         config: TelemetryConfig,
         worker_guard: WorkerGuard,
+        file_guards: Vec<WorkerGuard>,
         provider: Option<TracerProvider>,
         subscriber: Option<DefaultGuard>,
     ) -> Self {
@@ -104,6 +229,7 @@ impl TelemetryGuards {
         }
         Self {
             worker_guard,
+            file_guards,
             provider,
             subscriber,
         }
@@ -117,17 +243,26 @@ impl Drop for TelemetryGuards {
 }
 
 #[derive(Clone, Debug)]
-pub struct FilterHandle(reload::Handle<EnvFilter, Registry>);
+pub struct FilterHandle {
+    reload: reload::Handle<EnvFilter, Registry>,
+    /// Shared with GlobalLevelFilter so that reloading the env filter also
+    /// updates the global event-level gate.
+    max_event_level: Option<Arc<std::sync::atomic::AtomicU8>>,
+}
 
 impl FilterHandle {
     pub fn update<S: AsRef<str>>(&self, directives: S) -> Result<(), BoxError> {
         let filter = EnvFilter::try_new(directives)?;
-        self.0.reload(filter)?;
+        if let Some(ref max_level) = self.max_event_level {
+            let hint = filter.max_level_hint().unwrap_or(LevelFilter::TRACE);
+            max_level.store(level_filter_to_u8(hint), Ordering::Relaxed);
+        }
+        self.reload.reload(filter)?;
         Ok(())
     }
 
     pub fn get(&self) -> Result<String, BoxError> {
-        self.0
+        self.reload
             .with_current(|filter| filter.to_string())
             .map_err(Into::into)
     }
@@ -213,6 +348,24 @@ fn get_output(log_file: Option<String>) -> (NonBlocking, WorkerGuard) {
     }
 }
 
+/// Open a per-target log file (`RUST_LOG_TAILS`), pre-creating its parent directory.
+/// Panics `init()` if the directory cannot be created, rather than silently dropping the
+/// target's file sink.
+fn open_tail_file(path: &Path) -> (NonBlocking, WorkerGuard) {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).unwrap_or_else(|e| {
+            panic!(
+                "telemetry: cannot create directory for RUST_LOG_TAILS file {}: {e}",
+                path.display()
+            )
+        });
+    }
+    let file_appender = tracing_appender::rolling::daily("", path);
+    tracing_appender::non_blocking(file_appender)
+}
+
 // NOTE: this function is copied from tracing's panic_hook example
 fn set_panic_hook(crash_on_panic: bool) {
     let default_panic_handler = std::panic::take_hook();
@@ -272,6 +425,33 @@ pub fn get_global_telemetry_config() -> Option<TelemetryConfig> {
     global_config.clone()
 }
 
+fn parse_log_tails(spec: &str) -> Vec<LogTail> {
+    spec.split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(parse_log_tail_entry)
+        .collect()
+}
+
+fn parse_log_tail_entry(entry: &str) -> LogTail {
+    if let Some((target, file)) = entry.split_once('=') {
+        let (target, file) = (target.trim(), file.trim());
+        if !target.is_empty() && !file.is_empty() {
+            let file = PathBuf::from(file);
+            let format = LogFormat::from_path(&file);
+            return LogTail {
+                target: target.to_owned(),
+                format,
+                file,
+            };
+        }
+    }
+    panic!(
+        "telemetry: invalid RUST_LOG_TAILS entry {entry:?}: a `=file` path is \
+         required, e.g. `graphql_request=/var/log/sui/graphql_request.jsonl`"
+    )
+}
+
 impl TelemetryConfig {
     pub fn new() -> Self {
         Self {
@@ -284,9 +464,11 @@ impl TelemetryConfig {
             panic_hook: true,
             crash_on_panic: false,
             prom_registry: None,
+            disable_span_latency: false,
             sample_rate: 1.0,
             trace_target: None,
             user_info_target: Vec::new(),
+            log_tails: Vec::new(),
             set_global_default: true,
             enable_error_layer: false,
             enable_test_layer: false,
@@ -304,7 +486,7 @@ impl TelemetryConfig {
     }
 
     pub fn with_span_level(mut self, span_level: Level) -> Self {
-        self.span_level = Some(span_level);
+        self.span_level = Some(LevelFilter::from_level(span_level));
         self
     }
 
@@ -315,6 +497,11 @@ impl TelemetryConfig {
 
     pub fn with_prom_registry(mut self, registry: &prometheus::Registry) -> Self {
         self.prom_registry = Some(registry.clone());
+        self
+    }
+
+    pub fn with_disable_span_latency(mut self, disable: bool) -> Self {
+        self.disable_span_latency = disable;
         self
     }
 
@@ -336,6 +523,19 @@ impl TelemetryConfig {
     /// unadorned to standard error (for non-json output)
     pub fn with_user_info_target(mut self, target: &str) -> Self {
         self.user_info_target.push(target.to_owned());
+        self
+    }
+
+    /// Adds a `RUST_LOG_TAILS`-style routing rule: *additionally* write `target`'s logs to
+    /// `file`, in a format inferred from its extension.
+    pub fn with_log_tail(mut self, target: &str, file: impl Into<PathBuf>) -> Self {
+        let file = file.into();
+        let format = LogFormat::from_path(&file);
+        self.log_tails.push(LogTail {
+            target: target.to_owned(),
+            format,
+            file,
+        });
         self
     }
 
@@ -367,13 +567,17 @@ impl TelemetryConfig {
             self.json_log_output = true;
         }
 
+        if let Ok(spec) = env::var("RUST_LOG_TAILS") {
+            self.log_tails = parse_log_tails(&spec);
+        }
+
         if env::var("TOKIO_CONSOLE").is_ok() {
             self.tokio_console = true;
         }
 
         if let Ok(span_level) = env::var("TOKIO_SPAN_LEVEL") {
             self.span_level =
-                Some(Level::from_str(&span_level).expect("Cannot parse TOKIO_SPAN_LEVEL"));
+                Some(LevelFilter::from_str(&span_level).expect("Cannot parse TOKIO_SPAN_LEVEL"));
         }
 
         if let Ok(filepath) = env::var("RUST_LOG_FILE") {
@@ -407,17 +611,38 @@ impl TelemetryConfig {
                 directives.push_str(&format!(",{}=trace", target));
             }
         }
-        let env_filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(directives));
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new(directives.clone()));
+        // When the test layer is enabled, it accepts events at any level without a
+        // per-layer filter, so global event-level filtering would hide events the
+        // test wants to capture. Disable it by pinning max_event_level to TRACE
+        // (and skip propagating env filter reloads into it).
+        let max_event_level_seed = if config.enable_test_layer {
+            LevelFilter::TRACE
+        } else {
+            env_filter.max_level_hint().unwrap_or(LevelFilter::TRACE)
+        };
+        let max_event_level = Arc::new(std::sync::atomic::AtomicU8::new(level_filter_to_u8(
+            max_event_level_seed,
+        )));
         let (log_filter, reload_handle) = reload::Layer::new(env_filter);
-        let log_filter_handle = FilterHandle(reload_handle);
+        let log_filter_handle = FilterHandle {
+            reload: reload_handle,
+            max_event_level: if config.enable_test_layer {
+                None
+            } else {
+                Some(max_event_level.clone())
+            },
+        };
 
         // Separate span level filter.
         // This is a dumb filter for now - allows all spans that are below a given level.
         // TODO: implement a sampling filter
-        let span_level = config.span_level.unwrap_or(Level::INFO);
+        let span_level = config
+            .span_level
+            .unwrap_or(LevelFilter::from_level(Level::INFO));
         let span_filter = filter::filter_fn(move |metadata| {
-            metadata.is_span() && *metadata.level() <= span_level
+            metadata.is_span() && LevelFilter::from_level(*metadata.level()) <= span_level
         });
 
         let mut layers = Vec::new();
@@ -429,7 +654,9 @@ impl TelemetryConfig {
             layers.push(console_subscriber::spawn().boxed());
         }
 
-        if let Some(registry) = config.prom_registry {
+        if let Some(registry) = config.prom_registry
+            && !config.disable_span_latency
+        {
             let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
                 .expect("Could not initialize span latency layer");
             layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
@@ -502,12 +729,17 @@ impl TelemetryConfig {
 
             let trace_env_filter = EnvFilter::try_from_env("TRACE_FILTER").unwrap();
             let (trace_env_filter, reload_handle) = reload::Layer::new(trace_env_filter);
-            trace_filter_handle = Some(FilterHandle(reload_handle));
+            trace_filter_handle = Some(FilterHandle {
+                reload: reload_handle,
+                max_event_level: None,
+            });
 
             layers.push(telemetry.with_filter(trace_env_filter).boxed());
         }
 
         let (nb_output, worker_guard) = get_output(config.log_file.clone());
+        // Flush guards for any per-target files opened below; kept alive in TelemetryGuards.
+        let mut file_guards: Vec<WorkerGuard> = Vec::new();
         if config.json_log_output {
             // Output to file or to stderr in a newline-delimited JSON format
             let json_layer = fmt::layer()
@@ -519,13 +751,15 @@ impl TelemetryConfig {
                 .boxed();
             layers.push(json_layer);
         } else {
-            // Output to file or to stderr with ANSI colors
+            let with_ansi = config.log_file.is_none() && stderr().is_tty();
+
+            // Main human-readable layer — always emits everything permitted by the env
+            // filter (`RUST_LOG`).
             let fmt_layer = fmt::layer()
-                .with_ansi(config.log_file.is_none() && stderr().is_tty())
+                .with_ansi(with_ansi)
                 .with_writer(nb_output.clone())
                 .with_filter(log_filter)
                 .boxed();
-
             layers.push(fmt_layer);
 
             if config.log_file.is_none() && stderr().is_tty() && !config.user_info_target.is_empty()
@@ -552,6 +786,49 @@ impl TelemetryConfig {
             }
         }
 
+        if !config.log_tails.is_empty() {
+            // One non-blocking writer per unique file, shared by that file's layers.
+            let mut file_writers: HashMap<PathBuf, NonBlocking> = HashMap::new();
+            for path in config.log_tails.iter().map(|t| &t.file) {
+                if !file_writers.contains_key(path) {
+                    let (writer, guard) = open_tail_file(path);
+                    file_writers.insert(path.clone(), writer);
+                    file_guards.push(guard);
+                }
+            }
+
+            // One layer per routed target: its format, written to its file.
+            for log_tail in &config.log_tails {
+                let writer = file_writers
+                    .get(&log_tail.file)
+                    .cloned()
+                    .expect("a writer was created above for every target's file");
+                // Target restriction (matches this target at any level) ANDed with an EnvFilter
+                // (built like the main one) so `RUST_LOG`'s per-target level is the binding gate.
+                let target_filter = filter::Targets::new()
+                    .with_target(log_tail.target.clone(), LevelFilter::TRACE)
+                    .and(
+                        EnvFilter::try_from_default_env()
+                            .unwrap_or_else(|_| EnvFilter::new(directives.clone())),
+                    );
+                let layer = match log_tail.format {
+                    LogFormat::Json => fmt::layer()
+                        .with_file(true)
+                        .with_line_number(true)
+                        .json()
+                        .with_writer(writer)
+                        .with_filter(target_filter)
+                        .boxed(),
+                    LogFormat::Text => fmt::layer()
+                        .with_ansi(false)
+                        .with_writer(writer)
+                        .with_filter(target_filter)
+                        .boxed(),
+                };
+                layers.push(layer);
+            }
+        }
+
         if config.enable_error_layer {
             layers.push(ErrorLayer::new(Pretty::default()).boxed())
         }
@@ -564,7 +841,24 @@ impl TelemetryConfig {
             None
         };
 
-        let subscriber = tracing_subscriber::registry().with(layers);
+        // Global level filter: rejects span callsites above span_level and event
+        // callsites above the env filter's max level at registration time, preventing
+        // the Registry from dispatching callsites that every per-layer filter would
+        // immediately discard.
+        //
+        // Must be stacked on top of `layers` via `.with()` rather than pushed into the
+        // Vec. `Vec<Layer>::register_callsite` returns the most permissive Interest
+        // across its layers, so a `never()` from this filter would be overridden by
+        // any layer (e.g. fmt+EnvFilter) returning `sometimes()`. As an outer
+        // `Layered`, `pick_interest` short-circuits to `never()` and the inner stack
+        // is never consulted.
+        let global_filter = GlobalLevelFilter {
+            max_span_level: span_level,
+            max_event_level,
+        };
+        let subscriber = tracing_subscriber::registry()
+            .with(layers)
+            .with(global_filter);
         let subscriber_guard = if config.set_global_default {
             tracing::subscriber::set_global_default(subscriber)
                 .expect("unable to initialize tracing subscriber");
@@ -579,7 +873,13 @@ impl TelemetryConfig {
 
         // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
         // gets flushed and closed. If this is dropped too early then no output will appear!
-        let guards = TelemetryGuards::new(config_clone, worker_guard, provider, subscriber_guard);
+        let guards = TelemetryGuards::new(
+            config_clone,
+            worker_guard,
+            file_guards,
+            provider,
+            subscriber_guard,
+        );
 
         (
             guards,
@@ -715,5 +1015,84 @@ mod tests {
     #[test]
     fn testing_logger_2() {
         init_for_testing();
+    }
+
+    #[test]
+    fn with_log_tail_appends() {
+        // Format is inferred from the file extension.
+        let config = TelemetryConfig::new()
+            .with_log_tail("graphql_request", "/var/log/x.ndjson")
+            .with_log_tail("foo", "/var/log/foo.log");
+        assert_eq!(config.log_tails.len(), 2);
+        assert_eq!(config.log_tails[0].target, "graphql_request");
+        assert_eq!(config.log_tails[0].format, LogFormat::Json);
+        assert_eq!(config.log_tails[0].file, PathBuf::from("/var/log/x.ndjson"));
+        assert_eq!(config.log_tails[1].target, "foo");
+        assert_eq!(config.log_tails[1].format, LogFormat::Text);
+        assert_eq!(config.log_tails[1].file, PathBuf::from("/var/log/foo.log"));
+    }
+
+    #[test]
+    fn parse_log_tails_infers_format_from_extension() {
+        // `target=file`, comma-separated, with surrounding whitespace; the file extension
+        // selects the format.
+        let t = parse_log_tails(
+            "a=/var/log/a.jsonl, b=/var/log/b.ndjson , c=/var/log/c.log, d=/var/log/d.JSONL, e=/var/log/e.json",
+        );
+        assert_eq!(t.len(), 5);
+        let got: Vec<_> = t
+            .iter()
+            .map(|lt| (&*lt.target, lt.format, lt.file.clone()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("a", LogFormat::Json, PathBuf::from("/var/log/a.jsonl")),
+                ("b", LogFormat::Json, PathBuf::from("/var/log/b.ndjson")),
+                ("c", LogFormat::Text, PathBuf::from("/var/log/c.log")),
+                // Extension match is case-insensitive.
+                ("d", LogFormat::Json, PathBuf::from("/var/log/d.JSONL")),
+                // `.json` is a single JSON document, not newline-delimited → text.
+                ("e", LogFormat::Text, PathBuf::from("/var/log/e.json")),
+            ]
+        );
+
+        // Empty / whitespace-only entries are skipped (they are absent, not malformed).
+        assert!(parse_log_tails("").is_empty());
+        assert!(parse_log_tails("  ,  , ").is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid RUST_LOG_TAILS entry")]
+    fn parse_log_tails_panics_without_file() {
+        // A non-empty entry without a `=file` is a misconfiguration → hard-fail init.
+        let _ = parse_log_tails("graphql_request");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid RUST_LOG_TAILS entry")]
+    fn parse_log_tails_panics_on_empty_file() {
+        let _ = parse_log_tails("a=");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid RUST_LOG_TAILS entry")]
+    fn parse_log_tails_panics_on_empty_target() {
+        let _ = parse_log_tails("=/var/log/x.log");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid RUST_LOG_TAILS entry")]
+    fn parse_log_tails_panics_on_one_bad_entry_among_valid() {
+        // A single malformed entry fails the whole parse, even alongside valid ones.
+        let _ = parse_log_tails("bare, ok=/var/log/ok.jsonl");
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot create directory for RUST_LOG_TAILS file")]
+    fn open_tail_file_panics_on_uncreatable_dir() {
+        // `/dev/null` is not a directory, so create_dir_all under it fails deterministically —
+        // a bad RUST_LOG_TAILS file path must hard-fail init rather than silently degrade.
+        let _ = open_tail_file(Path::new("/dev/null/x/test.log"));
     }
 }

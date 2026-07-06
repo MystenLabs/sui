@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "definition_location": {
+    "file_hash": "429de2be2ee1a8ae5d6ff33241919faf3286ecea3bfb9cadbe390ffede54219a",
+    "start": 32,
+    "end": 33
+  },
+  "module_name": ["0x1", "m"],
+  "struct_map": {},
+  "enum_map": {},
+  "function_map": {
+    "0": {
+      "location": {
+        "file_hash": "429de2be2ee1a8ae5d6ff33241919faf3286ecea3bfb9cadbe390ffede54219a",
+        "start": 40,
+        "end": 117
+      },
+      "definition_location": {
+        "file_hash": "429de2be2ee1a8ae5d6ff33241919faf3286ecea3bfb9cadbe390ffede54219a",
+        "start": 44,
+        "end": 48
+      },
+      "type_parameters": [],
+      "parameters": [],
+      "locals": [],
+      "nops": {},
+      "code_map": {
+        "0": {
+          "file_hash": "429de2be2ee1a8ae5d6ff33241919faf3286ecea3bfb9cadbe390ffede54219a",
+          "start": 61,
+          "end": 83
+        },
+        "1": {
+          "file_hash": "429de2be2ee1a8ae5d6ff33241919faf3286ecea3bfb9cadbe390ffede54219a",
+          "start": 92,
+          "end": 112
+        }
+      },
+      "is_native": false
+    }
+  },
+  "constant_map": {}
+}

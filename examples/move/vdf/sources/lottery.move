@@ -112,7 +112,7 @@ public fun create(
         status: IN_PROGRESS,
         timestamp_start: clock.timestamp_ms(),
         submission_phase_length,
-        vdf_input_seed: vector::empty<u8>(),
+        vdf_input_seed: vector[],
         participants: 0,
         winner: option::none(),
     });

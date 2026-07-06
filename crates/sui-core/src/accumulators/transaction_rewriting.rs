@@ -4,21 +4,24 @@
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal};
 use sui_types::digests::ChainIdentifier;
+use sui_types::error::UserInputResult;
 use sui_types::transaction::{CallArg, ObjectArg, ProgrammableTransaction, TransactionKind};
 
 /// Rewrites coin reservation inputs (fake coins encoded as masked ObjectRefs) into
 /// FundsWithdrawalArgs so the executor can resolve them as balance withdrawals.
 ///
-/// Returns `Some(rewritten_inputs)` if any inputs were rewritten, where each bool indicates whether
-/// the corresponding input was converted from a coin reservation. Returns `None` if nothing
-/// was rewritten.
+/// Returns `Ok(Some(rewritten))` where each bool flags whether that input was rewritten,
+/// `Ok(None)` if nothing was rewritten, or `Err` if a reservation cannot be resolved.
+///
+/// `accumulator_version` selects the accumulator version for MVCC lookup during checkpoint
+/// replay (read before any settlement modifies it); pass `None` for the latest version.
 pub fn rewrite_transaction_for_coin_reservations(
     chain_identifier: ChainIdentifier,
     coin_reservation_resolver: &dyn CoinReservationResolverTrait,
     sender: SuiAddress,
     transaction_kind: &mut TransactionKind,
     accumulator_version: Option<SequenceNumber>,
-) -> Option<Vec<bool>> {
+) -> UserInputResult<Option<Vec<bool>>> {
     match transaction_kind {
         TransactionKind::ProgrammableTransaction(pt) => {
             rewrite_programmable_transaction_for_coin_reservations(
@@ -29,7 +32,7 @@ pub fn rewrite_transaction_for_coin_reservations(
                 accumulator_version,
             )
         }
-        _ => None,
+        _ => Ok(None),
     }
 }
 
@@ -39,9 +42,9 @@ fn rewrite_programmable_transaction_for_coin_reservations(
     sender: SuiAddress,
     pt: &mut ProgrammableTransaction,
     accumulator_version: Option<SequenceNumber>,
-) -> Option<Vec<bool>> {
+) -> UserInputResult<Option<Vec<bool>>> {
     if pt.coin_reservation_obj_refs().count() == 0 {
-        return None;
+        return Ok(None);
     }
 
     let mut rewritten_inputs = Vec::with_capacity(pt.inputs.len());
@@ -51,20 +54,16 @@ fn rewrite_programmable_transaction_for_coin_reservations(
         {
             rewritten_inputs.push(true);
 
-            // unwrap: This cannot fail because:
-            // 1. Coin reservations are validated in `process_funds_withdrawals_for_signing` before
-            //    execution, which checks that the accumulator exists and is owned by the sender.
-            // 2. The scheduler reserves funds before allowing the transaction to execute. If the
-            //    accumulator were deleted (balance dropped to 0), the reservation would fail and
-            //    the transaction would not enter execution.
-            let withdraw = coin_reservation_resolver
-                .resolve_funds_withdrawal(sender, parsed, accumulator_version)
-                .unwrap();
+            let withdraw = coin_reservation_resolver.resolve_funds_withdrawal(
+                sender,
+                parsed,
+                accumulator_version,
+            )?;
             *input = CallArg::FundsWithdrawal(withdraw);
         } else {
             rewritten_inputs.push(false);
         }
     }
 
-    Some(rewritten_inputs)
+    Ok(Some(rewritten_inputs))
 }

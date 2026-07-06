@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E10001]: invalid duplicate attribute
+  ┌─ tests/move_check/warning_suppression/duplicate_expect_same_code.move:5:7
+  │
+4 │     #[expect(unused_variable)]
+  │       ----------------------- Attribute previously given here
+5 │     #[expect(unused_variable)]
+  │       ^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'expect' attached to the same item

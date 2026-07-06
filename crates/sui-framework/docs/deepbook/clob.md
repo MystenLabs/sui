@@ -1333,7 +1333,7 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
 ): vector&lt;<a href="../deepbook/clob.md#deepbook_clob_Order">Order</a>&gt; {
     <b>let</b> user = object::id(account_cap);
     <b>let</b> usr_open_order_ids = table::borrow(&pool.usr_open_orders, user);
-    <b>let</b> <b>mut</b> open_orders = vector::empty&lt;<a href="../deepbook/clob.md#deepbook_clob_Order">Order</a>&gt;();
+    <b>let</b> <b>mut</b> open_orders = vector[];
     <b>let</b> <b>mut</b> order_id = linked_table::front(usr_open_order_ids);
     <b>while</b> (!option::is_none(order_id)) {
         <b>let</b> order_price = *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));
@@ -1451,8 +1451,8 @@ The latter is the corresponding depth list
     <b>if</b> (price_high &gt; price_high_) price_high = price_high_;
     price_low = <a href="../deepbook/critbit.md#deepbook_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.bids, price_low);
     price_high = <a href="../deepbook/critbit.md#deepbook_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.bids, price_high);
-    <b>let</b> <b>mut</b> price_vec = vector::empty&lt;u64&gt;();
-    <b>let</b> <b>mut</b> depth_vec = vector::empty&lt;u64&gt;();
+    <b>let</b> <b>mut</b> price_vec = vector[];
+    <b>let</b> <b>mut</b> depth_vec = vector[];
     <b>if</b> (price_low == 0) { <b>return</b> (price_vec, depth_vec) };
     <b>while</b> (price_low &lt;= price_high) {
         <b>let</b> depth = <a href="../deepbook/clob.md#deepbook_clob_get_level2_book_status">get_level2_book_status</a>(
@@ -1505,8 +1505,8 @@ The latter is the corresponding depth list
     <b>if</b> (price_high &gt; price_high_) price_high = price_high_;
     price_low = <a href="../deepbook/critbit.md#deepbook_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.asks, price_low);
     price_high = <a href="../deepbook/critbit.md#deepbook_critbit_find_closest_key">critbit::find_closest_key</a>(&pool.asks, price_high);
-    <b>let</b> <b>mut</b> price_vec = vector::empty&lt;u64&gt;();
-    <b>let</b> <b>mut</b> depth_vec = vector::empty&lt;u64&gt;();
+    <b>let</b> <b>mut</b> price_vec = vector[];
+    <b>let</b> <b>mut</b> depth_vec = vector[];
     <b>if</b> (price_low == 0) { <b>return</b> (price_vec, depth_vec) };
     <b>while</b> (price_low &lt;= price_high) {
         <b>let</b> depth = <a href="../deepbook/clob.md#deepbook_clob_get_level2_book_status">get_level2_book_status</a>(

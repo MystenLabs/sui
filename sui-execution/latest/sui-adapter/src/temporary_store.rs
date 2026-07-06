@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gas_charger::{GasCharger, PaymentLocation};
+use crate::execution_mode::ExecutionMode;
+use crate::gas_charger::GasCharger;
+use move_vm_runtime::runtime::MoveRuntime;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::AccumulatorObjId;
@@ -13,17 +17,17 @@ use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
-    TransactionEvents,
+    TransactionEffectsV2, TransactionEvents,
 };
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::Data;
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
+use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
@@ -32,10 +36,13 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
+    storage::{BackingPackageStore, ChildObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
+
+pub(crate) mod invariants;
+use invariants::InvariantChecker;
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -84,6 +91,11 @@ pub struct TemporaryStore<'backing> {
     /// The set of per-epoch config objects that were loaded during execution, and are not in the
     /// input objects. This allows us to commit them to the effects.
     loaded_per_epoch_config_objects: RwLock<BTreeSet<ObjectID>>,
+
+    /// Transaction-derived inputs and bookkeeping for the post-execution system-invariant checks
+    /// (SUI conservation, balance-accumulator authorization, object ownership). See
+    /// [`invariants::InvariantChecker`].
+    invariants: InvariantChecker,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -137,6 +149,7 @@ impl<'backing> TemporaryStore<'backing> {
             generated_runtime_ids: BTreeSet::new(),
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
+            invariants: InvariantChecker::new(),
         }
     }
 
@@ -188,6 +201,83 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
         running_max_withdraws
+    }
+
+    /// Ensure that, per accumulator object, the gross Merge total and gross Split total are
+    /// representable: bounded by the total SUI supply for `Balance<SUI>` keys, and by `u64::MAX`
+    /// otherwise.
+    ///
+    /// `AccumulatorWriteV1::merge` folds all writes for a key by summing Merge amounts and Split
+    /// amounts separately into `u64`s. The object runtime caps Move-native merges per key at
+    /// `u64::MAX`, but the gas charger emits additional, uncapped SUI deposit/withdraw events during
+    /// gas smashing and gas charging (e.g. a refund Merge to an address balance), so a per-key SUI
+    /// total could be pushed past `u64::MAX`, overflowing that fold (and the SUI-conservation sum).
+    /// Reaching such a total requires SUI from an object-sourced withdrawal whose backing is only
+    /// verified at settlement.
+    ///
+    /// Bounding SUI to `TOTAL_SUPPLY_MIST` rejects any such amount here, *before* gas is charged, so
+    /// the rejected PTB-emitted writes are dropped on gas reset and only the (bounded) gas events
+    /// remain. Crucially, `TOTAL_SUPPLY_MIST` is ~8.4B SUI below `u64::MAX`, so the gas events emitted
+    /// after this check (which move only real SUI) cannot push any per-key total past `u64::MAX` —
+    /// hence they need not be re-checked. Non-SUI balances have no uncapped gas path, so the
+    /// object-runtime per-key `u64::MAX` cap is the binding guard there and we only backstop u64
+    /// representability.
+    ///
+    /// The per-key limits are not sufficient on their own: withdrawn SUI can be spread across several
+    /// object keys (each withdrawal `<= TOTAL_SUPPLY_MIST`) and then recombined *outside* the
+    /// accumulator — e.g. each withdrawal redeemed to a `Coin<SUI>` and merged into the PTB gas coin
+    /// via `MergeCoins`, which is an object mutation, not an accumulator event. The recombined coin
+    /// can then reach `u64::MAX` and overflow `deduct_gas` on a refund. So we also bound the
+    /// *cross-key* total SUI withdrawn (gross Split) to the supply, capping the total SUI a single
+    /// transaction can withdraw regardless of how it is later recombined.
+    pub(crate) fn check_accumulator_amounts_representable(&self) -> Result<(), ExecutionError> {
+        let supply = sui_types::gas_coin::TOTAL_SUPPLY_MIST as u128;
+        let mut merge_totals: BTreeMap<AccumulatorObjId, u128> = BTreeMap::new();
+        let mut split_totals: BTreeMap<AccumulatorObjId, u128> = BTreeMap::new();
+        // Cross-key total of SUI withdrawn (gross Split), bounded to the supply (see above).
+        let mut total_sui_split: u128 = 0;
+        for event in &self.execution_results.accumulator_events {
+            let AccumulatorValue::Integer(amount) = event.write.value else {
+                continue;
+            };
+            let amount = amount as u128;
+            // SUI cannot exceed its total supply through any single balance. Bounding to the supply
+            // (rather than u64::MAX) leaves headroom for the not-yet-emitted gas events.
+            let is_sui = sui_types::gas_coin::GasCoin::is_gas_balance_type(&event.write.address.ty);
+            let limit = if is_sui { supply } else { u64::MAX as u128 };
+            let total = match event.write.operation {
+                AccumulatorOperation::Merge => {
+                    merge_totals.entry(event.accumulator_obj).or_default()
+                }
+                AccumulatorOperation::Split => {
+                    split_totals.entry(event.accumulator_obj).or_default()
+                }
+            };
+            *total += amount;
+            if *total > limit {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::CoinBalanceOverflow,
+                    format!(
+                        "accumulator balance change for {:?} exceeds the representable limit \
+                         (gross total {}, limit {})",
+                        event.accumulator_obj, *total, limit
+                    ),
+                ));
+            }
+            if is_sui && matches!(event.write.operation, AccumulatorOperation::Split) {
+                total_sui_split += amount;
+                if total_sui_split > supply {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::CoinBalanceOverflow,
+                        format!(
+                            "total SUI withdrawn across all accumulators ({total_sui_split}) \
+                             exceeds the total supply ({supply})"
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Ensure that there is one entry for each accumulator object in the accumulator events.
@@ -299,9 +389,18 @@ impl<'backing> TemporaryStore<'backing> {
         mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
-        gas_charger: &mut GasCharger,
+        gas_coin: Option<ObjectID>,
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
+        // Defense-in-depth: Owner::Party is not yet supported as an effect output. There are
+        // no constructions of `Owner::Party` yet so a hard assert should be safe.
+        for (id, obj) in &self.execution_results.written_objects {
+            assert!(
+                !matches!(obj.owner, Owner::Party { .. }),
+                "Party-owned objects are not yet supported (object {id})"
+            );
+        }
+
         self.update_object_version_and_prev_tx();
         // This must happens before merge_accumulator_events.
         let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
@@ -328,31 +427,23 @@ impl<'backing> TemporaryStore<'backing> {
 
         assert!(self.protocol_config.enable_effects_v2());
 
-        // In the case of special transactions that don't require a gas object,
-        // we don't really care about the effects to gas, just use the input for it.
-        // Gas coins are guaranteed to be at least size 1 and if more than 1
-        // the first coin is where all the others are merged.
-        let gas_coin = gas_charger
-            .gas_payment_amount()
-            .and_then(|gp| match gp.location {
-                PaymentLocation::Coin(coin_id) => Some(coin_id),
-                PaymentLocation::AddressBalance(_) => None,
-            });
-
         let object_changes = self.get_object_changes();
 
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
+        let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
+            shared_object_refs,
+            loaded_per_epoch_config_objects,
+            &object_changes,
+        );
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
         let effects = TransactionEffects::new_from_execution_v2(
             status,
             epoch,
             gas_cost_summary,
-            // TODO: Provide the list of read-only shared objects directly.
-            shared_object_refs,
-            loaded_per_epoch_config_objects,
+            unchanged_consensus_objects,
             *transaction_digest,
             lamport_version,
             object_changes,
@@ -480,6 +571,8 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn drop_writes(&mut self) {
         self.execution_results.drop_writes();
+        // The PTB-emitted ranges pointed into the now-cleared accumulator_events vec.
+        self.invariants.clear();
     }
 
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
@@ -568,7 +661,11 @@ impl<'backing> TemporaryStore<'backing> {
     /// - No new objects were created or existing objects mutated (written_objects is empty)
     /// - The set of deleted objects exactly equals the set of input Coin objects
     /// - Each recipient receives at least the minimum transfer amount per token type
-    pub fn check_gasless_execution_requirements(&self) -> Result<(), String> {
+    /// - Unused withdrawal reservation (reservation - actual split) is 0 or >= min_amount
+    pub fn check_gasless_execution_requirements(
+        &self,
+        withdrawal_reservations: Option<&BTreeMap<(SuiAddress, TypeTag), u64>>,
+    ) -> Result<(), String> {
         if !self.execution_results.written_objects.is_empty() {
             return Err("Gasless transactions cannot create or mutate objects".to_string());
         }
@@ -603,17 +700,37 @@ impl<'backing> TemporaryStore<'backing> {
             },
         );
 
-        for ((recipient, token_type), net_amount) in net_totals {
-            if net_amount <= 0 {
+        for ((recipient, token_type), net_amount) in &net_totals {
+            if *net_amount <= 0 {
                 continue;
             }
-            if let Some(&min_amount) = allowed_types.get(&token_type)
-                && net_amount < i128::from(min_amount)
+            if let Some(&min_amount) = allowed_types.get(token_type)
+                && *net_amount < i128::from(min_amount)
             {
                 return Err(format!(
                     "Gasless transfer of {net_amount} to {recipient} is below \
                      minimum {min_amount} for token type {token_type}"
                 ));
+            }
+        }
+
+        if let Some(reservations) = withdrawal_reservations {
+            for ((owner, token_type), &reserved) in reservations {
+                let net = net_totals
+                    .get(&(*owner, token_type.clone()))
+                    .copied()
+                    .unwrap_or(0);
+                let remaining = (reserved as i128).saturating_add(net);
+                if remaining > 0
+                    && let Some(&min_balance_remaining) = allowed_types.get(token_type)
+                    && min_balance_remaining > 0
+                    && remaining < min_balance_remaining as i128
+                {
+                    return Err(format!(
+                        "Gasless withdrawal leaves {remaining} unused for {owner}, \
+                         below minimum {min_balance_remaining} for token type {token_type}"
+                    ));
+                }
             }
         }
 
@@ -694,154 +811,59 @@ impl<'backing> TemporaryStore<'backing> {
             None
         }
     }
-}
 
-impl TemporaryStore<'_> {
-    // check that every object read is owned directly or indirectly by sender, sponsor,
-    // or a shared object input
-    pub fn check_ownership_invariants(
+    pub fn protocol_config(&self) -> &'backing ProtocolConfig {
+        self.protocol_config
+    }
+
+    /// Cache the transaction-derived inputs the system-invariant checks need (consumed by both the
+    /// conservation checks and the ownership-invariant check). Must be called once, before
+    /// execution, after any gas-smash filtering of `gas_data`.
+    /// See [`invariants::InvariantChecker::set_transaction_inputs`].
+    pub(crate) fn set_invariant_inputs(
+        &mut self,
+        transaction_kind: &TransactionKind,
+        gas_data: &GasData,
+        transaction_signer: SuiAddress,
+    ) {
+        self.invariants
+            .set_transaction_inputs(transaction_kind, gas_data, transaction_signer);
+    }
+
+    /// Run the (read-only) SUI-conservation and balance-accumulator invariant checks.
+    /// See [`invariants::InvariantChecker::check_conservation_invariants`].
+    pub(crate) fn check_conservation_invariants<Mode: ExecutionMode>(
+        &self,
+        move_vm: &Arc<MoveRuntime>,
+        enable_expensive_checks: bool,
+        cost_summary: &GasCostSummary,
+    ) -> Result<(), ExecutionError> {
+        self.invariants.check_conservation_invariants::<Mode>(
+            self,
+            move_vm,
+            enable_expensive_checks,
+            cost_summary,
+        )
+    }
+
+    /// Check that every modified object traces back to an authenticated owner.
+    /// See [`invariants::InvariantChecker::check_ownership_invariants`].
+    pub(crate) fn check_ownership_invariants(
         &self,
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
-        gas_charger: &mut GasCharger,
+        gas_charger: &GasCharger,
         mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
-        let gas_objs: HashSet<&ObjectID> = gas_charger.used_coins().map(|g| &g.0).collect();
-        let gas_owner = sponsor.as_ref().unwrap_or(sender);
-
-        // mark input objects as authenticated
-        let mut authenticated_for_mutation: HashSet<_> = self
-            .input_objects
-            .iter()
-            .filter_map(|(id, obj)| {
-                match &obj.owner {
-                    Owner::AddressOwner(a) => {
-                        if gas_objs.contains(id) {
-                            // gas object must be owned by sender or sponsor
-                            assert!(
-                                a == gas_owner,
-                                "Gas object must be owned by sender or sponsor"
-                            );
-                        } else {
-                            assert!(sender == a, "Input object must be owned by sender");
-                        }
-                        Some(id)
-                    }
-                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => Some(id),
-                    Owner::Immutable => {
-                        // object is authenticated, but it cannot own other objects,
-                        // so we should not add it to `authenticated_objs`
-                        // However, we would definitely want to add immutable objects
-                        // to the set of authenticated roots if we were doing runtime
-                        // checks inside the VM instead of after-the-fact in the temporary
-                        // store. Here, we choose not to add them because this will catch a
-                        // bug where we mutate or delete an object that belongs to an immutable
-                        // object (though it will show up somewhat opaquely as an authentication
-                        // failure), whereas adding the immutable object to the roots will prevent
-                        // us from catching this.
-                        None
-                    }
-                    Owner::ObjectOwner(_parent) => {
-                        unreachable!(
-                            "Input objects must be address owned, shared, consensus, or immutable"
-                        )
-                    }
-                }
-            })
-            .filter(|id| {
-                // remove any non-mutable inputs. This will remove deleted or readonly shared
-                // objects
-                mutable_inputs.contains(id)
-            })
-            .copied()
-            // Add any object IDs generated in the object runtime during execution to the
-            // authenticated set (i.e., new (non-package) objects, and possibly ephemeral UIDs).
-            .chain(self.generated_runtime_ids.iter().copied())
-            .collect();
-
-        // Add sender and sponsor (if present) to authenticated set
-        authenticated_for_mutation.insert((*sender).into());
-        if let Some(sponsor) = sponsor {
-            authenticated_for_mutation.insert((*sponsor).into());
-        }
-
-        // check all modified objects are authenticated
-        let mut objects_to_authenticate = self
-            .execution_results
-            .modified_objects
-            .iter()
-            .copied()
-            .collect::<Vec<_>>();
-
-        while let Some(to_authenticate) = objects_to_authenticate.pop() {
-            if authenticated_for_mutation.contains(&to_authenticate) {
-                // object has already been authenticated
-                continue;
-            }
-
-            let parent = if let Some(container_id) =
-                self.wrapped_object_containers.get(&to_authenticate)
-            {
-                // It's a wrapped object, so check that the container is authenticated
-                *container_id
-            } else {
-                // It's non-wrapped, so check the owner -- we can load the object from the
-                // store.
-                let Some(old_obj) = self.store.get_object(&to_authenticate) else {
-                    panic!(
-                        "Failed to load object {to_authenticate:?}.\n \
-                         If it cannot be loaded, we would expect it to be in the wrapped object map: {:#?}",
-                        &self.wrapped_object_containers
-                    )
-                };
-
-                match &old_obj.owner {
-                    // We mutated a dynamic field, we can continue to trace this back to verify
-                    // proper ownership.
-                    Owner::ObjectOwner(parent) => ObjectID::from(*parent),
-                    // We mutated an address owned or sequenced address owned object -- one of two cases apply:
-                    // 1) the object is owned by an object or address in the authenticated set,
-                    // 2) the object is owned by some other address, in which case we should
-                    //    continue to trace this back.
-                    Owner::AddressOwner(parent)
-                    | Owner::ConsensusAddressOwner { owner: parent, .. } => {
-                        // For Receiving<_> objects, the address owner is actually an object.
-                        // If it was actually an address, we should have caught it as an input and
-                        // it would already have been in authenticated_for_mutation
-                        ObjectID::from(*parent)
-                    }
-                    // We mutated a shared object -- we checked if this object was in the
-                    // authenticated set at the top of this loop and it wasn't so this is a failure.
-                    owner @ Owner::Shared { .. } => {
-                        panic!(
-                            "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
-                             Potentially covering objects in: {authenticated_for_mutation:#?}"
-                        );
-                    }
-                    Owner::Immutable => {
-                        assert!(
-                            is_epoch_change,
-                            "Immutable objects cannot be written, except for \
-                             Sui Framework/Move stdlib upgrades at epoch change boundaries"
-                        );
-                        // Note: this assumes that the only immutable objects an epoch change
-                        // tx can update are system packages,
-                        // but in principle we could allow others.
-                        assert!(
-                            is_system_package(to_authenticate),
-                            "Only system packages can be upgraded"
-                        );
-                        continue;
-                    }
-                }
-            };
-
-            // we now assume the object is authenticated and check the parent
-            authenticated_for_mutation.insert(to_authenticate);
-            objects_to_authenticate.push(parent);
-        }
-        Ok(())
+        self.invariants.check_ownership_invariants(
+            self,
+            sender,
+            sponsor,
+            gas_charger,
+            mutable_inputs,
+            is_epoch_change,
+        )
     }
 }
 
@@ -868,7 +890,7 @@ impl TemporaryStore<'_> {
             .execution_results
             .written_objects
             .values_mut()
-            .zip(old_storage_rebates)
+            .zip_debug_eq(old_storage_rebates)
         {
             // new object size
             let new_object_size = object.object_size_for_gas_metering();
@@ -903,7 +925,9 @@ impl TemporaryStore<'_> {
         }
     }
 
-    pub fn check_execution_results_consistency(&self) -> Result<(), ExecutionError> {
+    pub fn check_execution_results_consistency<Mode: ExecutionMode>(
+        &self,
+    ) -> Result<(), Mode::Error> {
         assert_invariant!(
             self.execution_results
                 .created_object_ids
@@ -938,236 +962,6 @@ impl TemporaryStore<'_> {
         let (old_object, new_object) =
             wrapper.advance_epoch_safe_mode(params, self.store.as_object_store(), protocol_config);
         self.mutate_child_object(old_object, new_object);
-    }
-}
-
-type ModifiedObjectInfo<'a> = (
-    ObjectID,
-    // old object metadata, including version, digest, owner, and storage rebate.
-    Option<DynamicallyLoadedObjectMetadata>,
-    Option<&'a Object>,
-);
-
-impl TemporaryStore<'_> {
-    fn get_input_sui(
-        &self,
-        id: &ObjectID,
-        expected_version: SequenceNumber,
-        layout_resolver: &mut impl LayoutResolver,
-    ) -> Result<u64, ExecutionError> {
-        if let Some(obj) = self.input_objects.get(id) {
-            // the assumption here is that if it is in the input objects must be the right one
-            if obj.version() != expected_version {
-                invariant_violation!(
-                    "Version mismatching when resolving input object to check conservation--\
-                     expected {}, got {}",
-                    expected_version,
-                    obj.version(),
-                );
-            }
-            obj.get_total_sui(layout_resolver).map_err(|e| {
-                make_invariant_violation!(
-                    "Failed looking up input SUI in SUI conservation checking for input with \
-                         type {:?}: {e:#?}",
-                    obj.struct_tag(),
-                )
-            })
-        } else {
-            // not in input objects, must be a dynamic field
-            let Some(obj) = self.store.get_object_by_key(id, expected_version) else {
-                invariant_violation!(
-                    "Failed looking up dynamic field {id} in SUI conservation checking"
-                );
-            };
-            obj.get_total_sui(layout_resolver).map_err(|e| {
-                make_invariant_violation!(
-                    "Failed looking up input SUI in SUI conservation checking for type \
-                         {:?}: {e:#?}",
-                    obj.struct_tag(),
-                )
-            })
-        }
-    }
-
-    /// Return the list of all modified objects, for each object, returns
-    /// - Object ID,
-    /// - Input: If the object existed prior to this transaction, include their version and storage_rebate,
-    /// - Output: If a new version of the object is written, include the new object.
-    fn get_modified_objects(&self) -> Vec<ModifiedObjectInfo<'_>> {
-        self.execution_results
-            .modified_objects
-            .iter()
-            .map(|id| {
-                let metadata = self.get_object_modified_at(id);
-                let output = self.execution_results.written_objects.get(id);
-                (*id, metadata, output)
-            })
-            .chain(
-                self.execution_results
-                    .written_objects
-                    .iter()
-                    .filter_map(|(id, object)| {
-                        if self.execution_results.modified_objects.contains(id) {
-                            None
-                        } else {
-                            Some((*id, None, Some(object)))
-                        }
-                    }),
-            )
-            .collect()
-    }
-
-    /// Check that this transaction neither creates nor destroys SUI. This should hold for all txes
-    /// except the epoch change tx, which mints staking rewards equal to the gas fees burned in the
-    /// previous epoch.  Specifically, this checks two key invariants about storage
-    /// fees and storage rebate:
-    ///
-    /// 1. all SUI in storage rebate fields of input objects should flow either to the transaction
-    ///    storage rebate, or the transaction non-refundable storage rebate
-    /// 2. all SUI charged for storage should flow into the storage rebate field of some output
-    ///    object
-    ///
-    /// This function is intended to be called *after* we have charged for
-    /// gas + applied the storage rebate to the gas object, but *before* we
-    /// have updated object versions.
-    pub fn check_sui_conserved(
-        &self,
-        simple_conservation_checks: bool,
-        gas_summary: &GasCostSummary,
-    ) -> Result<(), ExecutionError> {
-        if !simple_conservation_checks {
-            return Ok(());
-        }
-        // total amount of SUI in storage rebate of input objects
-        let mut total_input_rebate = 0;
-        // total amount of SUI in storage rebate of output objects
-        let mut total_output_rebate = 0;
-        for (_id, input, output) in self.get_modified_objects() {
-            if let Some(input) = input {
-                total_input_rebate += input.storage_rebate;
-            }
-            if let Some(object) = output {
-                total_output_rebate += object.storage_rebate;
-            }
-        }
-
-        if gas_summary.storage_cost == 0 {
-            // this condition is usually true when the transaction went OOG and no
-            // gas is left for storage charges.
-            // The storage cost has to be there at least for the gas coin which
-            // will not be deleted even when going to 0.
-            // However if the storage cost is 0 and if there is any object touched
-            // or deleted the value in input must be equal to the output plus rebate and
-            // non refundable.
-            // Rebate and non refundable will be positive when there are object deleted
-            // (gas smashing being the primary and possibly only example).
-            // A more typical condition is for all storage charges in summary to be 0 and
-            // then input and output must be the same value
-            if total_input_rebate
-                != total_output_rebate
-                    + gas_summary.storage_rebate
-                    + gas_summary.non_refundable_storage_fee
-            {
-                return Err(ExecutionError::invariant_violation(format!(
-                    "SUI conservation failed -- no storage charges in gas summary \
-                        and total storage input rebate {} not equal  \
-                        to total storage output rebate {}",
-                    total_input_rebate, total_output_rebate,
-                )));
-            }
-        } else {
-            // all SUI in storage rebate fields of input objects should flow either to
-            // the transaction storage rebate, or the non-refundable storage rebate pool
-            if total_input_rebate
-                != gas_summary.storage_rebate + gas_summary.non_refundable_storage_fee
-            {
-                return Err(ExecutionError::invariant_violation(format!(
-                    "SUI conservation failed -- {} SUI in storage rebate field of input objects, \
-                        {} SUI in tx storage rebate or tx non-refundable storage rebate",
-                    total_input_rebate, gas_summary.non_refundable_storage_fee,
-                )));
-            }
-
-            // all SUI charged for storage should flow into the storage rebate field
-            // of some output object
-            if gas_summary.storage_cost != total_output_rebate {
-                return Err(ExecutionError::invariant_violation(format!(
-                    "SUI conservation failed -- {} SUI charged for storage, \
-                        {} SUI in storage rebate field of output objects",
-                    gas_summary.storage_cost, total_output_rebate
-                )));
-            }
-        }
-        Ok(())
-    }
-
-    /// Check that this transaction neither creates nor destroys SUI.
-    /// This more expensive check will check a third invariant on top of the 2 performed
-    /// by `check_sui_conserved` above:
-    ///
-    /// * all SUI in input objects (including coins etc in the Move part of an object) should flow
-    ///   either to an output object, or be burned as part of computation fees or non-refundable
-    ///   storage rebate
-    ///
-    /// This function is intended to be called *after* we have charged for gas + applied the
-    /// storage rebate to the gas object, but *before* we have updated object versions. The
-    /// advance epoch transaction would mint `epoch_fees` amount of SUI, and burn `epoch_rebates`
-    /// amount of SUI. We need these information for this check.
-    pub fn check_sui_conserved_expensive(
-        &self,
-        gas_summary: &GasCostSummary,
-        advance_epoch_gas_summary: Option<(u64, u64)>,
-        layout_resolver: &mut impl LayoutResolver,
-    ) -> Result<(), ExecutionError> {
-        // total amount of SUI in input objects, including both coins and storage rebates
-        let mut total_input_sui = 0;
-        // total amount of SUI in output objects, including both coins and storage rebates
-        let mut total_output_sui = 0;
-
-        // settlement input/output sui is used by the settlement transactions to account for
-        // Sui that has been gathered from the accumulator writes of transactions which it is
-        // settling.
-        total_input_sui += self.execution_results.settlement_input_sui;
-        total_output_sui += self.execution_results.settlement_output_sui;
-
-        for (id, input, output) in self.get_modified_objects() {
-            if let Some(input) = input {
-                total_input_sui += self.get_input_sui(&id, input.version, layout_resolver)?;
-            }
-            if let Some(object) = output {
-                total_output_sui += object.get_total_sui(layout_resolver).map_err(|e| {
-                    make_invariant_violation!(
-                        "Failed looking up output SUI in SUI conservation checking for \
-                         mutated type {:?}: {e:#?}",
-                        object.struct_tag(),
-                    )
-                })?;
-            }
-        }
-
-        for event in &self.execution_results.accumulator_events {
-            let (input, output) = event.total_sui_in_event();
-            total_input_sui += input;
-            total_output_sui += output;
-        }
-
-        // note: storage_cost flows into the storage_rebate field of the output objects, which is
-        // why it is not accounted for here.
-        // similarly, all of the storage_rebate *except* the storage_fund_rebate_inflow
-        // gets credited to the gas coin both computation costs and storage rebate inflow are
-        total_output_sui += gas_summary.computation_cost + gas_summary.non_refundable_storage_fee;
-        if let Some((epoch_fees, epoch_rebates)) = advance_epoch_gas_summary {
-            total_input_sui += epoch_fees;
-            total_output_sui += epoch_rebates;
-        }
-        if total_input_sui != total_output_sui {
-            return Err(ExecutionError::invariant_violation(format!(
-                "SUI conservation failed: input={}, output={}, \
-                    this transaction either mints or burns SUI",
-                total_input_sui, total_output_sui,
-            )));
-        }
-        Ok(())
     }
 }
 
@@ -1241,6 +1035,16 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         (Owner::AddressOwner(a), Owner::AddressOwner(b)) => a == b,
         (Owner::Immutable, Owner::Immutable) => true,
         (Owner::ObjectOwner(a), Owner::ObjectOwner(b)) => a == b,
+        (
+            Owner::Party {
+                permissions: a,
+                start_version: _,
+            },
+            Owner::Party {
+                permissions: b,
+                start_version: _,
+            },
+        ) => a == b,
 
         // Keep the left hand side of the match exhaustive to catch future
         // changes to Owner
@@ -1248,7 +1052,8 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         | (Owner::Immutable, _)
         | (Owner::ObjectOwner(_), _)
         | (Owner::Shared { .. }, _)
-        | (Owner::ConsensusAddressOwner { .. }, _) => false,
+        | (Owner::ConsensusAddressOwner { .. }, _)
+        | (Owner::Party { .. }, _) => false,
     };
 
     !data_equal || !owner_equal
@@ -1297,9 +1102,16 @@ impl Storage for TemporaryStore<'_> {
 
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
+        // Track the index range of accumulator events brought in here as PTB-emitted; the
+        // address-balance change invariant (run inside `run_conservation_checks`) uses this
+        // set to distinguish trusted PTB-emitted events from runtime-emitted ones.
+        let event_start = self.execution_results.accumulator_events.len();
         self.execution_results.merge_results(
             results, /* consistent_merge */ true, /* invariant_checks */ true,
         )?;
+        let event_end = self.execution_results.accumulator_events.len();
+        self.invariants
+            .record_ptb_event_range(event_start, event_end);
 
         Ok(())
     }
@@ -1373,11 +1185,5 @@ impl BackingPackageStore for TemporaryStore<'_> {
                 }
             })
         }
-    }
-}
-
-impl ParentSync for TemporaryStore<'_> {
-    fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
-        unreachable!("Never called in newer protocol versions")
     }
 }

@@ -1,7 +1,7 @@
 //# run
-module 0x6.m {
+mvir 0x6::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u64 + 0u64 == 0u64, 1000);
     assert(0u64 + 1u64 == 1u64, 1001);
@@ -18,9 +18,9 @@ label b0:
 
 }
 //# run
-module 0x7.m {
+mvir 0x7::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 1u64 + 18446744073709551615u64;
     return;
@@ -28,9 +28,9 @@ label b0:
 
 }
 //# run
-module 0x8.m {
+mvir 0x8::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 12000000000000000000u64 + 10000000000000000000u64;
     return;
@@ -40,9 +40,9 @@ label b0:
 
 
 //# run
-module 0x9.m {
+mvir 0x9::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u64 - 0u64 == 0u64, 2000);
     assert(1u64 - 0u64 == 1u64, 2001);
@@ -58,9 +58,9 @@ label b0:
 
 }
 //# run
-module 0xa.m {
+mvir 0xa::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 - 1u64;
     return;
@@ -68,9 +68,9 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 54u64 - 100u64;
     return;
@@ -79,9 +79,9 @@ label b0:
 }
 
 //# run
-module 0xb.m {
+mvir 0xb::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u64 * 0u64 == 0u64, 3000);
     assert(1u64 * 0u64 == 0u64, 3001);
@@ -96,9 +96,9 @@ label b0:
 
 }
 //# run
-module 0xc.m {
+mvir 0xc::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 4294967296u64 * 4294967296u64;
     return;
@@ -106,9 +106,9 @@ label b0:
 
 }
 //# run
-module 0xd.m {
+mvir 0xd::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 9223372036854775808 * 2u64;
     return;
@@ -118,9 +118,9 @@ label b0:
 
 
 //# run
-module 0xe.m {
+mvir 0xe::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u64 / 1u64 == 0u64, 4000);
     assert(1u64 / 1u64 == 1u64, 4001);
@@ -136,9 +136,9 @@ label b0:
 
 }
 //# run
-module 0x15.m {
+mvir 0x15::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 / 0u64;
     return;
@@ -146,9 +146,9 @@ label b0:
 
 }
 //# run
-module 0x16.m {
+mvir 0x16::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 1u64 / 0u64;
     return;
@@ -156,9 +156,9 @@ label b0:
 
 }
 //# run
-module 0x17.m {
+mvir 0x17::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 18446744073709551615u64 / 0u64;
     return;
@@ -167,9 +167,9 @@ label b0:
 }
 
 //# run
-module 0x18.m {
+mvir 0x18::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u64 % 1u64 == 0u64, 5000);
     assert(1u64 % 1u64 == 0u64, 5001);
@@ -185,9 +185,9 @@ label b0:
 
 }
 //# run
-module 0x19.m {
+mvir 0x19::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 % 0u64;
     return;
@@ -195,9 +195,9 @@ label b0:
 
 }
 //# run
-module 0x1a.m {
+mvir 0x1a::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 1u64 % 0u64;
     return;
@@ -205,9 +205,9 @@ label b0:
 
 }
 //# run
-module 0x1b.m {
+mvir 0x1b::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 18446744073709551615u64 % 0u64;
     return;

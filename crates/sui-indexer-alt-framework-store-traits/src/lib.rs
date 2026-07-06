@@ -8,6 +8,9 @@ use chrono::DateTime;
 use chrono::Utc;
 use scoped_futures::ScopedBoxFuture;
 
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
+
 /// Represents a database connection that can be used by the indexer framework to manage watermark
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
@@ -44,8 +47,9 @@ pub trait Connection: Send {
 
     /// Upsert the high watermark for the `pipeline_task` - representing either a pipeline name or a
     /// pipeline with an associated task (formatted as `{pipeline}{Store::DELIMITER}{task}`) - as
-    /// long as it raises the watermark stored in the database. Returns a boolean indicating whether
-    /// the watermark was actually updated or not.
+    /// long as it raises the watermark stored in the database. `checkpoint_hi_inclusive` should not
+    /// regress; equal or lower writes are stale and should not update stored state. Returns a
+    /// boolean indicating whether the watermark was actually updated or not.
     async fn set_committer_watermark(
         &mut self,
         pipeline_task: &str,
@@ -88,9 +92,10 @@ pub trait ConcurrentConnection: Connection {
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>>;
 
-    /// Update the `reader_lo` of an existing watermark entry only if it raises `reader_lo`. Readers
-    /// will reference this as the inclusive lower bound of available data for the corresponding
-    /// pipeline.
+    /// Update the `reader_lo` of an existing watermark entry only if it raises `reader_lo`.
+    /// `reader_lo` should not regress; equal or lower writes are stale and should not update stored
+    /// state. Readers will reference this as the inclusive lower bound of available data for the
+    /// corresponding pipeline.
     ///
     /// If an update is to be made, some timestamp (i.e `pruner_timestamp`) should also be set on
     /// the watermark entry to the current time. Ideally, this would be from the perspective of the
@@ -107,7 +112,9 @@ pub trait ConcurrentConnection: Connection {
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
-    /// Update the pruner watermark, returns true if the watermark was actually updated.
+    /// Update the pruner watermark only if it raises `pruner_hi`. `pruner_hi` should not regress;
+    /// equal or lower writes are stale and should not update stored state. Returns true if the
+    /// watermark was actually updated.
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
@@ -202,7 +209,7 @@ pub struct CommitterWatermark {
 }
 
 /// Represents the inclusive lower bound of available data in the Store for some pipeline.
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct ReaderWatermark {
     /// Within the framework, this value is used to determine the new `reader_lo`.
     pub checkpoint_hi_inclusive: u64,

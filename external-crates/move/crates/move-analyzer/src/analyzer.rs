@@ -7,7 +7,7 @@ use lsp_server::{Connection, Message, Notification, Request, RequestId, Response
 use lsp_types::{
     CodeActionKind, CodeActionOptions, CodeActionProviderCapability, CompletionOptions,
     HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, NumberOrString, OneOf,
-    ProgressParams, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
+    ProgressParams, RenameOptions, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
     TextDocumentSyncOptions, TypeDefinitionProviderCapability, WorkDoneProgress,
     WorkDoneProgressBegin, WorkDoneProgressEnd, WorkDoneProgressOptions,
     notification::Notification as _,
@@ -28,7 +28,7 @@ use crate::{
         compilation::CachedPackages,
         requests::{
             on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
-            on_hover_request, on_references_request,
+            on_hover_request, on_prepare_rename_request, on_references_request, on_rename_request,
         },
         runner::{SymbolicatorMessage, SymbolicatorRunner},
     },
@@ -47,7 +47,7 @@ const LINT_ALL: &str = "all";
 const PROGRESS_TOKEN: &str = "symbolication";
 
 #[allow(deprecated)]
-pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
+pub fn run<F: MoveFlavor + 'static>(move_flavor: Arc<F>, flavor: Option<Flavor>) {
     // stdio is used to communicate Language Server Protocol requests and responses.
     // stderr is used for logging (and, when Visual Studio Code is used to communicate with this
     // server, it captures this output in a dedicated "output channel").
@@ -129,6 +129,12 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
             },
             resolve_provider: None,
         })),
+        rename_provider: Some(OneOf::Right(RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: None,
+            },
+        })),
         ..Default::default()
     })
     .expect("could not serialize server capabilities");
@@ -161,6 +167,7 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
         pkg_deps.clone(),
         diag_sender,
         lint,
+        move_flavor.clone(),
         flavor,
         initialize_params.process_id,
     );
@@ -348,7 +355,7 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request::<F>(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, flavor);
+                        shutdown_req_received = on_request::<F>(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, move_flavor.clone(), flavor);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -390,6 +397,7 @@ fn on_request<F: MoveFlavor>(
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     shutdown_request_received: bool,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
 ) -> bool {
     if shutdown_request_received {
@@ -413,6 +421,7 @@ fn on_request<F: MoveFlavor>(
             request,
             ide_files_root.clone(),
             pkg_dependencies,
+            move_flavor,
             flavor,
         ),
         lsp_types::request::GotoDefinition::METHOD => {
@@ -439,8 +448,15 @@ fn on_request<F: MoveFlavor>(
                 request,
                 ide_files_root.clone(),
                 pkg_dependencies,
+                move_flavor,
                 flavor,
             );
+        }
+        lsp_types::request::PrepareRenameRequest::METHOD => {
+            on_prepare_rename_request(context, request);
+        }
+        lsp_types::request::Rename::METHOD => {
+            on_rename_request(context, request);
         }
         lsp_types::request::Shutdown::METHOD => {
             eprintln!("Shutdown request received");

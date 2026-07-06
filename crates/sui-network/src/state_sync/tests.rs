@@ -10,6 +10,7 @@ use crate::{
 };
 use anemo::{PeerId, Request};
 use anyhow::anyhow;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost::Message;
 use std::num::NonZeroUsize;
 use std::{
@@ -314,6 +315,7 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
         download_concurrency: NonZeroUsize::new(1).unwrap(),
         ingestion_url: Some(format!("file://{}", temp_dir.display())),
         remote_store_options: vec![],
+        remote_store_headers: vec![],
     };
     // Build and connect two nodes where Node 1 will be given access to an archive store
     // Node 2 will prune older checkpoints, so Node 1 is forced to backfill from the archive
@@ -701,7 +703,7 @@ async fn sync_with_checkpoints_watermark() {
     ));
 
     // Inject all the checkpoints to Peer 1
-    for (checkpoint, contents) in checkpoint_iter.zip(contents_iter) {
+    for (checkpoint, contents) in checkpoint_iter.zip_debug_eq(contents_iter) {
         store_1
             .insert_checkpoint_contents(&checkpoint, contents)
             .unwrap();
@@ -713,7 +715,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(1), async {
         for (checkpoint, contents) in ordered_checkpoints[2..]
             .iter()
-            .zip(contents.clone().into_iter().skip(2))
+            .zip_debug_eq(contents.clone().into_iter().skip(2))
         {
             assert_eq!(subscriber_1.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();
@@ -816,7 +818,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(10), async {
         for (checkpoint, contents) in ordered_checkpoints[2..]
             .iter()
-            .zip(contents.clone().into_iter().skip(2))
+            .zip_debug_eq(contents.clone().into_iter().skip(2))
         {
             assert_eq!(subscriber_2.recv().await.unwrap().data(), checkpoint.data());
             assert_eq!(subscriber_3.recv().await.unwrap().data(), checkpoint.data());
@@ -899,7 +901,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(3), async {
         for (checkpoint, contents) in ordered_checkpoints[1..]
             .iter()
-            .zip(contents.clone().into_iter().skip(1))
+            .zip_debug_eq(contents.clone().into_iter().skip(1))
         {
             assert_eq!(subscriber_4.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();
@@ -1351,27 +1353,21 @@ fn test_peer_score_failing_since_tracking() {
     score.update_failing_state();
     assert_eq!(score.failing_since.unwrap(), first_failing_since);
 
-    // Record a success - this should clear failing_since
+    // A single success does NOT clear failing_since while the windowed failure rate is still
+    // above the threshold (8 successes + 4 failures = 33% >= 30%, still failing).
     score.record_success(100, Duration::from_secs(1));
+    assert!(score.is_failing());
+    score.update_failing_state();
+    assert_eq!(score.failing_since.unwrap(), first_failing_since);
+
+    // failing_since is cleared only once the windowed failure rate drops back below the
+    // threshold (14 successes + 4 failures = ~22% < 30%), which update_failing_state detects.
+    for _ in 0..6 {
+        score.record_success(100, Duration::from_secs(1));
+    }
+    assert!(!score.is_failing());
+    score.update_failing_state();
     assert!(score.failing_since.is_none());
-
-    // Make failing again and verify update_failing_state doesn't clear it
-    // when is_failing() returns false due to lack of samples (not due to success)
-    let mut score2 = PeerScore::new(window, failure_rate);
-    for _ in 0..7 {
-        score2.record_success(100, Duration::from_secs(1));
-    }
-    for _ in 0..4 {
-        score2.record_failure();
-    }
-    score2.update_failing_state();
-    assert!(score2.failing_since.is_some());
-    let failing_since_before = score2.failing_since.unwrap();
-
-    // Simulate samples aging out by not adding new ones - update_failing_state
-    // should NOT clear failing_since (only record_success does that)
-    score2.update_failing_state();
-    assert_eq!(score2.failing_since, Some(failing_since_before));
 }
 
 #[test]

@@ -3,6 +3,7 @@
 
 use move_core_types::ident_str;
 use move_core_types::u256::U256;
+use rand::Rng;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
@@ -299,6 +300,18 @@ impl TestTransactionBuilder {
                 CallArg::SUI_SYSTEM_MUT,
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(stake_coin)),
                 CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
+            ],
+        )
+    }
+
+    pub fn call_unstaking(self, staked_sui: ObjectRef) -> Self {
+        self.move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.as_str(),
+            "request_withdraw_stake",
+            vec![
+                CallArg::SUI_SYSTEM_MUT,
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
             ],
         )
     }
@@ -665,6 +678,15 @@ impl TestTransactionBuilder {
 
     pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
         Transaction::from_data_and_signer(self.build(), vec![signer])
+    }
+
+    // ensure that transaction is unique
+    pub fn ensure_unique(mut self) -> Self {
+        let nonce: u64 = rand::thread_rng().r#gen();
+        self.ptb_builder
+            .force_separate_pure(nonce)
+            .expect("nonce serialization is infallible");
+        self
     }
 
     pub fn build_and_sign_multisig(

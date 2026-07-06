@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use bincode::serde::Compat;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as grpc;
 use sui_indexer_alt_framework::types::TypeTag;
 use sui_indexer_alt_framework::types::base_types::SuiAddress;
@@ -82,7 +83,7 @@ pub(super) fn batch_get_balances(
         .map_err(|e| db_error(e, "failed to batch get address balances"))?;
 
     let mut balances = Vec::with_capacity(cb_keys.len());
-    for ((cb, ab), key) in cbs.into_iter().zip(abs).zip(cb_keys) {
+    for ((cb, ab), key) in cbs.into_iter().zip_debug_eq(abs).zip_debug_eq(cb_keys) {
         let with_prefix = true;
         let coin_type = key.type_.to_canonical_string(with_prefix);
         let coin_balance = try_balance(

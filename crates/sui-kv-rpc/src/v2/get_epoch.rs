@@ -17,7 +17,7 @@ use sui_rpc_api::{
 use sui_sdk_types::ValidatorCommittee;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
-pub const READ_MASK_DEFAULT: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
+pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EPOCH;
 
 pub async fn get_epoch(
     mut client: BigTableClient,
@@ -80,7 +80,7 @@ pub async fn get_epoch(
         });
     }
     if read_mask.contains(Epoch::COMMITTEE_FIELD.name) {
-        message.committee = epoch_info.system_state.map(|system_state| {
+        message.committee = epoch_info.system_state.as_ref().map(|system_state| {
             let committee: ValidatorCommittee = system_state
                 .get_current_epoch_committee()
                 .committee()
@@ -88,6 +88,11 @@ pub async fn get_epoch(
                 .into();
             committee.into()
         });
+    }
+    if read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
+        message.system_state = epoch_info
+            .system_state
+            .map(|system_state| Box::new(system_state.into()));
     }
     Ok(GetEpochResponse::new(message))
 }
@@ -115,7 +120,7 @@ fn epoch_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     if mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name).is_some() {
         columns.push(col::PROTOCOL_VERSION);
     }
-    if mask.contains(Epoch::COMMITTEE_FIELD.name) {
+    if mask.contains(Epoch::COMMITTEE_FIELD.name) || mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
         columns.push(col::SYSTEM_STATE);
     }
 

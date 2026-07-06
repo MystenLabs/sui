@@ -133,7 +133,7 @@ fun vector_contains() {
     assert!(!vec.contains(&3));
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun destroy_empty() {
     vector<u64>[].destroy_empty();
     vector<R>[].destroy_empty();

@@ -17,6 +17,7 @@ use crate::sui_client::{SuiClient, SuiClientInner};
 use crate::sui_syncer::GrpcSyncedEvents;
 use crate::types::EthLog;
 use alloy::primitives::Address as EthAddress;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -193,7 +194,7 @@ where
                 .collect::<Vec<_>>();
 
             let mut actions = vec![];
-            for (log, opt_bridge_event) in logs.iter().zip(bridge_events) {
+            for (log, opt_bridge_event) in logs.iter().zip_debug_eq(bridge_events) {
                 if opt_bridge_event.is_none() {
                     // TODO: we probably should not miss any events, log for now.
                     metrics.eth_watcher_unrecognized_events.inc();

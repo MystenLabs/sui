@@ -79,7 +79,9 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound, get_authority_key_pair,
 };
-use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest, TransactionDigest};
+use sui_types::digests::{
+    ChainIdentifier, CheckpointDigest, ConsensusCommitDigest, TransactionDigest,
+};
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue as EffectsAccumulatorValue, TransactionEffects,
     TransactionEffectsAPI, TransactionEvents,
@@ -168,6 +170,11 @@ pub struct SuiTestAdapter {
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
     /// Mapping from task ID to a transaction digest, for use in named variable substitution.
     digest_enumeration: BTreeMap<u64, TransactionDigest>,
+    /// Mapping from a checkpoint's sequence number to its digest, for use in named variable
+    /// substitution as `@{cp_digest_N}`.
+    cp_digest_enumeration: BTreeMap<u64, CheckpointDigest>,
+    /// Tracks the global creation order of each object across all transactions.
+    creation_order: BTreeMap<ObjectID, u64>,
     next_fake: (u64, u64),
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
@@ -252,6 +259,7 @@ impl AdapterInitConfig {
         let SuiInitArgs {
             accounts,
             protocol_version,
+            chain,
             max_gas,
             shared_object_deletion,
             simulator,
@@ -279,6 +287,7 @@ impl AdapterInitConfig {
             .map(|v| v.into_iter().collect::<BTreeSet<_>>())
             .unwrap_or_default();
 
+        let chain = chain.unwrap_or(Chain::Unknown);
         let mut protocol_config = if let Some(protocol_version) = protocol_version {
             assert!(
                 protocol_version <= ProtocolVersion::max().as_u64(),
@@ -291,9 +300,9 @@ impl AdapterInitConfig {
                 "Do not set the protocol version to the max {}. It can lead to unanticipated test changes once the max version is bumped. Instead, leave it unset to always use the max version.",
                 protocol_version,
             );
-            ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
+            ProtocolConfig::get_for_version(protocol_version.into(), chain)
         } else {
-            ProtocolConfig::get_for_max_version_UNSAFE()
+            ProtocolConfig::get_for_version(ProtocolVersion::MAX, chain)
         };
         if enable_accumulators {
             protocol_config.enable_accumulators_for_testing();
@@ -402,7 +411,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         >,
     ) -> Option<String> {
         match &task.command {
-            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..)) => {
+            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..))
+            | TaskCommand::Subcommand(SuiSubcommand::BenchProgrammable(..)) => {
                 let data_str = std::fs::read_to_string(task.data.as_ref()?)
                     .ok()?
                     .trim()
@@ -498,7 +508,6 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
-        #[cfg(debug_assertions)]
         sui_types::transaction::clear_gasless_tokens_for_testing();
 
         let mut test_adapter = Self {
@@ -524,6 +533,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             default_syntax,
             object_enumeration: BiBTreeMap::new(),
             digest_enumeration: BTreeMap::new(),
+            cp_digest_enumeration: BTreeMap::new(),
+            creation_order: BTreeMap::new(),
             next_fake: (0, 0),
             // TODO: make this configurable
             gas_price: default_gas_price.unwrap_or(DEFAULT_GAS_PRICE),
@@ -750,6 +761,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             }};
             ($fake_id:ident) => {{ get_obj!($fake_id, None) }};
         }
+        let bench_programmable = matches!(&command, SuiSubcommand::BenchProgrammable(_));
         match command {
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
@@ -853,23 +865,15 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 token_type,
                 min_transfer,
             }) => {
-                #[cfg(debug_assertions)]
-                {
-                    let state = self.compiled_state();
-                    let type_tag = token_type
-                        .into_type_tag(&|s| Some(state.resolve_named_address(s)))
-                        .map_err(|e| anyhow::anyhow!("invalid gasless token type: {e}"))?;
-                    sui_types::transaction::add_gasless_token_for_testing(
-                        type_tag.to_canonical_string(true),
-                        min_transfer,
-                    );
-                    Ok(None)
-                }
-                #[cfg(not(debug_assertions))]
-                {
-                    let _ = (token_type, min_transfer);
-                    panic!("gasless-allow-token is only supported in debug builds")
-                }
+                let state = self.compiled_state();
+                let type_tag = token_type
+                    .into_type_tag(&|s| Some(state.resolve_named_address(s)))
+                    .map_err(|e| anyhow::anyhow!("invalid gasless token type: {e}"))?;
+                sui_types::transaction::add_gasless_token_for_testing(
+                    type_tag.to_canonical_string(true),
+                    min_transfer,
+                );
+                Ok(None)
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
@@ -881,7 +885,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             }
             SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
                 for _ in 0..count.unwrap_or(1) {
-                    self.executor.create_checkpoint().await?;
+                    let checkpoint = self.executor.create_checkpoint().await?;
+                    let summary = checkpoint.data();
+                    self.cp_digest_enumeration
+                        .insert(summary.sequence_number, *checkpoint.digest());
                 }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
@@ -1119,7 +1126,22 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 dry_run,
                 expiration,
                 inputs,
+            })
+            | SuiSubcommand::BenchProgrammable(ProgrammableTransactionCommand {
+                sender,
+                sponsor,
+                gas_budget,
+                address_balance_gas,
+                gas_price,
+                gas_payment,
+                dev_inspect,
+                dry_run,
+                expiration,
+                inputs,
             }) => {
+                if bench_programmable && (dev_inspect || dry_run) {
+                    bail!("bench ptb does not support dev-inspect or dry-run");
+                }
                 if dev_inspect && self.is_simulator() {
                     bail!("Dev inspect is not supported on simulator mode");
                 }
@@ -1207,6 +1229,27 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             tx_data
                         },
                     );
+                    if bench_programmable {
+                        let assigned_versions = AssignedVersions::default();
+                        let objects = self
+                            .executor
+                            .read_input_objects(transaction.clone(), assigned_versions)
+                            .await?;
+                        // only run benchmarks in release mode
+                        if !cfg!(debug_assertions) {
+                            let mut c = Criterion::default();
+                            let bench_name = format!("benchmark_tx_task_{number}");
+                            c.bench_function(&bench_name, |b| {
+                                let tx = transaction.clone();
+                                let objects = objects.clone();
+                                b.iter(|| {
+                                    self.executor
+                                        .prepare_txn(tx.clone(), objects.clone())
+                                        .unwrap();
+                                })
+                            });
+                        }
+                    }
                     self.execute_txn(transaction).await?
                 } else if dry_run {
                     let gas_price = gas_price.unwrap_or(self.gas_price);
@@ -1541,7 +1584,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 if !cfg!(debug_assertions) {
                     let mut c = Criterion::default();
 
-                    c.bench_function("benchmark_tx", |b| {
+                    let bench_name = format!("benchmark_tx_task_{number}");
+                    c.bench_function(&bench_name, |b| {
                         let tx = tx.clone();
                         let objects = objects.clone();
                         b.iter(|| {
@@ -1641,10 +1685,6 @@ impl SuiTestAdapter {
         &*self.executor
     }
 
-    pub fn into_executor(self) -> Box<dyn TransactionalAdapter> {
-        self.executor
-    }
-
     fn get_chain_identifier(&self) -> ChainIdentifier {
         self.get_checkpoint_by_sequence_number(0)
             .map(|cp| ChainIdentifier::from(*cp.digest()))
@@ -1693,6 +1733,10 @@ impl SuiTestAdapter {
 
         for (tid, digest) in &self.digest_enumeration {
             variables.insert(format!("digest_{tid}"), digest.to_string());
+        }
+
+        for (seq, digest) in &self.cp_digest_enumeration {
+            variables.insert(format!("cp_digest_{seq}"), digest.to_string());
         }
 
         variables
@@ -2064,6 +2108,8 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
+        self.record_creation_order(digest, &created_ids);
+
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
@@ -2153,11 +2199,7 @@ impl SuiTestAdapter {
     }
 
     async fn dry_run(&mut self, transaction: TransactionData) -> anyhow::Result<TxnSummary> {
-        let digest = transaction.digest();
-        let results = self
-            .executor
-            .dry_run_transaction_block(transaction, digest)
-            .await?;
+        let results = self.executor.dry_run_transaction_block(transaction).await?;
         let DryRunTransactionBlockResponse {
             effects, events, ..
         } = results;
@@ -2236,6 +2278,8 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
+        self.record_creation_order(effects.transaction_digest(), &created_ids);
+
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
@@ -2309,8 +2353,35 @@ impl SuiTestAdapter {
 
     // stable way of sorting objects by type. Does not however, produce a stable sorting
     // between objects of the same type
-    fn get_object_sorting_key(&self, id: &ObjectID) -> String {
-        match &self.get_object(id, None).unwrap().data {
+    fn record_creation_order(&mut self, digest: &TransactionDigest, created_ids: &[ObjectID]) {
+        if created_ids.is_empty() {
+            return;
+        }
+        let mut remaining: HashSet<ObjectID> = created_ids.iter().copied().collect();
+        let mut n = 0u64;
+        // We probe derive_id(digest, n) for increasing n until all created IDs are found.
+        // Internal Move operations may consume derive_id slots that don't appear in effects
+        // (e.g., objects created and deleted in the same transaction), so the number of slots
+        // can exceed the number of objects in effects. Use a generous hard cap; the warning
+        // in object_summary_output will flag if this is ever insufficient.
+        let max_probes = 2048u64;
+        while !remaining.is_empty() && n < max_probes {
+            let candidate = ObjectID::derive_id(*digest, n);
+            if remaining.remove(&candidate) {
+                self.creation_order
+                    .insert(candidate, self.creation_order.len() as u64);
+            }
+            n += 1;
+        }
+    }
+
+    // Sort objects by creation order, with ties broken by type. This is used to assign fake IDs in
+    // a stable way, so that test outputs are stable. Objects that have not been seen before (and
+    // thus have no creation order) will be sorted at the end, and among them the ones of the same
+    // type will be sorted together.
+    fn get_object_sorting_key(&self, id: &ObjectID) -> (u64, String, ObjectID) {
+        let creation_id = self.creation_order.get(id).copied().unwrap_or(u64::MAX);
+        let type_key = match &self.get_object(id, None).unwrap().data {
             object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
             object::Data::Package(pkg) => pkg
                 .serialized_module_map()
@@ -2318,7 +2389,10 @@ impl SuiTestAdapter {
                 .map(|s| s.as_str())
                 .collect::<Vec<_>>()
                 .join(","),
-        }
+        };
+        // ObjectID as final tiebreaker for objects with the same creation order and type
+        // (e.g., dynamic field objects whose IDs are derived from parent+key, not fresh_id).
+        (creation_id, type_key, *id)
     }
 
     pub(crate) fn fake_to_real_object_id(&self, fake_id: FakeID) -> Option<ObjectID> {
@@ -2770,7 +2844,6 @@ async fn create_validator_fullnode(
         .with_starting_objects(objects)
         .with_shared_network_config(&network_config)
         .insert_genesis_checkpoint()
-        .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
         .await;
@@ -2782,7 +2855,6 @@ async fn create_validator_fullnode(
         .with_shared_network_config(&network_config)
         .with_keypair(&fullnode_key_pair)
         .insert_genesis_checkpoint()
-        .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
         .await;

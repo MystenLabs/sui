@@ -1,8 +1,12 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-name: Setup sccache
-description: Configure sccache with S3 backend for CI builds with graceful degradation
+name: Setup Rust build environment
+description: >
+  Single source of truth for the Rust CI/release build environment.
+  On Linux runners: installs upstream mold and configures RUSTFLAGS to use it.
+  On any runner: configures sccache with S3 backend (graceful degradation if
+  AWS credentials are empty, e.g. fork PRs).
 
 inputs:
   aws-access-key-id:
@@ -11,6 +15,22 @@ inputs:
   aws-secret-access-key:
     description: AWS secret access key for S3 cache backend (empty for fork PRs)
     required: false
+  role-to-assume:
+    description: >
+      AWS IAM role ARN to assume via GitHub OIDC for the S3 cache backend.
+      Preferred over static keys; takes priority when both are set. The caller
+      must grant `permissions: id-token: write`. Empty on fork PRs / untrusted
+      contexts (graceful degradation to a local cache). See AWS_OIDC_ROLES.md.
+    required: false
+  role-duration-seconds:
+    description: >
+      STS session duration (seconds) for the OIDC role assumption. Empty falls
+      back to configure-aws-credentials' default (3600 = 1h). Raise it for builds
+      that outlive a 1h session and would otherwise fail with an sccache S3
+      `ExpiredToken` mid-build (e.g. the slow macos-latest-large release leg). The
+      assumed role's MaxSessionDuration must be >= this value
+      (sui-sccache-rw-github is set to 14400).
+    required: false
   key-prefix:
     description: S3 key prefix for cache partitioning (e.g., ubuntu-ghcloud, windows-ghcloud)
     required: true
@@ -18,16 +38,90 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Configure AWS credentials
-      if: inputs.aws-access-key-id != ''
+    # ---- Linux: install upstream mold linker ----
+    #
+    # Why upstream, not apt? Ubuntu 22.04 apt ships mold 1.0.3 (Oct 2022) which
+    # has known unsoundness bugs that cause SIGSEGV in large Rust workspaces
+    # (reproduced against Sui's test suite in Docker). Ubuntu 24.04 apt ships
+    # mold 2.30. Either way, pinning to a specific upstream binary gives us
+    # distro-independent, version-deterministic linking.
+    #
+    # Static binary: works on any glibc >= 2.17.
+    - name: Install mold linker (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        MOLD_VERSION: '2.40.4'
+        SHA256_X86_64: '4c999e19ffa31afa5aa429c679b665d5e2ca5a6b6832ad4b79668e8dcf3d8ec1'
+        SHA256_AARCH64: 'c799b9ccae8728793da2186718fbe53b76400a9da396184fac0c64aa3298ec37'
+      run: |
+        set -euo pipefail
+        arch=$(uname -m)
+        case "$arch" in
+          x86_64)   mold_arch='x86_64-linux';   expected_sha="$SHA256_X86_64" ;;
+          aarch64)  mold_arch='aarch64-linux';  expected_sha="$SHA256_AARCH64" ;;
+          *)        echo "unsupported arch: $arch"; exit 1 ;;
+        esac
+        url="https://github.com/rui314/mold/releases/download/v${MOLD_VERSION}/mold-${MOLD_VERSION}-${mold_arch}.tar.gz"
+        tmp="$(mktemp -d)"
+        for attempt in 1 2 3; do
+          if curl -fsSL --retry 3 --retry-delay 2 -o "$tmp/mold.tar.gz" "$url"; then break; fi
+          echo "mold download attempt $attempt failed"; sleep 5
+          [ "$attempt" = 3 ] && exit 1
+        done
+        echo "${expected_sha}  ${tmp}/mold.tar.gz" | sha256sum -c -
+        sudo tar xz -C /opt -f "$tmp/mold.tar.gz"
+        sudo ln -sf "/opt/mold-${MOLD_VERSION}-${mold_arch}/bin/mold" /usr/local/bin/mold
+        sudo ln -sf "/opt/mold-${MOLD_VERSION}-${mold_arch}/bin/mold" /usr/local/bin/ld.mold
+        mold --version
+
+    # ---- Linux: configure RUSTFLAGS to use mold ----
+    #
+    # RUSTFLAGS env fully replaces [build].rustflags from .cargo/config.toml,
+    # so the baseline flags from that file are replicated here alongside the
+    # -C link-arg=-fuse-ld=mold flag. Keep in sync with .cargo/config.toml:
+    # any future change to [build].rustflags in that file must also be
+    # reflected in the value below.
+    - name: Configure RUSTFLAGS for mold (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        echo "RUSTFLAGS=-C force-frame-pointers=yes -C force-unwind-tables=yes -A unknown_lints -A mismatched_lifetime_syntaxes -C link-arg=-fuse-ld=mold" >> "$GITHUB_ENV"
+
+    # ---- Configure AWS credentials (any OS) ----
+    #
+    # Two auth paths, in priority order:
+    #   1. role-to-assume set -> assume the role via GitHub OIDC (no long-lived
+    #      keys). The caller must grant `permissions: id-token: write`.
+    #   2. static keys set    -> legacy access-key auth (being migrated off).
+    # When neither is set (fork PRs / untrusted contexts), every S3 step below is
+    # skipped and the build falls back to a local sccache. Keeping both paths lets
+    # callers migrate to OIDC one workflow/job at a time.
+    - name: Configure AWS credentials (OIDC)
+      if: inputs.role-to-assume != ''
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        # Identify the run/attempt in CloudTrail's AssumeRoleWithWebIdentity events.
+        role-session-name: sui-sccache-${{ github.run_id }}-${{ github.run_attempt }}
+        # Empty -> action default (3600 = 1h). Set higher for builds that run
+        # past 1h (the role's MaxSessionDuration must allow the requested value).
+        role-duration-seconds: ${{ inputs.role-duration-seconds }}
+        # Fail closed if STS ever returns creds for an unexpected account.
+        allowed-account-ids: '011083325127'
+        aws-region: us-west-2
+
+    - name: Configure AWS credentials (static keys)
+      if: inputs.role-to-assume == '' && inputs.aws-access-key-id != ''
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
       with:
         aws-access-key-id: ${{ inputs.aws-access-key-id }}
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        allowed-account-ids: '011083325127'
         aws-region: us-west-2
 
     - name: Set sccache environment
-      if: inputs.aws-access-key-id != ''
+      if: inputs.role-to-assume != '' || inputs.aws-access-key-id != ''
       shell: bash
       run: |
         echo "SCCACHE_BUCKET=mystenlabs-sccache" >> "$GITHUB_ENV"
@@ -35,7 +129,7 @@ runs:
         echo "SCCACHE_S3_KEY_PREFIX=${{ inputs.key-prefix }}" >> "$GITHUB_ENV"
 
     - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
-      if: inputs.aws-access-key-id != ''
+      if: inputs.role-to-assume != '' || inputs.aws-access-key-id != ''
       id: sccache
       continue-on-error: true
 

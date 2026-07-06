@@ -8,6 +8,7 @@ use async_graphql::dataloader::Loader;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use move_core_types::language_storage::StructTag;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_indexer_alt_schema::displays::StoredDisplay;
 use sui_indexer_alt_schema::schema::sum_displays;
 
@@ -49,7 +50,7 @@ impl Loader<DisplayKey> for PgReader {
 
         Ok(keys
             .iter()
-            .zip(types)
+            .zip_debug_eq(types)
             .filter_map(|(k, t)| Some((k.clone(), raw_type_to_stored.get(&t).cloned()?)))
             .collect())
     }

@@ -1,13 +1,13 @@
 //# publish
-module 0x5.A {
-    three(): u64 * u64 * u64 {
+mvir 0x5::A {
+    fun three(): u64 * u64 * u64 {
     label b0:
         return 0, 1, 2;
     }
 
-    public pop() {
+    public fun pop() {
     label b0:
-        Self.three();
+        Self::three();
         _, _ = ();
         _ = ();
         return;
@@ -16,12 +16,12 @@ module 0x5.A {
 
 
 //# run
-module 0x43.m {
-import 0x5.A;
+mvir 0x43::m {
+import 0x5::A;
 
-entry foo() {
+entry fun foo() {
 label b0:
-    A.pop();
+    A::pop();
     return;
 }
 }

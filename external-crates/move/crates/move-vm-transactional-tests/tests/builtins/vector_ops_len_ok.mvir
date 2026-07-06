@@ -1,10 +1,10 @@
 //# run
-module 0x5.m {
+mvir 0x5::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     assert(vec_len<u64>(&v) == 0, 0);
 
     return;
@@ -12,12 +12,12 @@ label b0:
 
 }
 //# run
-module 0x6.m {
+mvir 0x6::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_1<u64>(42);
+    v = vector<u64; 1>(42);
     assert(vec_len<u64>(&v) == 1, 1);
 
     return;
@@ -25,12 +25,12 @@ label b0:
 
 }
 //# run
-module 0x7.m {
+mvir 0x7::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_2<u64>(42, 43);
+    v = vector<u64; 2>(42, 43);
     assert(vec_len<u64>(&v) == 2, 2);
 
     return;

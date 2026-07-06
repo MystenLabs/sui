@@ -1,0 +1,6 @@
+[package]
+name = "refinements"
+edition = "2024.beta"
+
+[addresses]
+refinements = "0x0"

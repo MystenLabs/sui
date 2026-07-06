@@ -21,7 +21,7 @@ use sui::client_commands::{
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::RpcArgs;
 use sui_keys::key_identity::KeyIdentity;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_rpc_api::Client;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::effects::TransactionEffectsAPI;
@@ -2905,6 +2905,29 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
+    let skip_signing_tx = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(address1),
+        sui_coin_object_id: coin,
+        amount: Some(1),
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            serialize_signed_transaction: true,
+            skip_signing: true,
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data) = skip_signing_tx
+    else {
+        panic!("Expected SerializedSignedTransaction result");
+    };
+    assert!(sender_signed_data.tx_signatures().is_empty());
+
     // use alias for transfer
     SuiClientCommands::TransferSui {
         to: KeyIdentity::Alias(alias1),
@@ -3488,6 +3511,80 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
     } else {
         panic!("PayAllSui test failed");
     }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_send_funds_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::max(),
+        test_cluster.get_chain_identifier().chain(),
+    );
+    if !protocol_config.enable_address_balance_gas_payments() {
+        return Ok(());
+    }
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+    let amount = 1_000_000_000u64;
+
+    let send_funds = SuiClientCommands::SendFunds {
+        to: recipient1.clone(),
+        amount: Some(amount),
+        all_coins: false,
+        coin_type: None,
+        stateless: false,
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = send_funds else {
+        panic!("SendFunds test failed");
+    };
+    assert!(response.effects.status().is_ok());
+
+    // `send-funds` deposits into the recipient's address balance, not a Coin<T>.
+    let balance = client.get_balance(address2, &GAS::type_()).await?;
+    assert_eq!(balance.address_balance(), amount);
+    assert_eq!(balance.coin_balance(), 0);
+
+    let balance_output = SuiClientCommands::Balance {
+        address: Some(recipient1.clone()),
+        coin_type: None,
+        with_coins: false,
+    }
+    .execute(context)
+    .await?
+    .to_string();
+    assert!(
+        balance_output.contains(&amount.to_string()),
+        "{balance_output}"
+    );
+
+    let balance_with_coins_output = SuiClientCommands::Balance {
+        address: Some(recipient1.clone()),
+        coin_type: None,
+        with_coins: true,
+    }
+    .execute(context)
+    .await?
+    .to_string();
+    assert!(
+        balance_with_coins_output.contains("address balance"),
+        "{balance_with_coins_output}"
+    );
+    assert!(
+        balance_with_coins_output.contains(&amount.to_string()),
+        "{balance_with_coins_output}"
+    );
 
     Ok(())
 }
@@ -4214,6 +4311,67 @@ async fn test_tree_shaking_package_with_direct_dependency() -> Result<(), anyhow
     assert!(
         linkage_table_b.contains_key(&package_a_id),
         "Package B should depend on A"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_with_duplicate_dependency_names() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish two packages with the same declared package name. The package system disambiguates
+    // them with package graph IDs like `a` and `a_1`; tree shaking needs to use that same key space.
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
+    let (package_a_alt_id, _) = test.test_publish_package("A_ALT", false).await?;
+
+    // `DuplicateDirect` declares both packages and references both. Tree shaking needs to keep
+    // both package graph IDs, even though both packages have the same declared package name.
+    let (package_duplicate_id, _) = test.test_publish_package("DuplicateDirect", false).await?;
+    let linkage_table = test.fetch_linkage_table(package_duplicate_id).await;
+
+    assert!(
+        linkage_table.contains_key(&package_a_id),
+        "Package DuplicateDirect should depend on A"
+    );
+    assert!(
+        linkage_table.contains_key(&package_a_alt_id),
+        "Package DuplicateDirect should depend on A_ALT"
+    );
+    assert_eq!(
+        linkage_table.len(),
+        2,
+        "Package DuplicateDirect should have exactly two dependencies"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_with_duplicate_dependency_names_drops_unused()
+-> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish two packages with the same declared package name. `DuplicateSingle` declares both
+    // dependencies but references only A, so A_ALT must be dropped after tree shaking.
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
+    let (package_a_alt_id, _) = test.test_publish_package("A_ALT", false).await?;
+
+    let (package_duplicate_id, _) = test.test_publish_package("DuplicateSingle", false).await?;
+    let linkage_table = test.fetch_linkage_table(package_duplicate_id).await;
+
+    assert!(
+        linkage_table.contains_key(&package_a_id),
+        "Package DuplicateSingle should depend on A"
+    );
+    assert!(
+        !linkage_table.contains_key(&package_a_alt_id),
+        "Package DuplicateSingle should tree shake the unused A_ALT dependency"
+    );
+    assert_eq!(
+        linkage_table.len(),
+        1,
+        "Package DuplicateSingle should have exactly one dependency"
     );
 
     Ok(())

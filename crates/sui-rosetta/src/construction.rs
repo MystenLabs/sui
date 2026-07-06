@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -11,7 +12,7 @@ use fastcrypto::hash::HashFunction;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
-    Bcs, ExecuteTransactionRequest, SimulateTransactionRequest, Transaction, UserSignature,
+    ExecuteTransactionRequest, SimulateTransactionRequest, UserSignature,
     simulate_transaction_request::TransactionChecks,
 };
 
@@ -23,21 +24,23 @@ use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::{
     VerifiedDigestCache, verify_sender_signed_data_message_signatures,
 };
-use sui_types::transaction::{TransactionData, TransactionDataAPI};
+use sui_types::transaction::TransactionDataAPI;
 
 use crate::errors::Error;
-use crate::operations::Operations;
+use crate::operations::reconstruct_operations;
 use crate::types::internal_operation::{PayCoin, TransactionObjectData, TryConstructTransaction};
+use crate::types::transaction_envelope;
 use crate::types::{
-    Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
-    ConstructionDeriveResponse, ConstructionHashRequest, ConstructionMetadata,
-    ConstructionMetadataRequest, ConstructionMetadataResponse, ConstructionParseRequest,
-    ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
-    ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
-    InternalOperation, MetadataOptions, SignatureType, SigningPayload, TransactionIdentifier,
-    TransactionIdentifierResponse,
+    Amount, AuxData, ConstructionCombineRequest, ConstructionCombineResponse,
+    ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
+    ConstructionMetadata, ConstructionMetadataRequest, ConstructionMetadataResponse,
+    ConstructionParseRequest, ConstructionParseResponse, ConstructionPayloadsRequest,
+    ConstructionPayloadsResponse, ConstructionPreprocessRequest, ConstructionPreprocessResponse,
+    ConstructionSubmitRequest, InternalOperation, MetadataOptions, RosettaTransaction,
+    SignatureType, SigningPayload, TransactionIdentifier, TransactionIdentifierResponse,
 };
 use crate::{OnlineServerContext, SuiEnv};
+use move_core_types::language_storage::TypeTag;
 
 // This module implements the [Mesh Construction API](https://docs.cdp.coinbase.com/mesh/mesh-api-spec/api-reference#construction)
 
@@ -66,23 +69,26 @@ pub async fn payloads(
 ) -> Result<ConstructionPayloadsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let metadata = request.metadata.ok_or(Error::MissingMetadata)?;
-    let address = metadata.sender;
 
-    let data = request
-        .operations
-        .into_internal()?
-        .try_into_data(metadata)?;
+    let internal = request.operations.into_internal()?;
+    let data = internal.clone().try_into_data(metadata)?;
+    let wrapper = RosettaTransaction {
+        transaction: transaction_envelope::encode_inner_proto(&data),
+        signatures: vec![],
+        aux: internal.aux(),
+    };
+    let unsigned = transaction_envelope::encode(&wrapper)?;
+
+    let sender = data.sender();
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), data);
-    let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
-
     let mut hasher = DefaultHash::default();
-    hasher.update(bcs::to_bytes(&intent_msg).expect("Message serialization should not fail"));
+    bcs::serialize_into(&mut hasher, &intent_msg).expect("Message serialization should not fail");
     let digest = hasher.finalize().digest;
 
     Ok(ConstructionPayloadsResponse {
-        unsigned_transaction: Hex::from_bytes(&intent_msg_bytes),
+        unsigned_transaction: unsigned,
         payloads: vec![SigningPayload {
-            account_identifier: address.into(),
+            account_identifier: sender.into(),
             hex_bytes: Hex::encode(digest),
             signature_type: Some(SignatureType::Ed25519),
         }],
@@ -98,8 +104,11 @@ pub async fn combine(
     WithRejection(Json(request), _): WithRejection<Json<ConstructionCombineRequest>, Error>,
 ) -> Result<ConstructionCombineResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let unsigned_tx = request.unsigned_transaction.to_vec()?;
-    let intent_msg: IntentMessage<TransactionData> = bcs::from_bytes(&unsigned_tx)?;
+
+    let unsigned = transaction_envelope::decode(&request.unsigned_transaction)?;
+    let proto = transaction_envelope::decode_inner_proto(&unsigned.transaction)?;
+    let data = transaction_envelope::proto_to_transaction_data(proto)?;
+
     let sig = request
         .signatures
         .first()
@@ -113,13 +122,11 @@ pub async fn combine(
         }
         .flag(),
     ];
+    let generic_sig_bytes = [&*flag, &*sig_bytes, &*pub_key].concat();
+    let generic_sig = GenericSignature::from_bytes(&generic_sig_bytes)?;
 
-    let signed_tx = sui_types::transaction::Transaction::from_generic_sig_data(
-        intent_msg.value,
-        vec![GenericSignature::from_bytes(
-            &[&*flag, &*sig_bytes, &*pub_key].concat(),
-        )?],
-    );
+    let signed_tx =
+        sui_types::transaction::Transaction::from_generic_sig_data(data, vec![generic_sig]);
     // TODO: this will likely fail with zklogin authenticator, since we do not know the current epoch.
     // As long as coinbase doesn't need to use zklogin for custodial wallets this is okay.
     let place_holder_epoch = 0;
@@ -131,10 +138,18 @@ pub async fn combine(
         // TODO: This will fail for tx sent from aliased addresses.
         vec![],
     )?;
-    let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
+
+    // Pass the unchanged proto bytes and aux data through to the signed
+    // wrapper. Signatures live alongside; the inner transaction (and its
+    // aux data) is identical to what came in.
+    let signed_wrapper = RosettaTransaction {
+        transaction: unsigned.transaction,
+        signatures: vec![Hex::from_bytes(&generic_sig_bytes)],
+        aux: unsigned.aux,
+    };
 
     Ok(ConstructionCombineResponse {
-        signed_transaction: Hex::from_bytes(&signed_tx_bytes),
+        signed_transaction: transaction_envelope::encode(&signed_wrapper)?,
     })
 }
 
@@ -147,24 +162,41 @@ pub async fn submit(
     WithRejection(Json(request), _): WithRejection<Json<ConstructionSubmitRequest>, Error>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let signed_tx: sui_types::transaction::Transaction =
-        bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
 
-    let signatures = signed_tx
-        .tx_signatures()
+    let wrapper = transaction_envelope::decode(&request.signed_transaction)?;
+    if wrapper.signatures.is_empty() {
+        return Err(Error::DataError(
+            "cannot submit an unsigned transaction: wrapper carries no signatures".to_string(),
+        ));
+    }
+    // The wire-form proto has structured fields populated and bcs cleared,
+    // and gRPC accepts the structured form directly.
+    let proto_transaction = transaction_envelope::decode_inner_proto(&wrapper.transaction)?;
+
+    // Carry signatures straight from the wrapper.
+    let signatures = wrapper
+        .signatures
         .iter()
-        .map(UserSignature::from)
-        .collect();
-
-    let tx_data = signed_tx.into_data().into_inner().intent_message.value;
-    let proto_transaction =
-        Transaction::default().with_bcs(Bcs::default().with_value(bcs::to_bytes(&tx_data)?));
+        .map(|sig_hex| {
+            let bytes = sig_hex.to_vec()?;
+            let generic = GenericSignature::from_bytes(&bytes)?;
+            Ok::<UserSignature, Error>(UserSignature::from(&generic))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
 
     // According to RosettaClient.rosseta_flow() (see tests), this transaction has already passed
     // through a dry_run with a possibly invalid budget (metadata endpoint), but the requirements
     // are that it should pass from there and fail here.
+    //
+    // The balance-change read mask lets us verify, online, that a PayCoin
+    // wrapper's currency label matches the coin the transaction actually
+    // moves — the one part of the aux data that is fundamentally
+    // unverifiable offline (the source coin's on-chain type is not in the PTB).
     let request = SimulateTransactionRequest::new(proto_transaction.clone())
-        .with_read_mask(FieldMask::from_paths(["transaction.effects.status"]))
+        .with_read_mask(FieldMask::from_paths([
+            "transaction.effects.status",
+            "transaction.balance_changes",
+        ]))
         .with_checks(TransactionChecks::Enabled)
         .with_do_gas_selection(false);
 
@@ -183,6 +215,22 @@ pub async fn submit(
             effects.status().error().clone(),
         )));
     };
+
+    // Close the offline label-vs-reality gap (§7.7): if the wrapper claims
+    // a PayCoin currency, require the simulated balance changes to contain a
+    // non-SUI delta of that exact coin type. Otherwise the currency label
+    // disagrees with what the transaction actually moves — reject before
+    // broadcast. FSS validator / AtMost-cap online verification is deferred for
+    // v1 (those labels are display-only — the signed PTB determines execution,
+    // and `/block` re-derives the truth from chain).
+    verify_pay_coin_currency(
+        &wrapper.aux,
+        response
+            .transaction()
+            .balance_changes()
+            .iter()
+            .map(|bc| bc.coin_type()),
+    )?;
 
     let mut client = context.client.clone();
     let mut execution_client = client.execution_client();
@@ -246,8 +294,29 @@ pub async fn hash(
     WithRejection(Json(request), _): WithRejection<Json<ConstructionHashRequest>, Error>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let tx_bytes = request.signed_transaction.to_vec()?;
-    let tx: sui_types::transaction::Transaction = bcs::from_bytes(&tx_bytes)?;
+
+    let wrapper = transaction_envelope::decode(&request.signed_transaction)?;
+    if wrapper.signatures.is_empty() {
+        return Err(Error::DataError(
+            "cannot hash an unsigned transaction: wrapper carries no signatures".to_string(),
+        ));
+    }
+    let proto = transaction_envelope::decode_inner_proto(&wrapper.transaction)?;
+    let data = transaction_envelope::proto_to_transaction_data(proto)?;
+
+    // sui_types::transaction::Transaction::digest() is a hash over
+    // bcs(TransactionData) with the intent prefix — signatures don't affect it.
+    // Reconstruct the signatures purely to satisfy the constructor; the digest
+    // would be identical with a dummy signature too.
+    let signatures = wrapper
+        .signatures
+        .iter()
+        .map(|sig_hex| {
+            let bytes = sig_hex.to_vec()?;
+            GenericSignature::from_bytes(&bytes).map_err(Error::from)
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let tx = sui_types::transaction::Transaction::from_generic_sig_data(data, signatures);
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier { hash: *tx.digest() },
@@ -284,6 +353,18 @@ pub async fn metadata(
         InternalOperation::PaySui(_) | InternalOperation::Stake(_)
     );
 
+    let needed_objects = option
+        .internal_operation
+        .try_fetch_needed_objects(&mut context.client.clone(), Some(gas_price), budget)
+        .await?;
+
+    // Gasless ("free tier") PayCoin: zero the gas price so the downstream tx is recognized as
+    // gasless (`is_gasless_transaction` requires `price == 0`). Priced address-balance gas keeps
+    // `gas_price > 0`.
+    if needed_objects.is_gasless() {
+        gas_price = 0;
+    }
+
     let TransactionObjectData {
         gas_coins,
         objects,
@@ -293,10 +374,9 @@ pub async fn metadata(
         address_balance_withdrawal,
         fss_object_count,
         redeem_token_amount,
-    } = option
-        .internal_operation
-        .try_fetch_needed_objects(&mut context.client.clone(), Some(gas_price), budget)
-        .await?;
+        redeem_plan,
+        bind_epoch,
+    } = needed_objects;
 
     // For backwards compatibility during rolling deployments, populate extra_gas_coins.
     // Old clients expect this field to be present.
@@ -308,9 +388,21 @@ pub async fn metadata(
         vec![]
     };
 
-    // Fetch epoch and chain_id for address-balance gas transactions
-    let (epoch, chain_id) = if gas_coins.is_empty() || address_balance_withdrawal > 0 {
-        let epoch = crate::get_current_epoch(&mut context.client.clone()).await?;
+    // Fetch epoch and chain_id for address-balance gas transactions.
+    //
+    // Prefer `bind_epoch` (atomic with the rate snapshot from
+    // `get_validator_set_snapshot`) over a separate `get_current_epoch` RPC.
+    // If both are needed and `bind_epoch` is set, reusing it both saves an
+    // RPC and guarantees `metadata.epoch == bind_epoch`. Without this, an
+    // epoch transition between the two RPCs would leave them disagreeing,
+    // causing the bind-epoch mismatch check at signing time to reject the
+    // metadata even though both reads were individually valid.
+    let needs_address_balance_metadata = gas_coins.is_empty() || address_balance_withdrawal > 0;
+    let (epoch, chain_id) = if needs_address_balance_metadata {
+        let epoch = match bind_epoch {
+            Some(e) => e,
+            None => crate::get_current_epoch(&mut context.client.clone()).await?,
+        };
         let chain_id_str =
             sui_types::digests::CheckpointDigest::new(*context.chain_id.as_bytes()).base58_encode();
         (Some(epoch), Some(chain_id_str))
@@ -334,6 +426,8 @@ pub async fn metadata(
             chain_id,
             fss_object_count,
             redeem_token_amount,
+            redeem_plan,
+            bind_epoch,
         },
         suggested_fee: vec![Amount::new(budget as i128, None)],
     })
@@ -349,31 +443,116 @@ pub async fn parse(
 ) -> Result<ConstructionParseResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let (data, sender) = if request.signed {
-        let tx: sui_types::transaction::Transaction =
-            bcs::from_bytes(&request.transaction.to_vec()?)?;
-        let intent = tx.into_data().intent_message().value.clone();
-        let sender = intent.sender();
-        (intent, sender)
-    } else {
-        let intent: IntentMessage<TransactionData> =
-            bcs::from_bytes(&request.transaction.to_vec()?)?;
-        let sender = intent.value.sender();
-        (intent.value, sender)
-    };
-    let account_identifier_signers = if request.signed {
-        vec![sender.into()]
+    // /parse reconstructs operations *from the transaction* (the same parser
+    // the indexing/`/block` path uses), then applies the wrapper's aux data
+    // (the labels the PTB cannot encode). The PTB fields are signature-covered;
+    // the aux-data labels are server-supplied (PayCoin currency is verified
+    // online in `/submit`, FSS labels are display-only).
+    let wrapper = transaction_envelope::decode(&request.transaction)?;
+    let (aux, transaction, signed) = (wrapper.aux, wrapper.transaction, request.signed);
+
+    let proto = transaction_envelope::decode_inner_proto(&transaction)?;
+    let operations = reconstruct_operations(&proto, &aux, None)?;
+
+    // Signers come from the transaction sender, never the aux data.
+    let account_identifier_signers = if signed {
+        vec![
+            SuiAddress::from_str(proto.sender())
+                .map_err(|e| Error::DataError(format!("invalid transaction sender: {e}")))?
+                .into(),
+        ]
     } else {
         vec![]
     };
-    let proto_tx: Transaction = data.into();
-    let tx_kind = proto_tx
-        .kind
-        .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?;
-    let operations = Operations::new(Operations::from_transaction(tx_kind, sender, None)?);
+
+    // Force a full `TransactionData` decode so envelopes with a valid-looking
+    // `kind` but malformed gas payment / expiration / etc. are rejected here
+    // rather than at `/hash` / `/combine` / `/submit`. `/parse` is the spec's
+    // sanity check; it must surface structural decode failures the same way
+    // the downstream endpoints would.
+    let _ = transaction_envelope::proto_to_transaction_data(proto)?;
+
     Ok(ConstructionParseResponse {
         operations,
         account_identifier_signers,
         metadata: None,
     })
+}
+
+/// For a `PayCoin` aux-data label, require that the transaction's (simulated)
+/// balance changes actually move a non-SUI coin of the labelled type. This is
+/// the one part of the aux data that cannot be verified offline — the source
+/// coin's on-chain type is not encoded in the PTB — so it is checked online in
+/// `/submit` against the simulate response. Non-`PayCoin` aux data is a
+/// no-op.
+fn verify_pay_coin_currency<'a>(
+    aux: &AuxData,
+    moved_coin_types: impl IntoIterator<Item = &'a str>,
+) -> Result<(), Error> {
+    let AuxData::PayCoin { currency } = aux else {
+        return Ok(());
+    };
+    let want = TypeTag::from_str(&currency.metadata.coin_type)
+        .map_err(|e| Error::DataError(format!("invalid PayCoin currency coin_type: {e}")))?;
+    let sui = TypeTag::from_str("0x2::sui::SUI").expect("0x2::sui::SUI is a valid type tag");
+    let matched = moved_coin_types.into_iter().any(|ct| {
+        TypeTag::from_str(ct)
+            .map(|t| t == want && t != sui)
+            .unwrap_or(false)
+    });
+    if matched {
+        Ok(())
+    } else {
+        Err(Error::DataError(format!(
+            "PayCoin currency {} does not match any non-SUI balance change in the simulated \
+             transaction",
+            currency.metadata.coin_type
+        )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Currency, CurrencyMetadata};
+
+    fn pay_coin(coin_type: &str) -> AuxData {
+        AuxData::PayCoin {
+            currency: Currency {
+                symbol: "USDC".to_string(),
+                decimals: 6,
+                metadata: CurrencyMetadata {
+                    coin_type: coin_type.to_string(),
+                },
+            },
+        }
+    }
+
+    /// §12 test 14: the `/submit` PayCoin currency check accepts a balance
+    /// change of the labelled coin type and rejects when only SUI / a
+    /// different coin moves.
+    #[test]
+    fn test_verify_pay_coin_currency() {
+        let usdc = "0x5::usdc::USDC";
+        let aux = pay_coin(usdc);
+
+        // Labelled coin present among the balance changes → ok.
+        assert!(verify_pay_coin_currency(&aux, ["0x2::sui::SUI", usdc]).is_ok());
+
+        // A different non-SUI coin moves (currency label disagrees with
+        // reality) → reject.
+        let err = verify_pay_coin_currency(&aux, ["0x2::sui::SUI", "0x9::other::OTHER"])
+            .expect_err("mismatched currency must be rejected");
+        assert!(format!("{err:?}").contains("does not match"));
+
+        // Only SUI moves → reject.
+        assert!(verify_pay_coin_currency(&aux, ["0x2::sui::SUI"]).is_err());
+
+        // A PayCoin label that (wrongly) names SUI never matches — SUI is
+        // explicitly excluded as a non-SUI delta.
+        assert!(verify_pay_coin_currency(&pay_coin("0x2::sui::SUI"), ["0x2::sui::SUI"]).is_err());
+
+        // Non-PayCoin aux data is a no-op regardless of balance changes.
+        assert!(verify_pay_coin_currency(&AuxData::None, std::iter::empty()).is_ok());
+    }
 }

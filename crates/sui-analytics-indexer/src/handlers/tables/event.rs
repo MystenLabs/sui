@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use move_core_types::annotated_value::MoveValue;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_types::base_types::EpochId;
@@ -16,6 +15,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use sui_package_resolver::PackageStoreWithLruCache;
 use sui_package_resolver::Resolver;
 use sui_rpc_resolver::package_store::RpcPackageStore;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 
 use crate::Row;
 use crate::pipeline::Pipeline;
@@ -72,7 +72,7 @@ impl Processor for EventProcessor {
                         ))
                         .await?;
 
-                    let move_value = MoveValue::simple_deserialize(contents, &layout)?;
+                    let move_value = BoundedVisitor::deserialize_value(contents, &layout)?;
                     let (_, event_json) = type_and_fields_from_move_event_data(move_value)?;
 
                     let row = EventRow {

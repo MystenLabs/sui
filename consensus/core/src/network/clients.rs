@@ -50,8 +50,8 @@ where
         &self,
         peer: PeerId,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         // A validator node will always talk via the validator interface to another authority.
@@ -66,8 +66,8 @@ where
                 .fetch_blocks(
                     authority,
                     block_refs,
-                    highest_accepted_rounds,
-                    breadth_first,
+                    fetch_after_rounds,
+                    fetch_missing_ancestors,
                     timeout,
                 )
                 .await
@@ -75,7 +75,15 @@ where
             let client = self.observer_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Observer client not available".to_string())
             })?;
-            client.fetch_blocks(peer, block_refs, timeout).await
+            client
+                .fetch_blocks(
+                    peer,
+                    block_refs,
+                    fetch_after_rounds,
+                    fetch_missing_ancestors,
+                    timeout,
+                )
+                .await
         }
     }
 
@@ -163,8 +171,8 @@ where
         &self,
         peer: PeerId,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         // A validator node will always talk via the validator interface to another authority.
@@ -179,8 +187,8 @@ where
                 .fetch_blocks(
                     authority,
                     block_refs,
-                    highest_accepted_rounds,
-                    breadth_first,
+                    fetch_after_rounds,
+                    fetch_missing_ancestors,
                     timeout,
                 )
                 .await
@@ -188,7 +196,15 @@ where
             let client = self.observer_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Observer client not available".to_string())
             })?;
-            client.fetch_blocks(peer, block_refs, timeout).await
+            client
+                .fetch_blocks(
+                    peer,
+                    block_refs,
+                    fetch_after_rounds,
+                    fetch_missing_ancestors,
+                    timeout,
+                )
+                .await
         }
     }
 }

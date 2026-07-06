@@ -311,44 +311,8 @@ mod checked {
             self.reference_gas_price
         }
 
-        // Check whether gas arguments are legit:
-        // 1. Gas object has an address owner.
-        // 2. Gas budget is between min and max budget allowed
-        // 3. Gas balance (all gas coins together) is bigger or equal to budget
-        pub(crate) fn check_gas_balance(
-            &self,
-            gas_objs: &[&ObjectReadResult],
-            gas_budget: u64,
-            available_address_balance_gas: u64,
-        ) -> UserInputResult {
-            self.check_gas_objects(gas_objs)?;
-            self.check_gas_data(gas_objs, gas_budget, available_address_balance_gas)
-        }
-
-        // Check gas objects have an address owner.
-        pub(crate) fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
-            // All gas objects have an address owner
-            // Note: because of address balance payments, gas_objs may be empty.
-            for gas_object in gas_objs {
-                // if as_object() returns None, it means the object has been deleted (and therefore
-                // must be a shared object).
-                if let Some(obj) = gas_object.as_object() {
-                    if !obj.is_address_owned() {
-                        return Err(UserInputError::GasObjectNotOwnedObject {
-                            owner: obj.owner.clone(),
-                        });
-                    }
-                } else {
-                    // This case should never happen (because gas can't be a shared object), but we
-                    // handle this case for future-proofing
-                    return Err(UserInputError::MissingGasPayment);
-                }
-            }
-            Ok(())
-        }
-
         // Gas data is consistent
-        pub(crate) fn check_gas_data(
+        fn check_gas_data(
             &self,
             gas_objs: &[&ObjectReadResult],
             gas_budget: u64,
@@ -389,10 +353,6 @@ mod checked {
 
         fn storage_cost(&self) -> u64 {
             self.storage_gas_units()
-        }
-
-        pub fn per_object_storage(&self) -> &Vec<(ObjectID, PerObjectStorage)> {
-            &self.per_object_storage
         }
     }
 
@@ -603,6 +563,46 @@ mod checked {
                 storage_gas_price: self.storage_gas_price,
                 rebate_rate: self.rebate_rate,
             }
+        }
+
+        // Check whether gas arguments are legit:
+        // 1. Gas object has an address owner.
+        // 2. Gas budget is between min and max budget allowed
+        // 3. Gas balance (all gas coins together) is bigger or equal to budget
+        fn check_gas_balance(
+            &self,
+            gas_objs: &[&ObjectReadResult],
+            gas_budget: u64,
+            available_address_balance_gas: u64,
+        ) -> UserInputResult {
+            self.check_gas_objects(gas_objs)?;
+            self.check_gas_data(gas_objs, gas_budget, available_address_balance_gas)
+        }
+
+        // Check gas objects have an address owner.
+        fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
+            // All gas objects have an address owner
+            // Note: because of address balance payments, gas_objs may be empty.
+            for gas_object in gas_objs {
+                // if as_object() returns None, it means the object has been deleted (and therefore
+                // must be a shared object).
+                if let Some(obj) = gas_object.as_object() {
+                    if !obj.is_address_owned() {
+                        return Err(UserInputError::GasObjectNotOwnedObject {
+                            owner: obj.owner.clone(),
+                        });
+                    }
+                } else {
+                    // This case should never happen (because gas can't be a shared object), but we
+                    // handle this case for future-proofing
+                    return Err(UserInputError::MissingGasPayment);
+                }
+            }
+            Ok(())
+        }
+
+        fn per_object_storage(&self) -> &Vec<(ObjectID, PerObjectStorage)> {
+            &self.per_object_storage
         }
     }
 

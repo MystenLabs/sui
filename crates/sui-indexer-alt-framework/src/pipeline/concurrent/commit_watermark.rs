@@ -316,7 +316,8 @@ mod tests {
 
     use crate::FieldCount;
     use crate::metrics::IndexerMetrics;
-    use crate::mocks::store::*;
+    use crate::mocks::store::FallibleMockConnection;
+    use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::CommitterConfig;
     use crate::pipeline::Processor;
     use crate::pipeline::WatermarkPart;
@@ -342,7 +343,7 @@ mod tests {
 
     #[async_trait]
     impl Handler for DataPipeline {
-        type Store = MockStore;
+        type Store = FallibleMockStore;
         type Batch = Vec<Self::Value>;
 
         fn batch(
@@ -357,23 +358,23 @@ mod tests {
         async fn commit<'a>(
             &self,
             _batch: &Self::Batch,
-            _conn: &mut MockConnection<'a>,
+            _conn: &mut FallibleMockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(0)
         }
     }
 
     struct TestSetup {
-        store: MockStore,
+        store: FallibleMockStore,
         watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
         #[allow(unused)]
         commit_watermark: Service,
     }
 
-    fn setup_test<H: Handler<Store = MockStore>>(
+    fn setup_test<H: Handler<Store = FallibleMockStore>>(
         config: CommitterConfig,
         next_checkpoint: u64,
-        store: MockStore,
+        store: FallibleMockStore,
     ) -> TestSetup {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
         let metrics = IndexerMetrics::new(None, &Default::default());
@@ -410,7 +411,7 @@ mod tests {
     #[tokio::test]
     async fn test_basic_watermark_progression() {
         let config = CommitterConfig::default();
-        let setup = setup_test::<DataPipeline>(config, 1, MockStore::default());
+        let setup = setup_test::<DataPipeline>(config, 1, FallibleMockStore::default());
 
         // Send watermark parts in order
         for cp in 1..4 {
@@ -429,7 +430,7 @@ mod tests {
     #[tokio::test]
     async fn test_out_of_order_watermarks() {
         let config = CommitterConfig::default();
-        let setup = setup_test::<DataPipeline>(config, 1, MockStore::default());
+        let setup = setup_test::<DataPipeline>(config, 1, FallibleMockStore::default());
 
         // Send watermark parts out of order
         let parts = vec![
@@ -467,7 +468,7 @@ mod tests {
             watermark_interval_ms: 1_000, // Long polling interval to test connection retry
             ..Default::default()
         };
-        let store = MockStore::default().with_connection_failures(1);
+        let store = FallibleMockStore::default().with_connection_failures(1);
         let setup = setup_test::<DataPipeline>(config, 1, store);
 
         // Send watermark part
@@ -496,7 +497,7 @@ mod tests {
             ..Default::default()
         };
         // Create store with transaction failure configuration
-        let store = MockStore::default().with_commit_watermark_failures(1); // Will fail once before succeeding
+        let store = FallibleMockStore::default().with_commit_watermark_failures(1); // Will fail once before succeeding
         let setup = setup_test::<DataPipeline>(config, 10, store);
 
         let part = WatermarkPart {
@@ -528,7 +529,7 @@ mod tests {
             watermark_interval_ms: 1_000, // Long polling interval to test connection retry
             ..Default::default()          // Create store with transaction failure configuration
         };
-        let store = MockStore::default().with_commit_watermark_failures(1); // Will fail once before succeeding
+        let store = FallibleMockStore::default().with_commit_watermark_failures(1); // Will fail once before succeeding
         let setup = setup_test::<DataPipeline>(config, 10, store);
 
         let part = WatermarkPart {
@@ -569,7 +570,7 @@ mod tests {
             watermark_interval_ms: 1_000, // Long polling interval to test adding complete part
             ..Default::default()
         };
-        let setup = setup_test::<DataPipeline>(config, 1, MockStore::default());
+        let setup = setup_test::<DataPipeline>(config, 1, FallibleMockStore::default());
 
         // Send the first incomplete watermark part
         let part = WatermarkPart {
@@ -607,7 +608,7 @@ mod tests {
     #[tokio::test]
     async fn test_no_initial_watermark() {
         let config = CommitterConfig::default();
-        let setup = setup_test::<DataPipeline>(config, 0, MockStore::default());
+        let setup = setup_test::<DataPipeline>(config, 0, FallibleMockStore::default());
 
         // Send the checkpoint 1 watermark
         setup

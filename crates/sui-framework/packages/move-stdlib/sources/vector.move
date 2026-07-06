@@ -24,10 +24,6 @@ public use fun std::ascii::try_string as vector.try_to_ascii_string;
 const EINDEX_OUT_OF_BOUNDS: u64 = 0x20000;
 
 #[bytecode_instruction]
-/// Create an empty vector.
-public native fun empty<Element>(): vector<Element>;
-
-#[bytecode_instruction]
 /// Return the length of the vector.
 public native fun length<Element>(v: &vector<Element>): u64;
 
@@ -61,13 +57,6 @@ public native fun destroy_empty<Element>(v: vector<Element>);
 /// Swaps the elements at the `i`th and `j`th indices in the vector `v`.
 /// Aborts if `i` or `j` is out of bounds.
 public native fun swap<Element>(v: &mut vector<Element>, i: u64, j: u64);
-
-/// Return an vector of size one containing element `e`.
-public fun singleton<Element>(e: Element): vector<Element> {
-    let mut v = empty();
-    v.push_back(e);
-    v
-}
 
 /// Reverses the order of the elements in the vector `v` in place.
 public fun reverse<Element>(v: &mut vector<Element>) {
@@ -542,4 +531,17 @@ public macro fun skip_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector
     };
     v.reverse();
     v
+}
+
+// === Deprecated ===
+
+#[bytecode_instruction]
+#[deprecated(note = b"Use `vector[]` literal instead")]
+/// Create an empty vector.
+public native fun empty<Element>(): vector<Element>;
+
+#[deprecated(note = b"Use `vector[e]` literal instead")]
+/// Return an vector of size one containing element `e`.
+public fun singleton<Element>(e: Element): vector<Element> {
+    vector[e]
 }

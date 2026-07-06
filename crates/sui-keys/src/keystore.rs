@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use crate::external::External;
+use crate::external::ProvisionMode;
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::key_identity::KeyIdentity;
 use crate::random_names::{random_name, random_names};
+use mysten_common::ZipDebugEqIteratorExt;
 
 use anyhow::{Context, anyhow, bail, ensure};
 use async_trait::async_trait;
@@ -54,13 +56,18 @@ pub enum GenerateOptions {
     /// File or InMem keystore
     Local(LocalGenerate),
     /// Signer
-    ExternalSigner(String),
+    ExternalSigner {
+        signer: String,
+        provision_mode: Option<ProvisionMode>,
+    },
 }
 
+#[derive(Debug)]
 pub struct GeneratedKey {
     pub address: SuiAddress,
     pub public_key: PublicKey,
     pub scheme: SignatureScheme,
+    pub mnemonic: Option<String>,
 }
 
 #[async_trait]
@@ -77,7 +84,7 @@ pub trait AccountKeystore: Send + Sync {
             GenerateOptions::Local(opts) => {
                 (opts.key_scheme, opts.derivation_path, opts.word_length)
             }
-            GenerateOptions::ExternalSigner(_) => {
+            GenerateOptions::ExternalSigner { .. } => {
                 return Err(anyhow!(
                     "Generating new keypair is not supported for this keystore type"
                 ));
@@ -92,6 +99,7 @@ pub trait AccountKeystore: Send + Sync {
             address,
             public_key,
             scheme,
+            mnemonic: None,
         })
     }
 
@@ -460,7 +468,7 @@ impl FileBasedKeystore {
             let names: Vec<String> = random_names(HashSet::new(), keys.len());
             let aliases = keys
                 .iter()
-                .zip(names)
+                .zip_debug_eq(names)
                 .map(|((sui_address, skp), alias)| {
                     let public_key_base64 = skp.public().encode_base64();
                     (
@@ -719,7 +727,7 @@ impl InMemKeystore {
 
         let aliases = keys
             .iter()
-            .zip(random_names(HashSet::new(), keys.len()))
+            .zip_debug_eq(random_names(HashSet::new(), keys.len()))
             .map(|((sui_address, skp), alias)| {
                 let public_key_base64 = skp.public().encode_base64();
                 (

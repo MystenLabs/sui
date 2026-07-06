@@ -14,9 +14,7 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::{AuthorityState, ExecutionEnv};
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
-use sui_core::consensus_adapter::{
-    ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
-};
+use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
@@ -60,13 +58,10 @@ impl SingleValidator {
             )),
             validator.checkpoint_store.clone(),
             validator.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            epoch_store.protocol_config().clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
         // TODO: for validator benchmarking purposes, we should allow for traffic control
         // to be configurable and introduce traffic control benchmarks to test
@@ -84,6 +79,10 @@ impl SingleValidator {
 
     pub fn get_validator(&self) -> &Arc<AuthorityState> {
         self.validator_service.validator_state()
+    }
+
+    pub fn get_epoch(&self) -> u64 {
+        self.epoch_store.epoch()
     }
 
     /// Publish a package, returns the package object and the updated gas object.
@@ -117,22 +116,8 @@ impl SingleValidator {
         let effects = self
             .get_validator()
             .try_execute_immediately(&executable, ExecutionEnv::new(), &self.epoch_store)
-            .await
             .unwrap()
             .0;
-        assert!(effects.status().is_ok());
-        effects
-    }
-
-    pub async fn execute_dry_run(&self, transaction: Transaction) -> TransactionEffects {
-        let effects = self
-            .get_validator()
-            .dry_exec_transaction_for_benchmark(
-                transaction.data().intent_message().value.clone(),
-                *transaction.digest(),
-            )
-            .unwrap()
-            .2;
         assert!(effects.status().is_ok());
         effects
     }
@@ -150,8 +135,9 @@ impl SingleValidator {
         transaction: Transaction,
         assigned_versions: &AssignedVersions,
         component: Component,
-    ) -> TransactionEffects {
+    ) -> (TransactionEffects, std::time::Duration) {
         let executable = self.create_executable(transaction);
+        let start = std::time::Instant::now();
         let effects = match component {
             Component::Baseline => {
                 self.get_validator()
@@ -160,7 +146,6 @@ impl SingleValidator {
                         ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
                         &self.epoch_store,
                     )
-                    .await
                     .unwrap()
                     .0
             }
@@ -174,7 +159,7 @@ impl SingleValidator {
                     &self.epoch_store,
                 );
                 self.get_validator()
-                    .wait_for_transaction_execution_for_testing(&executable, &self.epoch_store)
+                    .wait_for_transaction_execution_for_testing(&executable)
                     .await
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
@@ -192,8 +177,9 @@ impl SingleValidator {
                 unreachable!()
             }
         };
+        let elapsed = start.elapsed();
         assert!(effects.status().is_ok());
-        effects
+        (effects, elapsed)
     }
 
     pub(crate) async fn execute_transaction_in_memory(
@@ -225,9 +211,9 @@ impl SingleValidator {
             self.epoch_store.executor().execute_transaction_to_effects(
                 &store,
                 self.epoch_store.protocol_config(),
-                self.get_validator().metrics.limits_metrics.clone(),
+                self.get_validator().metrics.execution_metrics.clone(),
                 false,
-                ExecutionOrEarlyError::Ok(()),
+                ExecutionOrEarlyError::ok(None),
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,

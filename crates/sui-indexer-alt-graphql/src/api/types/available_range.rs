@@ -233,7 +233,7 @@ macro_rules! delegate {
 // - `=> OtherType.field(.., "filterName")`: delegate and add filter constraint
 // - `|pipelines, filters| { ... }`: block of statements operating on pipelines and filters to execute
 collect_pipelines! {
-    Address.[address, addressAt] => IAddressable.*;
+    Address.[address, addressAt, asTransactionObject] => IAddressable.*;
     Address.[asObject] => IObject.objectAt();
     Address.[transactions] => Query.transactions(.., "affectedAddress");
     Address.[balance, balances, multiGetBalances, objects] => IAddressable.*;
@@ -242,7 +242,7 @@ collect_pipelines! {
 
     Checkpoint.[transactions] => Query.transactions(.., "atCheckpoint");
 
-    CoinMetadata.[address, addressAt] => IAddressable.*;
+    CoinMetadata.[address, addressAt, asTransactionObject] => IAddressable.*;
     CoinMetadata.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     CoinMetadata.[defaultNameRecord] => IAddressable.defaultNameRecord();
     CoinMetadata.[contents, hasPublicTransfer, moveObjectBcs] => IMoveObject.*;
@@ -255,7 +255,7 @@ collect_pipelines! {
         pipelines.insert("consistent".to_string());
     };
 
-    DynamicField.[address, addressAt] => IAddressable.*;
+    DynamicField.[address, addressAt, asTransactionObject] => IAddressable.*;
     DynamicField.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     DynamicField.[defaultNameRecord] => IAddressable.defaultNameRecord();
     DynamicField.[contents, hasPublicTransfer, moveObjectBcs] => IMoveObject.*;
@@ -308,7 +308,7 @@ collect_pipelines! {
         pipelines.insert("obj_versions".to_string());
     };
 
-    MoveObject.[address, addressAt] => IAddressable.*;
+    MoveObject.[address, addressAt, asTransactionObject] => IAddressable.*;
     MoveObject.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     MoveObject.[defaultNameRecord] => IAddressable.defaultNameRecord();
     MoveObject.[contents, hasPublicTransfer, moveObjectBcs] => IMoveObject.*;
@@ -318,7 +318,7 @@ collect_pipelines! {
     MoveObject.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     MoveObject.[receivedTransactions] => IObject.receivedTransactions();
 
-    MovePackage.[address, addressAt] => IAddressable.*;
+    MovePackage.[address, addressAt, asTransactionObject] => IAddressable.*;
     MovePackage.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     MovePackage.[defaultNameRecord] => IAddressable.defaultNameRecord();
     MovePackage.[objectAt, objectVersionsAfter, objectVersionsBefore] => IObject.*;
@@ -331,7 +331,7 @@ collect_pipelines! {
         pipelines.insert("obj_versions".to_string());
     };
 
-    Object.[address, addressAt] => IAddressable.*;
+    Object.[address, addressAt, asTransactionObject] => IAddressable.*;
     Object.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     Object.[defaultNameRecord] => IAddressable.defaultNameRecord();
     Object.[dynamicField, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] => IMoveObject.*;
@@ -632,7 +632,12 @@ mod field_piplines_tests {
                 );
             }
         }
-        insta::assert_snapshot!(output);
+        let snapshot_name = if cfg!(feature = "staging") {
+            "registry_collect_pipelines_snapshot_staging"
+        } else {
+            "registry_collect_pipelines_snapshot"
+        };
+        insta::assert_snapshot!(snapshot_name, output);
     }
 
     fn formatted_output_str(

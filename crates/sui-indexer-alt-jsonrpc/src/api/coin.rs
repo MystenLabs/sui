@@ -10,6 +10,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_indexer_alt_consistent_store::ObjectByOwnerKey;
 use sui_indexer_alt_reader::consistent_reader::proto::Balance as ProtoBalance;
 use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
@@ -180,11 +181,11 @@ impl CoinsApiServer for Coins {
         // whichever coin ends up last on the page.
         let mut coins: Vec<(Coin, Vec<u8>)> = coin_results
             .into_iter()
-            .zip(&coin_ids)
+            .zip_debug_eq(&coin_ids)
             .map(|(r, id)| r.with_internal_context(|| format!("Failed to get object {id}")))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
-            .zip(results.results.into_iter().map(|e| e.token))
+            .zip_debug_eq(results.results.into_iter().map(|e| e.token))
             .collect();
 
         if let Some(ab_coin) = address_balance_coin {

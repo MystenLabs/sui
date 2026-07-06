@@ -1,7 +1,7 @@
 //# run
-module 0x6.m {
+mvir 0x6::m {
 // Number of bits shifted >= total number of bits in the number.
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 << 8u8;
     return;
@@ -9,9 +9,9 @@ label b0:
 }
 
 //# run
-module 0x7.m {
+mvir 0x7::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 << 64u8;
     return;
@@ -19,9 +19,9 @@ label b0:
 
 }
 //# run
-module 0x8.m {
+mvir 0x8::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 << 128u8;
     return;
@@ -29,9 +29,9 @@ label b0:
 
 }
 //# run
-module 0x9.m {
+mvir 0x9::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u16 << 16u8;
     return;
@@ -39,9 +39,9 @@ label b0:
 
 }
 //# run
-module 0xa.m {
+mvir 0xa::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u32 << 32u8;
     return;
@@ -49,9 +49,9 @@ label b0:
 
 }
 //# run
-module 0xb.m {
+mvir 0xb::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 >> 8u8;
     return;
@@ -59,9 +59,9 @@ label b0:
 
 }
 //# run
-module 0xc.m {
+mvir 0xc::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 >> 64u8;
     return;
@@ -69,9 +69,9 @@ label b0:
 
 }
 //# run
-module 0xd.m {
+mvir 0xd::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 >> 128u8;
     return;
@@ -79,9 +79,9 @@ label b0:
 
 }
 //# run
-module 0xe.m {
+mvir 0xe::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u16 >> 16u8;
     return;
@@ -89,9 +89,9 @@ label b0:
 
 }
 //# run
-module 0x15.m {
+mvir 0x15::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u32 >> 32u8;
     return;
@@ -101,9 +101,9 @@ label b0:
 
 // Shifting 0 results in 0.
 //# run
-module 0x16.m {
+mvir 0x16::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u8 << 4u8 == 0u8, 1000);
     assert(0u64 << 1u8 == 0u64, 1001);
@@ -126,9 +126,9 @@ label b0:
 
 // Shifting by 0 bits results in the same number.
 //# run
-module 0x17.m {
+mvir 0x17::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(100u8 << 0u8 == 100u8, 2000);
     assert(43u64 << 0u8 == 43u64, 2001);
@@ -151,9 +151,9 @@ label b0:
 
 // shl/shr by 1 equivalent to mul/div by 2.
 //# run
-module 0x18.m {
+mvir 0x18::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(1u8 << 1u8 == 2u8, 3000);
     assert(7u64 << 1u8 == 14u64, 3001);
@@ -176,9 +176,9 @@ label b0:
 
 // Underflowing results in 0.
 //# run
-module 0x19.m {
+mvir 0x19::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(1234u64 >> 63u8 == 0u64, 4000);
     assert(3u8 >> 5u8 == 0u8, 4001);
@@ -194,9 +194,9 @@ label b0:
 
 // Overflowing results are truncated.
 //# run
-module 0x1a.m {
+mvir 0x1a::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(7u8 << 7u8 == 128u8, 5000);
     assert(7u64 << 62u8 == 13835058055282163712u64, 5001);
@@ -212,9 +212,9 @@ label b0:
 
 // Some random tests.
 //# run
-module 0x1b.m {
+mvir 0x1b::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(54u8 << 3u8 == 176u8, 6000);
     assert(5u8 << 2u8 == 20u8, 6001);

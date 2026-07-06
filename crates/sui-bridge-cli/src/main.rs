@@ -5,6 +5,7 @@ use alloy::primitives::Address as EthAddress;
 use alloy::providers::Provider;
 use clap::*;
 use fastcrypto::encoding::{Encoding, Hex};
+use mysten_common::ZipDebugEqIteratorExt;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use std::collections::BTreeMap;
@@ -452,7 +453,7 @@ async fn main() -> anyhow::Result<()> {
             };
             let mut total_online_stake = 0;
             for ((name, sui_address, pubkey, eth_address, url, stake, blocklisted), ping_resp) in
-                authorities.into_iter().zip(ping_tasks_resp)
+                authorities.into_iter().zip_debug_eq(ping_tasks_resp)
             {
                 let pubkey = if hex {
                     Hex::encode(pubkey.as_bytes())

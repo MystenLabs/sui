@@ -19,7 +19,7 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
@@ -30,7 +30,7 @@ pub trait Executor {
         store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         // Epoch
@@ -61,7 +61,7 @@ pub trait Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
@@ -87,7 +87,7 @@ pub trait Executor {
         store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         // Epoch
@@ -116,7 +116,7 @@ pub trait Executor {
         store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         // Epoch
         epoch_id: EpochId,
         epoch_timestamp_ms: u64,
@@ -129,6 +129,7 @@ pub trait Executor {
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
+        protocol_config: &'vm ProtocolConfig,
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r>;
 }

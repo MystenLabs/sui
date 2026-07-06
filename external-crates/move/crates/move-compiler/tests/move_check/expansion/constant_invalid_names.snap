@@ -5,13 +5,13 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_check/expansion/constant_invalid_names.move:3:11
   │
 3 │     const c1: u64 = 0;
   │           ^^ Invalid constant name 'c1'. Constant names must start with 'A'..'Z'
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_check/expansion/constant_invalid_names.move:4:11
   │
 4 │     const _C1: u64 = 0;
