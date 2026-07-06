@@ -3875,7 +3875,6 @@ mod tests {
 
         let state = TestAuthorityBuilder::new()
             .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
-            .skip_rpc_index_init()
             .skip_genesis_owner_index()
             .build()
             .await;
@@ -3929,7 +3928,6 @@ mod tests {
 
         let state = TestAuthorityBuilder::new()
             .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
-            .skip_rpc_index_init()
             .skip_genesis_owner_index()
             .build()
             .await;
@@ -4000,7 +3998,6 @@ mod tests {
 
         let state = TestAuthorityBuilder::new()
             .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
-            .skip_rpc_index_init()
             .skip_genesis_owner_index()
             .build()
             .await;
