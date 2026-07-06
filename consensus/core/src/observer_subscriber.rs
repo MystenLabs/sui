@@ -9,6 +9,7 @@ use std::{
     time::Duration,
 };
 
+use consensus_types::block::Round;
 use futures::StreamExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use parking_lot::Mutex;
@@ -128,12 +129,17 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
 
             // Recompute highest rounds from DagState before each connection attempt
             // so reconnections resume from where we left off rather than re-fetching
-            // already-seen blocks.
+            // already-seen blocks. Clamp to the GC round, since blocks below it would
+            // be skipped anyway.
             let highest_round_per_authority = {
                 let ds = dag_state.read();
-                let mut rounds = vec![0u32; context.committee.size()];
+                let gc_round = ds.gc_round();
+                let mut rounds = vec![0 as Round; context.committee.size()];
                 for (authority, _) in context.committee.authorities() {
-                    rounds[authority.value()] = ds.get_last_block_for_authority(authority).round();
+                    rounds[authority.value()] = ds
+                        .get_last_block_for_authority(authority)
+                        .round()
+                        .max(gc_round);
                 }
                 rounds
             };

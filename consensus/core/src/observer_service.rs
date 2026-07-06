@@ -230,9 +230,10 @@ impl ObserverNetworkService for ObserverService {
             ));
         }
 
-        // Subscribe to the live broadcast BEFORE snapshotting past blocks below, so a block
-        // accepted concurrently with the snapshot lands in both segments (a harmless duplicate
-        // that the receiver dedups) rather than in neither (a gap).
+        // Subscribe before snapshotting past blocks below. This can duplicate
+        // a block in both the subscription stream and snapshot, which is fine.
+        // Otherwise, it is possible to miss a block if it is broadcasted after snapshotting
+        // but before subscribing.
         let broadcast_rx = self.rx_accepted_block_broadcast.resubscribe();
 
         // Collect all accepted blocks from DagState that the observer hasn't yet seen,
@@ -242,7 +243,9 @@ impl ObserverNetworkService for ObserverService {
             let mut past_blocks = Vec::new();
 
             for (authority, _) in self.context.committee.authorities() {
-                let from_round = highest_round_per_authority[authority.value()] + 1;
+                // Saturate so an out-of-range round from the peer cannot wrap to 0 and
+                // replay the entire block cache.
+                let from_round = highest_round_per_authority[authority.value()].saturating_add(1);
                 past_blocks.extend(dag_state.get_cached_blocks(authority, from_round));
             }
 
@@ -383,7 +386,7 @@ mod tests {
         );
 
         // Observer starts with no blocks seen
-        let highest_round_per_authority = vec![0u32; context.committee.size()];
+        let highest_round_per_authority = vec![0 as Round; context.committee.size()];
         let peer = keys[0].0.public().clone();
 
         let mut stream = observer_service
@@ -457,7 +460,7 @@ mod tests {
         let peer = keys[0].0.public().clone();
 
         // Test with wrong size of highest_round_per_authority
-        let invalid_highest_rounds = vec![0u32; 10]; // Wrong size, should be 4
+        let invalid_highest_rounds = vec![0 as Round; 10]; // Wrong size, should be 4
         let result = observer_service
             .handle_stream_blocks(peer, invalid_highest_rounds)
             .await;

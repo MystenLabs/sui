@@ -137,14 +137,14 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
 
             // Recompute the resume round from DagState before each connection attempt, so a
             // reconnection resumes from the latest accepted round rather than re-streaming and
-            // re-verifying blocks that have been accepted since this subscription started. Clamp
-            // to the GC round, since blocks below it would be skipped anyway.
+            // re-verifying blocks that have been accepted since this subscription started.
             let last_received: Round = {
                 let dag_state = dag_state.read();
+                let gc_round = dag_state.gc_round();
                 dag_state
                     .get_last_block_for_authority(peer)
                     .round()
-                    .max(dag_state.gc_round())
+                    .max(gc_round)
             };
 
             // Use longer timeout when retry delay is long, to adapt to slow network.
@@ -251,11 +251,20 @@ mod test {
         storage::mem_store::MemStore,
     };
 
-    struct SubscriberTestClient {}
+    struct SubscriberTestClient {
+        // Records the `last_received` round passed to each subscribe_blocks() call.
+        subscribe_calls: Mutex<Vec<Round>>,
+    }
 
     impl SubscriberTestClient {
         fn new() -> Self {
-            Self {}
+            Self {
+                subscribe_calls: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn subscribe_calls(&self) -> Vec<Round> {
+            self.subscribe_calls.lock().clone()
         }
     }
 
@@ -273,9 +282,10 @@ mod test {
         async fn subscribe_blocks(
             &self,
             _peer: AuthorityIndex,
-            _last_received: Round,
+            last_received: Round,
             _timeout: Duration,
         ) -> ConsensusResult<BlockStream> {
+            self.subscribe_calls.lock().push(last_received);
             let block_stream = stream::unfold((), |_| async {
                 sleep(Duration::from_millis(1)).await;
                 let block = ExtendedSerializedBlock {
@@ -376,90 +386,15 @@ mod test {
     async fn subscriber_recomputes_resume_round_on_reconnect() {
         use crate::block::TestBlock;
 
-        // Records the `last_received` round passed to each subscribe_blocks() call, then returns a
-        // single-block stream that ends immediately to force frequent reconnections.
-        struct RecordingClient {
-            calls: Arc<Mutex<Vec<Round>>>,
-        }
-
-        #[async_trait]
-        impl ValidatorNetworkClient for RecordingClient {
-            async fn send_block(
-                &self,
-                _peer: AuthorityIndex,
-                _block: &VerifiedBlock,
-                _timeout: Duration,
-            ) -> ConsensusResult<()> {
-                unimplemented!("Unimplemented")
-            }
-
-            async fn subscribe_blocks(
-                &self,
-                _peer: AuthorityIndex,
-                last_received: Round,
-                _timeout: Duration,
-            ) -> ConsensusResult<BlockStream> {
-                self.calls.lock().push(last_received);
-                let block_stream = stream::once(async {
-                    sleep(Duration::from_millis(1)).await;
-                    ExtendedSerializedBlock {
-                        block: Bytes::from(vec![1u8; 8]),
-                        excluded_ancestors: vec![],
-                    }
-                });
-                Ok(Box::pin(block_stream))
-            }
-
-            async fn fetch_blocks(
-                &self,
-                _peer: AuthorityIndex,
-                _block_refs: Vec<BlockRef>,
-                _fetch_after_rounds: Vec<Round>,
-                _fetch_missing_ancestors: bool,
-                _timeout: Duration,
-            ) -> ConsensusResult<Vec<Bytes>> {
-                unimplemented!("Unimplemented")
-            }
-
-            async fn fetch_commits(
-                &self,
-                _peer: AuthorityIndex,
-                _commit_range: CommitRange,
-                _timeout: Duration,
-            ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-                unimplemented!("Unimplemented")
-            }
-
-            async fn fetch_latest_blocks(
-                &self,
-                _peer: AuthorityIndex,
-                _authorities: Vec<AuthorityIndex>,
-                _timeout: Duration,
-            ) -> ConsensusResult<Vec<Bytes>> {
-                unimplemented!("Unimplemented")
-            }
-
-            async fn get_latest_rounds(
-                &self,
-                _peer: AuthorityIndex,
-                _timeout: Duration,
-            ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
-                unimplemented!("Unimplemented")
-            }
-        }
-
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let calls = Arc::new(Mutex::new(Vec::new()));
-        let network_client = Arc::new(RecordingClient {
-            calls: calls.clone(),
-        });
+        let network_client = Arc::new(SubscriberTestClient::new());
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let subscriber = Subscriber::new(
             context.clone(),
-            network_client,
+            network_client.clone(),
             authority_service,
             dag_state.clone(),
         );
@@ -468,11 +403,9 @@ mod test {
         subscriber.subscribe(peer);
 
         // Before any block from the peer is accepted, every reconnect resumes from genesis (0).
-        for _ in 0..3 {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
+        tokio::time::sleep(Duration::from_secs(3)).await;
         {
-            let recorded = calls.lock();
+            let recorded = network_client.subscribe_calls();
             assert!(
                 !recorded.is_empty() && recorded.iter().all(|&r| r == 0),
                 "before a block is accepted, every reconnect should resume from round 0: {recorded:?}"
@@ -490,7 +423,7 @@ mod test {
         let mut observed_resume = false;
         for _ in 0..10 {
             tokio::time::sleep(Duration::from_secs(1)).await;
-            if calls.lock().last() == Some(&RESUME_ROUND) {
+            if network_client.subscribe_calls().last() == Some(&RESUME_ROUND) {
                 observed_resume = true;
                 break;
             }
@@ -499,7 +432,7 @@ mod test {
             observed_resume,
             "after accepting a block at round {RESUME_ROUND}, the subscriber should resume from it; \
              recorded resume rounds: {:?}",
-            calls.lock()
+            network_client.subscribe_calls()
         );
     }
 }

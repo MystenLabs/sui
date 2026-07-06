@@ -337,11 +337,10 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     ) -> ConsensusResult<BlockStream> {
         fail_point_async!("consensus-rpc-response");
 
-        // Subscribe to the live broadcast BEFORE snapshotting past proposed blocks below.
-        // resubscribe() positions the receiver at the current tail, so a block proposed
-        // concurrently with the snapshot lands in both segments (a harmless duplicate that the
-        // receiving peer dedups) rather than in neither (a gap that would otherwise have to be
-        // recovered via ancestor fetch).
+        // Subscribe before snapshotting past blocks below. This can duplicate
+        // a block in both the subscription stream and snapshot, which is fine.
+        // Otherwise, it is possible to miss a block if it is broadcasted after snapshotting
+        // but before subscribing.
         let broadcast_rx = self.rx_block_broadcast.resubscribe();
 
         // Find past proposed blocks as the initial blocks to send to the peer.
@@ -355,8 +354,10 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         let past_proposed_blocks = {
             let dag_state = self.dag_state.read();
 
-            let mut proposed_blocks =
-                dag_state.get_cached_blocks(self.context.own_index, last_received + 1);
+            // Saturate so an out-of-range round from the peer cannot wrap to 0 and
+            // replay the entire block cache.
+            let mut proposed_blocks = dag_state
+                .get_cached_blocks(self.context.own_index, last_received.saturating_add(1));
             if proposed_blocks.is_empty() {
                 let last_proposed_block = dag_state
                     .get_last_proposed_block()
@@ -377,9 +378,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             )
         };
 
-        // Validator streams carry only this validator's own proposals, and the tonic layer
-        // throttles them to min_round_delay / 2. Keep this at 1 so broadcast backpressure
-        // remains visible instead of draining extra blocks into per-subscriber buffers.
+        // Ok to not batch own proposed blocks, which is < 20/s.
         const MAX_BLOCKS_PER_POLL: usize = 1;
         let broadcasted_blocks = BroadcastedBlockStream::new(
             PeerId::Validator(peer),
@@ -510,10 +509,14 @@ impl SubscriptionCounter {
     fn increment(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
         counter.count += 1;
-        *counter
-            .subscriptions_by_peer
-            .entry(peer.clone())
-            .or_insert(0) += 1;
+        let peer_count = {
+            let count = counter
+                .subscriptions_by_peer
+                .entry(peer.clone())
+                .or_default();
+            *count += 1;
+            *count
+        };
 
         match peer {
             PeerId::Validator(authority) => {
@@ -526,25 +529,29 @@ impl SubscriptionCounter {
                     .set(1);
             }
             PeerId::Observer(_) => {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .subscribed_by
-                    .with_label_values(&["observer"])
-                    .inc();
+                // Only count the first subscription from each peer.
+                if peer_count == 1 {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .subscribed_by
+                        .with_label_values(&["observer"])
+                        .inc();
+                }
             }
         }
     }
 
     fn decrement(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
-        counter.count -= 1;
-        *counter
+        counter.count = counter.count.saturating_sub(1);
+        let peer_count = counter
             .subscriptions_by_peer
             .entry(peer.clone())
-            .or_insert(0) -= 1;
+            .or_default();
+        *peer_count = peer_count.saturating_sub(1);
 
-        if counter.subscriptions_by_peer[peer] == 0 {
+        if *peer_count == 0 {
             match peer {
                 PeerId::Validator(authority) => {
                     let peer_hostname = &self.context.committee.authority(*authority).hostname;
@@ -598,8 +605,6 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
         assert!(max_items_per_poll > 0, "max_items_per_poll must be > 0");
-        // Increment before storing `peer`/`subscription_counter`, so the matching decrement in
-        // Drop only ever runs for a subscription that was actually counted.
         subscription_counter.increment(&peer);
         Self {
             peer: Some(peer),
