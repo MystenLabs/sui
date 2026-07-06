@@ -55,6 +55,7 @@ pub(super) fn broadcaster<R>(
     client: IngestionClient,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     metrics: Arc<IngestionMetrics>,
+    cohort: usize,
 ) -> Service
 where
     R: std::ops::RangeBounds<u64> + Send + 'static,
@@ -104,6 +105,7 @@ where
                 &config,
                 &subscribers,
                 &metrics,
+                cohort,
             )
             .await;
 
@@ -117,6 +119,7 @@ where
                 client.clone(),
                 subscribers.clone(),
                 metrics.clone(),
+                cohort,
             );
 
             let (streaming_result, ingestion_result) =
@@ -163,9 +166,16 @@ fn ingest_and_broadcast_range(
     client: IngestionClient,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     metrics: Arc<IngestionMetrics>,
+    cohort: usize,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
-        let report_metrics = metrics.clone();
+        let cohort = cohort.to_string();
+        let concurrency_limit = metrics
+            .ingestion_concurrency_limit
+            .with_label_values(&[cohort.as_str()]);
+        let concurrency_inflight = metrics
+            .ingestion_concurrency_inflight
+            .with_label_values(&[cohort.as_str()]);
         futures::stream::iter(start..end)
             .try_for_each_broadcast_spawned(
                 ingest_concurrency.into(),
@@ -180,12 +190,8 @@ fn ingest_and_broadcast_range(
                 },
                 subscribers,
                 move |stats| {
-                    report_metrics
-                        .ingestion_concurrency_limit
-                        .set(stats.limit as i64);
-                    report_metrics
-                        .ingestion_concurrency_inflight
-                        .set(stats.inflight as i64);
+                    concurrency_limit.set(stats.limit as i64);
+                    concurrency_inflight.set(stats.inflight as i64);
                 },
             )
             .await
@@ -203,6 +209,7 @@ async fn setup_streaming_task(
     config: &IngestionConfig,
     subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
     metrics: &Arc<IngestionMetrics>,
+    cohort: usize,
 ) -> (TaskGuard<u64>, u64) {
     // No streaming client configured so we ingest all the way to end_cp.
     let Some(streaming_client) = streaming_client else {
@@ -277,6 +284,7 @@ async fn setup_streaming_task(
         envelope_stream,
         subscribers.to_vec(),
         metrics.clone(),
+        cohort,
     )));
 
     (stream_guard, ingestion_end)
@@ -293,7 +301,15 @@ async fn stream_and_broadcast_range(
     mut stream: impl Stream<Item = Result<CheckpointEnvelope, Error>> + Unpin,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     metrics: Arc<IngestionMetrics>,
+    cohort: usize,
 ) -> u64 {
+    let cohort = cohort.to_string();
+    let latest_streamed = metrics
+        .latest_streamed_checkpoint
+        .with_label_values(&[cohort.as_str()]);
+    let latest_skipped = metrics
+        .latest_skipped_streamed_checkpoint
+        .with_label_values(&[cohort.as_str()]);
     while lo < hi {
         let Some(item) = stream.next().await else {
             warn!(lo, "Streaming ended unexpectedly");
@@ -316,9 +332,7 @@ async fn stream_and_broadcast_range(
                 lo, "Skipping already processed checkpoint"
             );
             metrics.total_skipped_streamed_checkpoints.inc();
-            metrics
-                .latest_skipped_streamed_checkpoint
-                .set(sequence_number as i64);
+            latest_skipped.set(sequence_number as i64);
             continue;
         }
 
@@ -340,7 +354,7 @@ async fn stream_and_broadcast_range(
 
         debug!(checkpoint = lo, "Streamed checkpoint");
         metrics.total_streamed_checkpoints.inc();
-        metrics.latest_streamed_checkpoint.set(lo as i64);
+        latest_streamed.set(lo as i64);
         lo += 1;
     }
 
@@ -487,6 +501,7 @@ mod tests {
             mock_client_with_range(0..5, metrics.clone()),
             subscriber_dest,
             metrics,
+            0,
         );
 
         assert_eq!(
@@ -509,6 +524,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics,
+            0,
         );
 
         assert_eq!(
@@ -532,6 +548,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics,
+            0,
         );
 
         assert_eq!(
@@ -558,6 +575,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscribers,
             metrics,
+            0,
         );
 
         // Both subscribers should receive checkpoints
@@ -596,6 +614,7 @@ mod tests {
             mock_client_with_range(0..5, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should receive all checkpoints from the stream in order
@@ -604,7 +623,13 @@ mod tests {
         // We should get all checkpoints from streaming.
         assert_eq!(metrics.total_streamed_checkpoints.get(), 5);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 4);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            4
+        );
 
         svc.join().await.unwrap();
     }
@@ -625,6 +650,7 @@ mod tests {
             mock_client_with_range(0..60, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         assert_eq!(
@@ -637,7 +663,13 @@ mod tests {
         // the peek'd checkpoint, ingestion fills in below it.
         assert_eq!(metrics.total_ingested_checkpoints.get(), 49); // [0..49)
         assert_eq!(metrics.total_streamed_checkpoints.get(), 11); // [49..60)
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 59);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            59
+        );
 
         svc.join().await.unwrap();
     }
@@ -660,6 +692,7 @@ mod tests {
             mock_client_with_range(0..30, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should use only ingestion since streaming is beyond end_cp
@@ -691,6 +724,7 @@ mod tests {
             mock_client_with_range(30..100, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         assert_eq!(
@@ -701,9 +735,21 @@ mod tests {
         // Verify only streaming was used (all from streaming)
         assert_eq!(metrics.total_streamed_checkpoints.get(), 70);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 99);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            99
+        );
         assert_eq!(metrics.total_skipped_streamed_checkpoints.get(), 30);
-        assert_eq!(metrics.latest_skipped_streamed_checkpoint.get(), 29);
+        assert_eq!(
+            metrics
+                .latest_skipped_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            29
+        );
 
         svc.join().await.unwrap();
     }
@@ -729,6 +775,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should receive all checkpoints exactly once (no duplicates) from streaming.
@@ -739,9 +786,21 @@ mod tests {
 
         assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            19
+        );
         assert_eq!(metrics.total_skipped_streamed_checkpoints.get(), 2);
-        assert_eq!(metrics.latest_skipped_streamed_checkpoint.get(), 4);
+        assert_eq!(
+            metrics
+                .latest_skipped_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            4
+        );
 
         svc.join().await.unwrap();
     }
@@ -764,6 +823,7 @@ mod tests {
             mock_client_with_range(0..10, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should receive first three checkpoints from streaming in order
@@ -778,7 +838,13 @@ mod tests {
 
         assert_eq!(metrics.total_streamed_checkpoints.get(), 6);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 4);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 9);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            9
+        );
         assert_eq!(metrics.total_out_of_order_streamed_checkpoints.get(), 1);
 
         svc.join().await.unwrap();
@@ -803,6 +869,7 @@ mod tests {
             mock_client_with_range(0..15, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should receive first 5 checkpoints from streaming in order
@@ -819,7 +886,13 @@ mod tests {
         // Then ingestion was used to recover the missing checkpoints.
         assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
         // The last checkpoint should come from streaming after recovery.
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 14);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            14
+        );
 
         svc.join().await.unwrap();
     }
@@ -843,6 +916,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should eventually receive all checkpoints despite errors from streaming.
@@ -852,7 +926,13 @@ mod tests {
         );
 
         assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            19
+        );
         assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
         assert_eq!(metrics.total_stream_disconnections.get(), 3); // 2 errors + 1 completion
 
@@ -877,6 +957,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should fallback to ingestion for initial batch size checkpoints
@@ -917,6 +998,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should fallback to ingestion for first 10 checkpoints
@@ -954,6 +1036,7 @@ mod tests {
             mock_client_with_range(0..50, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should fallback to ingestion for all checkpoints
@@ -990,6 +1073,7 @@ mod tests {
             mock_client_with_range(0..50, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should fallback to ingestion for first 2 + 4 + 8 + 16 = 30 checkpoints
@@ -1048,6 +1132,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should fallback to ingestion for initial batch size checkpoints
@@ -1091,6 +1176,7 @@ mod tests {
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should fallback to ingestion for first batch
@@ -1129,6 +1215,7 @@ mod tests {
             mock_client_with_range(0..15, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
+            0,
         );
 
         // Should receive first 5 checkpoints from streaming in order
@@ -1145,7 +1232,13 @@ mod tests {
         // Then ingestion was used to recover the missing checkpoints
         assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
         // The last checkpoint should come from streaming after recovery
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 14);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            14
+        );
 
         svc.join().await.unwrap();
     }

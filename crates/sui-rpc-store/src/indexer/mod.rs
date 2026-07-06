@@ -55,7 +55,6 @@ use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
-use sui_indexer_alt_framework::ingestion::IngestionService;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
@@ -76,8 +75,7 @@ use crate::indexer::pruner::PrunerMetrics;
 /// underlying ingestion service. Surfaced as a constant so the
 /// prefix is consistent across the metrics built in [`Indexer::new`]
 /// and the ones the standalone-binary entry point builds when it
-/// constructs the [`IngestionClient`] / [`IngestionService`] from
-/// `ClientArgs`.
+/// constructs the [`IngestionClient`] from `ClientArgs`.
 pub const METRICS_PREFIX: &str = "rpc_store_indexer";
 
 /// The schema parameter the framework's `Store` / pipelines bind
@@ -314,18 +312,12 @@ impl Indexer {
             indexer_args.first_checkpoint,
         );
 
-        let ingestion_metrics = ingestion_client.metrics().clone();
-        let ingestion_service = IngestionService::with_clients(
+        let indexer = framework::Indexer::with_ingestion_clients(
+            store,
+            indexer_args,
             ingestion_client,
             streaming_client,
             ingestion_config,
-            ingestion_metrics,
-        );
-
-        let indexer = framework::Indexer::with_ingestion_service(
-            store,
-            indexer_args,
-            ingestion_service,
             metrics_prefix,
             registry,
         )

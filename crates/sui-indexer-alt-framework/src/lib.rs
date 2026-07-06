@@ -9,8 +9,10 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::bail;
 use anyhow::ensure;
+use ingestion::ArcStreamingClient;
 use ingestion::ClientArgs;
 use ingestion::IngestionConfig;
+use ingestion::IngestionFactory;
 use ingestion::IngestionService;
 use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
@@ -115,8 +117,9 @@ pub struct Indexer<S: Store> {
     /// Prometheus Metrics.
     metrics: Arc<IndexerMetrics>,
 
-    /// Service for downloading and disseminating checkpoint data.
-    ingestion_service: IngestionService,
+    /// Creates the ingestion service that downloads and disseminates checkpoint data. The service
+    /// is built when the indexer is run.
+    ingestion_factory: IngestionFactory,
 
     /// Optional override of the checkpoint lowerbound. When set, pipelines without a committer
     /// watermark will start processing at this checkpoint.
@@ -159,8 +162,9 @@ pub struct Indexer<S: Store> {
     /// with the same name isn't added twice.
     added_pipelines: BTreeSet<&'static str>,
 
-    /// The service handles for every pipeline, used to manage lifetimes and graceful shutdown.
-    pipelines: Vec<Service>,
+    /// Registered pipelines, waiting to be started against the ingestion service when the indexer
+    /// is run.
+    pipelines: Vec<PendingPipeline>,
 }
 
 /// Configuration for a tasked indexer.
@@ -173,6 +177,27 @@ pub(crate) struct Task {
     /// pipeline's reader watermark.
     reader_interval: Duration,
 }
+
+/// A pipeline that has been registered but whose tasks have not been started yet. Pipelines are
+/// held in this form until [Indexer::run], when the ingestion service they subscribe to is
+/// created.
+struct PendingPipeline {
+    /// The checkpoint this pipeline will resume processing from.
+    next_checkpoint: u64,
+
+    /// Deferred constructor, invoked in [Indexer::run] once the ingestion service is available to
+    /// subscribe to.
+    build: PipelineBuilder,
+}
+
+/// Subscribes a pipeline to the ingestion service and starts the pipeline's tasks, returning the
+/// service handle over those tasks.
+///
+/// `Sync` is required (in addition to `Send`) because the `Indexer` holding these builders is kept
+/// alive across await points, and the simulator test runtime requires the resulting futures to be
+/// `Sync`. The builder closures only capture `Send + Sync` state (the handler, store, config, and
+/// metrics), so this bound is satisfied.
+type PipelineBuilder = Box<dyn FnOnce(&mut IngestionService) -> Service + Send + Sync>;
 
 impl TaskArgs {
     pub fn tasked(task: String, reader_interval_ms: u64) -> Self {
@@ -210,29 +235,53 @@ impl<S: Store> Indexer<S> {
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
-        let ingestion_service =
-            IngestionService::new(client_args, ingestion_config, metrics_prefix, registry)?;
-        Self::with_ingestion_service(
+        let ingestion_factory =
+            IngestionFactory::new(client_args, ingestion_config, metrics_prefix, registry)?;
+        Self::with_ingestion_factory(
             store,
             indexer_args,
-            ingestion_service,
+            ingestion_factory,
             metrics_prefix,
             registry,
         )
         .await
     }
 
-    /// Variant of [`Self::new`] that accepts a pre-built
-    /// [`IngestionService`], bypassing [`ClientArgs`]-driven
-    /// construction. Callers that supply their own ingestion /
-    /// streaming clients — for example, when embedding the indexer
-    /// in a fullnode that already has checkpoint data on hand —
-    /// build the service via [`IngestionService::with_clients`] and
-    /// hand it in here.
-    pub async fn with_ingestion_service(
+    /// Variant of [`Self::new`] that accepts pre-built ingestion clients, bypassing
+    /// [`ClientArgs`]-driven construction. Callers that supply their own
+    /// [`IngestionClientTrait`] / [`CheckpointStreamingClient`] implementations — for example,
+    /// when embedding the indexer in a fullnode that already has checkpoint data on hand — hand
+    /// them in here, and the indexer creates its ingestion service from them.
+    ///
+    /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
+    /// [`CheckpointStreamingClient`]: crate::ingestion::streaming_client::CheckpointStreamingClient
+    pub async fn with_ingestion_clients(
         store: S,
         indexer_args: IndexerArgs,
-        mut ingestion_service: IngestionService,
+        ingestion_client: IngestionClient,
+        streaming_client: Option<ArcStreamingClient>,
+        ingestion_config: IngestionConfig,
+        metrics_prefix: Option<&str>,
+        registry: &Registry,
+    ) -> anyhow::Result<Self> {
+        let ingestion_factory =
+            IngestionFactory::with_clients(ingestion_client, streaming_client, ingestion_config);
+        Self::with_ingestion_factory(
+            store,
+            indexer_args,
+            ingestion_factory,
+            metrics_prefix,
+            registry,
+        )
+        .await
+    }
+
+    /// Common assembly point for [`Self::new`] and [`Self::with_ingestion_clients`]: probes the
+    /// network tip through the factory and stamps the fields onto the struct.
+    async fn with_ingestion_factory(
+        store: S,
+        indexer_args: IndexerArgs,
+        ingestion_factory: IngestionFactory,
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -245,14 +294,14 @@ impl<S: Store> Indexer<S> {
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
 
-        let latest_checkpoint = ingestion_service.latest_checkpoint_number().await?;
+        let latest_checkpoint = ingestion_factory.latest_checkpoint_number().await?;
 
         info!(latest_checkpoint);
 
         Ok(Self {
             store,
             metrics,
-            ingestion_service,
+            ingestion_factory,
             first_checkpoint,
             last_checkpoint,
             latest_checkpoint,
@@ -276,7 +325,7 @@ impl<S: Store> Indexer<S> {
 
     /// The ingestion client used by the indexer to fetch checkpoints.
     pub fn ingestion_client(&self) -> &IngestionClient {
-        self.ingestion_service.ingestion_client()
+        self.ingestion_factory.ingestion_client()
     }
 
     /// The indexer's metrics.
@@ -284,9 +333,9 @@ impl<S: Store> Indexer<S> {
         &self.metrics
     }
 
-    /// The ingestion service's metrics.
+    /// The ingestion metrics shared by all of this indexer's ingestion services.
     pub fn ingestion_metrics(&self) -> &Arc<IngestionMetrics> {
-        self.ingestion_service.metrics()
+        self.ingestion_factory.metrics()
     }
 
     /// The pipelines that this indexer will run.
@@ -305,13 +354,21 @@ impl<S: Store> Indexer<S> {
         self.next_sequential_checkpoint
     }
 
-    /// Start ingesting checkpoints from `next_checkpoint`. Individual pipelines
-    /// will start processing and committing once the ingestion service has caught up to their
-    /// respective watermarks.
+    /// Start ingesting checkpoints and run all the registered pipelines against a single ingestion
+    /// service. Each pipeline's tasks start here (idle until the service serves them checkpoint
+    /// data), and ingestion begins at the smallest `next_checkpoint` across the pipelines.
     ///
     /// Ingestion will stop after consuming the configured `last_checkpoint` if one is provided.
     pub async fn run(self) -> anyhow::Result<Service> {
-        if let Some(enabled_pipelines) = self.enabled_pipelines {
+        let Self {
+            ingestion_factory,
+            last_checkpoint,
+            enabled_pipelines,
+            pipelines,
+            ..
+        } = self;
+
+        if let Some(enabled_pipelines) = enabled_pipelines {
             ensure!(
                 enabled_pipelines.is_empty(),
                 "Tried to enable pipelines that this indexer does not know about: \
@@ -319,21 +376,28 @@ impl<S: Store> Indexer<S> {
             );
         }
 
-        let start = self.next_checkpoint;
-        let end = self.last_checkpoint;
-        info!(start, end, "Ingestion range");
+        ensure!(!pipelines.is_empty(), "No pipelines registered to run");
 
-        let mut service = self
-            .ingestion_service
-            .run((
-                Bound::Included(start),
-                end.map_or(Bound::Unbounded, Bound::Included),
-            ))
+        let end = last_checkpoint.map_or(Bound::Unbounded, Bound::Included);
+
+        let mut ingestion = ingestion_factory.create(0);
+
+        let mut start = u64::MAX;
+        let mut members = Vec::with_capacity(pipelines.len());
+        for pending in pipelines {
+            start = start.min(pending.next_checkpoint);
+            members.push((pending.build)(&mut ingestion));
+        }
+
+        info!(start, end = last_checkpoint, "Ingestion range");
+
+        let mut service = ingestion
+            .run((Bound::Included(start), end))
             .await
             .context("Failed to start ingestion service")?;
 
-        for pipeline in self.pipelines {
-            service = service.merge(pipeline);
+        for member in members {
+            service = service.merge(member);
         }
 
         Ok(service)
@@ -397,8 +461,8 @@ impl<S: Store> Indexer<S> {
 }
 
 impl<S: ConcurrentStore> Indexer<S> {
-    /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
-    /// they will be idle until the ingestion service starts, and serves it checkpoint data.
+    /// Adds a new pipeline to this indexer. Its tasks are started when the indexer is run, and
+    /// will be idle until the ingestion service serves it checkpoint data.
     ///
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
@@ -415,27 +479,33 @@ impl<S: ConcurrentStore> Indexer<S> {
             return Ok(());
         };
 
-        let checkpoint_rx = self
-            .ingestion_service
-            .subscribe_bounded(config.ingestion.subscriber_channel_size());
-
-        self.pipelines.push(concurrent::pipeline::<H>(
-            handler,
+        let store = self.store.clone();
+        let task = self.task.clone();
+        let metrics = self.metrics.clone();
+        self.pipelines.push(PendingPipeline {
             next_checkpoint,
-            config,
-            self.store.clone(),
-            self.task.clone(),
-            checkpoint_rx,
-            self.metrics.clone(),
-        ));
+            build: Box::new(move |ingestion| {
+                let checkpoint_rx =
+                    ingestion.subscribe_bounded(config.ingestion.subscriber_channel_size());
+                concurrent::pipeline::<H>(
+                    handler,
+                    next_checkpoint,
+                    config,
+                    store,
+                    task,
+                    checkpoint_rx,
+                    metrics,
+                )
+            }),
+        });
 
         Ok(())
     }
 }
 
 impl<T: SequentialStore> Indexer<T> {
-    /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
-    /// they will be idle until the ingestion service starts, and serves it checkpoint data.
+    /// Adds a new pipeline to this indexer. Its tasks are started when the indexer is run, and
+    /// will be idle until the ingestion service serves it checkpoint data.
     ///
     /// Sequential pipelines commit checkpoint data in-order which sacrifices throughput, but may be
     /// required to handle pipelines that modify data in-place (where each update is not an insert,
@@ -464,18 +534,23 @@ impl<T: SequentialStore> Indexer<T> {
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
         );
 
-        let checkpoint_rx = self
-            .ingestion_service
-            .subscribe_bounded(config.ingestion.subscriber_channel_size());
-
-        self.pipelines.push(sequential::pipeline::<H>(
-            handler,
+        let store = self.store.clone();
+        let metrics = self.metrics.clone();
+        self.pipelines.push(PendingPipeline {
             next_checkpoint,
-            config,
-            self.store.clone(),
-            checkpoint_rx,
-            self.metrics.clone(),
-        ));
+            build: Box::new(move |ingestion| {
+                let checkpoint_rx =
+                    ingestion.subscribe_bounded(config.ingestion.subscriber_channel_size());
+                sequential::pipeline::<H>(
+                    handler,
+                    next_checkpoint,
+                    config,
+                    store,
+                    checkpoint_rx,
+                    metrics,
+                )
+            }),
+        });
 
         Ok(())
     }

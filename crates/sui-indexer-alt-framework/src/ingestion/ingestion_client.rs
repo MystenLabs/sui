@@ -304,10 +304,11 @@ impl IngestionClient {
         client: Arc<dyn IngestionClientTrait>,
         metrics: Arc<IngestionMetrics>,
     ) -> Self {
-        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new(
-            metrics.ingested_checkpoint_timestamp_lag.clone(),
-            metrics.latest_ingested_checkpoint_timestamp_lag_ms.clone(),
-            metrics.latest_ingested_checkpoint.clone(),
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::with_label(
+            &metrics.ingested_checkpoint_timestamp_lag,
+            &metrics.latest_ingested_checkpoint_timestamp_lag_ms,
+            &metrics.latest_ingested_checkpoint,
+            "0",
         );
         IngestionClient {
             client,
@@ -315,6 +316,20 @@ impl IngestionClient {
             checkpoint_lag_reporter,
             chain_id: OnceCell::new(),
         }
+    }
+
+    /// A clone of this client that reports checkpoint-lag gauges under `cohort`, so services minted
+    /// for different cohorts don't overwrite each other. The checkpoint source and chain-id cache
+    /// are shared; only the metric reporter is rebound.
+    pub(crate) fn for_cohort(&self, cohort: usize) -> Self {
+        let mut client = self.clone();
+        client.checkpoint_lag_reporter = CheckpointLagMetricReporter::with_label(
+            &self.metrics.ingested_checkpoint_timestamp_lag,
+            &self.metrics.latest_ingested_checkpoint_timestamp_lag_ms,
+            &self.metrics.latest_ingested_checkpoint,
+            &cohort.to_string(),
+        );
+        client
     }
 
     /// Fetch checkpoint data by sequence number.

@@ -17,7 +17,6 @@ use prometheus::register_histogram_with_registry;
 use prometheus::register_int_counter_vec_with_registry;
 use prometheus::register_int_counter_with_registry;
 use prometheus::register_int_gauge_vec_with_registry;
-use prometheus::register_int_gauge_with_registry;
 use tracing::warn;
 
 use crate::ingestion::error::Error;
@@ -69,19 +68,20 @@ pub struct IngestionMetrics {
     pub total_stream_disconnections: IntCounter,
     pub total_streaming_connection_failures: IntCounter,
 
-    // Checkpoint lag metrics for the ingestion pipeline.
-    pub latest_ingested_checkpoint: IntGauge,
-    pub latest_streamed_checkpoint: IntGauge,
-    pub latest_skipped_streamed_checkpoint: IntGauge,
-    pub latest_ingested_checkpoint_timestamp_lag_ms: IntGauge,
-    pub ingested_checkpoint_timestamp_lag: Histogram,
+    // Checkpoint lag metrics for the ingestion pipeline. Labeled by cohort so that services minted
+    // for different cohorts report independently rather than overwriting each other's gauges.
+    pub latest_ingested_checkpoint: IntGaugeVec,
+    pub latest_streamed_checkpoint: IntGaugeVec,
+    pub latest_skipped_streamed_checkpoint: IntGaugeVec,
+    pub latest_ingested_checkpoint_timestamp_lag_ms: IntGaugeVec,
+    pub ingested_checkpoint_timestamp_lag: HistogramVec,
 
     pub ingested_checkpoint_latency: Histogram,
     pub ingested_chain_id_latency: Histogram,
     pub ingested_latest_checkpoint_latency: Histogram,
 
-    pub ingestion_concurrency_limit: IntGauge,
-    pub ingestion_concurrency_inflight: IntGauge,
+    pub ingestion_concurrency_limit: IntGaugeVec,
+    pub ingestion_concurrency_inflight: IntGaugeVec,
 }
 
 #[derive(Clone)]
@@ -255,35 +255,40 @@ impl IngestionMetrics {
                 registry,
             )
             .unwrap(),
-            latest_ingested_checkpoint: register_int_gauge_with_registry!(
+            latest_ingested_checkpoint: register_int_gauge_vec_with_registry!(
                 name("latest_ingested_checkpoint"),
                 "Latest checkpoint sequence number fetched from the remote store",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            latest_streamed_checkpoint: register_int_gauge_with_registry!(
+            latest_streamed_checkpoint: register_int_gauge_vec_with_registry!(
                 name("latest_streamed_checkpoint"),
                 "Latest checkpoint sequence number received from gRPC streaming",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            latest_skipped_streamed_checkpoint: register_int_gauge_with_registry!(
+            latest_skipped_streamed_checkpoint: register_int_gauge_vec_with_registry!(
                 name("latest_skipped_streamed_checkpoint"),
                 "Latest streamed checkpoint sequence number skipped because it was already processed",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            latest_ingested_checkpoint_timestamp_lag_ms: register_int_gauge_with_registry!(
+            latest_ingested_checkpoint_timestamp_lag_ms: register_int_gauge_vec_with_registry!(
                 name("latest_ingested_checkpoint_timestamp_lag_ms"),
                 "Difference between the system timestamp when the latest checkpoint was fetched and the \
                  timestamp in the checkpoint, in milliseconds",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            ingested_checkpoint_timestamp_lag: register_histogram_with_registry!(
+            ingested_checkpoint_timestamp_lag: register_histogram_vec_with_registry!(
                 name("ingested_checkpoint_timestamp_lag"),
                 "Difference between the system timestamp when a checkpoint was fetched and the \
                  timestamp in each checkpoint, in seconds",
+                &["cohort"],
                 LAG_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -309,15 +314,17 @@ impl IngestionMetrics {
                 registry,
             )
             .unwrap(),
-            ingestion_concurrency_limit: register_int_gauge_with_registry!(
+            ingestion_concurrency_limit: register_int_gauge_vec_with_registry!(
                 name("ingestion_concurrency_limit"),
                 "Current adaptive concurrency limit for checkpoint ingestion",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            ingestion_concurrency_inflight: register_int_gauge_with_registry!(
+            ingestion_concurrency_inflight: register_int_gauge_vec_with_registry!(
                 name("ingestion_concurrency_inflight"),
                 "Current number of in-flight checkpoint ingestion tasks",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
@@ -789,6 +796,21 @@ impl CheckpointLagMetricReporter {
             checkpoint_time_lag_histogram.with_label_values(&[P::NAME]),
             latest_checkpoint_time_lag_gauge.with_label_values(&[P::NAME]),
             latest_checkpoint_sequence_number_gauge.with_label_values(&[P::NAME]),
+        )
+    }
+
+    /// Bind a set of checkpoint-lag vecs to a single `label` value, so callers reporting under
+    /// different labels (e.g. one per cohort) don't overwrite each other's checkpoint-lag gauges.
+    pub fn with_label(
+        checkpoint_time_lag_histogram: &HistogramVec,
+        latest_checkpoint_time_lag_gauge: &IntGaugeVec,
+        latest_checkpoint_sequence_number_gauge: &IntGaugeVec,
+        label: &str,
+    ) -> Arc<Self> {
+        Self::new(
+            checkpoint_time_lag_histogram.with_label_values(&[label]),
+            latest_checkpoint_time_lag_gauge.with_label_values(&[label]),
+            latest_checkpoint_sequence_number_gauge.with_label_values(&[label]),
         )
     }
 
