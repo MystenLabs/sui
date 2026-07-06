@@ -170,11 +170,28 @@ async fn test_object_not_modified_returns_non_inclusion() {
         .with_object_id(non_existent_object_id.to_string())
         .with_checkpoint(latest_checkpoint);
 
-    let response = proof_client
-        .get_checkpoint_object_proof(request)
-        .await
-        .expect("non-inclusion proof should succeed")
-        .into_inner();
+    let response = {
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
+            match proof_client
+                .get_checkpoint_object_proof(request.clone())
+                .await
+            {
+                Ok(response) => break response.into_inner(),
+                Err(status)
+                    if attempts < 20
+                        && status.code() == tonic::Code::NotFound
+                        && status.message().contains("not yet indexed") =>
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                Err(status) => {
+                    panic!("non-inclusion proof should succeed after index catch-up: {status:?}")
+                }
+            }
+        }
+    };
 
     let proof = response.proof.expect("proof should be present");
     assert!(
