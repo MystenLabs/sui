@@ -113,7 +113,6 @@ struct FilteredConsensusOutput {
     // When multiple transactions in the same commit try to lock the same owned object, the transaction
     // that managed to lock it first is tracked here with the conflict info.
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
-    dropped_transaction_keys: Vec<ConsensusTransactionKey>,
 }
 
 pub struct ConsensusHandlerInitializer {

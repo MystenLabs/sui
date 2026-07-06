@@ -5080,7 +5080,7 @@ impl ProtocolConfig {
                 }
                 129 => {
                     cfg.feature_flags.enable_unified_linkage = true;
-                    }
+                }
                 130 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
