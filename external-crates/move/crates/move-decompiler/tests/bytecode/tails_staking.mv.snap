@@ -325,39 +325,39 @@ public(friend) fun get_level_counts(l0: &Version, l1: &TailsStakingRegistry): ve
 }
 
 public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: address): u64 {
-    // Residual gotos to labels 143
-    {
-        ecosystem::version_check(l0);
-        let l8 = 0u64;
-        let l14 = bag::borrow(&l1.tails_metadata, C8);
-        let l6 = big_vector::length(&l1.staking_infos);
-        if (l6 > 0u64) {
-            let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
-            let l10 = 0u64;
-            let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
-            let l11 = big_vector::get_slice_length(l9);
-            let l4 = 0u64;
-            let (l13, l5, l7);
-            loop {
-                if (l4 < l6) {
-                    l13 = big_vector::borrow_from_slice(l9, l4 % l12);
-                    if (l13.user == l2) {
-                        l5 = 0u64;
-                        l7 = (&l13.tails).length();
-                        break
-                    };
-                    if (l4 + 1u64 < l6 && l4 + 1u64 == l10 * l12 + l11) {
-                        l10 = big_vector::get_slice_idx(l9) + 1u64;
-                        l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
-                        l11 = big_vector::get_slice_length(l9);
-                    };
-                    l4 = l4 + 1u64;
-                } else {
-                    unstructured {
-                        goto 'label_143;
-                    }
-                }
+    ecosystem::version_check(l0);
+    let l8 = 0u64;
+    let l14 = bag::borrow(&l1.tails_metadata, C8);
+    let l6 = big_vector::length(&l1.staking_infos);
+    if (l6 > 0u64) {
+        let __c39;
+        let __c34;
+        let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
+        let l10 = 0u64;
+        let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
+        let l11 = big_vector::get_slice_length(l9);
+        let l4 = 0u64;
+        let (l13, l5, l7);
+        loop {
+            __c34 = l4 < l6;
+            if (!(__c34)) {
+                break
             };
+            l13 = big_vector::borrow_from_slice(l9, l4 % l12);
+            __c39 = l13.user == l2;
+            if (__c39) {
+                l5 = 0u64;
+                l7 = (&l13.tails).length();
+                break
+            };
+            if (l4 + 1u64 < l6 && l4 + 1u64 == l10 * l12 + l11) {
+                l10 = big_vector::get_slice_idx(l9) + 1u64;
+                l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
+                l11 = big_vector::get_slice_length(l9);
+            };
+            l4 = l4 + 1u64;
+        };
+        if (__c34 && __c39) {
             while (l5 < l7) {
                 let l15 = (&l13.tails)[l5];
                 if (l14[l15 - 1u64] > l8) {
@@ -365,10 +365,9 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
                 };
                 l5 = l5 + 1u64;
             }
-        };
-        /* block 143 */;
-        return l8
-    }
+        }
+    };
+    return l8
 }
 
 public(friend) fun get_staking_info(l0: &Version, l1: &TailsStakingRegistry, l2: address): vector<u8> {
@@ -729,18 +728,17 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
     let l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
     let l10 = big_vector::get_slice_length(freeze(l8));
     let l4 = 0u64;
-    let __dispatch_27;
-    let (l12, l5, l7);
+    let (__c27, __c32, l12, l5, l7);
     loop {
-        if (l4 >= l6) {
-            __dispatch_27 = 1u32;
+        __c27 = l4 < l6;
+        if (!(__c27)) {
             break
         };
         l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
-        if (l12.user == l2) {
+        __c32 = l12.user == l2;
+        if (__c32) {
             l5 = 0u64;
             l7 = (&l12.tails).length();
-            __dispatch_27 = 0u32;
             break
         };
         if (l4 + 1u64 < l6 && l4 + 1u64 == l9 * l11 + l10) {
@@ -750,22 +748,17 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
         };
         l4 = l4 + 1u64;
     };
-    match (__dispatch_27) {
-        0 => {
-            while (l5 < l7) {
-                if (l14[(&l12.tails)[l5] - 1u64] == l1) {
-                    let l13 = object_table::remove(&mut l0.tails, l1);
-                    let __c70 = vector::is_empty(&l12.tails);
-                    return l13
-                };
-                l5 = l5 + 1u64;
+    if (__c27 && __c32) {
+        while (l5 < l7) {
+            if (l14[(&l12.tails)[l5] - 1u64] == l1) {
+                let l13 = object_table::remove(&mut l0.tails, l1);
+                let __c70 = vector::is_empty(&l12.tails);
+                return l13
             };
-            abort C12
-        },
-        1 => {
-            abort C12
+            l5 = l5 + 1u64;
         }
-    }
+    };
+    assert!(!(!(__c27) || (__c27 && __c32)), C12)
 }
 
 entry fun update_tails_staking_registry_config(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64, l3: u64, l4: &TxContext) {

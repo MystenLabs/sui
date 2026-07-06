@@ -683,23 +683,6 @@ fn generate_output_inner(
             eprintln!("GOTO[{}] -> label_{}", src.as_tag(), label);
             Out::Exp::Unstructured(vec![Out::UnstructuredNode::Goto(label)])
         }
-        D::Structured::Let(name) => Out::Exp::Declare(vec![name]),
-        D::Structured::AssignTag(name, value) => Out::Exp::Assign(
-            vec![name],
-            Box::new(Out::Exp::Value(
-                move_core_types::runtime_value::MoveValue::U32(value),
-            )),
-        ),
-        D::Structured::SelectorMatch(name, arms) => {
-            let translated_arms: Vec<(crate::ast::DispatchTag, Out::Exp)> = arms
-                .into_iter()
-                .map(|(tag, body)| {
-                    let mut arm_terms = terms.clone();
-                    (tag, generate_output_inner(&mut arm_terms, body))
-                })
-                .collect();
-            Out::Exp::MatchLit(Box::new(Out::Exp::Variable(name)), translated_arms)
-        }
     }
 }
 

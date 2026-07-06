@@ -114,13 +114,7 @@ pub(crate) fn rewrite_owned_jumps_as_breaks(
                 rewrite_owned_jumps_as_breaks(body, loop_head, exit_set);
             }
         }
-        S::SelectorMatch(_, arms) => {
-            for (_, body) in arms.iter_mut() {
-                rewrite_owned_jumps_as_breaks(body, loop_head, exit_set);
-            }
-        }
-        S::Jump(..) | S::Block(_) | S::Break(_) | S::Continue(_) | S::Let(_) | S::AssignTag(..) => {
-        }
+        S::Jump(..) | S::Block(_) | S::Break(_) | S::Continue(_) => {}
     }
 }
 

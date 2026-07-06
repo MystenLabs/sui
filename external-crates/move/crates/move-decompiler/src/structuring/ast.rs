@@ -91,16 +91,6 @@ pub enum Structured {
     ),
     /// Goto. `GotoSource` records which structurer path created it for instrumentation.
     Jump(GotoSource, Label),
-    /// Synthetic declaration of a dispatch local emitted by `structure_loop` for multi-succ
-    /// loops: `let <name>: u32;`. Translated to `Exp::Declare`.
-    Let(String),
-    /// Synthetic assignment of an integer tag to a dispatch local: `<name> = <value>;`.
-    /// Emitted at each exit site inside a multi-succ loop body to mark which arm to
-    /// dispatch. Translated to `Exp::Assign(name, Constant(value))`.
-    AssignTag(String, crate::ast::DispatchTag),
-    /// Synthetic integer-literal match emitted after a multi-succ loop:
-    /// `match (<name>) { 0 => ..., 1 => ..., }`. Translated to `Exp::MatchLit`.
-    SelectorMatch(String, Vec<(crate::ast::DispatchTag, Structured)>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -158,14 +148,7 @@ impl Structured {
                 }
                 Structured::Loop(_, body) => walk(body, out),
                 Structured::Switch(_, _, arms) => arms.iter().for_each(|(_, b)| walk(b, out)),
-                Structured::SelectorMatch(_, arms) => {
-                    arms.iter().for_each(|(_, b)| walk(b, out));
-                }
-                Structured::Block(_)
-                | Structured::Break(_)
-                | Structured::Continue(_)
-                | Structured::Let(_)
-                | Structured::AssignTag(_, _) => {}
+                Structured::Block(_) | Structured::Break(_) | Structured::Continue(_) => {}
             }
         }
         let mut out = Vec::new();
@@ -173,16 +156,6 @@ impl Structured {
         out.sort_unstable();
         out.dedup();
         out
-    }
-
-    /// Empty input -> `Seq([])`; single-item input -> that item bare; otherwise -> `Seq`.
-    /// Avoids the `Seq([x])` shape that downstream refinements would just unwrap anyway.
-    pub fn seq_or_singleton(mut items: Vec<Structured>) -> Structured {
-        match items.len() {
-            0 => Structured::Seq(vec![]),
-            1 => items.pop().unwrap(),
-            _ => Structured::Seq(items),
-        }
     }
 
     /// `Seq[a, b]` flattened: if either side is already a `Seq`, its items splice in
@@ -406,27 +379,6 @@ impl std::fmt::Display for Structured {
                 Structured::Jump(src, node_index) => {
                     indent(f, level)?;
                     writeln!(f, "jump<{}> {:?};", src.as_tag(), node_index)
-                }
-                Structured::Let(name) => {
-                    indent(f, level)?;
-                    writeln!(f, "let {name}: u32;")
-                }
-                Structured::AssignTag(name, value) => {
-                    indent(f, level)?;
-                    writeln!(f, "{name} = {value};")
-                }
-                Structured::SelectorMatch(name, arms) => {
-                    indent(f, level)?;
-                    writeln!(f, "match ({name}) {{")?;
-                    for (lit, body) in arms {
-                        indent(f, level + 1)?;
-                        writeln!(f, "{lit} => {{")?;
-                        fmt_structured(body, f, level + 2)?;
-                        indent(f, level + 1)?;
-                        writeln!(f, "}},")?;
-                    }
-                    indent(f, level)?;
-                    writeln!(f, "}}")
                 }
             }
         }

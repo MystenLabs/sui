@@ -430,16 +430,6 @@ pub(super) fn flatten_sequence(s: &mut D::Structured) {
             }
         }
         DS::Loop(_, body) => flatten_sequence(body),
-        DS::SelectorMatch(_, arms) => {
-            for (_, body) in arms.iter_mut() {
-                flatten_sequence(body);
-            }
-        }
-        DS::Block(_)
-        | DS::Break(_)
-        | DS::Continue(_)
-        | DS::Jump(_, _)
-        | DS::Let(_)
-        | DS::AssignTag(_, _) => {}
+        DS::Block(_) | DS::Break(_) | DS::Continue(_) | DS::Jump(_, _) => {}
     }
 }
