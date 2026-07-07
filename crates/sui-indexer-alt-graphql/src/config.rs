@@ -694,7 +694,7 @@ impl Default for ZkLoginConfig {
         Self {
             env: ZkLoginEnv::Prod,
             max_epoch_upper_bound_delta: max_across_protocol(
-                ProtocolConfig::zklogin_max_epoch_upper_bound_delta,
+                ProtocolConfig::zklogin_max_epoch_upper_bound_delta_as_option,
             ),
         }
     }

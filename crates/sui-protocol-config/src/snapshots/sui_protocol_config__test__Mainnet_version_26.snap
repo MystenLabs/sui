@@ -20,15 +20,10 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
-  consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
   narwhal_new_leader_election_schedule: true
-  zklogin_supported_providers:
-    - Facebook
-    - Google
-    - Twitch
   loaded_child_object_format: true
   enable_jwk_consensus_updates: true
   end_of_epoch_transaction_supported: true
@@ -199,4 +194,11 @@ execution_version: 1
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
-
+consensus_transaction_ordering: ByGasPrice
+zklogin_supported_providers:
+  - Facebook
+  - Google
+  - Twitch
+per_object_congestion_control_mode: None
+consensus_choice: Narwhal
+consensus_network: Anemo

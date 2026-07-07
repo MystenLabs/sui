@@ -453,48 +453,43 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
     let struct_name = &ast.ident;
     let data = &ast.data;
 
+    // Enforce that every field is a `bool`.
     let getters = match data {
         Data::Struct(data_struct) => match &data_struct.fields {
-            // Operate on each field of the ProtocolConfig struct
-            Fields::Named(fields_named) => fields_named.named.iter().filter_map(|field| {
-                // Extract field name and type
+            Fields::Named(fields_named) => fields_named.named.iter().map(|field| {
                 let field_name = field.ident.as_ref().expect("Field must be named");
                 let field_type = &field.ty;
-                let skip_accessor = field
-                    .attrs
-                    .iter()
-                    .any(|attr| attr.path.is_ident("skip_accessor"));
-                if skip_accessor {
-                    return None;
-                }
-                // Check if field is of type bool
-                match field_type {
+                let is_bool = matches!(
+                    field_type,
                     Type::Path(type_path)
                         if type_path
                             .path
                             .segments
                             .last()
-                            .is_some_and(|segment| segment.ident == "bool") =>
-                    {
-                        Some((
-                            quote! {
-                                // Derive the getter
-                                pub fn #field_name(&self) -> #field_type {
-                                    self.#field_name
-                                }
-                            },
-                            (
-                                quote! {
-                                    stringify!(#field_name) => Some(self.#field_name),
-                                },
-                                quote! {
-                                    stringify!(#field_name)
-                                },
-                            ),
-                        ))
-                    }
-                    _ => None,
+                            .is_some_and(|segment| segment.ident == "bool")
+                );
+                if !is_bool {
+                    panic!(
+                        "`{}::{}` must be `bool` — `ProtocolConfigFeatureFlagsGetters` only supports bool fields. \
+                         Non-bool configuration belongs on `ProtocolConfig` so it flows through `render`.",
+                        struct_name, field_name,
+                    );
                 }
+                (
+                    quote! {
+                        pub fn #field_name(&self) -> #field_type {
+                            self.#field_name
+                        }
+                    },
+                    (
+                        quote! {
+                            stringify!(#field_name) => Some(self.#field_name),
+                        },
+                        quote! {
+                            stringify!(#field_name)
+                        },
+                    ),
+                )
             }),
             _ => panic!("Only named fields are supported."),
         },

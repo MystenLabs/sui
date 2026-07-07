@@ -20,7 +20,6 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
-  consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
 max_tx_size_bytes: 131072
@@ -182,4 +181,8 @@ hash_keccak256_data_cost_per_block: 2
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
-
+consensus_transaction_ordering: ByGasPrice
+zklogin_supported_providers: []
+per_object_congestion_control_mode: None
+consensus_choice: Narwhal
+consensus_network: Anemo
