@@ -31,6 +31,8 @@ use sui_types::transaction::TransactionExpiration;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
 use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -71,7 +73,7 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub type CTransaction = OpaqueCursor<CursorToken>;
+pub type CTransaction = MultiCursor<OpaqueCursor<CursorToken>, JsonCursor<u64>>;
 
 pub(crate) struct TransactionConnection {
     pub edges: Vec<Edge<String, Transaction, EmptyFields>>,
@@ -283,8 +285,8 @@ impl Transaction {
         page: &Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<TransactionConnection, RpcError> {
-        let after = page.after().map(|c| c.position);
-        let before = page.before().map(|c| c.position);
+        let after = page.after().map(|c| c.tx_sequence_number());
+        let before = page.before().map(|c| c.tx_sequence_number());
 
         let filtered: Vec<_> = transactions
             .iter()
@@ -297,11 +299,11 @@ impl Transaction {
         page.paginate_results(
             filtered,
             |tx| {
-                OpaqueCursor::new(CursorToken::item(
+                MultiCursor::new(OpaqueCursor::new(CursorToken::item(
                     QueryType::Transactions,
                     0,
                     tx.tx_sequence_number,
-                ))
+                )))
             },
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
@@ -376,7 +378,13 @@ impl Transaction {
 
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| OpaqueCursor::new(CursorToken::item(QueryType::Transactions, 0, *s)),
+            |(s, _)| {
+                MultiCursor::new(OpaqueCursor::new(CursorToken::item(
+                    QueryType::Transactions,
+                    0,
+                    *s,
+                )))
+            },
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
@@ -456,7 +464,10 @@ impl TransactionConnection {
 
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
-        self.position
+        match self {
+            CTransaction::Primary(c) => c.position,
+            CTransaction::Secondary(c) => **c,
+        }
     }
 }
 
@@ -467,6 +478,13 @@ impl ByteCursor for CursorToken {
 
     fn encode_cursor(&self) -> bytes::Bytes {
         self.encode()
+    }
+}
+
+impl Eq for CTransaction {}
+impl PartialEq for CTransaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.tx_sequence_number() == other.tx_sequence_number()
     }
 }
 

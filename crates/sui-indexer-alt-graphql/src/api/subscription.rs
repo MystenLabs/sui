@@ -12,6 +12,7 @@ use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::QueryType;
 
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
@@ -127,9 +128,12 @@ impl Subscription {
                             if !filter.matches(&tx.contents) {
                                 continue;
                             }
-                            let cursor = CTransaction::new(
-                                CursorToken::item(QueryType::Transactions, processed.summary.sequence_number, tx.tx_sequence_number)
-                            ).encode_cursor();
+                            let cursor = CTransaction::new(OpaqueCursor::new(CursorToken::item(
+                                QueryType::Transactions,
+                                processed.summary.sequence_number,
+                                tx.tx_sequence_number,
+                            )))
+                            .encode_cursor();
                             yield Transaction::with_contents(scope.clone(), tx.contents.clone())
                                 .map(|transaction| Edge::new(cursor, transaction));
                         }
