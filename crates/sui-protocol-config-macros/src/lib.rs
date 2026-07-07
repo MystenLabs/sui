@@ -502,9 +502,14 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                                     quote! {
                                         stringify!(#field_name) => Some(self.#field_name),
                                     },
-                                    quote! {
-                                        stringify!(#field_name)
-                                    },
+                                    (
+                                        quote! {
+                                            stringify!(#field_name) => self.#field_name = val,
+                                        },
+                                        quote! {
+                                            stringify!(#field_name)
+                                        },
+                                    ),
                                 ),
                             ))
                         }
@@ -519,10 +524,13 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
 
     let mut protocol_config_getters = Vec::new();
     let mut string_name_getters = Vec::new();
+    let mut string_name_setters = Vec::new();
     let mut field_names = Vec::new();
-    for (protocol_config_getter, (string_name_getter, field_name)) in getters {
+    for (protocol_config_getter, (string_name_getter, (string_name_setter, field_name))) in getters
+    {
         protocol_config_getters.push(protocol_config_getter);
         string_name_getters.push(string_name_getter);
+        string_name_setters.push(string_name_setter);
         field_names.push(field_name);
     }
 
@@ -533,6 +541,14 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                 match value.as_str() {
                     #(#string_name_getters)*
                     _ => None,
+                }
+            }
+
+            /// Set a feature flag by its string representation
+            pub fn set_attr_for_testing(&mut self, attr: String, val: bool) {
+                match attr.as_str() {
+                    #(#string_name_setters)*
+                    _ => panic!("Attempting to set unknown feature flag: {}", attr),
                 }
             }
 
@@ -547,6 +563,11 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
 
         impl ProtocolConfig {
             #(#protocol_config_getters)*
+
+            /// Set a feature flag by its string representation
+            pub fn set_feature_flag_for_testing(&mut self, flag: String, val: bool) {
+                self.feature_flags.set_attr_for_testing(flag, val)
+            }
         }
     };
 

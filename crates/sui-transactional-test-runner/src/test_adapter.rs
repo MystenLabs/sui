@@ -261,7 +261,6 @@ impl AdapterInitConfig {
             protocol_version,
             chain,
             max_gas,
-            shared_object_deletion,
             simulator,
             num_custom_validator_accounts,
             reference_gas_price,
@@ -270,16 +269,12 @@ impl AdapterInitConfig {
             consistent_range,
             data_ingestion_path,
             rest_api_url,
-            enable_accumulators,
-            enable_authenticated_event_streams,
-            allow_references_in_ptbs,
-            enable_non_exclusive_writes,
-            enable_address_balance_gas_payments,
-            enable_coin_reservations,
             file_format_version,
             enable_gasless,
             gasless_max_pure_input_bytes,
             gasless_max_unused_inputs,
+            enable_feature_flags,
+            disable_feature_flags,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -304,27 +299,6 @@ impl AdapterInitConfig {
         } else {
             ProtocolConfig::get_for_version(ProtocolVersion::MAX, chain)
         };
-        if enable_accumulators {
-            protocol_config.enable_accumulators_for_testing();
-        }
-        if enable_authenticated_event_streams {
-            protocol_config.enable_authenticated_event_streams_for_testing();
-        }
-        if allow_references_in_ptbs {
-            protocol_config.allow_references_in_ptbs_for_testing();
-        }
-        if enable_non_exclusive_writes {
-            protocol_config.enable_non_exclusive_writes_for_testing();
-        }
-        if let Some(enable) = shared_object_deletion {
-            protocol_config.set_shared_object_deletion_for_testing(enable);
-        }
-        if enable_address_balance_gas_payments {
-            protocol_config.enable_address_balance_gas_payments_for_testing();
-        }
-        if enable_coin_reservations {
-            protocol_config.enable_coin_reservation_for_testing();
-        }
         if enable_gasless {
             protocol_config.enable_gasless_for_testing();
         }
@@ -341,6 +315,12 @@ impl AdapterInitConfig {
                 "gasless-max-unused-inputs requires --enable-gasless"
             );
             protocol_config.set_gasless_max_unused_inputs_for_testing(max_unused);
+        }
+        for flag in enable_feature_flags {
+            protocol_config.set_feature_flag_for_testing(flag, true);
+        }
+        for flag in disable_feature_flags {
+            protocol_config.set_feature_flag_for_testing(flag, false);
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
         // ExecutionTimeEstimate mode which is the only supported mode.
