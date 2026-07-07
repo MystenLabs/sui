@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "129",
+              "maxSupportedProtocolVersion": "130",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1429,6 +1429,7 @@
                 "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
+                "record_net_unsettled_object_withdraws": false,
                 "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relax_valid_during_for_owned_inputs": false,
@@ -2384,6 +2385,7 @@
                 "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
+                "record_net_unsettled_object_withdraws": false,
                 "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relax_valid_during_for_owned_inputs": false,

@@ -10,14 +10,18 @@ use sui_types::{
     accumulator_root::AccumulatorObjId,
     base_types::{ObjectID, SequenceNumber, random_object_ref},
     crypto::get_account_key_pair,
+    effects::TestEffectsBuilder,
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
     execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
 };
 
 use crate::{
-    accumulators::object_funds_checker::{
-        ObjectFundsChecker, ObjectFundsWithdrawStatus, metrics::ObjectFundsCheckerMetrics,
+    accumulators::{
+        funds_read::AccountFundsRead,
+        object_funds_checker::{
+            ObjectFundsChecker, ObjectFundsWithdrawStatus, metrics::ObjectFundsCheckerMetrics,
+        },
     },
     authority::{
         ExecutionEnv, shared_object_version_manager::AssignedVersions,
@@ -25,6 +29,22 @@ use crate::{
     },
     execution_scheduler::funds_withdraw_scheduler::mock_funds_read::MockFundsRead,
 };
+
+/// Checks object funds where the recorded net withdraws equal the checked running max
+/// withdraws, i.e. transactions whose withdraws are not offset by any deposits.
+fn check_object_funds_same(
+    checker: &ObjectFundsChecker,
+    withdraws: BTreeMap<AccumulatorObjId, u128>,
+    accumulator_version: SequenceNumber,
+    funds_read: &dyn AccountFundsRead,
+) -> ObjectFundsWithdrawStatus {
+    checker.check_object_funds(
+        withdraws.clone(),
+        withdraws,
+        accumulator_version,
+        funds_read,
+    )
+}
 
 #[tokio::test]
 async fn test_sufficient_balance() {
@@ -37,7 +57,8 @@ async fn test_sufficient_balance() {
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
@@ -56,7 +77,8 @@ async fn test_insufficient_balance() {
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
@@ -82,7 +104,8 @@ async fn test_pending_wait() {
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
     // Attempt to withdraw 101 at version 2.
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(2),
         funds_read.as_ref(),
@@ -110,7 +133,8 @@ async fn test_pending_then_sufficient() {
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
@@ -128,7 +152,8 @@ async fn test_pending_then_sufficient() {
     let result = receiver.await.unwrap();
     assert_eq!(result, FundsWithdrawStatus::MaybeSufficient);
 
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
@@ -147,7 +172,8 @@ async fn test_pending_then_insufficient() {
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 102)]),
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
@@ -165,7 +191,8 @@ async fn test_pending_then_insufficient() {
     let result = receiver.await.unwrap();
     assert_eq!(result, FundsWithdrawStatus::MaybeSufficient);
 
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 102)]),
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
@@ -189,7 +216,8 @@ async fn test_multiple_withdraws() {
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([
             (AccumulatorObjId::new_unchecked(account1), 100),
             (AccumulatorObjId::new_unchecked(account2), 50),
@@ -230,7 +258,8 @@ async fn test_account_version_ahead_of_schedule() {
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
-    let result = checker.check_object_funds(
+    let result = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
@@ -241,7 +270,8 @@ async fn test_account_version_ahead_of_schedule() {
     let result = receiver.await.unwrap();
     assert_eq!(result, FundsWithdrawStatus::Insufficient);
 
-    let result = checker.check_object_funds(
+    let result = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
@@ -261,7 +291,8 @@ async fn test_settle_ahead_of_schedule() {
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
     checker.settle_accumulator_version(SequenceNumber::from_u64(1));
-    let result = checker.check_object_funds(
+    let result = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
@@ -289,13 +320,15 @@ async fn test_check_out_of_order() {
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account1), 100)]),
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
     assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account2), 100)]),
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
@@ -303,7 +336,8 @@ async fn test_check_out_of_order() {
     let ObjectFundsWithdrawStatus::Pending(_) = status else {
         panic!("Expected pending status");
     };
-    let status = checker.check_object_funds(
+    let status = check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account1), 100)]),
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
@@ -327,7 +361,8 @@ async fn test_commit() {
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
     assert!(checker.is_empty());
-    checker.check_object_funds(
+    check_object_funds_same(
+        &checker,
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
@@ -357,7 +392,7 @@ async fn test_should_commit_early_exits() {
     // Normal path that triggers object funds check. Should not commit since insufficient funds.
     assert!(!checker.should_commit_object_funds_withdraws(
         &tx,
-        &ExecutionStatus::Success,
+        &TestEffectsBuilder::new(tx.data()).build(),
         &withdraws,
         &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
             vec![],
@@ -369,19 +404,112 @@ async fn test_should_commit_early_exits() {
     ));
 
     // Failed execution should always commit.
-    assert!(checker.should_commit_object_funds_withdraws(
-        &tx,
-        &ExecutionStatus::new_failure(ExecutionFailure::new(
-            ExecutionErrorKind::FunctionNotFound,
-            None,
-        )),
-        &withdraws,
-        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
-            vec![],
-            Some(SequenceNumber::from_u64(0))
-        )),
-        state.get_account_funds_read(),
-        state.execution_scheduler(),
-        &epoch_store,
+    assert!(
+        checker.should_commit_object_funds_withdraws(
+            &tx,
+            &TestEffectsBuilder::new(tx.data())
+                .with_status(ExecutionStatus::new_failure(ExecutionFailure::new(
+                    ExecutionErrorKind::FunctionNotFound,
+                    None,
+                )))
+                .build(),
+            &withdraws,
+            &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+                vec![],
+                Some(SequenceNumber::from_u64(0))
+            )),
+            state.get_account_funds_read(),
+            state.execution_scheduler(),
+            &epoch_store,
+        )
+    );
+}
+
+#[tokio::test]
+async fn test_net_withdraws_do_not_block_same_version_withdraws() {
+    // A transaction whose running max withdraw is 100 but whose net withdraw is 0
+    // (e.g. withdraw 100 then deposit 100 back) should not consume any of the
+    // unsettled balance at its accumulator version.
+    let account = ObjectID::random();
+    let funds_read = Arc::new(MockFundsRead::new(
+        SequenceNumber::from_u64(0),
+        BTreeMap::from([(account, 100)]),
     ));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
+    let status = checker.check_object_funds(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
+        BTreeMap::new(),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+
+    // The full balance is still available at the same version.
+    let status = check_object_funds_same(
+        &checker,
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+
+    // Now the balance is fully reserved by the previous withdraw.
+    let status = check_object_funds_same(
+        &checker,
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 1)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+        panic!("Expected pending status");
+    };
+    let result = receiver.await.unwrap();
+    assert_eq!(result, FundsWithdrawStatus::Insufficient);
+}
+
+#[tokio::test]
+async fn test_partial_net_withdraws() {
+    // A transaction with running max withdraw of 100 and net withdraw of 30
+    // (e.g. withdraw 100 then deposit 70 back) reserves only 30 of the
+    // unsettled balance.
+    let account = ObjectID::random();
+    let funds_read = Arc::new(MockFundsRead::new(
+        SequenceNumber::from_u64(0),
+        BTreeMap::from([(account, 100)]),
+    ));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
+    let status = checker.check_object_funds(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 30)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+
+    // 70 remains available; a withdraw of 71 must fail.
+    let status = check_object_funds_same(
+        &checker,
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 71)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+        panic!("Expected pending status");
+    };
+    let result = receiver.await.unwrap();
+    assert_eq!(result, FundsWithdrawStatus::Insufficient);
+
+    let status = check_object_funds_same(
+        &checker,
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 70)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
 }
