@@ -47,7 +47,7 @@ public fun add<K: copy + drop, V: drop>(_: &mut TxContext, _: Permit<K>, key: K,
 /// Returns a copy of the value bound to `key`. Requires a `Permit<K>` for the key type.
 /// Aborts with `EEntryDoesNotExist` if there is no entry for `key`.
 /// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `V`.
-public fun read<K: copy + drop, V: drop>(_: &TxContext, _: Permit<K>, key: K): V {
+public fun read<K: copy + drop, V: copy + drop>(_: &TxContext, _: Permit<K>, key: K): V {
     read_impl(hash_type_and_key(key))
 }
 
@@ -86,7 +86,7 @@ public macro fun internal_add<$K: copy + drop, $V: drop>(
 /// A wrapper for `read` that constructs the `Permit<$K>` directly.
 /// Aborts with `EEntryDoesNotExist` if there is no entry for `$key`.
 /// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
-public macro fun internal_read<$K: copy + drop, $V: drop>($ctx: &TxContext, $key: $K): $V {
+public macro fun internal_read<$K: copy + drop, $V: copy + drop>($ctx: &TxContext, $key: $K): $V {
     read<$K, $V>($ctx, permit(internal::permit<$K>()), $key)
 }
 
@@ -122,7 +122,7 @@ native fun add_impl<V: drop>(key: address, value: V);
 
 /// Aborts with `EEntryDoesNotExist` if there is no entry for `key`.
 /// Aborts with `EEntryTypeMismatch` if there is an entry for `key` but it is not of type `V`.
-native fun read_impl<V: drop>(key: address): V;
+native fun read_impl<V: copy + drop>(key: address): V;
 
 /// Aborts with `EEntryDoesNotExist` if there is no entry for `key`.
 /// Aborts with `EEntryTypeMismatch` if there is an entry for `key` but it is not of type `V`.
