@@ -450,6 +450,11 @@ impl CheckpointExecutor {
         .await
         .unwrap();
 
+        // At this point transaction outputs are durable in the perpetual store, but the
+        // epoch store has not yet recorded the checkpoint as executed. A crash here leaves
+        // object state ahead of the consensus replay position.
+        fail_point!("after-commit-transaction-outputs");
+
         finish_stage!(pipeline_handle, CommitTransactionOutputs);
 
         self.epoch_store

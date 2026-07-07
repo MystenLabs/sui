@@ -512,6 +512,34 @@ mod test {
         test_simulated_load(test_cluster, 120).await;
     }
 
+    // Crashes validators in the window after checkpoint transaction outputs are committed
+    // to the perpetual store but before the epoch store records the checkpoint as executed
+    // (last_consensus_stats, executed-transaction markers). On restart the perpetual store
+    // is ahead of the consensus replay position, so replayed commits are re-processed over
+    // already-durable object state. Uses a 3-validator committee: quorum requires all three
+    // validators, so a single transaction vote that differs after recovery flips
+    // finalization outcomes.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_crash_between_checkpoint_commit_and_finalization() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(3, 10_000, 1).await;
+
+        let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
+        let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
+
+        register_fail_point("after-commit-transaction-outputs", move || {
+            handle_failpoint(
+                dead_validator.clone(),
+                keep_alive_nodes.clone(),
+                grace_period.clone(),
+                0.05,
+            );
+        });
+
+        test_simulated_load(test_cluster, 120).await;
+    }
+
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_crashes_during_epoch_change() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
