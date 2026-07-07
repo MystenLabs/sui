@@ -65,6 +65,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_inflight: IntGaugeVec,
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
+    pub sequencing_certificate_stage_latency: HistogramVec,
     pub sequencing_certificate_processed: IntCounterVec,
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
@@ -129,6 +130,13 @@ impl ConsensusAdapterMetrics {
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
                 &["submitted", "tx_type", "processed_method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            sequencing_certificate_stage_latency: register_histogram_vec_with_registry!(
+                "sequencing_certificate_stage_latency",
+                "Cumulative latency from inflight slot acquisition until a submission reaches each stage of the submit path: position_received (consensus positions returned by the first successful submit), block_sequenced (the submitted block committed), status_received / status_expired (all positions reached a terminal status, or one expired from the status cache first).",
+                &["tx_type", "stage"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
@@ -593,14 +601,29 @@ impl ConsensusAdapter {
 
             // Submit the transaction to consensus, racing against the processed waiter in
             // case another validator sequences the transaction first.
+            let submit_start = guard.start;
+            let observe_stage = |stage: &str| {
+                self.metrics
+                    .sequencing_certificate_stage_latency
+                    .with_label_values(&[tx_type, stage])
+                    .observe(submit_start.elapsed().as_secs_f64());
+            };
             let submit_fut = async {
                 const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
+                let mut position_received_recorded = false;
 
                 loop {
                     // Submit the transaction to consensus and return the submit result with a status waiter
                     let (consensus_positions, status_waiter) = self
                         .submit_inner(&transactions, epoch_store, &transaction_keys, tx_type)
                         .await;
+
+                    // Only record the first receipt, so GC-triggered resubmissions don't
+                    // re-count; later stages then include any resubmission time.
+                    if !position_received_recorded {
+                        position_received_recorded = true;
+                        observe_stage("position_received");
+                    }
 
                     if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
                         tracing::Span::current().record(
@@ -623,6 +646,7 @@ impl ConsensusAdapter {
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "sequenced"])
                                 .inc();
+                            observe_stage("block_sequenced");
                             debug!(
                                 "Transaction {transaction_keys:?} has been sequenced by consensus."
                             );
@@ -647,8 +671,12 @@ impl ConsensusAdapter {
                                 .wait_for_position_statuses(&consensus_positions, epoch_store)
                                 .await
                             {
-                                Some(statuses) => break SequencingOutcome::Sequenced(statuses),
+                                Some(statuses) => {
+                                    observe_stage("status_received");
+                                    break SequencingOutcome::Sequenced(statuses);
+                                }
                                 None => {
+                                    observe_stage("status_expired");
                                     // A position expired from the status cache before it
                                     // was read: the block was committed and its commit
                                     // processed more than the retention window ago, so a
