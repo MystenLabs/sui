@@ -19,11 +19,11 @@ use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::{
-    AffectedObjectFilter, EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter,
-    EventTerm, GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse,
-    ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter,
-    TransactionLiteral, TransactionPredicate, TransactionTerm,
-    get_checkpoint_object_proof_response, list_events_response, list_transactions_response,
+    AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
+    GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse, ListEventsRequest,
+    ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter, TransactionLiteral,
+    TransactionTerm, get_checkpoint_object_proof_response, list_events_response,
+    list_transactions_response,
 };
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk_types::ValidatorCommittee;
@@ -171,17 +171,15 @@ where
 
 fn build_event_stream_head_filter(stream_id: SuiAddress) -> EventFilter {
     let head_filter = EventStreamHeadFilter::default().with_stream_id(stream_id.to_string());
-    let predicate = EventPredicate::default().with_event_stream_head(head_filter);
-    let literal = EventLiteral::default().with_include(predicate);
+    let literal = EventLiteral::default().with_event_stream_head(head_filter);
     let term = EventTerm::default().with_literals(vec![literal]);
     EventFilter::default().with_terms(vec![term])
 }
 
 fn build_affected_object_filter(object_id: ObjectID) -> TransactionFilter {
-    let predicate = TransactionPredicate::default().with_affected_object(
+    let literal = TransactionLiteral::default().with_affected_object(
         AffectedObjectFilter::default().with_object_id(object_id.to_string()),
     );
-    let literal = TransactionLiteral::default().with_include(predicate);
     let term = TransactionTerm::default().with_literals(vec![literal]);
     TransactionFilter::default().with_terms(vec![term])
 }

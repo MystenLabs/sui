@@ -20,7 +20,6 @@ use sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventItem;
 use sui_rpc::proto::sui::rpc::v2alpha::EventLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::EventPredicate;
 use sui_rpc::proto::sui::rpc::v2alpha::EventStreamHeadFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTypeFilter;
@@ -36,17 +35,14 @@ use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionPredicate;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::event_predicate;
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as AlphaLedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
 use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_predicate;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -676,60 +672,57 @@ fn ev_not_sender_only_filter(addr: SuiAddress) -> EventFilter {
     filter
 }
 
-fn tx_include(predicate: transaction_predicate::Predicate) -> TransactionLiteral {
-    let mut p = TransactionPredicate::default();
-    p.predicate = Some(predicate);
+fn tx_include(predicate: transaction_literal::Predicate) -> TransactionLiteral {
     let mut literal = TransactionLiteral::default();
-    literal.polarity = Some(transaction_literal::Polarity::Include(p));
+    literal.predicate = Some(predicate);
     literal
 }
 
-fn tx_exclude(predicate: transaction_predicate::Predicate) -> TransactionLiteral {
-    let mut p = TransactionPredicate::default();
-    p.predicate = Some(predicate);
+fn tx_exclude(predicate: transaction_literal::Predicate) -> TransactionLiteral {
     let mut literal = TransactionLiteral::default();
-    literal.polarity = Some(transaction_literal::Polarity::Exclude(p));
+    literal.predicate = Some(predicate);
+    literal.negated = true;
     literal
 }
 
 fn tx_sender_literal(addr: SuiAddress) -> TransactionLiteral {
     let mut s = SenderFilter::default();
     s.address = Some(addr.to_string());
-    tx_include(transaction_predicate::Predicate::Sender(s))
+    tx_include(transaction_literal::Predicate::Sender(s))
 }
 
 fn tx_not_sender_literal(addr: SuiAddress) -> TransactionLiteral {
     let mut s = SenderFilter::default();
     s.address = Some(addr.to_string());
-    tx_exclude(transaction_predicate::Predicate::Sender(s))
+    tx_exclude(transaction_literal::Predicate::Sender(s))
 }
 
 fn tx_move_call_literal(path: &str) -> TransactionLiteral {
     let mut mc = MoveCallFilter::default();
     mc.function = Some(path.to_string());
-    tx_include(transaction_predicate::Predicate::MoveCall(mc))
+    tx_include(transaction_literal::Predicate::MoveCall(mc))
 }
 
 fn tx_emit_module_literal(path: &str) -> TransactionLiteral {
     let mut em = EmitModuleFilter::default();
     em.module = Some(path.to_string());
-    tx_include(transaction_predicate::Predicate::EmitModule(em))
+    tx_include(transaction_literal::Predicate::EmitModule(em))
 }
 
 fn tx_event_type_literal(path: &str) -> TransactionLiteral {
     let mut et = EventTypeFilter::default();
     et.event_type = Some(path.to_string());
-    tx_include(transaction_predicate::Predicate::EventType(et))
+    tx_include(transaction_literal::Predicate::EventType(et))
 }
 
 fn tx_event_stream_head_literal(stream_id: ObjectID) -> TransactionLiteral {
     let mut esh = EventStreamHeadFilter::default();
     esh.stream_id = Some(stream_id.to_canonical_string(true));
-    tx_include(transaction_predicate::Predicate::EventStreamHead(esh))
+    tx_include(transaction_literal::Predicate::EventStreamHead(esh))
 }
 
 fn tx_package_write_literal() -> TransactionLiteral {
-    tx_include(transaction_predicate::Predicate::PackageWrite(
+    tx_include(transaction_literal::Predicate::PackageWrite(
         PackageWriteFilter::default(),
     ))
 }
@@ -768,38 +761,35 @@ fn tx_and(filters: Vec<TransactionFilter>) -> TransactionFilter {
     tx_filter(literals)
 }
 
-fn ev_include(predicate: event_predicate::Predicate) -> EventLiteral {
-    let mut p = EventPredicate::default();
-    p.predicate = Some(predicate);
+fn ev_include(predicate: event_literal::Predicate) -> EventLiteral {
     let mut literal = EventLiteral::default();
-    literal.polarity = Some(event_literal::Polarity::Include(p));
+    literal.predicate = Some(predicate);
     literal
 }
 
-fn ev_exclude(predicate: event_predicate::Predicate) -> EventLiteral {
-    let mut p = EventPredicate::default();
-    p.predicate = Some(predicate);
+fn ev_exclude(predicate: event_literal::Predicate) -> EventLiteral {
     let mut literal = EventLiteral::default();
-    literal.polarity = Some(event_literal::Polarity::Exclude(p));
+    literal.predicate = Some(predicate);
+    literal.negated = true;
     literal
 }
 
 fn ev_sender_literal(addr: SuiAddress) -> EventLiteral {
     let mut s = SenderFilter::default();
     s.address = Some(addr.to_string());
-    ev_include(event_predicate::Predicate::Sender(s))
+    ev_include(event_literal::Predicate::Sender(s))
 }
 
 fn ev_not_sender_literal(addr: SuiAddress) -> EventLiteral {
     let mut s = SenderFilter::default();
     s.address = Some(addr.to_string());
-    ev_exclude(event_predicate::Predicate::Sender(s))
+    ev_exclude(event_literal::Predicate::Sender(s))
 }
 
 fn ev_event_stream_head_literal(stream_id: ObjectID) -> EventLiteral {
     let mut esh = EventStreamHeadFilter::default();
     esh.stream_id = Some(stream_id.to_canonical_string(true));
-    ev_include(event_predicate::Predicate::EventStreamHead(esh))
+    ev_include(event_literal::Predicate::EventStreamHead(esh))
 }
 
 fn ev_sender(addr: SuiAddress) -> EventFilter {
@@ -809,13 +799,13 @@ fn ev_sender(addr: SuiAddress) -> EventFilter {
 fn ev_emit_module(path: &str) -> EventFilter {
     let mut em = EmitModuleFilter::default();
     em.module = Some(path.to_string());
-    ev_filter(vec![ev_include(event_predicate::Predicate::EmitModule(em))])
+    ev_filter(vec![ev_include(event_literal::Predicate::EmitModule(em))])
 }
 
 fn ev_event_type(path: &str) -> EventFilter {
     let mut et = EventTypeFilter::default();
     et.event_type = Some(path.to_string());
-    ev_filter(vec![ev_include(event_predicate::Predicate::EventType(et))])
+    ev_filter(vec![ev_include(event_literal::Predicate::EventType(et))])
 }
 
 fn ev_event_stream_head(stream_id: ObjectID) -> EventFilter {
@@ -1222,7 +1212,7 @@ async fn test_list_transactions_combinators_and_affected_filters() {
     let mut req = ListTransactionsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["digest"]));
     req.filter = Some(tx_filter(vec![tx_include(
-        transaction_predicate::Predicate::AffectedAddress(affected_address),
+        transaction_literal::Predicate::AffectedAddress(affected_address),
     )]));
     req.options = Some(query_options(100));
     let resp = list_transactions_result(&mut client, req).await;
@@ -1236,7 +1226,7 @@ async fn test_list_transactions_combinators_and_affected_filters() {
     let mut req = ListTransactionsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["digest"]));
     req.filter = Some(tx_filter(vec![tx_include(
-        transaction_predicate::Predicate::AffectedObject(affected_object),
+        transaction_literal::Predicate::AffectedObject(affected_object),
     )]));
     req.options = Some(query_options(100));
     let resp = list_transactions_result(&mut client, req).await;
