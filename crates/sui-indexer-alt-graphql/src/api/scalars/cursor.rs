@@ -36,6 +36,18 @@ pub struct JsonCursor<C>(C);
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct BcsCursor<C>(C);
 
+/// Cursor that can be either a primary or secondary format.
+///
+/// When decoding, the primary format is attempted first, and if that fails, the secondary format
+/// is attempted.
+///
+/// TODO: Remove once cursors have fully migrated to the new format.
+#[derive(Clone, Debug)]
+pub enum MultiCursor<P, S> {
+    Primary(P),
+    Secondary(S),
+}
+
 /// Cursor whose value uses an opaque, custom byte encoding, then encoded as Base64.
 ///
 /// In the GraphQL schema this will show up as a `String`.
@@ -55,6 +67,9 @@ pub enum Error {
 
     #[error("Invalid encoding: {0:#}")]
     BadEncoding(#[from] anyhow::Error),
+
+    #[error("'{0}' and '{1}'")]
+    BadMulti(Box<Error>, Box<Error>),
 }
 
 impl<C> JsonCursor<C> {
@@ -66,6 +81,12 @@ impl<C> JsonCursor<C> {
 impl<C> BcsCursor<C> {
     pub(crate) fn new(cursor: C) -> Self {
         Self(cursor)
+    }
+}
+
+impl<P, S> MultiCursor<P, S> {
+    pub(crate) fn new(cursor: P) -> Self {
+        Self::Primary(cursor)
     }
 }
 
@@ -104,6 +125,32 @@ impl<C> ScalarType for BcsCursor<C>
 where
     C: Send + Sync,
     C: Serialize + DeserializeOwned,
+{
+    fn parse(value: Value) -> InputValueResult<Self> {
+        if let Value::String(s) = value {
+            Self::decode_cursor(&s).map_err(InputValueError::custom)
+        } else {
+            Err(InputValueError::expected_type(value))
+        }
+    }
+
+    /// Just check that the value is a string, as we'll do more involved tests during parsing.
+    fn is_valid(value: &Value) -> bool {
+        matches!(value, Value::String(_))
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.encode_cursor())
+    }
+}
+
+#[Scalar(name = "String", visible = false)]
+impl<P, S> ScalarType for MultiCursor<P, S>
+where
+    P: Send + Sync,
+    P: CursorType<Error = Error>,
+    S: Send + Sync,
+    S: CursorType<Error = Error>,
 {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(s) = value {
@@ -180,6 +227,35 @@ where
 
     fn encode_cursor(&self) -> String {
         Base64::encode(bcs::to_bytes(&self.0).unwrap_or_default())
+    }
+}
+
+impl<P, S> CursorType for MultiCursor<P, S>
+where
+    P: CursorType<Error = Error>,
+    S: CursorType<Error = Error>,
+{
+    type Error = Error;
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        let errp = match P::decode_cursor(s) {
+            Ok(cursor) => return Ok(Self::Primary(cursor)),
+            Err(e) => Box::new(e),
+        };
+
+        let errs = match S::decode_cursor(s) {
+            Ok(cursor) => return Ok(Self::Secondary(cursor)),
+            Err(e) => Box::new(e),
+        };
+
+        Err(Error::BadMulti(errp, errs))
+    }
+
+    fn encode_cursor(&self) -> String {
+        match self {
+            Self::Primary(c) => c.encode_cursor(),
+            Self::Secondary(c) => c.encode_cursor(),
+        }
     }
 }
 
