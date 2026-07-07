@@ -7,9 +7,7 @@ use prost::Message as _;
 
 mod proto;
 
-use proto::sui::rpc::cursor::v1::{
-    CursorKind as ProtoCursorKind, CursorToken as ProtoCursorToken, QueryType as ProtoQueryType,
-};
+use proto::sui::rpc::cursor::v1 as grpc;
 
 /// Pagination cursor for the bitmap-backed ledger-history endpoints.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -56,11 +54,11 @@ impl CursorToken {
     }
 
     pub fn encode(&self) -> Bytes {
-        ProtoCursorToken::from(self).encode_to_vec().into()
+        grpc::CursorToken::from(self).encode_to_vec().into()
     }
 
     pub fn decode(bytes: &[u8]) -> anyhow::Result<Self> {
-        Self::try_from(ProtoCursorToken::decode(bytes)?)
+        Self::try_from(grpc::CursorToken::decode(bytes)?)
     }
 
     pub fn after_position_start(&self) -> Option<u64> {
@@ -79,42 +77,42 @@ impl CursorToken {
 }
 
 impl QueryType {
-    fn to_proto(self) -> ProtoQueryType {
+    fn to_proto(self) -> grpc::QueryType {
         match self {
-            QueryType::Checkpoints => ProtoQueryType::Checkpoints,
-            QueryType::Transactions => ProtoQueryType::Transactions,
-            QueryType::Events => ProtoQueryType::Events,
+            QueryType::Checkpoints => grpc::QueryType::Checkpoints,
+            QueryType::Transactions => grpc::QueryType::Transactions,
+            QueryType::Events => grpc::QueryType::Events,
         }
     }
 
-    fn from_proto(value: ProtoQueryType) -> Option<Self> {
+    fn from_proto(value: grpc::QueryType) -> Option<Self> {
         match value {
-            ProtoQueryType::Checkpoints => Some(QueryType::Checkpoints),
-            ProtoQueryType::Transactions => Some(QueryType::Transactions),
-            ProtoQueryType::Events => Some(QueryType::Events),
-            ProtoQueryType::Unspecified => None,
+            grpc::QueryType::Checkpoints => Some(QueryType::Checkpoints),
+            grpc::QueryType::Transactions => Some(QueryType::Transactions),
+            grpc::QueryType::Events => Some(QueryType::Events),
+            grpc::QueryType::Unspecified => None,
         }
     }
 }
 
 impl CursorKind {
-    fn to_proto(self) -> ProtoCursorKind {
+    fn to_proto(self) -> grpc::CursorKind {
         match self {
-            CursorKind::Item => ProtoCursorKind::Item,
-            CursorKind::Boundary => ProtoCursorKind::Boundary,
+            CursorKind::Item => grpc::CursorKind::Item,
+            CursorKind::Boundary => grpc::CursorKind::Boundary,
         }
     }
 
-    fn from_proto(value: ProtoCursorKind) -> Option<Self> {
+    fn from_proto(value: grpc::CursorKind) -> Option<Self> {
         match value {
-            ProtoCursorKind::Item => Some(CursorKind::Item),
-            ProtoCursorKind::Boundary => Some(CursorKind::Boundary),
-            ProtoCursorKind::Unspecified => None,
+            grpc::CursorKind::Item => Some(CursorKind::Item),
+            grpc::CursorKind::Boundary => Some(CursorKind::Boundary),
+            grpc::CursorKind::Unspecified => None,
         }
     }
 }
 
-impl From<&CursorToken> for ProtoCursorToken {
+impl From<&CursorToken> for grpc::CursorToken {
     fn from(cursor: &CursorToken) -> Self {
         Self {
             query_type: cursor.query_type.to_proto() as i32,
@@ -125,15 +123,15 @@ impl From<&CursorToken> for ProtoCursorToken {
     }
 }
 
-impl TryFrom<ProtoCursorToken> for CursorToken {
+impl TryFrom<grpc::CursorToken> for CursorToken {
     type Error = anyhow::Error;
 
-    fn try_from(proto: ProtoCursorToken) -> anyhow::Result<Self> {
-        let query_type = ProtoQueryType::try_from(proto.query_type)
+    fn try_from(proto: grpc::CursorToken) -> anyhow::Result<Self> {
+        let query_type = grpc::QueryType::try_from(proto.query_type)
             .ok()
             .and_then(QueryType::from_proto)
             .with_context(|| format!("unknown cursor query_type: {}", proto.query_type))?;
-        let kind = ProtoCursorKind::try_from(proto.kind)
+        let kind = grpc::CursorKind::try_from(proto.kind)
             .ok()
             .and_then(CursorKind::from_proto)
             .with_context(|| format!("unknown cursor kind: {}", proto.kind))?;
