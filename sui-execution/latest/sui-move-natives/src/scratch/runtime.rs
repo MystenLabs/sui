@@ -19,8 +19,8 @@ pub struct ScratchEntry {
 /// Per-transaction, in-memory scratch store. Entries are keyed by the address derived from the
 /// `(key type, key value)` pair and live only for the duration of the transaction. The key type
 /// and value are not stored directly, only the derived address.
-/// A fresh
-/// `ScratchRuntime` is installed per transaction, and the map is dropped at the end of it.
+/// A fresh `ScratchRuntime` is installed per transaction, and the map is dropped at the end of
+/// it.
 #[derive(Tid, Default)]
 pub struct ScratchRuntime {
     entries: BTreeMap<AccountAddress, ScratchEntry>,
