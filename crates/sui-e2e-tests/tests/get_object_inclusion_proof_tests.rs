@@ -1,13 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
-use mysten_common::backoff::ExponentialBackoff;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_rpc::proto::sui::rpc::v2alpha::GetCheckpointObjectProofRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::GetCheckpointObjectProofResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::get_checkpoint_object_proof_response;
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_types::base_types::ObjectID;
@@ -29,40 +25,6 @@ async fn get_test_object(test_cluster: &TestCluster) -> ObjectID {
         .unwrap()
         .unwrap()
         .0
-}
-
-/// Retries `request` until the object-proof index catches up to the requested
-/// checkpoint and returns the first indexed response. The proof RPC returns
-/// NotFound until the checkpoint is indexed (see test_checkpoint_not_yet_indexed),
-/// and the index runs behind the fullnode's latest checkpoint, so tests that pick
-/// a checkpoint from fullnode state must wait for the index to catch up. Sleeps
-/// are virtual under the simulator, so the generous budget costs nothing once the
-/// index catches up.
-async fn get_object_proof_when_indexed(
-    proof_client: &mut ProofServiceClient<tonic::transport::Channel>,
-    request: GetCheckpointObjectProofRequest,
-) -> GetCheckpointObjectProofResponse {
-    const TIMEOUT: Duration = Duration::from_secs(30);
-    let mut backoff = ExponentialBackoff::new(Duration::from_millis(100), Duration::from_secs(1));
-    tokio::time::timeout(TIMEOUT, async {
-        loop {
-            match proof_client
-                .get_checkpoint_object_proof(request.clone())
-                .await
-            {
-                Ok(response) => return response.into_inner(),
-                Err(status)
-                    if status.code() == tonic::Code::NotFound
-                        && status.message().contains("not yet indexed") =>
-                {
-                    tokio::time::sleep(backoff.next().unwrap()).await;
-                }
-                Err(status) => panic!("proof request should succeed once indexed: {status:?}"),
-            }
-        }
-    })
-    .await
-    .unwrap_or_else(|_| panic!("object proof index did not catch up within {TIMEOUT:?}"))
 }
 
 #[sim_test]
@@ -198,6 +160,11 @@ async fn test_object_not_modified_returns_non_inclusion() {
     let state = test_cluster.fullnode_handle.sui_node.state();
     let latest_checkpoint = state.get_latest_checkpoint_sequence_number().unwrap();
 
+    // The proof service serves from the embedded rpc-store, which indexes the
+    // tip asynchronously; wait for it to catch up to the fullnode's executed
+    // checkpoint before requesting a proof at `latest_checkpoint`.
+    test_cluster.wait_for_rpc_index_ready().await;
+
     let non_existent_object_id = ObjectID::random();
 
     let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
@@ -208,7 +175,11 @@ async fn test_object_not_modified_returns_non_inclusion() {
         .with_object_id(non_existent_object_id.to_string())
         .with_checkpoint(latest_checkpoint);
 
-    let response = get_object_proof_when_indexed(&mut proof_client, request).await;
+    let response = proof_client
+        .get_checkpoint_object_proof(request)
+        .await
+        .expect("non-inclusion proof should succeed")
+        .into_inner();
 
     let proof = response.proof.expect("proof should be present");
     assert!(
@@ -233,6 +204,11 @@ async fn test_valid_request() {
     let state = test_cluster.fullnode_handle.sui_node.state();
     let latest_checkpoint = state.get_latest_checkpoint_sequence_number().unwrap();
 
+    // The proof service serves from the embedded rpc-store, which indexes the
+    // tip asynchronously; wait for it to catch up to the fullnode's executed
+    // checkpoint before requesting proofs up to `latest_checkpoint`.
+    test_cluster.wait_for_rpc_index_ready().await;
+
     let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -245,7 +221,11 @@ async fn test_valid_request() {
         let request = GetCheckpointObjectProofRequest::default()
             .with_object_id(object_id.to_string())
             .with_checkpoint(checkpoint_seq);
-        let response = get_object_proof_when_indexed(&mut proof_client, request).await;
+        let response = proof_client
+            .get_checkpoint_object_proof(request)
+            .await
+            .expect("proof request should succeed")
+            .into_inner();
 
         if let Some(get_checkpoint_object_proof_response::Proof::Inclusion(p)) =
             response.proof.as_ref()

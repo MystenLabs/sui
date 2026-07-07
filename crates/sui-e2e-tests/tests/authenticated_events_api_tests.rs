@@ -1200,6 +1200,11 @@ async fn test_object_inclusion_proof_returns_non_inclusion() {
         .unwrap()
         .sequence_number;
 
+    // The proof service serves from the embedded rpc-store, which indexes the
+    // tip asynchronously; wait for it to catch up before requesting a proof at
+    // the highest executed checkpoint.
+    test_cluster.wait_for_rpc_index_ready().await;
+
     let mut proof_client =
         connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
 
