@@ -504,6 +504,11 @@ mod test {
             },
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
+        // Occasionally stall local consensus commit processing to make it more likely that
+        // the checkpoint executor (driven by state sync) runs ahead of it.
+        register_fail_point_async("handle-consensus-commit-delay", || {
+            delay_failpoint(500..3000, 0.05)
+        });
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();

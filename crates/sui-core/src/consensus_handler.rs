@@ -27,7 +27,7 @@ use nonempty::NonEmpty;
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_config::node::CongestionLogConfig;
-use sui_macros::{fail_point, fail_point_arg, fail_point_if};
+use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -1089,6 +1089,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         consensus_commit: impl ConsensusCommitAPI,
         transactions: ParsedConsensusTransactions,
     ) {
+        // Widens the window in which the checkpoint executor (driven by state sync) can run
+        // ahead of local consensus commit processing, since checkpoint execution is not
+        // gated on this task.
+        fail_point_async!("handle-consensus-commit-delay");
+
         {
             let protocol_config = self.epoch_store.protocol_config();
 
