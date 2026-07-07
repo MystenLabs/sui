@@ -303,6 +303,7 @@ mod test {
             grace_period,
             probability,
             10000..20000,
+            5000..30000,
         )
     }
 
@@ -312,6 +313,7 @@ mod test {
         grace_period: Arc<Mutex<Option<Instant>>>,
         probability: f64,
         restart_range_ms: std::ops::Range<u64>,
+        grace_range_ms: std::ops::Range<u64>,
     ) {
         let mut dead_validator = dead_validator.lock().unwrap();
         let mut grace_period = grace_period.lock().unwrap();
@@ -348,7 +350,8 @@ mod test {
             let dead_until = Instant::now() + restart_after;
 
             // Prevent the same node from being restarted again rapidly.
-            let alive_until = dead_until + Duration::from_millis(rng.gen_range(5000..30000));
+            let alive_until =
+                dead_until + Duration::from_millis(rng.gen_range(grace_range_ms.clone()));
             *grace_period = Some(alive_until);
 
             error!(?cur_node, ?dead_until, ?alive_until, "killing node");
@@ -532,23 +535,26 @@ mod test {
     // to the perpetual store but before the epoch store records the checkpoint as executed
     // (last_consensus_stats, executed-transaction markers). On restart the perpetual store
     // is ahead of the consensus replay position, so replayed commits are re-processed over
-    // already-durable object state. Uses a 3-validator committee: quorum requires all three
-    // validators, so a single transaction vote that differs after recovery flips
-    // finalization outcomes.
+    // already-durable object state.
+    //
+    // Uses a 4-validator committee: quorum is 3, so a single transaction vote that resolves
+    // differently after recovery flips finalization outcomes, while the network still
+    // progresses during a validator's downtime. That progress is essential: it lets the
+    // restarted validator execute state-synced certified checkpoints covering consensus
+    // commits it has not locally finalized, and a crash during that catch-up leaves durable
+    // effects for commits that will be re-finalized (with freshly recomputed votes) on the
+    // next restart. Long downtimes let the network get ahead; short grace periods allow
+    // re-killing a validator while it is still catching up.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_crash_between_checkpoint_commit_and_finalization() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        // Long epochs: with a 3-validator committee any dead node halts the network, and
-        // frequent reconfigs compound the stalls to the point where no load gets through.
-        let test_cluster = build_test_cluster(3, 60_000, 1).await;
+        let test_cluster = build_test_cluster(4, 60_000, 1).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
 
-        // Give benchmark setup (bank funding) time to complete before crashing validators;
-        // every crash halts the whole 3-validator committee. Restarts are fast for the same
-        // reason: long downtime just stalls the network without adding recovery coverage.
+        // Give benchmark setup (bank funding) time to complete before crashing validators.
         let arm_at = Instant::now() + Duration::from_secs(30);
         register_fail_point("after-commit-transaction-outputs", move || {
             if Instant::now() < arm_at {
@@ -559,11 +565,35 @@ mod test {
                 keep_alive_nodes.clone(),
                 grace_period.clone(),
                 0.05,
-                500..2000,
+                5_000..15_000,
+                1_000..5_000,
             );
         });
 
-        test_simulated_load(test_cluster, 120).await;
+        // Force recovery re-votes to differ from the votes cast before the crash. Recovery
+        // recomputes own votes against post-crash state (they are not persisted), so any
+        // vote whose inputs changed can legitimately resolve differently; this makes that
+        // deterministic instead of waiting for the right interleaving.
+        register_fail_point_if("recovery-vote-flip", || true);
+
+        // Conflicting transfers submit competing transactions over contested owned objects,
+        // generating transaction reject votes. With quorum equal to the full committee, a
+        // single vote that resolves differently after crash recovery flips finalization.
+        let mut config = SimulatedLoadConfig::default();
+        config.remote_env = false;
+        config.conflicting_transfer_weight = 1;
+        config.num_contested_objects = 5;
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            120,
+            config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]

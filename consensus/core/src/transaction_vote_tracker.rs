@@ -117,7 +117,7 @@ impl TransactionVoteTracker {
                 } else {
                     // Voting is needed for blocks above GC round and not yet included in own proposed blocks.
                     // A block proposal can include the input block later and retries own votes on it.
-                    let reject_transaction_votes =
+                    let mut reject_transaction_votes =
                         self.block_verifier.vote(&b).unwrap_or_else(|e| {
                             panic!(
                                 "Failed to vote on block {} (own_index={}) during recovery: {}",
@@ -126,6 +126,17 @@ impl TransactionVoteTracker {
                                 e
                             )
                         });
+                    // Simulates a recovery-time vote that resolves differently than the vote
+                    // cast before restart, e.g. because input object availability changed.
+                    sui_macros::fail_point_if!("recovery-vote-flip", || {
+                        if reject_transaction_votes.is_empty() && !b.transactions().is_empty() {
+                            info!(
+                                "recovery-vote-flip: injecting reject vote on {}",
+                                b.reference()
+                            );
+                            reject_transaction_votes.push(0);
+                        }
+                    });
                     (b, reject_transaction_votes)
                 }
             })
