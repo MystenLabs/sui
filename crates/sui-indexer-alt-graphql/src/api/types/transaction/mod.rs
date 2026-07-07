@@ -52,6 +52,7 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::extensions::query_limits;
+use crate::pagination::Error as PaginationError;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedTransaction;
@@ -353,6 +354,12 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<TransactionConnection, RpcError> {
+        // Reject cursors that don't decode as `CursorToken`s up front -- `TxBoundsCursor` for
+        // `CTransaction` assumes they are valid.
+        for cursor in page.after().into_iter().chain(page.before()) {
+            CursorToken::decode(cursor).map_err(|_| PaginationError::BadCursor)?;
+        }
+
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
