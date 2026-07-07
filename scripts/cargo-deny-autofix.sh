@@ -46,19 +46,35 @@ REMAINING_MD="$OUT_DIR/remaining.md"
 # be mistaken for a clean result.
 ADVISORIES=()
 scan() {
-  local ws="$1" diag deny_status=0
+  local ws="$1" diag json deny_status=0
   diag="$(mktemp)"
+  json="$(mktemp)"
   # cargo-deny writes JSON diagnostics to stderr and exits non-zero on errors.
   cargo deny --manifest-path "$ws/Cargo.toml" --format json check advisories 2> "$diag" || deny_status=$?
 
-  if ! jq -es '.' "$diag" > /dev/null 2>&1; then
+  # Other tooling can interleave non-JSON noise on the same stderr stream,
+  # e.g. rustup printing "info: syncing channel updates" while auto-installing
+  # the pinned toolchain on a fresh runner. cargo-deny emits one JSON object
+  # per line, so parse only lines that look like JSON and log the rest.
+  grep '^{' "$diag" > "$json" || true
+  grep -v '^{' "$diag" | sed 's/^/    [cargo-deny stderr] /' || true
+
+  if ! jq -es '.' "$json" > /dev/null 2>&1; then
     echo "::error::cargo-deny output for '$ws' is not valid JSON (exit ${deny_status}); raw output:"
     cat "$diag"
     exit 1
   fi
 
+  # cargo-deny ends every completed check with a summary diagnostic; if it is
+  # missing, the output was truncated or cargo-deny died mid-run.
+  if ! jq -es 'any(.[]; .type == "summary")' "$json" > /dev/null 2>&1; then
+    echo "::error::cargo-deny output for '$ws' has no summary diagnostic (exit ${deny_status}); raw output:"
+    cat "$diag"
+    exit 1
+  fi
+
   local other
-  other=$(jq -c 'select(.type == "diagnostic" and .fields.severity == "error" and .fields.advisory == null)' "$diag")
+  other=$(jq -c 'select(.type == "diagnostic" and .fields.severity == "error" and .fields.advisory == null)' "$json")
   if [[ -n "$other" ]]; then
     echo "::error::cargo-deny reported non-advisory errors for '$ws':"
     echo "$other"
@@ -68,14 +84,14 @@ scan() {
   mapfile -t ADVISORIES < <(jq -c '
     select(.type == "diagnostic" and .fields.severity == "error" and .fields.advisory != null)
     | {id: .fields.advisory.id} + (.fields.graphs[].Krate | {pkg: .name, ver: .version})
-  ' "$diag" | sort -u)
+  ' "$json" | sort -u)
 
   if [[ $deny_status -ne 0 && ${#ADVISORIES[@]} -eq 0 ]]; then
     echo "::error::cargo deny check advisories failed for '$ws' with no advisory diagnostics (exit ${deny_status}); raw output:"
     cat "$diag"
     exit 1
   fi
-  rm -f "$diag"
+  rm -f "$diag" "$json"
 }
 
 declare -A bumped_pkgs=()
