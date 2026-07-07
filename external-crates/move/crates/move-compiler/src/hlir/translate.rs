@@ -1064,7 +1064,13 @@ fn tail(
             let block_color = context.block_color(&ec);
             context.current_color = block_color.clone();
             let name = translate_block_label(name);
-            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            let (binders, mut bound_exp) = make_binders(context, eloc, out_type.clone());
+            // The binder Move/Copy is located at the macro's call site,
+            // which belongs to the surrounding scope — stamp the parent's
+            // color on it (see the value() NamedBlock case for details).
+            if bound_exp.exp.color.is_none() {
+                bound_exp.exp.color = Some(saved_color.clone());
+            }
             let result = if binders.is_empty() {
                 // need to swap the implicit unit out for a trailing unit in tail position
                 trailing_unit_exp(eloc)
@@ -1476,13 +1482,40 @@ fn value(
                 },
             ));
             context.exit_named_block(name);
-            // Note: we deliberately do NOT stamp `block_color` on `bound_exp`
-            // here. `bound_exp` is the Move/Copy of the binder used OUTSIDE the
-            // NamedBlock, so it must inherit the enclosing scope's color
-            // (matching its location at the call site of a macro), not
-            // the body's color. The binder StLoc gets the parent's color
-            // via `bind_named_block_result` above.
-            context.current_color = saved_color;
+            context.current_color = saved_color.clone();
+            // `bound_exp` reads the binder holding the NamedBlock's result
+            // and is used outside the block:
+            //
+            //   macro fun inc($a: u64): u64 { $a + 1 }
+            //   macro fun double($b: u64): u64 { $b + $b }
+            //   fun test(v: u64): u64 { double!(inc!(v)) }
+            //
+            // Expanding the `inc!(v)` substituted for double's first `$b`
+            // wraps inc's body in a NamedBlock. The read of its result
+            // binder (`bound_exp`) is located, like the block itself, at
+            // the `inc!(v)` call site, and is consumed by the `$b + $b`
+            // addition in double's body. There are three options for the
+            // read's color:
+            //   * the parent's color (`saved_color`): the Argument frame
+            //     created for the `$b` substitution, covering exactly the
+            //     `inc!(v)` text. Correct — the read's location falls
+            //     within it.
+            //   * the body's color (`block_color`): MacroBody(inc),
+            //     covering inc's definition. Incorrect — `inc!(v)` is
+            //     written in `test`, not inside inc's definition.
+            //   * no color: the read then inherits the color of the
+            //     command consuming it — the `$b + $b` addition, colored
+            //     MacroBody(double), covering double's definition.
+            //     Incorrect for the same reason — `inc!(v)` is not inside
+            //     double's definition.
+            // So we stamp the parent's color. The store into the binder
+            // already gets it via `bind_named_block_result` above, so
+            // store and read agree.
+            // See test: macro_frames/macro_arg_macro_call.
+            let mut bound_exp = bound_exp;
+            if bound_exp.exp.color.is_none() {
+                bound_exp.exp.color = Some(saved_color);
+            }
             bound_exp
         }
         E::Block(ec, (_, seq)) => {
@@ -2125,7 +2158,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             } else {
                 // The binders for `out_name` were created at the named
                 // block's location (the call site of a macro for the
-                // implicit _macro_return wrapper). The Assign that stores
+                // implicit `'%macro` return block). The Assign that stores
                 // the break value into them must therefore use the
                 // *parent* color of the block, while the RHS expression
                 // keeps its own (body) color so that to_bytecode picks it
@@ -2751,21 +2784,31 @@ fn value_evaluation_order(
 fn bind_exp(context: &mut Context, stmts: &mut Block, e: H::Exp) -> H::Exp {
     let loc = e.exp.loc;
     let ty = e.ty.clone();
-    let (binders, var_exp) = make_binders(context, loc, ty.clone());
-    bind_value_in_block(context, binders, Some(ty), stmts, e);
+    let (binders, mut var_exp) = make_binders(context, loc, ty.clone());
+    // `bind_value_in_block` assigns `e` to a fresh temp, and `var_exp`
+    // reads that temp back. Both are located at `e`'s location, so give
+    // the read the same color the assignment got. Leaving the read
+    // colorless would instead make it inherit the color of whatever
+    // command consumes it, which may not match that location.
+    // See test: macro_frames/macro_arg_macro_call.
+    let color = bind_value_in_block(context, binders, Some(ty), stmts, e);
+    var_exp.exp.color = Some(color);
     var_exp
 }
 
 // Takes binder(s), a block, and a value. If the value is defined, adds an assignment to the end
 // of the block to assign the binders to that value.
-// Returns the block and a flag indicating if that operation happened.
+// Returns the expansion color chosen for that assignment — the color of the
+// store into the binders, which is not necessarily the RHS's color (see the
+// color selection logic in the body). Callers binding to fresh temps use it
+// to give the temp's later read the same color as its store.
 fn bind_value_in_block(
     context: &mut Context,
     binders: Vec<H::LValue>,
     binders_type: Option<H::Type>,
     stmts: &mut Block,
     value_exp: H::Exp,
-) {
+) -> ExpansionColor {
     use H::{Command_ as C, Statement_ as S};
     let mut binders_valid = true;
     for sp!(loc, lvalue) in &binders {
@@ -2784,7 +2827,7 @@ fn bind_value_in_block(
         }
     }
     if !binders_valid {
-        return;
+        return context.current_color.clone();
     }
     let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
     let loc = rhs_exp.exp.loc;
@@ -2842,36 +2885,36 @@ fn bind_value_in_block(
         color.clone(),
         S::Command(csp(
             loc,
-            color,
+            color.clone(),
             C::Assign(H::AssignCase::Let, binders, rhs_exp),
         )),
     ));
+    color
 }
 
 /// Binds the result of a NamedBlock body (or a `break` value) to the
-/// block's binders, taking care to keep the Assign command's color
-/// consistent with the binders' source location.
+/// block's binders. `body_color` is the expansion color active inside
+/// the block and `parent_color` the color of the surrounding scope;
+/// when the two are equal this just delegates to
+/// [`bind_value_in_block`].
 ///
-/// `body_color` is the expansion color active inside the named block's
-/// body (the effective `block_color` computed on entry), and
-/// `parent_color` is the color of the surrounding scope (the
-/// `saved_color` captured before entering the block).
+/// They differ for the implicit `'%macro` return block
+/// (`N::BlockLabel::MACRO_RETURN_NAME_SYMBOL`) that typing wraps around
+/// every expanded macro body:
 ///
-/// For most blocks (`body_color == parent_color`) this just delegates
-/// to [`bind_value_in_block`].
+///   macro fun inc($a: u64): u64 { $a + 1 }
+///   fun test(v: u64): u64 { inc!(v) + 1 }
 ///
-/// For macro-generated NamedBlocks — the implicit `_macro_return`
-/// wrapper that typing places around every macro body — `body_color`
-/// is the macro's MacroBody color while `parent_color` is the
-/// surrounding scope. The binders for these blocks were created at the
-/// macro's call site (call-site location), so the binder StLoc must
-/// have a color matching that location, i.e. the *parent's* color, not
-/// the body's color. We therefore:
-///   * stamp `body_color` onto the RHS expression (if it has no color
-///     yet) so to_bytecode's `exp()` override picks it up for the
-///     value-producing instructions, and
-///   * emit the Assign Command/Statement with `parent_color` so the
-///     binder StLoc is consistent with its call-site location.
+/// Expanding `inc!(v)` produces a NamedBlock with `body_color` =
+/// MacroBody(inc) and `parent_color` = the color of `test`'s body (user
+/// code, no frame). The block's result `$a + 1` is computed inside
+/// inc's definition, but the binder holding it was created at the
+/// `inc!(v)` call site in `test` — so each side gets its own color:
+///   * the RHS expression is stamped with `body_color` (unless it
+///     already has a color), keeping the value-producing instructions
+///     in inc's frame, and
+///   * the assignment is emitted with `parent_color`, so the store into
+///     the call-site-located binder matches its location.
 fn bind_named_block_result(
     context: &mut Context,
     binders: Vec<H::LValue>,
