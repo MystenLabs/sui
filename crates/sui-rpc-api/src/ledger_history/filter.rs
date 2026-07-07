@@ -17,7 +17,6 @@ use sui_rpc::proto::sui::rpc::v2alpha::AffectedObjectFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::EventPredicate;
 use sui_rpc::proto::sui::rpc::v2alpha::EventStreamHeadFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTypeFilter;
@@ -26,12 +25,9 @@ use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionPredicate;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::event_predicate;
 use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_predicate;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 
@@ -125,12 +121,7 @@ fn validate_literal_fanout(
 }
 
 fn transaction_term_to_query(term: &TransactionTerm) -> Result<BitmapTerm, RpcError> {
-    let has_include = term.literals.iter().any(|literal| {
-        matches!(
-            literal.polarity,
-            Some(transaction_literal::Polarity::Include(_))
-        )
-    });
+    let has_include = term.literals.iter().any(|literal| !literal.negated);
 
     let mut literals = Vec::with_capacity(term.literals.len() + usize::from(!has_include));
     // Unanchored negation: a term with only excludes resolves as
@@ -161,10 +152,7 @@ fn transaction_term_to_query(term: &TransactionTerm) -> Result<BitmapTerm, RpcEr
 }
 
 fn event_term_to_query(term: &EventTerm) -> Result<BitmapTerm, RpcError> {
-    let has_include = term
-        .literals
-        .iter()
-        .any(|literal| matches!(literal.polarity, Some(event_literal::Polarity::Include(_))));
+    let has_include = term.literals.iter().any(|literal| !literal.negated);
 
     let mut literals = Vec::with_capacity(term.literals.len() + usize::from(!has_include));
     // Unanchored negation: a term with only excludes resolves as
@@ -199,104 +187,75 @@ fn convert_transaction_literal(
     literal: &TransactionLiteral,
     field_prefix: &str,
 ) -> Result<BitmapLiteral, RpcError> {
-    let polarity = literal.polarity.as_ref().ok_or_else(|| {
+    let predicate = literal.predicate.as_ref().ok_or_else(|| {
         FieldViolation::new(field_prefix)
-            .with_description("literal polarity is required")
+            .with_description("predicate variant is required")
             .with_reason(ErrorReason::FieldMissing)
     })?;
-    match polarity {
-        transaction_literal::Polarity::Include(predicate) => {
-            let key = convert_transaction_predicate(predicate, &format!("{field_prefix}.include"))?;
-            BitmapLiteral::include(key).map_err(|e| {
-                FieldViolation::new(field_prefix)
-                    .with_description(e.to_string())
-                    .with_reason(ErrorReason::FieldInvalid)
-                    .into()
-            })
-        }
-        transaction_literal::Polarity::Exclude(predicate) => {
-            let key = convert_transaction_predicate(predicate, &format!("{field_prefix}.exclude"))?;
-            BitmapLiteral::exclude(key).map_err(|e| {
-                FieldViolation::new(field_prefix)
-                    .with_description(e.to_string())
-                    .with_reason(ErrorReason::FieldInvalid)
-                    .into()
-            })
-        }
-        _ => Err(FieldViolation::new(field_prefix)
-            .with_description("unknown literal polarity")
+    let key = convert_transaction_predicate(predicate, field_prefix)?;
+    let bitmap = if literal.negated {
+        BitmapLiteral::exclude(key)
+    } else {
+        BitmapLiteral::include(key)
+    };
+    bitmap.map_err(|e| {
+        FieldViolation::new(field_prefix)
+            .with_description(e.to_string())
             .with_reason(ErrorReason::FieldInvalid)
-            .into()),
-    }
+            .into()
+    })
 }
 
 fn convert_event_literal(
     literal: &EventLiteral,
     field_prefix: &str,
 ) -> Result<BitmapLiteral, RpcError> {
-    let polarity = literal.polarity.as_ref().ok_or_else(|| {
-        FieldViolation::new(field_prefix)
-            .with_description("literal polarity is required")
-            .with_reason(ErrorReason::FieldMissing)
-    })?;
-    match polarity {
-        event_literal::Polarity::Include(predicate) => {
-            let key = convert_event_predicate(predicate, &format!("{field_prefix}.include"))?;
-            BitmapLiteral::include(key).map_err(|e| {
-                FieldViolation::new(field_prefix)
-                    .with_description(e.to_string())
-                    .with_reason(ErrorReason::FieldInvalid)
-                    .into()
-            })
-        }
-        event_literal::Polarity::Exclude(predicate) => {
-            let key = convert_event_predicate(predicate, &format!("{field_prefix}.exclude"))?;
-            BitmapLiteral::exclude(key).map_err(|e| {
-                FieldViolation::new(field_prefix)
-                    .with_description(e.to_string())
-                    .with_reason(ErrorReason::FieldInvalid)
-                    .into()
-            })
-        }
-        _ => Err(FieldViolation::new(field_prefix)
-            .with_description("unknown literal polarity")
-            .with_reason(ErrorReason::FieldInvalid)
-            .into()),
-    }
-}
-
-fn convert_transaction_predicate(
-    predicate: &TransactionPredicate,
-    field_prefix: &str,
-) -> Result<Vec<u8>, RpcError> {
-    let predicate = predicate.predicate.as_ref().ok_or_else(|| {
+    let predicate = literal.predicate.as_ref().ok_or_else(|| {
         FieldViolation::new(field_prefix)
             .with_description("predicate variant is required")
             .with_reason(ErrorReason::FieldMissing)
     })?;
+    let key = convert_event_predicate(predicate, field_prefix)?;
+    let bitmap = if literal.negated {
+        BitmapLiteral::exclude(key)
+    } else {
+        BitmapLiteral::include(key)
+    };
+    bitmap.map_err(|e| {
+        FieldViolation::new(field_prefix)
+            .with_description(e.to_string())
+            .with_reason(ErrorReason::FieldInvalid)
+            .into()
+    })
+}
+
+fn convert_transaction_predicate(
+    predicate: &transaction_literal::Predicate,
+    field_prefix: &str,
+) -> Result<Vec<u8>, RpcError> {
     match predicate {
-        transaction_predicate::Predicate::Sender(f) => {
+        transaction_literal::Predicate::Sender(f) => {
             convert_sender(f, &format!("{field_prefix}.sender.address"))
         }
-        transaction_predicate::Predicate::AffectedAddress(f) => {
+        transaction_literal::Predicate::AffectedAddress(f) => {
             convert_affected_address(f, &format!("{field_prefix}.affected_address.address"))
         }
-        transaction_predicate::Predicate::AffectedObject(f) => {
+        transaction_literal::Predicate::AffectedObject(f) => {
             convert_affected_object(f, &format!("{field_prefix}.affected_object.object_id"))
         }
-        transaction_predicate::Predicate::MoveCall(f) => {
+        transaction_literal::Predicate::MoveCall(f) => {
             convert_move_call(f, &format!("{field_prefix}.move_call.function"))
         }
-        transaction_predicate::Predicate::EmitModule(f) => {
+        transaction_literal::Predicate::EmitModule(f) => {
             convert_emit_module(f, &format!("{field_prefix}.emit_module.module"))
         }
-        transaction_predicate::Predicate::EventType(f) => {
+        transaction_literal::Predicate::EventType(f) => {
             convert_event_type(f, &format!("{field_prefix}.event_type.event_type"))
         }
-        transaction_predicate::Predicate::EventStreamHead(f) => {
+        transaction_literal::Predicate::EventStreamHead(f) => {
             convert_event_stream_head(f, &format!("{field_prefix}.event_stream_head.stream_id"))
         }
-        transaction_predicate::Predicate::PackageWrite(f) => {
+        transaction_literal::Predicate::PackageWrite(f) => {
             convert_package_write(f, &format!("{field_prefix}.package_write"))
         }
         _ => Err(FieldViolation::new(field_prefix)
@@ -307,25 +266,20 @@ fn convert_transaction_predicate(
 }
 
 fn convert_event_predicate(
-    predicate: &EventPredicate,
+    predicate: &event_literal::Predicate,
     field_prefix: &str,
 ) -> Result<Vec<u8>, RpcError> {
-    let predicate = predicate.predicate.as_ref().ok_or_else(|| {
-        FieldViolation::new(field_prefix)
-            .with_description("predicate variant is required")
-            .with_reason(ErrorReason::FieldMissing)
-    })?;
     match predicate {
-        event_predicate::Predicate::Sender(f) => {
+        event_literal::Predicate::Sender(f) => {
             convert_sender(f, &format!("{field_prefix}.sender.address"))
         }
-        event_predicate::Predicate::EmitModule(f) => {
+        event_literal::Predicate::EmitModule(f) => {
             convert_emit_module(f, &format!("{field_prefix}.emit_module.module"))
         }
-        event_predicate::Predicate::EventType(f) => {
+        event_literal::Predicate::EventType(f) => {
             convert_event_type(f, &format!("{field_prefix}.event_type.event_type"))
         }
-        event_predicate::Predicate::EventStreamHead(f) => {
+        event_literal::Predicate::EventStreamHead(f) => {
             convert_event_stream_head(f, &format!("{field_prefix}.event_stream_head.stream_id"))
         }
         _ => Err(FieldViolation::new(field_prefix)
@@ -513,15 +467,9 @@ mod tests {
         let mut sender = SenderFilter::default();
         sender.address = Some(address);
 
-        let mut predicate = TransactionPredicate::default();
-        predicate.predicate = Some(transaction_predicate::Predicate::Sender(sender));
-
         let mut literal = TransactionLiteral::default();
-        literal.polarity = Some(if exclude {
-            transaction_literal::Polarity::Exclude(predicate)
-        } else {
-            transaction_literal::Polarity::Include(predicate)
-        });
+        literal.predicate = Some(transaction_literal::Predicate::Sender(sender));
+        literal.negated = exclude;
         literal
     }
 
@@ -579,11 +527,9 @@ mod tests {
         let mut filter = EventStreamHeadFilter::default();
         filter.stream_id = Some(stream_id);
 
-        let key = convert_event_stream_head(
-            &filter,
-            "filter.terms.literals.include.event_stream_head.stream_id",
-        )
-        .expect("valid stream id");
+        let key =
+            convert_event_stream_head(&filter, "filter.terms.literals.event_stream_head.stream_id")
+                .expect("valid stream id");
 
         assert_eq!(
             key,
@@ -593,16 +539,10 @@ mod tests {
 
     #[test]
     fn package_write_filter_encodes_dimension_key() {
-        let mut predicate = TransactionPredicate::default();
-        predicate.predicate = Some(transaction_predicate::Predicate::PackageWrite(
-            PackageWriteFilter::default(),
-        ));
+        let predicate = transaction_literal::Predicate::PackageWrite(PackageWriteFilter::default());
 
-        let key = convert_transaction_predicate(
-            &predicate,
-            "filter.terms.literals.include.package_write",
-        )
-        .expect("package write predicate converts");
+        let key = convert_transaction_predicate(&predicate, "filter.terms.literals.package_write")
+            .expect("package write predicate converts");
 
         assert_eq!(
             key,
@@ -617,15 +557,9 @@ mod tests {
         let mut sender = SenderFilter::default();
         sender.address = Some(address);
 
-        let mut predicate = EventPredicate::default();
-        predicate.predicate = Some(event_predicate::Predicate::Sender(sender));
-
         let mut literal = EventLiteral::default();
-        literal.polarity = Some(if exclude {
-            event_literal::Polarity::Exclude(predicate)
-        } else {
-            event_literal::Polarity::Include(predicate)
-        });
+        literal.predicate = Some(event_literal::Predicate::Sender(sender));
+        literal.negated = exclude;
         literal
     }
 
