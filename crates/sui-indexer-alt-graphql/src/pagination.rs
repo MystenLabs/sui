@@ -61,6 +61,9 @@ pub(crate) enum End {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
+    #[error("Invalid input cursor")]
+    BadCursor,
+
     #[error("Cannot provide both 'first' and 'last' parameters for connection")]
     FirstAndLast,
 
