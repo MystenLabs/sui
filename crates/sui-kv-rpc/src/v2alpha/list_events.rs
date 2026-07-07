@@ -501,12 +501,25 @@ async fn render_event(
             .map(Box::new);
     }
 
+    // The event's ledger position rides on the `Event` message itself rather
+    // than the enclosing `EventItem`; populate each position field only when the
+    // read mask requests it. Authenticated-stream clients that need to
+    // reconstruct the `EventCommitment` leaf ask for these paths.
+    if read_mask.contains(ProtoEvent::CHECKPOINT_FIELD.name) {
+        proto_event.checkpoint = Some(tx.checkpoint_number);
+    }
+    if read_mask.contains(ProtoEvent::TRANSACTION_DIGEST_FIELD.name) {
+        proto_event.transaction_digest = Some(tx.digest.to_string());
+    }
+    if read_mask.contains(ProtoEvent::TRANSACTION_INDEX_FIELD.name) {
+        proto_event.transaction_index = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
+    }
+    if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
+        proto_event.event_index = Some(event_ref.event_idx);
+    }
+
     let mut item = EventItem::default();
-    item.checkpoint = Some(tx.checkpoint_number);
-    item.event_index = Some(event_ref.event_idx);
-    item.transaction_digest = Some(tx.digest.to_string());
     item.event = Some(proto_event);
-    item.transaction_offset = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
 
     Ok(RenderedEvent {
         item,
@@ -517,7 +530,7 @@ async fn render_event(
 
 fn end_response(reason: QueryEndReason) -> ListEventsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListEventsResponse::default();
     response.response = Some(list_events_response::Response::End(end));
@@ -704,10 +717,10 @@ mod tests {
 
     fn options(ordering: Ordering) -> QueryOptions {
         let mut request = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();
-        request.ordering = match ordering {
+        request.ordering = Some(match ordering {
             Ordering::Ascending => 0,
             Ordering::Descending => 1,
-        };
+        });
 
         QueryOptions::from_proto(Some(&request), 100, 100, QueryType::Events).unwrap()
     }

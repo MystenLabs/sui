@@ -283,7 +283,7 @@ pub(crate) async fn list_transactions(
                     ctx.observe_response_render(render_started.elapsed());
                     emitted += 1;
                     let yield_started = Instant::now();
-                    yield transaction_item_response(wm, executed, tx_offset);
+                    yield transaction_item_response(wm, executed, tx_offset, &read_mask);
                     ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
@@ -429,12 +429,16 @@ async fn fetch_transactions(
 }
 
 fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {
+    // `digest`, `checkpoint`, and `transaction_index` are all available from the
+    // tx_seq_digest index row, so a mask limited to them skips the full
+    // transaction fetch.
     let paths = read_mask.to_field_mask().paths;
     paths.is_empty()
-        || paths.len() > 2
+        || paths.len() > 3
         || paths.iter().any(|path| {
             path != ExecutedTransaction::DIGEST_FIELD.name
                 && path != ExecutedTransaction::CHECKPOINT_FIELD.name
+                && path != ExecutedTransaction::TRANSACTION_INDEX_FIELD.name
         })
 }
 
@@ -451,7 +455,7 @@ fn transaction_response_from_tx_seq_digest(
         transaction.checkpoint = Some(row.checkpoint_number);
     }
 
-    transaction_item_response(watermark, transaction, row.tx_offset)
+    transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
 }
 
 /// Determine the tx_sequence_number scan window from the logical checkpoint
@@ -509,13 +513,20 @@ async fn checkpoint_to_tx_boundary(
 
 fn transaction_item_response(
     watermark: Watermark,
-    transaction: ExecutedTransaction,
+    mut transaction: ExecutedTransaction,
     tx_offset: u32,
+    read_mask: &FieldMaskTree,
 ) -> ListTransactionsResponse {
+    // The within-checkpoint position rides on the `ExecutedTransaction` rather
+    // than the enclosing `TransactionItem`; populate it only when the read mask
+    // requests it.
+    if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
+        transaction.transaction_index = Some(tx_offset as u64);
+    }
+
     let mut item = TransactionItem::default();
     item.transaction = Some(transaction);
     item.watermark = Some(watermark);
-    item.transaction_offset = Some(tx_offset as u64);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::Item(item));
@@ -524,7 +535,7 @@ fn transaction_item_response(
 
 fn end_response(reason: QueryEndReason) -> ListTransactionsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::End(end));
@@ -584,19 +595,27 @@ mod tests {
             digest_wm.cursor.as_ref(),
             Some(&options.cursor_for_item(row.checkpoint_number, 42))
         );
-        assert_eq!(digest_wm.checkpoint_hi, Some(8));
-        assert_eq!(
-            digest_wm.checkpoint_lo, None,
-            "ascending scan must not set checkpoint_lo"
-        );
-        assert_eq!(
-            digest_only.transaction_offset,
-            Some(row.tx_offset as u64),
-            "within-checkpoint offset should propagate to the item"
-        );
+        assert_eq!(digest_wm.checkpoint, Some(8));
         let transaction = digest_only.transaction.expect("executed transaction");
+        assert_eq!(
+            transaction.transaction_index, None,
+            "transaction_index must be omitted when the read mask does not request it"
+        );
         assert_eq!(transaction.digest, Some(row.digest.to_string()));
         assert_eq!(transaction.checkpoint, None);
+
+        let with_index = unwrap_item(transaction_response_from_tx_seq_digest(
+            row,
+            &read_mask(&["digest", "transaction_index"]),
+            wm(),
+        ));
+        let transaction = with_index.transaction.expect("executed transaction");
+        assert_eq!(
+            transaction.transaction_index,
+            Some(row.tx_offset as u64),
+            "within-checkpoint offset should propagate when requested"
+        );
+        assert_eq!(transaction.digest, Some(row.digest.to_string()));
 
         let checkpoint_only = unwrap_item(transaction_response_from_tx_seq_digest(
             row,
