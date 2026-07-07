@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use common::rpc_utils::get_object_proof_when_indexed;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use std::time::Duration;
@@ -37,6 +38,8 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
 use sui_types::{MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
 use test_cluster::{TestCluster, TestClusterBuilder};
+
+mod common;
 
 /// Test cluster config that enables ledger history indexing, which is what
 /// backs the v2alpha ListEvents and ProofService endpoints.
@@ -807,35 +810,6 @@ fn verify_ocs_inclusion_proof(
         .map_err(|e| format!("Proof verification failed: {:?}", e))?;
 
     Ok(())
-}
-
-/// The proof RPC is backed by the async embedded rpc-store index, which can lag
-/// slightly behind the fullnode's latest executed checkpoint in simtests.
-async fn get_object_proof_when_indexed(
-    proof_client: &mut ProofServiceClient<tonic::transport::Channel>,
-    request: GetCheckpointObjectProofRequest,
-) -> GetCheckpointObjectProofResponse {
-    const TIMEOUT: Duration = Duration::from_secs(30);
-
-    tokio::time::timeout(TIMEOUT, async {
-        loop {
-            match proof_client
-                .get_checkpoint_object_proof(request.clone())
-                .await
-            {
-                Ok(response) => return response.into_inner(),
-                Err(status)
-                    if status.code() == tonic::Code::NotFound
-                        && status.message().contains("not yet indexed") =>
-                {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-                Err(status) => panic!("proof request should succeed once indexed: {status:?}"),
-            }
-        }
-    })
-    .await
-    .unwrap_or_else(|_| panic!("object proof index did not catch up within {TIMEOUT:?}"))
 }
 
 async fn fetch_and_verify_event_stream_head(
