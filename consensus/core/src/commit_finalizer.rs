@@ -112,6 +112,7 @@ impl CommitFinalizer {
 
     async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
         while let Some(committed_sub_dag) = receiver.recv().await {
+            sui_macros::fail_point_async!("commit-finalizer-delay");
             let already_finalized = !self.context.protocol_config.transaction_voting_enabled()
                 || committed_sub_dag.recovered_rejected_transactions;
             let finalized_commits = if !already_finalized {

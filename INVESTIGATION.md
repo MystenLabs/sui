@@ -246,6 +246,64 @@ Verified facts:
   - Expected on current code if the mechanism is real: fork panic (CachedVersionMap fatal /
     checkpoint fork detection) on a restarted validator.
 
+## ROUND 6 — repro attempts and the 3-validator topology dead end
+Run log (all with failpoint `after-commit-transaction-outputs` killing validators):
+1. 3 validators, 10s epochs, p=0.05, slow restarts → starved (0 successful txs; quorum=3
+   means any dead node halts the network; kills landed during setup/epoch changes).
+2. 3 validators, 60s epochs, 30s arming delay, p=0.02 → PASSED (load flowed, no fork).
+3. Same + fast restarts (0.5-2s, new handle_failpoint_with_restart_range_ms) → PASSED.
+4. Same + conflicting-transfer workload (reject votes), 10 seeds (MSIM_TEST_NUM=10 SEED=2)
+   → all PASSED.
+
+Topology insight (why 3-of-3 cannot reproduce this): the fork requires commits that are
+locally UNFINALIZED (→ re-finalized on restart) yet have canonical effects DURABLY on disk
+(→ collision target). Durable effects for unfinalized commits can only come from executing
+STATE-SYNCED certified checkpoints. With quorum = full committee: (a) checkpoint
+certification requires every validator's signature, so anything certified was already
+locally finalized and handled (replayed verbatim — safe); (b) while the victim is down the
+rest cannot advance, so there is nothing new to sync on restart. The dangerous population
+cannot form.
+
+Switch to 4 validators (quorum 3): single vote still pivotal (3 accepts → 2 = below quorum,
+per user's threshold point), but the network progresses during downtime → restarted node
+executes state-synced checkpoints for commits it never finalized → a second crash DURING
+catch-up (short grace period, 1-5s) lands the torn cut on exactly the dangerous population.
+Long downtimes (5-15s) let the network get ahead. Grace range parameterized in
+handle_failpoint_with_restart_range_ms.
+
+## ROUND 7 — re-finalization exercised; vote-flip theory DEAD
+Instrumented runs (markers: "killing node" / "Starting to recover unfinalized" /
+"recovery-vote-flip: injecting"):
+- Without finalizer delay: 14 kills, 8 flips, **0 unfinalized recoveries** — commits finalize
+  ~immediately when decided with local blocks (finalized_commits row lands with the commit),
+  so the dangerous population never forms; earlier green runs proved nothing.
+- Added `commit-finalizer-delay` failpoint (commit_finalizer.rs run loop; registered with
+  delay_failpoint(500..2000, 0.1)): commits persist via proposal flushes long before their
+  finalized rows, AND the delayed node's checkpoint signing lags so state sync runs ahead —
+  both fork ingredients on the same node.
+- With delay, 5 seeds: 88 kills, **27 unfinalized-commit recoveries (re-finalization
+  exercised)**, 19 vote flips — ALL PASSED. No fork.
+
+Why a self vote flip can never flip finalization (quorum arithmetic, corroborated):
+canonical accept ⇒ accept-cert quorum (≥2f+1) in committed blocks ⇒ canonical reject stake
+≤ f; + own stake ≤ 2f < 2f+1 ⇒ direct-reject unreachable. Indirect resolution reads only
+committed-block certificates (immutable; own pre-crash accept votes already committed).
+Flip only moves a tx direct-accept → pending → indirect-accept. Same outcome.
+⇒ The handle_vote_transaction/recovery-re-vote mechanism is NOT the root cause.
+
+## Remaining live hypotheses (in order)
+1. Premise violation: replayed commit CONTENT differs — consensus store losing its
+   un-fsync'd WAL tail across the upgrade restart. Impossible for same-host process kill
+   (page cache); possible with host replacement, unclean host reboot, container/PV
+   migration, or upgrade procedures that touch the consensus DB (snapshot restore wipes
+   it?). Lost/re-derived commits change which ExecutionTimeObservation txns are in which
+   commit → estimator state differs → "differing execution time estimates" → CCP fork.
+   ACTION: get incident operators' upgrade procedure + whether host/pod moved; check
+   incident consensus store for commit-content mismatch vs peers.
+2. Estimator-table/P atomicity hole via a path not yet found (main path verified atomic).
+3. Incident-data discriminators still decisive: finalized_commits row for the diverged
+   commit; rejected-set diff vs certified checkpoint; CCP field diff (assignments vs d2).
+
 ## CONCLUSION (round 2)
 Every CCP input is verified replay-symmetric EXCEPT the rejected-transaction set of commits
 that were persisted but never finalized before the crash. Those are re-finalized on restart

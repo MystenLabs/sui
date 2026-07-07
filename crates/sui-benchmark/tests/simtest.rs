@@ -576,6 +576,14 @@ mod test {
         // deterministic instead of waiting for the right interleaving.
         register_fail_point_if("recovery-vote-flip", || true);
 
+        // Delay commit finalization so commits persist (via proposal-triggered flushes)
+        // well before their finalized_commits rows are written. Crashes then land on a
+        // populated unfinalized suffix, which is re-finalized from recomputed votes on
+        // restart. The lag also holds back the node's own checkpoint signing while the
+        // rest of the committee certifies, so state sync executes certified checkpoints
+        // ahead of local consensus on the delayed node.
+        register_fail_point_async("commit-finalizer-delay", || delay_failpoint(500..2000, 0.1));
+
         // Conflicting transfers submit competing transactions over contested owned objects,
         // generating transaction reject votes. With quorum equal to the full committee, a
         // single vote that resolves differently after crash recovery flips finalization.
