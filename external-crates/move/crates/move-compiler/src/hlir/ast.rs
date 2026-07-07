@@ -1473,7 +1473,13 @@ impl AstDebug for Exp {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Exp { ty, exp } = self;
         if let Some(c) = &exp.color {
-            w.write(&format!("(color={c:?}) "));
+            // compact frame-chain rendering — the derived Debug of the Arc
+            // chain is too verbose for nested macros
+            let frames = match c {
+                Some(info) => info.debug_chain(),
+                None => "[]".to_string(),
+            };
+            w.write(&format!("(color={frames}) "));
         }
         w.annotate(|w| exp.value.ast_debug(w), ty)
     }

@@ -244,7 +244,7 @@ fn render_source_map_snapshot(files: &MappedFiles, units: &[AnnotatedCompiledUni
         let (addr, module_name) = &source_map.module_name;
         let _ = writeln!(out, "module {}::{module_name}", addr.short_str_lossless());
 
-        for (fdef_idx, function_source_map) in source_map.function_map_iter() {
+        for (fdef_idx, function_source_map) in source_map.function_source_maps() {
             let fdef_idx = FunctionDefinitionIndex(fdef_idx);
             let fdef = module.function_def_at(fdef_idx);
             let fhandle = module.function_handle_at(fdef.function);
@@ -319,7 +319,7 @@ fn collect_unit_source_hashes(
     collect_loc_source_hash(unit.module_name_loc, source_hashes);
     let source_map = &unit.named_module.source_map;
     collect_loc_source_hash(source_map.definition_location, source_hashes);
-    for (_, function_source_map) in source_map.function_map_iter() {
+    for (_, function_source_map) in source_map.function_source_maps() {
         collect_loc_source_hash(function_source_map.location, source_hashes);
         collect_loc_source_hash(function_source_map.definition_location, source_hashes);
         for (_, loc) in &function_source_map.type_parameters {

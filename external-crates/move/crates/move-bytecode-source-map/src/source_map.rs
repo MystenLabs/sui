@@ -719,7 +719,7 @@ impl SourceMap {
     }
 
     /// Iterates over all function source maps keyed by table index.
-    pub fn function_map_iter(&self) -> impl Iterator<Item = (TableIndex, &FunctionSourceMap)> {
+    pub fn function_source_maps(&self) -> impl Iterator<Item = (TableIndex, &FunctionSourceMap)> {
         self.function_map.iter().map(|(k, v)| (*k, v))
     }
 
@@ -728,21 +728,6 @@ impl SourceMap {
         &mut self,
     ) -> impl Iterator<Item = (TableIndex, &mut FunctionSourceMap)> {
         self.function_map.iter_mut().map(|(k, v)| (*k, v))
-    }
-
-    /// Records a macro expansion color for a bytecode instruction in a function's source map.
-    pub fn add_color_mapping(
-        &mut self,
-        fdef_idx: FunctionDefinitionIndex,
-        code_offset: CodeOffset,
-        color_index: Option<u32>,
-    ) -> Result<()> {
-        let func_entry = self
-            .function_map
-            .get_mut(&fdef_idx.0)
-            .ok_or_else(|| format_err!("Tried to add color mapping to undefined function index"))?;
-        func_entry.add_color_mapping(code_offset, color_index);
-        Ok(())
     }
 
     pub fn get_function_source_map(

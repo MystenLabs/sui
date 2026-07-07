@@ -850,7 +850,6 @@ fn statement(
     mut current_block: BasicBlock,
 ) -> (BasicBlock, BlockList) {
     use H::{Command_ as C, Statement_ as S};
-    let color = color.clone();
     match stmt {
         S::IfElse {
             cond: test,
@@ -1020,13 +1019,11 @@ fn statement(
             (entry_block, new_blocks)
         }
         S::Command(csp!(cloc, color, C::Break(name))) => {
-            let color = color.clone();
             // Discard the current block because it's dead code.
             let break_jump = make_jump(cloc, color, context.named_block_end_label(&name), true);
             (VecDeque::from([break_jump]), vec![])
         }
         S::Command(csp!(cloc, color, C::Continue(name))) => {
-            let color = color.clone();
             // Discard the current block because it's dead code.
             let jump = make_jump(cloc, color, context.named_block_start_label(&name), true);
             (VecDeque::from([jump]), vec![])

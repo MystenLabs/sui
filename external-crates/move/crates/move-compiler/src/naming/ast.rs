@@ -423,7 +423,7 @@ pub struct Block {
     pub name: Option<BlockLabel>,
     pub from_macro_argument: Option<MacroArgument>,
     /// Structural macro expansion info for the debugger's frame tracking.
-    /// `None` for non-macro blocks; `Some(Rc<MacroInfo>)` for blocks introduced
+    /// `None` for non-macro blocks; `Some(Arc<MacroInfo>)` for blocks introduced
     /// by macro body, lambda, or argument expansion.
     ///
     /// During macro body recoloring (`recolor_use_funs = true`), this is set to
