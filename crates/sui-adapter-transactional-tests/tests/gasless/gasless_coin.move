@@ -3,7 +3,7 @@
 
 // Tests gasless transactions with coin object inputs, MergeCoins, and SplitCoins.
 
-//# init --addresses test=0x0 --accounts A B C --enable-gasless --enable-accumulators --shared-object-deletion true
+//# init --addresses test=0x0 --accounts A B C --enable-gasless --enable-feature-flags shared_object_deletion
 
 //# publish --sender A
 #[allow(deprecated_usage)]

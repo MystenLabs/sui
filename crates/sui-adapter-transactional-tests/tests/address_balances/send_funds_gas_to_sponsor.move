@@ -6,7 +6,7 @@
 // override redirects the final charge from sponsor's Coin to sponsor's AB.
 // Net: B's AB ends with +coin_value - net_gas; A is untouched.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 // Sponsored tx: sender = A, sponsor = B. Default gas payment uses B's gas
 // coin (object 0,1). Workload `send_funds(Gas, @B)` transfers the gas coin

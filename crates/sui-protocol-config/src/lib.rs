@@ -5168,6 +5168,25 @@ mod test {
     }
 
     #[test]
+    fn test_feature_flag_setter_by_string() {
+        let mut prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
+        assert!(!prot.zklogin_auth());
+        prot.set_feature_flag_for_testing("zklogin_auth".to_string(), true);
+        assert!(prot.zklogin_auth());
+        prot.set_feature_flag_for_testing("zklogin_auth".to_string(), false);
+        assert!(!prot.zklogin_auth());
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown feature flag")]
+    fn test_feature_flag_setter_unknown_flag() {
+        let mut prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
+        prot.set_feature_flag_for_testing("some random string".to_string(), true);
+    }
+
+    #[test]
     fn test_get_for_version_if_supported_applies_test_overrides() {
         let before =
             ProtocolConfig::get_for_version_if_supported(ProtocolVersion::new(1), Chain::Unknown)

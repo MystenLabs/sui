@@ -12,7 +12,7 @@
 // (3 coins' balance values folded into AB, minus the 100 MIST routed out to
 // B as a new coin).
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 // Seed A's address balance.
 //# programmable --sender A --inputs 100000000000 @A

@@ -12,7 +12,7 @@
 // can't be paid, forcing the fallback. The snapshot shows A's address
 // balance dropping by exactly the budget.
 
-//# init --addresses test=0x0 --accounts A --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::big;
