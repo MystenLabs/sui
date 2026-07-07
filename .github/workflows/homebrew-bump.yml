@@ -30,7 +30,7 @@ on:
         description: "PAT with public_repo,workflow scopes — opens the homebrew-core PR"
         required: true
 
-concurrency: ${{ github.workflow }}-${{ inputs.sui_tag }}
+concurrency: homebrew-bump-${{ inputs.sui_tag }}
 
 permissions:
   contents: read
