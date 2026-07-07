@@ -22,12 +22,20 @@ use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{Type, TypeInner},
     parser::keywords::PRIMITIVE_TYPES,
-    shared::Name,
+    shared::{Identifier, Name},
 };
 use move_ir_types::location::sp;
 use move_symbol_pool::Symbol;
 
-use std::{path::PathBuf, sync::LazyLock};
+use std::{collections::BTreeMap, path::PathBuf, sync::LazyLock};
+
+/// Describes how a module should be referenced from an auto-imported completion or quick fix.
+pub struct ModuleImportInfo {
+    /// Prefix to insert at the use site, usually the module name or an existing alias.
+    pub module_prefix: String,
+    /// Import to insert for the module, or `None` if the module is already in scope.
+    pub import_text: Option<String>,
+}
 
 /// List of completion items of Move's primitive types.
 pub static PRIMITIVE_TYPE_COMPLETIONS: LazyLock<Vec<CompletionItem>> = LazyLock::new(|| {
@@ -92,6 +100,36 @@ pub fn auto_import_text_edit(
             ),
         },
     }
+}
+
+/// Computes a module prefix and optional module import for a target module.
+/// Returns `None` if importing the module would conflict with an existing module alias.
+pub fn module_import_info(
+    mod_ident: ModuleIdent,
+    in_scope_modules: &BTreeMap<Symbol, ModuleIdent>,
+) -> Option<ModuleImportInfo> {
+    for (alias, in_scope_mod_ident) in in_scope_modules {
+        if in_scope_mod_ident.value == mod_ident.value {
+            return Some(ModuleImportInfo {
+                module_prefix: alias.to_string(),
+                import_text: None,
+            });
+        }
+    }
+
+    let module_name = mod_ident.value.module.value();
+    if in_scope_modules.contains_key(&module_name) {
+        return None;
+    }
+
+    Some(ModuleImportInfo {
+        module_prefix: module_name.to_string(),
+        import_text: Some(format!(
+            "use {}::{}",
+            addr_to_ide_string(&mod_ident.value.address),
+            mod_ident.value.module,
+        )),
+    })
 }
 
 /// Returns an iterator over module identifiers and function names defined in these modules.

@@ -4,13 +4,48 @@ source: crates/move-analyzer/tests/ide_testsuite.rs
 == colon_colon.move ========================================================
 -- test 0 -------------------
 CODE ACTION: Qualify as `Autofix::dep::PubStruct`
+    EDIT: 'Autofix::dep::'
 CODE ACTION: Import as `Autofix::dep::PubStruct`
+    EDIT: '
+    use Autofix::dep::PubStruct;'
 -- test 1 -------------------
 CODE ACTION: Qualify as `Autofix::dep::create_struct`
-CODE ACTION: Import as `Autofix::dep::create_struct`
+    EDIT: 'Autofix::dep::'
+CODE ACTION: Qualify as `dep::create_struct`
+    EDIT: 'dep::'
 -- test 2 -------------------
 CODE ACTION: Qualify as `Autofix::another_dep`
+    EDIT: 'Autofix::'
 CODE ACTION: Import as `Autofix::another_dep`
+    EDIT: '
+    use Autofix::another_dep;'
 -- test 3 -------------------
 CODE ACTION: Qualify as `Autofix::another_dep::AnotherDepStruct`
+    EDIT: 'Autofix::'
 CODE ACTION: Import `Autofix::another_dep` for `another_dep::AnotherDepStruct`
+    EDIT: '
+    use Autofix::another_dep;'
+== function_import_convention.move ========================================================
+-- test 0 -------------------
+CODE ACTION: Qualify as `Autofix::dep::create_struct`
+    EDIT: 'Autofix::dep::'
+CODE ACTION: Import `Autofix::dep` and use `dep::create_struct`
+    EDIT: 'dep::'
+    EDIT: 'use Autofix::dep;
+
+    '
+-- test 1 -------------------
+CODE ACTION: Qualify as `Autofix::dep::PubStruct`
+    EDIT: 'Autofix::dep::'
+CODE ACTION: Import as `Autofix::dep::PubStruct`
+    EDIT: 'use Autofix::dep::PubStruct;
+
+    '
+-- test 2 -------------------
+CODE ACTION: Qualify as `Autofix::dep::create_struct`
+    EDIT: 'Autofix::dep::'
+CODE ACTION: Qualify as `d::create_struct`
+    EDIT: 'd::'
+-- test 3 -------------------
+CODE ACTION: Qualify as `Autofix::dep::create_struct`
+    EDIT: 'Autofix::dep::'

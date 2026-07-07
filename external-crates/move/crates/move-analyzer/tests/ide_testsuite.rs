@@ -396,6 +396,15 @@ impl AccessChainQuickFixTest {
         );
         for action in code_actions {
             writeln!(output, "CODE ACTION: {}", action.title)?;
+            if let Some(edit) = action.edit
+                && let Some(changes) = edit.changes
+            {
+                for text_edits in changes.values() {
+                    for text_edit in text_edits {
+                        writeln!(output, "    EDIT: '{}'", text_edit.new_text)?;
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -721,6 +730,32 @@ fn test_symbols_for_autocomplete<F: MoveFlavor + Default>(
     Ok(symbols)
 }
 
+/// Compute symbols for code-action tests with autocomplete information for the target file.
+/// The code-action test computes the exact cursor position separately for each diagnostic.
+fn test_symbols_for_code_action<F: MoveFlavor + Default>(
+    packages_info: Arc<Mutex<CachedPackages>>,
+    ide_files_root: VfsPath,
+    project_path: PathBuf,
+    cursor_path: &PathBuf,
+) -> anyhow::Result<(CompiledPkgInfo, Symbols)> {
+    let move_flavor = Arc::new(F::default());
+    let (compiled_pkg_info_opt, _) = get_compiled_pkg::<F>(
+        packages_info.clone(),
+        ide_files_root,
+        project_path.as_path(),
+        LintLevel::None,
+        move_flavor,
+        Some(Flavor::Sui),
+        Some(cursor_path),
+    )?;
+
+    let compiled_pkg_info =
+        compiled_pkg_info_opt.ok_or_else(|| anyhow::anyhow!("PACKAGE COMPILATION FAILED"))?;
+    let symbols = compute_symbols(packages_info, compiled_pkg_info.clone(), None);
+
+    Ok((compiled_pkg_info, symbols))
+}
+
 fn use_def_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<UseDefTest>>,
@@ -988,14 +1023,6 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor + Default>(
     let packages_info = Arc::new(Mutex::new(CachedPackages::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
-    // Compile once at suite level
-    let (mut compiled_pkg_info, mut symbols) = test_symbols_with_optional_modifications::<F>(
-        packages_info.clone(),
-        ide_files_root.clone(),
-        project_path.clone(),
-        None,
-    )?;
-
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
 
@@ -1009,6 +1036,16 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor + Default>(
 
         fpath.push(format!("sources/{file}"));
         let cpath = canonicalize_path(fpath.clone());
+
+        // Compile per file to get autocomplete/alias info for that file. The exact cursor position
+        // is computed later for each diagnostic triggerring a quick fix action, so it does not
+        // need to happen per test.
+        let (mut compiled_pkg_info, mut symbols) = test_symbols_for_code_action::<F>(
+            packages_info.clone(),
+            ide_files_root.clone(),
+            project_path.clone(),
+            &cpath,
+        )?;
 
         for (idx, test) in tests.iter().enumerate() {
             test.test(idx, &mut compiled_pkg_info, &mut symbols, writer, &cpath)?;

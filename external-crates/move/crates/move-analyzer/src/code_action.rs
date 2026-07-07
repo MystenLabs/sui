@@ -5,6 +5,7 @@ use crate::{
     completions::utils::{
         addr_to_ide_string, all_mod_enums_to_import, all_mod_functions_to_import,
         all_mod_structs_to_import, auto_import_text_edit, compute_cursor, import_insertion_info,
+        module_import_info,
     },
     context::Context,
     symbols::{
@@ -36,7 +37,7 @@ use move_compiler::{
     expansion::ast::ModuleIdent,
     linters::LintLevel,
     parser::ast::{LeadingNameAccess_, NameAccessChain_},
-    shared::{Identifier, Name},
+    shared::{Identifier, Name, ide::AliasAutocompleteInfo},
 };
 use move_package_alt::MoveFlavor;
 
@@ -149,7 +150,7 @@ fn access_chain_autofix_actions<F: MoveFlavor>(
         LintLevel::None,
         move_flavor,
         flavor,
-        None,
+        Some(&file_path),
     ) else {
         return code_actions;
     };
@@ -192,6 +193,9 @@ pub fn access_chain_autofix_actions_for_error(
     {
         return;
     }
+    if let Some(autocomplete_info) = compiled_pkg_info.compiler_autocomplete_info.clone() {
+        symbols.compiler_autocomplete_info = autocomplete_info;
+    }
     // compute cursor and update symbols with it
     let Some(file_path) = canonical_path_from_uri(&file_url) else {
         return;
@@ -231,7 +235,7 @@ pub fn access_chain_autofix_actions_for_error(
                 }
                 SingleElementChainDiagPrefix::UnboundFunction => {
                     if err_msg.starts_with(prefix.as_str()) {
-                        single_element_access_chain_autofixes(
+                        single_element_function_autofixes(
                             code_actions,
                             symbols,
                             cursor,
@@ -311,7 +315,7 @@ fn single_element_access_chain_autofixes<I, K>(
             let title = format!("Qualify as `{}{}`", autofix_prefix, unbound_name);
             code_actions.push(access_chain_code_action(
                 title,
-                text_edit,
+                vec![text_edit],
                 diag.clone(),
                 file_url.clone(),
             ));
@@ -321,7 +325,7 @@ fn single_element_access_chain_autofixes<I, K>(
                 let text_edit = auto_import_text_edit(import_text, import_insertion_info);
                 code_actions.push(access_chain_code_action(
                     title,
-                    text_edit,
+                    vec![text_edit],
                     diag.clone(),
                     file_url.clone(),
                 ));
@@ -345,7 +349,7 @@ fn single_element_access_chain_autofixes<I, K>(
                 let title = format!("Qualify as `{}{}`", autofix_prefix, unbound_name);
                 code_actions.push(access_chain_code_action(
                     title,
-                    text_edit,
+                    vec![text_edit],
                     diag.clone(),
                     file_url.clone(),
                 ));
@@ -355,7 +359,111 @@ fn single_element_access_chain_autofixes<I, K>(
                     let text_edit = auto_import_text_edit(import_text, import_insertion_info);
                     code_actions.push(access_chain_code_action(
                         title,
-                        text_edit,
+                        vec![text_edit],
+                        diag.clone(),
+                        file_url.clone(),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// Create auto-fixes for a single unbound function using module-qualified call style.
+/// For `f()`, when the target is `foo::f`, the code action should end up with `foo::f()`
+/// and auto-inserted `use pkg::foo;`.
+fn single_element_function_autofixes<I, K>(
+    code_actions: &mut Vec<CodeAction>,
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    file_url: Url,
+    unbound_name: Name,
+    mod_functions: I,
+    diag: Option<Diagnostic>,
+) where
+    I: Iterator<Item = (ModuleIdent, K)>,
+    K: Iterator<Item = Symbol>,
+{
+    let Some(unbound_name_lsp_pos) =
+        loc_start_to_lsp_position_opt(&symbols.files, &unbound_name.loc)
+    else {
+        return;
+    };
+    let info = symbols
+        .compiler_autocomplete_info
+        .get_path_autocomplete_info(&unbound_name.loc)
+        .cloned()
+        .unwrap_or_else(AliasAutocompleteInfo::new);
+    for (mod_ident, mod_functions) in mod_functions {
+        for function_name in mod_functions {
+            if function_name != unbound_name.value {
+                continue;
+            }
+
+            // Always offer full qualification; it is valid even when a module import would clash.
+            let qualified_prefix = format!(
+                "{}::{}::",
+                addr_to_ide_string(&mod_ident.value.address),
+                mod_ident.value.module
+            );
+            let text_edit = TextEdit {
+                range: Range {
+                    start: unbound_name_lsp_pos,
+                    end: unbound_name_lsp_pos,
+                },
+                new_text: qualified_prefix.clone(),
+            };
+            let title = format!("Qualify as `{}{}`", qualified_prefix, unbound_name);
+            code_actions.push(access_chain_code_action(
+                title,
+                vec![text_edit],
+                diag.clone(),
+                file_url.clone(),
+            ));
+
+            // Then offer the Move-style fix: import the module and qualify the call through it.
+            // `module_import_info` returns `None` if the module name is already bound to a
+            // different module, in which case the full-qualification fix above is the only one.
+            let Some(import_info) = module_import_info(mod_ident, &info.modules) else {
+                continue;
+            };
+            let prefix_edit = TextEdit {
+                range: Range {
+                    start: unbound_name_lsp_pos,
+                    end: unbound_name_lsp_pos,
+                },
+                new_text: format!("{}::", import_info.module_prefix),
+            };
+            match import_info.import_text {
+                Some(import_text) => {
+                    // The module is not in scope yet, so apply both edits as one code action.
+                    let Some(import_insertion_info) = import_insertion_info(symbols, cursor) else {
+                        continue;
+                    };
+                    let import_edit =
+                        auto_import_text_edit(import_text.clone(), import_insertion_info);
+                    let title = format!(
+                        "Import `{}` and use `{}::{}`",
+                        import_text.trim_start_matches("use "),
+                        import_info.module_prefix,
+                        unbound_name
+                    );
+                    code_actions.push(access_chain_code_action(
+                        title,
+                        vec![prefix_edit, import_edit],
+                        diag.clone(),
+                        file_url.clone(),
+                    ));
+                }
+                None => {
+                    // The module is already in scope, possibly under an alias; only qualify the call.
+                    let title = format!(
+                        "Qualify as `{}::{}`",
+                        import_info.module_prefix, unbound_name
+                    );
+                    code_actions.push(access_chain_code_action(
+                        title,
+                        vec![prefix_edit],
                         diag.clone(),
                         file_url.clone(),
                     ));
@@ -407,7 +515,7 @@ fn two_element_access_chain_autofixes<I, K>(
                 );
                 code_actions.push(access_chain_code_action(
                     title,
-                    text_edit,
+                    vec![text_edit],
                     diag.clone(),
                     file_url.clone(),
                 ));
@@ -430,7 +538,7 @@ fn two_element_access_chain_autofixes<I, K>(
                 );
                 code_actions.push(access_chain_code_action(
                     title,
-                    text_edit,
+                    vec![text_edit],
                     diag.clone(),
                     file_url.clone(),
                 ));
@@ -442,12 +550,12 @@ fn two_element_access_chain_autofixes<I, K>(
 /// Create code action for fixing access chain.
 fn access_chain_code_action(
     title: String,
-    text_edit: TextEdit,
+    text_edits: Vec<TextEdit>,
     diag: Option<Diagnostic>,
     file_url: Url,
 ) -> CodeAction {
     let mut changes = HashMap::new();
-    changes.insert(file_url.clone(), vec![text_edit]);
+    changes.insert(file_url.clone(), text_edits);
     CodeAction {
         title,
         kind: Some(CodeActionKind::QUICKFIX),

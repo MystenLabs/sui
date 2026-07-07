@@ -15,7 +15,7 @@
 use crate::{
     completions::utils::{
         PRIMITIVE_TYPE_COMPLETIONS, addr_to_ide_string, call_completion_item, completion_item,
-        import_insertion_info, mod_defs,
+        import_insertion_info, mod_defs, module_import_info,
     },
     symbols::{
         Symbols,
@@ -175,6 +175,7 @@ pub fn name_chain_completions(
                 symbols,
                 cursor,
                 &info.members,
+                &info.modules,
                 chain_kind,
                 import_insertion_info_opt,
             ));
@@ -651,6 +652,7 @@ fn all_single_name_member_completions(
     symbols: &Symbols,
     cursor: &CursorContext,
     members_info: &BTreeMap<(ModuleIdent, Symbol), BTreeSet<Symbol>>,
+    modules_info: &BTreeMap<Symbol, ModuleIdent>,
     chain_kind: ChainCompletionKind,
     import_insertion_info_opt: Option<AutoImportInsertionInfo>,
 ) -> Vec<CompletionItem> {
@@ -673,8 +675,30 @@ fn all_single_name_member_completions(
     }
     // member auto-imports
     if let Some(auto_import_pos) = import_insertion_info_opt {
-        let all_mod_members = all_mod_functions_to_import(symbols, cursor)
-            .chain(all_mod_structs_to_import(symbols, cursor))
+        // Functions follow Move style by importing the module and qualifying the inserted call.
+        for (mod_ident, import_functions) in all_mod_functions_to_import(symbols, cursor) {
+            let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
+                continue;
+            };
+            for function_name in import_functions {
+                // exclude functions that are already imported
+                if members_info.contains_key(&(mod_ident, function_name)) {
+                    continue;
+                }
+                let function_imports = function_auto_imports_with_module_import(
+                    symbols,
+                    cursor,
+                    mod_defs,
+                    &function_name,
+                    modules_info,
+                    chain_kind,
+                    auto_import_pos,
+                );
+                completions.extend(function_imports);
+            }
+        }
+
+        let all_mod_members = all_mod_structs_to_import(symbols, cursor)
             .chain(all_mod_enums_to_import(symbols, cursor))
             .chain(all_mod_consts_to_import(symbols, cursor));
         for (mod_ident, import_members) in all_mod_members {
@@ -700,6 +724,41 @@ fn all_single_name_member_completions(
     }
 
     completions
+}
+
+/// Returns function auto-import completions that follow module-qualified call style.
+/// For `with_def`, when completing `with_defining_ids`, the algorithm should end up with
+/// auto-completed `type_name::with_defining_ids()` and auto-inserted `use std::type_name;`.
+fn function_auto_imports_with_module_import(
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    mod_defs: &ModuleDefs,
+    function_name: &Symbol,
+    modules_info: &BTreeMap<Symbol, ModuleIdent>,
+    chain_kind: ChainCompletionKind,
+    auto_import_pos: AutoImportInsertionInfo,
+) -> Vec<CompletionItem> {
+    let mod_ident = sp(mod_defs.name_loc, mod_defs.ident);
+    let Some(import_info) = module_import_info(mod_ident, modules_info) else {
+        return vec![];
+    };
+    let mut function_completions = single_name_member_completion(
+        symbols,
+        cursor,
+        mod_defs,
+        function_name,
+        function_name,
+        chain_kind,
+    );
+    function_completions.iter_mut().for_each(|item| {
+        if let Some(insert_text) = item.insert_text.as_mut() {
+            *insert_text = format!("{}::{}", import_info.module_prefix, insert_text);
+        }
+        if let Some(import_text) = import_info.import_text.clone() {
+            add_auto_import_to_completion_item(item, import_text, auto_import_pos);
+        }
+    });
+    function_completions
 }
 
 /// Returns list of completion items that represent module members
