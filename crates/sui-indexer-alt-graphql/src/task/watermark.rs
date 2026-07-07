@@ -31,6 +31,7 @@ use tonic::metadata::AsciiMetadataValue;
 use tracing::debug;
 use tracing::warn;
 
+use crate::config::AvailabilityConfig;
 use crate::config::PipelineAvailability;
 use crate::config::PipelineConfig;
 use crate::config::WatermarkConfig;
@@ -71,6 +72,9 @@ pub(crate) struct WatermarkTask {
     /// the watermark for.
     pipeline: PipelineConfig,
 
+    /// Availability policy applied to each snapshot before it is published.
+    availability: AvailabilityConfig,
+
     /// Access to metrics to report watermark updates.
     metrics: Arc<RpcMetrics>,
 }
@@ -102,6 +106,10 @@ pub(crate) struct Pipeline {
     hi: Watermark,
     lo: Watermark,
     timestamp_ms_hi_inclusive: i64,
+
+    /// Whether this pipeline is currently served, per the configured availability policy. Set by
+    /// [`Watermarks::apply_availability`].
+    available: bool,
 }
 
 #[derive(QueryableByName, Clone)]
@@ -137,6 +145,7 @@ impl WatermarkTask {
     pub(crate) fn new(
         config: WatermarkConfig,
         pipeline: PipelineConfig,
+        availability: AvailabilityConfig,
         pg_reader: PgReader,
         bigtable_reader: Option<BigtableReader>,
         ledger_grpc_reader: Option<LedgerGrpcReader>,
@@ -157,6 +166,7 @@ impl WatermarkTask {
             consistent_reader,
             interval: watermark_polling_interval,
             pipeline,
+            availability,
             metrics,
         }
     }
@@ -184,6 +194,7 @@ impl WatermarkTask {
                 consistent_reader,
                 interval,
                 pipeline,
+                availability,
                 metrics,
             } = self;
 
@@ -233,6 +244,11 @@ impl WatermarkTask {
                         continue;
                     }
                 };
+
+                // Gate pipelines per the configured availability policy and recompute the global
+                // upperbound over only the available ones, so a gated pipeline no longer pins the
+                // consistency boundary.
+                w.apply_availability(&availability);
 
                 let previous = watermarks.read().await.clone();
                 for (pipeline, next) in &w.per_pipeline {
@@ -314,6 +330,7 @@ impl Watermarks {
                 transaction: row.tx_lo,
             },
             timestamp_ms_hi_inclusive: row.timestamp_ms_hi_inclusive,
+            available: true,
         };
 
         self.global_hi.epoch = self.global_hi.epoch.min(pipeline.hi.epoch);
@@ -324,6 +341,56 @@ impl Watermarks {
             .min(pipeline.timestamp_ms_hi_inclusive);
 
         self.per_pipeline.insert(row.pipeline, pipeline);
+    }
+
+    /// Apply the configured availability policy to this snapshot: flag each pipeline as available
+    /// or not, then recompute the global upperbound (and its timestamp) over only the available
+    /// pipelines. A gated pipeline therefore stops pinning `checkpoint_viewed_at`, while remaining
+    /// present in `per_pipeline` for health and metrics reporting.
+    fn apply_availability(&mut self, config: &AvailabilityConfig) {
+        // Approximate the network tip as the furthest-ahead pipeline. When a Bigtable or Ledger
+        // gRPC source is configured its virtual pipeline tracks the true network tip; computing the
+        // max over every pipeline (including any that end up gated) keeps the reference stable.
+        let network_tip = self
+            .per_pipeline
+            .values()
+            .map(|p| p.hi.checkpoint)
+            .max()
+            .unwrap_or(0) as u64;
+
+        for (name, pipeline) in self.per_pipeline.iter_mut() {
+            // A pipeline's own override wins, then the configured default; a pipeline with
+            // neither is always available.
+            pipeline.available = match config.policy_for(name) {
+                Some(policy) => policy.is_available(pipeline.hi.checkpoint as u64, network_tip),
+                None => true,
+            };
+        }
+
+        let mut global_hi = Watermark {
+            epoch: i64::MAX,
+            checkpoint: i64::MAX,
+            transaction: i64::MAX,
+        };
+        let mut timestamp_ms_hi_inclusive = i64::MAX;
+        let mut any_available = false;
+        for pipeline in self.per_pipeline.values().filter(|p| p.available) {
+            any_available = true;
+            global_hi.epoch = global_hi.epoch.min(pipeline.hi.epoch);
+            global_hi.checkpoint = global_hi.checkpoint.min(pipeline.hi.checkpoint);
+            global_hi.transaction = global_hi.transaction.min(pipeline.hi.transaction);
+            timestamp_ms_hi_inclusive =
+                timestamp_ms_hi_inclusive.min(pipeline.timestamp_ms_hi_inclusive);
+        }
+
+        // A lag policy can never gate the furthest-ahead pipeline (it is at zero distance from
+        // the tip), but `enabled = false` can gate every pipeline. In that case (and for an empty
+        // snapshot) keep the merge-time bounds so the snapshot stays `initialized` with a sane
+        // `checkpoint_viewed_at` rather than `i64::MAX`.
+        if any_available {
+            self.global_hi = global_hi;
+            self.timestamp_ms_hi_inclusive = timestamp_ms_hi_inclusive;
+        }
     }
 }
 
@@ -355,6 +422,10 @@ impl Pipeline {
 
     pub(crate) fn lo(&self) -> &Watermark {
         &self.lo
+    }
+
+    pub(crate) fn available(&self) -> bool {
+        self.available
     }
 }
 
@@ -439,22 +510,32 @@ impl Default for Watermarks {
 
 #[cfg(test)]
 impl Watermarks {
-    /// Build a `Watermarks` snapshot with the given pipeline high-checkpoints.
+    /// Build a `Watermarks` snapshot with the given pipeline high-checkpoints, merged the same
+    /// way production rows are.
     pub(crate) fn for_test(pipelines: &[(&str, u64)]) -> Self {
         let mut w = Self::default();
         for (name, hi_cp) in pipelines {
-            w.per_pipeline.insert(
-                name.to_string(),
-                Pipeline {
-                    hi: Watermark {
-                        checkpoint: *hi_cp as i64,
-                        ..Default::default()
-                    },
-                    lo: Watermark::default(),
-                    timestamp_ms_hi_inclusive: 0,
-                },
-            );
+            w.merge(WatermarkRow {
+                pipeline: name.to_string(),
+                epoch_hi_inclusive: 0,
+                checkpoint_hi_inclusive: *hi_cp as i64,
+                tx_hi: 0,
+                timestamp_ms_hi_inclusive: 0,
+                epoch_lo: 0,
+                checkpoint_lo: 0,
+                tx_lo: 0,
+            });
         }
+        w
+    }
+
+    /// Build a snapshot from `pipelines`, then apply `config`'s availability policy to it.
+    pub(crate) fn for_test_with_availability(
+        pipelines: &[(&str, u64)],
+        config: &AvailabilityConfig,
+    ) -> Self {
+        let mut w = Self::for_test(pipelines);
+        w.apply_availability(config);
         w
     }
 }
@@ -717,6 +798,23 @@ mod tests {
         rx.borrow_and_update().clone()
     }
 
+    fn within_tip(pipeline: &str, max_checkpoint_lag: u64) -> AvailabilityConfig {
+        AvailabilityConfig {
+            default: None,
+            pipelines: BTreeMap::from([(
+                pipeline.to_string(),
+                PipelineAvailability::MaxCheckpointLag(max_checkpoint_lag),
+            )]),
+        }
+    }
+
+    fn default_within_tip(max_checkpoint_lag: u64) -> AvailabilityConfig {
+        AvailabilityConfig {
+            default: Some(PipelineAvailability::MaxCheckpointLag(max_checkpoint_lag)),
+            pipelines: BTreeMap::new(),
+        }
+    }
+
     #[tokio::test]
     async fn explicit_enabled_and_disabled_are_respected() {
         let (_db, pg_reader, consistent_reader, metrics) = setup(&["tx_calls", "kv_objects"]).await;
@@ -765,5 +863,133 @@ mod tests {
         let w = snapshot(pipeline, pg_reader, consistent_reader, metrics).await;
 
         assert!(!w.per_pipeline().contains_key("tx_calls"));
+    }
+
+    #[test]
+    fn empty_config_keeps_all_available_and_global_hi_is_min() {
+        let mut w = Watermarks::for_test(&[("a", 100), ("b", 200)]);
+        w.apply_availability(&AvailabilityConfig::default());
+        assert!(w.per_pipeline["a"].available);
+        assert!(w.per_pipeline["b"].available);
+        assert_eq!(w.high_watermark().checkpoint(), 100);
+    }
+
+    #[test]
+    fn lagging_pipeline_is_dropped_from_global_hi() {
+        // "a" is the min and lags "b" (the tip) by 100 checkpoints.
+        let mut w = Watermarks::for_test(&[("a", 100), ("b", 200)]);
+        w.apply_availability(&within_tip("a", 50));
+        assert!(!w.per_pipeline["a"].available);
+        assert!(w.per_pipeline["b"].available);
+        // Gating "a" advances the boundary to "b".
+        assert_eq!(w.high_watermark().checkpoint(), 200);
+    }
+
+    #[test]
+    fn within_tip_gates_on_distance_from_the_tip() {
+        // "tip" is the furthest-ahead pipeline; "lagging" is 100 checkpoints behind it.
+        let base = Watermarks::for_test(&[("tip", 1_000_000), ("lagging", 999_900)]);
+
+        // A budget of 100 keeps the lagging pipeline available (boundary inclusive).
+        let mut within = base.clone();
+        within.apply_availability(&within_tip("lagging", 100));
+        assert!(within.per_pipeline["lagging"].available);
+        assert_eq!(within.high_watermark().checkpoint(), 999_900);
+
+        // A budget of 99 gates it out, advancing the boundary to the tip.
+        let mut beyond = base;
+        beyond.apply_availability(&within_tip("lagging", 99));
+        assert!(!beyond.per_pipeline["lagging"].available);
+        assert_eq!(beyond.high_watermark().checkpoint(), 1_000_000);
+    }
+
+    #[test]
+    fn furthest_ahead_pipeline_is_never_gated() {
+        let mut w = Watermarks::for_test(&[("a", 100), ("b", 200)]);
+        // Gate every pipeline to zero lag: "a" is 100 behind the tip and drops, but "b" is the tip
+        // itself (zero distance) and stays available, so the boundary never resets to `i64::MAX`.
+        w.apply_availability(&default_within_tip(0));
+        assert!(!w.per_pipeline["a"].available);
+        assert!(w.per_pipeline["b"].available);
+        assert!(w.initialized());
+        assert_eq!(w.high_watermark().checkpoint(), 200);
+    }
+
+    #[test]
+    fn default_gates_pipelines_without_an_override() {
+        // "a" lags "b" (the tip) by 100 checkpoints, beyond the default budget of 50.
+        let mut w = Watermarks::for_test(&[("a", 100), ("b", 200)]);
+        w.apply_availability(&default_within_tip(50));
+        assert!(!w.per_pipeline["a"].available);
+        assert!(w.per_pipeline["b"].available);
+        assert_eq!(w.high_watermark().checkpoint(), 200);
+    }
+
+    #[test]
+    fn override_beats_the_default() {
+        let base = Watermarks::for_test(&[("a", 100), ("b", 200)]);
+
+        // A looser override keeps "a" available where the default would gate it.
+        let mut loosened = base.clone();
+        let mut config = default_within_tip(50);
+        config.pipelines.insert(
+            "a".to_string(),
+            PipelineAvailability::MaxCheckpointLag(1000),
+        );
+        loosened.apply_availability(&config);
+        assert!(loosened.per_pipeline["a"].available);
+        assert_eq!(loosened.high_watermark().checkpoint(), 100);
+
+        // A tighter override gates "a" where the default would allow it.
+        let mut tightened = base;
+        let mut config = default_within_tip(1000);
+        config
+            .pipelines
+            .insert("a".to_string(), PipelineAvailability::MaxCheckpointLag(50));
+        tightened.apply_availability(&config);
+        assert!(!tightened.per_pipeline["a"].available);
+        assert_eq!(tightened.high_watermark().checkpoint(), 200);
+    }
+
+    #[test]
+    fn disabled_pipeline_is_dropped_even_at_the_tip() {
+        let mut w = Watermarks::for_test(&[("a", 100), ("b", 200)]);
+        let mut config = AvailabilityConfig::default();
+        config
+            .pipelines
+            .insert("b".to_string(), PipelineAvailability::Disabled);
+        w.apply_availability(&config);
+        assert!(w.per_pipeline["a"].available);
+        assert!(!w.per_pipeline["b"].available);
+        // With the tip gated, the boundary is the min over the remaining pipelines.
+        assert_eq!(w.high_watermark().checkpoint(), 100);
+    }
+
+    #[test]
+    fn enabled_override_exempts_from_the_default() {
+        // "a" lags beyond the default budget but is force-enabled, so it stays available and
+        // keeps pinning the boundary.
+        let mut w = Watermarks::for_test(&[("a", 100), ("b", 200)]);
+        let mut config = default_within_tip(50);
+        config
+            .pipelines
+            .insert("a".to_string(), PipelineAvailability::Enabled);
+        w.apply_availability(&config);
+        assert!(w.per_pipeline["a"].available);
+        assert_eq!(w.high_watermark().checkpoint(), 100);
+    }
+
+    #[test]
+    fn all_disabled_snapshot_stays_initialized() {
+        let mut w = Watermarks::for_test(&[("a", 100), ("b", 200)]);
+        w.apply_availability(&AvailabilityConfig {
+            default: Some(PipelineAvailability::Disabled),
+            pipelines: BTreeMap::new(),
+        });
+        assert!(!w.per_pipeline["a"].available);
+        assert!(!w.per_pipeline["b"].available);
+        // No pipeline is available; the merge-time bounds are kept so the snapshot stays usable.
+        assert!(w.initialized());
+        assert_eq!(w.high_watermark().checkpoint(), 100);
     }
 }

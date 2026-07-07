@@ -103,6 +103,7 @@ impl AvailableRangeKey {
             let watermark = watermarks
                 .per_pipeline()
                 .get(pipeline)
+                .filter(|p| p.available())
                 .ok_or_else(|| pipeline_unavailable(pipeline))?;
             Ok(acc.max(watermark.lo().checkpoint()))
         })
@@ -143,6 +144,9 @@ pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
         "cp_sequence_numbers" => feature_unavailable("querying checkpoints"),
         "ev_emit_mod" => feature_unavailable("querying events by emitting module"),
         "ev_struct_inst" => feature_unavailable("querying events by type"),
+        "kv_checkpoints" => feature_unavailable("fetching checkpoint contents"),
+        "kv_objects" => feature_unavailable("fetching object contents"),
+        "kv_transactions" => feature_unavailable("fetching transaction contents"),
         "obj_versions" => feature_unavailable("querying object versions"),
         "tx_affected_addresses" => {
             feature_unavailable("filtering transactions by affected address")
@@ -153,6 +157,26 @@ pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
         "tx_digests" => feature_unavailable("querying transactions"),
         "tx_kinds" => feature_unavailable("filtering transactions by kind"),
         _ => anyhow!("unrecognized pipeline name: {}", pipeline).into(),
+    }
+}
+
+/// Guard a read path that consumes `pipeline` but does not go through [`AvailableRangeKey::reader_lo`].
+///
+/// Returns `FeatureUnavailable` when `pipeline` is tracked but gated off by the configured
+/// availability policy. A pipeline that is not tracked at all is a no-op: its data is either served
+/// from an external store (e.g. `kv_*` content under a Bigtable/Ledger backend) or genuinely
+/// absent, and those cases are handled by the read path itself.
+pub(crate) fn require_pipeline(ctx: &Context<'_>, pipeline: &str) -> Result<(), RpcError> {
+    let watermarks: &Arc<Watermarks> = ctx.data()?;
+    check_pipeline_available(watermarks, pipeline)
+}
+
+/// The availability decision behind [`require_pipeline`], split out so it can be unit-tested
+/// without a GraphQL context.
+fn check_pipeline_available(watermarks: &Watermarks, pipeline: &str) -> Result<(), RpcError> {
+    match watermarks.per_pipeline().get(pipeline) {
+        Some(p) if !p.available() => Err(pipeline_unavailable(pipeline)),
+        _ => Ok(()),
     }
 }
 
@@ -674,5 +698,105 @@ mod field_piplines_tests {
             return true;
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod reader_lo_tests {
+    use std::collections::BTreeMap;
+
+    use crate::config::AvailabilityConfig;
+    use crate::config::PipelineAvailability;
+    use crate::error::RpcError;
+    use crate::task::watermark::Watermarks;
+
+    use super::AvailableRangeKey;
+    use super::check_pipeline_available;
+
+    /// `Query.transactions(filter: { function })` requires the `tx_calls` pipeline.
+    fn tx_by_function_key() -> AvailableRangeKey {
+        AvailableRangeKey {
+            type_: "Query".to_string(),
+            field: Some("transactions".to_string()),
+            filters: Some(vec!["function".to_string()]),
+        }
+    }
+
+    #[test]
+    fn available_pipeline_yields_reader_lo() {
+        let watermarks = Watermarks::for_test(&[
+            ("cp_sequence_numbers", 100),
+            ("tx_digests", 100),
+            ("tx_calls", 100),
+        ]);
+        assert_eq!(tx_by_function_key().reader_lo(&watermarks).unwrap(), 0);
+    }
+
+    #[test]
+    fn gated_pipeline_is_feature_unavailable() {
+        // `tx_calls` lags the other pipelines (the tip) by 100 checkpoints, beyond its lag budget.
+        let config = AvailabilityConfig {
+            default: None,
+            pipelines: BTreeMap::from([(
+                "tx_calls".to_string(),
+                PipelineAvailability::MaxCheckpointLag(50),
+            )]),
+        };
+        let watermarks = Watermarks::for_test_with_availability(
+            &[
+                ("cp_sequence_numbers", 200),
+                ("tx_digests", 200),
+                ("tx_calls", 100),
+            ],
+            &config,
+        );
+        let err = tx_by_function_key().reader_lo(&watermarks).unwrap_err();
+        assert!(
+            matches!(err, RpcError::FeatureUnavailable { what } if what.contains("function calls")),
+            "expected a FeatureUnavailable error about function calls, got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn require_pipeline_gates_present_but_unavailable() {
+        // `consistent` lags the tip by 100 checkpoints, beyond its lag budget.
+        let config = AvailabilityConfig {
+            default: None,
+            pipelines: BTreeMap::from([(
+                "consistent".to_string(),
+                PipelineAvailability::MaxCheckpointLag(50),
+            )]),
+        };
+        let watermarks =
+            Watermarks::for_test_with_availability(&[("consistent", 100), ("tip", 200)], &config);
+        assert!(check_pipeline_available(&watermarks, "consistent").is_err());
+    }
+
+    #[test]
+    fn require_pipeline_allows_available_pipeline() {
+        let watermarks = Watermarks::for_test(&[("consistent", 100)]);
+        assert!(check_pipeline_available(&watermarks, "consistent").is_ok());
+    }
+
+    #[test]
+    fn require_pipeline_is_noop_for_untracked_pipeline() {
+        // An absent pipeline (e.g. `kv_objects` when content is served from Bigtable) must not be
+        // gated: the guard only fires when the pipeline is tracked and gated off.
+        let watermarks = Watermarks::for_test(&[("other", 100)]);
+        assert!(check_pipeline_available(&watermarks, "kv_objects").is_ok());
+    }
+
+    #[test]
+    fn content_pipelines_have_feature_mappings() {
+        // Gating a content pipeline must produce a `FeatureUnavailable`, not an internal error.
+        for pipeline in ["kv_objects", "kv_transactions", "kv_checkpoints"] {
+            assert!(
+                matches!(
+                    super::pipeline_unavailable(pipeline),
+                    RpcError::FeatureUnavailable { .. }
+                ),
+                "{pipeline} should map to a FeatureUnavailable error",
+            );
+        }
     }
 }

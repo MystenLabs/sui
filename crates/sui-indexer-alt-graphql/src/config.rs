@@ -162,26 +162,6 @@ pub struct PipelineAvailabilityLayer {
     pub max_checkpoint_lag: Option<u64>,
 }
 
-impl PipelineAvailability {
-    /// Whether a pipeline whose high-watermark is at `checkpoint` should be served, given the
-    /// current `network_tip` (the highest checkpoint high-watermark across all tracked pipelines).
-    pub(crate) fn is_available(&self, checkpoint: u64, network_tip: u64) -> bool {
-        match self {
-            Self::Enabled => true,
-            Self::Disabled => false,
-            Self::MaxCheckpointLag(lag) => network_tip.saturating_sub(checkpoint) <= *lag,
-        }
-    }
-}
-
-impl AvailabilityConfig {
-    /// The policy gating `pipeline`, if any: its own override when configured, otherwise the
-    /// default.
-    pub(crate) fn policy_for(&self, pipeline: &str) -> Option<&PipelineAvailability> {
-        self.pipelines.get(pipeline).or(self.default.as_ref())
-    }
-}
-
 /// Configuration for a single pipeline's `enabled` and `availability` settings -- used both for
 /// the shared default (`[pipeline-defaults]`) and for per-pipeline overrides (`[pipeline.<name>]`).
 /// Kept as its own type/section rather than flattened together with the per-pipeline map: TOML
@@ -511,6 +491,26 @@ impl HealthLayer {
                 .map(Duration::from_millis)
                 .unwrap_or(base.max_checkpoint_lag),
         }
+    }
+}
+
+impl PipelineAvailability {
+    /// Whether a pipeline whose high-watermark is at `checkpoint` should be served, given the
+    /// current `network_tip` (the highest checkpoint high-watermark across all tracked pipelines).
+    pub(crate) fn is_available(&self, checkpoint: u64, network_tip: u64) -> bool {
+        match self {
+            Self::Enabled => true,
+            Self::Disabled => false,
+            Self::MaxCheckpointLag(lag) => network_tip.saturating_sub(checkpoint) <= *lag,
+        }
+    }
+}
+
+impl AvailabilityConfig {
+    /// The policy gating `pipeline`, if any: its own override when configured, otherwise the
+    /// default.
+    pub(crate) fn policy_for(&self, pipeline: &str) -> Option<&PipelineAvailability> {
+        self.pipelines.get(pipeline).or(self.default.as_ref())
     }
 }
 
