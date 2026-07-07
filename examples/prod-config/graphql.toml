@@ -34,3 +34,15 @@ watermark-polling-interval-ms = 500
 [zklogin]
 env = "Prod"
 max-epoch-upper-bound-delta = 30
+
+[pipeline-defaults]
+# Enable every pipeline by default; set `enabled = false` on a specific
+# `[pipeline.<name>]` entry to opt back out despite the default.
+enabled = true
+
+# Gate served data by how far a pipeline lags behind the network tip. With no
+# [pipeline-defaults.availability] section (or per-pipeline override), every
+# enabled pipeline is always served, so this is optional and does not change
+# behaviour if omitted.
+# [pipeline-defaults.availability]
+# max-checkpoint-lag = 100

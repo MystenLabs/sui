@@ -46,6 +46,9 @@ pub struct RpcConfig {
 
     /// Configuration for which pipelines this service can expect to find populated.
     pub pipeline: PipelineConfig,
+
+    /// Which pipelines to serve, based on how far their data lags behind the network tip.
+    pub availability: AvailabilityConfig,
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
@@ -84,25 +87,115 @@ pub struct PipelineConfig {
     pub default_availability: PipelineAvailability,
 }
 
-/// Whether a pipeline is enabled: tracked by GraphQL and expected to be populated in the database
-/// it reads from.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Availability policy for a pipeline: serve it unconditionally (`enabled = true`), never serve
+/// it (`enabled = false`), or serve it only while its high-watermark is within
+/// `max-checkpoint-lag` checkpoints of the network tip. A policy section sets exactly one of the
+/// two keys. Queries that require a pipeline that is not served return a `FeatureUnavailable`
+/// error, and such a pipeline stops pinning the server's consistency boundary.
+///
+/// The shared `[pipeline-defaults].availability` section sets a default policy for every tracked
+/// pipeline, and a `[pipeline.<name>].availability` section overrides it for a single pipeline
+/// (e.g. `enabled = true` exempts one pipeline from a configured default). A pipeline with neither
+/// is always served, so this feature is opt-in and does not change behaviour unless configured:
+///
+/// ```toml
+/// [pipeline-defaults.availability]
+/// max-checkpoint-lag = 100          # default for every tracked pipeline
+///
+/// [pipeline.kv_objects.availability]
+/// enabled = true                    # always serve, exempt from the default
+///
+/// [pipeline.tx_kinds.availability]
+/// enabled = false                   # never serve
+///
+/// [pipeline.tx_calls.availability]
+/// max-checkpoint-lag = 1000         # lag-gated override
+/// ```
+///
+/// The lag distance is measured against the network tip, approximated as the highest checkpoint
+/// high-watermark across all tracked pipelines (equal to the true network tip when a Bigtable or
+/// Ledger gRPC KV source is configured, and the fastest local pipeline otherwise). The default
+/// also covers the virtual `bigtable`/`ledger_grpc`/`consistent` pipelines tracked from those
+/// stores; the KV ones define the tip, so in practice a lag default never gates them. Gating a
+/// `kv_*` content pipeline only takes effect in a pure-Postgres deployment; when content is served
+/// from an external KV store those pipelines are not tracked, so the policy is inert.
+///
+/// Also doubles as the resolved value in [`PipelineConfig::availability`]/`default_availability`,
+/// where only the `Enabled`/`Disabled` variants are ever produced (from a pipeline's plain
+/// `enabled` setting, not an explicit availability policy).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(
+    try_from = "PipelineAvailabilityLayer",
+    into = "PipelineAvailabilityLayer"
+)]
 pub enum PipelineAvailability {
+    /// Always serve the pipeline.
     #[default]
     Enabled,
+
+    /// Never serve the pipeline.
     Disabled,
+
+    /// Serve the pipeline only while its high-watermark is within this many checkpoints of the
+    /// network tip.
+    MaxCheckpointLag(u64),
 }
 
-/// Configuration for a single pipeline's `enabled` setting -- used both for the shared default
-/// (`[pipeline-defaults]`) and for per-pipeline overrides (`[pipeline.<name>]`). Kept as its own
-/// type/section rather than flattened together with the per-pipeline map: TOML forbids redefining
-/// the same key as both a scalar and a table, so if the default lived directly in the `[pipeline]`
-/// table, a pipeline named `enabled` could never be expressed, regardless of how the Rust side
-/// deserialized it.
+/// Availability policies assembled from `[pipeline-defaults].availability` and each pipeline's own
+/// `[pipeline.<name>].availability` override. See [`PipelineAvailability`] for the policy
+/// semantics.
+#[derive(Clone, Default)]
+pub struct AvailabilityConfig {
+    /// Default policy applied to every tracked pipeline without an override.
+    pub default: Option<PipelineAvailability>,
+
+    /// Per-pipeline overrides, keyed by pipeline name.
+    pub pipelines: BTreeMap<String, PipelineAvailability>,
+}
+
+/// TOML mirror of [`PipelineAvailability`]: a policy section sets exactly one of these keys,
+/// validated when converting to the enum.
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct PipelineAvailabilityLayer {
+    pub enabled: Option<bool>,
+    pub max_checkpoint_lag: Option<u64>,
+}
+
+impl PipelineAvailability {
+    /// Whether a pipeline whose high-watermark is at `checkpoint` should be served, given the
+    /// current `network_tip` (the highest checkpoint high-watermark across all tracked pipelines).
+    pub(crate) fn is_available(&self, checkpoint: u64, network_tip: u64) -> bool {
+        match self {
+            Self::Enabled => true,
+            Self::Disabled => false,
+            Self::MaxCheckpointLag(lag) => network_tip.saturating_sub(checkpoint) <= *lag,
+        }
+    }
+}
+
+impl AvailabilityConfig {
+    /// The policy gating `pipeline`, if any: its own override when configured, otherwise the
+    /// default.
+    pub(crate) fn policy_for(&self, pipeline: &str) -> Option<&PipelineAvailability> {
+        self.pipelines.get(pipeline).or(self.default.as_ref())
+    }
+}
+
+/// Configuration for a single pipeline's `enabled` and `availability` settings -- used both for
+/// the shared default (`[pipeline-defaults]`) and for per-pipeline overrides (`[pipeline.<name>]`).
+/// Kept as its own type/section rather than flattened together with the per-pipeline map: TOML
+/// forbids redefining the same key as both a scalar and a table, so if the default lived directly
+/// in the `[pipeline]` table, a pipeline named `enabled` could never be expressed, regardless of
+/// how the Rust side deserialized it.
+#[derive(Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PipelineLayer {
     pub enabled: Option<bool>,
+
+    /// Overrides the default availability policy for this pipeline. An override exists only to
+    /// set a policy, so its section must set `enabled` or `max-checkpoint-lag`.
+    pub availability: Option<PipelineAvailability>,
 }
 
 pub struct Limits {
@@ -376,12 +469,22 @@ impl RpcLayer {
             logging: LoggingConfig::default().into(),
             pipeline_defaults: PipelineLayer {
                 enabled: Some(true),
+                availability: None,
             },
             pipeline: BTreeMap::new(),
         }
     }
 
     pub fn finish(self) -> RpcConfig {
+        let availability = AvailabilityConfig {
+            default: self.pipeline_defaults.availability,
+            pipelines: self
+                .pipeline
+                .iter()
+                .filter_map(|(name, layer)| Some((name.clone(), layer.availability?)))
+                .collect(),
+        };
+
         RpcConfig {
             limits: self.limits.finish(Limits::default()),
             health: self.health.finish(HealthConfig::default()),
@@ -395,6 +498,7 @@ impl RpcLayer {
                 self.pipeline,
                 PipelineConfig::default(),
             ),
+            availability,
         }
     }
 }
@@ -573,6 +677,41 @@ impl From<PipelineLayer> for PipelineAvailability {
             PipelineAvailability::Enabled
         } else {
             PipelineAvailability::Disabled
+        }
+    }
+}
+
+impl TryFrom<PipelineAvailabilityLayer> for PipelineAvailability {
+    type Error = String;
+
+    fn try_from(layer: PipelineAvailabilityLayer) -> Result<Self, Self::Error> {
+        match (layer.enabled, layer.max_checkpoint_lag) {
+            (Some(_), Some(_)) => {
+                Err("'enabled' and 'max-checkpoint-lag' are mutually exclusive".to_string())
+            }
+            (Some(true), None) => Ok(Self::Enabled),
+            (Some(false), None) => Ok(Self::Disabled),
+            (None, Some(lag)) => Ok(Self::MaxCheckpointLag(lag)),
+            (None, None) => Err("expected 'enabled' or 'max-checkpoint-lag'".to_string()),
+        }
+    }
+}
+
+impl From<PipelineAvailability> for PipelineAvailabilityLayer {
+    fn from(value: PipelineAvailability) -> Self {
+        match value {
+            PipelineAvailability::Enabled => Self {
+                enabled: Some(true),
+                max_checkpoint_lag: None,
+            },
+            PipelineAvailability::Disabled => Self {
+                enabled: Some(false),
+                max_checkpoint_lag: None,
+            },
+            PipelineAvailability::MaxCheckpointLag(lag) => Self {
+                enabled: None,
+                max_checkpoint_lag: Some(lag),
+            },
         }
     }
 }
@@ -875,5 +1014,201 @@ mod tests {
             enabled_pipelines(&config.pipeline),
             BTreeSet::from(["tx_calls"]),
         );
+    }
+
+    #[test]
+    fn availability_within_tip_respects_lag() {
+        let a = PipelineAvailability::MaxCheckpointLag(100);
+        // At the tip, and exactly at the lag boundary (inclusive), are available.
+        assert!(a.is_available(1_000_000, 1_000_000));
+        assert!(a.is_available(999_900, 1_000_000));
+        // One checkpoint beyond the lag budget is unavailable.
+        assert!(!a.is_available(999_899, 1_000_000));
+        // A watermark momentarily ahead of the recorded tip saturates to zero lag.
+        assert!(a.is_available(1_000_050, 1_000_000));
+    }
+
+    #[test]
+    fn enabled_and_disabled_ignore_lag() {
+        // Force-on serves regardless of distance from the tip; force-off never serves, even at it.
+        assert!(PipelineAvailability::Enabled.is_available(0, 1_000_000));
+        assert!(!PipelineAvailability::Disabled.is_available(1_000_000, 1_000_000));
+    }
+
+    #[test]
+    fn default_and_overrides_parse_from_toml() {
+        let layer: RpcLayer = toml::from_str(
+            r#"
+            [pipeline-defaults.availability]
+            max-checkpoint-lag = 100
+
+            [pipeline.tx_calls.availability]
+            max-checkpoint-lag = 1000
+
+            [pipeline.tx_kinds.availability]
+            max-checkpoint-lag = 0
+            "#,
+        )
+        .unwrap();
+
+        let config = layer.finish().availability;
+        assert_eq!(
+            config.policy_for("tx_calls"),
+            Some(&PipelineAvailability::MaxCheckpointLag(1000))
+        );
+        assert_eq!(
+            config.policy_for("tx_kinds"),
+            Some(&PipelineAvailability::MaxCheckpointLag(0))
+        );
+        // A pipeline with no override falls back to the default.
+        assert_eq!(
+            config.policy_for("unset"),
+            Some(&PipelineAvailability::MaxCheckpointLag(100))
+        );
+    }
+
+    #[test]
+    fn enabled_and_disabled_parse_from_toml() {
+        let layer: RpcLayer = toml::from_str(
+            r#"
+            [pipeline-defaults.availability]
+            max-checkpoint-lag = 100
+
+            [pipeline.kv_objects.availability]
+            enabled = true
+
+            [pipeline.tx_kinds.availability]
+            enabled = false
+            "#,
+        )
+        .unwrap();
+
+        let config = layer.finish().availability;
+        assert_eq!(
+            config.policy_for("kv_objects"),
+            Some(&PipelineAvailability::Enabled)
+        );
+        assert_eq!(
+            config.policy_for("tx_kinds"),
+            Some(&PipelineAvailability::Disabled)
+        );
+    }
+
+    #[test]
+    fn enabled_and_lag_are_mutually_exclusive() {
+        let err = toml::from_str::<RpcLayer>(
+            r#"
+            [pipeline.tx_calls.availability]
+            enabled = true
+            max-checkpoint-lag = 100
+            "#,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("mutually exclusive"),
+            "unexpected error: {err}",
+        );
+    }
+
+    #[test]
+    fn overrides_without_a_default_gate_only_themselves() {
+        let layer: RpcLayer = toml::from_str(
+            r#"
+            [pipeline.tx_calls.availability]
+            max-checkpoint-lag = 100
+            "#,
+        )
+        .unwrap();
+
+        let config = layer.finish().availability;
+        assert_eq!(
+            config.policy_for("tx_calls"),
+            Some(&PipelineAvailability::MaxCheckpointLag(100))
+        );
+        assert_eq!(config.policy_for("unset"), None);
+    }
+
+    #[test]
+    fn empty_availability_sections_are_rejected() {
+        // A policy section exists only to set a policy, so one of its keys is mandatory.
+        for toml in [
+            "[pipeline-defaults.availability]",
+            "[pipeline.tx_calls.availability]",
+        ] {
+            let err = toml::from_str::<RpcLayer>(toml).unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("expected 'enabled' or 'max-checkpoint-lag'"),
+                "unexpected error for {toml:?}: {err}",
+            );
+        }
+    }
+
+    #[test]
+    fn pipeline_section_without_availability_has_no_override() {
+        // An enablement-only pipeline section (no `.availability` sub-table) implies no
+        // availability override, regardless of whether it enables the pipeline.
+        let layer: RpcLayer = toml::from_str("[pipeline.tx_calls]").unwrap();
+        let config = layer.finish().availability;
+        assert_eq!(config.policy_for("tx_calls"), None);
+    }
+
+    #[test]
+    fn availability_sections_reject_unknown_fields() {
+        for toml in [
+            "[pipeline-defaults.availability]\nmode = \"disabled\"",
+            "[pipeline.tx_calls]\nmode = \"disabled\"",
+            "[pipeline.tx_calls.availability]\nmax-checkpoint-lag = 100\nmode = \"disabled\"",
+        ] {
+            let result: Result<RpcLayer, _> = toml::from_str(toml);
+            assert!(result.is_err(), "expected {toml:?} to be rejected");
+        }
+    }
+
+    #[test]
+    fn empty_config_has_no_availability_policies() {
+        let layer: RpcLayer = toml::from_str("").unwrap();
+        let config = layer.finish().availability;
+        assert!(config.default.is_none());
+        assert!(config.pipelines.is_empty());
+    }
+
+    #[test]
+    fn example_config_roundtrips() {
+        let example = RpcLayer::example();
+        let serialized = toml::to_string_pretty(&example).unwrap();
+        let parsed: RpcLayer = toml::from_str(&serialized).unwrap();
+        assert_eq!(parsed.pipeline_defaults, example.pipeline_defaults);
+        assert_eq!(parsed.pipeline, example.pipeline);
+    }
+
+    #[test]
+    fn availability_policies_roundtrip() {
+        for policy in [
+            PipelineAvailability::Enabled,
+            PipelineAvailability::Disabled,
+            PipelineAvailability::MaxCheckpointLag(100),
+        ] {
+            let layer = RpcLayer {
+                pipeline_defaults: PipelineLayer {
+                    availability: Some(policy),
+                    ..PipelineLayer::default()
+                },
+                ..RpcLayer::default()
+            };
+            let serialized = toml::to_string_pretty(&layer).unwrap();
+            let parsed: RpcLayer = toml::from_str(&serialized).unwrap();
+            assert_eq!(
+                parsed.pipeline_defaults.availability,
+                Some(policy),
+                "roundtrip failed for {policy:?}:\n{serialized}",
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_top_level_key_is_rejected() {
+        let result: Result<RpcLayer, _> = toml::from_str("nonexistent-key = 3");
+        assert!(result.is_err());
     }
 }

@@ -91,6 +91,17 @@ default and let you override it. Set `enabled = false` under
 `[pipeline.<name>]` entry (e.g. `[pipeline.tx_calls]`) to opt a specific
 pipeline out (or back in, if the default has been flipped to disabled).
 
+Separately, `[pipeline-defaults.availability]` and `[pipeline.<name>.availability]`
+sections gate an *enabled* pipeline's data by how far it lags behind the
+network tip, rather than whether it runs at all: `max-checkpoint-lag = N`
+serves a pipeline's data only while it is within `N` checkpoints of the tip,
+`enabled = false` never serves it, and `enabled = true` always serves it. A
+gated pipeline is dropped from the consistency boundary so other pipelines
+keep serving fresh reads, and queries that require it return
+`FeatureUnavailable` while it's gated. A pipeline with no availability policy
+is always served, so this is opt-in and doesn't change behaviour unless
+configured.
+
 ## Running
 
 The service can be run with the following minimal command:
