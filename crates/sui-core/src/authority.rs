@@ -2033,7 +2033,7 @@ impl AuthorityState {
         if let Some(object_funds_checker) = object_funds_checker.as_ref()
             && !object_funds_checker.should_commit_object_funds_withdraws(
                 certificate,
-                effects.status(),
+                &effects,
                 &inner_temp_store.accumulator_running_max_withdraws,
                 &execution_env,
                 self.get_account_funds_read(),

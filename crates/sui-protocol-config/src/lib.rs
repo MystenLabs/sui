@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 129;
+const MAX_PROTOCOL_VERSION: u64 = 130;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -361,6 +361,8 @@ const MAINNET_USDB: &str =
 // Version 128: Make some additional bounds to binary tables explicit.
 // Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
 //              Enable unified linkage in PTBs
+// Version 130: Record unsettled object-funds withdraws using per-account net amounts
+//              from transaction effects instead of running-max withdraw amounts.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1048,6 +1050,11 @@ struct FeatureFlags {
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
+
+    // If true, unsettled object-funds withdraws are recorded using per-account net
+    // amounts from transaction effects, instead of running-max withdraw amounts.
+    #[serde(skip_serializing_if = "is_false")]
+    record_net_unsettled_object_withdraws: bool,
 
     // If true, skip GC'ed blocks in direct finalization.
     #[serde(skip_serializing_if = "is_false")]
@@ -4447,6 +4454,9 @@ impl ProtocolConfig {
                 129 => {
                     cfg.feature_flags.enable_unified_linkage = true;
                 }
+                130 => {
+                    cfg.feature_flags.record_net_unsettled_object_withdraws = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4934,6 +4944,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_record_net_unsettled_object_withdraws_for_testing(&mut self, val: bool) {
+        self.feature_flags.record_net_unsettled_object_withdraws = val;
     }
 
     pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
