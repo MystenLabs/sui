@@ -297,6 +297,22 @@ mod test {
         grace_period: Arc<Mutex<Option<Instant>>>,
         probability: f64,
     ) {
+        handle_failpoint_with_restart_range_ms(
+            dead_validator,
+            keep_alive_nodes,
+            grace_period,
+            probability,
+            10000..20000,
+        )
+    }
+
+    fn handle_failpoint_with_restart_range_ms(
+        dead_validator: Arc<Mutex<Option<DeadValidator>>>,
+        keep_alive_nodes: HashSet<sui_simulator::task::NodeId>,
+        grace_period: Arc<Mutex<Option<Instant>>>,
+        probability: f64,
+        restart_range_ms: std::ops::Range<u64>,
+    ) {
         let mut dead_validator = dead_validator.lock().unwrap();
         let mut grace_period = grace_period.lock().unwrap();
         let cur_node = sui_simulator::current_simnode_id();
@@ -328,7 +344,7 @@ mod test {
                 return;
             }
 
-            let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
+            let restart_after = Duration::from_millis(rng.gen_range(restart_range_ms.clone()));
             let dead_until = Instant::now() + restart_after;
 
             // Prevent the same node from being restarted again rapidly.
@@ -522,18 +538,28 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_crash_between_checkpoint_commit_and_finalization() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(3, 10_000, 1).await;
+        // Long epochs: with a 3-validator committee any dead node halts the network, and
+        // frequent reconfigs compound the stalls to the point where no load gets through.
+        let test_cluster = build_test_cluster(3, 60_000, 1).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
 
+        // Give benchmark setup (bank funding) time to complete before crashing validators;
+        // every crash halts the whole 3-validator committee. Restarts are fast for the same
+        // reason: long downtime just stalls the network without adding recovery coverage.
+        let arm_at = Instant::now() + Duration::from_secs(30);
         register_fail_point("after-commit-transaction-outputs", move || {
-            handle_failpoint(
+            if Instant::now() < arm_at {
+                return;
+            }
+            handle_failpoint_with_restart_range_ms(
                 dead_validator.clone(),
                 keep_alive_nodes.clone(),
                 grace_period.clone(),
                 0.05,
+                500..2000,
             );
         });
 
