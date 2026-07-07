@@ -402,7 +402,11 @@ impl BridgeTestCluster {
 
                 for tx in checkpoint.transactions {
                     if let Some(e) = tx.events {
-                        matched.extend(e.data.into_iter().filter(|e| event_types.contains(&e.type_)));
+                        matched.extend(
+                            e.data
+                                .into_iter()
+                                .filter(|e| event_types.contains(&e.type_)),
+                        );
                     }
                 }
             }
