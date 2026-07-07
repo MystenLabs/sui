@@ -582,6 +582,18 @@ impl ConsensusAdapter {
             debug!("Submitting {:?} to consensus", transaction_keys);
             guard.submitted = true;
 
+            // Submit the transaction to consensus, racing against the processed waiter in
+            // case another validator sequences the transaction first.
+            let submit_start = guard.start;
+            let observe_stage = |stage: &str| {
+                self.metrics
+                    .sequencing_certificate_stage_latency
+                    .with_label_values(&[tx_type, stage])
+                    .observe(submit_start.elapsed().as_secs_f64());
+            };
+
+            observe_stage("passed_processing");
+
             // System messages (checkpoint signatures, EndOfPublish, capability
             // notifications, randomness DKG, etc.) are not buffered behind user
             // tx; they are excluded from the semaphore.
@@ -596,18 +608,12 @@ impl ConsensusAdapter {
                         .expect("Consensus adapter does not close semaphore"),
                 )
             };
+
+            observe_stage("acquired_semaphore");
+
             let _in_flight_submission_guard =
                 GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
-            // Submit the transaction to consensus, racing against the processed waiter in
-            // case another validator sequences the transaction first.
-            let submit_start = guard.start;
-            let observe_stage = |stage: &str| {
-                self.metrics
-                    .sequencing_certificate_stage_latency
-                    .with_label_values(&[tx_type, stage])
-                    .observe(submit_start.elapsed().as_secs_f64());
-            };
             let submit_fut = async {
                 const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
                 let mut position_received_recorded = false;
