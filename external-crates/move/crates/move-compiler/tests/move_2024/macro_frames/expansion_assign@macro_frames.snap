@@ -33,9 +33,5 @@ note[I15008]: macro frame info
            [0:MacroBody(apply), 1:Lambda] -> [0:MacroBody(apply), 1:Lambda, 2:MacroBody(id), 3:Argument]
        18: `if (x > p) {`
            [0:MacroBody(apply), 1:Lambda, 2:MacroBody(id), 3:Argument] -> [0:MacroBody(apply), 1:Lambda]
-       21: `0`
-           [0:MacroBody(apply), 1:Lambda] -> []
-       18: `if (x > p) {`
-           [] -> [0:MacroBody(apply), 1:Lambda]
        17: `apply!(|x|`
            [0:MacroBody(apply), 1:Lambda] -> []

@@ -152,10 +152,11 @@ pub(super) struct Context<'env> {
     /// scope (the macro's call site).
     named_block_parent_colors: UniqueMap<H::BlockLabel, ExpansionColor>,
     /// Tracks the active macro expansion info during translation. Saved and
-    /// restored at block boundaries (set from the Block's expansion_color
-    /// on entry), and stamped onto every H::Statement and H::Command
-    /// so that to_bytecode can compute debugger frame transitions between
-    /// consecutive bytecodes. Starts at None (no macro scope).
+    /// restored at block boundaries: on entry it is set to the block's
+    /// effective color as computed by [`Context::block_color`].
+    /// Stamped onto every H::Statement and H::Command so that to_bytecode
+    /// can compute debugger frame transitions between consecutive
+    /// bytecodes. Starts at None (no macro scope).
     current_color: ExpansionColor,
     /// collects all struct fields used in the current module
     used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
@@ -287,6 +288,33 @@ impl<'env> Context<'env> {
             .get(block_name)
             .expect("ICE named block with no parent color")
             .clone()
+    }
+
+    /// Computes the effective expansion color for a block annotated with
+    /// `ec`. Blocks with no annotation (`ec == None`) inherit the current
+    /// (enclosing) color, mirroring how typing's `exp()` only updates
+    /// `current_expansion_color` for `Some` annotations.
+    ///
+    /// Two kinds of colorless blocks can appear inside a colored scope:
+    /// - user-written blocks inside lambda/argument bodies (lambda and
+    ///   argument recoloring preserves their `None` annotation), and
+    /// - compiler-generated match blocks (see `match_compilation`).
+    ///
+    /// Consider:
+    ///
+    ///   macro fun apply($f: |u64| -> u64): u64 { $f(1) }
+    ///   fun test(p: u64): u64 {
+    ///       apply!(|x| if (x > p) { x } else { 0 })
+    ///   }
+    ///
+    /// The else-branch `{ 0 }` is a colorless user block inside the
+    /// lambda body. Resetting the color to `None` for its contents would
+    /// make the debugger pop out of the Lambda (and MacroBody) frames at
+    /// `0` and re-enter them at the join point; inheriting keeps the
+    /// whole lambda body in the Lambda frame.
+    /// See tests: macro_frames/block_in_lambda, macro_frames/match_in_macro.
+    pub fn block_color(&self, ec: &ExpansionColor) -> ExpansionColor {
+        ec.clone().or_else(|| self.current_color.clone())
     }
 
     pub fn exit_named_block(&mut self, block_name: H::BlockLabel) {
@@ -1033,7 +1061,8 @@ fn tail(
         }
         E::NamedBlock(name, ec, (_, seq)) => {
             let saved_color = context.current_color.clone();
-            context.current_color = ec.clone();
+            let block_color = context.block_color(&ec);
+            context.current_color = block_color.clone();
             let name = translate_block_label(name);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             let result = if binders.is_empty() {
@@ -1052,7 +1081,7 @@ fn tail(
                     Some(out_type),
                     &mut body_block,
                     exp,
-                    &ec,
+                    &block_color,
                     &saved_color,
                 );
             }
@@ -1070,7 +1099,8 @@ fn tail(
         }
         E::Block(ec, (_, seq)) => {
             let saved_color = context.current_color.clone();
-            context.current_color = ec.clone();
+            let block_color = context.block_color(&ec);
+            context.current_color = block_color.clone();
             let result = tail_block(context, block, expected_type, seq);
             // Preserve the block's expansion color on its result expression
             // when the block introduced a new color and the result doesn't
@@ -1097,9 +1127,13 @@ fn tail(
             // overwriting it with MacroBody(outer) would make the inner
             // transition invisible.
             // See test: macro_frames/simple_nested_macros.
+            //
+            // Colorless blocks inherit the enclosing color (see
+            // `Context::block_color`), in which case
+            // `block_color == saved_color` and no stamping occurs.
             let result = result.map(|mut e| {
-                if !expansion_color_eq(&ec, &saved_color) && e.exp.color.is_none() {
-                    e.exp.color = Some(ec.clone());
+                if !expansion_color_eq(&block_color, &saved_color) && e.exp.color.is_none() {
+                    e.exp.color = Some(block_color.clone());
                 }
                 e
             });
@@ -1417,7 +1451,8 @@ fn value(
         }
         E::NamedBlock(name, ec, (_, seq)) => {
             let saved_color = context.current_color.clone();
-            context.current_color = ec.clone();
+            let block_color = context.block_color(&ec);
+            context.current_color = block_color.clone();
             let name = translate_block_label(name);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             context.enter_named_block(name, binders.clone(), out_type.clone(), saved_color.clone());
@@ -1429,7 +1464,7 @@ fn value(
                 Some(out_type),
                 &mut body_block,
                 final_exp,
-                &ec,
+                &block_color,
                 &saved_color,
             );
             block.push_back(csp(
@@ -1441,8 +1476,8 @@ fn value(
                 },
             ));
             context.exit_named_block(name);
-            // Note: we deliberately do NOT stamp `ec` on `bound_exp` here.
-            // `bound_exp` is the Move/Copy of the binder used OUTSIDE the
+            // Note: we deliberately do NOT stamp `block_color` on `bound_exp`
+            // here. `bound_exp` is the Move/Copy of the binder used OUTSIDE the
             // NamedBlock, so it must inherit the enclosing scope's color
             // (matching its location at the call site of a macro), not
             // the body's color. The binder StLoc gets the parent's color
@@ -1452,7 +1487,8 @@ fn value(
         }
         E::Block(ec, (_, seq)) => {
             let saved_color = context.current_color.clone();
-            context.current_color = ec.clone();
+            let block_color = context.block_color(&ec);
+            context.current_color = block_color.clone();
             let mut result = value_block(context, block, Some(&out_type), eloc, seq);
             // Preserve the block's expansion color on its result expression
             // when the block introduced a new color and the result doesn't
@@ -1479,8 +1515,12 @@ fn value(
             // overwriting it with MacroBody(outer) would make the inner
             // transition invisible.
             // See test: macro_frames/simple_nested_macros.
-            if !expansion_color_eq(&ec, &saved_color) && result.exp.color.is_none() {
-                result.exp.color = Some(ec.clone());
+            //
+            // Colorless blocks inherit the enclosing color (see
+            // `Context::block_color`), in which case
+            // `block_color == saved_color` and no stamping occurs.
+            if !expansion_color_eq(&block_color, &saved_color) && result.exp.color.is_none() {
+                result.exp.color = Some(block_color.clone());
             }
             context.current_color = saved_color;
             result
@@ -2050,7 +2090,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         }
         E::Block(ec, (_, seq)) => {
             let saved_color = context.current_color.clone();
-            context.current_color = ec;
+            context.current_color = context.block_color(&ec);
             statement_block(context, block, seq);
             context.current_color = saved_color;
         }
@@ -2762,11 +2802,41 @@ fn bind_value_in_block(
     //     → MacroBody(id) appears as a distinct scope transition
     //
     // See test: macro_frames/expansion_assign.
-    let color = rhs_exp
-        .exp
-        .color
-        .clone()
-        .unwrap_or_else(|| context.current_color.clone());
+    //
+    // However, only use the RHS color when the binders' location falls
+    // within that color's source range. For temps created by
+    // `bind_exp`/`make_temp` this always holds — they are located at the
+    // RHS expression itself. But a binder can also belong to an enclosing
+    // construct, located outside the RHS's frame:
+    //
+    //   macro fun unwrap_or($e: E, $default: u64): u64 {
+    //       match ($e) { E::V(x) => x, E::Empty => $default }
+    //   }
+    //   fun test(e: E): u64 { unwrap_or!(e, 42) }
+    //
+    // The `E::Empty` arm's result is `$default`, i.e. the substituted
+    // `42`, so the RHS carries the Argument color, whose source range is
+    // `42` at the call site. The binder receiving the arm's result is
+    // the temp for the whole `match` expression, located at the `match`
+    // in the macro body — outside that range. With the Argument color,
+    // the store into that temp would appear to execute in `42`'s frame
+    // even though its location is the `match`; using the current
+    // (MacroBody) color instead keeps color and location consistent.
+    // See test: macro_frames/match_in_macro.
+    let color = match &rhs_exp.exp.color {
+        Some(rhs_color) => {
+            let binders_within_rhs_color = match (rhs_color, binders.first()) {
+                (Some(info), Some(sp!(bloc, _))) => info.source_loc.contains(bloc),
+                _ => false,
+            };
+            if binders_within_rhs_color {
+                rhs_color.clone()
+            } else {
+                context.current_color.clone()
+            }
+        }
+        None => context.current_color.clone(),
+    };
     stmts.push_back(csp(
         loc,
         color.clone(),
@@ -2783,8 +2853,9 @@ fn bind_value_in_block(
 /// consistent with the binders' source location.
 ///
 /// `body_color` is the expansion color active inside the named block's
-/// body (`ec`), and `parent_color` is the color of the surrounding
-/// scope (the `saved_color` captured before entering the block).
+/// body (the effective `block_color` computed on entry), and
+/// `parent_color` is the color of the surrounding scope (the
+/// `saved_color` captured before entering the block).
 ///
 /// For most blocks (`body_color == parent_color`) this just delegates
 /// to [`bind_value_in_block`].
