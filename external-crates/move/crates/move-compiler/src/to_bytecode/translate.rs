@@ -726,6 +726,22 @@ fn populate_macro_frame_info(
             None => continue,
         };
 
+        // The color data is indexed by bytecode offset, which relies on the
+        // IR compiler emitting exactly one instruction per IR bytecode. If
+        // the counts ever diverge, drop this function's macro frame info —
+        // missing debug info is better than misattributed frames.
+        let code_len = fdef.code.as_ref().map_or(0, |code| code.code.len());
+        if color_data.len() != code_len {
+            debug_assert!(
+                false,
+                "color metadata instruction count mismatch in {}: bytecode has {} instructions, colors has {} entries",
+                fname_str,
+                code_len,
+                color_data.len(),
+            );
+            continue;
+        }
+
         // Collect all unique MacroInfo nodes (by Arc pointer identity)
         // including ancestors reachable via parent chains.
         let mut ptr_to_index: StdHashMap<*const MacroInfo, u32> = StdHashMap::new();

@@ -91,11 +91,11 @@ pub(crate) fn call(
     // (not call_color) so that macros called inside lambda bodies get the
     // correct parent chain. See test: macro_frames/binop_macro.
     let module_addr = m.value.address.into_addr_bytes().into_inner();
-    let macro_info_rc = if let (Ok(module_name), Ok(function_name)) = (
+    let macro_info_rc = match (
         Identifier::new(m.value.module_name()),
         Identifier::new(f.0.value.as_str()),
     ) {
-        Some(Arc::new(MacroInfo {
+        (Ok(module_name), Ok(function_name)) => Some(Arc::new(MacroInfo {
             kind: MacroFrameKind::MacroBody {
                 module_addr,
                 module_name,
@@ -104,9 +104,22 @@ pub(crate) fn call(
             source_loc: macro_info.full_loc,
             call_loc,
             parent: context.current_expansion_color().clone(),
-        }))
-    } else {
-        None
+        })),
+        _ => {
+            // Module and function names are valid identifiers by
+            // construction, so this should be unreachable. If it does
+            // happen, frame info for this expansion is dropped, degrading
+            // debugger output but not compilation.
+            context.add_diag(ice!((
+                call_loc,
+                format!(
+                    "ICE macro name {}::{} is not a valid identifier",
+                    m.value.module_name(),
+                    f
+                )
+            )));
+            None
+        }
     };
 
     let (macro_type_params, macro_params, mut macro_body, return_label, max_color) =
