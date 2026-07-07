@@ -64,11 +64,11 @@ impl QueryOptions {
         query_type: QueryType,
     ) -> Result<Self, RpcError> {
         let limit_items = request
-            .and_then(|options| options.limit_items)
+            .and_then(|options| options.limit)
             .unwrap_or(default_limit_items)
             .clamp(1, max_limit_items) as usize;
 
-        let ordering = match request.map(|options| options.ordering) {
+        let ordering = match request.and_then(|options| options.ordering) {
             None | Some(ORDERING_ASCENDING) => Ordering::Ascending,
             Some(ORDERING_DESCENDING) => Ordering::Descending,
             Some(_) => {
@@ -391,10 +391,10 @@ mod tests {
         let after = CursorToken::item(QueryType::Transactions, 2, 20).encode();
         let before = CursorToken::item(QueryType::Transactions, 3, 30).encode();
         let mut request = ProtoQueryOptions::default();
-        request.limit_items = Some(500);
+        request.limit = Some(500);
         request.after = Some(after);
         request.before = Some(before);
-        request.ordering = ProtoOrdering::Descending as i32;
+        request.ordering = Some(ProtoOrdering::Descending as i32);
 
         let options = query_options_from_proto(Some(&request)).unwrap();
 
@@ -429,7 +429,7 @@ mod tests {
     #[test]
     fn clamps_limit_items_and_defaults_to_ascending() {
         let mut request = ProtoQueryOptions::default();
-        request.limit_items = Some(5_000);
+        request.limit = Some(5_000);
 
         let options = query_options_from_proto(Some(&request)).unwrap();
 
@@ -449,7 +449,7 @@ mod tests {
         assert!(query_options_from_proto(Some(&request)).is_err());
 
         let mut request = ProtoQueryOptions::default();
-        request.ordering = 99;
+        request.ordering = Some(99);
         assert!(query_options_from_proto(Some(&request)).is_err());
     }
 
@@ -480,7 +480,7 @@ mod tests {
         let token = CursorToken::item(QueryType::Transactions, 9, 9).encode();
         let mut request = ProtoQueryOptions::default();
         request.after = Some(token);
-        request.ordering = ProtoOrdering::Descending as i32;
+        request.ordering = Some(ProtoOrdering::Descending as i32);
 
         let options = query_options_from_proto(Some(&request)).unwrap();
         let range = CheckpointRange::from_request(Some(1_000), Some(1_100), 2_000).unwrap();

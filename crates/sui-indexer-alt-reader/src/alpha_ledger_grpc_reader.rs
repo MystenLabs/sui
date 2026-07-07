@@ -51,7 +51,7 @@ pub struct StreamPage<T> {
 enum FrameKind<T> {
     Item { payload: T, cursor: Bytes },
     Watermark { cursor: Option<Bytes> },
-    End { reason: i32 },
+    End { reason: proto::QueryEndReason },
     Unknown,
 }
 
@@ -160,13 +160,10 @@ impl<T> StreamPage<T> {
                 }
             }
             FrameKind::End { reason } => {
-                // Fold an unknown reason into `Unspecified` so `None` remains unambiguous shorthand
-                // for "no End frame received" (i.e. the deadline cut the stream short).
-                self.end_reason =
-                    Some(proto::QueryEndReason::try_from(reason).unwrap_or_else(|_| {
-                        warn!(reason, "unknown QueryEndReason");
-                        proto::QueryEndReason::Unspecified
-                    }));
+                // `QueryEnd::reason()` folds an absent or unknown reason into
+                // `Unspecified`, so `None` here remains unambiguous shorthand for
+                // "no End frame received" (i.e. the deadline cut the stream short).
+                self.end_reason = Some(reason);
                 return true;
             }
             FrameKind::Unknown => {
@@ -211,7 +208,9 @@ impl TryFrom<proto::ListTransactionsResponse> for FrameKind<ExecutedTransaction>
             Response::Watermark(watermark) => FrameKind::Watermark {
                 cursor: watermark.cursor,
             },
-            Response::End(end) => FrameKind::End { reason: end.reason },
+            Response::End(end) => FrameKind::End {
+                reason: end.reason(),
+            },
             _ => FrameKind::Unknown,
         })
     }
@@ -299,7 +298,7 @@ mod tests {
 
     fn end_response(reason: proto::QueryEndReason) -> proto::ListTransactionsResponse {
         let mut end = proto::QueryEnd::default();
-        end.reason = reason as i32;
+        end.reason = Some(reason as i32);
         let mut response = proto::ListTransactionsResponse::default();
         response.response = Some(proto::list_transactions_response::Response::End(end));
         response
@@ -469,7 +468,7 @@ mod tests {
     #[test]
     fn apply_end_with_unknown_reason_folds_to_unspecified() {
         let mut end = proto::QueryEnd::default();
-        end.reason = i32::MAX;
+        end.reason = Some(i32::MAX);
         let mut response = proto::ListTransactionsResponse::default();
         response.response = Some(proto::list_transactions_response::Response::End(end));
 

@@ -471,7 +471,7 @@ fn render_transaction_rows(
                 row.checkpoint_number,
                 read_mask,
             )?;
-            transaction_item_response(watermark, transaction, row.tx_offset)
+            transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
         } else {
             let mut transaction = ExecutedTransaction::default();
             if read_mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -480,7 +480,7 @@ fn render_transaction_rows(
             if read_mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
                 transaction.checkpoint = Some(row.checkpoint_number);
             }
-            transaction_item_response(watermark, transaction, row.tx_offset)
+            transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
         };
         items.push(response);
     }
@@ -500,12 +500,16 @@ pub(crate) fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMa
 }
 
 fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {
+    // `digest`, `checkpoint`, and `transaction_index` are all available from the
+    // tx_seq_digest index row, so a mask limited to them skips the full
+    // transaction fetch.
     let paths = read_mask.to_field_mask().paths;
     paths.is_empty()
-        || paths.len() > 2
+        || paths.len() > 3
         || paths.iter().any(|path| {
             path != ExecutedTransaction::DIGEST_FIELD.name
                 && path != ExecutedTransaction::CHECKPOINT_FIELD.name
+                && path != ExecutedTransaction::TRANSACTION_INDEX_FIELD.name
         })
 }
 
@@ -534,13 +538,20 @@ fn resolve_tx_range(
 
 fn transaction_item_response(
     watermark: Watermark,
-    transaction: ExecutedTransaction,
+    mut transaction: ExecutedTransaction,
     tx_offset: u32,
+    read_mask: &FieldMaskTree,
 ) -> ListTransactionsResponse {
+    // The within-checkpoint position rides on the `ExecutedTransaction` rather
+    // than the enclosing `TransactionItem`; populate it only when the read mask
+    // requests it.
+    if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
+        transaction.transaction_index = Some(tx_offset as u64);
+    }
+
     let mut item = TransactionItem::default();
     item.watermark = Some(watermark);
     item.transaction = Some(transaction);
-    item.transaction_offset = Some(tx_offset as u64);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::Item(item));
@@ -555,7 +566,7 @@ fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
 
 fn end_response(reason: QueryEndReason) -> ListTransactionsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::End(end));

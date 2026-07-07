@@ -510,7 +510,7 @@ fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsRes
 
 fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListCheckpointsResponse::default();
     response.response = Some(list_checkpoints_response::Response::End(end));
