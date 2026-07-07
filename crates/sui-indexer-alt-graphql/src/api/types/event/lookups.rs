@@ -12,6 +12,7 @@ use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
 use sui_types::digests::TransactionDigest;
 
+use crate::api::types::available_range::require_pipeline;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::EventCursor;
@@ -37,6 +38,8 @@ pub(crate) async fn events_from_sequence_numbers(
     let kv_loader: &KvLoader = ctx.data()?;
 
     let digests = tx_digests(ctx, tx_sequence_numbers).await?;
+
+    require_pipeline(ctx, "kv_transactions")?;
 
     let digest_to_events = kv_loader
         .load_many_transaction_events(digests.iter().map(|d| d.1).collect())

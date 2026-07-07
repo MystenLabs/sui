@@ -33,6 +33,7 @@ use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::json::Json;
 use crate::api::scalars::uint53::UInt53;
+use crate::api::types::available_range::require_pipeline;
 use crate::api::types::balance_change::BalanceChange;
 use crate::api::types::balance_change::BalanceChangeContents;
 use crate::api::types::checkpoint::Checkpoint;
@@ -270,6 +271,8 @@ impl EffectsContents {
                 }
 
                 // Fall back to loading from database
+                require_pipeline(ctx, "tx_balance_changes")?;
+
                 let transaction_digest = content.digest()?;
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
                 let key = TxBalanceChangeKey(transaction_digest);
@@ -322,6 +325,8 @@ impl EffectsContents {
                 }
 
                 // Fall back to loading from database
+                require_pipeline(ctx, "tx_balance_changes")?;
+
                 let transaction_digest = content.digest()?;
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
                 let key = TxBalanceChangeKey(transaction_digest);
@@ -580,6 +585,8 @@ impl EffectsContents {
         let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
             return Ok(self.clone());
         };
+
+        require_pipeline(ctx, "kv_transactions")?;
 
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader

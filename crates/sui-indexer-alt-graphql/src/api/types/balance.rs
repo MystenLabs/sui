@@ -15,10 +15,12 @@ use sui_types::base_types::SuiAddress;
 
 use crate::api::scalars::big_int::BigInt;
 use crate::api::scalars::cursor;
+use crate::api::types::available_range::require_pipeline;
 use crate::api::types::move_type::MoveType;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::feature_unavailable;
+use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
@@ -92,6 +94,8 @@ impl Balance {
             return Ok(None);
         };
 
+        require_pipeline(ctx, "consistent").map_err(upcast)?;
+
         query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
         let balance = consistent_reader
@@ -121,6 +125,8 @@ impl Balance {
         let Some(checkpoint) = scope.root_checkpoint() else {
             return Ok(None);
         };
+
+        require_pipeline(ctx, "consistent").map_err(upcast)?;
 
         query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
@@ -159,6 +165,8 @@ impl Balance {
         let Some(root_checkpoint) = scope.root_checkpoint() else {
             return Ok(Connection::new(false, false));
         };
+
+        require_pipeline(ctx, "consistent").map_err(upcast)?;
 
         query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;

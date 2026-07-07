@@ -54,6 +54,7 @@ use crate::api::scalars::type_filter::TypeInput;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address;
 use crate::api::types::address::Address;
+use crate::api::types::available_range::require_pipeline;
 use crate::api::types::balance;
 use crate::api::types::balance::Balance;
 use crate::api::types::coin_metadata::CoinMetadata;
@@ -801,6 +802,8 @@ impl Object {
         address: SuiAddress,
         root_version: UInt53,
     ) -> Result<Option<Self>, RpcError> {
+        require_pipeline(ctx, "obj_versions")?;
+
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let Some(stored) = pg_loader
@@ -825,6 +828,8 @@ impl Object {
         address: SuiAddress,
         at_checkpoint: UInt53,
     ) -> Result<Option<Self>, RpcError> {
+        require_pipeline(ctx, "obj_versions")?;
+
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let Some(stored) = pg_loader
@@ -855,6 +860,8 @@ impl Object {
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(None);
         };
+
+        require_pipeline(ctx, "kv_objects")?;
 
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let kv_loader: &KvLoader = ctx.data()?;
@@ -961,6 +968,8 @@ impl Object {
             return Ok(Connection::new(false, false));
         };
 
+        require_pipeline(ctx, "obj_versions")?;
+
         query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
@@ -1048,6 +1057,8 @@ impl Object {
         let Some(root_checkpoint) = scope.root_checkpoint() else {
             return Ok(Connection::new(false, false));
         };
+
+        require_pipeline(ctx, "consistent").map_err(upcast)?;
 
         query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
@@ -1207,6 +1218,8 @@ impl Object {
                 } else if let Some(cp) = self.super_.scope.checkpoint_viewed_at() {
                     // If we don't have a version, we need to do a checkpoint-bounded lookup first
                     // to get the version, then fetch contents with that version.
+                    require_pipeline(ctx, "obj_versions")?;
+
                     let Some(stored) = pg_loader
                         .load_one(CheckpointBoundedObjectVersionKey(
                             self.super_.address.into(),
@@ -1231,6 +1244,7 @@ impl Object {
                 {
                     Ok(Some(cached_object.clone()))
                 } else {
+                    require_pipeline(ctx, "kv_objects")?;
                     Ok(kv_loader
                         .load_one_object(self.super_.address.into(), version.into())
                         .await

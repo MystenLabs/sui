@@ -28,6 +28,7 @@ use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::available_range::require_pipeline;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::checkpoint::filter::cp_by_epoch;
@@ -303,6 +304,8 @@ impl Checkpoint {
         scope: Scope,
         digest: CheckpointDigest,
     ) -> Result<Option<Self>, RpcError> {
+        require_pipeline(ctx, "kv_checkpoints")?;
+
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(sequence_number) = kv_loader
             .load_one_checkpoint_seq_by_digest(digest)
@@ -370,6 +373,8 @@ impl CheckpointContents {
         scope: Scope,
         sequence_number: u64,
     ) -> Result<Self, RpcError> {
+        require_pipeline(ctx, "kv_checkpoints")?;
+
         let kv_loader: &KvLoader = ctx.data()?;
         let contents = kv_loader
             .load_one_checkpoint(sequence_number)

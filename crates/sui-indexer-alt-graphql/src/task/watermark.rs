@@ -780,6 +780,7 @@ mod tests {
                 watermark_polling_interval: Duration::from_millis(20),
             },
             pipeline,
+            AvailabilityConfig::default(),
             pg_reader,
             None,
             None,
