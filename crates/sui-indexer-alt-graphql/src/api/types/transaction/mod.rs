@@ -31,6 +31,7 @@ use sui_types::transaction::TransactionExpiration;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::id::Id;
@@ -49,10 +50,8 @@ use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
 use crate::error::RpcError;
-use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::extensions::query_limits;
-use crate::pagination::Error as PaginationError;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedTransaction;
@@ -72,17 +71,11 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub type CTransaction = ByteCursor;
+pub type CTransaction = OpaqueCursor<CursorToken>;
 
 pub(crate) struct TransactionConnection {
     pub edges: Vec<Edge<String, Transaction, EmptyFields>>,
     pub page_info: PageInfo,
-}
-
-#[derive(thiserror::Error, Debug, Clone)]
-pub(crate) enum Error {
-    #[error("Invalid input cursor")]
-    BadCursor,
 }
 
 /// Description of a transaction, the unit of activity on Sui.
@@ -289,19 +282,9 @@ impl Transaction {
         transactions: &[ProcessedTransaction],
         page: &Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError<Error>> {
-        let after = page
-            .after()
-            .map(|c| CursorToken::decode(c))
-            .transpose()
-            .map_err(|_| bad_user_input(Error::BadCursor))?
-            .map(|c| c.position);
-        let before = page
-            .before()
-            .map(|c| CursorToken::decode(c))
-            .transpose()
-            .map_err(|_| bad_user_input(Error::BadCursor))?
-            .map(|c| c.position);
+    ) -> Result<TransactionConnection, RpcError> {
+        let after = page.after().map(|c| c.position);
+        let before = page.before().map(|c| c.position);
 
         let filtered: Vec<_> = transactions
             .iter()
@@ -314,11 +297,11 @@ impl Transaction {
         page.paginate_results(
             filtered,
             |tx| {
-                ByteCursor::new(
-                    CursorToken::item(QueryType::Transactions, 0, tx.tx_sequence_number)
-                        .encode()
-                        .to_vec(),
-                )
+                OpaqueCursor::new(CursorToken::item(
+                    QueryType::Transactions,
+                    0,
+                    tx.tx_sequence_number,
+                ))
             },
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
@@ -354,12 +337,6 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<TransactionConnection, RpcError> {
-        // Reject cursors that don't decode as `CursorToken`s up front -- `TxBoundsCursor` for
-        // `CTransaction` assumes they are valid.
-        for cursor in page.after().into_iter().chain(page.before()) {
-            CursorToken::decode(cursor).map_err(|_| PaginationError::BadCursor)?;
-        }
-
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -399,13 +376,7 @@ impl Transaction {
 
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| {
-                ByteCursor::new(
-                    CursorToken::item(QueryType::Transactions, 0, *s)
-                        .encode()
-                        .to_vec(),
-                )
-            },
+            |(s, _)| OpaqueCursor::new(CursorToken::item(QueryType::Transactions, 0, *s)),
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
@@ -485,9 +456,17 @@ impl TransactionConnection {
 
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
-        CursorToken::decode(self)
-            .expect("cursor already validated as ByteCursor")
-            .position
+        self.position
+    }
+}
+
+impl ByteCursor for CursorToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        CursorToken::decode(bytes)
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        self.encode()
     }
 }
 
