@@ -10,7 +10,7 @@ use async_graphql::connection::EmptyFields;
 use futures::StreamExt;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::QueryType;
+use sui_rpc_cursor::Position;
 
 use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::uint53::UInt53;
@@ -128,11 +128,10 @@ impl Subscription {
                             if !filter.matches(&tx.contents) {
                                 continue;
                             }
-                            let cursor = CTransaction::new(OpaqueCursor::new(CursorToken::item(
-                                QueryType::Transactions,
-                                processed.summary.sequence_number,
-                                tx.tx_sequence_number,
-                            )))
+                            let cursor = CTransaction::new(OpaqueCursor::new(CursorToken::item(Position::Transactions {
+                                checkpoint: processed.summary.sequence_number,
+                                tx_seq: tx.tx_sequence_number,
+                            })))
                             .encode_cursor();
                             yield Transaction::with_contents(scope.clone(), tx.contents.clone())
                                 .map(|transaction| Edge::new(cursor, transaction));

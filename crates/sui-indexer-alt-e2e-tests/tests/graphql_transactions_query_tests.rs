@@ -11,7 +11,7 @@ use sui_indexer_alt_e2e_tests::graphql;
 use sui_indexer_alt_e2e_tests::transaction::DEFAULT_GAS_BUDGET;
 use sui_indexer_alt_e2e_tests::transaction::send_sui;
 use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::QueryType;
+use sui_rpc_cursor::Position;
 
 const TX_QUERY: &str = r#"
 query($first: Int, $last: Int, $after: String, $before: String) {
@@ -165,7 +165,10 @@ async fn test_transactions_query_cursor_pagination() {
     assert!(page.page_info.has_previous_page);
     assert!(!page.page_info.has_next_page);
 
-    let beyond = CursorToken::item(QueryType::Transactions, 0, 100);
+    let beyond = CursorToken::item(Position::Transactions {
+        checkpoint: 0,
+        tx_seq: 100,
+    });
     let beyond_cursor = Base64::encode(beyond.encode());
     let page = transactions(&cluster, Some(2), None, Some(beyond_cursor), None)
         .await

@@ -142,16 +142,23 @@ pub type BitmapScanResult<T> = std::result::Result<T, BitmapScanError>;
 /// preserve watermark/item ordering — that's what makes the watermark a
 /// safe resume cursor on timeout.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Watermarked<T> {
+pub enum Watermarked<T, P = u64> {
     Item(T),
-    Watermark(u64),
+    Watermark(P),
 }
 
-impl<T> Watermarked<T> {
-    pub fn map_item<U>(self, f: impl FnOnce(T) -> U) -> Watermarked<U> {
+impl<T, P> Watermarked<T, P> {
+    pub fn map_item<U>(self, f: impl FnOnce(T) -> U) -> Watermarked<U, P> {
         match self {
             Watermarked::Item(t) => Watermarked::Item(f(t)),
             Watermarked::Watermark(p) => Watermarked::Watermark(p),
+        }
+    }
+
+    pub fn map_watermark<Q>(self, f: impl FnOnce(P) -> Q) -> Watermarked<T, Q> {
+        match self {
+            Watermarked::Item(t) => Watermarked::Item(t),
+            Watermarked::Watermark(p) => Watermarked::Watermark(f(p)),
         }
     }
 }
