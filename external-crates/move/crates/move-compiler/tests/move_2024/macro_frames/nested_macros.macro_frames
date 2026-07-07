@@ -1,13 +1,1 @@
-module A::m {
-    macro fun double($x: u64): u64 {
-        $x + $x
-    }
-
-    macro fun quad($x: u64): u64 {
-        double!($x) + double!($x)
-    }
-
-    fun test(): u64 {
-        quad!(5)
-    }
-}
+// See nested_macros.move.

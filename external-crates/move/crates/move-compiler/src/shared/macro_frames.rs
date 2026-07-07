@@ -5,6 +5,10 @@ use move_bytecode_source_map::source_map::MacroFrameKind;
 use move_ir_types::location::Loc;
 use std::sync::Arc;
 
+/// Compiler mode under which per-function diagnostics describing macro frame
+/// transitions are emitted (used by the `.macro_frames` compiler tests).
+pub const MACRO_FRAMES_MODE: &str = "macro-frames";
+
 /// Structural representation of a macro expansion frame. Parent chains are
 /// encoded directly via `Arc` references instead of requiring a global lookup.
 #[derive(Debug, Clone, PartialEq, Eq)]

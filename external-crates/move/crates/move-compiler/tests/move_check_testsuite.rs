@@ -25,7 +25,10 @@ use move_compiler::{
     diagnostics::*,
     editions::{Edition, Flavor},
     linters::{self, LintLevel},
-    shared::{Flags, NumericalAddress, PackageConfig, PackagePaths, files::MappedFiles},
+    shared::{
+        Flags, NumericalAddress, PackageConfig, PackagePaths, files::MappedFiles,
+        macro_frames::MACRO_FRAMES_MODE,
+    },
     sui_mode,
 };
 use move_ir_types::location::Loc;
@@ -205,7 +208,7 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
         // additional flags for IDE
         TestKind::IDE => Flags::testing().set_ide_test_mode(true).set_ide_mode(true),
         // MacroFrames tests use a special mode to emit only macro frame diagnostics
-        TestKind::MacroFrames => Flags::empty().set_modes(vec!["macro-frames".into()]),
+        TestKind::MacroFrames => Flags::empty().set_modes(vec![MACRO_FRAMES_MODE.into()]),
         TestKind::SourceMap => Flags::empty(),
         // Setting a mode flag
         TestKind::Mode(modes) => Flags::empty().set_modes(modes.clone()),
@@ -869,6 +872,17 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let rendered_diags = std::str::from_utf8(&diag_buffer)?;
     if save_diags {
         fs::write(out_path, &diag_buffer)?;
+    }
+
+    // Macro frame diagnostics render color/location inconsistencies as `!!`
+    // markers. Fail outright rather than relying on snapshot comparison, so
+    // that a newly added test cannot commit a snapshot containing a
+    // violation unnoticed.
+    if matches!(test_kind, TestKind::MacroFrames) && rendered_diags.contains("!!") {
+        return Err(anyhow::anyhow!(
+            "Macro frames test output contains `!!` invariant violation markers:\n{rendered_diags}"
+        )
+        .into());
     }
 
     let mut options = InstaOptions::new();

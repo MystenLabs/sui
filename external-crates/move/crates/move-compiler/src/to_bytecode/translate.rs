@@ -393,7 +393,7 @@ fn module(
     );
     if compilation_env
         .modes()
-        .contains(&Symbol::from("macro-frames"))
+        .contains(&Symbol::from(macro_frames::MACRO_FRAMES_MODE))
     {
         emit_macro_frame_diagnostics(
             reporter,

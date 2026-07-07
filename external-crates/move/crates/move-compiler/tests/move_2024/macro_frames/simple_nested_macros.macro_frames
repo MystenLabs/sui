@@ -1,13 +1,1 @@
-module A::m {
-    macro fun inner($x: u64): u64 {
-        $x + 1
-    }
-
-    macro fun outer($x: u64): u64 {
-        inner!($x)
-    }
-
-    public fun test(): u64 {
-        outer!(5)
-    }
-}
+// See simple_nested_macros.move.
