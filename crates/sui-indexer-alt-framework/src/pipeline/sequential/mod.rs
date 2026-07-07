@@ -150,7 +150,7 @@ pub(crate) fn pipeline<H: Handler>(
         .unwrap_or(ConcurrencyConfig::Adaptive {
             initial: 1,
             min: 1,
-            max: num_cpus::get(),
+            max: num_cpus::get().max(1),
             dead_band: None,
         });
     let min_eager_rows = config.min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
@@ -159,12 +159,16 @@ pub(crate) fn pipeline<H: Handler>(
         .max_batch_checkpoints
         .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
 
-    let processor_channel_size = config.processor_channel_size.unwrap_or(num_cpus::get() / 2);
+    let processor_channel_size = config
+        .processor_channel_size
+        .unwrap_or_else(|| num_cpus::get() / 2)
+        .max(1);
     let (processor_tx, collector_rx) = mpsc::channel(processor_channel_size);
 
     let pipeline_depth = config
         .pipeline_depth
-        .unwrap_or_else(|| (num_cpus::get() / 2).max(4));
+        .unwrap_or_else(|| num_cpus::get() / 2)
+        .max(4);
     let (collector_tx, committer_rx) = mpsc::channel::<BatchedRows<H>>(pipeline_depth);
 
     let handler = Arc::new(handler);
@@ -272,7 +276,8 @@ mod tests {
             .unwrap_or(TestHandler::MAX_BATCH_CHECKPOINTS);
         let pipeline_depth = config
             .pipeline_depth
-            .unwrap_or_else(|| (num_cpus::get() / 2).max(4));
+            .unwrap_or_else(|| num_cpus::get() / 2)
+            .max(4);
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
         let (collector_tx, committer_rx) =
