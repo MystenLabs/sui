@@ -809,6 +809,35 @@ fn verify_ocs_inclusion_proof(
     Ok(())
 }
 
+/// The proof RPC is backed by the async embedded rpc-store index, which can lag
+/// slightly behind the fullnode's latest executed checkpoint in simtests.
+async fn get_object_proof_when_indexed(
+    proof_client: &mut ProofServiceClient<tonic::transport::Channel>,
+    request: GetCheckpointObjectProofRequest,
+) -> GetCheckpointObjectProofResponse {
+    const TIMEOUT: Duration = Duration::from_secs(30);
+
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            match proof_client
+                .get_checkpoint_object_proof(request.clone())
+                .await
+            {
+                Ok(response) => return response.into_inner(),
+                Err(status)
+                    if status.code() == tonic::Code::NotFound
+                        && status.message().contains("not yet indexed") =>
+                {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(status) => panic!("proof request should succeed once indexed: {status:?}"),
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("object proof index did not catch up within {TIMEOUT:?}"))
+}
+
 async fn fetch_and_verify_event_stream_head(
     proof_client: &mut ProofServiceClient<tonic::transport::Channel>,
     ledger_client: &mut LedgerServiceClient<tonic::transport::Channel>,
@@ -820,11 +849,7 @@ async fn fetch_and_verify_event_stream_head(
         .with_object_id(object_id.to_string())
         .with_checkpoint(checkpoint);
 
-    let response = proof_client
-        .get_checkpoint_object_proof(request)
-        .await
-        .unwrap()
-        .into_inner();
+    let response = get_object_proof_when_indexed(proof_client, request).await;
 
     let proof = response.proof.as_ref().expect("proof should be present");
     let inclusion_proof = match proof {
@@ -1194,11 +1219,7 @@ async fn test_object_inclusion_proof_returns_non_inclusion() {
         .with_object_id(event_stream_head_id.to_string())
         .with_checkpoint(highest_checkpoint);
 
-    let response = proof_client
-        .get_checkpoint_object_proof(request)
-        .await
-        .expect("non-inclusion proof should succeed")
-        .into_inner();
+    let response = get_object_proof_when_indexed(&mut proof_client, request).await;
 
     let proof = response.proof.expect("proof should be present");
     assert!(
