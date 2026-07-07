@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 129;
+const MAX_PROTOCOL_VERSION: u64 = 130;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -360,6 +360,7 @@ const MAINNET_USDB: &str =
 //              Enable timestamp_based_epoch_close on mainnet.
 // Version 128: Make some additional bounds to binary tables explicit.
 // Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
+// Version 130: Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1633,6 +1634,20 @@ pub struct ProtocolConfig {
     dynamic_field_has_child_object_with_ty_cost_base: Option<u64>,
     dynamic_field_has_child_object_with_ty_type_cost_per_byte: Option<u64>,
     dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Option<u64>,
+
+    // `scratch` module
+    // Cost params for the Move native function `add_impl<V: drop>(key: address, value: V)`
+    scratch_add_cost_base: Option<u64>,
+    // Cost params for the Move native function `read_impl<V: copy + drop>(key: address): V`
+    scratch_read_cost_base: Option<u64>,
+    scratch_read_value_cost: Option<u64>,
+    // Cost params for the Move native function `remove_impl<V: drop>(key: address): V`
+    scratch_remove_cost_base: Option<u64>,
+    // Cost params for the Move native function `exists_impl(key: address): bool`
+    scratch_exists_cost_base: Option<u64>,
+    // Cost params for the Move native function `exists_with_type_impl<V: drop>(key: address): bool`
+    scratch_exists_with_type_cost_base: Option<u64>,
+    scratch_exists_with_type_type_cost: Option<u64>,
 
     // `event` module
     // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
@@ -3165,6 +3180,15 @@ impl ProtocolConfig {
             dynamic_field_has_child_object_with_ty_cost_base: Some(100),
             dynamic_field_has_child_object_with_ty_type_cost_per_byte: Some(2),
             dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Some(2),
+
+            // `scratch` module: introduced in protocol version 130
+            scratch_add_cost_base: None,
+            scratch_read_cost_base: None,
+            scratch_read_value_cost: None,
+            scratch_remove_cost_base: None,
+            scratch_exists_cost_base: None,
+            scratch_exists_with_type_cost_base: None,
+            scratch_exists_with_type_type_cost: None,
 
             // `event` module
             // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
@@ -5060,6 +5084,18 @@ impl ProtocolConfig {
                     cfg.binary_enum_def_instantiations = Some(100);
                 }
                 129 => {}
+                130 => {
+                    // `scratch` module native costs. scratch is a pure in-memory,
+                    // per-transaction store (no object-store/DB access, no serialization),
+                    // so it is cheaper than the dynamic_field analogs.
+                    cfg.scratch_add_cost_base = Some(13);
+                    cfg.scratch_read_cost_base = Some(13);
+                    cfg.scratch_read_value_cost = Some(1);
+                    cfg.scratch_remove_cost_base = Some(13);
+                    cfg.scratch_exists_cost_base = Some(13);
+                    cfg.scratch_exists_with_type_cost_base = Some(13);
+                    cfg.scratch_exists_with_type_type_cost = Some(1);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

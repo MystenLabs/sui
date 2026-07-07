@@ -21,7 +21,8 @@ use std::{
 use sui_adapter::gas_meter::SuiGasMeter;
 use sui_move_build::decorate_warnings;
 use sui_move_natives::{
-    NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
+    NativesCostTable, object_runtime::ObjectRuntime, scratch::ScratchRuntime,
+    test_scenario::InMemoryTestStore,
     transaction_context::TransactionContext,
 };
 use sui_package_alt::{SuiFlavor, find_environment};
@@ -227,6 +228,7 @@ impl VMTestSetup for SuiVMTestSetup {
         ext.add(NativesCostTable::from_protocol_config(
             &self.protocol_config,
         ));
+        ext.add(ScratchRuntime::new());
         let tx_context = TxContext::new_from_components(
             &SuiAddress::ZERO,
             &TransactionDigest::default(),

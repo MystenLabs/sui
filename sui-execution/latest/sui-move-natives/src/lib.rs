@@ -28,6 +28,10 @@ use self::{
     },
     event::EventEmitCostParams,
     object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
+    scratch::{
+        ScratchAddCostParams, ScratchExistsCostParams, ScratchExistsWithTypeCostParams,
+        ScratchReadCostParams, ScratchRemoveCostParams,
+    },
     transfer::{
         TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
     },
@@ -88,6 +92,7 @@ mod object;
 pub mod object_runtime;
 mod protocol_config;
 mod random;
+pub mod scratch;
 pub mod test_scenario;
 mod test_utils;
 pub mod transaction_context;
@@ -116,6 +121,13 @@ pub struct NativesCostTable {
     pub dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams,
     pub dynamic_field_has_child_object_with_ty_cost_params:
         DynamicFieldHasChildObjectWithTyCostParams,
+
+    // Scratch natives
+    pub scratch_add_cost_params: ScratchAddCostParams,
+    pub scratch_read_cost_params: ScratchReadCostParams,
+    pub scratch_remove_cost_params: ScratchRemoveCostParams,
+    pub scratch_exists_cost_params: ScratchExistsCostParams,
+    pub scratch_exists_with_type_cost_params: ScratchExistsWithTypeCostParams,
 
     // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
@@ -299,6 +311,38 @@ impl NativesCostTable {
                         .dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte()
                         .into(),
                 },
+
+            scratch_add_cost_params: ScratchAddCostParams {
+                scratch_add_cost_base: protocol_config
+                    .scratch_add_cost_base_as_option()
+                    .map(Into::into),
+            },
+            scratch_read_cost_params: ScratchReadCostParams {
+                scratch_read_cost_base: protocol_config
+                    .scratch_read_cost_base_as_option()
+                    .map(Into::into),
+                scratch_read_value_cost: protocol_config
+                    .scratch_read_value_cost_as_option()
+                    .map(Into::into),
+            },
+            scratch_remove_cost_params: ScratchRemoveCostParams {
+                scratch_remove_cost_base: protocol_config
+                    .scratch_remove_cost_base_as_option()
+                    .map(Into::into),
+            },
+            scratch_exists_cost_params: ScratchExistsCostParams {
+                scratch_exists_cost_base: protocol_config
+                    .scratch_exists_cost_base_as_option()
+                    .map(Into::into),
+            },
+            scratch_exists_with_type_cost_params: ScratchExistsWithTypeCostParams {
+                scratch_exists_with_type_cost_base: protocol_config
+                    .scratch_exists_with_type_cost_base_as_option()
+                    .map(Into::into),
+                scratch_exists_with_type_type_cost: protocol_config
+                    .scratch_exists_with_type_type_cost_as_option()
+                    .map(Into::into),
+            },
 
             event_emit_cost_params: EventEmitCostParams {
                 event_emit_value_size_derivation_cost_per_byte: protocol_config
@@ -980,6 +1024,23 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "dynamic_field",
             "has_child_object_with_ty",
             make_native!(dynamic_field::has_child_object_with_ty),
+        ),
+        ("scratch", "add_impl", make_native!(scratch::add_impl)),
+        ("scratch", "read_impl", make_native!(scratch::read_impl)),
+        (
+            "scratch",
+            "remove_impl",
+            make_native!(scratch::remove_impl),
+        ),
+        (
+            "scratch",
+            "exists_impl",
+            make_native!(scratch::exists_impl),
+        ),
+        (
+            "scratch",
+            "exists_with_type_impl",
+            make_native!(scratch::exists_with_type_impl),
         ),
         (
             "ecdsa_k1",

@@ -4,6 +4,7 @@
 use crate::{
     get_extension, get_extension_mut, get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
     object_runtime::{ObjectRuntime, RuntimeResults, object_store::ChildObjectEffects},
+    scratch::ScratchRuntime,
 };
 use better_any::{Tid, TidAble};
 use indexmap::{IndexMap, IndexSet};
@@ -103,6 +104,10 @@ pub fn end_transaction(
 ) -> PartialVMResult<NativeResult> {
     safe_assert!(ty_args.is_empty());
     safe_assert!(args.is_empty());
+    // scratch is per-transaction. A single set of native extensions is reused across the
+    // transactions simulated by `test_scenario`, so clear the store here to mirror the fresh
+    // `ScratchRuntime` that real execution installs per transaction.
+    get_extension_mut!(context, ScratchRuntime)?.clear();
     let object_runtime_ref: &mut ObjectRuntime = get_extension_mut!(context)?;
     let taken_shared_or_imm: BTreeMap<_, _> = object_runtime_ref
         .test_inventories

@@ -27,7 +27,7 @@ mod checked {
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
-    use sui_move_natives::{NativesCostTable, object_runtime::ObjectRuntime};
+    use sui_move_natives::{NativesCostTable, object_runtime::ObjectRuntime, scratch::ScratchRuntime};
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
@@ -100,6 +100,7 @@ mod checked {
             current_epoch_id,
         ));
         exts.add(NativesCostTable::from_protocol_config(protocol_config));
+        exts.add(ScratchRuntime::new());
         exts.add(TransactionContext::new(tx_context));
         drop(exts);
         Ok(extensions)
