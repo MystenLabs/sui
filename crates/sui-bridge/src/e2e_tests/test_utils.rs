@@ -374,33 +374,47 @@ impl BridgeTestCluster {
         );
     }
 
-    /// Returns events that are emitted in new bridge transaction and match `event_types`.
-    /// It advanaces the stored tx digest cursor.
-    pub async fn new_bridge_events(&mut self, event_types: HashSet<StructTag>) -> Vec<Event> {
+    /// Returns events that are emitted in new bridge transactions and match `event_types`,
+    /// polling until at least `expected_count` matching events are found or the timeout expires
+    /// (returning however many were found by then). It advances the stored checkpoint cursor.
+    ///
+    /// Polling is necessary because transaction execution (and therefore onchain bridge action
+    /// status) is observable before the transaction lands in a checkpoint, so at the time of the
+    /// call the events may not be in any checkpoint yet.
+    pub async fn new_bridge_events(
+        &mut self,
+        event_types: HashSet<StructTag>,
+        expected_count: usize,
+    ) -> Vec<Event> {
         let mut client = self.grpc_client();
+        let mut matched: Vec<Event> = Vec::new();
 
-        let target = client
-            .get_latest_checkpoint()
-            .await
-            .unwrap()
-            .sequence_number;
+        let deadline = Instant::now() + tokio::time::Duration::from_secs(30);
+        loop {
+            let target = client
+                .get_latest_checkpoint()
+                .await
+                .unwrap()
+                .sequence_number;
 
-        let mut events: Vec<Event> = Vec::new();
-        for checkpoint in self.events_cursor.unwrap_or(0)..=target {
-            let checkpoint = client.get_full_checkpoint(checkpoint).await.unwrap();
+            for checkpoint in self.events_cursor.unwrap_or(0)..=target {
+                let checkpoint = client.get_full_checkpoint(checkpoint).await.unwrap();
 
-            for tx in checkpoint.transactions {
-                if let Some(e) = tx.events {
-                    events.extend(e.data);
+                for tx in checkpoint.transactions {
+                    if let Some(e) = tx.events {
+                        matched.extend(e.data.into_iter().filter(|e| event_types.contains(&e.type_)));
+                    }
                 }
             }
-        }
 
-        self.events_cursor = Some(target);
-        events
-            .into_iter()
-            .filter(|e| event_types.contains(&e.type_))
-            .collect()
+            // `target` has already been scanned; start after it on the next call/iteration.
+            self.events_cursor = Some(target + 1);
+
+            if matched.len() >= expected_count || Instant::now() > deadline {
+                return matched;
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
     }
 
     /// Upgrades the SuiBridge proxy to SuiBridgeV2.

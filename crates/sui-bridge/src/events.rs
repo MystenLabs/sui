@@ -641,7 +641,7 @@ pub mod tests {
                 CommitteeUpdateEvent.get().unwrap().clone(),
                 TokenRegistrationEvent.get().unwrap().clone(),
                 NewTokenEvent.get().unwrap().clone(),
-            ]))
+            ]), 4)
             .await;
         let mut mask = 0u8;
         for event in events.iter() {
