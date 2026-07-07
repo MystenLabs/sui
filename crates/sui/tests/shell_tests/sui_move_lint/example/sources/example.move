@@ -3,11 +3,14 @@
 
 module example::example;
 
-const VALUE: u64 = 42;
+public struct Obj has key, store {
+    id: UID,
+}
 
-// The `return` is unnecessary because the expression is already in tail position.
-// This triggers the `unneeded_return` lint, which only runs at the `All` lint level
-// that `sui move lint` enables; a plain `sui move build` does not report it.
-public fun value(): u64 {
-    return VALUE
+// Transferring a freshly created object to the transaction sender triggers the
+// Sui-specific `self_transfer` lint. This lint only runs when the compiler is in
+// Sui mode, which `sui move lint` must enable; a plain `sui move build` does not
+// report it.
+public fun mint(ctx: &mut TxContext) {
+    transfer::public_transfer(Obj { id: object::new(ctx) }, ctx.sender())
 }
