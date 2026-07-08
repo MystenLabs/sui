@@ -503,14 +503,11 @@ impl AuthorityStorePruner {
         // directly instead of summing checkpoint content sizes.
         let mut pruned_tx_seq_exclusive = 0u64;
 
-        loop {
-            let Some(ckpt) = checkpoint_store
-                .tables
-                .certified_checkpoints
-                .get(&(checkpoint_number + 1))?
-            else {
-                break;
-            };
+        while let Some(ckpt) = checkpoint_store
+            .tables
+            .certified_checkpoints
+            .get(&(checkpoint_number + 1))?
+        {
             let checkpoint = ckpt.into_inner();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark (including the watermark itself)
@@ -853,8 +850,7 @@ impl AuthorityStorePruner {
             .checked_div(Self::pruning_tick_duration_ms(epoch_duration_ms))
             .unwrap_or(1);
         let delta = max_eligible_checkpoint
-            .checked_sub(pruned_checkpoint)
-            .unwrap_or_default()
+            .saturating_sub(pruned_checkpoint)
             .checked_div(num_intervals)
             .unwrap_or(1);
         Ok(pruned_checkpoint + delta)

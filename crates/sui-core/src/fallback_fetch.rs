@@ -55,7 +55,7 @@ pub fn do_fallback_lookup_fallible<K: Clone, V: Default + Clone>(
 
     for (i, result) in fallback_indices
         .into_iter()
-        .zip_debug_eq(fallback_results.into_iter())
+        .zip_debug_eq(fallback_results)
     {
         results[i] = result;
     }

@@ -5126,7 +5126,11 @@ impl AuthorityState {
                 |((_event_digest, tx_digest, event_seq, timestamp), event)| {
                     event
                         .map(|e| (e, tx_digest, event_seq, timestamp))
-                        .ok_or(SuiErrorKind::TransactionEventsNotFound { digest: tx_digest })
+                        .ok_or_else(|| {
+                            SuiError::from(SuiErrorKind::TransactionEventsNotFound {
+                                digest: tx_digest,
+                            })
+                        })
                 },
             )
             .collect::<Result<Vec<_>, _>>()?;

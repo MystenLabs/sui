@@ -949,9 +949,7 @@ impl IndexStore {
                 };
 
                 // only process coin types
-                let (coin_type, coin) = object
-                    .coin_type_maybe()
-                    .and_then(|coin_type| object.as_coin_maybe().map(|coin| (coin_type, coin)))?;
+                let (coin_type, coin) = object.coin_type_maybe().zip(object.as_coin_maybe())?;
 
                 let key = CoinIndexKey2::new(
                     *owner,
@@ -989,9 +987,7 @@ impl IndexStore {
                 };
 
                 // only process coin types
-                let (coin_type, coin) = object
-                    .coin_type_maybe()
-                    .and_then(|coin_type| object.as_coin_maybe().map(|coin| (coin_type, coin)))?;
+                let (coin_type, coin) = object.coin_type_maybe().zip(object.as_coin_maybe())?;
 
                 let key = CoinIndexKey2::new(
                     *owner,
@@ -2007,11 +2003,11 @@ impl IndexStore {
         let mut batch = self.tables.owner_index.batch();
         batch.insert_batch(
             &self.tables.owner_index,
-            object_index_changes.new_owners.into_iter(),
+            object_index_changes.new_owners,
         )?;
         batch.insert_batch(
             &self.tables.dynamic_field_index,
-            object_index_changes.new_dynamic_fields.into_iter(),
+            object_index_changes.new_dynamic_fields,
         )?;
         batch.write()?;
         Ok(())

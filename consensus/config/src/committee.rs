@@ -123,7 +123,7 @@ impl Committee {
 
         // Ensure intersection between committed certification and quorum thresholds.
         assert!(
-            certification_threshold + quorum_threshold >= actual_total_stake + f + 1,
+            certification_threshold + quorum_threshold > actual_total_stake + f,
             "Stake-safety invariant violated: \
                 committed_cert ({certification_threshold}) + \
                 quorum ({quorum_threshold}) < \
