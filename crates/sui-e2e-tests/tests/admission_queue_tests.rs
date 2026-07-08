@@ -48,6 +48,9 @@ async fn make_transfer_tx_with_gas(
 async fn test_admission_queue_basic() {
     let config = AuthorityOverloadConfig {
         admission_queue_enabled: true,
+        // These tests exercise admission queue behavior; pin the queue pipeline even
+        // when SUI_TRANSACTION_POOL_ENABLED selects the transaction pool by default.
+        transaction_pool_enabled: false,
         admission_queue_bypass_fraction: 0.0,
         admission_queue_capacity_fraction: 0.001,
         ..Default::default()
@@ -76,6 +79,9 @@ async fn test_admission_queue_basic() {
 async fn test_admission_queue_eviction_and_rejection() {
     let overload_config = AuthorityOverloadConfig {
         admission_queue_enabled: true,
+        // These tests exercise admission queue behavior; pin the queue pipeline even
+        // when SUI_TRANSACTION_POOL_ENABLED selects the transaction pool by default.
+        transaction_pool_enabled: false,
         admission_queue_bypass_fraction: 0.0,
         // capacity = 20_000 * 0.0001 = 2
         admission_queue_capacity_fraction: 0.0001,
@@ -207,6 +213,9 @@ async fn test_admission_queue_eviction_and_rejection() {
 async fn test_admission_queue_epoch_boundary_cleanup() {
     let config = AuthorityOverloadConfig {
         admission_queue_enabled: true,
+        // These tests exercise admission queue behavior; pin the queue pipeline even
+        // when SUI_TRANSACTION_POOL_ENABLED selects the transaction pool by default.
+        transaction_pool_enabled: false,
         admission_queue_bypass_fraction: 0.0,
         admission_queue_capacity_fraction: 0.001,
         ..Default::default()
@@ -255,6 +264,9 @@ async fn test_admission_queue_epoch_boundary_cleanup() {
 async fn test_admission_queue_reconfig_with_pending_entries() {
     let overload_config = AuthorityOverloadConfig {
         admission_queue_enabled: true,
+        // These tests exercise admission queue behavior; pin the queue pipeline even
+        // when SUI_TRANSACTION_POOL_ENABLED selects the transaction pool by default.
+        transaction_pool_enabled: false,
         admission_queue_bypass_fraction: 0.0,
         admission_queue_capacity_fraction: 0.0001,
         ..Default::default()
