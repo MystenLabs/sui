@@ -374,6 +374,7 @@ const MAINNET_USDB: &str =
 // Version 132: Enable defer_owned_object_double_spend on devnet.
 //              Add the `object::record_new_uid_from_hash` native and its cost, tracking the
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
+//              Create the ForwardingAddressRegistry system object on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4564,7 +4565,6 @@ impl ProtocolConfig {
                     // Verify with the v2 then v1 for devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
-                        cfg.feature_flags.create_forwarding_address_registry = true;
                     }
                 }
                 131 => {
@@ -4574,6 +4574,7 @@ impl ProtocolConfig {
                 132 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
+                        cfg.feature_flags.create_forwarding_address_registry = true;
                     }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                 }
