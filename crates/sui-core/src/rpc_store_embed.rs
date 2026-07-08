@@ -44,7 +44,7 @@ use sui_consistent_store::metrics::ColumnFamilyStatsCollector;
 use sui_consistent_store::restore::RestoreDriverConfig;
 use sui_consistent_store::restore::metrics::RestoreMetrics;
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
+use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
@@ -529,12 +529,12 @@ async fn build_indexer(
     // reads the current tip from the same local store the ingestion
     // client uses (so the framework's `peek()` resolves immediately even
     // on an idle chain), and the ingestion client backfills any gap.
-    let streaming_client: Option<BoxedStreamingClient> = checkpoint_sender.map(|sender| {
-        Box::new(BroadcastStreamingClient::new(
+    let streaming_client: Option<ArcStreamingClient> = checkpoint_sender.map(|sender| {
+        Arc::new(BroadcastStreamingClient::new(
             sender,
             chain_id,
             ingestion_source,
-        )) as BoxedStreamingClient
+        )) as ArcStreamingClient
     });
 
     let mut indexer = Indexer::from_store(

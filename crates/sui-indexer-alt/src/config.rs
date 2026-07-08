@@ -57,6 +57,7 @@ pub struct IngestionLayer {
     pub streaming_backoff_max_batch_size: Option<usize>,
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,
+    pub min_cohort_boundary: Option<u64>,
 
     /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
     /// per-pipeline `ingestion.subscriber-channel-size`.
@@ -211,6 +212,7 @@ impl IngestionLayer {
             streaming_statement_timeout_ms: self
                 .streaming_statement_timeout_ms
                 .unwrap_or(base.streaming_statement_timeout_ms),
+            min_cohort_boundary: self.min_cohort_boundary.unwrap_or(base.min_cohort_boundary),
         })
     }
 }
@@ -362,6 +364,7 @@ impl Merge for IngestionLayer {
             streaming_statement_timeout_ms: other
                 .streaming_statement_timeout_ms
                 .or(self.streaming_statement_timeout_ms),
+            min_cohort_boundary: other.min_cohort_boundary.or(self.min_cohort_boundary),
             checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
         })
     }
@@ -487,6 +490,7 @@ impl From<IngestionConfig> for IngestionLayer {
             streaming_backoff_max_batch_size: Some(config.streaming_backoff_max_batch_size),
             streaming_connection_timeout_ms: Some(config.streaming_connection_timeout_ms),
             streaming_statement_timeout_ms: Some(config.streaming_statement_timeout_ms),
+            min_cohort_boundary: Some(config.min_cohort_boundary),
             checkpoint_buffer_size: None,
         }
     }

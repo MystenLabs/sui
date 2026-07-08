@@ -12,6 +12,7 @@ use sui_futures::service::Service;
 use tokio::sync::mpsc;
 use tracing::warn;
 
+use crate::cohort::DEFAULT_MIN_COHORT_BOUNDARY;
 pub use crate::config::ConcurrencyConfig as IngestConcurrencyConfig;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::error::Error;
@@ -25,14 +26,15 @@ use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
 
-/// Type alias for a boxed [`CheckpointStreamingClient`] trait object,
+/// Type alias for a shared [`CheckpointStreamingClient`] trait object,
 /// the form [`IngestionService`] stores and the broadcaster consumes.
-/// Boxed (rather than `Arc`'d) because `CheckpointStreamingClient`'s
-/// methods take `&mut self`, so unique ownership is required. The
-/// `Send + Sync` bounds let the boxed client move across task
-/// boundaries and be shared behind a reference when an enclosing
-/// [`IngestionService`] is held across threads.
-pub type BoxedStreamingClient = Box<dyn CheckpointStreamingClient + Send + Sync>;
+/// `Arc`'d (rather than `Box`'d) because `CheckpointStreamingClient`'s
+/// methods take `&self`, so the client can be cheaply cloned and shared
+/// across owners -- each cohort's [`IngestionService`] gets its own clone.
+/// The `Send + Sync` bounds let it move across task boundaries and be
+/// shared behind a reference when an enclosing [`IngestionService`] is
+/// held across threads.
+pub type ArcStreamingClient = Arc<dyn CheckpointStreamingClient + Send + Sync>;
 
 mod broadcaster;
 mod byte_count;
@@ -59,6 +61,7 @@ pub struct ClientArgs {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
 pub struct IngestionConfig {
     /// Concurrency control for checkpoint ingestion. A plain integer gives fixed concurrency;
     /// an object with `initial`, `min`, and `max` fields enables adaptive concurrency that adjusts
@@ -79,14 +82,38 @@ pub struct IngestionConfig {
 
     /// Timeout for streaming statement (peek/next) operations in milliseconds.
     pub streaming_statement_timeout_ms: u64,
+
+    /// Minimum boundary (in checkpoints) for an ingestion cohort: the closest pipeline in a
+    /// cohort absorbs peers within `max(2 * its distance from the tip, this)`, so nearly
+    /// caught-up pipelines are not fragmented into many tiny cohorts. Defaults to 25,000
+    /// checkpoints when unset.
+    pub min_cohort_boundary: u64,
 }
 
 pub struct IngestionService {
     config: IngestionConfig,
     ingestion_client: IngestionClient,
-    streaming_client: Option<BoxedStreamingClient>,
+    streaming_client: Option<ArcStreamingClient>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
-    metrics: Arc<IngestionMetrics>,
+}
+
+/// Creates the [IngestionService]s that an indexer runs -- one per cohort of pipelines with
+/// similar distances from the network tip. The factory holds the clients services are made from;
+/// services are only constructed when requested through [Self::create], and every service is
+/// created the same way: it shares the factory's ingestion client (and so reports to the same
+/// metrics -- counters aggregate across services, while latest-checkpoint style gauges are labeled
+/// by cohort so concurrently-running services don't overwrite each other), and it gets its own
+/// clone of the streaming client, if there is one.
+pub(crate) struct IngestionFactory {
+    /// The ingestion configuration shared by every service this factory creates.
+    config: IngestionConfig,
+
+    /// The client shared by [Self::latest_checkpoint_number] and the services this factory
+    /// creates.
+    ingestion_client: IngestionClient,
+
+    /// Cloned into every service created, and used by [Self::latest_checkpoint_number].
+    streaming_client: Option<ArcStreamingClient>,
 }
 
 impl IngestionConfig {
@@ -121,20 +148,11 @@ impl IngestionService {
         registry: &Registry,
     ) -> Result<Self> {
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
-        let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
-        let streaming_client: Option<BoxedStreamingClient> =
-            args.streaming.streaming_url.map(|uri| {
-                Box::new(GrpcStreamingClient::new(
-                    uri,
-                    config.streaming_connection_timeout(),
-                    config.streaming_statement_timeout(),
-                )) as BoxedStreamingClient
-            });
-        Ok(Self::from_clients(
+        let (ingestion_client, streaming_client) = clients_from_args(args, &config, metrics)?;
+        Ok(Self::with_clients(
             ingestion_client,
             streaming_client,
             config,
-            metrics,
         ))
     }
 
@@ -145,83 +163,18 @@ impl IngestionService {
     /// implementations — for example, when embedding the indexer in a fullnode that already has
     /// checkpoint data on hand — use this constructor instead of [`Self::new`].
     ///
-    /// `metrics` is the shared [`IngestionMetrics`] handle. The caller is expected to have built
-    /// it once and passed the same handle to [`IngestionClient::from_trait`] (or another
-    /// `IngestionClient` constructor) so the service and the client report against a single set of
-    /// registered metric vectors — building two sets against the same prometheus registry would
-    /// double-register the metric names.
-    ///
     /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
     pub fn with_clients(
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         config: IngestionConfig,
-        metrics: Arc<IngestionMetrics>,
-    ) -> Self {
-        Self::from_clients(ingestion_client, streaming_client, config, metrics)
-    }
-
-    /// Common assembly point for both [`Self::new`] and [`Self::with_clients`]: stamps the fields
-    /// onto the struct once a metrics handle has been resolved (either built fresh from a
-    /// registry, or in the [`Self::new`] case, threaded through from the ingestion-client
-    /// construction).
-    fn from_clients(
-        ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
-        config: IngestionConfig,
-        metrics: Arc<IngestionMetrics>,
     ) -> Self {
         Self {
             config,
             ingestion_client,
             streaming_client,
             subscribers: Vec::new(),
-            metrics,
         }
-    }
-
-    /// The ingestion client this service uses to fetch checkpoints.
-    pub(crate) fn ingestion_client(&self) -> &IngestionClient {
-        &self.ingestion_client
-    }
-
-    /// Return the latest checkpoint number known to the ingestion service, preferably via the
-    /// streaming client, and failing that via the ingestion client.
-    pub async fn latest_checkpoint_number(&mut self) -> anyhow::Result<u64> {
-        if let Some(streaming_client) = self.streaming_client.as_deref_mut() {
-            match streaming_client.latest_checkpoint_number().await {
-                Ok(checkpoint_number) => return Ok(checkpoint_number),
-                Err(e) => {
-                    warn!(
-                        operation = "latest_checkpoint_number",
-                        "Failed to get latest checkpoint number from streaming client: {e}"
-                    );
-                }
-            }
-        }
-
-        let ingestion_client = self.ingestion_client.clone();
-        let future = move || {
-            let ingestion_client = ingestion_client.clone();
-            async move {
-                ingestion_client
-                    .latest_checkpoint_number()
-                    .await
-                    .map_err(|e| backoff::Error::transient(Error::LatestCheckpointError(e)))
-            }
-        };
-
-        Ok(retry_transient_with_slow_monitor(
-            "latest_checkpoint_number",
-            future,
-            &self.metrics.ingested_latest_checkpoint_latency,
-        )
-        .await?)
-    }
-
-    /// Access to the ingestion metrics.
-    pub(crate) fn metrics(&self) -> &Arc<IngestionMetrics> {
-        &self.metrics
     }
 
     /// The ingestion configuration this service was built with.
@@ -262,7 +215,6 @@ impl IngestionService {
             ingestion_client,
             streaming_client,
             subscribers,
-            metrics,
         } = self;
 
         if subscribers.is_empty() {
@@ -275,8 +227,75 @@ impl IngestionService {
             config,
             ingestion_client,
             subscribers,
-            metrics,
         ))
+    }
+}
+
+impl IngestionFactory {
+    /// Create a factory whose services fetch checkpoints as specified by `args`, reporting
+    /// metrics registered under `metrics_prefix` in `registry`.
+    pub(crate) fn new(
+        args: ClientArgs,
+        config: IngestionConfig,
+        metrics_prefix: Option<&str>,
+        registry: &Registry,
+    ) -> Result<Self> {
+        let metrics = IngestionMetrics::new(metrics_prefix, registry);
+        let (ingestion_client, streaming_client) = clients_from_args(args, &config, metrics)?;
+        Ok(Self::with_clients(
+            ingestion_client,
+            streaming_client,
+            config,
+        ))
+    }
+
+    /// Create a factory from pre-built clients, bypassing [ClientArgs]-driven construction.
+    /// Callers that supply their own [`IngestionClientTrait`] / [`CheckpointStreamingClient`]
+    /// implementations -- for example, when embedding the indexer in a fullnode that already has
+    /// checkpoint data on hand -- use this constructor instead of [`Self::new`].
+    ///
+    /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
+    pub(crate) fn with_clients(
+        ingestion_client: IngestionClient,
+        streaming_client: Option<ArcStreamingClient>,
+        config: IngestionConfig,
+    ) -> Self {
+        Self {
+            config,
+            ingestion_client,
+            streaming_client,
+        }
+    }
+
+    /// Return the latest checkpoint number known to the underlying checkpoint source, preferably
+    /// via the streaming client, and failing that via the ingestion client.
+    pub(crate) async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        latest_checkpoint_number(self.streaming_client.as_deref(), &self.ingestion_client).await
+    }
+
+    /// The ingestion client this factory's services fetch checkpoints with.
+    pub(crate) fn ingestion_client(&self) -> &IngestionClient {
+        &self.ingestion_client
+    }
+
+    /// The metrics that this factory's services report to.
+    pub(crate) fn metrics(&self) -> &Arc<IngestionMetrics> {
+        self.ingestion_client.metrics()
+    }
+
+    /// The ingestion configuration shared by every service this factory creates.
+    pub(crate) fn config(&self) -> &IngestionConfig {
+        &self.config
+    }
+
+    /// Create an ingestion service for `cohort` from the factory's clients. The cohort labels the
+    /// service's ingestion gauges so concurrently-running services don't overwrite each other.
+    pub(crate) fn create(&self, cohort: usize) -> IngestionService {
+        IngestionService::with_clients(
+            self.ingestion_client.for_cohort(cohort),
+            self.streaming_client.clone(),
+            self.config.clone(),
+        )
     }
 }
 
@@ -295,8 +314,68 @@ impl Default for IngestionConfig {
             streaming_backoff_max_batch_size: 10000, // 10000 checkpoints, ~ 40 minutes
             streaming_connection_timeout_ms: 5000,   // 5 seconds
             streaming_statement_timeout_ms: 5000,    // 5 seconds
+            min_cohort_boundary: DEFAULT_MIN_COHORT_BOUNDARY,
         }
     }
+}
+
+/// Build the ingestion client (and optional streaming client) described by `args`.
+fn clients_from_args(
+    args: ClientArgs,
+    config: &IngestionConfig,
+    metrics: Arc<IngestionMetrics>,
+) -> Result<(IngestionClient, Option<ArcStreamingClient>)> {
+    let ingestion_client = IngestionClient::new(args.ingestion, metrics)?;
+    let streaming_client = args.streaming.streaming_url.map(|uri| {
+        Arc::new(GrpcStreamingClient::new(
+            uri,
+            config.streaming_connection_timeout(),
+            config.streaming_statement_timeout(),
+        )) as ArcStreamingClient
+    });
+    Ok((ingestion_client, streaming_client))
+}
+
+/// Return the latest checkpoint number known to the underlying checkpoint source, preferably
+/// via the streaming client, and failing that via the ingestion client.
+async fn latest_checkpoint_number<S>(
+    streaming_client: Option<&S>,
+    ingestion_client: &IngestionClient,
+) -> anyhow::Result<u64>
+where
+    S: CheckpointStreamingClient + Send + Sync + ?Sized,
+{
+    if let Some(streaming_client) = streaming_client {
+        match streaming_client.latest_checkpoint_number().await {
+            Ok(checkpoint_number) => return Ok(checkpoint_number),
+            Err(e) => {
+                warn!(
+                    operation = "latest_checkpoint_number",
+                    "Failed to get latest checkpoint number from streaming client: {e}"
+                );
+            }
+        }
+    }
+
+    let client = ingestion_client.clone();
+    let future = move || {
+        let client = client.clone();
+        async move {
+            client
+                .latest_checkpoint_number()
+                .await
+                .map_err(|e| backoff::Error::transient(Error::LatestCheckpointError(e)))
+        }
+    };
+
+    Ok(retry_transient_with_slow_monitor(
+        "latest_checkpoint_number",
+        future,
+        &ingestion_client
+            .metrics()
+            .ingested_latest_checkpoint_latency,
+    )
+    .await?)
 }
 
 #[cfg(test)]
@@ -368,33 +447,6 @@ mod tests {
 
             seqs
         }))
-    }
-
-    /// Probe the streaming client (if any) for the latest checkpoint number, falling back to the
-    /// ingestion client on no-streaming-client or streaming-side failure. Mirrors the inline logic in
-    /// [`IngestionService::latest_checkpoint_number`] in a form unit tests can drive directly with
-    /// concrete mock clients (without having to build an `IngestionService`).
-    #[cfg(test)]
-    async fn latest_checkpoint_number<S>(
-        streaming_client: Option<&mut S>,
-        ingestion_client: &IngestionClient,
-    ) -> anyhow::Result<u64>
-    where
-        S: CheckpointStreamingClient + Send + ?Sized,
-    {
-        if let Some(streaming_client) = streaming_client {
-            match streaming_client.latest_checkpoint_number().await {
-                Ok(checkpoint_number) => return Ok(checkpoint_number),
-                Err(e) => {
-                    warn!(
-                        operation = "latest_checkpoint_number",
-                        "Failed to get latest checkpoint number from streaming client: {e}"
-                    );
-                }
-            }
-        }
-
-        ingestion_client.latest_checkpoint_number().await
     }
 
     /// If the ingestion service has no subscribers, it will fail fast (before fetching any
@@ -555,16 +607,15 @@ mod tests {
     #[tokio::test]
     async fn latest_checkpoint_number_no_streaming_client() {
         let client = mock_ingestion_client(FALLBACK);
-        let mut streaming: Option<MockStreamingClient> = None;
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let result = latest_checkpoint_number(None::<&MockStreamingClient>, &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
     }
 
     #[tokio::test]
     async fn latest_checkpoint_number_from_stream() {
         let client = mock_ingestion_client(FALLBACK);
-        let mut streaming = Some(MockStreamingClient::new([42], None));
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let streaming = Some(MockStreamingClient::new([42], None));
+        let result = latest_checkpoint_number(streaming.as_ref(), &client).await;
         assert_eq!(result.unwrap(), 42);
     }
 
@@ -573,26 +624,25 @@ mod tests {
         let client = mock_ingestion_client(FALLBACK);
         let mut mock = MockStreamingClient::new(std::iter::empty::<u64>(), None);
         mock.insert_error();
-        let mut streaming = Some(mock);
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let result = latest_checkpoint_number(Some(&mock), &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
     }
 
     #[tokio::test]
     async fn latest_checkpoint_number_empty_stream_falls_back() {
         let client = mock_ingestion_client(FALLBACK);
-        let mut streaming = Some(MockStreamingClient::new(std::iter::empty::<u64>(), None));
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let streaming = Some(MockStreamingClient::new(std::iter::empty::<u64>(), None));
+        let result = latest_checkpoint_number(streaming.as_ref(), &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
     }
 
     #[tokio::test]
     async fn latest_checkpoint_number_connection_failure_falls_back() {
         let client = mock_ingestion_client(FALLBACK);
-        let mut streaming = Some(
+        let streaming = Some(
             MockStreamingClient::new(std::iter::empty::<u64>(), None).fail_connection_times(1),
         );
-        let result = latest_checkpoint_number(streaming.as_mut(), &client).await;
+        let result = latest_checkpoint_number(streaming.as_ref(), &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
     }
 
@@ -605,51 +655,72 @@ mod tests {
         assert!(error.to_string().contains("nonzero"));
     }
 
-    /// `with_clients` resolves `latest_checkpoint_number` through the supplied streaming client
-    /// when it is healthy, without going through `ClientArgs`-driven setup.
-    #[tokio::test]
-    async fn with_clients_uses_supplied_streaming_client() {
-        const STREAM_LATEST: u64 = 42;
-
+    /// Every service an args-driven factory creates shares the factory's metrics; no additional
+    /// metrics are registered.
+    #[test]
+    fn factory_from_args_shares_metrics() {
         let registry = Registry::new();
-        let metrics = IngestionMetrics::new(None, &registry);
-        let mut service = IngestionService::with_clients(
-            IngestionClient::from_trait(
-                Arc::new(MockIngestionClient {
-                    latest_checkpoint: FALLBACK,
-                    ..Default::default()
-                }),
-                metrics.clone(),
-            ),
-            Some(Box::new(MockStreamingClient::new([STREAM_LATEST], None))),
-            IngestionConfig::default(),
-            metrics,
-        );
+        let dir = tempfile::tempdir().unwrap();
+        let args = ClientArgs {
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(dir.path().to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
-        let latest = service.latest_checkpoint_number().await.unwrap();
-        assert_eq!(latest, STREAM_LATEST);
+        let factory =
+            IngestionFactory::new(args, IngestionConfig::default(), None, &registry).unwrap();
+
+        let first = factory.create(0);
+        let second = factory.create(1);
+        assert!(Arc::ptr_eq(
+            first.ingestion_client.metrics(),
+            factory.metrics()
+        ));
+        assert!(Arc::ptr_eq(
+            second.ingestion_client.metrics(),
+            factory.metrics()
+        ));
+        assert!(
+            registry
+                .gather()
+                .iter()
+                .all(|family| !family.name().contains("cohort"))
+        );
     }
 
-    /// With no streaming client supplied, `with_clients` falls back to the ingestion client for
-    /// the latest-checkpoint probe.
+    /// Services created by a client-driven factory all share the client's metrics handle, and
+    /// each gets its own clone of the streaming client. When the streaming client cannot serve
+    /// the latest checkpoint (the mock's shared queue is exhausted by the first probe), the
+    /// factory's probe falls back to the ingestion client.
     #[tokio::test]
-    async fn with_clients_falls_back_to_ingestion_when_no_streaming() {
+    async fn factory_from_clients_shares_metrics() {
         let registry = Registry::new();
         let metrics = IngestionMetrics::new(None, &registry);
-        let mut service = IngestionService::with_clients(
-            IngestionClient::from_trait(
-                Arc::new(MockIngestionClient {
-                    latest_checkpoint: FALLBACK,
-                    ..Default::default()
-                }),
-                metrics.clone(),
-            ),
-            None,
-            IngestionConfig::default(),
-            metrics,
+        let client = IngestionClient::from_trait(
+            Arc::new(MockIngestionClient {
+                latest_checkpoint: FALLBACK,
+                ..Default::default()
+            }),
+            metrics.clone(),
         );
 
-        let latest = service.latest_checkpoint_number().await.unwrap();
-        assert_eq!(latest, FALLBACK);
+        let factory = IngestionFactory::with_clients(
+            client,
+            Some(Arc::new(MockStreamingClient::new([42], None))),
+            IngestionConfig::default(),
+        );
+
+        assert_eq!(factory.latest_checkpoint_number().await.unwrap(), 42);
+
+        let first = factory.create(0);
+        let second = factory.create(1);
+        assert!(Arc::ptr_eq(first.ingestion_client.metrics(), &metrics));
+        assert!(Arc::ptr_eq(second.ingestion_client.metrics(), &metrics));
+        assert!(first.streaming_client.is_some());
+        assert!(second.streaming_client.is_some());
+
+        assert_eq!(factory.latest_checkpoint_number().await.unwrap(), FALLBACK);
     }
 }
