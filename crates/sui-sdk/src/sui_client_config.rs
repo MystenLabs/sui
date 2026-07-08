@@ -14,7 +14,7 @@ use sui_rpc_api::Client;
 use sui_rpc_api::client::HeadersInterceptor;
 use sui_types::{
     base_types::*,
-    digests::{MAINNET_CHAIN_IDENTIFIER_BASE58, TESTNET_CHAIN_IDENTIFIER_BASE58},
+    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
 };
 
 #[serde_as]
@@ -132,7 +132,7 @@ impl SuiEnv {
             rpc: SUI_TESTNET_URL.into(),
             ws: None,
             basic_auth: None,
-            chain_id: Some(TESTNET_CHAIN_IDENTIFIER_BASE58.to_string()),
+            chain_id: Some(get_testnet_chain_identifier().to_string()),
         }
     }
 
@@ -152,7 +152,7 @@ impl SuiEnv {
             rpc: SUI_MAINNET_URL.into(),
             ws: None,
             basic_auth: None,
-            chain_id: Some(MAINNET_CHAIN_IDENTIFIER_BASE58.to_string()),
+            chain_id: Some(get_mainnet_chain_identifier().to_string()),
         }
     }
 }

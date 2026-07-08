@@ -5,7 +5,7 @@
 # Test an ephemeral upgrade workflow. We have
 # B --> A
 
-chain_id=$(sui client --client.config $CONFIG chain-identifier)
+chain_id=$(sui client --client.config $CONFIG chain-identifier | awk '/^Hex:/ {print $2}')
 
 extract_published() {
   awk '

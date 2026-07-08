@@ -19,7 +19,7 @@ source: crates/sui/tests/shell_tests.rs
 #
 # We publish A, B, C, D, E in order
 
-chain_id=$(sui client --client.config $CONFIG chain-identifier)
+chain_id=$(sui client --client.config $CONFIG chain-identifier | awk '/^Hex:/ {print $2}')
 
 add_env_to_toml() {
   echo "[environments]" >> $1/Move.toml

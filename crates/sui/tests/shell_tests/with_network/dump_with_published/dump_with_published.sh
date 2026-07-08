@@ -7,7 +7,7 @@
 # from Published.toml appears in the compiled bytecode.
 
 # Get the chain ID from the network
-chain_id=$(sui client --client.config $CONFIG chain-identifier)
+chain_id=$(sui client --client.config $CONFIG chain-identifier | awk '/^Hex:/ {print $2}')
 
 # Generate Published.toml for dep_pkg with the chain ID
 cat > dep_pkg/Published.toml <<EOF

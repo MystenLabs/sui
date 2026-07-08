@@ -14,7 +14,6 @@ use sui_keys::keystore::{AccountKeystore, Alias, Keystore};
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{Signature, SuiKeyPair};
-use sui_types::digests::CheckpointDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Object;
 
@@ -189,15 +188,12 @@ impl WalletContext {
             return Ok(chain_id.clone());
         }
         let chain_id = self.grpc_client()?.get_chain_identifier().await?;
-        // Cache the canonical form: the full genesis checkpoint digest, Base58-encoded
-        // (`ChainIdentifier`'s `Display` is the legacy 4-byte hex short form).
-        let chain_id = CheckpointDigest::new(*chain_id.as_bytes()).base58_encode();
         let path = self.config.path();
         let mut config_result = SuiClientConfig::load_with_lock(path)?;
 
-        config_result.update_env_chain_id(&env.alias, chain_id.clone())?;
+        config_result.update_env_chain_id(&env.alias, chain_id.to_string())?;
         config_result.save_with_lock(path)?;
-        Ok(chain_id)
+        Ok(chain_id.to_string())
     }
 
     pub fn get_active_env(&self) -> Result<&SuiEnv, anyhow::Error> {

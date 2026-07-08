@@ -114,7 +114,6 @@ use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
 use sui_package_alt::{BuildParams, SuiFlavor, chain_id_base58, find_environment};
 use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
-use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 use tracing::{debug, info};
 
 /// Concurrency level for fetching coin metadata for balances.
@@ -193,15 +192,12 @@ pub enum SuiClientCommands {
         processing: TxProcessingArgs,
     },
 
-    /// Query the chain identifier from the rpc endpoint. This is the Base58-encoded digest of
-    /// the network's genesis checkpoint, as returned by the gRPC and GraphQL APIs.
+    /// Query the chain identifier from the rpc endpoint. Prints it in both encodings: the full
+    /// Base58-encoded genesis checkpoint digest (as returned by the gRPC and GraphQL APIs) and
+    /// the legacy hex short form. Either can be used as a chain ID in the `[environments]`
+    /// section of `Move.toml`.
     #[clap(name = "chain-identifier")]
-    ChainIdentifier {
-        /// Print the legacy short chain identifier (the first 4 bytes of the digest,
-        /// hex-encoded) instead of the full Base58 form.
-        #[clap(long)]
-        short: bool,
-    },
+    ChainIdentifier,
 
     /// Query a dynamic field by its address.
     #[clap(name = "dynamic-field")]
@@ -936,7 +932,7 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.publish_args.build_config)?;
 
                 let client = context.grpc_client()?;
-                let chain_id = chain_id_base58(&client.get_chain_identifier().await?);
+                let chain_id = client.get_chain_identifier().await?.to_string();
                 let active_env = context.get_active_env()?;
                 let alias = active_env.alias.clone();
 
@@ -1545,14 +1541,11 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 SuiClientCommandResult::NoOutput
             }
-            SuiClientCommands::ChainIdentifier { short } => {
-                let ci = context.cache_chain_id().await?;
-                let ci = if short {
-                    ChainIdentifier::from(ci.parse::<CheckpointDigest>()?).to_string()
-                } else {
-                    ci
-                };
-                SuiClientCommandResult::ChainIdentifier(ci)
+            SuiClientCommands::ChainIdentifier => {
+                // Keep populating the client.yaml chain-id cache, as other commands rely on it.
+                let hex = context.cache_chain_id().await?;
+                let base58 = chain_id_base58(&context.get_chain_identifier().await?);
+                SuiClientCommandResult::ChainIdentifier(ChainIdentifierOutput { base58, hex })
             }
             SuiClientCommands::SplitCoin {
                 coin_id,
@@ -2339,7 +2332,8 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "Client state sync complete.")?;
             }
             SuiClientCommandResult::ChainIdentifier(ci) => {
-                writeln!(writer, "{}", ci)?;
+                writeln!(writer, "Base58: {}", ci.base58)?;
+                writeln!(writer, "Hex: {}", ci.hex)?;
             }
             SuiClientCommandResult::Switch(response) => {
                 write!(writer, "{}", response)?;
@@ -2788,6 +2782,16 @@ pub struct AddressesOutput {
     pub addresses: Vec<(String, SuiAddress)>,
 }
 
+/// The chain identifier in both supported encodings: the full Base58-encoded genesis checkpoint
+/// digest (as returned by the gRPC and GraphQL APIs) and the legacy hex short form (its first
+/// 4 bytes). Either can be used as a chain ID in the `[environments]` section of `Move.toml`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainIdentifierOutput {
+    pub base58: String,
+    pub hex: String,
+}
+
 /// Balance data prepared for both human-readable and JSON CLI output.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -2901,7 +2905,7 @@ pub enum SuiClientCommandResult {
     ActiveEnv(Option<String>),
     Addresses(AddressesOutput),
     Balance(Vec<BalanceOutput>, bool),
-    ChainIdentifier(String),
+    ChainIdentifier(ChainIdentifierOutput),
     ComputeTransactionDigest(TransactionData),
     DynamicFieldQuery(proto::ListDynamicFieldsResponse),
     DryRun(SimulateTransactionResponse),
@@ -3987,7 +3991,7 @@ async fn publish_command(
     };
 
     let publish_data = update_publication(
-        &chain_id_base58(&chain_id),
+        &chain_id.to_string(),
         LockCommand::Publish,
         response,
         &build_config,
@@ -4021,7 +4025,7 @@ async fn upgrade_command(
         .unwrap_or(context.infer_sender(&payment.gas).await?);
     let client = context.grpc_client()?;
     let chain_identifier = client.get_chain_identifier().await?;
-    let chain_id = chain_id_base58(&chain_identifier);
+    let chain_id = chain_identifier.to_string();
 
     // For upgrade, we want to force the root package to have `0x0` as its address
     build_config.root_as_zero = true;
