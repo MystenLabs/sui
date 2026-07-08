@@ -47,6 +47,10 @@ use crate::consensus_adapter::{ConsensusAdapterMetrics, SubmitToConsensus};
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify};
 use crate::epoch::reconfiguration::ReconfigurationInitiator;
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_pool_tests.rs"]
+mod transaction_pool_tests;
+
 /// A sequenced own block whose entries have not fully settled after this many rounds
 /// past its round indicates missed settle coverage; the defensive sweep reaps it.
 const SWEEP_GRACE_ROUNDS: Round = 100;
@@ -868,7 +872,7 @@ impl SuiTransactionPool {
     /// per-position status. This is the sole settle signal for vote-rejected
     /// transactions and for certs-closed / post-EndOfPublish drops, which are never
     /// marked consensus-message-processed.
-    pub fn note_statuses(&self, updates: &[(ConsensusPosition, ConsensusTxStatus)]) {
+    pub(crate) fn note_statuses(&self, updates: &[(ConsensusPosition, ConsensusTxStatus)]) {
         let mut notifications = Notifications::new();
         {
             let mut inner = self.inner.lock();
