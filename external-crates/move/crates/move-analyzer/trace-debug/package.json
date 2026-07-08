@@ -5,7 +5,7 @@
     "publisher": "mysten",
     "icon": "images/move.png",
     "license": "Apache-2.0",
-    "version": "0.0.20",
+    "version": "0.0.21",
     "preview": true,
     "repository": {
         "url": "https://github.com/MystenLabs/sui.git",
@@ -31,6 +31,11 @@
             {
                 "command": "move.toggleSource",
                 "title": "Toggle source view",
+                "category": "Move"
+            },
+            {
+                "command": "move.addSourceToTrace",
+                "title": "Add Source to Trace",
                 "category": "Move"
             }
         ],
@@ -139,17 +144,23 @@
                     }
                 ]
             }
-        ]
-    },
-    "menus": {
-        "commandPalette": [
-            {
-                "command": "move.toggleDisassembly"
+        ],
+        "menus": {
+            "commandPalette": [
+                {
+                    "command": "move.addSourceToTrace",
+                    "when": "false"
+                }
+            ]
+        },
+        "configurationDefaults": {
+            "[mtrace]": {
+                "editor.unusualLineTerminators": "off"
             },
-            {
-                "command": "move.toggleSource"
+            "[code-text-binary]": {
+                "editor.unusualLineTerminators": "off"
             }
-        ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile; tsc -p ../trace-adapter; cp ../trace-adapter/out/*.* ./out/",
