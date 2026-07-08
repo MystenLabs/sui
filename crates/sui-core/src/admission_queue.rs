@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Gas-price priority queue admitting user transactions to consensus under load.
+//!
+//! See `consensus_submission_pipeline.md` (same directory) for the end-to-end
+//! submission dataflow and behaviors; keep it in sync with behavior changes here.
+
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use arc_swap::ArcSwap;
