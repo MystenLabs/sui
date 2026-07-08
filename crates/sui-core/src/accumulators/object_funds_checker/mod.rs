@@ -146,17 +146,30 @@ impl ObjectFundsChecker {
                     event
                         .write
                         .get_fund_withdraw_amount()
+                        // A zero-amount withdraw emits a single Split(0) accumulator event,
+                        // which survives effects folding as a Split (the fold's Merge
+                        // tie-break only applies when an account has multiple writes).
+                        // It contributes nothing to the running max nor to settlement,
+                        // so recording it would be a no-op; skip it.
+                        .filter(|amount| *amount > 0)
                         .map(|amount| (event.accumulator_obj, amount))
                 })
                 .collect();
-            // A net withdraw in effects can never exceed the running max withdraw of the
-            // same account. Recording more than what the sufficiency check covered could
-            // break the funds >= unsettled_withdraw invariant in try_withdraw.
-            debug_assert!(updates.iter().all(|(obj_id, net)| {
-                object_running_max_withdraws
-                    .get(obj_id)
-                    .is_some_and(|max| net <= max)
-            }));
+            // A positive net withdraw in effects implies a positive peak, so the account
+            // must have a running max entry that the net cannot exceed. Recording more
+            // than what the sufficiency check covered could break the
+            // funds >= unsettled_withdraw invariant in try_withdraw.
+            debug_assert!(
+                updates.iter().all(|(obj_id, net)| {
+                    object_running_max_withdraws
+                        .get(obj_id)
+                        .is_some_and(|max| net <= max)
+                }),
+                "net withdraw exceeds running max: tx={:?} updates={:?} running_max={:?}",
+                certificate.digest(),
+                updates,
+                object_running_max_withdraws,
+            );
             updates
         } else {
             object_running_max_withdraws.clone()
