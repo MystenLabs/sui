@@ -1,7 +1,17 @@
 ---
-source: crates/move-compiler/src/linters/docs.rs
-expression: render_index()
+source: crates/sui/tests/shell_tests.rs
 ---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# `sui move lint --list` prints the full lint index, grouped by category.
+sui move --client.config $CONFIG lint --list
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
 Move lint index. Run `move lint --explain <name>` for details on any lint.
 
 Security
@@ -41,3 +51,6 @@ Style
     while_true                 unnecessary 'while (true)', replace with 'loop'
     unneeded_return            unneeded return
     unnecessary_unit           unit `()` expression can be removed or simplified
+
+
+----- stderr -----

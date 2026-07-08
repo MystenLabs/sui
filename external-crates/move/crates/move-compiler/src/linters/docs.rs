@@ -731,7 +731,7 @@ mod tests {
     #[test]
     fn explain_index() {
         explain_settings().bind(|| {
-            insta::assert_snapshot!("_index", LintIndex.to_string());
+            insta::assert_snapshot!("index", LintIndex.to_string());
         });
     }
 

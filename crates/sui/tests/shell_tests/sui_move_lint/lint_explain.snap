@@ -1,0 +1,79 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# `sui move lint --explain <CODE>` prints a lint's documentation and exits without building a
+# package. It accepts a lint name...
+sui move --client.config $CONFIG lint --explain share_owned
+# ...and the same lint by its diagnostic code.
+sui move --client.config $CONFIG lint --explain W99000
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+share_owned
+===========
+
+group:   Security
+origin:  Sui
+level:   on by default
+code:    W99000
+
+possible owned object share
+
+Sharing is irreversible and makes an object world-writable forever. Calling `share_object` on an object that is not freshly created in this function (it arrives as a parameter or from an unpack) can silently hand every account write access to something a user believed was theirs. It fires only when the type is also transferable — it has `store`, or is transferred with `transfer::transfer` elsewhere; a `key`-only type that is never transferred is not flagged.
+
+When it's OK:
+  The shared object really is fresh, but was produced through a helper call the local analysis can't see through — a conservative false positive.
+
+Example:
+
+  // flagged
+  // `o` is a parameter — the checker can't prove it is fresh
+  public fun share(o: Obj) {
+      transfer::public_share_object(o)
+  }
+
+  // suggested
+  // packed here, so provably a fresh object
+  public fun share(ctx: &mut TxContext) {
+      transfer::share_object(Obj { id: object::new(ctx) })
+  }
+
+Suppress a specific case with `#[allow(lint(share_owned))]`.
+share_owned
+===========
+
+group:   Security
+origin:  Sui
+level:   on by default
+code:    W99000
+
+possible owned object share
+
+Sharing is irreversible and makes an object world-writable forever. Calling `share_object` on an object that is not freshly created in this function (it arrives as a parameter or from an unpack) can silently hand every account write access to something a user believed was theirs. It fires only when the type is also transferable — it has `store`, or is transferred with `transfer::transfer` elsewhere; a `key`-only type that is never transferred is not flagged.
+
+When it's OK:
+  The shared object really is fresh, but was produced through a helper call the local analysis can't see through — a conservative false positive.
+
+Example:
+
+  // flagged
+  // `o` is a parameter — the checker can't prove it is fresh
+  public fun share(o: Obj) {
+      transfer::public_share_object(o)
+  }
+
+  // suggested
+  // packed here, so provably a fresh object
+  public fun share(ctx: &mut TxContext) {
+      transfer::share_object(Obj { id: object::new(ctx) })
+  }
+
+Suppress a specific case with `#[allow(lint(share_owned))]`.
+
+----- stderr -----
