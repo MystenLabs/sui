@@ -900,10 +900,11 @@ impl CheckpointLagMetricReporter {
         latest_checkpoint_time_lag_gauge: &IntGaugeVec,
         latest_checkpoint_sequence_number_gauge: &IntGaugeVec,
     ) -> Arc<Self> {
-        Self::new(
-            checkpoint_time_lag_histogram.with_label_values(&[P::NAME]),
-            latest_checkpoint_time_lag_gauge.with_label_values(&[P::NAME]),
-            latest_checkpoint_sequence_number_gauge.with_label_values(&[P::NAME]),
+        Self::with_label(
+            checkpoint_time_lag_histogram,
+            latest_checkpoint_time_lag_gauge,
+            latest_checkpoint_sequence_number_gauge,
+            P::NAME,
         )
     }
 
