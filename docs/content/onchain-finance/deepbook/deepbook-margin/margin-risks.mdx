@@ -22,7 +22,7 @@ The most significant risk in margin trading is **liquidation** - the forced clos
 
 ### How liquidation works
 
-When you borrow funds to trade, you must maintain a minimum [risk ratio](/onchain-finance/deepbook-margin/contract-information/risk-ratio) (the ratio of your total assets to total debts). If your position's risk ratio falls to or below the **Liquidation Risk Ratio**, anyone can liquidate your position.
+When you borrow funds to trade, you must maintain a minimum [risk ratio](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio) (the ratio of your total assets to total debts). If your position's risk ratio falls to or below the **Liquidation Risk Ratio**, anyone can liquidate your position.
 
 :::caution Warning zone
 For SUI/USDC (5x leverage), when your risk ratio falls between 1.1 and 1.2, you are in the **warning zone**. For WAL/USDC and DEEP/USDC (3x leverage), the warning zone is between 1.2 and 1.3. At these levels, even minor price movements can push you into liquidation. Monitor your position carefully and consider adding collateral or reducing your position size.
@@ -108,7 +108,7 @@ When you borrow funds, you pay interest that accrues continuously. This interest
 
 ### How interest rates fluctuate
 
-DeepBook Margin uses a [kinked interest rate model](/onchain-finance/deepbook-margin/contract-information/interest-rates) where rates increase gradually up to an optimal utilization point, then spike dramatically.
+DeepBook Margin uses a [kinked interest rate model](/onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates) where rates increase gradually up to an optimal utilization point, then spike dramatically.
 
 **Current USDC pool parameters:**
 
@@ -184,7 +184,7 @@ Just because you can borrow at 5x doesn't mean you should. Consider:
 
 ### 3. Use Take Profit / Stop Loss orders
 
-DeepBook Margin supports [TPSL orders](/onchain-finance/deepbook-margin/contract-information/tpsl) that automatically close your position:
+DeepBook Margin supports [TPSL orders](/onchain-finance/deepbook/deepbook-margin/contract-information/tpsl) that automatically close your position:
 - Set a stop loss above your liquidation price
 - This exits your position with a smaller loss rather than getting liquidated
 

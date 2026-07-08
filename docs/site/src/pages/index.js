@@ -87,7 +87,7 @@ export default function Home() {
               <Link className={styles.cardLink} to="/onchain-finance/tokenized-assets">
                 Tokenized Assets
               </Link>
-              <Link className={styles.cardLink} to="/onchain-finance/deepbookv3/deepbook">
+              <Link className={styles.cardLink} to="/onchain-finance/deepbook/deepbookv3/deepbook">
                 DeepBookV3
               </Link>
             </HomeCard>
