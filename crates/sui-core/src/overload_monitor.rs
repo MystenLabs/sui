@@ -14,6 +14,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::SuiErrorKind;
 use sui_types::error::SuiResult;
 use sui_types::fp_bail;
+use tokio::sync::Notify;
 use tokio::time::sleep;
 use tracing::{debug, info};
 use twox_hash::XxHash64;
@@ -25,18 +26,27 @@ pub struct AuthorityOverloadInfo {
 
     /// The calculated percentage of transactions to drop.
     pub load_shedding_percentage: AtomicU32,
+
+    /// Pulsed whenever `load_shedding_percentage` changes.
+    pub shed_changed: Notify,
 }
 
 impl AuthorityOverloadInfo {
     pub fn set_overload(&self, load_shedding_percentage: u32) {
         self.is_overload.store(true, Ordering::Relaxed);
-        self.load_shedding_percentage
-            .store(min(load_shedding_percentage, 100), Ordering::Relaxed);
+        let new = min(load_shedding_percentage, 100);
+        let prev = self.load_shedding_percentage.swap(new, Ordering::Relaxed);
+        if prev != new {
+            self.shed_changed.notify_waiters();
+        }
     }
 
     pub fn clear_overload(&self) {
         self.is_overload.store(false, Ordering::Relaxed);
-        self.load_shedding_percentage.store(0, Ordering::Relaxed);
+        let prev = self.load_shedding_percentage.swap(0, Ordering::Relaxed);
+        if prev != 0 {
+            self.shed_changed.notify_waiters();
+        }
     }
 }
 

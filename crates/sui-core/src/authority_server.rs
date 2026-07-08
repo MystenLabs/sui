@@ -215,6 +215,8 @@ pub struct ValidatorServiceMetrics {
     x_forwarded_for_num_hops: Gauge,
     pub gasless_rate_limited_count: IntCounter,
     pub gasless_submission_outcomes: IntCounterVec,
+    admission_queue_direct: IntCounterVec,
+    admission_queue_failover_active: IntGauge,
 }
 
 impl ValidatorServiceMetrics {
@@ -393,6 +395,19 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
+            admission_queue_direct: register_int_counter_vec_with_registry!(
+                "validator_service_admission_queue_direct",
+                "Number of submit requests routed directly to consensus, bypassing the queue, by reason (disabled, ping, failover)",
+                &["reason"],
+                registry,
+            )
+            .unwrap(),
+            admission_queue_failover_active: register_int_gauge_with_registry!(
+                "validator_service_admission_queue_failover_active",
+                "1 while admission queue failover is routing around a stuck queue actor, 0 otherwise",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -406,11 +421,31 @@ impl ValidatorServiceMetrics {
 enum AdmissionQueueSubmitMode {
     /// Admit via the gas-price priority queue.
     Queue,
-    /// Submit directly to consensus, bypassing the queue — used when the queue
-    /// is turned off by config, temporarily disabled by failover, or for a ping
-    /// request. Individual txs are rejected when consensus is saturated
-    /// (pre-queue behavior).
-    Direct,
+    /// Submit directly to consensus, bypassing the queue. Individual txs are
+    /// rejected when consensus is saturated (pre-queue behavior).
+    Direct(DirectReason),
+}
+
+/// Why a request bypasses the queue and submits directly to consensus. Used as
+/// a metric label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DirectReason {
+    /// Queue turned off by config.
+    Disabled,
+    /// Ping request — carries no transactions, must not wait behind queued work.
+    Ping,
+    /// Queue actor appears stuck; failover routes around it.
+    Failover,
+}
+
+impl DirectReason {
+    fn as_str(self) -> &'static str {
+        match self {
+            DirectReason::Disabled => "disabled",
+            DirectReason::Ping => "ping",
+            DirectReason::Failover => "failover",
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -863,7 +898,7 @@ impl ValidatorService {
 
             // Use the pre-queue per-tx consensus overload reject on the direct
             // submission path (queue off, failover, or ping).
-            if matches!(submit_mode, AdmissionQueueSubmitMode::Direct)
+            if matches!(submit_mode, AdmissionQueueSubmitMode::Direct(_))
                 && let Err(error) = self.consensus_adapter.check_consensus_overload()
             {
                 state.update_overload_metrics("consensus");
@@ -1302,7 +1337,11 @@ impl ValidatorService {
         // any other error fails the whole request, after all groups have settled.
         // Soft bundles submit as a single group; individual transactions submit one group each.
         let group_results = match submit_mode {
-            AdmissionQueueSubmitMode::Direct => {
+            AdmissionQueueSubmitMode::Direct(reason) => {
+                self.metrics
+                    .admission_queue_direct
+                    .with_label_values(&[reason.as_str()])
+                    .inc();
                 let futures = tx_groups.into_iter().map(|txns| {
                     debug!(
                         "handle_submit_transaction: submitting consensus transactions ({}): {}",
@@ -1489,19 +1528,23 @@ impl ValidatorService {
 
     fn classify_submit_mode(&self, is_ping_request: bool) -> AdmissionQueueSubmitMode {
         let Some(aq) = &self.admission_queue else {
-            return AdmissionQueueSubmitMode::Direct;
+            return AdmissionQueueSubmitMode::Direct(DirectReason::Disabled);
         };
 
         // Ping requests carry no transactions and must not wait behind queued
         // work; submit them directly to consensus.
         if is_ping_request {
-            return AdmissionQueueSubmitMode::Direct;
+            return AdmissionQueueSubmitMode::Direct(DirectReason::Ping);
         }
 
         // If the queue actor is stuck, fall back to direct submission with the
         // pre-queue saturation reject until it resumes making progress.
-        if aq.load().failover_tripped() {
-            return AdmissionQueueSubmitMode::Direct;
+        let failover = aq.load().failover_tripped();
+        self.metrics
+            .admission_queue_failover_active
+            .set(failover as i64);
+        if failover {
+            return AdmissionQueueSubmitMode::Direct(DirectReason::Failover);
         }
 
         AdmissionQueueSubmitMode::Queue

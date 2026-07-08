@@ -1653,6 +1653,7 @@ impl SuiNode {
                 overload_config.admission_queue_capacity_fraction,
                 overload_config.admission_queue_failover_timeout,
                 inflight_slot_freed_notify,
+                state.overload_info.clone(),
             ));
             AdmissionQueueContext::spawn(manager, epoch_store)
         });
