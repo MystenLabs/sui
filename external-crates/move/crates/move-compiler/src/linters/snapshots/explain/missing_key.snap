@@ -1,14 +1,14 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: render_explanation(doc)
+expression: doc.to_string()
 ---
 missing_key
 ===========
 
-group:   Correctness
-origin:  Sui
-level:   on by default
-code:    W99007
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99007
 
 struct with id but missing key ability
 

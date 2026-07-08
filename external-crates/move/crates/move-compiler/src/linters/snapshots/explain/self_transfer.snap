@@ -5,10 +5,10 @@ expression: doc.to_string()
 self_transfer
 =============
 
-group:   Conventions
-origin:  Sui
-level:   on by default
-code:    W99001
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99001
 
 non-composable transfer to sender
 

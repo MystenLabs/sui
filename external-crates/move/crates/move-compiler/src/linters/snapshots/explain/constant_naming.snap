@@ -5,10 +5,10 @@ expression: doc.to_string()
 constant_naming
 ===============
 
-group:   Conventions
-origin:  Core
-level:   requires `--lint`
-code:    W04001
+category: Style
+origin:   Core
+level:    requires `--lint`
+code:     W04001
 
 constant should follow naming convention
 

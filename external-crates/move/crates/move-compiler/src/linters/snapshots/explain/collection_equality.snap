@@ -5,10 +5,10 @@ expression: doc.to_string()
 collection_equality
 ===================
 
-group:   Suspicious
-origin:  Sui
-level:   on by default
-code:    W99005
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99005
 
 possibly useless collections compare
 

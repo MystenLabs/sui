@@ -1,14 +1,14 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: render_explanation(doc)
+expression: doc.to_string()
 ---
 combinable_comparisons
 ======================
 
-group:   Complexity
-origin:  Core
-level:   requires `--lint`
-code:    W01012
+category: Complexity
+origin:   Core
+level:    requires `--lint`
+code:     W01012
 
 comparison operations condition can be simplified
 

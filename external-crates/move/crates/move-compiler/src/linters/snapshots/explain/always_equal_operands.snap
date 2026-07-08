@@ -5,10 +5,10 @@ expression: doc.to_string()
 always_equal_operands
 =====================
 
-group:   Suspicious
-origin:  Core
-level:   requires `--lint`
-code:    W02011
+category: Suspicious
+origin:   Core
+level:    requires `--lint`
+code:     W02011
 
 redundant, always-equal operands for binary operation
 

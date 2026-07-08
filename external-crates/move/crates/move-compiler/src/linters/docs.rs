@@ -6,7 +6,24 @@
 //! the numeric `(category, code)` ids are only used to render the `Wxxyyy` code and to match
 //! emitted diagnostics so the hint can name the right lint.
 
+use crate::linters::LinterDiagnosticCategory;
 use std::fmt;
+
+/// The category name for a diagnostic `category` byte, exactly as defined by
+/// [`LinterDiagnosticCategory`]. Referencing the enum discriminants keeps this in lockstep with the
+/// linter — the docs never invent categories of their own.
+fn category_label(category: u8) -> &'static str {
+    use LinterDiagnosticCategory::*;
+    match category {
+        c if c == Correctness as u8 => "Correctness",
+        c if c == Complexity as u8 => "Complexity",
+        c if c == Suspicious as u8 => "Suspicious",
+        c if c == Deprecated as u8 => "Deprecated",
+        c if c == Style as u8 => "Style",
+        c if c == Sui as u8 => "Sui",
+        _ => "Unknown",
+    }
+}
 
 /// Where a lint originates.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -38,8 +55,6 @@ pub struct LintExample {
 pub struct LintDoc {
     /// Filter name: the canonical `--explain` key and the `#[allow(lint(<name>))]` key.
     pub name: &'static str,
-    /// Semantic group shown to users (e.g. "Security", "Complexity").
-    pub group: &'static str,
     pub origin: LintOrigin,
     /// `true` if the lint runs at the default level; `false` if it requires `--lint`.
     pub default: bool,
@@ -113,10 +128,10 @@ impl fmt::Display for LintDoc {
         writeln!(f, "{}", self.name)?;
         writeln!(f, "{}", "=".repeat(self.name.len()))?;
         writeln!(f)?;
-        writeln!(f, "group:   {}", self.group)?;
-        writeln!(f, "origin:  {}", self.origin.label())?;
-        writeln!(f, "level:   {level}")?;
-        writeln!(f, "code:    {}", self.rendered_code())?;
+        writeln!(f, "category: {}", category_label(self.category))?;
+        writeln!(f, "origin:   {}", self.origin.label())?;
+        writeln!(f, "level:    {level}")?;
+        writeln!(f, "code:     {}", self.rendered_code())?;
         writeln!(f)?;
         writeln!(f, "{}", self.summary)?;
         writeln!(f)?;
@@ -153,20 +168,23 @@ impl fmt::Display for LintIndex {
             "Move lint index. Run `move lint --explain <name>` for details on any lint.\n"
         )?;
         let width = LINT_DOCS.iter().map(|d| d.name.len()).max().unwrap_or(0);
-        // Stable, curated group order.
-        const GROUPS: &[&str] = &[
-            "Security",
+        // Categories in `LinterDiagnosticCategory` order; empty ones are skipped.
+        const CATEGORIES: &[&str] = &[
             "Correctness",
-            "Suspicious",
-            "Conventions",
             "Complexity",
+            "Suspicious",
+            "Deprecated",
             "Style",
+            "Sui",
         ];
-        for group in GROUPS {
+        for category in CATEGORIES {
             let mut any = false;
-            for doc in LINT_DOCS.iter().filter(|d| &d.group == group) {
+            for doc in LINT_DOCS
+                .iter()
+                .filter(|d| &category_label(d.category) == category)
+            {
                 if !any {
-                    writeln!(f, "{group}")?;
+                    writeln!(f, "{category}")?;
                     any = true;
                 }
                 writeln!(f, "    {:width$}  {}", doc.name, doc.summary, width = width)?;
@@ -183,13 +201,12 @@ impl fmt::Display for LintIndex {
 // Registry
 //**************************************************************************************************
 
-// Ordered by group for readability; `render_index` re-groups explicitly. The `category`/`code`
-// pairs follow the current (origin-based) numbering used to render `Wxxyyy` and match diagnostics.
+// A flat registry; `render_index` groups by category. The `(category, code)` pairs are the lints'
+// actual diagnostic ids (see `LinterDiagnosticCategory`), used to render `Wxxyyy` and match
+// emitted diagnostics.
 pub const LINT_DOCS: &[LintDoc] = &[
-    // -- Security ---------------------------------------------------------------------------------
     LintDoc {
         name: "share_owned",
-        group: "Security",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -212,7 +229,6 @@ analysis can't see through — a conservative false positive.",
     },
     LintDoc {
         name: "custom_state_change",
-        group: "Security",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -234,7 +250,6 @@ actually hold, remove `store` so the private variant is the only path.",
     },
     LintDoc {
         name: "freeze_wrapped",
-        group: "Security",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -252,7 +267,6 @@ too, which is almost never intended.",
     },
     LintDoc {
         name: "public_random",
-        group: "Security",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -274,7 +288,6 @@ that stays `public` does not help.",
     },
     LintDoc {
         name: "freezing_capability",
-        group: "Security",
         origin: LintOrigin::Sui,
         default: false,
         category: 99,
@@ -294,10 +307,8 @@ capability with an off-pattern name (`AdminRights`, `Capv0`) is missed.",
             good: "// keep the capability owned instead of freezing it\npublic fun keep_cap(cap: AdminCap, owner: address) {\n    transfer::transfer(cap, owner)\n}",
         },
     },
-    // -- Correctness ------------------------------------------------------------------------------
     LintDoc {
         name: "missing_key",
-        group: "Correctness",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -312,10 +323,8 @@ can never be stored, transferred, or shared as one. This is almost always a forg
             good: "public struct HasKeyAbility has key {\n    id: UID,\n}",
         },
     },
-    // -- Suspicious -------------------------------------------------------------------------------
     LintDoc {
         name: "collection_equality",
-        group: "Suspicious",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -334,7 +343,6 @@ a different insertion order compare unequal. Either way `==`/`!=` rarely means w
     },
     LintDoc {
         name: "uncallable_function",
-        group: "Suspicious",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -354,7 +362,6 @@ The transaction runtime can only supply certain argument shapes. Taking `TxConte
     },
     LintDoc {
         name: "unused_object_with_fields",
-        group: "Suspicious",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -375,7 +382,6 @@ field — or drop the parameter if it truly isn't needed.",
     },
     LintDoc {
         name: "loop_without_exit",
-        group: "Suspicious",
         origin: LintOrigin::Core,
         default: false,
         category: 2,
@@ -396,7 +402,6 @@ is a false positive.",
     },
     LintDoc {
         name: "self_assignment",
-        group: "Suspicious",
         origin: LintOrigin::Core,
         default: false,
         category: 2,
@@ -413,7 +418,6 @@ typo or an unfinished edit.",
     },
     LintDoc {
         name: "always_equal_operands",
-        group: "Suspicious",
         origin: LintOrigin::Core,
         default: false,
         category: 2,
@@ -431,7 +435,6 @@ and often a copy-paste bug where one side should differ.",
     },
     LintDoc {
         name: "unused_return_value",
-        group: "Suspicious",
         origin: LintOrigin::Core,
         default: true,
         category: 2,
@@ -450,10 +453,8 @@ to acknowledge an intentionally discarded value.",
             good: "let _ = price(10);",
         },
     },
-    // -- Conventions ------------------------------------------------------------------------------
     LintDoc {
         name: "self_transfer",
-        group: "Conventions",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -474,7 +475,6 @@ function gives it away internally. Returning the object lets the caller decide w
     },
     LintDoc {
         name: "coin_field",
-        group: "Conventions",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -495,7 +495,6 @@ not avoid the lint — the resolved type is what's matched.",
     },
     LintDoc {
         name: "public_entry",
-        group: "Conventions",
         origin: LintOrigin::Sui,
         default: true,
         category: 99,
@@ -513,7 +512,6 @@ what makes the function callable as a transaction command.",
     },
     LintDoc {
         name: "prefer_mut_tx_context",
-        group: "Conventions",
         origin: LintOrigin::Sui,
         default: false,
         category: 99,
@@ -534,7 +532,6 @@ API upgrade-compatible.",
     },
     LintDoc {
         name: "constant_naming",
-        group: "Conventions",
         origin: LintOrigin::Core,
         default: false,
         category: 4,
@@ -555,7 +552,6 @@ error constants, such as `ENotAuthorized`.",
     },
     LintDoc {
         name: "abort_without_constant",
-        group: "Conventions",
         origin: LintOrigin::Core,
         default: false,
         category: 4,
@@ -573,10 +569,8 @@ documents the failure and keeps codes consistent across the module.",
             good: "const ERR_INVALID_ARGUMENT: u64 = 1;\n// ...\nabort ERR_INVALID_ARGUMENT",
         },
     },
-    // -- Complexity -------------------------------------------------------------------------------
     LintDoc {
         name: "unnecessary_math",
-        group: "Complexity",
         origin: LintOrigin::Core,
         default: false,
         category: 1,
@@ -594,7 +588,6 @@ with an absorbing operand (`* 0`, `0 / x`, `x % 1`, `0 % x`) is `0`; and `1 % x`
     },
     LintDoc {
         name: "unnecessary_conditional",
-        group: "Complexity",
         origin: LintOrigin::Core,
         default: false,
         category: 1,
@@ -612,7 +605,6 @@ conditional only adds noise.",
     },
     LintDoc {
         name: "redundant_ref_deref",
-        group: "Complexity",
         origin: LintOrigin::Core,
         default: false,
         category: 1,
@@ -632,7 +624,6 @@ borrow (`*(&s.f)`), is a no-op the compiler already performs for you.",
     },
     LintDoc {
         name: "combinable_comparisons",
-        group: "Complexity",
         origin: LintOrigin::Core,
         default: false,
         category: 1,
@@ -647,10 +638,8 @@ Two comparisons over the same operand pair joined by `&&`/`||` often collapse to
             good: "let b = x == y;",
         },
     },
-    // -- Style ------------------------------------------------------------------------------------
     LintDoc {
         name: "while_true",
-        group: "Style",
         origin: LintOrigin::Core,
         default: false,
         category: 4,
@@ -667,7 +656,6 @@ Two comparisons over the same operand pair joined by `&&`/`||` often collapse to
     },
     LintDoc {
         name: "unneeded_return",
-        group: "Style",
         origin: LintOrigin::Core,
         default: false,
         category: 4,
@@ -688,7 +676,6 @@ operand doesn't yield a value (e.g. `return abort E`), is left alone.",
     },
     LintDoc {
         name: "unnecessary_unit",
-        group: "Style",
         origin: LintOrigin::Core,
         default: false,
         category: 4,
@@ -775,6 +762,42 @@ mod tests {
             .filter(|n| !registered.contains(**n))
             .collect();
         assert!(extra.is_empty(), "docs for unregistered lints: {extra:?}");
+    }
+
+    #[test]
+    fn doc_ids_match_registered_filters() {
+        use crate::diagnostics::filter::FILTER_ALL;
+        // name -> (category, code) as the linter actually registers it.
+        let mut registered: std::collections::HashMap<String, (u8, u8)> =
+            std::collections::HashMap::new();
+        for (_prefix, filters) in [
+            crate::linters::known_filters(),
+            crate::sui_mode::linters::known_filters(),
+        ] {
+            for (name, ids) in filters {
+                if name.as_str() == FILTER_ALL {
+                    continue;
+                }
+                let id = ids.first().expect("lint filter has an id");
+                registered.insert(name.to_string(), (id.category, id.code));
+            }
+        }
+        for doc in LINT_DOCS {
+            let (category, code) = registered
+                .get(doc.name)
+                .unwrap_or_else(|| panic!("{} is not a registered lint", doc.name));
+            assert_eq!(
+                (doc.category, doc.code),
+                (*category, *code),
+                "doc for `{}` claims id ({}, {}) but the lint registers ({}, {}) — \
+                 category/code must match the linter, not be hand-set",
+                doc.name,
+                doc.category,
+                doc.code,
+                category,
+                code
+            );
+        }
     }
 
     #[test]

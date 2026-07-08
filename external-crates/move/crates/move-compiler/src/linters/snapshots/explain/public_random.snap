@@ -5,10 +5,10 @@ expression: doc.to_string()
 public_random
 =============
 
-group:   Security
-origin:  Sui
-level:   on by default
-code:    W99006
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99006
 
 Risky use of 'sui::random'
 

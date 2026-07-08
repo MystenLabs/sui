@@ -1,14 +1,14 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: render_explanation(doc)
+expression: doc.to_string()
 ---
 self_assignment
 ===============
 
-group:   Suspicious
-origin:  Core
-level:   requires `--lint`
-code:    W02008
+category: Suspicious
+origin:   Core
+level:    requires `--lint`
+code:     W02008
 
 assignment preserves the same value
 

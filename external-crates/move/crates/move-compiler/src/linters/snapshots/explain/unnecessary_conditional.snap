@@ -5,10 +5,10 @@ expression: doc.to_string()
 unnecessary_conditional
 =======================
 
-group:   Complexity
-origin:  Core
-level:   requires `--lint`
-code:    W01007
+category: Complexity
+origin:   Core
+level:    requires `--lint`
+code:     W01007
 
 'if' expression can be removed
 

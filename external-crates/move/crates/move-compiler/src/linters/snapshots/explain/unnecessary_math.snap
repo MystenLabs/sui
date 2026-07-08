@@ -5,10 +5,10 @@ expression: doc.to_string()
 unnecessary_math
 ================
 
-group:   Complexity
-origin:  Core
-level:   requires `--lint`
-code:    W01003
+category: Complexity
+origin:   Core
+level:    requires `--lint`
+code:     W01003
 
 math operator can be simplified
 

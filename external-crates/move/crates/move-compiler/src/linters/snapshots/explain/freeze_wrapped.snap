@@ -1,14 +1,14 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: render_explanation(doc)
+expression: doc.to_string()
 ---
 freeze_wrapped
 ==============
 
-group:   Security
-origin:  Sui
-level:   on by default
-code:    W99004
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99004
 
 attempting to freeze wrapped objects
 

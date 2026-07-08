@@ -5,10 +5,10 @@ expression: doc.to_string()
 freezing_capability
 ===================
 
-group:   Security
-origin:  Sui
-level:   requires `--lint`
-code:    W99008
+category: Sui
+origin:   Sui
+level:    requires `--lint`
+code:     W99008
 
 freezing potential capability
 

@@ -5,10 +5,10 @@ expression: doc.to_string()
 unnecessary_unit
 ================
 
-group:   Style
-origin:  Core
-level:   requires `--lint`
-code:    W04010
+category: Style
+origin:   Core
+level:    requires `--lint`
+code:     W04010
 
 unit `()` expression can be removed or simplified
 

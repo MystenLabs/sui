@@ -1,14 +1,14 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: render_explanation(doc)
+expression: doc.to_string()
 ---
 while_true
 ==========
 
-group:   Style
-origin:  Core
-level:   requires `--lint`
-code:    W04002
+category: Style
+origin:   Core
+level:    requires `--lint`
+code:     W04002
 
 unnecessary 'while (true)', replace with 'loop'
 

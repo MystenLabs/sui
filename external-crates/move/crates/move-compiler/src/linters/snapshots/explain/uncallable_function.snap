@@ -5,10 +5,10 @@ expression: doc.to_string()
 uncallable_function
 ===================
 
-group:   Suspicious
-origin:  Sui
-level:   on by default
-code:    W99011
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99011
 
 it will not be possible to call this function
 

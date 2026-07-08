@@ -1,14 +1,14 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: render_explanation(doc)
+expression: doc.to_string()
 ---
 custom_state_change
 ===================
 
-group:   Security
-origin:  Sui
-level:   on by default
-code:    W99002
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99002
 
 potentially unenforceable custom transfer/share/freeze policy
 

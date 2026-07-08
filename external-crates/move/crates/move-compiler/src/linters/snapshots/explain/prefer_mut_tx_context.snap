@@ -5,10 +5,10 @@ expression: doc.to_string()
 prefer_mut_tx_context
 =====================
 
-group:   Conventions
-origin:  Sui
-level:   requires `--lint`
-code:    W99009
+category: Sui
+origin:   Sui
+level:    requires `--lint`
+code:     W99009
 
 prefer '&mut TxContext' over '&TxContext'
 

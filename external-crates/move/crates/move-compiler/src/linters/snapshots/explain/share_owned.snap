@@ -5,10 +5,10 @@ expression: doc.to_string()
 share_owned
 ===========
 
-group:   Security
-origin:  Sui
-level:   on by default
-code:    W99000
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99000
 
 possible owned object share
 

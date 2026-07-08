@@ -5,10 +5,10 @@ expression: doc.to_string()
 public_entry
 ============
 
-group:   Conventions
-origin:  Sui
-level:   on by default
-code:    W99010
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99010
 
 unnecessary `entry` on a `public` function
 

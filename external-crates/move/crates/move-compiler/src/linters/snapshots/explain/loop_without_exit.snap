@@ -5,10 +5,10 @@ expression: doc.to_string()
 loop_without_exit
 =================
 
-group:   Suspicious
-origin:  Core
-level:   requires `--lint`
-code:    W02006
+category: Suspicious
+origin:   Core
+level:    requires `--lint`
+code:     W02006
 
 'loop' without 'break' or 'return'
 

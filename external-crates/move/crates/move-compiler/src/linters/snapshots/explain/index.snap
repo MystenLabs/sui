@@ -4,40 +4,36 @@ expression: LintIndex.to_string()
 ---
 Move lint index. Run `move lint --explain <name>` for details on any lint.
 
-Security
-    share_owned                possible owned object share
-    custom_state_change        potentially unenforceable custom transfer/share/freeze policy
-    freeze_wrapped             attempting to freeze wrapped objects
-    public_random              Risky use of 'sui::random'
-    freezing_capability        freezing potential capability
-
-Correctness
-    missing_key                struct with id but missing key ability
-
-Suspicious
-    collection_equality        possibly useless collections compare
-    uncallable_function        it will not be possible to call this function
-    unused_object_with_fields  unused object with fields
-    loop_without_exit          'loop' without 'break' or 'return'
-    self_assignment            assignment preserves the same value
-    always_equal_operands      redundant, always-equal operands for binary operation
-    unused_return_value        return value of a non-mutating call is discarded
-
-Conventions
-    self_transfer              non-composable transfer to sender
-    coin_field                 sub-optimal 'sui::coin::Coin' field type
-    public_entry               unnecessary `entry` on a `public` function
-    prefer_mut_tx_context      prefer '&mut TxContext' over '&TxContext'
-    constant_naming            constant should follow naming convention
-    abort_without_constant     'abort' or 'assert' without named constant
-
 Complexity
     unnecessary_math           math operator can be simplified
     unnecessary_conditional    'if' expression can be removed
     redundant_ref_deref        redundant reference/dereference
     combinable_comparisons     comparison operations condition can be simplified
 
+Suspicious
+    loop_without_exit          'loop' without 'break' or 'return'
+    self_assignment            assignment preserves the same value
+    always_equal_operands      redundant, always-equal operands for binary operation
+    unused_return_value        return value of a non-mutating call is discarded
+
 Style
+    constant_naming            constant should follow naming convention
+    abort_without_constant     'abort' or 'assert' without named constant
     while_true                 unnecessary 'while (true)', replace with 'loop'
     unneeded_return            unneeded return
     unnecessary_unit           unit `()` expression can be removed or simplified
+
+Sui
+    share_owned                possible owned object share
+    custom_state_change        potentially unenforceable custom transfer/share/freeze policy
+    freeze_wrapped             attempting to freeze wrapped objects
+    public_random              Risky use of 'sui::random'
+    freezing_capability        freezing potential capability
+    missing_key                struct with id but missing key ability
+    collection_equality        possibly useless collections compare
+    uncallable_function        it will not be possible to call this function
+    unused_object_with_fields  unused object with fields
+    self_transfer              non-composable transfer to sender
+    coin_field                 sub-optimal 'sui::coin::Coin' field type
+    public_entry               unnecessary `entry` on a `public` function
+    prefer_mut_tx_context      prefer '&mut TxContext' over '&TxContext'

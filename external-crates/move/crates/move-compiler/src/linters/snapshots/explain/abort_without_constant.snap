@@ -1,14 +1,14 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: render_explanation(doc)
+expression: doc.to_string()
 ---
 abort_without_constant
 ======================
 
-group:   Conventions
-origin:  Core
-level:   requires `--lint`
-code:    W04005
+category: Style
+origin:   Core
+level:    requires `--lint`
+code:     W04005
 
 'abort' or 'assert' without named constant
 

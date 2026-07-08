@@ -5,10 +5,10 @@ expression: doc.to_string()
 unneeded_return
 ===============
 
-group:   Style
-origin:  Core
-level:   requires `--lint`
-code:    W04004
+category: Style
+origin:   Core
+level:    requires `--lint`
+code:     W04004
 
 unneeded return
 

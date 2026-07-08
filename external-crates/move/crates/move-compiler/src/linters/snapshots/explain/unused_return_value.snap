@@ -1,14 +1,14 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: render_explanation(doc)
+expression: doc.to_string()
 ---
 unused_return_value
 ===================
 
-group:   Suspicious
-origin:  Core
-level:   on by default
-code:    W02013
+category: Suspicious
+origin:   Core
+level:    on by default
+code:     W02013
 
 return value of a non-mutating call is discarded
 
