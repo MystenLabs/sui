@@ -3347,15 +3347,8 @@ impl AuthorityPerEpochStore {
     /// Registers the pull-based transaction pool for settle callbacks (processed keys,
     /// per-position statuses, checkpoint-executed digests). Called once at epoch start
     /// when the transaction pool is enabled.
-    pub fn set_transaction_pool(
-        &self,
-        pool: &Arc<crate::transaction_pool::SuiTransactionPool>,
-    ) {
-        if self
-            .transaction_pool
-            .set(Arc::downgrade(pool))
-            .is_err()
-        {
+    pub fn set_transaction_pool(&self, pool: &Arc<crate::transaction_pool::SuiTransactionPool>) {
+        if self.transaction_pool.set(Arc::downgrade(pool)).is_err() {
             mysten_common::debug_fatal!("transaction pool already registered for this epoch");
         }
     }

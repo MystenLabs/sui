@@ -184,7 +184,9 @@ enum EntryKind {
     System,
     /// One-shot system submission: dropped instead of taken past the deadline, and
     /// dropped instead of re-queued on garbage collection.
-    BestEffort { deadline: Instant },
+    BestEffort {
+        deadline: Instant,
+    },
     /// Payload-less entry acknowledged with a ping position at the next proposed block.
     Ping,
 }
@@ -732,8 +734,7 @@ impl SuiTransactionPool {
                         }
                         _ => {
                             self.metrics.pool_rejections.inc();
-                            let min_gas_price =
-                                victim.map(|v| v.gas_price).unwrap_or(gas_price);
+                            let min_gas_price = victim.map(|v| v.gas_price).unwrap_or(gas_price);
                             info!(
                                 ?keys,
                                 gas_price,
@@ -1250,8 +1251,7 @@ impl StagedBatch {
                         };
                         let waiters = std::mem::take(&mut m.waiters);
                         drop(m);
-                        let positions: Vec<_> = (0..entry.num_transactions()
-                            as TransactionIndex)
+                        let positions: Vec<_> = (0..entry.num_transactions() as TransactionIndex)
                             .map(|i| ConsensusPosition {
                                 epoch: self.epoch,
                                 block: block_ref,
@@ -1407,10 +1407,7 @@ impl TransactionPoolContext {
         // enters the pool after user certs close.
         let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
         if !reconfiguration_lock.should_accept_user_certs() {
-            self.inner
-                .metrics
-                .num_rejected_cert_in_epoch_boundary
-                .inc();
+            self.inner.metrics.num_rejected_cert_in_epoch_boundary.inc();
             return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
         }
 

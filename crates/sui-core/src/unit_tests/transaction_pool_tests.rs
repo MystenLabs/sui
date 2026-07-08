@@ -675,7 +675,9 @@ async fn test_submit_to_consensus_dedups_system_message() {
     drop(pool);
 
     let tx = make_tx();
-    context.submit_to_consensus(&[tx.clone()], &epoch_store).unwrap();
+    context
+        .submit_to_consensus(std::slice::from_ref(&tx), &epoch_store)
+        .unwrap();
     // Same key coalesces instead of adding a second entry.
     context.submit_to_consensus(&[tx], &epoch_store).unwrap();
     let (transactions, _ack, _) = context.current_pool().take(100, usize::MAX);

@@ -102,7 +102,6 @@ use sui_core::checkpoints::{
     SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, SubmitToConsensus};
-use sui_core::transaction_pool::{TransactionPool, TransactionPoolContext, TransactionPoolMetrics};
 use sui_core::consensus_manager::ConsensusManager;
 use sui_core::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
@@ -120,6 +119,7 @@ use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_core::storage::RpcStoreReadStore;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
+use sui_core::transaction_pool::{TransactionPool, TransactionPoolContext, TransactionPoolMetrics};
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
@@ -1708,19 +1708,18 @@ impl SuiNode {
     ) -> Result<(SpawnOnce, Option<AdmissionQueueContext>)> {
         let overload_config = &config.authority_overload_config;
         // The transaction pool replaces the admission queue when enabled.
-        let admission_queue = (overload_config.admission_queue_enabled
-            && transaction_pool.is_none())
-        .then(|| {
-            let manager = Arc::new(AdmissionQueueManager::new(
-                consensus_adapter.clone(),
-                Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
-                overload_config.admission_queue_capacity_fraction,
-                overload_config.admission_queue_bypass_fraction,
-                overload_config.admission_queue_failover_timeout,
-                inflight_slot_freed_notify,
-            ));
-            AdmissionQueueContext::spawn(manager, epoch_store)
-        });
+        let admission_queue =
+            (overload_config.admission_queue_enabled && transaction_pool.is_none()).then(|| {
+                let manager = Arc::new(AdmissionQueueManager::new(
+                    consensus_adapter.clone(),
+                    Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
+                    overload_config.admission_queue_capacity_fraction,
+                    overload_config.admission_queue_bypass_fraction,
+                    overload_config.admission_queue_failover_timeout,
+                    inflight_slot_freed_notify,
+                ));
+                AdmissionQueueContext::spawn(manager, epoch_store)
+            });
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,

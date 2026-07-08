@@ -514,7 +514,9 @@ impl Proposer for ValidatorProposer {
         // return the transactions to the pool. Just let this be done in the end of the method.
         let (transactions, ack_transactions, _limit_reached) = self.transaction_pool.take(
             self.context.protocol_config.max_num_transactions_in_block() as usize,
-            self.context.protocol_config.max_transactions_in_block_bytes() as usize,
+            self.context
+                .protocol_config
+                .max_transactions_in_block_bytes() as usize,
         );
         self.context
             .metrics
