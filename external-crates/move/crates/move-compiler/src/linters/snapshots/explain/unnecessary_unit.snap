@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: doc.to_string()
+---
+unnecessary_unit
+================
+
+group:   Style
+origin:  Core
+level:   requires `--lint`
+code:    W04010
+
+unit `()` expression can be removed or simplified
+
+A `()` unit expression as a non-final statement, or as a branch of an `if`, adds nothing. Remove it, or invert the condition to drop the empty branch.
+
+Example:
+
+  // flagged
+  if (b) () else { x = 1 };
+
+  // suggested
+  if (!b) { x = 1 };
+
+Suppress a specific case with `#[allow(lint(unnecessary_unit))]`.

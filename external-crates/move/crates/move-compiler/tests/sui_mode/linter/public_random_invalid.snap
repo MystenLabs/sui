@@ -14,6 +14,7 @@ warning[Lint W99006]: Risky use of 'sui::random'
   = Functions that accept 'sui::random::Random' as a parameter might be abused by attackers by inspecting the results of randomness
   = Non-public functions are preferred
   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain public_random` for more information
 
 warning[Lint W99006]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:10:34
@@ -24,6 +25,7 @@ warning[Lint W99006]: Risky use of 'sui::random'
    = Functions that accept 'sui::random::RandomGenerator' as a parameter might be abused by attackers by inspecting the results of randomness
    = Non-public functions are preferred
    = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain public_random` for more information
 
 warning[Lint W99006]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:12:33
@@ -34,6 +36,7 @@ warning[Lint W99006]: Risky use of 'sui::random'
    = Functions that accept 'sui::random::Random' as a parameter might be abused by attackers by inspecting the results of randomness
    = Non-public functions are preferred
    = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain public_random` for more information
 
 warning[Lint W99006]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:12:47
@@ -44,6 +47,7 @@ warning[Lint W99006]: Risky use of 'sui::random'
    = Functions that accept 'sui::random::RandomGenerator' as a parameter might be abused by attackers by inspecting the results of randomness
    = Non-public functions are preferred
    = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain public_random` for more information
 
 warning[Lint W99006]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:14:48
@@ -54,3 +58,4 @@ warning[Lint W99006]: Risky use of 'sui::random'
    = Functions that accept 'sui::random::Random' as a parameter might be abused by attackers by inspecting the results of randomness
    = Non-public functions are preferred
    = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain public_random` for more information

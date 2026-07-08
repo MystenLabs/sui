@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: render_explanation(doc)
+---
+abort_without_constant
+======================
+
+group:   Conventions
+origin:  Core
+level:   requires `--lint`
+code:    W04005
+
+'abort' or 'assert' without named constant
+
+A bare numeric abort code carries no meaning at the call site or in error output. A named constant documents the failure and keeps codes consistent across the module.
+
+When it's OK:
+  The whole argument must be a single named constant — `abort A + B` still fires. `assert!(cond, ECode)` is the idiomatic form.
+
+Example:
+
+  // flagged
+  abort 100
+
+  // suggested
+  const ERR_INVALID_ARGUMENT: u64 = 1;
+  // ...
+  abort ERR_INVALID_ARGUMENT
+
+Suppress a specific case with `#[allow(lint(abort_without_constant))]`.

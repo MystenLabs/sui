@@ -1,0 +1,28 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: render_explanation(doc)
+---
+combinable_comparisons
+======================
+
+group:   Complexity
+origin:  Core
+level:   requires `--lint`
+code:    W01012
+
+comparison operations condition can be simplified
+
+Two comparisons over the same operand pair joined by `&&`/`||` often collapse to a single comparison (`x == y && x >= y` is just `x == y`), or to a constant `true`/`false` (`x >= y || x <= y`).
+
+When it's OK:
+  Negated comparisons are not handled and won't fire.
+
+Example:
+
+  // flagged
+  let b = x == y && x >= y;
+
+  // suggested
+  let b = x == y;
+
+Suppress a specific case with `#[allow(lint(combinable_comparisons))]`.

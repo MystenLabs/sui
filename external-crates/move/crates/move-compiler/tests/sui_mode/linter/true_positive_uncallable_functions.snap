@@ -13,6 +13,7 @@ warning[Lint W99011]: it will not be possible to call this function
   │
   = This object has extra restrictions checked when submitting transactions to Sui. As such, this function will not be callable.
   = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain uncallable_function` for more information
 
 warning[Lint W99011]: it will not be possible to call this function
   ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:9:25
@@ -22,6 +23,7 @@ warning[Lint W99011]: it will not be possible to call this function
   │
   = This object has extra restrictions checked when submitting transactions to Sui. As such, this function will not be callable.
   = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain uncallable_function` for more information
 
 warning[Lint W99011]: it will not be possible to call this function
    ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:12:26
@@ -31,6 +33,7 @@ warning[Lint W99011]: it will not be possible to call this function
    │
    = This object has extra restrictions checked when submitting transactions to Sui. As such, this function will not be callable.
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain uncallable_function` for more information
 
 warning[Lint W99011]: it will not be possible to call this function
    ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:15:26
@@ -40,6 +43,7 @@ warning[Lint W99011]: it will not be possible to call this function
    │
    = This object has extra restrictions checked when submitting transactions to Sui. As such, this function will not be callable.
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain uncallable_function` for more information
 
 warning[Lint W99011]: it will not be possible to call this function
    ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:20:43
@@ -51,6 +55,7 @@ warning[Lint W99011]: it will not be possible to call this function
    │
    = Due to restrictions in PTB execution if there is a mutable reference to a TxContext, it must be unique. This means that there cannot be another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the function parameters. This function will not be callable on Sui
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain uncallable_function` for more information
 
 warning[Lint W99011]: it will not be possible to call this function
    ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:23:47
@@ -62,6 +67,7 @@ warning[Lint W99011]: it will not be possible to call this function
    │
    = Due to restrictions in PTB execution if there is a mutable reference to a TxContext, it must be unique. This means that there cannot be another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the function parameters. This function will not be callable on Sui
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain uncallable_function` for more information
 
 warning[Lint W99011]: it will not be possible to call this function
    ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:26:22
@@ -70,3 +76,4 @@ warning[Lint W99011]: it will not be possible to call this function
    │                      ^^^^^^^^^ Invalid TxContext usage. 'TxContext' must be taken by reference, e.g. '&TxContext' or '&mut TxContext'
    │
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain uncallable_function` for more information

@@ -17,6 +17,7 @@ warning[Lint W99001]: non-composable transfer to sender
    │         Transfer of an object to transaction sender address
    │
    = This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_transfer` for more information
 
 warning[Lint W99001]: non-composable transfer to sender
    ┌─ tests/sui_mode/linter/self_transfer.move:27:9
@@ -30,6 +31,7 @@ warning[Lint W99001]: non-composable transfer to sender
    │         Transfer of an object to transaction sender address
    │
    = This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_transfer` for more information
 
 warning[Lint W99001]: non-composable transfer to sender
    ┌─ tests/sui_mode/linter/self_transfer.move:39:9
@@ -43,3 +45,4 @@ warning[Lint W99001]: non-composable transfer to sender
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Transfer of an object to transaction sender address
    │
    = This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_transfer` for more information

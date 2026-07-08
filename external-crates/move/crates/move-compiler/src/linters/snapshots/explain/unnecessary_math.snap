@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: doc.to_string()
+---
+unnecessary_math
+================
+
+group:   Complexity
+origin:  Core
+level:   requires `--lint`
+code:    W01003
+
+math operator can be simplified
+
+An operation with an identity operand (`* 1`, `/ 1`, `+ 0`, `- 0`, `<< 0`, `>> 0`) does nothing; one with an absorbing operand (`* 0`, `0 / x`, `x % 1`, `0 % x`) is `0`; and `1 % x` is `1`. Only literal `0`/`1` operands are detected.
+
+Example:
+
+  // flagged
+  let y = x * 1;
+
+  // suggested
+  let y = x;
+
+Suppress a specific case with `#[allow(lint(unnecessary_math))]`.

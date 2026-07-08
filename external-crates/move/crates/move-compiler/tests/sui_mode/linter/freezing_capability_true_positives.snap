@@ -13,6 +13,7 @@ warning[Lint W99008]: freezing potential capability
    │
    = Freezing a capability might lock out critical operations or otherwise open access to operations that otherwise should be restricted
    = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freezing_capability` for more information
 
 warning[Lint W99008]: freezing potential capability
    ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:25:9
@@ -22,6 +23,7 @@ warning[Lint W99008]: freezing potential capability
    │
    = Freezing a capability might lock out critical operations or otherwise open access to operations that otherwise should be restricted
    = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freezing_capability` for more information
 
 warning[Lint W99008]: freezing potential capability
    ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:29:9
@@ -31,3 +33,4 @@ warning[Lint W99008]: freezing potential capability
    │
    = Freezing a capability might lock out critical operations or otherwise open access to operations that otherwise should be restricted
    = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freezing_capability` for more information

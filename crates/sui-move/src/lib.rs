@@ -50,6 +50,8 @@ pub async fn execute_move_command(
     wallet: &WalletContext,
 ) -> anyhow::Result<()> {
     let flavor = SuiFlavor::with_client(wallet);
+    // Enable the per-lint `--explain` hint on rendered lint diagnostics, naming the Sui CLI.
+    move_compiler::diagnostics::set_explain_command("sui move lint");
     match command {
         Command::Build(c) => c.execute(package_path, build_config, wallet).await,
         Command::CachePackage(c) => c.execute(flavor).await,

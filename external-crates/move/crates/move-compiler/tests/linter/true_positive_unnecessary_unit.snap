@@ -15,6 +15,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
   │
   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
   ┌─ tests/linter/true_positive_unnecessary_unit.move:8:16
@@ -26,6 +27,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
   │
   = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
   = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:10:16
@@ -37,6 +39,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │
    = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:12:16
@@ -50,6 +53,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │  
    = For example 'if (cond) () else e' can be simplified to 'if (!cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:21:31
@@ -62,6 +66,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │
    = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:23:31
@@ -74,6 +79,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │
    = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:25:34
@@ -86,6 +92,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │
    = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:27:31
@@ -99,6 +106,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │    
    = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:34:9
@@ -107,6 +115,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │         ^^ Unnecessary unit in sequence '();'. Consider removing
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:37:18
@@ -115,6 +124,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │                  ^^ Unnecessary unit in sequence '();'. Consider removing
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:39:33
@@ -123,6 +133,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │                                 ^^ Unnecessary unit in sequence '();'. Consider removing
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:39:37
@@ -131,6 +142,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │                                     ^^ Unnecessary unit in sequence '();'. Consider removing
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:41:9
@@ -139,6 +151,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │         ^^ Unnecessary unit in sequence '();'. Consider removing
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:42:9
@@ -147,6 +160,7 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │         ^^^^^^ Unnecessary unit in sequence '();'. Consider removing
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
    ┌─ tests/linter/true_positive_unnecessary_unit.move:43:11
@@ -155,3 +169,4 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    │           ^^ Unnecessary unit in sequence '();'. Consider removing
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_unit` for more information

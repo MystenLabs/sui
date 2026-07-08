@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: render_explanation(doc)
+---
+self_assignment
+===============
+
+group:   Suspicious
+origin:  Core
+level:   requires `--lint`
+code:    W02008
+
+assignment preserves the same value
+
+Assigning a location to itself (`x = x`, `*r = *r`, `s.f = s.f`) has no effect. It usually signals a typo or an unfinished edit.
+
+Example:
+
+  // flagged
+  p = p;
+
+  // suggested
+  // remove the redundant statement
+
+Suppress a specific case with `#[allow(lint(self_assignment))]`.

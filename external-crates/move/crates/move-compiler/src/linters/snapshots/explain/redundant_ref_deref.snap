@@ -1,0 +1,28 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: doc.to_string()
+---
+redundant_ref_deref
+===================
+
+group:   Complexity
+origin:  Core
+level:   requires `--lint`
+code:    W01009
+
+redundant reference/dereference
+
+Taking a reference and immediately dereferencing it (`&*(&x)`), or dereferencing a fresh field borrow (`*(&s.f)`), is a no-op the compiler already performs for you.
+
+When it's OK:
+  Dereferencing an existing reference (`*r`) is fine — only dereferencing a fresh borrow (`*(&x)` or `&*(&x)`) is redundant.
+
+Example:
+
+  // flagged
+  let _ref = &*(&resource);
+
+  // suggested
+  let _ref = &resource;
+
+Suppress a specific case with `#[allow(lint(redundant_ref_deref))]`.

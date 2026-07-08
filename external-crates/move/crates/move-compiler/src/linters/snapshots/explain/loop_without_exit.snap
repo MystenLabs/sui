@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: doc.to_string()
+---
+loop_without_exit
+=================
+
+group:   Suspicious
+origin:  Core
+level:   requires `--lint`
+code:    W02006
+
+'loop' without 'break' or 'return'
+
+A `loop` whose body contains neither `break` nor `return` has no normal exit — it runs until it aborts, if ever. This is almost always a missing exit condition. (`while` is covered separately by `while_true`.)
+
+When it's OK:
+  An `abort` inside the loop is not treated as an exit, so a deliberately divergent loop is a false positive.
+
+Example:
+
+  // flagged
+  let i = 0;
+  loop {
+      i = i + 1;
+  }
+
+  // suggested
+  let i = 0;
+  loop {
+      if (i >= 10) break;
+      i = i + 1;
+  }
+
+Suppress a specific case with `#[allow(lint(loop_without_exit))]`.

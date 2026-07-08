@@ -12,6 +12,7 @@ warning[Lint W02006]: 'loop' without 'break' or 'return'
   │         ^^^^^^^ 'loop' without 'break' or 'return'. This code will until it errors, e.g. reaching an 'abort' or running out of gas
   │
   = This warning can be suppressed with '#[allow(lint(loop_without_exit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain loop_without_exit` for more information
 
 warning[Lint W02006]: 'loop' without 'break' or 'return'
    ┌─ tests/linter/true_positive_loop_without_exit.move:10:9
@@ -20,6 +21,7 @@ warning[Lint W02006]: 'loop' without 'break' or 'return'
    │         ^^^^^^^^^^^^^^^^^^^ 'loop' without 'break' or 'return'. This code will until it errors, e.g. reaching an 'abort' or running out of gas
    │
    = This warning can be suppressed with '#[allow(lint(loop_without_exit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain loop_without_exit` for more information
 
 warning[Lint W02006]: 'loop' without 'break' or 'return'
    ┌─ tests/linter/true_positive_loop_without_exit.move:14:9
@@ -31,3 +33,4 @@ warning[Lint W02006]: 'loop' without 'break' or 'return'
    │ ╰─────────^ 'loop' without 'break' or 'return'. This code will until it errors, e.g. reaching an 'abort' or running out of gas
    │  
    = This warning can be suppressed with '#[allow(lint(loop_without_exit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain loop_without_exit` for more information

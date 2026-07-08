@@ -1,0 +1,28 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: doc.to_string()
+---
+prefer_mut_tx_context
+=====================
+
+group:   Conventions
+origin:  Sui
+level:   requires `--lint`
+code:    W99009
+
+prefer '&mut TxContext' over '&TxContext'
+
+A public function that takes `&TxContext` cannot later create objects — which needs `&mut TxContext` — without a breaking signature change. Taking `&mut TxContext` up front keeps the API upgrade-compatible.
+
+When it's OK:
+  Only `public` functions are checked; any non-`public` visibility (private, `public(package)`, `public(friend)`) is exempt, since those signatures can change freely.
+
+Example:
+
+  // flagged
+  public fun incorrect_mint(_ctx: &TxContext) {}
+
+  // suggested
+  public fun correct_mint(_ctx: &mut TxContext) {}
+
+Suppress a specific case with `#[allow(lint(prefer_mut_tx_context))]`.

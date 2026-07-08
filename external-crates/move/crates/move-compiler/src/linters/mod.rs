@@ -16,6 +16,7 @@ use crate::{
 pub mod abort_constant;
 pub mod combinable_comparisons;
 pub mod constant_naming;
+pub mod docs;
 pub mod equal_operands;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;

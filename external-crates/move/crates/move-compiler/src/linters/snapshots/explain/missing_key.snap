@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: render_explanation(doc)
+---
+missing_key
+===========
+
+group:   Correctness
+origin:  Sui
+level:   on by default
+code:    W99007
+
+struct with id but missing key ability
+
+A struct whose first field is `id: UID` looks like a Sui object, but without the `key` ability it can never be stored, transferred, or shared as one. This is almost always a forgotten `has key`.
+
+Example:
+
+  // flagged
+  public struct MissingKeyAbility {
+      id: UID,
+  }
+
+  // suggested
+  public struct HasKeyAbility has key {
+      id: UID,
+  }
+
+Suppress a specific case with `#[allow(lint(missing_key))]`.

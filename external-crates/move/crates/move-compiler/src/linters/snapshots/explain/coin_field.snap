@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: render_explanation(doc)
+---
+coin_field
+==========
+
+group:   Conventions
+origin:  Sui
+level:   on by default
+code:    W99003
+
+sub-optimal 'sui::coin::Coin' field type
+
+`Coin<T>` is itself a full object (it has an `id: UID`) meant for transfers between accounts. Held as a field it adds needless object plumbing; `Balance<T>` is the storage-oriented type for keeping value inside another object.
+
+When it's OK:
+  Keep `Coin` only if the field genuinely needs to be an independent object. An alias does not avoid the lint — the resolved type is what's matched.
+
+Example:
+
+  // flagged
+  public struct S2 has key, store {
+      id: UID,
+      c: Coin<S1>,
+  }
+
+  // suggested
+  public struct S2 has key, store {
+      id: UID,
+      c: Balance<S1>,
+  }
+
+Suppress a specific case with `#[allow(lint(coin_field))]`.

@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: render_explanation(doc)
+---
+while_true
+==========
+
+group:   Style
+origin:  Core
+level:   requires `--lint`
+code:    W04002
+
+unnecessary 'while (true)', replace with 'loop'
+
+`while (true)` is an infinite loop written the long way. `loop` states the intent directly and can `break` with a value. Only the literal `true` condition is detected.
+
+Example:
+
+  // flagged
+  while (true) {
+      // ...
+  }
+
+  // suggested
+  loop {
+      // ...
+  }
+
+Suppress a specific case with `#[allow(lint(while_true))]`.
