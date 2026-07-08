@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 130
+version: 131
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -151,6 +151,7 @@ feature_flags:
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
   address_aliases: true
+  create_forwarding_address_registry: true
   fix_checkpoint_signature_mapping: true
   enable_object_funds_withdraw: true
   record_net_unsettled_object_withdraws: true

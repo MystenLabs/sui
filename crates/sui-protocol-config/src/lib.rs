@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 130;
+const MAX_PROTOCOL_VERSION: u64 = 131;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -367,6 +367,7 @@ const MAINNET_USDB: &str =
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
 //              Add an epoch close deadline failsafe for deferred transactions.
+// Version 131: Create the ForwardingAddressRegistry system object on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4531,6 +4532,10 @@ impl ProtocolConfig {
                     // Verify with the v2 then v1 for devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
+                    }
+                }
+                131 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.create_forwarding_address_registry = true;
                     }
                 }
@@ -4781,10 +4786,6 @@ impl ProtocolConfig {
 
     pub fn set_mysticeti_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {
         self.feature_flags.mysticeti_num_leaders_per_round = val;
-    }
-
-    pub fn set_create_forwarding_address_registry_for_testing(&mut self, val: bool) {
-        self.feature_flags.create_forwarding_address_registry = val;
     }
 
     pub fn disable_accumulators_for_testing(&mut self) {
