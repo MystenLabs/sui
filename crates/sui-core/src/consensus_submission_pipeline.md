@@ -14,19 +14,18 @@ background submission task settles.
 gRPC SubmitTx
      │
 ValidatorService::handle_submit_transaction        (authority_server.rs)
+     │  request checks; classify_submit_mode()
      │  per-tx validation, dedup, voting
      │
-classify_submit_mode()
-     │
-     ├─ Bypass ───────────────────────────────┐
-     ├─ Disabled (per-tx overload reject) ────┤
-     │                                        │
-     └─ Queue                                 │
-         │ AdmissionQueueHandle::try_insert   │
-         ▼                                    │
-   AdmissionQueueEventLoop (per-epoch actor)  │
-         │ drain_batch (highest gas price)    │
-         ▼                                    ▼
+     ├─ Direct (queue off / ping / failover) ────┐
+     │  per-tx overload reject for user txs      │
+     │                                           │
+     └─ Queue                                    │
+         │ AdmissionQueueHandle::try_insert      │
+         ▼                                       │
+   AdmissionQueueEventLoop (per-epoch actor)     │
+         │ drain_batch (highest gas price)       │
+         ▼                                       ▼
    ConsensusAdapter::submit_and_get_positions
          │ spawn submit_and_wait task
          ├──► RPC caller gets Vec<ConsensusPosition>  ← request "finishes" here
@@ -47,10 +46,10 @@ this contract: the dedup and spam-accounting layers exist to defend against that
 pattern, not to optimize for it.
 
 1. **Inflight accounting is leak-free; admission is deliberately weak.**
-   `num_inflight_transactions` is the single signal behind every backpressure
-   decision — the bypass threshold, the queue's drain capacity, and the
-   Disabled-mode reject — so it must stay accurate under high load. It is
-   maintained exclusively by RAII (`InflightDropGuard`): every exit path —
+   `num_inflight_transactions` is the signal behind the pipeline's backpressure
+   decisions — the queue's drain capacity and (together with submit-semaphore
+   availability) the Direct-mode reject — so it must stay accurate under high
+   load. It is maintained exclusively by RAII (`InflightDropGuard`): every exit path —
    settled, skipped as already-processed, cancelled at epoch end, dropped
    mid-race — releases its slots. The asymmetry is intentional: admission checks
    are weak (checked, not atomically reserved; a transient overshoot
@@ -58,8 +57,8 @@ pattern, not to optimize for it.
    for the epoch, so release correctness is the hard invariant.
 
 2. **Answer early when the outcome is already known elsewhere.** A transaction
-   observed as processed — via another validator's submission appearing in
-   consensus output, or via checkpoint execution/sync — is answered without
+   observed as processed — via consensus output, or via checkpoint
+   execution/sync — is answered without
    being (re)submitted, with a retriable `TransactionProcessing` or a concrete
    terminal error. This applies both before submission (the RPC handler's
    `is_consensus_message_processed` suppression, the adapter's
@@ -137,25 +136,25 @@ outcomes land on individual per-tx results.
 
 | Condition | Mode |
 |---|---|
-| Queue not configured (`admission_queue_enabled: false`, default true) | Disabled |
-| Ping request | Bypass |
-| `num_inflight_transactions < bypass_threshold` (default 0.9 × `max_pending_transactions`) | Bypass |
-| Overloaded and `failover_tripped()` | Disabled |
-| Otherwise (overloaded, queue healthy) | Queue |
+| Queue not configured (`admission_queue_enabled: false`, default true) | Direct |
+| Ping request | Direct |
+| Queue configured and `failover_tripped()` | Direct |
+| Otherwise | Queue |
 
 Two behavioral notes:
 
-- The per-tx `check_consensus_overload()` reject (`TooManyTransactionsPendingConsensus`)
-  only runs in **Disabled** mode. Bypass mode skips it — inflight is below threshold
-  by definition. Queue mode replaces rejection with queuing/eviction.
-- The failover check is only consulted on the overloaded path, so the hot path never
-  pays the `ArcSwap` load.
+- For user transactions, the per-tx `check_consensus_overload()` reject
+  (`TooManyTransactionsPendingConsensus`) only runs in **Direct** mode. Queue mode
+  replaces that rejection with queuing/eviction and capacity-aware draining. A ping
+  is Direct but carries no transaction, so no per-tx check runs.
+- Every non-ping request with a configured queue consults `failover_tripped()` before
+  choosing Queue mode.
 
 ## 2. The queue path (`admission_queue.rs`)
 
 **Handle → actor**: `AdmissionQueueHandle::try_insert` creates a `oneshot` for the
 eventual consensus positions, packages a
-`QueueEntry { gas_price, transactions, position_sender, client_addr, enqueue_time }`,
+`QueueEntry { gas_price, transactions, position_sender, submitter_client_addr, enqueue_time }`,
 and sends an `InsertCommand` over a bounded mpsc to the per-epoch actor.
 `send().await` applies backpressure when the command channel
 (capacity = max(queue capacity, 1024)) is full; a closed channel or dropped ack maps
@@ -205,7 +204,7 @@ slightly.
 
 **Failover** (`AdmissionQueueHandle::failover_tripped`): if the queue is non-empty
 and no drain has happened for `admission_queue_failover_timeout` (default 30s),
-`classify_submit_mode` treats the queue as stuck and routes around it in Disabled
+`classify_submit_mode` treats the queue as stuck and routes around it in Direct
 mode (direct submit with per-tx saturation rejects) until the actor makes progress
 again. An empty queue never trips failover.
 
@@ -230,7 +229,7 @@ groups' `position_rx` receivers *without short-circuiting*. Per-group outcomes:
 
 ## 3. Inside the consensus adapter (`consensus_adapter.rs`)
 
-`submit_and_get_positions` is the entry for both Bypass/Disabled and drained queue
+`submit_and_get_positions` is the entry for both Direct and drained queue
 entries:
 
 1. Under the **reconfig read lock**: if user certs are no longer accepted →
@@ -249,12 +248,13 @@ reconfiguration can proceed and that an ex-validator stops submitting.
 - **Ping** (empty tx list): one `submit_inner` call to get a position; returned
   immediately, block status ignored.
 - **DoS accounting**: each user tx is recorded in `submitted_transaction_cache` with
-  an amplification factor of `gas_price / reference_gas_price` before submission.
+  an amplification factor of `gas_price / reference_gas_price` (floored at 1, so
+  gasless and below-RGP transactions record 1) before submission.
 - **Inflight accounting**: `InflightDropGuard::acquire` bumps
   `num_inflight_transactions` by the bundle size. This is the number the queue's
-  capacity checks and the bypass threshold read. It covers the *entire* task
-  lifetime — until terminal status or cancellation, not just until the position is
-  returned.
+  capacity checks and the Direct-mode overload check read. It covers the *entire*
+  task lifetime — until terminal status or cancellation, not just until the
+  position is returned.
 - **Already-processed short-circuit**
   (`check_processed_via_consensus_or_checkpoint`): a synchronous check against
   consensus-processed keys, checkpoint-executed digests, and (for checkpoint
@@ -262,9 +262,10 @@ reconfiguration can proceed and that an ex-validator stops submitting.
   processed, submission is skipped and the position-waiting caller gets a retriable
   `TransactionProcessing` error instead of a meaningless position.
 - **Submission concurrency**: non-system transactions must acquire
-  `submit_semaphore` (`max_pending_local_submissions` permits); system messages
-  (checkpoint sigs, EndOfPublish, DKG, capabilities) bypass it so they're never
-  buffered behind user traffic.
+  `submit_semaphore` (`max_pending_local_submissions` permits); the permit is
+  held until the submission settles, not just for the duration of the submit
+  call. System messages (checkpoint sigs, EndOfPublish, DKG, capabilities)
+  bypass it so they're never buffered behind user traffic.
 - **Submit loop** raced against **`processed_notify`** via `select`:
   - `submit_inner` calls `consensus_client.submit` with unbounded retries and
     100ms→10s exponential backoff (errors here are expected during reconfig). On
@@ -274,19 +275,25 @@ reconfiguration can proceed and that an ex-validator stops submitting.
     done at this point. Internal retries never send a second position — clients
     handle retries themselves if their position doesn't produce results.
   - Block status outcomes:
-    - **`Sequenced`** → for system messages, done; for user transactions,
-      `wait_for_position_statuses` waits for every position to reach a terminal
-      `ConsensusTxStatus` (Finalized / Rejected / Dropped) via the status cache,
-      which settles the submission (`SequencingOutcome::Sequenced`). A status that
-      expired from the cache before being read means the outcome existed and was
-      missed — the task ends (`StatusExpired`) rather than resubmitting.
+    - **`Sequenced`** → for user transactions, `wait_for_position_statuses`
+      waits for every position to reach a terminal `ConsensusTxStatus`
+      (Finalized / Rejected / Dropped) via the status cache, which settles the
+      submission (`SequencingOutcome::Sequenced`). A status that expired from
+      the cache before being read means the outcome existed and was missed —
+      the task ends (`StatusExpired`) rather than resubmitting. For system
+      messages the submit loop ends here, but the task does not settle yet: the
+      commit handler assigns per-position statuses only to user transactions,
+      so a system message settles by awaiting `processed_notify`.
     - **`GarbageCollected`** → the block never committed; sleep 1s and resubmit.
     - **Waiter error** → sleep 1s and retry.
-  - `processed_notify` wins the race when the tx becomes visible through another
-    path first — consensus output from another validator's submission, execution in
-    a checkpoint, or (for signature messages) a synced checkpoint. The submit future
-    (including its retry loop) is dropped, and if the position was never sent, the
-    caller gets the retriable `TransactionProcessing` error.
+  - `processed_notify` wins the race when a processed notification fires before
+    the submit loop settles — from consensus output (the notification has no
+    submitter filter, so this validator's *own* committed submission counts, and
+    since the `select` polls the processed waiter first this is a common settle
+    path), execution in a checkpoint, or (for signature messages) a synced
+    checkpoint. The submit future (including its retry loop) is dropped, and if
+    the position was never sent, the caller gets the retriable
+    `TransactionProcessing` error.
 - **Epilogue**: after a user-transaction settle, if the epoch is closing (and not
   timestamp-based close), an `EndOfPublish` is submitted.
 
@@ -320,7 +327,7 @@ highest-gas-price entries.
 |---|---|
 | RPC caller | All groups return consensus positions or errors → `SubmitTxResult` per tx (Submitted / Executed / Rejected). Finality is *not* awaited here; clients follow up via wait-for-effects. |
 | Queue entry | Popped and handed to the adapter (positions flow back through its oneshot), evicted (outbid error), or dropped at actor shutdown (`TooManyTransactionsPendingConsensus`). |
-| Adapter task | All positions reach a terminal consensus status, or the tx is observed processed via another path, or the status expired, or the epoch ends. Only then does the inflight slot free. |
+| Adapter task | All positions reach a terminal consensus status (user transactions), or the tx is observed processed via consensus output or a checkpoint (the only settle path for system messages), or the status expired, or the epoch ends. Only then does the inflight slot free. |
 
 ## 5. Per-transaction outcomes: errors and effects
 
@@ -343,7 +350,7 @@ consensus-derived consulted:
 |---|---|---|
 | `RepeatedTransactions` | Duplicate digest within one request (fails the whole request for soft bundles) | Fix the request |
 | Overload errors (e.g. `ValidatorOverloadedRetryAfter`) | `check_system_overload` at signing; gasless rate limiting | Retry after backoff |
-| `TooManyTransactionsPendingConsensus` | Per-tx consensus saturation check (Disabled mode only); also whole-request when the queue actor is gone | Retry after backoff |
+| `TooManyTransactionsPendingConsensus` | Per-tx consensus saturation check (Direct mode only); also whole-request when the queue actor is gone | Retry after backoff |
 | `TransactionSubmitted` | Concurrent in-flight duplicate or recently-submitted duplicate (dedup guard / TTL cache) | Wait; the earlier submission is in flight |
 | `TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price }` | Queue full and gas price too low (immediate reject), or entry later evicted by a higher bid (delivered through the position channel); fails the whole request | Resubmit with gas price above `min_gas_price` |
 | `ValidatorHaltedAtEpochEnd` | Reconfig closed user certs; the handler internally retries once after waiting (≤15s) for the new epoch before surfacing it | Retry (possibly on another validator) |
@@ -355,10 +362,10 @@ transaction itself:
 
 | Error | Read from | Client action |
 |---|---|---|
-| `TransactionAlreadyExecuted` | Transaction cache: digest executed in a previous epoch | Stop; terminal |
+| `TransactionAlreadyExecuted` | Transaction cache: digest executed in the immediately preceding epoch | Stop; terminal |
 | Owned-object lock conflict | Epoch owned-lock table (populated post-consensus): the digest lost a conflict to another transaction holding its input locks | Stop; terminal |
 | Revalidation errors (stale/unavailable input versions, etc.) | Live object state via `handle_vote_transaction`, surfacing terminal errors once a conflict winner executed | Stop; terminal |
-| `TransactionProcessing { digest, status }` | Consensus-processed key table: the digest is known-processed but may still execute (e.g. deferred). Returned upfront by the RPC handler, or by the adapter when the already-processed check or the `processed_notify` race fires before a position was sent | Retriable: poll WaitForEffects or resubmit later |
+| `TransactionProcessing { digest, status }` | Consensus-processed key table, or checkpoint state (executed-in-checkpoint digests, synced checkpoint sequence): the digest is known-processed — it may have already executed, or may still execute (e.g. deferred). Returned upfront by the RPC handler, or by the adapter when the already-processed check or the `processed_notify` race fires before a position was sent | Retriable: poll WaitForEffects or resubmit later |
 
 Note: per-position consensus statuses (`Finalized` / `Rejected` / `Dropped`) never
 surface through SubmitTx — the submit response completes at position
@@ -369,8 +376,9 @@ acknowledgment. They surface through WaitForEffects.
 - **SubmitTx**: when the digest already has executed effects,
   `complete_executed_data` packages the effects together with events and
   input/output objects into `SubmitTxResult::Executed`. If that data can no longer
-  be reconstructed (e.g. objects pruned), the handler falls through to the
-  processed-suppression path and returns a retriable error instead.
+  be reconstructed (e.g. objects pruned), the handler falls through to the normal
+  validation and suppression paths, which end in a terminal or retriable error for
+  that transaction.
 - **WaitForEffects** (the expected follow-up to `Submitted`, keyed by digest plus
   optional consensus position):
   - `Executed { effects_digest, details? }` — resolves when executed effects appear
@@ -390,17 +398,19 @@ acknowledgment. They surface through WaitForEffects.
 
 ## 6. Backpressure and limits
 
-Config lives in `AuthorityOverloadConfig` (`sui-config/src/node.rs`).
+The admission-queue knobs live in `AuthorityOverloadConfig`
+(`sui-config/src/node.rs`); the consensus capacity limit comes from
+`ConsensusConfig`.
 
-- `max_pending_transactions` — global inflight budget; caps queue drains and defines
-  the two derived thresholds. Enforced weakly (checked, not atomically reserved).
-- `admission_queue_bypass_fraction` (default 0.9) — below this inflight level the
-  queue is skipped entirely.
+- `max_pending_transactions` (`ConsensusConfig`, default 20,000) — global inflight
+  budget; caps queue drains and the Direct-mode saturation check. Enforced weakly
+  (checked, not atomically reserved).
 - `admission_queue_capacity_fraction` (default 0.5) — queue size; overflow resolves
   by gas-price eviction/rejection.
 - `admission_queue_failover_timeout` (default 30s) — stuck-queue detection window.
-- `max_pending_local_submissions` — semaphore on concurrent
-  `consensus_client.submit` calls for user txs.
+- `max_pending_local_submissions` — submit-semaphore size, bounding user-tx
+  submissions between permit acquisition and settle. Not a config field: derived at
+  node startup from `max_pending_transactions` and the committee size.
 - Actor mpsc channel — `max(queue capacity, 1024)`; senders await rather than fail
   when it's full.
 
@@ -408,7 +418,7 @@ A design consequence worth stating: in Queue mode, saturation no longer rejects
 transactions outright — it converts consensus capacity into a gas-price auction,
 with FIFO fairness within a price level and gasless transactions as designated first
 victims. Rejection only reappears when the queue itself is full (outbid) or presumed
-dead (failover → Disabled semantics).
+dead (failover → Direct semantics).
 
 ## 7. Non-queue producers into the adapter
 

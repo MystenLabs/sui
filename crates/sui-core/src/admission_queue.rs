@@ -405,10 +405,9 @@ impl AdmissionQueueManager {
 }
 
 /// Shared handle to a live admission queue. Holds the manager (for spawning a
-/// fresh per-epoch actor on reconfig), the per-epoch `ArcSwap` handle, and the
-/// cached (config-derived) bypass threshold. Cloned cheaply by `Arc`; passed
-/// both to `ValidatorService` (for hot-path routing) and through
-/// `ValidatorComponents` (for epoch rotation).
+/// fresh per-epoch actor on reconfig) and the per-epoch `ArcSwap` handle. Cloned
+/// cheaply by `Arc`; passed both to `ValidatorService` (for hot-path routing)
+/// and through `ValidatorComponents` (for epoch rotation).
 #[derive(Clone)]
 pub struct AdmissionQueueContext {
     manager: Arc<AdmissionQueueManager>,
