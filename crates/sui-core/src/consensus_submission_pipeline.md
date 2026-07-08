@@ -40,7 +40,7 @@ classify_submit_mode()
 ## Design principles
 
 The pipeline assumes a well-behaved client submits a transaction **once** and then
-waits on its status. Occasionally the same transaction is submitted again — 
+waits on its status. Occasionally the same transaction is submitted again —
 typically when the client lost its connection to this validator and chose to retry
 here. Submitting many copies of the same transaction in a short interval is outside
 this contract: the dedup and spam-accounting layers exist to defend against that
@@ -176,8 +176,9 @@ Insert semantics when full:
 **Duplicates are admitted, not rejected**: a `queued_keys` refcount detects entries
 whose `ConsensusTransactionKey` is already queued; the insert returns
 `newly_inserted = false`, which the RPC layer records as `duplicate_at_admission`
-and converts to spam weight 1 for traffic control (`request_spam_weight`). The
-duplicate still flows to consensus, where downstream dedup handles it.
+and converts to spam weight 1 for traffic control (`request_spam_weight`). If the
+adapter does not suppress the entry as already processed, the duplicate can still
+flow to consensus; admission duplicate detection itself only affects spam weight.
 
 **Event loop** (`AdmissionQueueEventLoop::run`): a single actor per epoch, spawned by
 `AdmissionQueueManager::spawn` and rotated at reconfig. Each iteration:
@@ -329,7 +330,7 @@ Each transaction in the request resolves to one `SubmitTxResult`:
 
 | Result | Meaning |
 |---|---|
-| `Submitted { consensus_position }` | Accepted (directly or via the queue) and acknowledged by consensus; the position identifies the block/index. A queue-admitted duplicate still gets its own position — duplication only affects spam weight. |
+| `Submitted { consensus_position }` | Accepted (directly or via the queue) and acknowledged by consensus; the position identifies the block/index. A queue-admitted duplicate can still get its own position if it is not suppressed by already-processed checks; admission duplicate detection only affects spam weight. |
 | `Executed { effects_digest, details }` | The transaction already executed; effects are returned directly in the submit response. |
 | `Rejected { error }` | Not submitted (or suppressed); the error tells the client what to do next. |
 
