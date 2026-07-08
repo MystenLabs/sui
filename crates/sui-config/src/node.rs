@@ -235,6 +235,13 @@ pub struct NodeConfig {
     #[serde(default = "bool_true")]
     pub enable_soft_bundle: bool,
 
+    /// If true, gasless transactions are dry-run at signing/voting time and rejected if execution
+    /// would fail for any reason (e.g. a transfer below the per-token minimum). Since gasless
+    /// transactions pay no gas, admitting ones that will fail at execution is free spam. Defaults
+    /// to true.
+    #[serde(default = "bool_true")]
+    pub enable_gasless_dry_run_at_signing: bool,
+
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
 
