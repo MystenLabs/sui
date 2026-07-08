@@ -40,9 +40,7 @@
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{
-    ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
-};
+use crate::authority::authority_store::ExecutionLockWriteGuard;
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
@@ -76,7 +74,7 @@ use sui_types::base_types::{
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
+use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -1896,45 +1894,6 @@ impl ObjectCacheRead for WritebackCache {
                 .record_db_get("marker_latest")
                 .get_latest_marker(object_id, epoch_id)
                 .expect("db error"),
-        }
-    }
-
-    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
-        let cur_epoch = epoch_store.epoch();
-        match self.get_object_by_id_cache_only("lock", &obj_ref.0) {
-            CacheResult::Hit((_, obj)) => {
-                let actual_objref = obj.compute_object_reference();
-                if obj_ref != actual_objref {
-                    Ok(ObjectLockStatus::LockedAtDifferentVersion {
-                        locked_ref: actual_objref,
-                    })
-                } else {
-                    // requested object ref is live, check if there is a lock
-                    Ok(
-                        match self
-                            .object_locks
-                            .get_transaction_lock(&obj_ref, epoch_store)?
-                        {
-                            Some(tx_digest) => ObjectLockStatus::LockedToTx {
-                                locked_by_tx: LockDetailsDeprecated {
-                                    epoch: cur_epoch,
-                                    tx_digest,
-                                },
-                            },
-                            None => ObjectLockStatus::Initialized,
-                        },
-                    )
-                }
-            }
-            CacheResult::NegativeHit => {
-                Err(SuiError::from(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    // even though we know the requested version, we leave it as None to indicate
-                    // that the object does not exist at any version
-                    version: None,
-                }))
-            }
-            CacheResult::Miss => self.record_db_get("lock").get_lock(obj_ref, epoch_store),
         }
     }
 

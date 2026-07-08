@@ -360,6 +360,7 @@ where
         execution_scheduler_sender,
         consensus_adapter,
         authority.get_object_cache_reader().clone(),
+        authority.get_transaction_cache_reader().clone(),
         consensus_committee,
         metrics,
         Arc::new(throughput_calculator),

@@ -981,11 +981,14 @@ impl ValidatorService {
                 // error lets the client stop retrying instead of polling for effects that
                 // will never come.
                 //
-                // First check the epoch owned-object lock table with the same conflict
-                // logic the consensus handler uses post-consensus. Locks are never
-                // released within an epoch, so this reports the conflict even before the
-                // winner executes, while the loser's input versions still validate as
-                // live.
+                // First check the epoch owned-object locks with the same conflict logic
+                // the consensus handler uses post-consensus. This reports the conflict
+                // even before the winner executes, while the loser's input versions
+                // still validate as live. Under owned_object_conflict_check_v2 only
+                // unflushed (quarantined) locks are visible here, which is exactly the
+                // winner-not-yet-executed window this pre-screen exists for; once the
+                // winner executes, the handle_vote_transaction call below surfaces the
+                // terminal stale-version error instead.
                 if let Ok(input_objects) = verified_transaction
                     .tx()
                     .data()

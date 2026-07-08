@@ -794,6 +794,22 @@ impl ConsensusOutputQuarantine {
         ))
     }
 
+    /// Gets owned object locks from the in-memory quarantine only (locks of finalized
+    /// transactions whose commits have not yet been flushed). Locks from flushed commits
+    /// are intentionally not visible here: under `owned_object_conflict_check_v2` they are
+    /// subsumed by the consumed-check against the objects table — a flushed lock implies
+    /// the locking transaction's outputs are durable, which implies every locked ref has
+    /// a successor version in the objects table.
+    pub(super) fn get_unflushed_owned_object_locks(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> Vec<Option<LockDetails>> {
+        obj_refs
+            .iter()
+            .map(|obj_ref| self.owned_object_locks.get(obj_ref).copied())
+            .collect()
+    }
+
     /// Gets owned object locks, checking quarantine first then falling back to DB.
     /// After crash recovery, quarantine is empty so we naturally fall back to DB.
     pub(super) fn get_owned_object_locks(

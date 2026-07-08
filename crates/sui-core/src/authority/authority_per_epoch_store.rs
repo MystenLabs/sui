@@ -45,7 +45,7 @@ use sui_types::crypto::{AuthoritySignInfo, RandomnessRound};
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::{
     TrustedExecutableTransactionWithAliases, VerifiedExecutableTransaction,
     VerifiedExecutableTransactionWithAliases,
@@ -119,8 +119,8 @@ use crate::epoch::randomness::{
     VersionedUsedProcessedMessages,
 };
 use crate::epoch::reconfiguration::ReconfigState;
-use crate::execution_cache::ObjectCacheRead;
 use crate::execution_cache::cache_types::CacheResult;
+use crate::execution_cache::{ObjectCacheRead, TransactionCacheRead};
 use crate::fallback_fetch::do_fallback_lookup;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::*;
@@ -796,13 +796,6 @@ impl AuthorityEpochTables {
         Ok(self
             .last_consensus_stats_v2
             .get(&LAST_CONSENSUS_STATS_ADDR)?)
-    }
-
-    pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
-        Ok(self
-            .owned_object_locked_transactions
-            .get(obj_ref)?
-            .map(|l| l.migrate().into_inner()))
     }
 
     pub fn multi_get_locked_transactions(
@@ -1781,16 +1774,54 @@ impl AuthorityPerEpochStore {
         Ok(cached)
     }
 
-    /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
+    /// Gets owned object locks.
+    ///
+    /// With `owned_object_conflict_check_v2` the epoch lock table is write-only: only
+    /// quarantined (unflushed) locks are visible, and flushed locks are subsumed by the
+    /// consumed-check in `try_acquire_owned_object_locks_post_consensus_v2` (a flushed
+    /// lock implies durable execution outputs, which imply the locked refs are consumed
+    /// in the objects table). After crash recovery the quarantine is rebuilt by replay.
+    ///
+    /// With the flag off, checks quarantine first then falls back to DB; after crash
+    /// recovery the quarantine is empty so we naturally fall back to DB.
     pub fn get_owned_object_locks(
         &self,
         obj_refs: &[ObjectRef],
     ) -> SuiResult<Vec<Option<LockDetails>>> {
+        if self.protocol_config().owned_object_conflict_check_v2() {
+            return Ok(self.get_unflushed_owned_object_locks(obj_refs));
+        }
         let tables = self.tables()?;
         self.consensus_quarantine
             .read()
             .get_owned_object_locks(&tables, obj_refs)
+    }
+
+    /// Gets owned object locks from the in-memory quarantine only, ignoring the flushed
+    /// portion of the lock table. See `get_owned_object_locks` for when this is the
+    /// complete lock state.
+    pub fn get_unflushed_owned_object_locks(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> Vec<Option<LockDetails>> {
+        self.consensus_quarantine
+            .read()
+            .get_unflushed_owned_object_locks(obj_refs)
+    }
+
+    /// Map form of `get_unflushed_owned_object_locks`, containing only the refs that are
+    /// currently locked. Used by the shadow run of the v2 conflict check.
+    pub fn get_unflushed_owned_object_locks_map(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> HashMap<ObjectRef, LockDetails> {
+        let locks = self.get_unflushed_owned_object_locks(obj_refs);
+        obj_refs
+            .iter()
+            .cloned()
+            .zip_eq(locks)
+            .filter_map(|(obj_ref, lock)| lock.map(|lock| (obj_ref, lock)))
+            .collect()
     }
 
     /// Batched read of existing owned-object locks, returned as a map containing only
@@ -1858,6 +1889,133 @@ impl AuthorityPerEpochStore {
             .iter()
             .map(|obj_ref| (*obj_ref, tx_digest))
             .collect())
+    }
+
+    /// Post-consensus owned-object conflict detection, v2
+    /// (`owned_object_conflict_check_v2`). See docs/in_memory_object_versioning.md.
+    ///
+    /// Differences from `try_acquire_owned_object_locks_post_consensus`:
+    /// - `unflushed_locks` covers only quarantined commits. Conflicts with flushed
+    ///   history are detected by a consumed-check against the objects table instead:
+    ///   a flushed lock implies the locking transaction's execution outputs are durable
+    ///   (quarantine flush is gated on checkpoint execution), and every locked ref is an
+    ///   exclusive-mutable input that execution bumps even on failure — so a ref has a
+    ///   flushed lock exactly when it has a successor version in the objects table.
+    /// - A transaction that already has effects from the current epoch is accepted
+    ///   unconditionally, re-acquiring its locks: it was deterministically accepted
+    ///   before (crash replay, or checkpoint execution running ahead of local
+    ///   consensus), and the consumed-check would otherwise reject it based on its own
+    ///   consumptions.
+    pub fn try_acquire_owned_object_locks_post_consensus_v2(
+        &self,
+        owned_object_refs: &[ObjectRef],
+        tx_digest: TransactionDigest,
+        current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
+        unflushed_locks: &HashMap<ObjectRef, LockDetails>,
+        cache_reader: &dyn ObjectCacheRead,
+        transaction_cache_reader: &dyn TransactionCacheRead,
+    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
+        let result = self.check_owned_object_conflicts_v2(
+            owned_object_refs,
+            tx_digest,
+            current_commit_locks,
+            unflushed_locks,
+            cache_reader,
+        );
+
+        if let Err(error) = result {
+            // The effects lookup is only needed on the (rare) reject path, keeping the
+            // accept path free of transaction-store reads.
+            let executed_in_current_epoch = transaction_cache_reader
+                .get_executed_effects(&tx_digest)
+                .is_some_and(|effects| effects.executed_epoch() == self.epoch());
+            if !executed_in_current_epoch {
+                return Err(error);
+            }
+            debug!(
+                ?tx_digest,
+                ?error,
+                "accepting already-executed transaction despite owned-object check failure"
+            );
+        }
+
+        Ok(owned_object_refs
+            .iter()
+            .map(|obj_ref| (*obj_ref, tx_digest))
+            .collect())
+    }
+
+    fn check_owned_object_conflicts_v2(
+        &self,
+        owned_object_refs: &[ObjectRef],
+        tx_digest: TransactionDigest,
+        current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
+        unflushed_locks: &HashMap<ObjectRef, LockDetails>,
+        cache_reader: &dyn ObjectCacheRead,
+    ) -> SuiResult {
+        for obj_ref in owned_object_refs {
+            // Conflict with a transaction earlier in the same commit.
+            if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+            // Conflict with a lock from an earlier unflushed commit.
+            if let Some(locked_tx_digest) = unflushed_locks.get(obj_ref)
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+            // Consumed-check, covering flushed history. This must be read only after the
+            // lock maps miss: quarantine entries are removed only after the
+            // corresponding execution outputs are durable, so an objects-view read that
+            // happens after an overlay miss observes any consumption whose lock has
+            // already been flushed away.
+            let Some(latest_ref) = cache_reader.get_latest_object_ref_or_tombstone(obj_ref.0)
+            else {
+                // Not yet created locally: the creator is an earlier finalized
+                // transaction that has not executed here yet. The decision must not
+                // depend on local execution progress, so accept; the scheduler waits
+                // for input availability as it does today.
+                continue;
+            };
+            if obj_ref.1 > latest_ref.1 {
+                // Newer than the locally-known latest version: creator pending, as above.
+                continue;
+            }
+            if *obj_ref == latest_ref {
+                // Exact live version.
+                continue;
+            }
+            if obj_ref.1 == latest_ref.1 && latest_ref.2.is_alive() {
+                // Live at this version but with a different digest. Cannot be finalized
+                // while a quorum of honest validators votes on owned-input liveness.
+                debug_fatal!(
+                    "finalized transaction {:?} claims digest-mismatched ref {:?} (live: {:?})",
+                    tx_digest,
+                    obj_ref,
+                    latest_ref
+                );
+            }
+            // The version is consumed (or tombstoned at/below the claimed version) —
+            // some earlier finalized transaction took it as an exclusive-mutable input.
+            // Validators that have not yet executed/flushed that transaction reject via
+            // its lock instead; the decision is the same.
+            return Err(UserInputError::ObjectVersionUnavailableForConsumption {
+                provided_obj_ref: *obj_ref,
+                current_version: latest_ref.1,
+            }
+            .into());
+        }
+        Ok(())
     }
 
     /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs

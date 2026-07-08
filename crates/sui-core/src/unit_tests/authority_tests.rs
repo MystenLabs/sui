@@ -63,7 +63,6 @@ use sui_types::{
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
 use sui_types::{dynamic_field::DynamicFieldType, messages_consensus::ConsensusTransaction};
 
-use crate::authority::authority_store::ObjectLockStatus;
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::transaction_deferral::DeferralKey;
@@ -1211,16 +1210,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     // assert_eq!(metrics.signature_errors.get(), 1);
 
     let object = authority_state.get_object(&object_id).unwrap();
-    assert_eq!(
-        authority_state
-            .get_object_cache_reader()
-            .get_lock(
-                object.compute_object_reference(),
-                &authority_state.epoch_store_for_testing()
-            )
-            .unwrap(),
-        ObjectLockStatus::Initialized
-    );
+    assert_owned_ref_live_and_unlocked(&authority_state, object.compute_object_reference());
 }
 
 #[tokio::test]
@@ -1297,16 +1287,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
     );
 
     let object = authority_state.get_object(&object_id).unwrap();
-    assert_eq!(
-        authority_state
-            .get_object_cache_reader()
-            .get_lock(
-                object.compute_object_reference(),
-                &authority_state.epoch_store_for_testing()
-            )
-            .unwrap(),
-        ObjectLockStatus::Initialized
-    );
+    assert_owned_ref_live_and_unlocked(&authority_state, object.compute_object_reference());
 }
 
 /// Tests that a transfer transaction can be successfully validated and executed.
@@ -2204,29 +2185,143 @@ async fn test_handle_confirmation_transaction_ok() {
     );
     assert_eq!(next_sequence_number, new_account.version());
 
-    // Check locks are set and archived correctly
+    // The consumed input version is no longer live; the new version is live and unlocked.
+    let err = authority_state
+        .get_object_cache_reader()
+        .check_owned_objects_are_live(&[(object_id, 1.into(), old_account.digest())])
+        .unwrap_err();
+    assert!(matches!(
+        UserInputError::try_from(err).unwrap(),
+        UserInputError::ObjectVersionUnavailableForConsumption {
+            current_version,
+            ..
+        } if current_version == 2.into()
+    ));
+    assert_owned_ref_live_and_unlocked(
+        &authority_state,
+        (object_id, 2.into(), new_account.digest()),
+    );
+}
+
+/// Asserts that `obj_ref` is the current live version of its object and is not locked
+/// to any transaction in the current epoch.
+fn assert_owned_ref_live_and_unlocked(
+    authority_state: &AuthorityState,
+    obj_ref: sui_types::base_types::ObjectRef,
+) {
+    authority_state
+        .get_object_cache_reader()
+        .check_owned_objects_are_live(&[obj_ref])
+        .unwrap();
     assert_eq!(
         authority_state
-            .get_object_cache_reader()
-            .get_lock(
-                (object_id, 1.into(), old_account.digest()),
-                &authority_state.epoch_store_for_testing()
-            )
+            .epoch_store_for_testing()
+            .get_owned_object_locks(&[obj_ref])
             .unwrap(),
-        ObjectLockStatus::LockedAtDifferentVersion {
-            locked_ref: (object_id, 2.into(), new_account.digest())
-        }
+        vec![None]
     );
-    assert_eq!(
-        authority_state
-            .get_object_cache_reader()
-            .get_lock(
-                (object_id, 2.into(), new_account.digest()),
-                &authority_state.epoch_store_for_testing()
-            )
+}
+
+#[tokio::test]
+async fn test_owned_object_conflict_check_v2() {
+    use sui_types::base_types::{ObjectDigest, ObjectRef};
+    use sui_types::error::SuiErrorKind;
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let epoch_store = authority_state.epoch_store_for_testing();
+    let object_cache = authority_state.get_object_cache_reader();
+    let tx_cache = authority_state.get_transaction_cache_reader();
+
+    let check = |refs: &[ObjectRef],
+                 digest: TransactionDigest,
+                 current: &HashMap<ObjectRef, TransactionDigest>,
+                 unflushed: &HashMap<ObjectRef, TransactionDigest>| {
+        epoch_store.try_acquire_owned_object_locks_post_consensus_v2(
+            refs,
+            digest,
+            current,
+            unflushed,
+            object_cache.as_ref(),
+            tx_cache.as_ref(),
+        )
+    };
+
+    let live_ref = authority_state
+        .get_object(&object_id)
+        .unwrap()
+        .compute_object_reference();
+    let gas_ref = authority_state
+        .get_object(&gas_object_id)
+        .unwrap()
+        .compute_object_reference();
+    let tx_a = TransactionDigest::random();
+    let tx_b = TransactionDigest::random();
+    let no_locks = HashMap::new();
+
+    // Live, unlocked ref: accepted.
+    check(&[live_ref], tx_a, &no_locks, &no_locks).unwrap();
+
+    // Refs above the locally-known latest version must be accepted: the creator may be
+    // an earlier finalized transaction that has not executed locally yet.
+    let future_ref = (object_id, live_ref.1.next(), ObjectDigest::random());
+    check(&[future_ref], tx_a, &no_locks, &no_locks).unwrap();
+    let unknown_ref = (ObjectID::random(), 1.into(), ObjectDigest::random());
+    check(&[unknown_ref], tx_a, &no_locks, &no_locks).unwrap();
+
+    // Conflicts with a same-commit lock and with an unflushed (quarantined) lock.
+    let locked_to_b = HashMap::from([(live_ref, tx_b)]);
+    assert!(matches!(
+        check(&[live_ref], tx_a, &locked_to_b, &no_locks)
+            .unwrap_err()
+            .as_inner(),
+        SuiErrorKind::ObjectLockConflict { pending_transaction, .. }
+            if *pending_transaction == tx_b
+    ));
+    assert!(matches!(
+        check(&[live_ref], tx_a, &no_locks, &locked_to_b)
+            .unwrap_err()
+            .as_inner(),
+        SuiErrorKind::ObjectLockConflict { .. }
+    ));
+    // Re-acquisition by the lock holder itself is idempotent.
+    check(&[live_ref], tx_b, &locked_to_b, &no_locks).unwrap();
+
+    // Execute a transfer consuming the object, then claim the consumed refs.
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let transfer_transaction = init_transfer_transaction(
+        &authority_state,
+        sender,
+        &sender_key,
+        recipient,
+        live_ref,
+        gas_ref,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+    let transfer_digest = *transfer_transaction.digest();
+    let (_, signed_effects) =
+        submit_and_execute(&authority_state, transfer_transaction.into_inner())
+            .await
+            .unwrap();
+    signed_effects.data().status().unwrap();
+
+    // A consumed version is rejected even with no lock present (it is covered by the
+    // consumed-check, standing in for the flushed portion of the lock table).
+    assert!(matches!(
+        UserInputError::try_from(check(&[live_ref], tx_a, &no_locks, &no_locks).unwrap_err())
             .unwrap(),
-        ObjectLockStatus::Initialized
-    );
+        UserInputError::ObjectVersionUnavailableForConsumption { .. }
+    ));
+
+    // Exemption: the executed transaction itself re-acquires its (now consumed) refs,
+    // as happens during crash replay or when checkpoint execution runs ahead of
+    // consensus.
+    check(&[live_ref, gas_ref], transfer_digest, &no_locks, &no_locks).unwrap();
 }
 
 #[tokio::test]
