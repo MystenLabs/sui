@@ -100,11 +100,24 @@ function daysSince(date) {
 // Build a set of all valid internal doc paths (without extensions)
 function buildDocPathSet(contentRoot) {
   const paths = new Set();
-  const files = globMdx(contentRoot);
+  // Include both .mdx and .md files (framework references use .md)
+  const files = [];
+  function walkAll(d) {
+    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, entry.name);
+      if (entry.isDirectory()) {
+        if (['node_modules', '.docusaurus', 'build', 'dist'].includes(entry.name)) continue;
+        walkAll(full);
+      } else if (entry.name.endsWith('.mdx') || entry.name.endsWith('.md')) {
+        files.push(full);
+      }
+    }
+  }
+  walkAll(contentRoot);
   for (const f of files) {
     let rel = relativeTo(f, contentRoot);
-    // Remove .mdx extension
-    rel = rel.replace(/\.mdx$/, '');
+    // Remove .mdx/.md extension
+    rel = rel.replace(/\.(mdx|md)$/, '');
     // Remove /index suffix
     rel = rel.replace(/\/index$/, '');
     // Add with leading slash
@@ -158,10 +171,12 @@ function checkBrokenInternalLinks(body, docPaths, filePath) {
 
 function checkBrokenImports(body, filePath) {
   const broken = [];
+  // Strip code blocks so we don't match example imports in documentation
+  const bodyNoCode = stripCodeBlocks(body);
   // Match the full tag to check for remote attributes (org, repo)
   const importRe = /<ImportContent\s([^>]+)>/g;
   let m;
-  while ((m = importRe.exec(body)) !== null) {
+  while ((m = importRe.exec(bodyNoCode)) !== null) {
     const attrs = m[1];
     // Skip remote imports (fetched from external repos at build time)
     if (/\borg=/.test(attrs) || /\brepo=/.test(attrs)) continue;

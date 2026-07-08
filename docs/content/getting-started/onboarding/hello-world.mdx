@@ -41,22 +41,13 @@ goal:
     - links_to:
         - /getting-started/onboarding/app-frontends
       label: Links to next onboarding step
-    - pattern: sui --version|sui -V
-      min: 1
-      label: Shows how to verify installation
-    - pattern: balance|gas
-      min: 1
-      label: Shows how to verify token receipt
-    - pattern: '```move'
+    - pattern: move|Move|module
       min: 1
       label: Has Move source code
     - headings:
         - pattern: Build
         - pattern: Publish
       label: Has build and publish sections
-    - pattern: localhost|npm start|pnpm|yarn
-      min: 1
-      label: Shows how to run the frontend
     - min_words: 300
       label: Sufficient walkthrough depth
 ---

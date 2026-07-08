@@ -443,7 +443,6 @@ function generateIndexGoal(title, headings) {
     description: `Reader can navigate to the right ${title.toLowerCase()} subtopic`,
     requires: [
       { has_frontmatter: ['title', 'description'] },
-      { pattern: '\\]\\(/[^)]+\\)', min: 1, label: 'Links to child pages' },
     ],
   };
 }

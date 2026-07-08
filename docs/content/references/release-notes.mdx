@@ -2,6 +2,9 @@
 sidebar_position: 999
 sidebar_label: Release Notes
 title: Release Notes
+description: >-
+  Review what changed in each Sui release, including protocol upgrades,
+  framework changes, GraphQL updates, and indexing improvements.
 goal:
   description: Reader can review what changed in each Sui release
   requires:
@@ -925,7 +928,7 @@ pipelines.
 
 [#24367](https://github.com/MystenLabs/sui/pull/24367):
 - Refactored `sui validator` commands to use a shared
-[TxProcessingArgs](cci:2://file:///Users/jnaulty/github/mystenlabs/sui/crates/sui/src/client_commands.rs:693:0-721:1)
+`TxProcessingArgs`
 struct for transaction arguments, improving consistency with `sui
 client`. Updated `serialize_unsigned_transaction` help text to provide
 clearer instructions for offline signing.
