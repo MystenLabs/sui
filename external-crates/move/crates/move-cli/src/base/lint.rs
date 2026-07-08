@@ -30,7 +30,8 @@ impl Lint {
         flavor: F,
     ) -> anyhow::Result<()> {
         if self.list {
-            print!("{}", move_compiler::linters::docs::LintIndex);
+            let command = move_compiler::diagnostics::explain_command();
+            print!("{}", move_compiler::linters::docs::LintIndex { command });
             return Ok(());
         }
 
@@ -38,7 +39,10 @@ impl Lint {
             match move_compiler::linters::docs::find_lint_doc(query) {
                 Some(doc) => print!("{doc}"),
                 None => {
-                    anyhow::bail!("unknown lint `{query}`; run `lint --list` to see every lint")
+                    anyhow::bail!(
+                        "unknown lint `{query}`; run `{} --list` to see every lint",
+                        move_compiler::diagnostics::explain_command()
+                    )
                 }
             }
             return Ok(());

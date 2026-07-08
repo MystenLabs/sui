@@ -12,6 +12,6 @@ sui move --client.config $CONFIG lint --explain not_a_real_lint
 success: false
 exit_code: 1
 ----- stdout -----
-unknown lint `not_a_real_lint`; run `lint --list` to see every lint
+unknown lint `not_a_real_lint`; run `sui move lint --list` to see every lint
 
 ----- stderr -----

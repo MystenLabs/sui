@@ -158,14 +158,18 @@ impl fmt::Display for LintDoc {
     }
 }
 
-/// The catalog listing printed by `move lint --list`.
-pub struct LintIndex;
+/// The catalog listing printed by `<command> --list`. `command` is the tool name referenced in the
+/// header (e.g. `move lint` or `sui move lint`), so it matches how the tool was actually invoked.
+pub struct LintIndex<'a> {
+    pub command: &'a str,
+}
 
-impl fmt::Display for LintIndex {
+impl fmt::Display for LintIndex<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
-            "Move lint index. Run `move lint --explain <name>` for details on any lint.\n"
+            "Move lint index. Run `{} --explain <name>` for details on any lint.\n",
+            self.command
         )?;
         let width = LINT_DOCS.iter().map(|d| d.name.len()).max().unwrap_or(0);
         // Categories in `LinterDiagnosticCategory` order; empty ones are skipped.
@@ -718,7 +722,13 @@ mod tests {
     #[test]
     fn explain_index() {
         explain_settings().bind(|| {
-            insta::assert_snapshot!("index", LintIndex.to_string());
+            insta::assert_snapshot!(
+                "index",
+                LintIndex {
+                    command: "move lint"
+                }
+                .to_string()
+            );
         });
     }
 
@@ -755,7 +765,10 @@ mod tests {
             .iter()
             .filter(|n| !documented.contains(n.as_str()))
             .collect();
-        assert!(missing.is_empty(), "lints missing an --explain doc: {missing:?}");
+        assert!(
+            missing.is_empty(),
+            "lints missing an --explain doc: {missing:?}"
+        );
         // Every doc must correspond to a real registered lint (no stale entries).
         let extra: Vec<_> = documented
             .iter()
@@ -812,7 +825,13 @@ mod tests {
 
         // Runs in its own process under nextest, so the process-global command name is isolated.
         set_explain_command("test move lint");
-        let info = custom(LINT_WARNING_PREFIX, Severity::Warning, 99, 0, "possible owned object share");
+        let info = custom(
+            LINT_WARNING_PREFIX,
+            Severity::Warning,
+            99,
+            0,
+            "possible owned object share",
+        );
         let diag = Diagnostic::new(
             info,
             (Loc::invalid(), "here"),
@@ -821,9 +840,12 @@ mod tests {
         );
         let mut diags = Diagnostics::new();
         diags.add(diag);
-        let rendered =
-            String::from_utf8(report_diagnostics_to_buffer(&MappedFiles::empty(), diags, false))
-                .unwrap();
+        let rendered = String::from_utf8(report_diagnostics_to_buffer(
+            &MappedFiles::empty(),
+            diags,
+            false,
+        ))
+        .unwrap();
         assert!(
             rendered.contains("test move lint --explain share_owned"),
             "expected `--explain` hint in output:\n{rendered}"

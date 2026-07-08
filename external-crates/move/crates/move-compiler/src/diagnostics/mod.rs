@@ -122,7 +122,10 @@ pub fn set_explain_command(command: impl Into<String>) {
     let _ = EXPLAIN_COMMAND.set(command.into());
 }
 
-fn explain_command() -> &'static str {
+/// The command a driver exposes for lints (`move lint` by default, or whatever a driver registered
+/// via [`set_explain_command`], e.g. `sui move lint`). Used to phrase `--explain`/`--list` hints
+/// consistently with how the tool is actually invoked.
+pub fn explain_command() -> &'static str {
     EXPLAIN_COMMAND
         .get()
         .map(String::as_str)

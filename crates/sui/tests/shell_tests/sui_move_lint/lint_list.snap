@@ -12,7 +12,7 @@ sui move --client.config $CONFIG lint --list
 success: true
 exit_code: 0
 ----- stdout -----
-Move lint index. Run `move lint --explain <name>` for details on any lint.
+Move lint index. Run `sui move lint --explain <name>` for details on any lint.
 
 Complexity
     unnecessary_math           math operator can be simplified
