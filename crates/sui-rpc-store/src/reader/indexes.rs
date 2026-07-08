@@ -311,6 +311,15 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         Ok(min)
     }
 
+    fn get_highest_live_indexed_checkpoint_seq_number(
+        &self,
+    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
+        // Only the live cohort (owned objects, types, balances); the
+        // ledger-history cohort backfills independently and is excluded so a
+        // node is healthy as soon as its live-object reads are caught up.
+        self.highest_live_committed_checkpoint()
+    }
+
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
         let meta = self
             .schema()
