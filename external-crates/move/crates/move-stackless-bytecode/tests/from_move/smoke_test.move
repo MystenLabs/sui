@@ -90,4 +90,40 @@ module 0x42::SmokeTest {
         if (b_var != 42) abort 42;
         var_a
     }
+
+    // -----------------
+    // Enums
+    // -----------------
+
+    public enum Color { Red, Green, Blue }
+
+    public enum Shape {
+        Circle { radius: u64 },
+        Rect { width: u64, height: u64 },
+    }
+
+    // Match arms are reachable only through the `VariantSwitch` jump table.
+    fun match_color(c: &Color): u64 {
+        match (c) {
+            Color::Red => 1,
+            Color::Green => 2,
+            Color::Blue => 3,
+        }
+    }
+
+    // Or-pattern: `Red | Green` lowers into separate jump-table arms.
+    fun classify_color(c: &Color): u64 {
+        match (c) {
+            Color::Red | Color::Green => 1,
+            Color::Blue => 2,
+        }
+    }
+
+    // By-value match with field bindings (VariantSwitch + UnpackVariant).
+    fun shape_size(s: Shape): u64 {
+        match (s) {
+            Shape::Circle { radius } => radius,
+            Shape::Rect { width, height } => width + height,
+        }
+    }
 }

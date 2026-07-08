@@ -77,6 +77,16 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     label_map.insert(offs, label);
                 }
             }
+            if let MoveBytecode::VariantSwitch(jump_table_idx) = bytecode {
+                let JumpTableInner::Full(offsets) =
+                    &self.func_env.get_jump_tables()[jump_table_idx.0 as usize].jump_table;
+                for code_offset in offsets {
+                    if label_map.get(code_offset).is_none() {
+                        let label = Label::new(label_map.len());
+                        label_map.insert(*code_offset, label);
+                    }
+                }
+            }
             if let MoveBytecode::BrTrue(_) | MoveBytecode::BrFalse(_) = bytecode {
                 let next_offs = (pos + 1) as CodeOffset;
                 if label_map.get(&next_offs).is_none() {
