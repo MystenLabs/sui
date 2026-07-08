@@ -12,9 +12,11 @@ use sui_futures::service::Service;
 use tokio::sync::mpsc;
 use tracing::warn;
 
+use crate::cohort::DEFAULT_COHORT_MERGE_THRESHOLD;
 use crate::cohort::DEFAULT_MIN_COHORT_BOUNDARY;
+use crate::cohort::MergeContext;
+use crate::cohort::Subscriber;
 pub use crate::config::ConcurrencyConfig as IngestConcurrencyConfig;
-use crate::ingestion::broadcaster::Subscriber;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
@@ -89,6 +91,12 @@ pub struct IngestionConfig {
     /// caught-up pipelines are not fragmented into many tiny cohorts. Defaults to 25,000
     /// checkpoints when unset.
     pub min_cohort_boundary: u64,
+
+    /// When a trailing ingestion cohort's frontier comes within this many checkpoints of the
+    /// cohort ahead of it, the trailing cohort merges into the one ahead: its pipelines are
+    /// handed off exactly-once and its ingestion service winds down. Defaults to 1,000
+    /// checkpoints when unset; at 0, cohorts merge only once their frontiers meet exactly.
+    pub cohort_merge_threshold: u64,
 }
 
 pub struct IngestionService {
@@ -96,6 +104,10 @@ pub struct IngestionService {
     ingestion_client: IngestionClient,
     streaming_client: Option<ArcStreamingClient>,
     subscribers: Vec<Subscriber>,
+
+    /// This service's view of the indexer's cohort table, when it participates in cohort
+    /// merging.
+    merge: Option<MergeContext>,
 }
 
 /// Creates the [IngestionService]s that an indexer runs -- one per cohort of pipelines with
@@ -175,6 +187,7 @@ impl IngestionService {
             ingestion_client,
             streaming_client,
             subscribers: Vec::new(),
+            merge: None,
         }
     }
 
@@ -206,6 +219,14 @@ impl IngestionService {
         rx
     }
 
+    /// Enroll this service in cohort merging: it will publish its ingestion frontier and join
+    /// point to the table in `merge`, hand its subscribers off to a cohort ahead of it once
+    /// within the merge threshold, and absorb subscribers that cohorts behind it register in
+    /// its slot.
+    pub(crate) fn set_merge_context(&mut self, merge: MergeContext) {
+        self.merge = Some(merge);
+    }
+
     /// Start the ingestion service as a background task, consuming it in the process.
     ///
     /// Checkpoints are fetched concurrently from the `checkpoints` iterator and pushed to
@@ -228,6 +249,7 @@ impl IngestionService {
             ingestion_client,
             streaming_client,
             subscribers,
+            merge,
         } = self;
 
         if subscribers.is_empty() {
@@ -240,6 +262,7 @@ impl IngestionService {
             config,
             ingestion_client,
             subscribers,
+            merge,
         ))
     }
 }
@@ -328,6 +351,7 @@ impl Default for IngestionConfig {
             streaming_connection_timeout_ms: 5000,   // 5 seconds
             streaming_statement_timeout_ms: 5000,    // 5 seconds
             min_cohort_boundary: DEFAULT_MIN_COHORT_BOUNDARY,
+            cohort_merge_threshold: DEFAULT_COHORT_MERGE_THRESHOLD,
         }
     }
 }
@@ -684,6 +708,7 @@ mod tests {
 
         let factory =
             IngestionFactory::new(args, IngestionConfig::default(), None, &registry).unwrap();
+        let families = registry.gather().len();
 
         let first = factory.create(0);
         let second = factory.create(1);
@@ -695,12 +720,7 @@ mod tests {
             second.ingestion_client.metrics(),
             factory.metrics()
         ));
-        assert!(
-            registry
-                .gather()
-                .iter()
-                .all(|family| !family.name().contains("cohort"))
-        );
+        assert_eq!(registry.gather().len(), families);
     }
 
     /// Services created by a client-driven factory all share the client's metrics handle, and

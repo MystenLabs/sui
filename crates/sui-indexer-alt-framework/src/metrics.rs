@@ -57,10 +57,10 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
 /// Metrics specific to the ingestion service.
 ///
 /// Almost every metric is labeled by `cohort`: the framework mints one ingestion service per cohort,
-/// all sharing this handle, so the label keeps their series from colliding. The two exceptions are
-/// `total_ingested_bytes` (counted inside the checkpoint source, which is shared across cohorts) and
+/// all sharing this handle, so the label keeps their series from colliding. The exceptions are
+/// `total_ingested_bytes` (counted inside the checkpoint source, which is shared across cohorts),
 /// `ingested_latest_checkpoint_latency` (recorded only by the factory's one-time tip probe, before
-/// any cohort exists).
+/// any cohort exists), and `total_cohort_merges` (each merge involves two cohorts).
 #[derive(Clone)]
 pub struct IngestionMetrics {
     // Statistics related to fetching data from the remote store.
@@ -76,6 +76,7 @@ pub struct IngestionMetrics {
     pub total_out_of_order_streamed_checkpoints: IntCounterVec,
     pub total_stream_disconnections: IntCounterVec,
     pub total_streaming_connection_failures: IntCounterVec,
+    pub total_cohort_merges: IntCounter,
 
     // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGaugeVec,
@@ -303,6 +304,12 @@ impl IngestionMetrics {
                 name("total_streaming_connection_failures"),
                 "Total number of failures due to streaming service connection or peek failures",
                 &["cohort"],
+                registry,
+            )
+            .unwrap(),
+            total_cohort_merges: register_int_counter_with_registry!(
+                name("total_cohort_merges"),
+                "Total number of times an ingestion cohort has merged into the cohort ahead of it",
                 registry,
             )
             .unwrap(),

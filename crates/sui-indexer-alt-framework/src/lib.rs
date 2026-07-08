@@ -4,11 +4,14 @@
 use std::collections::BTreeSet;
 use std::ops::Bound;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::bail;
 use anyhow::ensure;
+use cohort::CohortSlot;
+use cohort::MergeContext;
 use cohort::cohorts;
 use ingestion::ArcStreamingClient;
 use ingestion::ClientArgs;
@@ -368,9 +371,16 @@ impl<S: Store> Indexer<S> {
     /// held back (through channel backpressure) by pipelines that have a long backfill ahead of
     /// them.
     ///
+    /// Cohorts merge back together as they converge: once a trailing cohort's ingestion frontier
+    /// comes within `cohort_merge_threshold` checkpoints of the cohort ahead of it, its
+    /// pipelines are handed off to that cohort's ingestion service (exactly once -- no gaps, no
+    /// duplicates) and its own service winds down, so a fully caught-up indexer ends up back on
+    /// a single ingestion service.
+    ///
     /// Ingestion will stop after consuming the configured `last_checkpoint` if one is provided.
-    /// Note that a pipeline dropping its checkpoint subscription only winds down its own
-    /// cohort's ingestion service; other cohorts keep running.
+    /// Note that a pipeline dropping its checkpoint subscription winds down its own cohort's
+    /// ingestion service (including pipelines merged into that cohort); other cohorts keep
+    /// running.
     pub async fn run(self) -> anyhow::Result<Service> {
         let Self {
             ingestion_factory,
@@ -404,6 +414,17 @@ impl<S: Store> Indexer<S> {
 
         let end = last_checkpoint.map_or(Bound::Unbounded, Bound::Included);
 
+        // The table through which cohorts coordinate merges, with one slot per cohort.
+        let threshold = ingestion_factory.config().cohort_merge_threshold;
+        let table = (groups.len() > 1).then(|| {
+            Arc::new(Mutex::new(
+                groups
+                    .iter()
+                    .map(|_| CohortSlot::default())
+                    .collect::<Vec<_>>(),
+            ))
+        });
+
         let mut service = Service::new();
         for (cohort, group) in groups.into_iter().enumerate() {
             let mut ingestion = ingestion_factory.create(cohort);
@@ -418,6 +439,14 @@ impl<S: Store> Indexer<S> {
             }
 
             info!(cohort, start, end = last_checkpoint, pipelines = ?names, "Ingestion range");
+
+            if let Some(table) = &table {
+                ingestion.set_merge_context(MergeContext {
+                    table: table.clone(),
+                    cohort,
+                    threshold,
+                });
+            }
 
             let mut cohort_service = ingestion
                 .run((Bound::Included(start), end))
@@ -618,68 +647,75 @@ mod tests {
     #[derive(Clone, FieldCount)]
     struct MockValue(u64);
 
-    /// A handler that can be controlled externally to block checkpoint processing.
-    struct ControllableHandler {
-        /// Process checkpoints less than or equal to this value.
-        process_below: watch::Receiver<u64>,
-    }
-
-    impl ControllableHandler {
-        fn with_limit(limit: u64) -> (Self, watch::Sender<u64>) {
-            let (tx, rx) = watch::channel(limit);
-            (Self { process_below: rx }, tx)
-        }
-    }
-
-    #[async_trait]
-    impl Processor for ControllableHandler {
-        const NAME: &'static str = "controllable";
-        type Value = MockValue;
-
-        async fn process(
-            &self,
-            checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
-        ) -> anyhow::Result<Vec<Self::Value>> {
-            let cp_num = checkpoint.summary.sequence_number;
-
-            // Wait until the checkpoint is allowed to be processed
-            self.process_below
-                .clone()
-                .wait_for(|&limit| cp_num <= limit)
-                .await
-                .ok();
-
-            Ok(vec![MockValue(cp_num)])
-        }
-    }
-
-    #[async_trait]
-    impl concurrent::Handler for ControllableHandler {
-        type Store = FallibleMockStore;
-        type Batch = Vec<MockValue>;
-
-        fn batch(
-            &self,
-            batch: &mut Self::Batch,
-            values: &mut std::vec::IntoIter<Self::Value>,
-        ) -> concurrent::BatchStatus {
-            batch.extend(values);
-            concurrent::BatchStatus::Ready
-        }
-
-        async fn commit<'a>(
-            &self,
-            batch: &Self::Batch,
-            conn: &mut <Self::Store as Store>::Connection<'a>,
-        ) -> anyhow::Result<usize> {
-            for value in batch {
-                conn.0
-                    .commit_data(Self::NAME, value.0, vec![value.0])
-                    .await?;
+    /// A handler that can be controlled externally to block checkpoint processing: it only
+    /// processes checkpoints at or below a limit adjusted through the returned `watch` sender.
+    macro_rules! controllable_handler {
+        ($handler:ident, $name:literal) => {
+            struct $handler {
+                /// Process checkpoints less than or equal to this value.
+                process_below: watch::Receiver<u64>,
             }
-            Ok(batch.len())
-        }
+
+            impl $handler {
+                fn with_limit(limit: u64) -> (Self, watch::Sender<u64>) {
+                    let (tx, rx) = watch::channel(limit);
+                    (Self { process_below: rx }, tx)
+                }
+            }
+
+            #[async_trait]
+            impl Processor for $handler {
+                const NAME: &'static str = $name;
+                type Value = MockValue;
+
+                async fn process(
+                    &self,
+                    checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
+                ) -> anyhow::Result<Vec<Self::Value>> {
+                    let cp_num = checkpoint.summary.sequence_number;
+
+                    // Wait until the checkpoint is allowed to be processed
+                    self.process_below
+                        .clone()
+                        .wait_for(|&limit| cp_num <= limit)
+                        .await
+                        .ok();
+
+                    Ok(vec![MockValue(cp_num)])
+                }
+            }
+
+            #[async_trait]
+            impl concurrent::Handler for $handler {
+                type Store = FallibleMockStore;
+                type Batch = Vec<MockValue>;
+
+                fn batch(
+                    &self,
+                    batch: &mut Self::Batch,
+                    values: &mut std::vec::IntoIter<Self::Value>,
+                ) -> concurrent::BatchStatus {
+                    batch.extend(values);
+                    concurrent::BatchStatus::Ready
+                }
+
+                async fn commit<'a>(
+                    &self,
+                    batch: &Self::Batch,
+                    conn: &mut <Self::Store as Store>::Connection<'a>,
+                ) -> anyhow::Result<usize> {
+                    for value in batch {
+                        conn.0
+                            .commit_data(Self::NAME, value.0, vec![value.0])
+                            .await?;
+                    }
+                    Ok(batch.len())
+                }
+            }
+        };
     }
+
+    controllable_handler!(ControllableHandler, "controllable");
 
     macro_rules! test_pipeline {
         ($handler:ident, $name:literal) => {
@@ -2054,9 +2090,13 @@ mod tests {
                 ..Default::default()
             },
             // A small cohort boundary splits the near-tip and far-behind pipelines into separate
-            // cohorts without having to generate tens of thousands of checkpoints.
+            // cohorts without having to generate tens of thousands of checkpoints, and a zero
+            // merge threshold keeps them separate for the whole test (the wedged far-behind
+            // cohort's frontier never reaches the near-tip cohort's): at this scale the two
+            // cohorts start within the default merge threshold of each other.
             IngestionConfig {
                 min_cohort_boundary: 10,
+                cohort_merge_threshold: 0,
                 ..Default::default()
             },
             None,
@@ -2105,6 +2145,304 @@ mod tests {
         assert!(store.data.get(ControllableHandler::NAME).is_none());
 
         // The merged service never completes on its own while a cohort is wedged; drop aborts it.
+        drop(service);
+    }
+
+    /// End-to-end cohort merging: a far-behind pipeline backfills, and once its ingestion
+    /// frontier comes within the merge threshold of the near-tip cohort, its subscription is
+    /// handed off to that cohort's ingestion service (exactly once -- no gaps, no duplicates)
+    /// and its own service winds down; the far pipeline then follows new checkpoints through
+    /// the near cohort's service.
+    #[tokio::test]
+    async fn test_cohorts_merge_as_they_converge() {
+        const TIP: u64 = 100;
+        const END: u64 = 160;
+
+        let registry = Registry::new();
+        let store = FallibleMockStore::default();
+
+        test_pipeline!(B, "far_behind");
+
+        // The near pipeline initially blocks every checkpoint above 99, so its cohort's
+        // broadcaster backpressures to a halt mid-chunk with its published frontier pinned at
+        // 95, giving the far cohort a stationary target to converge on. Keep the release
+        // sender alive for the whole test.
+        let (near, release) = ControllableHandler::with_limit(99);
+
+        let temp_dir = init_ingestion_dir(Some(TIP));
+        let mut conn = store.connect().await.unwrap();
+        set_committer_watermark(&mut conn, ControllableHandler::NAME, 94).await; // resumes at 95
+        set_committer_watermark(&mut conn, B::NAME, 9).await; // resumes at 10
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: 0,
+            num_checkpoints: END + 1, // checkpoints [0, END]
+            checkpoint_size: 1,
+        })
+        .await;
+
+        let mut indexer = Indexer::new(
+            store.clone(),
+            // Unbounded: the merged service keeps following the tip.
+            IndexerArgs::default(),
+            ClientArgs {
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(temp_dir.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            // A small cohort boundary splits the pipelines into two cohorts (distances 5 and
+            // 90 from the advertised tip), and the far cohort merges into the near one when it
+            // gets within 20 checkpoints of it -- at its chunk boundary 90, against the near
+            // cohort's pinned frontier of 95.
+            IngestionConfig {
+                min_cohort_boundary: 10,
+                cohort_merge_threshold: 20,
+                ..Default::default()
+            },
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        // Commit promptly so watermarks advance without waiting on the default intervals, and
+        // give the near pipeline a small subscriber channel so blocking its handler parks its
+        // broadcaster after only a few buffered checkpoints.
+        let committer = || CommitterConfig {
+            collect_interval_ms: 10,
+            watermark_interval_ms: 10,
+            ..Default::default()
+        };
+        indexer
+            .concurrent_pipeline(
+                near,
+                ConcurrentConfig {
+                    committer: committer(),
+                    ingestion: crate::pipeline::IngestionConfig {
+                        subscriber_channel_size: Some(4),
+                    },
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        indexer
+            .concurrent_pipeline(
+                B,
+                ConcurrentConfig {
+                    committer: committer(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        let ingestion_metrics = indexer.ingestion_metrics().clone();
+        let indexer_metrics = indexer.indexer_metrics().clone();
+        let service = indexer.run().await.unwrap();
+
+        // The far cohort backfills to its chunk boundary at 90, finds the near cohort's
+        // frontier (95) within the merge threshold, and merges into it.
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while ingestion_metrics.total_cohort_merges.get() == 0 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("timed out waiting for the cohorts to merge");
+
+        // Unblock the near pipeline: the merged service absorbs the far pipeline's subscription
+        // at the handoff checkpoint, and deliveries to both pipelines flow through to the end
+        // of the data.
+        release.send(u64::MAX).unwrap();
+
+        store
+            .wait_for_watermark(ControllableHandler::NAME, END, Duration::from_secs(10))
+            .await;
+        store
+            .wait_for_watermark(B::NAME, END, Duration::from_secs(10))
+            .await;
+
+        // Exactly-once delivery across the handoff: each handler saw each checkpoint in its
+        // range exactly once (a gap would have stalled its watermark above; a duplicate would
+        // inflate its received count).
+        let received = |name| {
+            indexer_metrics
+                .total_handler_checkpoints_received
+                .get_metric_with_label_values(&[name])
+                .unwrap()
+                .get()
+        };
+        assert_eq!(received(ControllableHandler::NAME), END - 95 + 1);
+        assert_eq!(received(B::NAME), END - 10 + 1);
+
+        // The far cohort stopped ingesting at its handoff checkpoint -- the end of the near
+        // cohort's parked chunk [95, 115) -- instead of following the data to the end itself.
+        assert_eq!(ingestion_metrics.total_cohort_merges.get(), 1);
+        let far_ingested = ingestion_metrics
+            .total_ingested_checkpoints
+            .with_label_values(&["1"])
+            .get();
+        assert_eq!(far_ingested, 115 - 10);
+
+        // The merged service follows the tip indefinitely; drop aborts it.
+        drop(service);
+    }
+
+    /// A subscription handed off once can be handed off again: the far cohort merges into the
+    /// mid cohort, the mid cohort absorbs the handed-off subscription and later re-registers it
+    /// (alongside its own) when it merges into the near cohort -- and every pipeline sees every
+    /// checkpoint in its range exactly once across three ingestion services.
+    #[tokio::test]
+    async fn test_three_cohorts_cascade_merge() {
+        const TIP: u64 = 100;
+        const END: u64 = 160;
+
+        let registry = Registry::new();
+        let store = FallibleMockStore::default();
+
+        controllable_handler!(Near, "cascade_near");
+        controllable_handler!(Mid, "cascade_mid");
+        controllable_handler!(Far, "cascade_far");
+
+        // Every cohort parks at startup: near blocks above 99 (broadcaster parked in
+        // [95, 115)), mid and far block everything from their resume points (parked in
+        // [56, 76) and [10, 30)) until released. Keep the senders alive for the whole test.
+        let (near, release_near) = Near::with_limit(99);
+        let (mid, release_mid) = Mid::with_limit(55);
+        let (far, release_far) = Far::with_limit(9);
+
+        let temp_dir = init_ingestion_dir(Some(TIP));
+        let mut conn = store.connect().await.unwrap();
+        set_committer_watermark(&mut conn, Near::NAME, 94).await; // resumes at 95, distance 5
+        set_committer_watermark(&mut conn, Mid::NAME, 55).await; // resumes at 56, distance 44
+        set_committer_watermark(&mut conn, Far::NAME, 9).await; // resumes at 10, distance 90
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: 0,
+            num_checkpoints: END + 1, // checkpoints [0, END]
+            checkpoint_size: 1,
+        })
+        .await;
+
+        let mut indexer = Indexer::new(
+            store.clone(),
+            // Unbounded: the surviving service keeps following the tip.
+            IndexerArgs::default(),
+            ClientArgs {
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(temp_dir.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            // Distances 5 / 44 / 90 form three cohorts (mid's boundary is 2 * 44 = 88 < 90),
+            // each merging into the one ahead once within 20 checkpoints; chunk = 20.
+            IngestionConfig {
+                min_cohort_boundary: 10,
+                cohort_merge_threshold: 20,
+                ..Default::default()
+            },
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        // Commit promptly, and use small subscriber channels so a blocked handler parks its
+        // broadcaster after only a few buffered checkpoints.
+        let config = || ConcurrentConfig {
+            committer: CommitterConfig {
+                collect_interval_ms: 10,
+                watermark_interval_ms: 10,
+                ..Default::default()
+            },
+            ingestion: crate::pipeline::IngestionConfig {
+                subscriber_channel_size: Some(4),
+            },
+            ..Default::default()
+        };
+        indexer.concurrent_pipeline(near, config()).await.unwrap();
+        indexer.concurrent_pipeline(mid, config()).await.unwrap();
+        indexer.concurrent_pipeline(far, config()).await.unwrap();
+
+        let ingestion_metrics = indexer.ingestion_metrics().clone();
+        let indexer_metrics = indexer.indexer_metrics().clone();
+        let service = indexer.run().await.unwrap();
+
+        let ingested = |cohort: &str| {
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&[cohort])
+                .get()
+        };
+        async fn wait_until(what: &str, cond: impl Fn() -> bool) {
+            tokio::time::timeout(Duration::from_secs(10), async {
+                while !cond() {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for {what}"));
+        }
+
+        // Both cohorts ahead must have committed their first (parked) chunks -- publishing
+        // their frontiers and join points -- before the far cohort starts converging.
+        wait_until(
+            "the near and mid cohorts to publish their first chunks",
+            || ingested("0") > 0 && ingested("1") > 0,
+        )
+        .await;
+
+        // The far cohort backfills to its chunk boundary at 50, finds mid's frontier (56)
+        // within the threshold, hands its subscription off at mid's join point (76), delivers
+        // [10, 76), and winds down.
+        release_far.send(u64::MAX).unwrap();
+        wait_until("the far cohort to merge into the mid cohort", || {
+            ingestion_metrics.total_cohort_merges.get() == 1
+        })
+        .await;
+
+        // Mid completes [56, 76), absorbs far's subscription there, then finds near's frontier
+        // (95) within the threshold and re-registers both subscriptions at near's join point
+        // (115).
+        release_mid.send(u64::MAX).unwrap();
+        wait_until("the mid cohort to merge into the near cohort", || {
+            ingestion_metrics.total_cohort_merges.get() == 2
+        })
+        .await;
+
+        // Unblock near: it absorbs both subscriptions at its clean state (115) and carries all
+        // three pipelines to the end of the data.
+        release_near.send(u64::MAX).unwrap();
+        for name in [Near::NAME, Mid::NAME, Far::NAME] {
+            store
+                .wait_for_watermark(name, END, Duration::from_secs(10))
+                .await;
+        }
+
+        // Exactly-once across both handoffs: each pipeline saw each checkpoint in its range
+        // exactly once (a gap would have stalled its watermark above; a duplicate would
+        // inflate its received count).
+        let received = |name| {
+            indexer_metrics
+                .total_handler_checkpoints_received
+                .get_metric_with_label_values(&[name])
+                .unwrap()
+                .get()
+        };
+        assert_eq!(received(Near::NAME), END - 95 + 1);
+        assert_eq!(received(Mid::NAME), END - 56 + 1);
+        assert_eq!(received(Far::NAME), END - 10 + 1);
+
+        // Each mergee stopped ingesting at its handoff: far at mid's join point (76), mid at
+        // near's (115).
+        assert_eq!(ingested("2"), 76 - 10);
+        assert_eq!(ingested("1"), 115 - 56);
+
+        // The surviving service follows the tip indefinitely; drop aborts it.
         drop(service);
     }
 }

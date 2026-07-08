@@ -58,6 +58,7 @@ pub struct IngestionLayer {
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,
     pub min_cohort_boundary: Option<u64>,
+    pub cohort_merge_threshold: Option<u64>,
 
     /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
     /// per-pipeline `ingestion.subscriber-channel-size`.
@@ -213,6 +214,9 @@ impl IngestionLayer {
                 .streaming_statement_timeout_ms
                 .unwrap_or(base.streaming_statement_timeout_ms),
             min_cohort_boundary: self.min_cohort_boundary.unwrap_or(base.min_cohort_boundary),
+            cohort_merge_threshold: self
+                .cohort_merge_threshold
+                .unwrap_or(base.cohort_merge_threshold),
         })
     }
 }
@@ -365,6 +369,7 @@ impl Merge for IngestionLayer {
                 .streaming_statement_timeout_ms
                 .or(self.streaming_statement_timeout_ms),
             min_cohort_boundary: other.min_cohort_boundary.or(self.min_cohort_boundary),
+            cohort_merge_threshold: other.cohort_merge_threshold.or(self.cohort_merge_threshold),
             checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
         })
     }
@@ -491,6 +496,7 @@ impl From<IngestionConfig> for IngestionLayer {
             streaming_connection_timeout_ms: Some(config.streaming_connection_timeout_ms),
             streaming_statement_timeout_ms: Some(config.streaming_statement_timeout_ms),
             min_cohort_boundary: Some(config.min_cohort_boundary),
+            cohort_merge_threshold: Some(config.cohort_merge_threshold),
             checkpoint_buffer_size: None,
         }
     }
