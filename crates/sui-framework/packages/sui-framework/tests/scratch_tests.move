@@ -48,16 +48,14 @@ fun add_read_remove_exists() {
     assert_eq!(scratch::internal_read!<Marker, bool>(&ctx, Marker()), true);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::scratch::EEntryAlreadyExists)]
+#[test, expected_failure(abort_code = sui::scratch::EEntryAlreadyExists)]
 fun add_duplicate() {
     let mut ctx = tx_context::dummy();
     scratch::internal_add!<Marker, u64>(&mut ctx, Marker(), 0);
     scratch::internal_add!<Marker, u64>(&mut ctx, Marker(), 1);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::scratch::EEntryAlreadyExists)]
+#[test, expected_failure(abort_code = sui::scratch::EEntryAlreadyExists)]
 fun add_duplicate_mismatched_value_type() {
     let mut ctx = tx_context::dummy();
     scratch::internal_add!<Marker, u64>(&mut ctx, Marker(), 0);
@@ -65,30 +63,26 @@ fun add_duplicate_mismatched_value_type() {
     scratch::internal_add!<Marker, bool>(&mut ctx, Marker(), true);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::scratch::EEntryDoesNotExist)]
+#[test, expected_failure(abort_code = sui::scratch::EEntryDoesNotExist)]
 fun read_missing() {
     let ctx = tx_context::dummy();
     scratch::internal_read!<Marker, u64>(&ctx, Marker());
 }
 
-#[test]
-#[expected_failure(abort_code = sui::scratch::EEntryDoesNotExist)]
+#[test, expected_failure(abort_code = sui::scratch::EEntryDoesNotExist)]
 fun remove_missing() {
     let mut ctx = tx_context::dummy();
     scratch::internal_remove!<Marker, u64>(&mut ctx, Marker());
 }
 
-#[test]
-#[expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
+#[test, expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
 fun read_type_mismatch() {
     let mut ctx = tx_context::dummy();
     scratch::internal_add!<Marker, u64>(&mut ctx, Marker(), 0);
     scratch::internal_read!<Marker, bool>(&ctx, Marker());
 }
 
-#[test]
-#[expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
+#[test, expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
 fun remove_type_mismatch() {
     let mut ctx = tx_context::dummy();
     scratch::internal_add!<Marker, u64>(&mut ctx, Marker(), 0);
@@ -143,8 +137,7 @@ fun value_types_same_bytes_not_confused() {
     assert_eq!(scratch::internal_read!<Marker, WrappedU8>(&ctx, Marker()), WrappedU8(1));
 }
 
-#[test]
-#[expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
+#[test, expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
 fun read_wrong_value_type_same_bytes() {
     let mut ctx = tx_context::dummy();
     scratch::internal_add!<Marker, WrappedU8>(&mut ctx, Marker(), WrappedU8(1));
