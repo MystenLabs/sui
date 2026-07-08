@@ -637,6 +637,20 @@ pub trait RpcStateReader:
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
 
+    /// The sequence number of the highest executed checkpoint, independent of
+    /// how far any embedded index has caught up.
+    ///
+    /// [`ReadStore::get_latest_checkpoint`] may bound the reported tip to the
+    /// live-object index frontier, so clients never observe a checkpoint whose
+    /// indexed state is not yet readable. The health check, by contrast, needs
+    /// the true executed tip to measure that index lag against, so it reads
+    /// this instead. Defaults to
+    /// [`ReadStore::get_latest_checkpoint_sequence_number`] for backends that
+    /// do not bound their reported tip.
+    fn get_highest_executed_checkpoint_seq_number(&self) -> Result<CheckpointSequenceNumber> {
+        self.get_latest_checkpoint_sequence_number()
+    }
+
     fn get_type_layout(&self, type_tag: &TypeTag) -> Result<Option<MoveTypeLayout>> {
         match type_tag {
             TypeTag::Bool => Ok(Some(MoveTypeLayout::Bool)),
@@ -729,6 +743,25 @@ pub trait RpcIndexes: Send + Sync {
 
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
+
+    /// The highest checkpoint the live-object cohort -- the indexes derivable
+    /// from the live object set (owned objects, types, and balances) -- has
+    /// committed, or `None` if it has not committed any checkpoint yet.
+    ///
+    /// This is the frontier the health check measures against. The live-object
+    /// indexes are restored to the tip and follow it, whereas the
+    /// ledger-history cohort backfills independently after a restore; gating
+    /// health on the latter would report a node unhealthy for the whole
+    /// backfill even though its live-object reads are already caught up.
+    ///
+    /// Defaults to [`Self::get_highest_indexed_checkpoint_seq_number`] for
+    /// backends without a live/history cohort split, where every index tracks
+    /// the tip together.
+    fn get_highest_live_indexed_checkpoint_seq_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>> {
+        self.get_highest_indexed_checkpoint_seq_number()
+    }
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>>;
 
