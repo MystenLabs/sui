@@ -3351,10 +3351,7 @@ async fn test_merge_and_redeem_fungible_staked_sui() {
     let Some(submit) = flow_result.submit else {
         panic!(
             "Submit was None. preprocess: {:?}, metadata: {:?}, payloads: {:?}, combine: {:?}",
-            flow_result.preprocess,
-            flow_result.metadata,
-            flow_result.payloads,
-            flow_result.combine
+            flow_result.preprocess, flow_result.metadata, flow_result.payloads, flow_result.combine
         );
     };
     let response: TransactionIdentifierResponse = submit.expect("Submit should succeed");
@@ -3561,10 +3558,7 @@ async fn run_redeem_flow(
     let Some(submit) = flow_result.submit else {
         panic!(
             "Submit was None. preprocess: {:?}, metadata: {:?}, payloads: {:?}, combine: {:?}",
-            flow_result.preprocess,
-            flow_result.metadata,
-            flow_result.payloads,
-            flow_result.combine
+            flow_result.preprocess, flow_result.metadata, flow_result.payloads, flow_result.combine
         );
     };
     let response: TransactionIdentifierResponse = submit.expect("Submit should succeed");
