@@ -18,15 +18,19 @@ enum CursorKind {
 // Pagination cursor for ledger-history endpoints. The cursor scope is encoded
 // by which `position` member is set.
 message CursorToken {
+    // Tags 1-4 belonged to an earlier version of this schema; reserved so
+    // stale tokens are rejected instead of misread.
+    reserved 1 to 4;
+
     // Orthogonal to `position`: the same coordinate can be either a returned
     // item or a scan boundary, with different resume inclusivity.
-    CursorKind kind = 1;
+    CursorKind kind = 5;
 
     // Coordinate schema / endpoint scope. This does not imply Item vs Boundary.
     oneof position {
-        CheckpointsPosition checkpoints = 2;
-        TransactionsPosition transactions = 3;
-        EventsPosition events = 4;
+        CheckpointsPosition checkpoints = 6;
+        TransactionsPosition transactions = 7;
+        EventsPosition events = 8;
     }
 }
 

@@ -5,10 +5,10 @@
 pub struct CursorToken {
     /// Orthogonal to `position`: the same coordinate can be either a returned
     /// item or a scan boundary, with different resume inclusivity.
-    #[prost(enumeration = "CursorKind", tag = "1")]
+    #[prost(enumeration = "CursorKind", tag = "5")]
     pub kind: i32,
     /// Coordinate schema / endpoint scope. This does not imply Item vs Boundary.
-    #[prost(oneof = "cursor_token::Position", tags = "2, 3, 4")]
+    #[prost(oneof = "cursor_token::Position", tags = "6, 7, 8")]
     pub position: ::core::option::Option<cursor_token::Position>,
 }
 /// Nested message and enum types in `CursorToken`.
@@ -16,11 +16,11 @@ pub mod cursor_token {
     /// Coordinate schema / endpoint scope. This does not imply Item vs Boundary.
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Position {
-        #[prost(message, tag = "2")]
+        #[prost(message, tag = "6")]
         Checkpoints(super::CheckpointsPosition),
-        #[prost(message, tag = "3")]
+        #[prost(message, tag = "7")]
         Transactions(super::TransactionsPosition),
-        #[prost(message, tag = "4")]
+        #[prost(message, tag = "8")]
         Events(super::EventsPosition),
     }
 }
