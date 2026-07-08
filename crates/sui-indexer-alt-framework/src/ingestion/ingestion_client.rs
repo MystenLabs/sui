@@ -38,7 +38,7 @@ use crate::ingestion::Result as IngestionResult;
 use crate::ingestion::byte_count::ByteCountMakeCallbackHandler;
 use crate::ingestion::decode;
 use crate::ingestion::store_client::StoreIngestionClient;
-use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::CohortMetrics;
 use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
@@ -51,6 +51,11 @@ const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 /// continue executing without being canceled. This helps identify network issues or
 /// slow remote stores without interrupting the ingestion process.
 const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
+
+/// The `cohort` metric label for the base client, before it has been rebound to a specific cohort via
+/// [`IngestionClient::for_cohort`]. It keeps checkpoint fetches made before the indexer starts (e.g.
+/// the factory's tip probe) out of any real cohort's series.
+const DEFAULT_COHORT_LABEL: &str = "";
 
 #[async_trait]
 pub trait IngestionClientTrait: Send + Sync {
@@ -181,9 +186,12 @@ pub type CheckpointResult = Result<Checkpoint, CheckpointError>;
 #[derive(Clone)]
 pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
-    /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
+    /// The metrics registry this client's cohort view is bound against, and the handle its peers
+    /// reuse (see [`Self::metrics`]). Also owns the global `total_ingested_bytes` counter wired into
+    /// the checkpoint source.
     metrics: Arc<IngestionMetrics>,
-    checkpoint_lag_reporter: Arc<CheckpointLagMetricReporter>,
+    /// This client's cohort-labeled metric handles, rebound per cohort by [`Self::for_cohort`].
+    cohort_metrics: Arc<CohortMetrics>,
     chain_id: OnceCell<ChainIdentifier>,
 }
 
@@ -296,6 +304,11 @@ impl IngestionClient {
         &self.metrics
     }
 
+    /// This client's cohort-labeled metric view, bound to the cohort it was created for.
+    pub(crate) fn cohort_metrics(&self) -> &Arc<CohortMetrics> {
+        &self.cohort_metrics
+    }
+
     /// Wrap an arbitrary [`IngestionClientTrait`] implementation in an [`IngestionClient`]. Use
     /// this when the source of checkpoints is not one of the built-in remote object stores or gRPC
     /// endpoints — for example, when embedding the indexer in a fullnode that already has
@@ -304,31 +317,21 @@ impl IngestionClient {
         client: Arc<dyn IngestionClientTrait>,
         metrics: Arc<IngestionMetrics>,
     ) -> Self {
-        let checkpoint_lag_reporter = CheckpointLagMetricReporter::with_label(
-            &metrics.ingested_checkpoint_timestamp_lag,
-            &metrics.latest_ingested_checkpoint_timestamp_lag_ms,
-            &metrics.latest_ingested_checkpoint,
-            "0",
-        );
+        let cohort_metrics = CohortMetrics::new(&metrics, DEFAULT_COHORT_LABEL);
         IngestionClient {
             client,
             metrics,
-            checkpoint_lag_reporter,
+            cohort_metrics,
             chain_id: OnceCell::new(),
         }
     }
 
-    /// A clone of this client that reports checkpoint-lag gauges under `cohort`, so services minted
-    /// for different cohorts don't overwrite each other. The checkpoint source and chain-id cache
-    /// are shared; only the metric reporter is rebound.
+    /// A clone of this client that reports its cohort-labeled metrics under `cohort`, so services
+    /// minted for different cohorts don't overwrite each other. The checkpoint source and chain-id
+    /// cache are shared; only the cohort metric view is rebound.
     pub(crate) fn for_cohort(&self, cohort: usize) -> Self {
         let mut client = self.clone();
-        client.checkpoint_lag_reporter = CheckpointLagMetricReporter::with_label(
-            &self.metrics.ingested_checkpoint_timestamp_lag,
-            &self.metrics.latest_ingested_checkpoint_timestamp_lag_ms,
-            &self.metrics.latest_ingested_checkpoint,
-            &cohort.to_string(),
-        );
+        client.cohort_metrics = CohortMetrics::new(&self.metrics, &cohort.to_string());
         client
     }
 
@@ -348,7 +351,7 @@ impl IngestionClient {
             self.checkpoint(checkpoint).await.map_err(|e| match e {
                 IE::NotFound(checkpoint) => {
                     debug!(checkpoint, "Checkpoint not found, retrying...");
-                    self.metrics.total_ingested_not_found_retries.inc();
+                    self.cohort_metrics.total_ingested_not_found_retries.inc();
                     BE::transient(e)
                 }
                 e => BE::permanent(e),
@@ -386,12 +389,12 @@ impl IngestionClient {
                             // upstream checkpoint data source. If the upstream checkpoint data
                             // source is corrected, then the indexer will automatically recover
                             // the next time the read is attempted.
-                            CheckpointError::Fetch(e) => self.metrics.inc_retry(
+                            CheckpointError::Fetch(e) => self.cohort_metrics.inc_retry(
                                 cp_sequence_number,
                                 "fetch",
                                 IE::FetchError(cp_sequence_number, e),
                             ),
-                            CheckpointError::Decode(e) => self.metrics.inc_retry(
+                            CheckpointError::Decode(e) => self.cohort_metrics.inc_retry(
                                 cp_sequence_number,
                                 e.reason(),
                                 IE::DecodeError(cp_sequence_number, e.into()),
@@ -399,7 +402,7 @@ impl IngestionClient {
                         })
                 }
             },
-            &self.metrics.ingested_checkpoint_latency,
+            &self.cohort_metrics.ingested_checkpoint_latency,
         );
 
         let client = self.client.clone();
@@ -415,22 +418,23 @@ impl IngestionClient {
                             .map_err(|e| BE::transient(IE::ChainIdError(cp_sequence_number, e)))
                     }
                 },
-                &self.metrics.ingested_chain_id_latency,
+                &self.cohort_metrics.ingested_chain_id_latency,
             )
         });
 
         let (checkpoint, chain_id) = tokio::try_join!(checkpoint_data_fut, chain_id_fut)?;
 
-        self.checkpoint_lag_reporter
+        self.cohort_metrics
+            .checkpoint_lag
             .report_lag(cp_sequence_number, checkpoint.summary.timestamp_ms);
 
-        self.metrics.total_ingested_checkpoints.inc();
+        self.cohort_metrics.total_ingested_checkpoints.inc();
 
-        self.metrics
+        self.cohort_metrics
             .total_ingested_transactions
             .inc_by(checkpoint.transactions.len() as u64);
 
-        self.metrics.total_ingested_events.inc_by(
+        self.cohort_metrics.total_ingested_events.inc_by(
             checkpoint
                 .transactions
                 .iter()
@@ -438,7 +442,7 @@ impl IngestionClient {
                 .sum(),
         );
 
-        self.metrics
+        self.cohort_metrics
             .total_ingested_objects
             .inc_by(checkpoint.object_set.len() as u64);
 
@@ -628,7 +632,9 @@ pub(crate) mod tests {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
         let metrics = IngestionMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
-        let client = IngestionClient::from_trait(mock_client.clone(), metrics);
+        // Bind to cohort 0, matching production where the broadcaster always runs under a cohort's
+        // client rather than the unlabeled base client.
+        let client = IngestionClient::from_trait(mock_client.clone(), metrics).for_cohort(0);
         (client, mock_client)
     }
 
@@ -764,11 +770,39 @@ pub(crate) mod tests {
         let result = client.checkpoint(1).await.unwrap();
         assert_eq!(result.checkpoint.summary.sequence_number(), &1);
         assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 1);
-        assert_eq!(client.metrics.total_ingested_events.get(), 1);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
         // 1 created object + 2 gas object versions (input + output)
-        assert_eq!(client.metrics.total_ingested_objects.get(), 3);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            3
+        );
     }
 
     #[tokio::test]
@@ -778,10 +812,38 @@ pub(crate) mod tests {
         // Try to fetch non-existent checkpoint
         let result = client.checkpoint(1).await;
         assert!(matches!(result, Err(IE::NotFound(1))));
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -800,13 +862,41 @@ pub(crate) mod tests {
         let retries = client
             .metrics
             .total_ingested_transient_retries
-            .with_label_values(&["fetch"])
+            .with_label_values(&["fetch", "0"])
             .get();
         assert_eq!(retries, 2);
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -825,13 +915,41 @@ pub(crate) mod tests {
         let retries = client
             .metrics
             .total_ingested_transient_retries
-            .with_label_values(&["deserialization"])
+            .with_label_values(&["deserialization", "0"])
             .get();
         assert_eq!(retries, 2);
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -847,12 +965,44 @@ pub(crate) mod tests {
         assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
 
         // Verify that exactly 1 retry was recorded
-        let retries = client.metrics.total_ingested_not_found_retries.get();
+        let retries = client
+            .metrics
+            .total_ingested_not_found_retries
+            .with_label_values(&["0"])
+            .get();
         assert_eq!(retries, 1);
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -864,9 +1014,37 @@ pub(crate) mod tests {
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
         assert_eq!(result.checkpoint.summary.sequence_number(), &1);
         assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 }

@@ -375,9 +375,21 @@ mod tests {
         }
 
         // Check that ingestion metrics were updated.
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 10);
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            10
+        );
         // 10 checkpoints, 2 user transactions + 1 settlement transaction per checkpoint
-        assert_eq!(ingestion_metrics.total_ingested_transactions.get(), 30);
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            30
+        );
         assert_eq!(
             ingestion_metrics
                 .latest_ingested_checkpoint

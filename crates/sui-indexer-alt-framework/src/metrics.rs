@@ -55,36 +55,74 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
 ];
 
 /// Metrics specific to the ingestion service.
+///
+/// Almost every metric is labeled by `cohort`: the framework mints one ingestion service per cohort,
+/// all sharing this handle, so the label keeps their series from colliding. The two exceptions are
+/// `total_ingested_bytes` (counted inside the checkpoint source, which is shared across cohorts) and
+/// `ingested_latest_checkpoint_latency` (recorded only by the factory's one-time tip probe, before
+/// any cohort exists).
 #[derive(Clone)]
 pub struct IngestionMetrics {
     // Statistics related to fetching data from the remote store.
-    pub total_ingested_checkpoints: IntCounter,
-    pub total_ingested_transactions: IntCounter,
-    pub total_ingested_events: IntCounter,
-    pub total_ingested_objects: IntCounter,
+    pub total_ingested_checkpoints: IntCounterVec,
+    pub total_ingested_transactions: IntCounterVec,
+    pub total_ingested_events: IntCounterVec,
+    pub total_ingested_objects: IntCounterVec,
     pub total_ingested_bytes: IntCounter,
     pub total_ingested_transient_retries: IntCounterVec,
-    pub total_ingested_not_found_retries: IntCounter,
-    pub total_streamed_checkpoints: IntCounter,
-    pub total_skipped_streamed_checkpoints: IntCounter,
-    pub total_out_of_order_streamed_checkpoints: IntCounter,
-    pub total_stream_disconnections: IntCounter,
-    pub total_streaming_connection_failures: IntCounter,
+    pub total_ingested_not_found_retries: IntCounterVec,
+    pub total_streamed_checkpoints: IntCounterVec,
+    pub total_skipped_streamed_checkpoints: IntCounterVec,
+    pub total_out_of_order_streamed_checkpoints: IntCounterVec,
+    pub total_stream_disconnections: IntCounterVec,
+    pub total_streaming_connection_failures: IntCounterVec,
 
-    // Checkpoint lag metrics for the ingestion pipeline. Labeled by cohort so that services minted
-    // for different cohorts report independently rather than overwriting each other's gauges.
+    // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGaugeVec,
     pub latest_streamed_checkpoint: IntGaugeVec,
     pub latest_skipped_streamed_checkpoint: IntGaugeVec,
     pub latest_ingested_checkpoint_timestamp_lag_ms: IntGaugeVec,
     pub ingested_checkpoint_timestamp_lag: HistogramVec,
 
-    pub ingested_checkpoint_latency: Histogram,
-    pub ingested_chain_id_latency: Histogram,
+    pub ingested_checkpoint_latency: HistogramVec,
+    pub ingested_chain_id_latency: HistogramVec,
     pub ingested_latest_checkpoint_latency: Histogram,
 
     pub ingestion_concurrency_limit: IntGaugeVec,
     pub ingestion_concurrency_inflight: IntGaugeVec,
+}
+
+/// A cohort's pre-bound view over [`IngestionMetrics`]. The framework mints one ingestion service
+/// per cohort; each binds its metrics' `cohort` label once, here, so emission sites stay plain
+/// `.inc()`/`.observe()`/`.set()` calls rather than repeating `.with_label_values(&[cohort])`.
+pub(crate) struct CohortMetrics {
+    pub(crate) total_ingested_checkpoints: IntCounter,
+    pub(crate) total_ingested_transactions: IntCounter,
+    pub(crate) total_ingested_events: IntCounter,
+    pub(crate) total_ingested_objects: IntCounter,
+    pub(crate) total_ingested_not_found_retries: IntCounter,
+    pub(crate) total_streamed_checkpoints: IntCounter,
+    pub(crate) total_skipped_streamed_checkpoints: IntCounter,
+    pub(crate) total_out_of_order_streamed_checkpoints: IntCounter,
+    pub(crate) total_stream_disconnections: IntCounter,
+    pub(crate) total_streaming_connection_failures: IntCounter,
+
+    pub(crate) ingested_checkpoint_latency: Histogram,
+    pub(crate) ingested_chain_id_latency: Histogram,
+
+    pub(crate) latest_streamed_checkpoint: IntGauge,
+    pub(crate) latest_skipped_streamed_checkpoint: IntGauge,
+    pub(crate) ingestion_concurrency_limit: IntGauge,
+    pub(crate) ingestion_concurrency_inflight: IntGauge,
+
+    /// Reports this cohort's checkpoint-lag gauges/histogram (with its own running-max state).
+    pub(crate) checkpoint_lag: Arc<CheckpointLagMetricReporter>,
+
+    /// Retries carry a `reason` label in addition to `cohort`, so this stays an unbound vector and
+    /// [`Self::inc_retry`] binds both labels.
+    total_ingested_transient_retries: IntCounterVec,
+    /// This client's `cohort` label value, for the two-label retry counter.
+    label: String,
 }
 
 #[derive(Clone)]
@@ -183,27 +221,31 @@ impl IngestionMetrics {
         let prefix = prefix.unwrap_or(DEFAULT_METRICS_PREFIX);
         let name = |n| format!("{prefix}_{n}");
         Arc::new(Self {
-            total_ingested_checkpoints: register_int_counter_with_registry!(
+            total_ingested_checkpoints: register_int_counter_vec_with_registry!(
                 name("total_ingested_checkpoints"),
                 "Total number of checkpoints fetched from the remote store",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            total_ingested_transactions: register_int_counter_with_registry!(
+            total_ingested_transactions: register_int_counter_vec_with_registry!(
                 name("total_ingested_transactions"),
                 "Total number of transactions fetched from the remote store",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            total_ingested_events: register_int_counter_with_registry!(
+            total_ingested_events: register_int_counter_vec_with_registry!(
                 name("total_ingested_events"),
                 "Total number of events fetched from the remote store",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            total_ingested_objects: register_int_counter_with_registry!(
+            total_ingested_objects: register_int_counter_vec_with_registry!(
                 name("total_ingested_objects"),
                 "Total number of objects in checkpoints fetched from the remote store",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
@@ -217,44 +259,50 @@ impl IngestionMetrics {
                 name("total_ingested_retries"),
                 "Total number of retries due to transient errors while fetching data from the \
                  remote store",
-                &["reason"],
+                &["reason", "cohort"],
                 registry,
             )
             .unwrap(),
-            total_ingested_not_found_retries: register_int_counter_with_registry!(
+            total_ingested_not_found_retries: register_int_counter_vec_with_registry!(
                 name("total_ingested_not_found_retries"),
                 "Total number of retries due to the not found errors while fetching data from the \
                  remote store",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            total_streamed_checkpoints: register_int_counter_with_registry!(
+            total_streamed_checkpoints: register_int_counter_vec_with_registry!(
                 name("total_streamed_checkpoints"),
                 "Total number of checkpoints received from gRPC streaming",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            total_skipped_streamed_checkpoints: register_int_counter_with_registry!(
+            total_skipped_streamed_checkpoints: register_int_counter_vec_with_registry!(
                 name("total_skipped_streamed_checkpoints"),
                 "Total number of streamed checkpoints skipped because they were already processed",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            total_out_of_order_streamed_checkpoints: register_int_counter_with_registry!(
+            total_out_of_order_streamed_checkpoints: register_int_counter_vec_with_registry!(
                 name("total_out_of_order_streamed_checkpoints"),
                 "Total number of streamed checkpoints received out of order",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            total_stream_disconnections: register_int_counter_with_registry!(
+            total_stream_disconnections: register_int_counter_vec_with_registry!(
                 name("total_stream_disconnections"),
                 "Total number of times the gRPC stream was disconnected",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
-            total_streaming_connection_failures: register_int_counter_with_registry!(
+            total_streaming_connection_failures: register_int_counter_vec_with_registry!(
                 name("total_streaming_connection_failures"),
                 "Total number of failures due to streaming service connection or peek failures",
+                &["cohort"],
                 registry,
             )
             .unwrap(),
@@ -296,16 +344,18 @@ impl IngestionMetrics {
                 registry,
             )
             .unwrap(),
-            ingested_checkpoint_latency: register_histogram_with_registry!(
+            ingested_checkpoint_latency: register_histogram_vec_with_registry!(
                 name("ingested_checkpoint_latency"),
                 "Time taken to fetch a checkpoint from the remote store, including retries",
+                &["cohort"],
                 INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            ingested_chain_id_latency: register_histogram_with_registry!(
+            ingested_chain_id_latency: register_histogram_vec_with_registry!(
                 name("ingested_chain_id_latency"),
                 "Time taken to fetch the chain identifier, including retries",
+                &["cohort"],
                 INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -333,6 +383,61 @@ impl IngestionMetrics {
             .unwrap(),
         })
     }
+}
+
+impl CohortMetrics {
+    /// Bind every cohort-labeled ingestion metric to `label` once, so services minted for
+    /// different cohorts report under their own label without re-binding at each emission site.
+    pub(crate) fn new(metrics: &IngestionMetrics, label: &str) -> Arc<Self> {
+        let c = label;
+        let checkpoint_lag = CheckpointLagMetricReporter::with_label(
+            &metrics.ingested_checkpoint_timestamp_lag,
+            &metrics.latest_ingested_checkpoint_timestamp_lag_ms,
+            &metrics.latest_ingested_checkpoint,
+            c,
+        );
+        Arc::new(Self {
+            total_ingested_checkpoints: metrics.total_ingested_checkpoints.with_label_values(&[c]),
+            total_ingested_transactions: metrics
+                .total_ingested_transactions
+                .with_label_values(&[c]),
+            total_ingested_events: metrics.total_ingested_events.with_label_values(&[c]),
+            total_ingested_objects: metrics.total_ingested_objects.with_label_values(&[c]),
+            total_ingested_not_found_retries: metrics
+                .total_ingested_not_found_retries
+                .with_label_values(&[c]),
+            total_streamed_checkpoints: metrics.total_streamed_checkpoints.with_label_values(&[c]),
+            total_skipped_streamed_checkpoints: metrics
+                .total_skipped_streamed_checkpoints
+                .with_label_values(&[c]),
+            total_out_of_order_streamed_checkpoints: metrics
+                .total_out_of_order_streamed_checkpoints
+                .with_label_values(&[c]),
+            total_stream_disconnections: metrics
+                .total_stream_disconnections
+                .with_label_values(&[c]),
+            total_streaming_connection_failures: metrics
+                .total_streaming_connection_failures
+                .with_label_values(&[c]),
+            ingested_checkpoint_latency: metrics
+                .ingested_checkpoint_latency
+                .with_label_values(&[c]),
+            ingested_chain_id_latency: metrics.ingested_chain_id_latency.with_label_values(&[c]),
+            latest_streamed_checkpoint: metrics.latest_streamed_checkpoint.with_label_values(&[c]),
+            latest_skipped_streamed_checkpoint: metrics
+                .latest_skipped_streamed_checkpoint
+                .with_label_values(&[c]),
+            ingestion_concurrency_limit: metrics
+                .ingestion_concurrency_limit
+                .with_label_values(&[c]),
+            ingestion_concurrency_inflight: metrics
+                .ingestion_concurrency_inflight
+                .with_label_values(&[c]),
+            checkpoint_lag,
+            total_ingested_transient_retries: metrics.total_ingested_transient_retries.clone(),
+            label: label.to_string(),
+        })
+    }
 
     /// Register that we're retrying a checkpoint fetch due to a transient error, logging the
     /// reason and error.
@@ -350,7 +455,7 @@ impl IngestionMetrics {
         );
 
         self.total_ingested_transient_retries
-            .with_label_values(&[reason])
+            .with_label_values(&[reason, self.label.as_str()])
             .inc();
 
         backoff::Error::transient(error)

@@ -95,10 +95,6 @@ pub struct IngestionService {
     ingestion_client: IngestionClient,
     streaming_client: Option<ArcStreamingClient>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
-    metrics: Arc<IngestionMetrics>,
-    /// The cohort this service belongs to, used to label its ingestion gauges so services running
-    /// for different cohorts don't overwrite each other's metrics.
-    cohort: usize,
 }
 
 /// Creates the [IngestionService]s that an indexer runs -- one per cohort of pipelines with
@@ -175,11 +171,9 @@ impl IngestionService {
     ) -> Self {
         Self {
             config,
-            metrics: ingestion_client.metrics().clone(),
             ingestion_client,
             streaming_client,
             subscribers: Vec::new(),
-            cohort: 0,
         }
     }
 
@@ -221,8 +215,6 @@ impl IngestionService {
             ingestion_client,
             streaming_client,
             subscribers,
-            metrics,
-            cohort,
         } = self;
 
         if subscribers.is_empty() {
@@ -235,8 +227,6 @@ impl IngestionService {
             config,
             ingestion_client,
             subscribers,
-            metrics,
-            cohort,
         ))
     }
 }
@@ -301,13 +291,11 @@ impl IngestionFactory {
     /// Create an ingestion service for `cohort` from the factory's clients. The cohort labels the
     /// service's ingestion gauges so concurrently-running services don't overwrite each other.
     pub(crate) fn create(&self, cohort: usize) -> IngestionService {
-        let mut service = IngestionService::with_clients(
+        IngestionService::with_clients(
             self.ingestion_client.for_cohort(cohort),
             self.streaming_client.clone(),
             self.config.clone(),
-        );
-        service.cohort = cohort;
-        service
+        )
     }
 }
 
@@ -686,8 +674,14 @@ mod tests {
 
         let first = factory.create(0);
         let second = factory.create(1);
-        assert!(Arc::ptr_eq(&first.metrics, factory.metrics()));
-        assert!(Arc::ptr_eq(&second.metrics, factory.metrics()));
+        assert!(Arc::ptr_eq(
+            first.ingestion_client.metrics(),
+            factory.metrics()
+        ));
+        assert!(Arc::ptr_eq(
+            second.ingestion_client.metrics(),
+            factory.metrics()
+        ));
         assert!(
             registry
                 .gather()
@@ -722,8 +716,8 @@ mod tests {
 
         let first = factory.create(0);
         let second = factory.create(1);
-        assert!(Arc::ptr_eq(&first.metrics, &metrics));
-        assert!(Arc::ptr_eq(&second.metrics, &metrics));
+        assert!(Arc::ptr_eq(first.ingestion_client.metrics(), &metrics));
+        assert!(Arc::ptr_eq(second.ingestion_client.metrics(), &metrics));
         assert!(first.streaming_client.is_some());
         assert!(second.streaming_client.is_some());
 

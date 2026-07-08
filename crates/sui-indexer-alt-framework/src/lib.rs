@@ -1309,7 +1309,13 @@ mod tests {
 
         indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 24);
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            24
+        );
         assert_out_of_order!(indexer_metrics, A::NAME, 0);
         assert_out_of_order!(indexer_metrics, B::NAME, 5);
         assert_out_of_order!(indexer_metrics, C::NAME, 10);
@@ -1350,7 +1356,13 @@ mod tests {
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 24);
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            24
+        );
         assert_out_of_order!(metrics, A::NAME, 0);
         assert_out_of_order!(metrics, B::NAME, 5);
         assert_out_of_order!(metrics, C::NAME, 10);
@@ -1389,7 +1401,13 @@ mod tests {
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 30);
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            30
+        );
         assert_out_of_order!(metrics, A::NAME, 0);
         assert_out_of_order!(metrics, B::NAME, 11);
         assert_out_of_order!(metrics, C::NAME, 16);
@@ -1429,7 +1447,13 @@ mod tests {
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 20);
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            20
+        );
         assert_out_of_order!(metrics, A::NAME, 0);
         assert_out_of_order!(metrics, B::NAME, 1);
         assert_out_of_order!(metrics, C::NAME, 6);
@@ -1560,7 +1584,13 @@ mod tests {
 
         tasked_indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 16);
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            16
+        );
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
@@ -1610,7 +1640,13 @@ mod tests {
 
         tasked_indexer.run().await.unwrap().join().await.unwrap();
 
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 17);
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            17
+        );
         assert_out_of_order!(metrics, "test", 0);
         assert_eq!(
             metrics
@@ -1796,9 +1832,23 @@ mod tests {
         let indexer_metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
-        // Both cohorts' services report to the shared metrics; only the lagging cohort had
-        // anything to ingest (the near-tip cohort's range [100_101, 59] is empty).
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 50);
+        // Both cohorts' services report to the shared metrics, each under its own cohort label.
+        // Only the lagging cohort (1) had anything to ingest; the near-tip cohort (0)'s range
+        // [100_101, 59] is empty.
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["1"])
+                .get(),
+            50
+        );
 
         // The near-tip pipeline received no checkpoints at all, proving it was not subscribed
         // to the lagging cohort's backfill (unsplit, it would have received all 50).
@@ -1863,9 +1913,22 @@ mod tests {
         let indexer_metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
-        // Both cohorts' services report to the one shared metrics handle, and only the lagging
-        // cohort's pipeline received checkpoints.
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 50);
+        // Both cohorts' services report to the one shared metrics handle, each under its own
+        // cohort label, and only the lagging cohort (1) ingested checkpoints.
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["1"])
+                .get(),
+            50
+        );
         assert_eq!(
             indexer_metrics
                 .total_handler_checkpoints_received
