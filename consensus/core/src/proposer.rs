@@ -223,7 +223,7 @@ impl ValidatorProposer {
 
         // Sort scores descending so we can include the best of the pending excluded
         // ancestors first until we reach the threshold.
-        score_and_pending_excluded_ancestors.sort_by_key(|b| std::cmp::Reverse(b.0));
+        score_and_pending_excluded_ancestors.sort_by_key(|a| std::cmp::Reverse(a.0));
 
         let mut ancestors_to_propose = included_ancestors;
         let mut excluded_ancestors = Vec::new();
