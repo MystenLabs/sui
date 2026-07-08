@@ -9,18 +9,17 @@ Companion docs: `docs/consensus-handler-optimization.md` (the post-consensus hot
 touches), `docs/tidehunter-pt-load-investigation.md` (why table count and key count matter
 for tidehunter).
 
-**Implementation status (2026-07-08):** Phase 1 Release A and Phase 2 Release A are
-sketched in the working tree. Phase 1: all reads of `live_owned_object_markers` are gone
-(`check_owned_objects_are_live` DB fallback rewritten against the objects table; the dead
-`get_lock`/`ObjectLockStatus` surface deleted); writes remain for rollback safety.
-Phase 2: `try_acquire_owned_object_locks_post_consensus_v2` (consumed-check +
-executed-in-epoch exemption) behind the `owned_object_conflict_check_v2` protocol flag
-(present, not enabled for any version); lock reads become overlay-only under the flag;
-the epoch table is still dual-written. Shadow mode compares legacy vs v2 decisions on
-every commit — always on in debug/simtest builds (divergence ⇒ `debug_fatal`), env-gated
-via `SUI_OWNED_OBJECT_CONFLICT_CHECK_V2_SHADOW=1` in release — plus a
-`consensus_handler_owned_lock_check_divergence` metric. Not yet implemented: both
-Release B table removals, Phase 3 (next-versions), and the §11 crash-matrix simtests.
+**Implementation status (2026-07-08, perf-eval branch):** all three tables are removed
+outright, with the new checks unconditional — the flag-gated migration path described in
+§10 is deliberately skipped for performance evaluation. Phase 1+2: liveness and
+post-consensus conflict detection (consumed-check + executed-in-epoch exemption) run
+against the objects table; lock state is quarantine-only; both lock tables deleted.
+Phase 3: `next_shared_object_versions_v2` deleted; the next-version map is epoch-lifetime
+in-memory (quarantine), seeded lazily from the objects table with **effects-aware
+seeding** (§6.3) during replay, plus a debug-build assertion that recomputed assignments
+for executed transactions match their effects. Not yet implemented: overlay eviction for
+the next-version map (§4.3), cleanup of pre-existing marker CFs on old DBs, and the §11
+crash-matrix simtests.
 
 ---
 

@@ -5,7 +5,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
-use crate::execution_cache::ObjectCacheRead;
+use crate::execution_cache::{ObjectCacheRead, TransactionCacheRead};
 use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -26,7 +26,7 @@ use sui_types::storage::{
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
 use sui_types::{SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber, error::SuiResult};
-use tracing::trace;
+use tracing::{info, trace};
 
 pub struct SharedObjVerManager {}
 
@@ -268,18 +268,53 @@ impl SharedObjVerManager {
     pub fn assign_versions_from_consensus<'a, T>(
         epoch_store: &AuthorityPerEpochStore,
         cache_reader: &dyn ObjectCacheRead,
+        transaction_cache_reader: &dyn TransactionCacheRead,
         assignables: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult<ConsensusSharedObjVerAssignment>
     where
         T: AsTx + 'a,
     {
-        let mut shared_input_next_versions = get_or_init_versions(
+        let version_keys = collect_version_keys(
             assignables
                 .clone()
                 .flat_map(|a| a.shared_input_objects(epoch_store)),
             epoch_store,
+        );
+
+        // Effects-aware seeding (docs/in_memory_object_versioning.md §6.3): keys are
+        // normally seeded from the objects table, but during replay (or when checkpoint
+        // execution runs ahead of consensus) the objects table may already contain
+        // versions written by the execution of the very transactions being assigned
+        // here, which would produce a seed ahead of what the assignment should start
+        // from. For every key that is about to be seeded, if some assignable in this
+        // batch already has current-epoch effects, the earliest such assignable's
+        // recorded (non-cancelled) input version for the key is the correct seed:
+        // every earlier toucher in the batch either was cancelled (does not constrain
+        // the seed) or has not mutated the key durably (or the executed one could not
+        // have executed before it). In the common case nothing is uninitialized (or
+        // nothing is executed yet) and no effects are read.
+        let uninitialized: Vec<ConsensusObjectSequenceKey> = epoch_store
+            .multi_get_next_shared_object_versions(&version_keys)
+            .into_iter()
+            .zip_debug_eq(&version_keys)
+            .filter_map(|(version, key)| version.is_none().then_some(*key))
+            .collect();
+        let effects_seeds = if uninitialized.is_empty() {
+            Default::default()
+        } else {
+            compute_effects_version_seeds(
+                epoch_store,
+                transaction_cache_reader,
+                assignables.clone(),
+                &uninitialized,
+            )
+        };
+
+        let mut shared_input_next_versions = epoch_store.get_or_init_next_object_versions(
+            &version_keys,
             cache_reader,
+            &effects_seeds,
         )?;
         let mut assigned_versions = Vec::new();
         for assignable in assignables {
@@ -295,6 +330,18 @@ impl SharedObjVerManager {
                 &mut shared_input_next_versions,
                 cancelled_txns,
             );
+
+            // Recomputed assignments for already-executed transactions must match their
+            // effects — anything else means the recovered next-version state diverged
+            // from what the network executed.
+            #[cfg(debug_assertions)]
+            verify_assignment_matches_effects(
+                epoch_store,
+                transaction_cache_reader,
+                assignable,
+                &cert_assigned_versions,
+            );
+
             assigned_versions.push((assignable.key(), cert_assigned_versions));
         }
 
@@ -321,12 +368,41 @@ impl SharedObjVerManager {
         // of a consensus object in an epoch by reading the current version from the object store.
         // This must be done before we mutate it the first time, otherwise we would be initializing
         // it with the wrong version.
-        let _ = get_or_init_versions(
+        //
+        // Since the effects are already in hand, seed uninitialized keys from the
+        // earliest transaction in the batch that touches them — the input version each
+        // key had before this batch mutates it — rather than from the object store,
+        // which may already reflect this batch's own (re-executed) writes.
+        let version_keys = collect_version_keys(
             certs_and_effects.iter().flat_map(|(cert, _, _)| {
                 cert.transaction_data().shared_input_objects().into_iter()
             }),
             epoch_store,
+        );
+        let mut effects_seeds: HashMap<ConsensusObjectSequenceKey, SequenceNumber> = HashMap::new();
+        for (cert, effects, _) in certs_and_effects {
+            let initial_version_map: BTreeMap<_, _> = cert
+                .transaction_data()
+                .shared_input_objects()
+                .into_iter()
+                .map(|input| input.into_id_and_version())
+                .collect();
+            for iso in effects.input_consensus_objects() {
+                let (id, version) = iso.id_and_version();
+                let Some(initial_version) = initial_version_map.get(&id) else {
+                    continue;
+                };
+                if version.is_valid() {
+                    effects_seeds
+                        .entry((id, *initial_version))
+                        .or_insert(version);
+                }
+            }
+        }
+        let _ = epoch_store.get_or_init_next_object_versions(
+            &version_keys,
             cache_reader,
+            &effects_seeds,
         );
         let mut assigned_versions = Vec::new();
         for (cert, effects, accumulator_version) in certs_and_effects {
@@ -509,17 +585,19 @@ impl SharedObjVerManager {
     }
 }
 
-fn get_or_init_versions<'a>(
+/// The deduplicated set of consensus object keys whose next-version state a batch of
+/// assignables needs (always including the accumulator root when enabled, since every
+/// assignment reads its version).
+fn collect_version_keys<'a>(
     shared_input_objects: impl Iterator<Item = SharedInputObject> + 'a,
     epoch_store: &AuthorityPerEpochStore,
-    cache_reader: &dyn ObjectCacheRead,
-) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
-    let mut shared_input_objects: Vec<_> = shared_input_objects
+) -> Vec<ConsensusObjectSequenceKey> {
+    let mut keys: Vec<_> = shared_input_objects
         .map(|so| so.into_id_and_version())
         .collect();
 
     if epoch_store.accumulators_enabled() {
-        shared_input_objects.push((
+        keys.push((
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
             epoch_store
                 .epoch_start_config()
@@ -528,10 +606,114 @@ fn get_or_init_versions<'a>(
         ));
     }
 
-    shared_input_objects.sort();
-    shared_input_objects.dedup();
+    keys.sort();
+    keys.dedup();
+    keys
+}
 
-    epoch_store.get_or_init_next_object_versions(&shared_input_objects, cache_reader)
+/// Resolves an assignable's transaction digest, if it has one. System assignables
+/// (settlements, prologues, randomness updates) get theirs via the durable
+/// transaction_key_to_digest mapping, which is only present once the transaction was
+/// built — absent means it cannot have been executed, which is all callers care about.
+fn assignable_digest<T: AsTx>(
+    epoch_store: &AuthorityPerEpochStore,
+    assignable: &Schedulable<T>,
+) -> Option<TransactionDigest> {
+    match assignable.key() {
+        TransactionKey::Digest(digest) => Some(digest),
+        key => epoch_store.tx_key_to_digest(&key).ok().flatten(),
+    }
+}
+
+/// For each uninitialized key, the input version recorded by the earliest assignable in
+/// the batch that touches it and has current-epoch effects with a real (non-cancelled)
+/// assignment for it. See the comment at the call site in
+/// `assign_versions_from_consensus`.
+fn compute_effects_version_seeds<'a, T: AsTx + 'a>(
+    epoch_store: &AuthorityPerEpochStore,
+    transaction_cache_reader: &dyn TransactionCacheRead,
+    assignables: impl Iterator<Item = &'a Schedulable<T>>,
+    uninitialized: &[ConsensusObjectSequenceKey],
+) -> HashMap<ConsensusObjectSequenceKey, SequenceNumber> {
+    let uninitialized: HashSet<_> = uninitialized.iter().copied().collect();
+    let mut seeds: HashMap<ConsensusObjectSequenceKey, SequenceNumber> = HashMap::new();
+    for assignable in assignables {
+        if seeds.len() == uninitialized.len() {
+            break;
+        }
+        let wanted_keys: Vec<_> = assignable
+            .shared_input_objects(epoch_store)
+            .map(|so| so.into_id_and_version())
+            .filter(|key| uninitialized.contains(key) && !seeds.contains_key(key))
+            .collect();
+        if wanted_keys.is_empty() {
+            continue;
+        }
+        let Some(digest) = assignable_digest(epoch_store, assignable) else {
+            continue;
+        };
+        let Some(effects) = transaction_cache_reader.get_executed_effects(&digest) else {
+            continue;
+        };
+        if effects.executed_epoch() != epoch_store.epoch() {
+            continue;
+        }
+        let recorded_inputs: HashMap<_, _> = effects
+            .input_consensus_objects()
+            .into_iter()
+            .map(|iso| iso.id_and_version())
+            .collect();
+        for key in wanted_keys {
+            if let Some(version) = recorded_inputs.get(&key.0)
+                && version.is_valid()
+            {
+                info!(
+                    ?key,
+                    ?version,
+                    ?digest,
+                    "seeding next shared object version from executed effects"
+                );
+                seeds.insert(key, *version);
+            }
+        }
+    }
+    seeds
+}
+
+/// If the assignable already executed in this epoch, its recomputed version assignment
+/// must equal the one recorded in its effects; a mismatch means the in-memory
+/// next-version state diverged from what the network executed (a fork on this
+/// validator).
+#[cfg(debug_assertions)]
+fn verify_assignment_matches_effects<T: AsTx>(
+    epoch_store: &AuthorityPerEpochStore,
+    transaction_cache_reader: &dyn TransactionCacheRead,
+    assignable: &Schedulable<T>,
+    assigned_versions: &AssignedVersions,
+) {
+    let Some(digest) = assignable_digest(epoch_store, assignable) else {
+        return;
+    };
+    let Some(effects) = transaction_cache_reader.get_executed_effects(&digest) else {
+        return;
+    };
+    if effects.executed_epoch() != epoch_store.epoch() {
+        return;
+    }
+    let recorded_inputs: HashMap<_, _> = effects
+        .input_consensus_objects()
+        .into_iter()
+        .map(|iso| iso.id_and_version())
+        .collect();
+    for ((id, _initial_version), assigned) in &assigned_versions.shared_object_versions {
+        if let Some(recorded) = recorded_inputs.get(id) {
+            assert_eq!(
+                assigned, recorded,
+                "recomputed shared version assignment for {digest:?} diverged from effects \
+                 (object {id:?}: assigned {assigned:?}, effects {recorded:?})"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -588,6 +770,7 @@ mod tests {
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             assignables.iter(),
             &BTreeMap::new(),
         )
@@ -693,6 +876,7 @@ mod tests {
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             assignables.iter(),
             &BTreeMap::new(),
         )
@@ -852,6 +1036,7 @@ mod tests {
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             assignables.iter(),
             &cancelled_txns,
         )
@@ -1152,6 +1337,7 @@ mod tests {
             SharedObjVerManager::assign_versions_from_consensus(
                 &epoch_store,
                 self.authority.get_object_cache_reader().as_ref(),
+                self.authority.get_transaction_cache_reader().as_ref(),
                 self.assignables.iter(),
                 &BTreeMap::new(),
             )

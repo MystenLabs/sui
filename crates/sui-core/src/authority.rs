@@ -4046,6 +4046,7 @@ impl AuthorityState {
         let assigned_versions = epoch_store
             .assign_shared_object_versions_for_tests(
                 self.get_object_cache_reader().as_ref(),
+                self.get_transaction_cache_reader().as_ref(),
                 &settlements,
             )
             .unwrap();
@@ -4078,6 +4079,7 @@ impl AuthorityState {
         let assigned_versions = epoch_store
             .assign_shared_object_versions_for_tests(
                 self.get_object_cache_reader().as_ref(),
+                self.get_transaction_cache_reader().as_ref(),
                 std::slice::from_ref(&barrier),
             )
             .unwrap();
@@ -6165,6 +6167,7 @@ impl AuthorityState {
         // This is because we do not sequence end-of-epoch transactions through consensus.
         let assigned_versions = epoch_store.assign_shared_object_versions_idempotent(
             self.get_object_cache_reader().as_ref(),
+            self.get_transaction_cache_reader().as_ref(),
             std::iter::once(&Schedulable::Transaction(&executable_tx)),
         )?;
 

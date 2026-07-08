@@ -1635,6 +1635,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .epoch_store
             .process_consensus_transaction_shared_object_versions(
                 self.cache_reader.as_ref(),
+                self.transaction_cache_reader.as_ref(),
                 schedulables_for_version_assignment,
                 randomness_schedulables_for_version_assignment,
                 cancelled_txns,

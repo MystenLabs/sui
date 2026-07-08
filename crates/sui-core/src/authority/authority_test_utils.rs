@@ -92,6 +92,7 @@ pub async fn submit_to_consensus(
         .epoch_store_for_testing()
         .assign_shared_object_versions_for_tests(
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             std::slice::from_ref(&executable.clone()),
         )?;
 
@@ -176,6 +177,7 @@ pub async fn submit_and_execute_with_error(
             .epoch_store_for_testing()
             .assign_shared_object_versions_for_tests(
                 authority.get_object_cache_reader().as_ref(),
+                authority.get_transaction_cache_reader().as_ref(),
                 std::slice::from_ref(&executable.clone()),
             )?;
         versions
@@ -452,6 +454,7 @@ pub async fn assign_versions_and_schedule(
         .epoch_store_for_testing()
         .assign_shared_object_versions_for_tests(
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             std::slice::from_ref(&executable.clone()),
         )
         .unwrap();
@@ -481,6 +484,7 @@ pub async fn assign_shared_object_versions(
         .epoch_store_for_testing()
         .assign_shared_object_versions_for_tests(
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             std::slice::from_ref(&executable.clone()),
         )
         .unwrap();

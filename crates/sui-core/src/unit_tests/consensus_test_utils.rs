@@ -257,6 +257,7 @@ pub fn make_consensus_adapter_for_test_with_submit_limit(
                         if let Some(exec_tx) = executable_tx {
                             let versions = epoch_store.assign_shared_object_versions_for_tests(
                                 self.state.get_object_cache_reader().as_ref(),
+                                self.state.get_transaction_cache_reader().as_ref(),
                                 std::slice::from_ref(&exec_tx),
                             )?;
 

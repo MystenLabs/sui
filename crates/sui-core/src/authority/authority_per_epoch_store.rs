@@ -435,9 +435,6 @@ pub struct AuthorityEpochTables {
     /// to disk.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    /// Next available shared object versions for each shared object.
-    next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
-
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_shared_object_versions exactly once for each transaction we receive from
     /// consensus. But, we may also be processing transactions from checkpoints, so we need to
@@ -562,7 +559,6 @@ impl AuthorityEpochTables {
         let value_cache_size = default_value_cache_size();
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
-        let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
         let builder_checkpoint_summary_v2_config = KeySpaceConfig::new()
             .disable_unload()
             .with_value_cache_size(default_value_cache_size());
@@ -589,10 +585,6 @@ impl AuthorityEpochTables {
                     bloom_config.clone(),
                     digest_prefix.clone(),
                 ),
-            ),
-            (
-                "next_shared_object_versions_v2".to_string(),
-                ThConfig::new_with_config(32 + 8, mutexes, uniform_key, lru_only_config.clone()),
             ),
             (
                 "consensus_message_processed".to_string(),
@@ -2072,11 +2064,7 @@ impl AuthorityPerEpochStore {
         obj: &ObjectID,
         start_version: SequenceNumber,
     ) -> Option<SequenceNumber> {
-        self.tables()
-            .expect("test should not cross epoch boundary")
-            .next_shared_object_versions_v2
-            .get(&(*obj, start_version))
-            .unwrap()
+        self.multi_get_next_shared_object_versions(&[(*obj, start_version)])[0]
     }
 
     pub fn insert_finalized_transactions(
@@ -2137,24 +2125,41 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
+    /// Returns the next-version state for each key, keys missing from the in-memory map
+    /// as `None`. Used to decide whether effects-aware seeding is needed before calling
+    /// `get_or_init_next_object_versions`.
+    pub(crate) fn multi_get_next_shared_object_versions(
+        &self,
+        object_keys: &[ConsensusObjectSequenceKey],
+    ) -> Vec<Option<SequenceNumber>> {
+        self.consensus_quarantine
+            .read()
+            .get_next_shared_object_versions(object_keys)
+    }
+
     // For each key in objects_to_init, return the next version for that key as recorded in the
-    // next_shared_object_versions table.
+    // in-memory next-version map.
     //
-    // If any keys are missing, then we need to initialize the table. We first check if a previous
-    // version of that object has been written. If so, then the object was written in a previous
-    // epoch, and we initialize next_shared_object_versions to that value. If no version of the
-    // object has yet been written, we initialize the object to the initial version recorded in the
-    // certificate (which is a function of the lamport version computation of the transaction that
-    // created the shared object originally - which transaction may not yet have been executed on
-    // this node).
+    // If any keys are missing, then we need to seed them. `effects_seeds` takes priority:
+    // it contains seeds recovered from the effects of already-executed transactions in
+    // the batch being assigned, which protects replay from observing versions that were
+    // written to the objects table by the pre-crash execution of the very transactions
+    // being replayed (docs/in_memory_object_versioning.md §6.3). Otherwise we check if a
+    // previous version of the object has been written. If so, then the object was
+    // written in a previous epoch, and we seed with that value. If no version of the
+    // object has yet been written, we seed with the initial version recorded in the
+    // certificate (which is a function of the lamport version computation of the
+    // transaction that created the shared object originally - which transaction may not
+    // yet have been executed on this node).
     //
-    // Because all paths that assign shared versions for a shared object transaction call this
-    // function, it is impossible for parent_sync to be updated before this function completes
-    // successfully for each affected object id.
+    // Because all paths that assign shared versions for a shared object transaction call
+    // this function, it is impossible for parent_sync to be updated before this function
+    // completes successfully for each affected object id.
     pub(crate) fn get_or_init_next_object_versions(
         &self,
         objects_to_init: &[ConsensusObjectSequenceKey],
         cache_reader: &dyn ObjectCacheRead,
+        effects_seeds: &HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
     ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
         // get_or_init_next_object_versions can be called
         // from consensus or checkpoint executor,
@@ -2162,12 +2167,11 @@ impl AuthorityPerEpochStore {
         let _locks = self
             .version_assignment_mutex_table
             .acquire_locks(objects_to_init.iter().map(|(id, _)| *id));
-        let tables = self.tables()?;
 
         let next_versions = self
             .consensus_quarantine
             .read()
-            .get_next_shared_object_versions(&tables, objects_to_init)?;
+            .get_next_shared_object_versions(objects_to_init);
 
         let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
             .iter()
@@ -2192,6 +2196,9 @@ impl AuthorityPerEpochStore {
         let versions_to_write: Vec<_> = uninitialized_objects
             .iter()
             .map(|(id, initial_version)| {
+                if let Some(seed) = effects_seeds.get(&(*id, *initial_version)) {
+                    return ((*id, *initial_version), *seed);
+                }
                 // Note: we don't actually need to read from the transaction here, as no writer
                 // can update object_store until after get_or_init_next_object_versions
                 // completes.
@@ -2229,27 +2236,29 @@ impl AuthorityPerEpochStore {
             ?versions_to_write,
             "initializing next_shared_object_versions"
         );
-        tables
-            .next_shared_object_versions_v2
-            .multi_insert(versions_to_write)?;
+        self.consensus_quarantine
+            .write()
+            .insert_next_shared_object_version_seeds(versions_to_write.into_iter());
 
         Ok(ret)
     }
 
     /// Given list of certificates, assign versions for all shared objects used in them.
-    /// We start with the current next_shared_object_versions table for each object, and build
+    /// We start with the current next-version state for each object, and build
     /// up the versions based on the dependencies of each certificate.
-    /// However, in the end we do not update the next_shared_object_versions table, which keeps
+    /// However, in the end we do not advance the next-version state, which keeps
     /// this function idempotent. We should call this function when we are assigning shared object
-    /// versions outside of consensus and do not want to taint the next_shared_object_versions table.
+    /// versions outside of consensus and do not want to taint the next-version state.
     pub fn assign_shared_object_versions_idempotent<'a>(
         &self,
         cache_reader: &dyn ObjectCacheRead,
+        transaction_cache_reader: &dyn TransactionCacheRead,
         assignables: impl Iterator<Item = &'a Schedulable<&'a VerifiedExecutableTransaction>> + Clone,
     ) -> SuiResult<AssignedTxAndVersions> {
         Ok(SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
+            transaction_cache_reader,
             assignables,
             &BTreeMap::new(),
         )?
@@ -3050,6 +3059,7 @@ impl AuthorityPerEpochStore {
     pub(crate) fn process_consensus_transaction_shared_object_versions<'a, T>(
         &'a self,
         cache_reader: &dyn ObjectCacheRead,
+        transaction_cache_reader: &dyn TransactionCacheRead,
         non_randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
@@ -3066,6 +3076,7 @@ impl AuthorityPerEpochStore {
         } = SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
+            transaction_cache_reader,
             all_certs,
             cancelled_txns,
         )?;
@@ -3088,6 +3099,7 @@ impl AuthorityPerEpochStore {
     pub fn assign_shared_object_versions_for_tests(
         self: &Arc<Self>,
         cache_reader: &dyn ObjectCacheRead,
+        transaction_cache_reader: &dyn TransactionCacheRead,
         transactions: &[VerifiedExecutableTransaction],
     ) -> SuiResult<AssignedTxAndVersions> {
         let mut output = ConsensusCommitOutput::new(0);
@@ -3109,11 +3121,18 @@ impl AuthorityPerEpochStore {
 
         let assigned_versions = self.process_consensus_transaction_shared_object_versions(
             cache_reader,
+            transaction_cache_reader,
             transactions.iter(),
             std::iter::empty(),
             &BTreeMap::new(),
             &mut output,
         )?;
+        // Version advancements normally reach the in-memory next-version map when the
+        // consensus handler pushes the commit output into the quarantine; apply them
+        // directly here since this test path bypasses the handler.
+        self.consensus_quarantine
+            .write()
+            .insert_shared_object_next_versions(&output);
         let mut batch = self.db_batch()?;
         output.set_default_commit_stats_for_testing();
         output.write_to_batch(self, &mut batch)?;
