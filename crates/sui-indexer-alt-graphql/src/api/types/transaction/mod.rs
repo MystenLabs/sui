@@ -779,6 +779,7 @@ async fn tx_unfiltered(
 mod tests {
     use super::*;
     use crate::pagination::PageLimits;
+    use async_graphql::connection::CursorType;
     use sui_indexer_alt_reader::kv_loader::ExecutedTransactionData;
     use sui_rpc_cursor::CursorKind;
     use sui_types::base_types::random_object_ref;
@@ -962,5 +963,25 @@ mod tests {
         assert_eq!(edge_positions(&conn), [13, 14]);
         assert!(conn.page_info.has_previous_page);
         assert!(conn.page_info.has_next_page);
+    }
+
+    /// A `last: n` page over fewer matches than `n`: the tail-windowing is a no-op (pins the
+    /// `saturating_sub` underflow guard) and the underfilled page returns everything.
+    #[test]
+    fn paginate_preloaded_backward_page_smaller_than_window() {
+        // Two transactions (10 and 11), requesting the last three.
+        let txs = preloaded_txs(10..12);
+        let conn = Transaction::paginate_preloaded_transactions(
+            Scope::for_tests(),
+            STREAMED_CP,
+            &txs,
+            &page_params_for_testing(None, None, Some(3), None),
+            TransactionFilter::default(),
+        )
+        .expect("paginated");
+
+        assert_eq!(edge_positions(&conn), [10, 11]);
+        assert!(!conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
     }
 }
