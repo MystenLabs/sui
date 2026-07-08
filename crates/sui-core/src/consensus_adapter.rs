@@ -66,6 +66,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
     pub sequencing_certificate_stage_latency: HistogramVec,
+    pub sequencing_certificate_submit_to_ack_latency: HistogramVec,
     pub sequencing_certificate_processed: IntCounterVec,
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
@@ -137,6 +138,13 @@ impl ConsensusAdapterMetrics {
                 "sequencing_certificate_stage_latency",
                 "Cumulative latency from inflight slot acquisition until a submission reaches each stage of the submit path: position_received (consensus positions returned by the first successful submit), block_sequenced (the submitted block committed), status_received / status_expired (all positions reached a terminal status, or one expired from the status cache first).",
                 &["tx_type", "stage"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            sequencing_certificate_submit_to_ack_latency: register_histogram_vec_with_registry!(
+                "sequencing_certificate_submit_to_ack_latency",
+                "Net latency from acquiring the in-flight submission permit (just before submitting to consensus) until the submission is acknowledged: the local submission settles (statuses received or expired, or a sequenced system message observed processed) or the transaction is observed processed via another path.",
+                &["tx_type"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
@@ -611,6 +619,8 @@ impl ConsensusAdapter {
 
             observe_stage("acquired_semaphore");
 
+            let submit_to_ack_start = Instant::now();
+
             let _in_flight_submission_guard =
                 GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
@@ -765,6 +775,10 @@ impl ConsensusAdapter {
                     processed_waiter.await
                 }
             };
+            self.metrics
+                .sequencing_certificate_submit_to_ack_latency
+                .with_label_values(&[tx_type])
+                .observe(submit_to_ack_start.elapsed().as_secs_f64());
             // If processing was observed before a position was sent to a waiting caller,
             // report that the transaction is already processing so the caller returns a
             // retriable error. If a position was already sent, the channel is taken and this
