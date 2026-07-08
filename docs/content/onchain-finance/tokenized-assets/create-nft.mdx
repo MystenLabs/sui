@@ -1,7 +1,41 @@
 ---
 title: Create a Non-Fungible Token
-description: Create NFTs on Sui using the native object model, without needing a dedicated token standard.
-keywords: [ERC-721, NFT, non-fungible token, digital collectibles, tokenized assets, fungible token, asset tokenization, Move, mint, kiosk, soulbound, gaming assets, object model]
+description: >-
+  Create NFTs on Sui using the native object model, without needing a dedicated
+  token standard.
+keywords:
+  - ERC-721
+  - NFT
+  - non-fungible token
+  - digital collectibles
+  - tokenized assets
+  - fungible token
+  - asset tokenization
+  - Move
+  - mint
+  - kiosk
+  - soulbound
+  - gaming assets
+  - object model
+goal:
+  description: >-
+    Reader can create NFTs on Sui using the native object model, without needing
+    a dedicated token standard
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Use cases
+        - pattern: NFTs vs tokenized assets
+        - pattern: Example
+      label: Has expected section structure
 ---
 
 On Sui, every object is unique and has an owner, properties that other blockchains like Ethereum require a dedicated standard such as [ERC-721](https://erc721.org/) to achieve.

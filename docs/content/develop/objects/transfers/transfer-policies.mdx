@@ -2,7 +2,35 @@
 title: Object Transfer Policies
 sidebar_label: Transfer Policies
 description: Learn about transfer policies on Sui.
-keywords: [ transfer, policy, transferpolicy, transfer receipt, transfer request, transferrequest ]
+keywords:
+  - transfer
+  - policy
+  - transferpolicy
+  - transfer receipt
+  - transfer request
+  - transferrequest
+goal:
+  description: Reader can learn about transfer policies on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: '`TransferPolicy` rules'
+        - pattern: Royalty rules
+        - pattern: Time-based rules
+      label: Has expected section structure
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Transfer policies
+    stage: Authorization
 ---
 
 A [`TransferPolicy`](https://docs.sui.io/references/framework/sui_sui/transfer_policy) on Sui is a customizable primitive that enables the owner of a type to create custom rules that define how the type can be transferred. You can set any number of rules, such as paying a royalty or commission, and all must be satisfied in a single transaction for the transfer to succeed. A `TransferPolicy` can be used within a Sui Kiosk marketplace or any other system that integrates the `TransferPolicy` primitive. 

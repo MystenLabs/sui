@@ -1,7 +1,36 @@
 ---
 title: SuiLink
 description: Use SuiLink to connect wallets across different chains.
-keywords: [ wallet, wallets, sui, playtron, cross-chain, ethereum, solana, link, connect ]
+keywords:
+  - wallet
+  - wallets
+  - sui
+  - playtron
+  - cross-chain
+  - ethereum
+  - solana
+  - link
+  - connect
+goal:
+  description: Reader can use SuiLink to connect wallets across different chains
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Key features
+        - pattern: Creating a SuiLink
+        - pattern: Managing SuiLink
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 [SuiLink](https://www.suilink.io/) enables securely linking wallet addresses from different blockchains to a Sui wallet address. Upon creating a SuiLink, you receive a soulbound NFT that serves as authenticated proof of ownership for your connected wallets.

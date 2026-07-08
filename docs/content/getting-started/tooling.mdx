@@ -1,8 +1,46 @@
 ---
 title: Developer Tools
-description: A catalog of developer tools for building, testing, deploying, and auditing Move packages on Sui.
-keywords: [developer tools, sui CLI, suiup, move-analyzer, MVR, debugger, linting, testing, deployment, SDK, indexer, explorer, oracle]
+description: >-
+  A catalog of developer tools for building, testing, deploying, and auditing
+  Move packages on Sui.
+keywords:
+  - developer tools
+  - sui CLI
+  - suiup
+  - move-analyzer
+  - MVR
+  - debugger
+  - linting
+  - testing
+  - deployment
+  - SDK
+  - indexer
+  - explorer
+  - oracle
 pagination_prev: null
+goal:
+  description: >-
+    Reader can find and choose the right developer tool for writing, testing,
+    deploying, or auditing Move on Sui
+  requires:
+    - min_words: 1000
+      label: Comprehensive tool listings
+    - pattern: 'https?://'
+      min: 10
+      label: Links to external tool sites
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Developer tools
+    stage: Setup
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Developer tools
+    stage: Setup
 ---
 
 import React from 'react';

@@ -1,17 +1,33 @@
 ---
 title: Take Profit Stop Loss
-description: Learn about conditional orders for automated trading strategies on DeepBook Margin.
+description: >-
+  Learn about conditional orders for automated trading strategies on DeepBook
+  Margin.
 keywords:
-  [
-    take profit,
-    stop loss,
-    tpsl,
-    conditional orders,
-    automated trading,
-    trigger orders,
-    margin trading,
-    deepbook margin,
-  ]
+  - take profit
+  - stop loss
+  - tpsl
+  - conditional orders
+  - automated trading
+  - trigger orders
+  - margin trading
+  - deepbook margin
+goal:
+  description: >-
+    Reader can learn about conditional orders for automated trading strategies
+    on DeepBook Margin
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: How TPSL works
+        - pattern: API
+        - pattern: Events
+      label: Has expected section structure
 ---
 
 The Take Profit Stop Loss (TPSL) module enables conditional orders that automatically execute when certain price conditions are met. This allows traders to set up automated trading strategies that protect against losses (stop loss) or lock in profits (take profit) without requiring constant monitoring.

@@ -1,7 +1,49 @@
 ---
 title: What is a PTB?
-description: Programmable transaction blocks are a group of commands that complete a transaction on Sui.
-keywords: [ programmable transaction blocks, transaction blocks, program transaction blocks, PTB, PTBs, what are PTBs, what is PTB, transaction group, programmable group of transactions, program transaction block, block of transactions, group of transactions ]
+description: >-
+  Programmable transaction blocks are a group of commands that complete a
+  transaction on Sui.
+keywords:
+  - programmable transaction blocks
+  - transaction blocks
+  - program transaction blocks
+  - PTB
+  - PTBs
+  - what are PTBs
+  - what is PTB
+  - transaction group
+  - programmable group of transactions
+  - program transaction block
+  - block of transactions
+  - group of transactions
+goal:
+  description: >-
+    Reader understands programmable transaction blocks are a group of commands
+    that complete a transaction on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Transaction components
+        - pattern: Inputs and results
+        - pattern: '`Argument` structure and usage'
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: PTB composition examples
+    stage: Advanced
+    eval: missing
 ---
 
 :::tip Local network prerequisite

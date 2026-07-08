@@ -1,18 +1,33 @@
 ---
 title: Registry
-description: Learn about DeepBook Predict registry setup, oracle creation, quote asset management, and admin configuration entry points.
+description: >-
+  Learn about DeepBook Predict registry setup, oracle creation, quote asset
+  management, and admin configuration entry points.
 keywords:
-  [
-    deepbook predict registry,
-    registry,
-    admin cap,
-    create predict,
-    create oracle,
-    quote asset,
-    oracle cap,
-    pricing config,
-    risk config,
-  ]
+  - deepbook predict registry
+  - registry
+  - admin cap
+  - create predict
+  - create oracle
+  - quote asset
+  - oracle cap
+  - pricing config
+  - risk config
+goal:
+  description: >-
+    Reader can learn about DeepBook Predict registry setup, oracle creation,
+    quote asset management, and admin configuration entry points
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: API
+        - pattern: Structs and events
+      label: Has expected section structure
 ---
 
 The `Registry` shared object tracks the Predict object ID and the oracle IDs created by each `OracleSVICap`. The registry module also exposes admin entry points for setup, quote asset management, oracle creation, pricing configuration, risk configuration, and the withdrawal limiter.

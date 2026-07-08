@@ -1,8 +1,44 @@
 ---
 title: Sui Bridge Validator Node Configuration
 sidebar_label: Bridge Node Configuration
-description: Correct configuration of your node ensures optimal performance and valid metrics data.
-keywords: [ bridge validator node, bridge node, bridge, bridge committee, metric data, metrics, metadata, committee registration, waf, web application firewall, bridge client, bridgeclient, bridge node monitoring, build bridge node, run bridge node ]
+description: >-
+  Correct configuration of your node ensures optimal performance and valid
+  metrics data.
+keywords:
+  - bridge validator node
+  - bridge node
+  - bridge
+  - bridge committee
+  - metric data
+  - metrics
+  - metadata
+  - committee registration
+  - waf
+  - web application firewall
+  - bridge client
+  - bridgeclient
+  - bridge node monitoring
+  - build bridge node
+  - run bridge node
+goal:
+  description: >-
+    Operator understands correct configuration of your node ensures optimal
+    performance and valid metrics data
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - headings:
+        - pattern: Committee registration
+        - pattern: Update metadata \(after committee is fin
+        - pattern: Bridge node
+      label: Has expected section structure
 ---
 
 Running a bridge validator node (bridge node) requires registering your node with the bridge committee. Correct configuration of your node ensures optimal performance and valid metrics data. Follow this topic to make sure your bridge node is set up properly.

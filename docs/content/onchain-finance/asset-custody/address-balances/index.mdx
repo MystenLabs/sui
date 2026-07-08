@@ -1,17 +1,33 @@
 ---
 title: Address Balances
-description: Address balances introduce a canonical balance system for fungible assets tied to Sui addresses.
+description: >-
+  Address balances introduce a canonical balance system for fungible assets tied
+  to Sui addresses.
 keywords:
-  [
-    address balances,
-    migration,
-    coin objects,
-    funds withdrawal,
-    balance transfer,
-    gas payment,
-    SIP-58,
-    fungible assets,
-  ]
+  - address balances
+  - migration
+  - coin objects
+  - funds withdrawal
+  - balance transfer
+  - gas payment
+  - SIP-58
+  - fungible assets
+goal:
+  description: >-
+    Reader gets a clear overview of address balances and knows which subtopic to
+    read next
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '\]\(/[^)]+\)'
+      min: 1
+      label: Links to child pages
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Address balances
+    stage: Wallets & Funding
 ---
 
 Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This replaces the UTXO-style `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.

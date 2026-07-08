@@ -2,17 +2,36 @@
 title: Referrals
 description: Learn about the DeepBook referral system and how to earn referral fees.
 keywords:
-  [
-    referral,
-    deepbook referral,
-    referral fees,
-    referral rewards,
-    mint referral,
-    claim referral,
-    set referral,
-    referral multiplier,
-    deepbookv3,
-  ]
+  - referral
+  - deepbook referral
+  - referral fees
+  - referral rewards
+  - mint referral
+  - claim referral
+  - set referral
+  - referral multiplier
+  - deepbookv3
+goal:
+  description: >-
+    Reader can learn about the DeepBook referral system and how to earn referral
+    fees
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: How referrals work
+        - pattern: API
+        - pattern: '`BalanceManager` referral functions'
+      label: Has expected section structure
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Referral system
+    stage: DeFi Primitives
 ---
 
 The DeepBook referral system allows users to earn fees by referring traders to the platform. Referrers can mint a `DeepBookPoolReferral` object for a specific pool, and traders can associate their `BalanceManager` with a referral. When traders with an associated referral execute trades, a portion of their trading fees is allocated to the referrer based on the referral multiplier.

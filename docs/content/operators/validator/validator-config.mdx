@@ -1,8 +1,33 @@
 ---
 title: Validator Deployment and Configuration
-description: Learn how to set up, configure, and manage a Sui validator node.
-keywords: [ sui validator node, validator nodes, validator node configuration, configure validator node, set up validator node, manage validator ]
+description: 'Learn how to set up, configure, and manage a Sui validator node.'
+keywords:
+  - sui validator node
+  - validator nodes
+  - validator node configuration
+  - configure validator node
+  - set up validator node
+  - manage validator
 sidebar_label: Deployment and Configuration
+goal:
+  description: >-
+    Validator operator can learn how to set up, configure, and manage a Sui
+    validator node
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - headings:
+        - pattern: Validator requirements
+        - pattern: Deployment
+        - pattern: Configuration
+      label: Has expected section structure
 ---
 
 Validators on Sui run specialized validator nodes that can execute more tasks than full nodes. Validators handle staking, gas price reference, and tallying rules.

@@ -1,7 +1,41 @@
 ---
-title: "Create Fungible Tokens: Currency Standard"
+title: 'Create Fungible Tokens: Currency Standard'
 description: Learn how to create currencies and mint coins and tokens on the Sui network.
-keywords: [mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry]
+keywords:
+  - mint tokens
+  - create tokens
+  - use tokens
+  - publish token
+  - custom tokens
+  - sui CLI
+  - denylist
+  - regulated coins
+  - coin registry
+  - currency registry
+goal:
+  description: >-
+    Reader can learn how to create currencies and mint coins and tokens on the
+    Sui network
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Coin Registry
+        - pattern: Creation options
+        - pattern: Standard creation \(recommended\)
+      label: Has expected section structure
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Create a token
+    stage: Tokens
 ---
 
 Assets created using the Currency Standard are free-flowing, [wrappable](/develop/objects/object-ownership/wrapped), [freely transferable](/develop/objects/transfers/custom-rules) fungible assets that you can store in any app. The Currency Standard uses the [`sui::coin_registry`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin_registry.md) module and the `Currency` object for metadata.

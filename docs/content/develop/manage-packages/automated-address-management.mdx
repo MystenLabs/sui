@@ -1,8 +1,48 @@
 ---
-title: Automated Address Management (Legacy, pre-v1.63)
+title: 'Automated Address Management (Legacy, pre-v1.63)'
 sidebar_label: Address Management (Legacy)
-description: "Legacy documentation for the pre-v1.63 Move.lock-based address tracking system. For the current package system, see Move Package Management."
-keywords: [ track address, track package address, package addresses, managing package addresses, managing addresses, tracking addresses, tracking packages, tracking mainnet address, track mainnet address, track testnet address, tracking testnet address, track devnet address, tracking devnet address, conflicting addresses, conflicting package addresses ]
+description: >-
+  Legacy documentation for the pre-v1.63 Move.lock-based address tracking
+  system. For the current package system, see Move Package Management.
+keywords:
+  - track address
+  - track package address
+  - package addresses
+  - managing package addresses
+  - managing addresses
+  - tracking addresses
+  - tracking packages
+  - tracking mainnet address
+  - track mainnet address
+  - track testnet address
+  - tracking testnet address
+  - track devnet address
+  - tracking devnet address
+  - conflicting addresses
+  - conflicting package addresses
+goal:
+  description: >-
+    Reader understands legacy documentation for the pre-v1.63 Move.lock-based
+    address tracking system. For the current package system, see Move Package
+    Management
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Adopting automated address management
+        - pattern: Package upgrade guidance
+        - pattern: Troubleshooting
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 <AgentPrompt

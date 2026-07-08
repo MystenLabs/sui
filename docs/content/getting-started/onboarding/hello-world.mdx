@@ -1,9 +1,64 @@
 ---
 title: Build and Publish a Package
-description: Build and publish your first Move package using a basic 'Hello, World!' example.
-keywords: [ first dapp, first package, move package, first move package, hello world, hello, world, what is move, what is a package, what is an object, move object, sui move object, sui move package, sui move module, move module, build package, publish package, call package, make call to package, how to call package ]
+description: >-
+  Build and publish your first Move package using a basic 'Hello, World!'
+  example.
+keywords:
+  - first dapp
+  - first package
+  - move package
+  - first move package
+  - hello world
+  - hello
+  - world
+  - what is move
+  - what is a package
+  - what is an object
+  - move object
+  - sui move object
+  - sui move package
+  - sui move module
+  - move module
+  - build package
+  - publish package
+  - call package
+  - make call to package
+  - how to call package
 pagination_prev: null
 pagination_next: null
+goal:
+  description: >-
+    Reader can clone, build, publish, and call a Move package, understanding
+    each step along the way
+  requires:
+    - pattern: '```'
+      min: 2
+      label: Has command or code examples
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - links_to:
+        - /getting-started/onboarding/app-frontends
+      label: Links to next onboarding step
+    - pattern: sui --version|sui -V
+      min: 1
+      label: Shows how to verify installation
+    - pattern: balance|gas
+      min: 1
+      label: Shows how to verify token receipt
+    - pattern: '```move'
+      min: 1
+      label: Has Move source code
+    - headings:
+        - pattern: Build
+        - pattern: Publish
+      label: Has build and publish sections
+    - pattern: localhost|npm start|pnpm|yarn
+      min: 1
+      label: Shows how to run the frontend
+    - min_words: 300
+      label: Sufficient walkthrough depth
 ---
 
 <AgentPrompt

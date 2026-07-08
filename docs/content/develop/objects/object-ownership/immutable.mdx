@@ -1,7 +1,42 @@
 ---
 title: Immutable Objects
-description: Immutable objects cannot be changed, transferred, or deleted. Immutable objects cannot have an owner and anyone can use them.
-keywords: [ immutable objects, objects immutable, create immutable object, convert object, use immutable object, test immutable object ]
+description: >-
+  Immutable objects cannot be changed, transferred, or deleted. Immutable
+  objects cannot have an owner and anyone can use them.
+keywords:
+  - immutable objects
+  - objects immutable
+  - create immutable object
+  - convert object
+  - use immutable object
+  - test immutable object
+goal:
+  description: >-
+    Reader understands immutable objects cannot be changed, transferred, or
+    deleted. Immutable objects cannot have an owner and anyone can use them
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Create immutable objects
+        - pattern: When to use immutable objects
+        - pattern: Interact with immutable objects
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Immutable objects
+    stage: Environment
 ---
 
 Objects on Sui can either be immutable or mutable. An immutable object cannot be mutated, transferred, or deleted. These objects have no owner and are freely accessible to everyone.

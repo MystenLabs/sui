@@ -1,7 +1,51 @@
 ---
 title: Querying Data with gRPC
-description: Learn how to use gRPC clients for the Sui network with grpcurl, Buf CLI, and popular programming languages.
-keywords: [ grpc, grpc client, grpcurl, typescript grpc, golang grpc, python grpc, sui grpc tutorial ]
+description: >-
+  Learn how to use gRPC clients for the Sui network with grpcurl, Buf CLI, and
+  popular programming languages.
+keywords:
+  - grpc
+  - grpc client
+  - grpcurl
+  - typescript grpc
+  - golang grpc
+  - python grpc
+  - sui grpc tutorial
+goal:
+  description: >-
+    Reader can learn how to use gRPC clients for the Sui network with grpcurl,
+    Buf CLI, and popular programming languages
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Field masks
+        - pattern: Field presence
+        - pattern: Encoding
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: gRPC queries
+    stage: History
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: gRPC queries
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: gRPC queries
+    stage: Ship
 ---
 
 <AgentPrompt

@@ -1,8 +1,42 @@
 ---
 title: Object Versioning
 sidebar_label: Versioning
-description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
-keywords: ['object versioning', 'Lamport timestamps', 'fastpath', 'consensus objects', 'object ownership', 'dynamic fields', 'wrapped objects', 'Sui objects']
+description: >-
+  Sui provides `Table` and `Bag` collections built using dynamic fields, but
+  with additional support to count the number of entries they contain to protect
+  against accidental deletion when non-empty.
+keywords:
+  - object versioning
+  - Lamport timestamps
+  - fastpath
+  - consensus objects
+  - object ownership
+  - dynamic fields
+  - wrapped objects
+  - Sui objects
+goal:
+  description: >-
+    Reader understands sui provides `Table` and `Bag` collections built using
+    dynamic fields, but with additional support to count the number of entries
+    they contain to protect against accidental deletion when non-empty
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Object versioning paths
+        - pattern: Fastpath objects
+        - pattern: Consensus objects
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.

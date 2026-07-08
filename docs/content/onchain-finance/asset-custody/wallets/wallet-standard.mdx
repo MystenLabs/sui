@@ -1,8 +1,45 @@
 ---
 title: Wallet Standard
-description: The Wallet Standard defines how apps can automatically discover and interact with wallets.
-keywords: [ mysten/wallet-standard, wallet standards, Wallet Standard, browser extensions, exposing accounts, wallet events, register in window, wallet best practices, efficient transaction execution, wallet data, managing wallets, wallet-standard ]
+description: >-
+  The Wallet Standard defines how apps can automatically discover and interact
+  with wallets.
+keywords:
+  - mysten/wallet-standard
+  - wallet standards
+  - Wallet Standard
+  - browser extensions
+  - exposing accounts
+  - wallet events
+  - register in window
+  - wallet best practices
+  - efficient transaction execution
+  - wallet data
+  - managing wallets
+  - wallet-standard
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands the Wallet Standard defines how apps can automatically
+    discover and interact with wallets
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Working with wallets
+        - pattern: Managing wallets
+      label: Has expected section structure
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Wallet Standard
+    stage: Wallets & Funding
 ---
 
 Browser extension wallets built for Sui use the [Wallet Standard](https://github.com/wallet-standard/wallet-standard/). This is a cross-chain standard that defines how apps can automatically discover and interact with wallets.

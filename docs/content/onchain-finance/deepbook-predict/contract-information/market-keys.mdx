@@ -1,16 +1,32 @@
 ---
 title: Market Keys
-description: Learn how DeepBook Predict identifies binary positions and vertical ranges with MarketKey and RangeKey.
+description: >-
+  Learn how DeepBook Predict identifies binary positions and vertical ranges
+  with MarketKey and RangeKey.
 keywords:
-  [
-    deepbook predict market key,
-    marketkey,
-    rangekey,
-    binary position,
-    vertical range,
-    strike,
-    expiry,
-  ]
+  - deepbook predict market key
+  - marketkey
+  - rangekey
+  - binary position
+  - vertical range
+  - strike
+  - expiry
+goal:
+  description: >-
+    Reader can learn how DeepBook Predict identifies binary positions and
+    vertical ranges with MarketKey and RangeKey
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Binary position keys
+        - pattern: Range keys
+        - pattern: Structs
+      label: Has expected section structure
 ---
 
 `MarketKey` and `RangeKey` identify the internal position quantities stored in a `PredictManager`.

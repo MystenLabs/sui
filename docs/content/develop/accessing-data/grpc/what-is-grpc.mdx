@@ -1,7 +1,35 @@
 ---
 title: What is gRPC?
-description: Learn about gRPC and how it provides fast, type-safe access to Sui network data.
-keywords: [ grpc, g rpc, RPC, sui full node grpc, full node rpc, what is grpc, grpc on sui ]
+description: >-
+  Learn about gRPC and how it provides fast, type-safe access to Sui network
+  data.
+keywords:
+  - grpc
+  - g rpc
+  - RPC
+  - sui full node grpc
+  - full node rpc
+  - what is grpc
+  - grpc on sui
+goal:
+  description: >-
+    Reader can learn about gRPC and how it provides fast, type-safe access to
+    Sui network data
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Release status
+        - pattern: When to use
+        - pattern: How gRPC fits into the application stack
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 The [Sui Full Node gRPC API](/references/fullnode-protocol) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Designed for power users, indexers, explorers, and decentralized apps, this API enables access to Sui data with high performance and low latency.

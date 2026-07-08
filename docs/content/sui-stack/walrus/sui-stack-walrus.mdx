@@ -1,8 +1,121 @@
 ---
 title: Data Storage Using Walrus
-description: Learn how to store and retrieve data on Walrus by walking through OnlyFins, a content platform built on Sui and Walrus.
-keywords: [walrus, blob storage, walrus SDK, OnlyFins, Sui Stack, upload, read, seal]
-last_verified: 2026-04-15
+description: >-
+  Learn how to store and retrieve data on Walrus by walking through OnlyFins, a
+  content platform built on Sui and Walrus.
+keywords:
+  - walrus
+  - blob storage
+  - walrus SDK
+  - OnlyFins
+  - Sui Stack
+  - upload
+  - read
+  - seal
+last_verified: 2026-04-15T00:00:00.000Z
+goal:
+  description: >-
+    Reader can learn how to store and retrieve data on Walrus by walking through
+    OnlyFins, a content platform built on Sui and Walrus
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Tooling
+        - pattern: Uploading data
+        - pattern: Reading data
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Walrus concepts
+    stage: Environment
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: 'Storage resource, epochs & lifetime'
+    stage: Environment
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Choose upload path
+    stage: Store
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Store a blob
+    stage: Store
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Set blob lifetime
+    stage: Store
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Retrieve blob
+    stage: Read & Verify
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Verify availability & integrity
+    stage: Read & Verify
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Integrate into app
+    stage: Ship
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Manage lifecycle
+    stage: Ship
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Object model for agent blobs
+    stage: Environment
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Storage resource & payment
+    stage: Environment
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Programmatic store via SDK
+    stage: Agent Write
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Batch small blobs (Quilt)
+    stage: Agent Write
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Content addressing & metadata/tags
+    stage: Agent Write
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Verify availability before acting
+    stage: Verify & Secure
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Versioned datasets/immutable lineage
+    stage: Verify & Secure
+    eval: covered
 ---
 
 <AgentPrompt

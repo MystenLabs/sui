@@ -1,17 +1,32 @@
 ---
 title: Vault
-description: Learn about the DeepBook Predict vault, PLP shares, vault value, exposure tracking, and liquidity reads.
+description: >-
+  Learn about the DeepBook Predict vault, PLP shares, vault value, exposure
+  tracking, and liquidity reads.
 keywords:
-  [
-    deepbook predict vault,
-    vault,
-    plp,
-    liquidity provider,
-    vault value,
-    mark to market,
-    max payout,
-    settled oracle,
-  ]
+  - deepbook predict vault
+  - vault
+  - plp
+  - liquidity provider
+  - vault value
+  - mark to market
+  - max payout
+  - settled oracle
+goal:
+  description: >-
+    Reader can learn about the DeepBook Predict vault, PLP shares, vault value,
+    exposure tracking, and liquidity reads
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Read functions
+        - pattern: Structs
+      label: Has expected section structure
 ---
 
 The Predict vault holds accepted quote assets and takes the opposite side of every trade. `predict.move` owns pricing and trading orchestration; `vault.move` is the state machine for balances, exposure, mark-to-market liability, max payout, and settled-oracle compaction.

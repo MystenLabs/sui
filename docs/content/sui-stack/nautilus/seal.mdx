@@ -1,7 +1,34 @@
 ---
 title: Encrypt Enclave Secrets with Seal
-description: The Seal-Nautilus pattern provides secure secret management for enclave applications.
-keywords: [ seal, encryption, encrypt secrets, pcr, nautilus, secure ]
+description: >-
+  The Seal-Nautilus pattern provides secure secret management for enclave
+  applications.
+keywords:
+  - seal
+  - encryption
+  - encrypt secrets
+  - pcr
+  - nautilus
+  - secure
+goal:
+  description: >-
+    Reader understands the Seal-Nautilus pattern provides secure secret
+    management for enclave applications and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Components
+        - pattern: 'Phase 1: Start and register the server'
+        - pattern: 'Phase 2: Initialize and complete key loa'
+      label: Has expected section structure
 ---
 
 The Seal-Nautilus pattern provides secure secret management for enclave applications, where you can encrypt any secrets for an enclave binary.

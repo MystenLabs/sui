@@ -1,7 +1,36 @@
 ---
 title: Indexer Pipeline Architecture
-description: The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understand the differences between the sequential and concurrent pipelines that the `sui-indexer-alt-framework` provides to decide which best suits your project needs.
-keywords: [ indexer, index data, sui-indexer, custom indexer, sequential pipeline, concurrent pipeline ]
+description: >-
+  The `sui-indexer-alt-framework` provides two distinct pipeline architectures.
+  Understand the differences between the sequential and concurrent pipelines
+  that the `sui-indexer-alt-framework` provides to decide which best suits your
+  project needs.
+keywords:
+  - indexer
+  - index data
+  - sui-indexer
+  - custom indexer
+  - sequential pipeline
+  - concurrent pipeline
+goal:
+  description: >-
+    Reader understands the `sui-indexer-alt-framework` provides two distinct
+    pipeline architectures
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Sequential versus concurrent pipelines
+        - pattern: When to use each pipeline
+        - pattern: Decision framework
+      label: Has expected section structure
 ---
 
 The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understand their differences to choose the right approach.

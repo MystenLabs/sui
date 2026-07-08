@@ -1,7 +1,34 @@
 ---
 title: Move Best Practices
 description: Recommended Move best practices for Sui development.
-keywords: ['Move best practices', 'Sui conventions', 'smart contract patterns', 'Move coding standards', 'package organization', 'module design', 'Sui Move development']
+keywords:
+  - Move best practices
+  - Sui conventions
+  - smart contract patterns
+  - Move coding standards
+  - package organization
+  - module design
+  - Sui Move development
+goal:
+  description: Reader understands recommended Move best practices for Sui development
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Organization principles
+        - pattern: Naming conventions
+        - pattern: Code Structure
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 This guide outlines recommended conventions and best practices for writing Move smart contracts on Sui. Following these guidelines helps create more maintainable, secure, and composable code that aligns with ecosystem standards.

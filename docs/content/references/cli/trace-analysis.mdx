@@ -1,6 +1,18 @@
 ---
 title: Sui Trace Analysis
 description: Use the Sui CLI to analyze transaction traces.
+goal:
+  description: 'Reader can look up trace analysis command syntax, flags, and usage examples'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - pattern: 'sui '
+      min: 2
+      label: Shows CLI command usage
 ---
 
 [Replaying a transaction](/references/cli/replay) generates a trace file that contains detailed information about the execution of the transaction, such as gas usage, functions called, instructions executed, and more. Use the Sui CLI to analyze a trace file and extract useful insights.

@@ -1,7 +1,42 @@
 ---
 title: Exchange Integration
-description: Guidance for integrating SUI into a cryptocurrency exchange. Covers infrastructure, current APIs (gRPC and GraphQL), balance tracking, transactions, transfers, and staking.
-keywords: [ integrate sui, integrate with SUI token, sui tokens, SUI, integrate sui into exchange, cryptocurrency exchange, decentralized exchange, dex, integrate with dex, sui balance transfer, staking functions, track balance, checkpoints, grpc, graphql ]
+description: >-
+  Guidance for integrating SUI into a cryptocurrency exchange. Covers
+  infrastructure, current APIs (gRPC and GraphQL), balance tracking,
+  transactions, transfers, and staking.
+keywords:
+  - integrate sui
+  - integrate with SUI token
+  - sui tokens
+  - SUI
+  - integrate sui into exchange
+  - cryptocurrency exchange
+  - decentralized exchange
+  - dex
+  - integrate with dex
+  - sui balance transfer
+  - staking functions
+  - track balance
+  - checkpoints
+  - grpc
+  - graphql
+goal:
+  description: >-
+    Operator understands guidance for integrating SUI into a cryptocurrency
+    exchange. Covers infrastructure, current APIs (gRPC and GraphQL), balance
+    tracking, transactions, transfers, and staking
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient operational depth
+    - headings:
+        - pattern: Requirements to configure a SUI integrat
+        - pattern: Infrastructure
+        - pattern: Sui APIs
+      label: Has expected section structure
 ---
 
 This topic describes how to integrate SUI into a cryptocurrency exchange. Specific requirements and processes vary between exchanges. Before you ship an integration to production, confirm the API and SDK examples you use against the current references linked from each section.

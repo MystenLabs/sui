@@ -1,6 +1,27 @@
 ---
 title: Checkpoint Verification
-description: On the Sui network, checkpoints define the history of the blockchain. Checkpoint verification is how full nodes and other clients guarantee their state is exactly the same as the Sui network.
+description: >-
+  On the Sui network, checkpoints define the history of the blockchain.
+  Checkpoint verification is how full nodes and other clients guarantee their
+  state is exactly the same as the Sui network.
+goal:
+  description: >-
+    Reader understands on the Sui network, checkpoints define the history of the
+    blockchain
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Verifying checkpoints
+        - pattern: Checkpoint commitments
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Unlike traditional blockchains that create blocks before execution, Sui creates checkpoints after transaction execution to provide a certified record of chain history. Checkpoints contain the cryptographic hash of the previous checkpoint, a list of all the transaction digests and the corresponding transaction effects digests that are included in the checkpoint and a set of signatures from a [quorum](/develop/sui-architecture/consensus#quorums) (more than 2/3) of the validators that formed the committee at the time the checkpoint was created.

@@ -1,8 +1,28 @@
 ---
 title: Paying for Transactions
-description: Understand how Sui transactions pay for computational execution costs and long-term object storage.
-keywords: ['transaction payment', 'gas fees', 'Sui gas', 'execution cost', 'storage cost', 'transaction fees', 'SUI token']
+description: >-
+  Understand how Sui transactions pay for computational execution costs and
+  long-term object storage.
+keywords:
+  - transaction payment
+  - gas fees
+  - Sui gas
+  - execution cost
+  - storage cost
+  - transaction fees
+  - SUI token
 pagination_prev: null
+goal:
+  description: >-
+    Reader gets a clear overview of paying for transactions and knows which
+    subtopic to read next
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '\]\(/[^)]+\)'
+      min: 1
+      label: Links to child pages
 ---
 
 A Sui transaction must pay for both the computational cost of execution and the long-term cost of storing the objects a transaction creates or mutates. 

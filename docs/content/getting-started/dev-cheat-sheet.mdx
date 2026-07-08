@@ -1,8 +1,41 @@
 ---
 title: Developer Cheat Sheet
 description: A quick reference document regarding best practices for Sui developers.
-keywords: [ cheat sheet, quick reference, best practices, general best practices, composability, testing, apps, signing, zklogin, app best practices, dev best practices, testing best practices, signing best practices ]
+keywords:
+  - cheat sheet
+  - quick reference
+  - best practices
+  - general best practices
+  - composability
+  - testing
+  - apps
+  - signing
+  - zklogin
+  - app best practices
+  - dev best practices
+  - testing best practices
+  - signing best practices
 pagination_prev: null
+goal:
+  description: >-
+    Reader can quickly look up best practices for Move, app development,
+    signing, and zkLogin
+  requires:
+    - min_words: 500
+      label: Has enough entries to be useful
+    - pattern: '\[.*\]\(/.*\)'
+      min: 3
+      label: Links to deeper docs for each topic
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - headings:
+        - pattern: Move
+        - pattern: Apps
+        - pattern: Signing
+        - pattern: zkLogin
+      label: Covers expected topic categories
 ---
 
 Quick reference on best practices for Sui Network developers.

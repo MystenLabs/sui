@@ -1,8 +1,31 @@
 ---
 title: Cryptography
-description: The system supports multiple cryptography algorithms and primitives and can switch between them rapidly.
-keywords: [ cryptographic primitives, public keys, signatures, aggregated signatures, hash functions, cryptographic algorithms, cryptography on sui, zkLogin, transaction authentication, passkey ]
+description: >-
+  The system supports multiple cryptography algorithms and primitives and can
+  switch between them rapidly.
+keywords:
+  - cryptographic primitives
+  - public keys
+  - signatures
+  - aggregated signatures
+  - hash functions
+  - cryptographic algorithms
+  - cryptography on sui
+  - zkLogin
+  - transaction authentication
+  - passkey
 pagination_prev: null
+goal:
+  description: >-
+    Reader gets a clear overview of cryptography and knows which subtopic to
+    read next
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '\]\(/[^)]+\)'
+      min: 1
+      label: Links to child pages
 ---
 
 Cryptographic agility is core to Sui. The system supports multiple cryptography algorithms and primitives and can switch between them rapidly.

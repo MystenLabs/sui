@@ -1,17 +1,37 @@
 ---
 title: DeepBook Margin
-description: Leveraged trading capabilities for DeepBookV3, enabling users to trade with borrowed funds and increase their buying power.
+description: >-
+  Leveraged trading capabilities for DeepBookV3, enabling users to trade with
+  borrowed funds and increase their buying power.
 keywords:
-  [
-    deepbook margin,
-    margin trading,
-    leveraged trading,
-    deepbookv3,
-    collateral,
-    liquidation,
-    isolated margin,
-    deep book,
-  ]
+  - deepbook margin
+  - margin trading
+  - leveraged trading
+  - deepbookv3
+  - collateral
+  - liquidation
+  - isolated margin
+  - deep book
+goal:
+  description: >-
+    Reader understands leveraged trading capabilities for DeepBookV3, enabling
+    users to trade with borrowed funds and increase their buying power
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Key features
+        - pattern: Risk considerations
+      label: Has expected section structure
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Margin trading overview
+    stage: Margin
 ---
 
 DeepBook Margin extends the trading capabilities of DeepBookV3 by enabling leveraged trading positions. With margin trading, users can borrow funds to increase their buying power.

@@ -1,7 +1,44 @@
 ---
 title: Regulated Currencies
-description: Create regulated currencies on Sui using the Coin Registry system with deny list capabilities for access control.
-keywords: [regulated coin list, regulated coins, regulate coin, allow list, deny list, stablecoins, token example, create a token, how to create token, SUI token standards, coin registry]
+description: >-
+  Create regulated currencies on Sui using the Coin Registry system with deny
+  list capabilities for access control.
+keywords:
+  - regulated coin list
+  - regulated coins
+  - regulate coin
+  - allow list
+  - deny list
+  - stablecoins
+  - token example
+  - create a token
+  - how to create token
+  - SUI token standards
+  - coin registry
+goal:
+  description: >-
+    Reader can create regulated currencies on Sui using the Coin Registry system
+    with deny list capabilities for access control
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: '`DenyList`'
+        - pattern: Create regulated currency
+        - pattern: Example
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Regulated tokens
+    stage: Tokens
 ---
 
 Regulated currencies are assets with access control managed through a **deny list**. A deny list identifies addresses that cannot send or receive that asset. For example, stablecoins are a type of regulated currency.

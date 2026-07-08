@@ -1,9 +1,55 @@
 ---
 title: Coin Standard
-description: The Coin standard enables you to create a broad range of fungible tokens on the Sui network to satisfy a number of use cases.
+description: >-
+  The Coin standard enables you to create a broad range of fungible tokens on
+  the Sui network to satisfy a number of use cases.
 sidebar_label: Coin
-keywords: [ sui coin standard, erc-20, erc-20 equivalent, creating coins, coin standard, fungible tokens, fungible token standard, treasury capability, regulated coins, denylist object, coin metadata, create coin with SDK, use SDK to create coin, mint coin, minting coins ]
+keywords:
+  - sui coin standard
+  - erc-20
+  - erc-20 equivalent
+  - creating coins
+  - coin standard
+  - fungible tokens
+  - fungible token standard
+  - treasury capability
+  - regulated coins
+  - denylist object
+  - coin metadata
+  - create coin with SDK
+  - use SDK to create coin
+  - mint coin
+  - minting coins
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands the Coin standard enables you to create a broad range of
+    fungible tokens on the Sui network to satisfy a number of use cases
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Fungible tokens
+        - pattern: Coin creation
+        - pattern: Treasury capability
+      label: Has expected section structure
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Coin standard
+    stage: Tokens
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Coin/Balance representation
+    stage: Environment
+    eval: partial
 ---
 
 :::tip

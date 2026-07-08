@@ -2,14 +2,29 @@
 title: Interest Rates
 description: Learn how interest rates are calculated for margin pool borrowing.
 keywords:
-  [
-    interest rate,
-    borrow rate,
-    utilization rate,
-    margin pool,
-    deepbook margin,
-    APR,
-  ]
+  - interest rate
+  - borrow rate
+  - utilization rate
+  - margin pool
+  - deepbook margin
+  - APR
+goal:
+  description: Reader can learn how interest rates are calculated for margin pool borrowing
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Borrow interest formula
+        - pattern: Current parameters
+        - pattern: Examples
+      label: Has expected section structure
 ---
 
 Margin pools use a kinked interest rate model where the borrow rate increases gradually up to an optimal utilization point, then rises sharply to discourage excessive borrowing and maintain liquidity for withdrawals.

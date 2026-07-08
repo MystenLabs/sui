@@ -1,7 +1,35 @@
 ---
 title: Running the Archival Store and Service
-description: Setup instructions for running the archival indexer, Bigtable store, and gRPC service in production.
-keywords: [archival, bigtable, grpc, kvstore, indexer, setup, historical data]
+description: >-
+  Setup instructions for running the archival indexer, Bigtable store, and gRPC
+  service in production.
+keywords:
+  - archival
+  - bigtable
+  - grpc
+  - kvstore
+  - indexer
+  - setup
+  - historical data
+goal:
+  description: >-
+    Operator understands setup instructions for running the archival indexer,
+    Bigtable store, and gRPC service in production
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - headings:
+        - pattern: Architecture overview
+        - pattern: Authentication
+        - pattern: Bigtable setup
+      label: Has expected section structure
 ---
 
 <ImportContent source="indexer-archival" mode="snippet" />

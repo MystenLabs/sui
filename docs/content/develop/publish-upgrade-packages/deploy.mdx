@@ -1,8 +1,38 @@
 ---
 title: Publishing Packages
 sidebar_label: Publishing
-description: A Move package on Sui includes one or more modules that define the package's interaction with onchain objects. You develop the logic for those modules in Move, compile them into an object, and publish that package object to a Sui network. 
-keywords: [ move packages, move, packages, move smart contract, package overview ]
+description: >-
+  A Move package on Sui includes one or more modules that define the package's
+  interaction with onchain objects. You develop the logic for those modules in
+  Move, compile them into an object, and publish that package object to a Sui
+  network.
+keywords:
+  - move packages
+  - move
+  - packages
+  - move smart contract
+  - package overview
 pagination_prev: null
 draft: true
+goal:
+  description: >-
+    Reader understands a Move package on Sui includes one or more modules that
+    define the package's interaction with onchain objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Package deployment
+    stage: Operations
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Package deployment
+    stage: Ship
 ---
+

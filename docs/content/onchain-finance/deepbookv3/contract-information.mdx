@@ -1,17 +1,33 @@
 ---
 title: Contract Information
-description: DeepBookV3 contract addresses, supported coins, and pool information on Sui Mainnet.
+description: >-
+  DeepBookV3 contract addresses, supported coins, and pool information on Sui
+  Mainnet.
 keywords:
-  [
-    deepbook,
-    deepbookv3,
-    contract address,
-    package id,
-    pool id,
-    coins,
-    mainnet,
-    registry,
-  ]
+  - deepbook
+  - deepbookv3
+  - contract address
+  - package id
+  - pool id
+  - coins
+  - mainnet
+  - registry
+goal:
+  description: >-
+    Reader understands deepBookV3 contract addresses, supported coins, and pool
+    information on Sui Mainnet
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Contract versions
+        - pattern: Supported coins
+        - pattern: Pools
+      label: Has expected section structure
 ---
 
 This page contains the contract addresses, supported coins, and pool information for DeepBookV3 on Sui Mainnet.

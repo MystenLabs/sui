@@ -1,7 +1,46 @@
 ---
 title: Components
-description: Sui is a layer 1 blockchain that performs its own consensus and validation of transaction blocks. Sui is comprised of the blockchain itself, the blockchain's activity such as transactions, and the validator entities that verify this activity.
-keywords: [ sui blockchain, sui components, sui validators, sui transactions, components of sui, what is sui comprised of, delegated proof of stake, delegated proof-of-stake, dpos, consensus, sui networks, sui mainnet, sui testnet, sui devnet, move, move language ]
+description: >-
+  Sui is a layer 1 blockchain that performs its own consensus and validation of
+  transaction blocks. Sui is comprised of the blockchain itself, the
+  blockchain's activity such as transactions, and the validator entities that
+  verify this activity.
+keywords:
+  - sui blockchain
+  - sui components
+  - sui validators
+  - sui transactions
+  - components of sui
+  - what is sui comprised of
+  - delegated proof of stake
+  - delegated proof-of-stake
+  - dpos
+  - consensus
+  - sui networks
+  - sui mainnet
+  - sui testnet
+  - sui devnet
+  - move
+  - move language
+goal:
+  description: >-
+    Reader understands sui is a layer 1 blockchain that performs its own
+    consensus and validation of transaction blocks
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Networks
+        - pattern: Delegated proof-of-stake consensus
+        - pattern: Transactions
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Sui is a layer 1 blockchain. Layer 1 networks consist of the following primary components:

@@ -1,8 +1,58 @@
 ---
 title: Upgrading Packages
 sidebar_label: Upgrading
-description: Sui provides a method of upgrading your packages while still retaining their immutable properties.
-keywords: [ upgrading packages, upgrade considerations, how to upgrade a package, how to upgrade, update package, update, how to update ]
+description: >-
+  Sui provides a method of upgrading your packages while still retaining their
+  immutable properties.
+keywords:
+  - upgrading packages
+  - upgrade considerations
+  - how to upgrade a package
+  - how to upgrade
+  - update package
+  - update
+  - how to update
+goal:
+  description: >-
+    Reader understands sui provides a method of upgrading your packages while
+    still retaining their immutable properties
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Upgrade considerations
+        - pattern: Upgrade requirements
+        - pattern: Upgrading
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Upgrade and versioning
+    stage: Operations
+    eval: partial
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Deploy to mainnet
+    stage: Ship
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Upgrade storage contracts
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Upgrade storage contracts
+    stage: Ship
 ---
 
 <AgentPrompt

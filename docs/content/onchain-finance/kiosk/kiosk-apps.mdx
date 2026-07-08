@@ -1,8 +1,38 @@
 ---
 title: Kiosk Apps
-description: Kiosk apps are a way to extend the functionality of Sui Kiosk while keeping the core functionality intact. You can develop apps to add new features to a kiosk without having to modify the core code or move the assets elsewhere.
-keywords: [kiosk apps, basic kiosk apps, permissioned kiosk apps, UID access through uid_mut, uid_mut, kiosk::uid_mut_as_owner, Kiosk Apps API, kiosk extension ]
+description: >-
+  Kiosk apps are a way to extend the functionality of Sui Kiosk while keeping
+  the core functionality intact. You can develop apps to add new features to a
+  kiosk without having to modify the core code or move the assets elsewhere.
+keywords:
+  - kiosk apps
+  - basic kiosk apps
+  - permissioned kiosk apps
+  - UID access through uid_mut
+  - uid_mut
+  - 'kiosk::uid_mut_as_owner'
+  - Kiosk Apps API
+  - kiosk extension
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands kiosk apps are a way to extend the functionality of Sui
+    Kiosk while keeping the core functionality intact
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Basic apps
+        - pattern: Permissioned apps using the Kiosk Apps A
+        - pattern: kiosk_extension module
+      label: Has expected section structure
 ---
 
 Kiosk apps are a way to extend the functionality of Sui Kiosk while keeping the core functionality intact. You can develop apps to add new features to a kiosk without having to modify the core code or move the assets elsewhere.

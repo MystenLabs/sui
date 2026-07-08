@@ -2,16 +2,28 @@
 title: Orders
 description: Learn how to place and manage orders using margin managers.
 keywords:
-  [
-    orders,
-    limit order,
-    market order,
-    reduce only,
-    cancel order,
-    modify order,
-    margin trading,
-    deepbook margin,
-  ]
+  - orders
+  - limit order
+  - market order
+  - reduce only
+  - cancel order
+  - modify order
+  - margin trading
+  - deepbook margin
+goal:
+  description: Reader can learn how to place and manage orders using margin managers
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'Margin contract: Orders'
+    stage: Margin
 ---
 
 The `pool_proxy` module provides wrapper functions for trading with margin managers. These functions enable placing orders, modifying and canceling them, and managing staking and governance participation through a margin manager. All trading operations require the margin manager to be associated with the correct DeepBook pool.

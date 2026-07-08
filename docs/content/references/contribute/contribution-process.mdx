@@ -1,9 +1,32 @@
 ---
 title: Contribute to Sui Documentation
 sidebar_label: Docs Contribution
-description: Help the Sui community through documentation contributions. Whether it's to fix errors or add new content, the entire Sui community benefits from your contributions.
-keywords: [ contribute docs, style guide compliance, add new docs page, change existing docs page ]
+description: >-
+  Help the Sui community through documentation contributions. Whether it's to
+  fix errors or add new content, the entire Sui community benefits from your
+  contributions.
+keywords:
+  - contribute docs
+  - style guide compliance
+  - add new docs page
+  - change existing docs page
 pagination_prev: null
+goal:
+  description: >-
+    Contributor understands the contribute to sui documentation requirements for
+    the Sui documentation
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Follow the style guide
+        - pattern: GitHub web editor
+        - pattern: 'Set up a local environment \{#local-envi'
+      label: Has expected section structure
 ---
 
 The Sui documentation is open source and thrives on community contributions. Whether you’re fixing a typo, clarifying explanations, or adding entirely new content, your work benefits the whole community. This page explains how to contribute to the documentation using either GitHub’s web editor or your local development environment.

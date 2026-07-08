@@ -1,7 +1,30 @@
 ---
 title: Sui Framework
-description: The Sui framework libraries include Move modules that provide the logic for Sui and its standards. A Rust process creates the documentation for the modules directly from comments in the code.
-keywords: [ sui framework, sui libraries, move modules, sui standards, rust, documentation from modules, generate framework documentation, crate documentation, build documentation locally, build docs ]
+description: >-
+  The Sui framework libraries include Move modules that provide the logic for
+  Sui and its standards. A Rust process creates the documentation for the
+  modules directly from comments in the code.
+keywords:
+  - sui framework
+  - sui libraries
+  - move modules
+  - sui standards
+  - rust
+  - documentation from modules
+  - generate framework documentation
+  - crate documentation
+  - build documentation locally
+  - build docs
+goal:
+  description: >-
+    Reader can browse the Sui framework module reference to find function
+    signatures and type definitions
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - min_words: 100
+      label: Has substantive reference content
 ---
 
 The documentation in this section is created from the Rust `cargo doc` process. The process builds the content from comments in the source code.

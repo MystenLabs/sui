@@ -1,7 +1,28 @@
 ---
 title: Sui Keytool CLI
-description: The Sui Keytool CLI has commands for managing and generating addresses, working with private keys, signatures, or zkLogin. 
-keywords: [ Keytool cli, Keytool reference, Keytool, sui Keytool, Keytool help, how to use Keytool, key tool ]
+description: >-
+  The Sui Keytool CLI has commands for managing and generating addresses,
+  working with private keys, signatures, or zkLogin.
+keywords:
+  - Keytool cli
+  - Keytool reference
+  - Keytool
+  - sui Keytool
+  - Keytool help
+  - how to use Keytool
+  - key tool
+goal:
+  description: 'Reader can look up keytool cli command syntax, flags, and usage examples'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - pattern: 'sui '
+      min: 2
+      label: Shows CLI command usage
 ---
 
 The Sui CLI `keytool` command provides several command-level access for the management and generation of addresses, as well as working with private keys, signatures, or zkLogin. For example, you can export a private key from the Sui Wallet and import it into the local Sui CLI wallet using the `sui keytool import [...]` command.

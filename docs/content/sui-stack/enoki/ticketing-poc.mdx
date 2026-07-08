@@ -1,10 +1,23 @@
 ---
 title: Ticketing Platform
-description: Build a decentralized ticketing and loyalty platform on Sui with NFT tickets, cryptographic mint permits, stage-based lifecycle transitions, and gasless transactions.
-keywords: [example, ticketing, nft, loyalty, permits, ed25519, stage-transitions, sponsored-transactions, enoki, zklogin]
+description: >-
+  Build a decentralized ticketing and loyalty platform on Sui with NFT tickets,
+  cryptographic mint permits, stage-based lifecycle transitions, and gasless
+  transactions.
+keywords:
+  - example
+  - ticketing
+  - nft
+  - loyalty
+  - permits
+  - ed25519
+  - stage-transitions
+  - sponsored-transactions
+  - enoki
+  - zklogin
 example_id: ticketing-poc
-last_verified: 2026-04-30
-repo: https://github.com/MystenLabs/ticketing-poc
+last_verified: 2026-04-30T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/ticketing-poc'
 path: /
 languages:
   - move
@@ -19,6 +32,29 @@ concepts:
   - zklogin
   - display_standard
   - typed_markers
+goal:
+  description: >-
+    Reader can build a decentralized ticketing and loyalty platform on Sui with
+    NFT tickets, cryptographic mint permits, stage-based lifecycle transitions,
+    and gasless transactions
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: When to use this pattern
+        - pattern: What you learn
+        - pattern: Architecture
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 This example demonstrates a decentralized event ticketing and loyalty rewards app. Tickets are NFTs with a multi-stage lifecycle (Purchased → Attended → Collectible), minting requires a server-signed Ed25519 permit to prevent unauthorized issuance, and a loyalty points system rewards repeat attendees. All transactions are sponsored through Enoki so users pay no gas. The frontend uses Google OAuth through zkLogin for frictionless onboarding.

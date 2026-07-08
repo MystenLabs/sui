@@ -1,19 +1,40 @@
 ---
 title: Orders SDK
 sidebar_label: Orders
-description: Learn how to use the DeepBook Margin SDK to place and manage orders with margin managers.
+description: >-
+  Learn how to use the DeepBook Margin SDK to place and manage orders with
+  margin managers.
 keywords:
-  [
-    margin orders,
-    limit orders,
-    market orders,
-    reduce only,
-    cancel orders,
-    modify orders,
-    staking,
-    governance,
-    deepbook margin sdk,
-  ]
+  - margin orders
+  - limit orders
+  - market orders
+  - reduce only
+  - cancel orders
+  - modify orders
+  - staking
+  - governance
+  - deepbook margin sdk
+goal:
+  description: >-
+    Developer can learn how to use the DeepBook Margin SDK to place and manage
+    orders with margin managers using the SDK
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Has substantive API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'Margin SDK: Orders'
+    stage: Margin
 ---
 
 Placing and managing orders through margin managers enables leveraged trading on DeepBook. The Orders SDK provides functions for placing limit and market orders, managing positions, and participating in governance.

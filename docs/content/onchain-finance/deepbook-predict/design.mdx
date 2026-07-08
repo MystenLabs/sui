@@ -1,18 +1,34 @@
 ---
 title: Design
-description: Learn about DeepBook Predict design, including Predict, PredictManager, OracleSVI, Vault, and PLP.
+description: >-
+  Learn about DeepBook Predict design, including Predict, PredictManager,
+  OracleSVI, Vault, and PLP.
 keywords:
-  [
-    deepbook predict design,
-    predict,
-    predictmanager,
-    oraclesvi,
-    vault,
-    plp,
-    binary position,
-    vertical range,
-    prediction market,
-  ]
+  - deepbook predict design
+  - predict
+  - predictmanager
+  - oraclesvi
+  - vault
+  - plp
+  - binary position
+  - vertical range
+  - prediction market
+goal:
+  description: >-
+    Reader can learn about DeepBook Predict design, including Predict,
+    PredictManager, OracleSVI, Vault, and PLP
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: '`Predict` shared object \{#predict\}'
+        - pattern: '`PredictManager` shared object \{#predic'
+        - pattern: 'Positions and ranges \{#positions-and-ra'
+      label: Has expected section structure
 ---
 
 At a high level, DeepBook Predict revolves around four main onchain components:

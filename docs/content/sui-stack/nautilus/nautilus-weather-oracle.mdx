@@ -1,11 +1,22 @@
 ---
 title: Weather Oracle with Nautilus
-description: Build a verified weather oracle on Sui using Nautilus, where a Trusted Execution Environment fetches weather data, signs it cryptographically, and the Move contract mints an NFT only after verifying the signature.
-keywords: [example, nautilus, tee, oracle, trusted-execution-environment, nft, weather, offchain-computation]
+description: >-
+  Build a verified weather oracle on Sui using Nautilus, where a Trusted
+  Execution Environment fetches weather data, signs it cryptographically, and
+  the Move contract mints an NFT only after verifying the signature.
+keywords:
+  - example
+  - nautilus
+  - tee
+  - oracle
+  - trusted-execution-environment
+  - nft
+  - weather
+  - offchain-computation
 sidebar_label: Weather Oracle
 example_id: nautilus-weather-oracle
-last_verified: 2026-04-29
-repo: https://github.com/MystenLabs/sui-move-bootcamp
+last_verified: 2026-04-29T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/sui-move-bootcamp'
 path: /K4
 concepts:
   - trusted_execution_environment
@@ -13,6 +24,30 @@ concepts:
   - oracle_pattern
   - nft_minting
   - enclave_attestation
+goal:
+  description: >-
+    Reader can build a verified weather oracle on Sui using Nautilus, where a
+    Trusted Execution Environment fetches weather data, signs it
+    cryptographically, and the Move contract mints an NFT only after verifying
+    the signature
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: When to use this pattern
+        - pattern: What you learn
+        - pattern: Architecture
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 This example demonstrates a verified oracle system that fetches real-world weather data inside a Trusted Execution Environment (TEE), signs the result cryptographically, and submits it to a Move contract that mints a `WeatherNFT` only after verifying the signature. 

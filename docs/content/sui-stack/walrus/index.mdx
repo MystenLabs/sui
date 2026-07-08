@@ -1,7 +1,23 @@
 ---
 title: Walrus
-description: Store and retrieve large binary files on Walrus, a decentralized storage and data availability protocol built on Sui.
-keywords: [walrus, blob storage, decentralized storage, data availability, sui stack]
+description: >-
+  Store and retrieve large binary files on Walrus, a decentralized storage and
+  data availability protocol built on Sui.
+keywords:
+  - walrus
+  - blob storage
+  - decentralized storage
+  - data availability
+  - sui stack
+goal:
+  description: Reader gets a clear overview of walrus and knows which subtopic to read next
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '\]\(/[^)]+\)'
+      min: 1
+      label: Links to child pages
 ---
 
 Walrus is a decentralized storage and data availability protocol designed for large binary files. It uses Sui for coordination, payment, and governance, making it a natural storage layer for apps built on Sui.

@@ -1,7 +1,20 @@
 ---
 title: Nautilus
-description: Run secure, offchain logic in trusted execution environments (TEEs), and verify it onchain to trigger safe smart contract workflows.
+description: >-
+  Run secure, offchain logic in trusted execution environments (TEEs), and
+  verify it onchain to trigger safe smart contract workflows.
 pagination_prev: null
+goal:
+  description: >-
+    Reader gets a clear overview of nautilus and knows which subtopic to read
+    next
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '\]\(/[^)]+\)'
+      min: 1
+      label: Links to child pages
 ---
 
 Run secure, offchain logic in trusted execution environments (TEEs), and verify it onchain to trigger safe smart contract workflows.

@@ -1,7 +1,37 @@
 ---
 title: Derived Objects
-description: Derived objects enable deterministic object addresses, Transfer-to-Object capabilities, guaranteed uniqueness, and native parallelization for building scalable composable systems on Sui.
-keywords: [ Derived objects, deterministic addresses, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
+description: >-
+  Derived objects enable deterministic object addresses, Transfer-to-Object
+  capabilities, guaranteed uniqueness, and native parallelization for building
+  scalable composable systems on Sui.
+keywords:
+  - Derived objects
+  - deterministic addresses
+  - Transfer-to-Object
+  - TTO
+  - parallelization
+  - object composition
+  - scalability
+goal:
+  description: >-
+    Reader understands derived objects enable deterministic object addresses,
+    Transfer-to-Object capabilities, guaranteed uniqueness, and native
+    parallelization for building scalable composable systems on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Core capabilities
+        - pattern: Derived objects and dynamic fields
+        - pattern: '`derived_object`'
+      label: Has expected section structure
 ---
 
 Sui objects get a unique ID assigned to them upon creation. However, a derived object has a claimed ID created through the mapping of a parent object to a key. The parent object's unique onchain ID maps to an individual key, ensuring the derived object's claimed ID is both deterministic and unique. You can compute derived object IDs using the parent ID and key, both onchain and offchain, even before creating the object on the network.

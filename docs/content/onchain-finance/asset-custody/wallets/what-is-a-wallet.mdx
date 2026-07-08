@@ -1,7 +1,44 @@
 ---
 title: What Is a Wallet?
-description: Learn what Sui wallets are, how they work, and which wallet types and options are available on Sui.
-keywords: [ wallet, wallets, self-custodial, zkLogin, Slush, Phantom, Ledger, key pair, transaction fees, gas, staking ]
+description: >-
+  Learn what Sui wallets are, how they work, and which wallet types and options
+  are available on Sui.
+keywords:
+  - wallet
+  - wallets
+  - self-custodial
+  - zkLogin
+  - Slush
+  - Phantom
+  - Ledger
+  - key pair
+  - transaction fees
+  - gas
+  - staking
+goal:
+  description: >-
+    Reader can learn what Sui wallets are, how they work, and which wallet types
+    and options are available on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: How wallets work
+        - pattern: Sui wallets
+        - pattern: Transaction fees
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: What is a wallet
+    stage: Wallets & Funding
 ---
 
 A wallet stores the cryptographic keys that prove ownership of your onchain assets and signs the transactions you submit to the Sui network.

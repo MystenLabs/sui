@@ -1,0 +1,198 @@
+# Concept coverage map for docs auditing.
+#
+# Each concept lists:
+#   must_appear_in  – pages that MUST cover this concept
+#   terms           – keywords the audit script checks for (case-insensitive)
+#
+# A page passes if it contains >= half of the listed terms.
+# A page NOT listed in must_appear_in is flagged as an orphan if it contains >= 75% of the terms.
+
+concepts:
+
+  sui-install:
+    must_appear_in:
+      - "getting-started/onboarding/sui-install.mdx"
+    terms:
+      - "suiup"
+      - "sui --version"
+      - "install"
+      - "prerequisites"
+
+  sui-client-config:
+    must_appear_in:
+      - "getting-started/onboarding/configure-sui-client.mdx"
+    terms:
+      - "sui client"
+      - "client.yaml"
+      - "envs"
+      - "switch"
+
+  sui-address:
+    must_appear_in:
+      - "getting-started/onboarding/get-address.mdx"
+      - "getting-started/onboarding/configure-sui-client.mdx"
+    terms:
+      - "address"
+      - "0x"
+      - "sui client new-address"
+      - "recovery phrase"
+      - "keystore"
+
+  gas-and-faucet:
+    must_appear_in:
+      - "getting-started/onboarding/get-coins.mdx"
+      - "getting-started/onboarding/hello-world.mdx"
+    terms:
+      - "gas"
+      - "faucet"
+      - "SUI"
+      - "sui client gas"
+      - "balance"
+
+  move-build-publish:
+    must_appear_in:
+      - "getting-started/onboarding/hello-world.mdx"
+    terms:
+      - "sui move build"
+      - "sui client publish"
+      - "Move.toml"
+      - "module"
+      - "package"
+
+  move-call:
+    must_appear_in:
+      - "getting-started/onboarding/hello-world.mdx"
+    terms:
+      - "sui client call"
+      - "function"
+      - "transaction"
+      - "object"
+
+  frontend-wallet:
+    must_appear_in:
+      - "getting-started/onboarding/app-frontends.mdx"
+      - "getting-started/examples/dapp-kit-frontend.mdx"
+    terms:
+      - "ConnectButton"
+      - "wallet"
+      - "useCurrentAccount"
+      - "React"
+      - "@mysten/dapp-kit"
+
+  ptb:
+    must_appear_in:
+      - "getting-started/onboarding/hello-world.mdx"
+      - "getting-started/examples/nft-app.mdx"
+      - "getting-started/examples/dapp-kit-frontend.mdx"
+      - "getting-started/sui-for-ethereum.mdx"
+      - "getting-started/sui-for-solana.mdx"
+    terms:
+      - "PTB"
+      - "programmable transaction"
+      - "splitCoins"
+      - "moveCall"
+      - "transferObjects"
+
+  object-ownership:
+    must_appear_in:
+      - "getting-started/sui-for-ethereum.mdx"
+      - "getting-started/sui-for-solana.mdx"
+      - "getting-started/examples/capability-pattern.mdx"
+    terms:
+      - "owned"
+      - "shared"
+      - "immutable"
+      - "address-owned"
+      - "object"
+
+  capability-pattern:
+    must_appear_in:
+      - "getting-started/examples/capability-pattern.mdx"
+      - "getting-started/dev-cheat-sheet.mdx"
+    terms:
+      - "Cap"
+      - "capability"
+      - "AdminCap"
+      - "transfer"
+      - "access control"
+
+  test-scenario:
+    must_appear_in:
+      - "getting-started/examples/scenario-testing.mdx"
+    terms:
+      - "test_scenario"
+      - "#[test]"
+      - "sui move test"
+      - "next_tx"
+      - "take_shared"
+
+  event-indexing:
+    must_appear_in:
+      - "getting-started/examples/event-indexer.mdx"
+    terms:
+      - "event"
+      - "SubscribeCheckpoints"
+      - "BCS"
+      - "gRPC"
+      - "checkpoint"
+
+  derived-objects:
+    must_appear_in:
+      - "getting-started/examples/derived-objects.mdx"
+    terms:
+      - "derive"
+      - "deterministic"
+      - "object ID"
+      - "predict"
+
+  nft-minting:
+    must_appear_in:
+      - "getting-started/examples/nft-app.mdx"
+    terms:
+      - "NFT"
+      - "mint"
+      - "hero"
+      - "registry"
+      - "PTB"
+
+  local-network:
+    must_appear_in:
+      - "getting-started/onboarding/local-network.mdx"
+    terms:
+      - "sui start"
+      - "localnet"
+      - "faucet"
+      - "localhost"
+      - "127.0.0.1"
+
+  ethereum-migration:
+    must_appear_in:
+      - "getting-started/sui-for-ethereum.mdx"
+    terms:
+      - "Solidity"
+      - "EVM"
+      - "Ethereum"
+      - "Move"
+      - "object model"
+      - "ownership"
+
+  solana-migration:
+    must_appear_in:
+      - "getting-started/sui-for-solana.mdx"
+    terms:
+      - "Solana"
+      - "Anchor"
+      - "Rust"
+      - "Move"
+      - "object model"
+      - "ownership"
+
+  dev-best-practices:
+    must_appear_in:
+      - "getting-started/dev-cheat-sheet.mdx"
+    terms:
+      - "composability"
+      - "upgrade"
+      - "testing"
+      - "signing"
+      - "best practice"

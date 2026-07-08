@@ -1,7 +1,34 @@
 ---
 title: GraphQL for Sui RPC
 description: Use GraphQL to make Sui RPC calls.
-keywords: [ graphql, graphql headers, x-sui-rpc-version, x-sui-rpc-show-usage, variables, fragments, pagination, graphql limits, make rpc call, sui rpc calls ]
+keywords:
+  - graphql
+  - graphql headers
+  - x-sui-rpc-version
+  - x-sui-rpc-show-usage
+  - variables
+  - fragments
+  - pagination
+  - graphql limits
+  - make rpc call
+  - sui rpc calls
+goal:
+  description: Reader can use GraphQL to make Sui RPC calls
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Components
+        - pattern: When to use
+        - pattern: How GraphQL RPC and General-purpose Inde
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 GraphQL provides a flexible way to query the Sui network, submit transactions, and simulate transactions. This page covers the core concepts for working with GraphQL on Sui RPC, including request headers, query composition with variables and fragments, pagination strategies, query scope, and service limits.

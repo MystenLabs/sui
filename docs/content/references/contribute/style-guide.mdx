@@ -1,7 +1,40 @@
 ---
 title: Style Guide
 description: All contributions to the Sui documentation must adhere to the style guide.
-keywords: [ style guide, documentation style, accessibility of docs, formatting of docs, capitalization, grammar, tense, headings, lists, tables, word choice ]
+keywords:
+  - style guide
+  - documentation style
+  - accessibility of docs
+  - formatting of docs
+  - capitalization
+  - grammar
+  - tense
+  - headings
+  - lists
+  - tables
+  - word choice
+goal:
+  description: >-
+    Contributor understands the style guide requirements for the Sui
+    documentation
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: 'Editorial considerations \{#editorial-co'
+        - pattern: Spelling and grammar
+        - pattern: Terminology and vocabulary
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 This document defines the styles, vocabulary usage, and content formatting for the Sui documentation.

@@ -1,7 +1,39 @@
 ---
 title: Deploy a Tokenized Asset
-description: Publish the asset_tokenization and template packages on Sui and interact with your tokenized asset using the CLI and TypeScript scripts.
-keywords: [asset tokenization, deploy, publish, WASM, bytecode, template, Move, CLI]
+description: >-
+  Publish the asset_tokenization and template packages on Sui and interact with
+  your tokenized asset using the CLI and TypeScript scripts.
+keywords:
+  - asset tokenization
+  - deploy
+  - publish
+  - WASM
+  - bytecode
+  - template
+  - Move
+  - CLI
+goal:
+  description: >-
+    Reader can publish the asset_tokenization and template packages on Sui and
+    interact with your tokenized asset using the CLI and TypeScript scripts
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Clone the repository
+        - pattern: Initialize the Sui Client CLI
+        - pattern: Publishing
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 This guide covers how to publish the [asset tokenization](/onchain-finance/tokenized-assets/asset-tokenization) packages and interact with your tokenized asset.

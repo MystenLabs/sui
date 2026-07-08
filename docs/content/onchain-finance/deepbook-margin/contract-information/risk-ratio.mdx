@@ -1,17 +1,37 @@
 ---
 title: Risk Ratio
-description: Understanding risk ratios and how they determine leverage limits, collateral requirements, and liquidation thresholds in DeepBook Margin.
+description: >-
+  Understanding risk ratios and how they determine leverage limits, collateral
+  requirements, and liquidation thresholds in DeepBook Margin.
 keywords:
-  [
-    risk ratio,
-    leverage,
-    liquidation,
-    collateral,
-    margin trading,
-    borrow ratio,
-    withdraw ratio,
-    deepbook margin,
-  ]
+  - risk ratio
+  - leverage
+  - liquidation
+  - collateral
+  - margin trading
+  - borrow ratio
+  - withdraw ratio
+  - deepbook margin
+goal:
+  description: >-
+    Reader understands understanding risk ratios and how they determine leverage
+    limits, collateral requirements, and liquidation thresholds in DeepBook
+    Margin
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: What is a risk ratio\?
+        - pattern: Risk ratio thresholds
+        - pattern: How leverage is determined
+      label: Has expected section structure
 ---
 
 Risk ratios are the core mechanism that governs leverage limits and position safety in DeepBook Margin. Understanding these ratios is essential for managing margin positions effectively.

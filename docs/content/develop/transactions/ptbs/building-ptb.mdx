@@ -1,17 +1,45 @@
 ---
 title: Building Transactions
-description: Using the Sui TypeScript SDK, you can create programmable transaction blocks to perform multiple commands in a single transaction.
+description: >-
+  Using the Sui TypeScript SDK, you can create programmable transaction blocks
+  to perform multiple commands in a single transaction.
 keywords:
-  [
-    ptbs,
-    programmable transaction blocks,
-    typescript SDK,
-    how to use typescript SDK,
-    typescript,
-    transaction blocks,
-    transactions as arguments,
-    passing transactions,
-  ]
+  - ptbs
+  - programmable transaction blocks
+  - typescript SDK
+  - how to use typescript SDK
+  - typescript
+  - transaction blocks
+  - transactions as arguments
+  - passing transactions
+goal:
+  description: >-
+    Reader understands using the Sui TypeScript SDK, you can create programmable
+    transaction blocks to perform multiple commands in a single transaction
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Build PTBs with the CLI
+        - pattern: Constructing inputs
+        - pattern: Passing transaction results as arguments
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Construct payment PTB
+    stage: Money Movement
+    eval: covered
 ---
 
 This guide explores creating a [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) on Sui using the [TypeScript SDK](https://sdk.mystenlabs.com/typescript/install) and the Sui CLI.

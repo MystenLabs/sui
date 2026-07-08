@@ -1,7 +1,33 @@
 ---
 title: What are Move Packages?
-description: Sui uses Move through three constructs. They are packages, modules, and objects.
-keywords: [ move packages, move, packages, move smart contract, package overview ]
+description: >-
+  Sui uses Move through three constructs. They are packages, modules, and
+  objects.
+keywords:
+  - move packages
+  - move
+  - packages
+  - move smart contract
+  - package overview
+goal:
+  description: >-
+    Reader understands sui uses Move through three constructs. They are
+    packages, modules, and objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Packages are immutable
+        - pattern: Upgrading packages
+        - pattern: Using the Sui Client CLI
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Move is the smart contract language Sui uses to define onchain logic. Move is platform-agnostic, enabling shared libraries, tooling, and developer communities across blockchains with different data and execution models.

@@ -1,8 +1,35 @@
 ---
 title: Types of Object Ownership
 description: Learn about different types of object ownership on Sui.
-keywords: [ object model, objects on sui, sui move package, sui move object, move objects, move packages, objects, packages, referring to objects, object metadata, transaction-objects, transaction objects, relating objects and transactions ]
+keywords:
+  - object model
+  - objects on sui
+  - sui move package
+  - sui move object
+  - move objects
+  - move packages
+  - objects
+  - packages
+  - referring to objects
+  - object metadata
+  - transaction-objects
+  - transaction objects
+  - relating objects and transactions
 pagination_prev: null
+goal:
+  description: >-
+    Reader gets a clear overview of types of object ownership and knows which
+    subtopic to read next
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Every object has an owner that determines who can use it in transactions and whether the object is versioned on the fastpath or through consensus.

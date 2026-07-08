@@ -1,7 +1,48 @@
 ---
 title: Gasless Stablecoin Transfers
-description: Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified stablecoins to execute without paying gas fees in SUI.
-keywords: [ usdc, stablecoins, sui dollar, usdsui, usdy, ausd, fdusd, buck, ysld, gasless, free tier ]
+description: >-
+  Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified
+  stablecoins to execute without paying gas fees in SUI.
+keywords:
+  - usdc
+  - stablecoins
+  - sui dollar
+  - usdsui
+  - usdy
+  - ausd
+  - fdusd
+  - buck
+  - ysld
+  - gasless
+  - free tier
+goal:
+  description: >-
+    Reader understands gasless stablecoin transfers on Sui enable peer-to-peer
+    payments of qualified stablecoins to execute without paying gas fees in SUI
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Eligible stablecoins
+        - pattern: 'What gasless stablecoin transfers don''t '
+        - pattern: Monitoring gasless stablecoin transfers
+      label: Has expected section structure
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Gasless stablecoin transfers
+    stage: Gas
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Gasless stablecoin transfers
+    stage: Authorization
 ---
 
 Chain-specific gas fees can introduce several points of friction to end users and complicate institutional compliance for asset trading or payments. Eliminating chain-specific gas is a major simplification for regulated institutions to conduct payments without the burden of holding digital assets that might fluctuate in value.

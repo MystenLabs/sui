@@ -1,7 +1,27 @@
 ---
 title: Install from Binaries
-description: Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
-keywords: [ install sui, install sui binaries, binaries ]
+description: >-
+  Each Sui release provides a set of binaries for several operating systems. You
+  can download these binaries from GitHub and use them to install Sui.
+keywords:
+  - install sui
+  - install sui binaries
+  - binaries
+goal:
+  description: Reader can install prebuilt Sui binaries for their platform
+  requires:
+    - pattern: '```'
+      min: 2
+      label: Has command or code examples
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - pattern: sui --version|sui -V
+      min: 1
+      label: Shows how to verify installation
+    - min_words: 300
+      label: Sufficient walkthrough depth
 ---
 
 <ImportContent source="info-easy-install" mode="snippet" />

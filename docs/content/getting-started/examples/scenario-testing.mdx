@@ -1,10 +1,21 @@
 ---
 title: Scenario Testing
-description: Write multi-transaction tests for Move smart contracts using test_scenario to simulate real-world flows with multiple users, shared objects, and cross-module interactions.
-keywords: [example, testing, test-scenario, move, access-control, nft, game, bootcamp]
+description: >-
+  Write multi-transaction tests for Move smart contracts using test_scenario to
+  simulate real-world flows with multiple users, shared objects, and
+  cross-module interactions.
+keywords:
+  - example
+  - testing
+  - test-scenario
+  - move
+  - access-control
+  - nft
+  - game
+  - bootcamp
 example_id: scenario-testing-bootcamp
-last_verified: 2026-04-30
-repo: https://github.com/MystenLabs/sui-move-bootcamp
+last_verified: 2026-04-30T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/sui-move-bootcamp'
 path: /G1/scenario
 concepts:
   - test_scenario
@@ -13,6 +24,35 @@ concepts:
   - shared_objects
   - object_consumption
   - transaction_effects
+goal:
+  description: >-
+    Reader can write multi-transaction tests for Move smart contracts using
+    test_scenario to simulate real-world flows with multiple users, shared
+    objects, and cross-module interactions
+  requires:
+    - headings:
+        - pattern: When to use|Use case
+        - pattern: What you learn|Learning
+        - pattern: Prerequisites
+        - pattern: Setup|Getting started
+        - pattern: Run
+        - pattern: Troubleshooting|Common issues
+      label: Has standard example page sections
+    - pattern: '```'
+      min: 3
+      label: 'Has code blocks for setup, source, and output'
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 800
+      label: Sufficient explanation depth
+    - pattern: mermaid|sequenceDiagram|graph|flowchart
+      min: 1
+      label: Has architecture diagram
+    - headings:
+        - pattern: Key code|Code highlight|Walkthrough
+      label: Has code explanation section
 ---
 
 <AgentPrompt

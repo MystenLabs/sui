@@ -1,8 +1,56 @@
 ---
 title: Signature Verification in Move
 sidebar_label: Signature Verification
-description: Sui supports verification within Move smart contracts through several signature schemes. Signature schemes include Ed25519, Secp256k1 recoverable, Secp256k1 non-recoverable, Secp256r1 non-recoverable, Secp256r1 recoverable, BLS G1, and BLS G2.
-keywords: [ Ed25519, Secp256k1 recoverable, Secp256k1 non-recoverable, Secp256r1 non-recoverable, Secp256r1 recoverable, BLS G1, BLS G2, signature schemes, signature verification fastcrypto, onchain verification ]
+description: >-
+  Sui supports verification within Move smart contracts through several
+  signature schemes. Signature schemes include Ed25519, Secp256k1 recoverable,
+  Secp256k1 non-recoverable, Secp256r1 non-recoverable, Secp256r1 recoverable,
+  BLS G1, and BLS G2.
+keywords:
+  - Ed25519
+  - Secp256k1 recoverable
+  - Secp256k1 non-recoverable
+  - Secp256r1 non-recoverable
+  - Secp256r1 recoverable
+  - BLS G1
+  - BLS G2
+  - signature schemes
+  - signature verification fastcrypto
+  - onchain verification
+goal:
+  description: >-
+    Reader understands sui supports verification within Move smart contracts
+    through several signature schemes
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Setup `fastcrypto` CLI binary
+        - pattern: Sign with CLI and submit to onchain Move
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Signature verification
+    stage: Operations
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Signature verification
+    stage: Signing
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Signature verification
+    stage: Authorization
 ---
 
 Move contracts in Sui support verifications for several signature schemes onchain. Not all signatures supported in onchain verification are supported as user signature verification. See [Sui Signatures](/develop/transactions/transaction-auth/auth-overview) for valid signature schemes for transaction authorization.

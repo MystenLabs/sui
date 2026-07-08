@@ -1,7 +1,47 @@
 ---
 title: Domain Names with SuiNS
-description: Integrate Sui Name Service (SuiNS) into your app using onchain or offchain resolution, reverse lookup, subnames, and the Enoki subname API, by walking through Sui Messenger.
-keywords: [SuiNS, Sui Name Service, domain names, name resolution, subnames, reverse lookup, onchain resolution, offchain resolution, Sui Stack]
+description: >-
+  Integrate Sui Name Service (SuiNS) into your app using onchain or offchain
+  resolution, reverse lookup, subnames, and the Enoki subname API, by walking
+  through Sui Messenger.
+keywords:
+  - SuiNS
+  - Sui Name Service
+  - domain names
+  - name resolution
+  - subnames
+  - reverse lookup
+  - onchain resolution
+  - offchain resolution
+  - Sui Stack
+goal:
+  description: >-
+    Reader can integrate Sui Name Service (SuiNS) into your app using onchain or
+    offchain resolution, reverse lookup, subnames, and the Enoki subname API, by
+    walking through Sui Messenger
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Introduction to SuiNS
+        - pattern: Resolution types
+        - pattern: Address types
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: SuiNS integration
+    stage: Payment Flow
 ---
 
 import Tabs from '@theme/Tabs';

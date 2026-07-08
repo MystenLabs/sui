@@ -1,18 +1,37 @@
 ---
 title: EWMA Gas Price Penalty
-description: Learn about the DeepBook EWMA (Exponentially Weighted Moving Average) gas price penalty system.
+description: >-
+  Learn about the DeepBook EWMA (Exponentially Weighted Moving Average) gas
+  price penalty system.
 keywords:
-  [
-    ewma,
-    gas price,
-    taker fee,
-    penalty,
-    volatility,
-    z-score,
-    exponentially weighted moving average,
-    toxic takers,
-    deepbookv3,
-  ]
+  - ewma
+  - gas price
+  - taker fee
+  - penalty
+  - volatility
+  - z-score
+  - exponentially weighted moving average
+  - toxic takers
+  - deepbookv3
+goal:
+  description: >-
+    Reader can learn about the DeepBook EWMA (Exponentially Weighted Moving
+    Average) gas price penalty system
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Overview
+        - pattern: How it works
+        - pattern: Configuration parameters
+      label: Has expected section structure
 ---
 
 DeepBook implements an exponentially weighted moving average (EWMA) system to dynamically adjust taker fees based on network gas prices. This feature helps prevent toxic takers from using high gas prices to prioritize their transactions and pick off stale maker orders.

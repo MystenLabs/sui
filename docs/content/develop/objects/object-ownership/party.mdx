@@ -1,6 +1,30 @@
 ---
 title: Party Objects
-description: Party objects are owned by a specified party at the time of transfer and versioned by consensus. Learn how to create and access these objects.
+description: >-
+  Party objects are owned by a specified party at the time of transfer and
+  versioned by consensus. Learn how to create and access these objects.
+goal:
+  description: >-
+    Reader understands party objects are owned by a specified party at the time
+    of transfer and versioned by consensus. Learn how to create and access these
+    objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Create party objects
+        - pattern: When to use party objects
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 A party object is a consensus-address-owned object: a single address owns it, but consensus sequences and versions it. APIs expose this ownership with a `ConsensusAddressOwner` owner variant. Like shared objects, party objects use consensus sequencing. Unlike shared objects, they retain single-address ownership and can be transferred to and from other ownership types and wrapped.

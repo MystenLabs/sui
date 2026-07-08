@@ -1,17 +1,42 @@
 ---
 title: Margin Risks
-description: Understand the risks of margin trading on DeepBook, including liquidation, interest rate fluctuations, and how to protect your positions.
+description: >-
+  Understand the risks of margin trading on DeepBook, including liquidation,
+  interest rate fluctuations, and how to protect your positions.
 keywords:
-  [
-    margin risks,
-    liquidation,
-    leverage risks,
-    interest rate risk,
-    margin trading risks,
-    deepbook margin,
-    collateral,
-    forced liquidation,
-  ]
+  - margin risks
+  - liquidation
+  - leverage risks
+  - interest rate risk
+  - margin trading risks
+  - deepbook margin
+  - collateral
+  - forced liquidation
+goal:
+  description: >-
+    Reader understands understand the risks of margin trading on DeepBook,
+    including liquidation, interest rate fluctuations, and how to protect your
+    positions
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Liquidation risk
+        - pattern: Interest rate risk
+        - pattern: Oracle risk
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Margin risks
+    stage: Margin
 ---
 
 Margin trading amplifies both gains and losses. Before using DeepBook Margin, you should understand the risks involved. This guide explains the key risks and provides concrete examples to help you make informed decisions.

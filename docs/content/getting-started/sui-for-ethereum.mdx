@@ -1,8 +1,36 @@
 ---
 title: Ethereum -> Sui
 description: Build your first app on Sui if you have EVM experience
-keywords: [ ethereum, solidity, EVM,  ]
+keywords:
+  - ethereum
+  - solidity
+  - EVM
 pagination_prev: null
+goal:
+  description: >-
+    Ethereum developer can map their existing mental model to Sui's
+    object-centric equivalents and start building
+  requires:
+    - has_tables: true
+      min: 2
+      label: Has comparison tables
+    - headings:
+        - pattern: Object model|Objects
+        - pattern: Ownership
+        - pattern: Access control
+      label: Covers core concept categories
+    - pattern: '```move'
+      min: 1
+      label: Has Move code example
+    - min_words: 800
+      label: Sufficient comparison depth
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - pattern: Ethereum
+      min: 3
+      label: References Ethereum for comparison
 ---
 
 If you have worked with Ethereum Virtual Machine (EVM) before, the biggest difference when developing on Sui is the programming language. Sui uses **Move** and EVM uses **Solidity**.

@@ -2,22 +2,34 @@
 title: Swaps
 description: Use DeepBookV3 to execute token swaps.
 keywords:
-  [
-    automatic market makers,
-    amms,
-    swap_exact_amount,
-    balancemanager,
-    base_in,
-    quote_in,
-    deep_in,
-    swaps,
-    swap base quantity,
-    deep quantity,
-    DEEP,
-    swap exact quantity,
-    deepbook,
-    deepbookv3,
-  ]
+  - automatic market makers
+  - amms
+  - swap_exact_amount
+  - balancemanager
+  - base_in
+  - quote_in
+  - deep_in
+  - swaps
+  - swap base quantity
+  - deep quantity
+  - DEEP
+  - swap exact quantity
+  - deepbook
+  - deepbookv3
+goal:
+  description: Reader can use DeepBookV3 to execute token swaps
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Swap mechanics
+    stage: DeFi Primitives
 ---
 
 DeepBook provides a swap-like interface commonly seen in automatic market makers (AMMs). Unlike the order functions, you can call `swap_exact_amount` without a `BalanceManager`. You call it directly with `Coin` objects instead. When swapping from base to quote, `base_in` must have a positive value while `quote_in` must be zero. When swapping from quote to base, `quote_in` must be positive and `base_in` zero. Some `deep_in` amount is required to pay for trading fees. You can overestimate this amount, as the unused DEEP tokens are returned at the end of the call.

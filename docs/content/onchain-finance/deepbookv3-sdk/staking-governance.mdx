@@ -2,7 +2,40 @@
 title: Staking and Governance SDK
 sidebar_label: Staking and Governance
 description: Learn how to use the DeepBookV3 SDK to interact with staking and governance.
-keywords: [ taker fee, maker fee, stake, staking, governance, unstake, submit proposal, vote, claim rebates, deepbook pool, deepbook governance, deepbookv3 ]
+keywords:
+  - taker fee
+  - maker fee
+  - stake
+  - staking
+  - governance
+  - unstake
+  - submit proposal
+  - vote
+  - claim rebates
+  - deepbook pool
+  - deepbook governance
+  - deepbookv3
+goal:
+  description: >-
+    Developer can learn how to use the DeepBookV3 SDK to interact with staking
+    and governance using the SDK
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Has substantive API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'SDK: Staking & governance'
+    stage: DeFi SDK
 ---
 
 Examples of interacting with staking and governance. These functions typically require a `balanceManagerKey`, `poolKey`, or both. For details on these keys, see [DeepBookV3 SDK](/onchain-finance/deepbookv3-sdk#keys). The SDK includes some default keys that you can view in the `constants.ts` file. 

@@ -1,8 +1,31 @@
 ---
 title: Install from Source
-description: Install the Sui framework from source, either locally or directly from GitHub.
-keywords: [ install sui, how to install sui, install sui cli, sui command line interface, install from source, source install ]
+description: 'Install the Sui framework from source, either locally or directly from GitHub.'
+keywords:
+  - install sui
+  - how to install sui
+  - install sui cli
+  - sui command line interface
+  - install from source
+  - source install
 hide_table_of_contents: true
+goal:
+  description: >-
+    Reader can build the Sui CLI from source when prebuilt binaries are not
+    suitable
+  requires:
+    - pattern: '```'
+      min: 2
+      label: Has command or code examples
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - pattern: sui --version|sui -V
+      min: 1
+      label: Shows how to verify installation
+    - min_words: 300
+      label: Sufficient walkthrough depth
 ---
 
 <ImportContent source="info-easy-install" mode="snippet" /> 

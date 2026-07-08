@@ -1,28 +1,48 @@
 ---
 title: Orders
-description: Use DeepBookV3 to create limit and market orders, modify orders, or cancel orders.
+description: >-
+  Use DeepBookV3 to create limit and market orders, modify orders, or cancel
+  orders.
 keywords:
-  [
-    limit orders,
-    market orders,
-    modify orders,
-    cancel orders,
-    balancemanager,
-    deepbookv3,
-    pay_with_deep,
-    DEEP token,
-    reduce order size,
-    lower expiration time,
-    order options,
-    self-matching options,
-    orderinfo,
-    orderdeepprice,
-    fill,
-    events,
-    place market order,
-    withdraw amount,
-    withdraw settled amount,
-  ]
+  - limit orders
+  - market orders
+  - modify orders
+  - cancel orders
+  - balancemanager
+  - deepbookv3
+  - pay_with_deep
+  - DEEP token
+  - reduce order size
+  - lower expiration time
+  - order options
+  - self-matching options
+  - orderinfo
+  - orderdeepprice
+  - fill
+  - events
+  - place market order
+  - withdraw amount
+  - withdraw settled amount
+goal:
+  description: >-
+    Reader can use DeepBookV3 to create limit and market orders, modify orders,
+    or cancel orders
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: API
+        - pattern: Events
+      label: Has expected section structure
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Order constraints
+    stage: DeFi Primitives
 ---
 
 Users can create limit or market orders, modify orders, and cancel orders. The `BalanceManager` must have the necessary funds to process orders. DeepBookV3 has four order options and three self matching options. If you set the `pay_with_deep` flag to `true`, trading fees are paid with the DEEP token. If you set the `pay_with_deep` flag to `false`, trading fees are paid with the input token.

@@ -1,7 +1,45 @@
 ---
 title: Design
-description: Learn about DeepBookV3 design, including the Pool, PoolRegistry, and BalanceManager shared objects.
-keywords: [ deepbook design, deepbookv3, deep book, pool, poolregistry, balancemanager, pool shared object, poolregister shared object, balancemanager shared object, book, state, vault, governance, history, account, bigvector ]
+description: >-
+  Learn about DeepBookV3 design, including the Pool, PoolRegistry, and
+  BalanceManager shared objects.
+keywords:
+  - deepbook design
+  - deepbookv3
+  - deep book
+  - pool
+  - poolregistry
+  - balancemanager
+  - pool shared object
+  - poolregister shared object
+  - balancemanager shared object
+  - book
+  - state
+  - vault
+  - governance
+  - history
+  - account
+  - bigvector
+goal:
+  description: >-
+    Reader can learn about DeepBookV3 design, including the Pool, PoolRegistry,
+    and BalanceManager shared objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: 'Pool shared object \{#pool\}'
+        - pattern: Place limit order flow
+      label: Has expected section structure
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: DeepBook architecture
+    stage: DeFi Primitives
 ---
 
 At a high level, the DeepBookV3 design follows the following flow, which revolves around three shared objects:

@@ -1,7 +1,32 @@
 ---
 title: GraphQL and General-Purpose Indexer
-description: Setup instructions for running the indexer, consistent store, and GraphQL in production.
-keywords: [indexer, consistent store, graphql, setup]
+description: >-
+  Setup instructions for running the indexer, consistent store, and GraphQL in
+  production.
+keywords:
+  - indexer
+  - consistent store
+  - graphql
+  - setup
+goal:
+  description: >-
+    Operator understands setup instructions for running the indexer, consistent
+    store, and GraphQL in production
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - headings:
+        - pattern: Indexer setup
+        - pattern: Consistent store setup
+        - pattern: GraphQL RPC server setup
+      label: Has expected section structure
 ---
 
 <ImportContent source="indexer-graphql" mode="snippet" />

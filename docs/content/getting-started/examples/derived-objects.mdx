@@ -1,10 +1,20 @@
 ---
 title: Derived Objects
-description: Create deterministic Sui objects whose IDs you can predict offchain before the objects exist, using four derivation strategies in Move and the TypeScript SDK.
-keywords: [example, derived-objects, deterministic-id, object-model, move, typescript-sdk, bootcamp]
+description: >-
+  Create deterministic Sui objects whose IDs you can predict offchain before the
+  objects exist, using four derivation strategies in Move and the TypeScript
+  SDK.
+keywords:
+  - example
+  - derived-objects
+  - deterministic-id
+  - object-model
+  - move
+  - typescript-sdk
+  - bootcamp
 example_id: derived-objects-bootcamp
-last_verified: 2026-04-30
-repo: https://github.com/MystenLabs/sui-move-bootcamp
+last_verified: 2026-04-30T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/sui-move-bootcamp'
 path: /C5
 concepts:
   - derived_objects
@@ -12,6 +22,35 @@ concepts:
   - object_model
   - bcs_serialization
   - offchain_prediction
+goal:
+  description: >-
+    Reader can create deterministic Sui objects whose IDs you can predict
+    offchain before the objects exist, using four derivation strategies in Move
+    and the TypeScript SDK
+  requires:
+    - headings:
+        - pattern: When to use|Use case
+        - pattern: What you learn|Learning
+        - pattern: Prerequisites
+        - pattern: Setup|Getting started
+        - pattern: Run
+        - pattern: Troubleshooting|Common issues
+      label: Has standard example page sections
+    - pattern: '```'
+      min: 3
+      label: 'Has code blocks for setup, source, and output'
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 800
+      label: Sufficient explanation depth
+    - pattern: mermaid|sequenceDiagram|graph|flowchart
+      min: 1
+      label: Has architecture diagram
+    - headings:
+        - pattern: Key code|Code highlight|Walkthrough
+      label: Has code explanation section
 ---
 
 Derived objects are Sui objects with deterministic IDs computed from a parent object and a key. You can predict a derived object's ID offchain before the transaction that creates it runs, which enables indexer-free lookups, batch queries, and state verification.

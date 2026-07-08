@@ -1,7 +1,42 @@
 ---
 title: Rules
-description: Rule modules create programmable restrictions that apply to any action within a `TokenPolicy`.
-keywords: [ rule module, token rules, tokenpolicy, rules for tokens, token policies, configuring rules, rule configuration, rule structure, rule compliance, rule regulation, token regulation ]
+description: >-
+  Rule modules create programmable restrictions that apply to any action within
+  a `TokenPolicy`.
+keywords:
+  - rule module
+  - token rules
+  - tokenpolicy
+  - rules for tokens
+  - token policies
+  - configuring rules
+  - rule configuration
+  - rule structure
+  - rule compliance
+  - rule regulation
+  - token regulation
+goal:
+  description: >-
+    Reader understands rule modules create programmable restrictions that apply
+    to any action within a `TokenPolicy`
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Rule structure
+        - pattern: Modular rules
+        - pattern: Rule configuration
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Rules are programmable restrictions that you can apply to any action in the [`TokenPolicy`](/onchain-finance/closed-loop-token/token-policy). They are the tool of compliance, regulation, and enforcement of certain business logic in the closed-loop system.

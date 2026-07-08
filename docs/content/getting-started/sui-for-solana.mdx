@@ -1,8 +1,36 @@
 ---
 title: Solana -> Sui
 description: Build your first app on Sui if you have Solana experience
-keywords: [ solana, rust, anchor ]
+keywords:
+  - solana
+  - rust
+  - anchor
 pagination_prev: null
+goal:
+  description: >-
+    Solana developer can map their existing mental model to Sui's object-centric
+    equivalents and start building
+  requires:
+    - has_tables: true
+      min: 2
+      label: Has comparison tables
+    - headings:
+        - pattern: Object model|Objects
+        - pattern: Ownership
+        - pattern: Access control
+      label: Covers core concept categories
+    - pattern: '```move'
+      min: 1
+      label: Has Move code example
+    - min_words: 800
+      label: Sufficient comparison depth
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - pattern: Solana
+      min: 3
+      label: References Solana for comparison
 ---
 
 The biggest difference between Sui and Solana development lies in the programming language. Sui uses [**Move**](/develop/write-move/sui-move-concepts), while Solana relies on **Rust**, typically paired with a development framework that simplifies app development and management. **Anchor** is the most popular Solana framework.

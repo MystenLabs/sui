@@ -1,9 +1,46 @@
 ---
 title: Configure a Sui Client
-description: The Sui client configuration specifies which network to connect to and which address to send transactions.
-keywords: [ sui client, sui configuration, client.yaml, client config, local config, configure tooling, configure sui client, configure sui, config sui ]
+description: >-
+  The Sui client configuration specifies which network to connect to and which
+  address to send transactions.
+keywords:
+  - sui client
+  - sui configuration
+  - client.yaml
+  - client config
+  - local config
+  - configure tooling
+  - configure sui client
+  - configure sui
+  - config sui
 pagination_prev: null
 pagination_next: null
+goal:
+  description: >-
+    Reader can configure the Sui client for Testnet, Devnet, or a custom network
+    and verify connectivity
+  requires:
+    - pattern: '```'
+      min: 2
+      label: Has command or code examples
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - links_to:
+        - /getting-started/onboarding/get-address
+      label: Links to next onboarding step
+    - pattern: sui --version|sui -V
+      min: 1
+      label: Shows how to verify installation
+    - pattern: recovery phrase|mnemonic
+      min: 1
+      label: Explains recovery phrase security
+    - pattern: balance|gas
+      min: 1
+      label: Shows how to verify token receipt
+    - min_words: 300
+      label: Sufficient walkthrough depth
 ---
 
 The Sui client configuration specifies which network to connect to and which address to send transactions.

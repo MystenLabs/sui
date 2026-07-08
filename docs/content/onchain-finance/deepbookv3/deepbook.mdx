@@ -1,24 +1,52 @@
 ---
 title: DeepBookV3
-description: A central limit order book that offers features and functionality for marketplaces on Sui. Token exchanges leveraging the layer can feature transparency, a full range of trading options, and customer privacy.
+description: >-
+  A central limit order book that offers features and functionality for
+  marketplaces on Sui. Token exchanges leveraging the layer can feature
+  transparency, a full range of trading options, and customer privacy.
 keywords:
-  [
-    deepbook,
-    deep book,
-    limit order book,
-    order book,
-    orderbook,
-    deepbookv3,
-    deep book v3,
-    deep book 3,
-    decentralized central limit order book,
-    clob,
-    DEEP token,
-    deep,
-    liquidity support,
-    digital ledger,
-  ]
+  - deepbook
+  - deep book
+  - limit order book
+  - order book
+  - orderbook
+  - deepbookv3
+  - deep book v3
+  - deep book 3
+  - decentralized central limit order book
+  - clob
+  - DEEP token
+  - deep
+  - liquidity support
+  - digital ledger
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands a central limit order book that offers features and
+    functionality for marketplaces on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: DeepBookV3 tokenomics
+        - pattern: Liquidity support
+        - pattern: Transparency and privacy
+      label: Has expected section structure
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Understand DeFi on Sui
+    stage: DeFi Primitives
+    eval: partial
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: DeepBook integration
+    stage: DeFi Primitives
+    eval: partial
 ---
 
 DeepBookV3 is a next-generation decentralized central limit order book (CLOB) built on Sui. DeepBookV3 leverages Sui's parallel execution and low transaction fees to bring a highly performant, low-latency exchange on chain.

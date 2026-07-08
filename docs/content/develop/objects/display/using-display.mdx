@@ -1,7 +1,35 @@
 ---
 title: Creating Displays
-description: An Object Display must be explicitly created and then maintained by the package or type owner.
-keywords: [ Object Display, object, display, display properties, object properties, sui::display, Sui utility objects ]
+description: >-
+  An Object Display must be explicitly created and then maintained by the
+  package or type owner.
+keywords:
+  - Object Display
+  - object
+  - display
+  - display properties
+  - object properties
+  - 'sui::display'
+  - Sui utility objects
+goal:
+  description: >-
+    Reader understands an Object Display must be explicitly created and then
+    maintained by the package or type owner
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Display registry
+        - pattern: Example
+        - pattern: Object Display patterns
+      label: Has expected section structure
 ---
 
 :::info

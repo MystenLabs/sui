@@ -1,17 +1,38 @@
 ---
 title: Design
-description: Learn about DeepBook Margin design, including MarginPool, MarginManager, and MarginRegistry shared objects.
+description: >-
+  Learn about DeepBook Margin design, including MarginPool, MarginManager, and
+  MarginRegistry shared objects.
 keywords:
-  [
-    deepbook margin design,
-    margin pool,
-    margin manager,
-    margin registry,
-    leveraged trading,
-    lending protocol,
-    state,
-    interest accrual,
-  ]
+  - deepbook margin design
+  - margin pool
+  - margin manager
+  - margin registry
+  - leveraged trading
+  - lending protocol
+  - state
+  - interest accrual
+goal:
+  description: >-
+    Reader can learn about DeepBook Margin design, including MarginPool,
+    MarginManager, and MarginRegistry shared objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: '`MarginPool` shared object \{#margin-poo'
+        - pattern: '`MarginManager` shared object \{#margin-'
+        - pattern: '`MarginRegistry` \{#margin-registry\}'
+      label: Has expected section structure
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Margin architecture
+    stage: Margin
 ---
 
 At a high level, the DeepBook Margin design revolves around four main shared objects that work together to enable leveraged trading:

@@ -1,13 +1,56 @@
 ---
 title: Secure Messaging Chat App
-description: Build an end-to-end encrypted group messaging app on Sui using Seal threshold encryption, a Walrus-backed relayer, and onchain permission management.
-keywords: [example, messaging, encryption, seal, walrus, permissions, groups, relayer, enoki, dapp-kit]
+description: >-
+  Build an end-to-end encrypted group messaging app on Sui using Seal threshold
+  encryption, a Walrus-backed relayer, and onchain permission management.
+keywords:
+  - example
+  - messaging
+  - encryption
+  - seal
+  - walrus
+  - permissions
+  - groups
+  - relayer
+  - enoki
+  - dapp-kit
 sidebar_label: Messaging Chat
 example_id: sui-stack-messaging-chat
-last_verified: 2026-04-28
-repo: https://github.com/MystenLabs/sui-stack-messaging
+last_verified: 2026-04-28T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/sui-stack-messaging'
 path: /chat-app
-concepts: [end_to_end_encryption, seal_threshold_encryption, permissioned_groups, dynamic_fields, events, walrus_storage, relayer_pattern, session_keys]
+concepts:
+  - end_to_end_encryption
+  - seal_threshold_encryption
+  - permissioned_groups
+  - dynamic_fields
+  - events
+  - walrus_storage
+  - relayer_pattern
+  - session_keys
+goal:
+  description: >-
+    Reader can build an end-to-end encrypted group messaging app on Sui using
+    Seal threshold encryption, a Walrus-backed relayer, and onchain permission
+    management
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: When to use this pattern
+        - pattern: What you learn
+        - pattern: Prerequisites
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 This example builds an end-to-end encrypted group chat app on Sui. The client encrypts messages with AES-256-GCM before they leave the browser, routes them through an offchain relayer that never sees plaintext, and archives them to Walrus for decentralized persistence. Onchain Move contracts manage group membership, 7 granular permission types, and versioned encryption keys through Seal threshold encryption.

@@ -1,10 +1,22 @@
 ---
 title: Solitaire
-description: Play solitaire onchain where every card shuffle uses Sui's Random module and every move is a sponsored transaction verified on the blockchain.
-keywords: [example, solitaire, game, onchain-randomness, sponsored-transactions, enoki, zklogin, move, dapp-kit, pwa]
+description: >-
+  Play solitaire onchain where every card shuffle uses Sui's Random module and
+  every move is a sponsored transaction verified on the blockchain.
+keywords:
+  - example
+  - solitaire
+  - game
+  - onchain-randomness
+  - sponsored-transactions
+  - enoki
+  - zklogin
+  - move
+  - dapp-kit
+  - pwa
 example_id: solitaire
-last_verified: 2026-04-30
-repo: https://github.com/MystenLabs/solitaire
+last_verified: 2026-04-30T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/solitaire'
 path: /
 concepts:
   - onchain_randomness
@@ -15,6 +27,29 @@ concepts:
   - pwa
   - enoki_zklogin
   - event_parsing
+goal:
+  description: >-
+    Reader understands play solitaire onchain where every card shuffle uses
+    Sui's Random module and every move is a sponsored transaction verified on
+    the blockchain and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: When to use this pattern
+        - pattern: What you learn
+        - pattern: Architecture
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 This example deploys a solitaire game fully onchain. Every card shuffle uses Sui's `Random` module for verifiable randomness, every move is an onchain transaction sponsored through Enoki so players pay no gas, and the full game state (deck, columns, piles) lives in a single `Game` object on the blockchain. 

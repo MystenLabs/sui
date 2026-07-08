@@ -1,7 +1,46 @@
 ---
 title: Self-Custodial Wallets
-description: Learn about self-custodial wallets on Sui, how Phantom and Ledger work, and how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
-keywords: [ wallet, self-custodial, phantom, ledger, hardware wallet, wallet standard, dapp kit, dapp-kit-react, dapp-kit-core ]
+description: >-
+  Learn about self-custodial wallets on Sui, how Phantom and Ledger work, and
+  how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
+keywords:
+  - wallet
+  - self-custodial
+  - phantom
+  - ledger
+  - hardware wallet
+  - wallet standard
+  - dapp kit
+  - dapp-kit-react
+  - dapp-kit-core
+goal:
+  description: >-
+    Reader can learn about self-custodial wallets on Sui, how Phantom and Ledger
+    work, and how to integrate any Wallet Standard wallet into your app using
+    Sui dApp Kit
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Phantom
+        - pattern: Ledger
+        - pattern: App integration
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Self-custody wallets
+    stage: Wallets & Funding
 ---
 
 A self-custodial wallet stores your private key on a device you control. No third party holds the key, and no third party can authorize transactions on your behalf. If you lose the device and your recovery passphrase, access to your assets is permanently lost. Every self-custodial wallet compatible with Sui implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wallet-standard), which means [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) and other apps can discover and connect to them automatically, without any wallet-specific code.

@@ -1,7 +1,53 @@
 ---
 title: Offline Signing
-description: Offline signing can be used to sign a Sui transaction when a device is not connected to a Sui network, or if the signing wallet uses a different programming language than that of the transaction being signed.
-keywords: [ offline signing, sign offline, sign transaction offline, offline transaction, serialize data, sign data, sign serialized data, sign with Sui Keystore, Sui Keystore, Keystore ]
+description: >-
+  Offline signing can be used to sign a Sui transaction when a device is not
+  connected to a Sui network, or if the signing wallet uses a different
+  programming language than that of the transaction being signed.
+keywords:
+  - offline signing
+  - sign offline
+  - sign transaction offline
+  - offline transaction
+  - serialize data
+  - sign data
+  - sign serialized data
+  - sign with Sui Keystore
+  - Sui Keystore
+  - Keystore
+goal:
+  description: >-
+    Reader understands offline signing can be used to sign a Sui transaction
+    when a device is not connected to a Sui network, or if the signing wallet
+    uses a different programming language than that of the transaction being
+    signed
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Serialize data
+        - pattern: 'Sign the serialized data \{#sign\}'
+        - pattern: 'Execute the signed transaction \{#execut'
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Offline signing
+    stage: Signing
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Offline signing
+    stage: Authorization
 ---
 
 Offline signing is the process of signing transactions using a device that is not connected to a Sui network or using a wallet implemented in a different programming language that doesn't rely on Sui Keystore. To implement offline signing:

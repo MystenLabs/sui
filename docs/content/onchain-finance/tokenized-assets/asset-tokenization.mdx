@@ -1,7 +1,35 @@
 ---
 title: Asset Tokenization
-description: Represent real-world assets as onchain fractional tokens using the tokenized_asset module on Sui.
-keywords: [asset tokenization, fractionalization, NFT, fungible token, tokenized asset, Move, kiosk, burnability]
+description: >-
+  Represent real-world assets as onchain fractional tokens using the
+  tokenized_asset module on Sui.
+keywords:
+  - asset tokenization
+  - fractionalization
+  - NFT
+  - fungible token
+  - tokenized asset
+  - Move
+  - kiosk
+  - burnability
+goal:
+  description: >-
+    Reader understands represent real-world assets as onchain fractional tokens
+    using the tokenized_asset module on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Fractionalization
+        - pattern: Move packages
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Asset tokenization is the process of representing real-world assets, such as real estate, art, commodities, or stocks, as digital tokens on the blockchain. Each token represents ownership or a fraction of the underlying asset, recorded and managed onchain.

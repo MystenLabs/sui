@@ -1,7 +1,33 @@
 ---
 title: Move Package Management
 description: Learn how to use the Move package manager system.
-keywords: [ move, move reference, package management, package manager, move packages, move package management ]
+keywords:
+  - move
+  - move reference
+  - package management
+  - package manager
+  - move packages
+  - move package management
+goal:
+  description: Reader can learn how to use the Move package manager system
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Package-related files
+        - pattern: Dependencies
+        - pattern: Environments
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 <AgentPrompt

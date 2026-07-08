@@ -1,7 +1,44 @@
 ---
 title: Move Trace Debugger
-description: Debug Move execution traces directly in VS Code to understand how your code executes.
-keywords: [ move trace debugger, debug move execution traces, debug move traces, move execution traces, vs code, debug in vs code, visual studio code, move extension, vs code extension, move vs code extension, debugging, debug interface, replay ]
+description: >-
+  Debug Move execution traces directly in VS Code to understand how your code
+  executes.
+keywords:
+  - move trace debugger
+  - debug move execution traces
+  - debug move traces
+  - move execution traces
+  - vs code
+  - debug in vs code
+  - visual studio code
+  - move extension
+  - vs code extension
+  - move vs code extension
+  - debugging
+  - debug interface
+  - replay
+goal:
+  description: >-
+    Reader can set up and use move trace debugger for a better Move development
+    experience
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Install
+        - pattern: Features
+        - pattern: Usage
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 The [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension for Visual Studio Code provides a familiar [debugging interface](https://code.visualstudio.com/docs/debugtest/debugging) for Move unit tests and onchain transactions, including [PTB](/develop/transactions/ptbs/prog-txn-blocks) debugging support. You can inspect the state of PTB commands, step through code execution, track local variable values, and set line breakpoints for Move code, either in unit tests or in onchain Move calls.

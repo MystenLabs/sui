@@ -1,7 +1,38 @@
 ---
-title: Customizing, Testing, and Management
-description: Details on how to customize Nautilus server logic, test functionality locally, and manage the enclave. 
-keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
+title: 'Customizing, Testing, and Management'
+description: >-
+  Details on how to customize Nautilus server logic, test functionality locally,
+  and manage the enclave.
+keywords:
+  - nautilus
+  - using nautilus
+  - deploy aws nitro enclave
+  - aws nitro
+  - enclaves
+  - tee
+  - ec2
+goal:
+  description: >-
+    Reader understands details on how to customize Nautilus server logic, test
+    functionality locally, and manage the enclave and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Create custom server logic
+        - pattern: Local testing
+        - pattern: Check reproducibility
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 The Nautilus server logic is located in the directory [`src/nautilus-server`](https://github.com/MystenLabs/nautilus/tree/main/src/nautilus-server). To customize the application, refer to the [Using Nautilus guide](/sui-stack/nautilus/using-nautilus) as a template.

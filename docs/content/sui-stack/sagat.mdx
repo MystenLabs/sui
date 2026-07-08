@@ -1,7 +1,44 @@
 ---
-title: Sagat 
-description: Sagat is a multisig management platform designed for managing Sui multisig wallets.
-keywords: [multisig, multi-signature, wallet management, transaction signing, Sagat SDK, Sagat API, signature analyzer, transaction signer, proposal voting, multisig threshold, external proposers, Slush wallet, Suilet wallet, TypeScript SDK, Testnet, Mainnet] 
+title: Sagat
+description: >-
+  Sagat is a multisig management platform designed for managing Sui multisig
+  wallets.
+keywords:
+  - multisig
+  - multi-signature
+  - wallet management
+  - transaction signing
+  - Sagat SDK
+  - Sagat API
+  - signature analyzer
+  - transaction signer
+  - proposal voting
+  - multisig threshold
+  - external proposers
+  - Slush wallet
+  - Suilet wallet
+  - TypeScript SDK
+  - Testnet
+  - Mainnet
+goal:
+  description: >-
+    Reader understands sagat is a multisig management platform designed for
+    managing Sui multisig wallets and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: What is multisig\?
+        - pattern: Risks
+        - pattern: Using the Sagat web interface
+      label: Has expected section structure
 ---
 
 [Sagat](https://github.com/MystenLabs/sagat/tree/main) is a full-stack multisig management platform for Sui multisig wallets. It is built using Bun and a TypeScript API for the backend and React for the frontend.

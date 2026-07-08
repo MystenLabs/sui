@@ -1,8 +1,28 @@
 ---
-title: Hello, World!
-description: Get started with Sui, the first internet-scale programmable blockchain platform.
-keywords: [ install sui, sui data, get started, how to get started, connect to a network, get SUI, sui tokens ]
+title: 'Hello, World!'
+description: >-
+  Get started with Sui, the first internet-scale programmable blockchain
+  platform.
+keywords:
+  - install sui
+  - sui data
+  - get started
+  - how to get started
+  - connect to a network
+  - get SUI
+  - sui tokens
 pagination_prev: null
+goal:
+  description: >-
+    Reader gets a clear overview of hello, world! and knows which subtopic to
+    read next
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '\]\(/[^)]+\)'
+      min: 1
+      label: Links to child pages
 ---
 
 Get started with Sui, the first internet-scale programmable blockchain platform.

@@ -1,10 +1,57 @@
 ---
 title: Connect a Frontend to a Move Package
 sidebar_label: Connect a Frontend
-description: Connect a React interface to a basic Move package to create a full stack application.
-keywords: [ first dapp, first package, move package, first move package, hello world, hello, world, react, react dapp, react ui, connect react dapp, add frontend, add ui, create fullstack app, fullstack app, full stack, full stack dapp ]
+description: >-
+  Connect a React interface to a basic Move package to create a full stack
+  application.
+keywords:
+  - first dapp
+  - first package
+  - move package
+  - first move package
+  - hello world
+  - hello
+  - world
+  - react
+  - react dapp
+  - react ui
+  - connect react dapp
+  - add frontend
+  - add ui
+  - create fullstack app
+  - fullstack app
+  - full stack
+  - full stack dapp
 pagination_prev: null
 pagination_next: null
+goal:
+  description: >-
+    Reader can connect a React frontend to their published Move package and see
+    it working locally
+  requires:
+    - pattern: '```'
+      min: 2
+      label: Has command or code examples
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - pattern: sui --version|sui -V
+      min: 1
+      label: Shows how to verify installation
+    - pattern: balance|gas
+      min: 1
+      label: Shows how to verify token receipt
+    - pattern: localhost|npm start|pnpm|yarn
+      min: 1
+      label: Shows how to run the frontend
+    - min_words: 300
+      label: Sufficient walkthrough depth
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Connect a frontend
+    stage: Setup
 ---
 
 In the previous guide, ["Hello, World!"](/getting-started/onboarding/hello-world), you deployed a Move package and interacted with it to create an object that stored the text "Hello world!".

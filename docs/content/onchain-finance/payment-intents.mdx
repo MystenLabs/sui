@@ -1,7 +1,39 @@
 ---
 title: Payment Intents
-description: Use programmable transaction blocks to compile multi-step payment workflows into a single atomic transaction.
-keywords: [PTB, programmable transaction block, payment intent, atomic transaction, sponsored gas]
+description: >-
+  Use programmable transaction blocks to compile multi-step payment workflows
+  into a single atomic transaction.
+keywords:
+  - PTB
+  - programmable transaction block
+  - payment intent
+  - atomic transaction
+  - sponsored gas
+goal:
+  description: >-
+    Reader can use programmable transaction blocks to compile multi-step payment
+    workflows into a single atomic transaction
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Anatomy of a payment intent
+        - pattern: 'Swap, save, send example'
+        - pattern: Comparison with single-action chains
+      label: Has expected section structure
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Payment intents
+    stage: Payment Flow
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Payment intents
+    stage: Money Movement
 ---
 
 A **payment intent** is a single atomic transaction that bundles multiple, heterogeneous payment operations. Rather than signing a separate transaction for each onchain action, you compose multiple operations into one batch: swaps, deposits, transfers, and balance reads. A payment intent is a form of [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks). All operations execute as a unit. If any operation fails, the entire batch reverts and no state changes onchain.

@@ -1,7 +1,40 @@
 ---
 title: DeepBookV3 SDK
-description: Use the DeepBook TypeScript SDK to interact directly with the DeepBook package. 
-keywords: [ deepbook, deep book, deepbook v3, typescript, typescript SDK, mysten/deepbook, deepbookV3 SDK, Coin, Pool, Manager ] 
+description: >-
+  Use the DeepBook TypeScript SDK to interact directly with the DeepBook
+  package.
+keywords:
+  - deepbook
+  - deep book
+  - deepbook v3
+  - typescript
+  - typescript SDK
+  - mysten/deepbook
+  - deepbookV3 SDK
+  - Coin
+  - Pool
+  - Manager
+goal:
+  description: >-
+    Developer can use the DeepBook TypeScript SDK to interact directly with the
+    DeepBook package using the SDK
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Has substantive API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: DeepBook SDK overview
+    stage: DeFi Primitives
 ---
 
 The DeepBookV3 TypeScript SDK abstracts away the transaction calls, allowing for direct interactions with the `DeepBook` package.

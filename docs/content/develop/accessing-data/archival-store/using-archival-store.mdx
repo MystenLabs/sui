@@ -1,7 +1,36 @@
 ---
 title: Querying Historical Data with Archival Service
 description: Query historical Sui network data through the Archival Service gRPC API.
-keywords: [ archival store, archival service, historical data, grpc, ledger service, bigtable, sui-kv-rpc ]
+keywords:
+  - archival store
+  - archival service
+  - historical data
+  - grpc
+  - ledger service
+  - bigtable
+  - sui-kv-rpc
+goal:
+  description: >-
+    Reader can query historical Sui network data through the Archival Service
+    gRPC API
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Public endpoints
+        - pattern: Querying the service
+        - pattern: Using the Archival Service as a fallback
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 The Archival Service provides access to historical Sui network data through the same [`LedgerService`](/references/fullnode-protocol) gRPC API available on full nodes. Use it as an explicit gRPC endpoint when a full node has pruned the data you need, or as a dedicated source for historical queries. Full node gRPC endpoints do not automatically fall back to Archival Service endpoints.

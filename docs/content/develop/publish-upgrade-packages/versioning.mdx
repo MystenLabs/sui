@@ -2,7 +2,37 @@
 title: Package Versioning
 sidebar_label: Versioning
 description: Versioning provides the ability to upgrade packages on the Sui network.
-keywords: [ package versioning, package versions, versioning packages ]
+keywords:
+  - package versioning
+  - package versions
+  - versioning packages
+goal:
+  description: >-
+    Reader understands versioning provides the ability to upgrade packages on
+    the Sui network
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Package versioning
+    stage: Operations
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Package versioning
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Package versioning
+    stage: Ship
 ---
 
 [Move packages](/develop/publish-upgrade-packages) are versioned and stored onchain, but follow a different scheme because they are immutable from inception. Package transaction inputs are referenced by ID alone. They are always loaded at their latest version.

@@ -1,8 +1,41 @@
 ---
 title: Flash Loans SDK
 sidebar_label: Flash Loans
-description: Learn how to use the DeepBookV3 SDK to execute functions relating to flash loans.
-keywords: [ uncollateralized, flash loans, loans, uncollateralized loans, programmable transaction blocks, ptbs, borrow flash loan base, borrow flash loan quote, retrieve flash loan base, retrieve flash loan quote ]
+description: >-
+  Learn how to use the DeepBookV3 SDK to execute functions relating to flash
+  loans.
+keywords:
+  - uncollateralized
+  - flash loans
+  - loans
+  - uncollateralized loans
+  - programmable transaction blocks
+  - ptbs
+  - borrow flash loan base
+  - borrow flash loan quote
+  - retrieve flash loan base
+  - retrieve flash loan quote
+goal:
+  description: >-
+    Developer can learn how to use the DeepBookV3 SDK to execute functions
+    relating to flash loans using the SDK
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Has substantive API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'SDK: Flash loans'
+    stage: DeFi SDK
 ---
 
 A flash loan is one where the borrowing and returning of loans from pools is performed within a single programmable transaction block. The SDK exposes functions that allow you to implement this functionality. See [Flash Loans](/onchain-finance/deepbookv3/contract-information/flash-loans) for more details on the API.

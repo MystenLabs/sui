@@ -1,6 +1,25 @@
 ---
 title: What is Nautilus?
 description: Nautilus is a verifiable offchain compute layer on Sui.
+goal:
+  description: >-
+    Reader understands nautilus is a verifiable offchain compute layer on Sui
+    and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Features
+        - pattern: How it works
+        - pattern: Use cases
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Nautilus is a verifiable offchain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/sui-stack/nautilus/community-dev-tools) while preserving trust onchain through smart contract-based verification.

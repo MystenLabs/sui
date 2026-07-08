@@ -1,7 +1,27 @@
 ---
 title: Sui Validator CLI
-description: The Sui Validator CLI is used to access the validator features of the Sui network. 
-keywords: [ sui validator cli, sui validator, sui cli validator, interact with validator from cli, validator cli, validator commands ]
+description: >-
+  The Sui Validator CLI is used to access the validator features of the Sui
+  network.
+keywords:
+  - sui validator cli
+  - sui validator
+  - sui cli validator
+  - interact with validator from cli
+  - validator cli
+  - validator commands
+goal:
+  description: 'Reader can look up validator cli command syntax, flags, and usage examples'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - pattern: 'sui '
+      min: 2
+      label: Shows CLI command usage
 ---
 
 The Sui CLI `validator` command provides command-level access to validator features of the Sui network.

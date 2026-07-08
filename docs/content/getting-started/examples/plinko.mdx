@@ -1,14 +1,60 @@
 ---
 title: Plinko
-description: Build a provably fair, gasless Plinko game on Sui using onchain randomness and sponsored transactions through Enoki.
-keywords: [example, plinko, onchain-randomness, sponsored-transactions, enoki, zklogin, game, move]
+description: >-
+  Build a provably fair, gasless Plinko game on Sui using onchain randomness and
+  sponsored transactions through Enoki.
+keywords:
+  - example
+  - plinko
+  - onchain-randomness
+  - sponsored-transactions
+  - enoki
+  - zklogin
+  - game
+  - move
 sidebar_label: Plinko
 example_id: plinko-poc
-last_verified: 2026-04-28
-repo: https://github.com/MystenLabs/plinko-poc
+last_verified: 2026-04-28T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/plinko-poc'
 path: /
-languages: [move, typescript]
-concepts: [onchain_randomness, sponsored_transactions, shared_objects, dynamic_object_fields, events, house_pattern]
+languages:
+  - move
+  - typescript
+concepts:
+  - onchain_randomness
+  - sponsored_transactions
+  - shared_objects
+  - dynamic_object_fields
+  - events
+  - house_pattern
+goal:
+  description: >-
+    Reader can build a provably fair, gasless Plinko game on Sui using onchain
+    randomness and sponsored transactions through Enoki
+  requires:
+    - headings:
+        - pattern: When to use|Use case
+        - pattern: What you learn|Learning
+        - pattern: Prerequisites
+        - pattern: Setup|Getting started
+        - pattern: Run
+        - pattern: Troubleshooting|Common issues
+      label: Has standard example page sections
+    - pattern: '```'
+      min: 3
+      label: 'Has code blocks for setup, source, and output'
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 800
+      label: Sufficient explanation depth
+    - pattern: mermaid|sequenceDiagram|graph|flowchart
+      min: 1
+      label: Has architecture diagram
+    - headings:
+        - pattern: Key code|Code highlight|Walkthrough
+      label: Has code explanation section
 ---
 
 Plinko is a casino-style game where a ball is dropped through a pin board, randomly landing on a prize at the bottom. This Plinko example written in Move demonstrates Sui's [onchain randomness](/sui-stack/on-chain-primitives/randomness-onchain) and [sponsored transactions](/develop/transaction-payment/sponsor-txn). Players bet SUI tokens and drop balls through the pin board, where each ball lands in a multiplier bucket determined entirely by Sui's onchain random number generator.

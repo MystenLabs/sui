@@ -1,15 +1,30 @@
 ---
 title: Maintainer
-description: Learn about maintainer functions for managing margin pools and system configuration.
+description: >-
+  Learn about maintainer functions for managing margin pools and system
+  configuration.
 keywords:
-  [
-    maintainer,
-    margin pool admin,
-    pool configuration,
-    interest rates,
-    protocol config,
-    deepbook margin,
-  ]
+  - maintainer
+  - margin pool admin
+  - pool configuration
+  - interest rates
+  - protocol config
+  - deepbook margin
+goal:
+  description: >-
+    Reader can learn about maintainer functions for managing margin pools and
+    system configuration
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: API
+        - pattern: Events
+      label: Has expected section structure
 ---
 
 The maintainer module provides functions for managing margin pools, configuring interest rates, and controlling which DeepBook pools can access margin lending. These functions are restricted to maintainers with the appropriate capabilities.

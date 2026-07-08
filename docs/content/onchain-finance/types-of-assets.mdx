@@ -1,7 +1,41 @@
 ---
 title: Types of Assets
-description: Sui provides a variety of asset standards with different features for multiple usage patterns.
-keywords: [ coin, currency, address balances, permissioned assets, pas, balances, closed-loop, currency standard, coin standard, closed-loop token standard, non-fungible token, fungible token, nft ]
+description: >-
+  Sui provides a variety of asset standards with different features for multiple
+  usage patterns.
+keywords:
+  - coin
+  - currency
+  - address balances
+  - permissioned assets
+  - pas
+  - balances
+  - closed-loop
+  - currency standard
+  - coin standard
+  - closed-loop token standard
+  - non-fungible token
+  - fungible token
+  - nft
+goal:
+  description: >-
+    Reader understands sui provides a variety of asset standards with different
+    features for multiple usage patterns
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: 'Fungible tokens: Coin standard'
+        - pattern: 'Fungible tokens: Currency standard'
+        - pattern: Permissioned assets
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 On Sui, there are a variety of fungible, non-fungible, and other types of asset standards, each with their own defined usage patterns and capabilities. Choosing the correct standard for your use case is important to enable the correct set of features in your application.

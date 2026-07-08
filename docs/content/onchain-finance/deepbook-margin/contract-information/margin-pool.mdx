@@ -2,17 +2,30 @@
 title: Margin Pool
 description: Learn about margin pools and how they enable liquidity for leveraged trading.
 keywords:
-  [
-    margin pool,
-    marginpool,
-    liquidity pool,
-    lending pool,
-    supply,
-    borrow,
-    interest rate,
-    utilization rate,
-    deepbook margin,
-  ]
+  - margin pool
+  - marginpool
+  - liquidity pool
+  - lending pool
+  - supply
+  - borrow
+  - interest rate
+  - utilization rate
+  - deepbook margin
+goal:
+  description: >-
+    Reader can learn about margin pools and how they enable liquidity for
+    leveraged trading
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: API
+        - pattern: Events
+      label: Has expected section structure
 ---
 
 The `MarginPool` is a shared object that manages liquidity for a specific asset, enabling lenders to supply assets and margin traders to borrow them. Each margin pool tracks supply and borrow positions, accrues interest over time, and enforces risk parameters to maintain system health.

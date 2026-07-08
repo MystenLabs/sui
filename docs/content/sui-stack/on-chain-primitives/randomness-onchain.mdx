@@ -1,7 +1,38 @@
 ---
 title: Onchain Randomness
-description: Randomness is a valuable tool to simulate chance onchain, but can also expose flaws in your logic. Understanding the vulnerabilities and accounting for them can mitigate the threat exposure for your smart contracts.
-keywords: [ raffle, randomness, random, RandomGenerator, ProtocolConfig, PTB, dice ]
+description: >-
+  Randomness is a valuable tool to simulate chance onchain, but can also expose
+  flaws in your logic. Understanding the vulnerabilities and accounting for them
+  can mitigate the threat exposure for your smart contracts.
+keywords:
+  - raffle
+  - randomness
+  - random
+  - RandomGenerator
+  - ProtocolConfig
+  - PTB
+  - dice
+goal:
+  description: >-
+    Reader understands randomness is a valuable tool to simulate chance onchain,
+    but can also expose flaws in your logic. Understanding the vulnerabilities
+    and accounting for them can mitigate the threat exposure for your smart
+    contracts and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Limited resources and `Random` dependent
+        - pattern: Use \(non-public\) `entry` functions
+        - pattern: Programmable transaction block \(PTB\) r
+      label: Has expected section structure
 ---
 
 A Move function can create a new instance of `RandomGenerator` and use it for generating random values of different types. For example, `generate_u128(&mut generator), generate_u8_in_range(&mut generator, 1, 6)` or the following example:

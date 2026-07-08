@@ -1,8 +1,28 @@
 ---
 title: Custom Indexing Framework
-description: The `sui-indexer-alt-framework` is a powerful Rust framework for building high-performance, custom blockchain indexers on Sui. It provides customizable, production-ready components for data ingestion, processing, and storage.
-keywords: [ indexer, framework, indexer framework, dex, events, framework architecture ]
+description: >-
+  The `sui-indexer-alt-framework` is a powerful Rust framework for building
+  high-performance, custom blockchain indexers on Sui. It provides customizable,
+  production-ready components for data ingestion, processing, and storage.
+keywords:
+  - indexer
+  - framework
+  - indexer framework
+  - dex
+  - events
+  - framework architecture
 pagination_prev: null
+goal:
+  description: >-
+    Reader gets a clear overview of custom indexing framework and knows which
+    subtopic to read next
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '\]\(/[^)]+\)'
+      min: 1
+      label: Links to child pages
 ---
 
 The custom indexing framework exposes specific interfaces that you implement to define your data processing logic. Some common APIs include:

@@ -1,6 +1,22 @@
 ---
 title: Nautilus Design
-description: Overview of the design aspects of Nautilus, including its trust model.
+description: 'Overview of the design aspects of Nautilus, including its trust model.'
+goal:
+  description: >-
+    Reader understands overview of the design aspects of Nautilus, including its
+    trust model and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Platform Configuration Registers \(PCR\)
+        - pattern: What happens inside the enclave
+        - pattern: The role of smart contracts
+      label: Has expected section structure
 ---
 
 ![image](./images/nautilus-overview_nautilus-design_v1.png)

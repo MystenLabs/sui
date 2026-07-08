@@ -1,7 +1,31 @@
 ---
 title: Contribute to Sui Repositories
-description: Sui repositories are open source and welcome community contributions. 
-keywords: [ contribute to sui, open source contributions, contributing to sui, contribution guidelines, how to contribute, open an issue, contribute through SIP, sui improvement proposal  ]
+description: Sui repositories are open source and welcome community contributions.
+keywords:
+  - contribute to sui
+  - open source contributions
+  - contributing to sui
+  - contribution guidelines
+  - how to contribute
+  - open an issue
+  - contribute through SIP
+  - sui improvement proposal
+goal:
+  description: >-
+    Contributor understands the contribute to sui repositories requirements for
+    the Sui documentation
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: 'Join the community \{#join-the-community'
+        - pattern: 'Open issues \{#open-issues\}'
+        - pattern: 'Fork Sui to contribute \{#fork-sui-contr'
+      label: Has expected section structure
 ---
 
 This page describes how to contribute to Sui, and provides additional information about participating in the Sui community.

@@ -1,7 +1,46 @@
 ---
 title: Intent Signing
-description: Intent signing provides a compact domain separator to data signed by both user and authority signatures. Data that each signature commits to is called an intent message, which all signatures on Sui must include. 
-keywords: [ intent, signing, intent signatures, intent message, domain separators, compact structs, signing standard, compact domain separator, user signatures, authority signatures, proof of possession, generate proof of possession ]
+description: >-
+  Intent signing provides a compact domain separator to data signed by both user
+  and authority signatures. Data that each signature commits to is called an
+  intent message, which all signatures on Sui must include.
+keywords:
+  - intent
+  - signing
+  - intent signatures
+  - intent message
+  - domain separators
+  - compact structs
+  - signing standard
+  - compact domain separator
+  - user signatures
+  - authority signatures
+  - proof of possession
+  - generate proof of possession
+goal:
+  description: >-
+    Reader understands intent signing provides a compact domain separator to
+    data signed by both user and authority signatures
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Structs
+        - pattern: User signature
+        - pattern: Authority signature
+      label: Has expected section structure
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Intent signing
+    stage: Signing
 ---
 
 An intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message rather than the message itself.

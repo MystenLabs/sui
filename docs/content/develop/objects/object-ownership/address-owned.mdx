@@ -1,7 +1,53 @@
 ---
 title: Address-Owned Objects
-description: Address-owned objects are owned by a Sui 32-byte address, which can either be an account address or an object ID. Learn how to create and access these objects.
-keywords: [ address-owned objects, address-owned, owned objects, objects owned by address, accessing objects, accessing owned objects, address ownership ]
+description: >-
+  Address-owned objects are owned by a Sui 32-byte address, which can either be
+  an account address or an object ID. Learn how to create and access these
+  objects.
+keywords:
+  - address-owned objects
+  - address-owned
+  - owned objects
+  - objects owned by address
+  - accessing objects
+  - accessing owned objects
+  - address ownership
+goal:
+  description: >-
+    Reader can address-owned objects are owned by a Sui 32-byte address, which
+    can either be an account address or an object ID. Learn how to create and
+    access these objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Create address-owned objects
+        - pattern: When to use address-owned objects
+        - pattern: Interact with address-owned objects
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Address-owned objects
+    stage: Payment Flow
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Address-owned objects
+    stage: Environment
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Address-owned objects
+    stage: Environment
 ---
 
 Address-owned objects are owned by a 32-byte address. 32-byte addresses are either an account address derived from a particular signature scheme or an object ID. An address-owned object is only accessible to its owner. You can transfer objects that you own to different addresses.

@@ -1,7 +1,49 @@
 ---
 title: zkLogin Wallets
-description: Learn how zkLogin wallets work on Sui, explore examples like Enoki and the Playtron wallet, and integrate zkLogin into your app using the Sui TypeScript SDK.
-keywords: [ zkLogin, zero-knowledge login, wallet, enoki, playtron, suiplay0x1, sponsored transactions, oauth, jwt, ephemeral key pair, dapp kit ]
+description: >-
+  Learn how zkLogin wallets work on Sui, explore examples like Enoki and the
+  Playtron wallet, and integrate zkLogin into your app using the Sui TypeScript
+  SDK.
+keywords:
+  - zkLogin
+  - zero-knowledge login
+  - wallet
+  - enoki
+  - playtron
+  - suiplay0x1
+  - sponsored transactions
+  - oauth
+  - jwt
+  - ephemeral key pair
+  - dapp kit
+goal:
+  description: >-
+    Reader can learn how zkLogin wallets work on Sui, explore examples like
+    Enoki and the Playtron wallet, and integrate zkLogin into your app using the
+    Sui TypeScript SDK
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: How zkLogin wallets work
+        - pattern: Enoki
+        - pattern: Playtron wallet
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: zkLogin wallets
+    stage: Wallets & Funding
 ---
 
 zkLogin wallets derive a Sui address from an OAuth credential rather than a traditional private key or recovery passphrase. The user signs in with a provider they already use (Google, Apple, Twitch, and others), and the wallet generates a Sui address tied to that credential. No seed phrase is created, and no persistent private key is stored by the OAuth provider. [zkLogin is a primitive native to Sui](/sui-stack/zklogin-integration/zklogin), designed to remove the key management burden for users who are new to onchain applications.

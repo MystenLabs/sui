@@ -1,7 +1,31 @@
 ---
 title: Protocol Upgrades
-description: The Sui protocol, framework, and execution engine are frequently extended to include new functionality and bug fixes. The upgrade process ensures all clients use the same source.
-keywords: [ protocol upgrades, framework upgrades, protocol config, feature flags, validator upgrades, protocol version ]
+description: >-
+  The Sui protocol, framework, and execution engine are frequently extended to
+  include new functionality and bug fixes. The upgrade process ensures all
+  clients use the same source.
+keywords:
+  - protocol upgrades
+  - framework upgrades
+  - protocol config
+  - feature flags
+  - validator upgrades
+  - protocol version
+goal:
+  description: >-
+    Reader understands the Sui protocol, framework, and execution engine are
+    frequently extended to include new functionality and bug fixes
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Protocol upgrade process
+        - pattern: Framework upgrades
+      label: Has expected section structure
 ---
 
 The Sui protocol, framework, and execution engine are frequently extended to include new functionality and bug fixes. This functionality is added as new code released to validator operators as part of regular software releases.

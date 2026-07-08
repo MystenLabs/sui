@@ -1,7 +1,53 @@
 ---
 title: JSON-RPC Migration Guide
-description: Choose between gRPC and GraphQL RPC when migrating from the deprecated JSON-RPC API. Includes a method mapping, decision criteria, and common migration gotchas.
-keywords: [ json-rpc, migration, grpc, graphql, deprecation, sui rpc, json-rpc migration, sui rpc migration, replace json-rpc ]
+description: >-
+  Choose between gRPC and GraphQL RPC when migrating from the deprecated
+  JSON-RPC API. Includes a method mapping, decision criteria, and common
+  migration gotchas.
+keywords:
+  - json-rpc
+  - migration
+  - grpc
+  - graphql
+  - deprecation
+  - sui rpc
+  - json-rpc migration
+  - sui rpc migration
+  - replace json-rpc
+goal:
+  description: >-
+    Reader can choose between gRPC and GraphQL RPC when migrating from the
+    deprecated JSON-RPC API. Includes a method mapping, decision criteria, and
+    common migration gotchas
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Choose your replacement
+        - pattern: Method mapping
+        - pattern: Migration gotchas
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Transaction indexing (migration)
+    stage: History
+    eval: partial
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Index payment history
+    stage: Ship
+    eval: partial
 ---
 
 <ImportContent source="json-rpc-deprecation" mode="snippet" />

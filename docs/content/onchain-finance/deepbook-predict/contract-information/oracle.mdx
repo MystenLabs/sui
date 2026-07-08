@@ -1,17 +1,33 @@
 ---
 title: Oracle
-description: Learn about OracleSVI lifecycle, price updates, SVI updates, settlement, and oracle read functions in DeepBook Predict.
+description: >-
+  Learn about OracleSVI lifecycle, price updates, SVI updates, settlement, and
+  oracle read functions in DeepBook Predict.
 keywords:
-  [
-    oraclesvi,
-    deepbook predict oracle,
-    oracle lifecycle,
-    svi,
-    spot price,
-    forward price,
-    settlement price,
-    oracle events,
-  ]
+  - oraclesvi
+  - deepbook predict oracle
+  - oracle lifecycle
+  - svi
+  - spot price
+  - forward price
+  - settlement price
+  - oracle events
+goal:
+  description: >-
+    Reader can learn about OracleSVI lifecycle, price updates, SVI updates,
+    settlement, and oracle read functions in DeepBook Predict
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Lifecycle
+        - pattern: API
+        - pattern: Structs
+      label: Has expected section structure
 ---
 
 `OracleSVI` is the market state for one underlying asset and one expiry. It stores spot and forward prices, SVI volatility surface parameters, activation state, the last update timestamp, and the settlement price after expiry.

@@ -1,7 +1,59 @@
 ---
 title: Signing and Sending Transactions
-description: Understanding cryptographic keys, addresses, and signatures on Sui. Sui supports multiple cryptography algorithms and primitives with rapid switching between them.
-keywords: [ authentication, keys, addresses, signatures, Ed25519, ECDSA, multisig, zkLogin, passkey, BIP-32, BIP-44, BIP-39, key derivation, signature requirements ]
+description: >-
+  Understanding cryptographic keys, addresses, and signatures on Sui. Sui
+  supports multiple cryptography algorithms and primitives with rapid switching
+  between them.
+keywords:
+  - authentication
+  - keys
+  - addresses
+  - signatures
+  - Ed25519
+  - ECDSA
+  - multisig
+  - zkLogin
+  - passkey
+  - BIP-32
+  - BIP-44
+  - BIP-39
+  - key derivation
+  - signature requirements
+goal:
+  description: >-
+    Reader understands understanding cryptographic keys, addresses, and
+    signatures on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Keys and addresses
+        - pattern: Signatures
+        - pattern: Authority signatures
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Transaction auth
+    stage: Operations
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Auth overview
+    stage: Signing
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Auth overview
+    stage: Authorization
 ---
 
 Transaction authentication on Sui involves three core concepts: cryptographic keys that you control, addresses that identify accounts onchain, and signatures that prove ownership. Sui implements these concepts using widely accepted wallet specifications and multiple signature schemes.

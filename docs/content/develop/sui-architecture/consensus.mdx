@@ -1,7 +1,29 @@
 ---
 title: Consensus
 description: Overview of the Sui consensus mechanism.
-keywords: [ consensus, mysticeti, delegated proof of stake, proof of stake, dpos ]
+keywords:
+  - consensus
+  - mysticeti
+  - delegated proof of stake
+  - proof of stake
+  - dpos
+goal:
+  description: Reader understands overview of the Sui consensus mechanism
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: Validator nodes
+        - pattern: Write requests
+        - pattern: Mysticeti
+      label: Has expected section structure
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
 ---
 
 Consensus is the process by which the majority of nodes on a blockchain network agree on the current state of the network, including which transactions to finalize and commit to the chain's permanent history. This process prevents malicious or faulty nodes from altering the network incorrectly.

@@ -1,7 +1,25 @@
 ---
 title: Sui CLI Completions
 description: Generate shell completion scripts for the Sui CLI.
-keywords: [sui completion, sui cli completion, shell completion, bash completion, zsh completion, fish completion]
+keywords:
+  - sui completion
+  - sui cli completion
+  - shell completion
+  - bash completion
+  - zsh completion
+  - fish completion
+goal:
+  description: 'Reader can look up cli completions command syntax, flags, and usage examples'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - pattern: 'sui '
+      min: 2
+      label: Shows CLI command usage
 ---
 
 The Sui CLI `completion` command generates shell completion scripts for the `sui` command. Install the generated script for your shell to complete Sui commands, subcommands, flags, and values from your command line.

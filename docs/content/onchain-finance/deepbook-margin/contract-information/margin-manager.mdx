@@ -1,18 +1,38 @@
 ---
 title: Margin Manager
-description: Learn about the margin manager and how it enables leveraged trading on DeepBook.
+description: >-
+  Learn about the margin manager and how it enables leveraged trading on
+  DeepBook.
 keywords:
-  [
-    margin manager,
-    marginmanager,
-    leveraged trading,
-    margin trading,
-    borrow,
-    repay,
-    liquidation,
-    collateral,
-    deepbook margin,
-  ]
+  - margin manager
+  - marginmanager
+  - leveraged trading
+  - margin trading
+  - borrow
+  - repay
+  - liquidation
+  - collateral
+  - deepbook margin
+goal:
+  description: >-
+    Reader can learn about the margin manager and how it enables leveraged
+    trading on DeepBook
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - headings:
+        - pattern: API
+        - pattern: Events
+      label: Has expected section structure
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'Margin contract: Manager'
+    stage: Margin
 ---
 
 The `MarginManager` is a shared object that wraps a `BalanceManager` and provides the necessary capabilities to deposit, withdraw, trade, and manage leveraged positions. It enables users to borrow assets from margin pools to amplify their trading positions while managing risk through collateralization.

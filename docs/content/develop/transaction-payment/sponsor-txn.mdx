@@ -1,7 +1,46 @@
 ---
 title: Sponsored Transactions
-description: Sponsored transactions let you pay gas fees on behalf of another user, reducing onboarding friction for users who don't own SUI.
-keywords: [sponsored transactions, gas station, sponsor a transaction, pay gas for another address, GasData, user onboarding, gas fees]
+description: >-
+  Sponsored transactions let you pay gas fees on behalf of another user,
+  reducing onboarding friction for users who don't own SUI.
+keywords:
+  - sponsored transactions
+  - gas station
+  - sponsor a transaction
+  - pay gas for another address
+  - GasData
+  - user onboarding
+  - gas fees
+goal:
+  description: >-
+    Reader understands sponsored transactions let you pay gas fees on behalf of
+    another user, reducing onboarding friction for users who don't own SUI
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+    - min_words: 300
+      label: Sufficient content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - headings:
+        - pattern: Roles
+        - pattern: Data structure
+        - pattern: Create sponsored transactions using a `G
+      label: Has expected section structure
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Sponsored transactions
+    stage: Gas
+    eval: covered
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Sponsored gas
+    stage: Authorization
+    eval: partial
 ---
 
 A transaction on Sui requires a gas payment to execute. The payment is a list of `0x2::coin::Coin<0x2::sui::SUI>` objects.
