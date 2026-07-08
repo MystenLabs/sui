@@ -1,16 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use consensus_config::Committee;
 use consensus_types::block::{BlockRef, Round};
 use futures::{StreamExt as _, stream};
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
 use tap::TapFallible;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
     BlockVerifier, RandomnessSignatureHandler, TransactionVoteTracker,
@@ -27,6 +33,7 @@ use crate::{
         NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem, PeerId,
         observer::AuxiliaryData,
     },
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     synchronizer::SynchronizerHandle,
 };
 
@@ -264,11 +271,16 @@ impl ObserverNetworkService for ObserverService {
             );
 
         const MAX_BLOCKS_PER_POLL: usize = 20;
-        let live_block_stream = BroadcastStream::<VerifiedBlock>::new(
-            PeerId::Observer(Box::new(peer)),
-            broadcast_rx,
+        let live_block_stream = quorum_gated_accepted_block_stream(
+            self.context.clone(),
+            self.dag_state.clone(),
+            BroadcastStream::<VerifiedBlock>::new(
+                PeerId::Observer(Box::new(peer)),
+                broadcast_rx,
+                MAX_BLOCKS_PER_POLL,
+                self.subscription_counter.clone(),
+            ),
             MAX_BLOCKS_PER_POLL,
-            self.subscription_counter.clone(),
         )
         .map(|blocks| ObserverStreamItem {
             blocks: blocks
@@ -326,9 +338,202 @@ impl ObserverNetworkService for ObserverService {
     }
 }
 
+fn quorum_gated_accepted_block_stream(
+    context: Arc<Context>,
+    dag_state: Arc<RwLock<DagState>>,
+    mut source: BroadcastStream<VerifiedBlock>,
+    max_blocks_per_item: usize,
+) -> ReceiverStream<Vec<VerifiedBlock>> {
+    let release_timeout = context.parameters.leader_timeout;
+    let (tx, rx) = mpsc::channel(max_blocks_per_item);
+
+    mysten_metrics::spawn_monitored_task!(async move {
+        let mut state = AcceptedBlockReleaseState::new(context, dag_state, release_timeout);
+
+        loop {
+            let released = tokio::select! {
+                blocks = source.next() => {
+                    let Some(blocks) = blocks else {
+                        break;
+                    };
+                    state.accept_blocks(blocks)
+                }
+                _ = tokio::time::sleep_until(state.next_timeout()) => {
+                    state.release_timed_out_rounds()
+                }
+            };
+
+            if !send_released_blocks(&tx, released, max_blocks_per_item).await {
+                return;
+            }
+        }
+
+        let released = state.release_all();
+        let _ = send_released_blocks(&tx, released, max_blocks_per_item).await;
+    });
+
+    ReceiverStream::new(rx)
+}
+
+async fn send_released_blocks(
+    tx: &mpsc::Sender<Vec<VerifiedBlock>>,
+    released: Vec<VerifiedBlock>,
+    max_blocks_per_item: usize,
+) -> bool {
+    for blocks in released.chunks(max_blocks_per_item) {
+        if tx.send(blocks.to_vec()).await.is_err() {
+            return false;
+        }
+    }
+    true
+}
+
+struct BufferedRound {
+    first_buffered_at: Instant,
+    blocks: Vec<VerifiedBlock>,
+    // Aggregates the stake of block authors buffered on this stream only. Blocks dropped by
+    // broadcast lag or accepted before subscription are not counted, so a round may miss
+    // quorum here even when the validator has it — those rounds fall back to the release
+    // timeout.
+    quorum: StakeAggregator<QuorumThreshold>,
+}
+
+impl BufferedRound {
+    /// Buffers the block and counts its author's stake towards the round quorum.
+    /// Returns true when the quorum has been reached.
+    fn add_block(&mut self, block: VerifiedBlock, committee: &Committee) -> bool {
+        let reached_quorum = self.quorum.add(block.author(), committee);
+        self.blocks.push(block);
+        reached_quorum
+    }
+}
+
+impl Default for BufferedRound {
+    fn default() -> Self {
+        Self {
+            first_buffered_at: Instant::now(),
+            blocks: Vec::new(),
+            quorum: StakeAggregator::new(),
+        }
+    }
+}
+
+struct AcceptedBlockReleaseState {
+    context: Arc<Context>,
+    dag_state: Arc<RwLock<DagState>>,
+    release_timeout: Duration,
+    buffered_rounds: BTreeMap<Round, BufferedRound>,
+    // Highest round released so far. Releasing a round (on quorum or timeout) also releases
+    // all buffered rounds below it, so released rounds form a contiguous prefix and blocks
+    // at or below this watermark pass through without buffering.
+    last_released_round: Round,
+}
+
+impl AcceptedBlockReleaseState {
+    fn new(
+        context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
+        release_timeout: Duration,
+    ) -> Self {
+        Self {
+            context,
+            dag_state,
+            release_timeout,
+            buffered_rounds: BTreeMap::new(),
+            last_released_round: 0,
+        }
+    }
+
+    fn accept_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> Vec<VerifiedBlock> {
+        let gc_round = self.dag_state.read().gc_round();
+        self.prune(gc_round);
+
+        let mut immediately_release = Vec::new();
+        for block in blocks {
+            let round = block.round();
+            if round <= self.last_released_round {
+                immediately_release.push(block);
+                continue;
+            }
+
+            let reached_quorum = self
+                .buffered_rounds
+                .entry(round)
+                .or_default()
+                .add_block(block, &self.context.committee);
+
+            if reached_quorum {
+                immediately_release.extend(self.release_rounds_up_to(round));
+            }
+        }
+        sort_blocks(&mut immediately_release);
+        immediately_release
+    }
+
+    fn release_timed_out_rounds(&mut self) -> Vec<VerifiedBlock> {
+        let now = Instant::now();
+        let max_timed_out_round = self
+            .buffered_rounds
+            .iter()
+            .filter_map(|(round, buffered)| {
+                (now.duration_since(buffered.first_buffered_at) >= self.release_timeout)
+                    .then_some(*round)
+            })
+            .max();
+
+        let mut released = match max_timed_out_round {
+            Some(round) => self.release_rounds_up_to(round),
+            None => Vec::new(),
+        };
+        sort_blocks(&mut released);
+        released
+    }
+
+    fn release_all(&mut self) -> Vec<VerifiedBlock> {
+        let mut released = match self.buffered_rounds.keys().next_back().copied() {
+            Some(max_round) => self.release_rounds_up_to(max_round),
+            None => Vec::new(),
+        };
+        sort_blocks(&mut released);
+        released
+    }
+
+    fn next_timeout(&self) -> tokio::time::Instant {
+        let next_timeout = self
+            .buffered_rounds
+            .values()
+            .map(|buffered| buffered.first_buffered_at + self.release_timeout)
+            .min()
+            .unwrap_or_else(|| Instant::now() + Duration::from_secs(3600));
+        tokio::time::Instant::from_std(next_timeout)
+    }
+
+    /// Releases all buffered rounds at or below `round`. A quorum (or timeout) at a round
+    /// implies the rounds below it are settled, so there is no reason to keep them buffered.
+    fn release_rounds_up_to(&mut self, round: Round) -> Vec<VerifiedBlock> {
+        self.last_released_round = self.last_released_round.max(round);
+        let remaining_rounds = self.buffered_rounds.split_off(&round.saturating_add(1));
+        let released_rounds = std::mem::replace(&mut self.buffered_rounds, remaining_rounds);
+        released_rounds
+            .into_values()
+            .flat_map(|buffered| buffered.blocks)
+            .collect()
+    }
+
+    fn prune(&mut self, gc_round: Round) {
+        self.last_released_round = self.last_released_round.max(gc_round);
+        self.buffered_rounds
+            .retain(|round, _| *round > self.last_released_round);
+    }
+}
+
+fn sort_blocks(blocks: &mut [VerifiedBlock]) {
+    blocks.sort_unstable_by_key(|block| block.reference());
+}
+
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{sync::Arc, time::Duration};
 
     use futures::StreamExt;
     use parking_lot::RwLock;
@@ -338,6 +543,7 @@ mod tests {
     use crate::{
         block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
+        commit::CommitDigest,
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::MockCoreThreadDispatcher,
@@ -352,7 +558,8 @@ mod tests {
     #[tokio::test]
     async fn test_observer_stream_receives_broadcast_blocks() {
         telemetry_subscribers::init_for_testing();
-        let (context, keys) = Context::new_for_test(4);
+        let (mut context, keys) = Context::new_for_test(4);
+        context.parameters.leader_timeout = Duration::from_millis(10);
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());
@@ -419,6 +626,392 @@ mod tests {
         assert_eq!(received_blocks[1].author().value(), 1);
         assert_eq!(received_blocks[2].round(), 15);
         assert_eq!(received_blocks[2].author().value(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_accepted_block_release_waits_for_round_quorum() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut state = AcceptedBlockReleaseState::new(
+            context.clone(),
+            dag_state.clone(),
+            Duration::from_secs(60),
+        );
+
+        let block1 = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
+        let block2 = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        let block3 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
+        let block4 = VerifiedBlock::new_for_test(TestBlock::new(1, 3).build());
+
+        dag_state
+            .write()
+            .accept_blocks(vec![block1.clone(), block2.clone()]);
+        assert!(
+            state
+                .accept_blocks(vec![block1.clone(), block2.clone()])
+                .is_empty()
+        );
+
+        dag_state.write().accept_blocks(vec![block3.clone()]);
+        let released = state.accept_blocks(vec![block3.clone()]);
+        assert_eq!(
+            released
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+            vec![block1.reference(), block2.reference(), block3.reference()]
+        );
+
+        dag_state.write().accept_blocks(vec![block4.clone()]);
+        let released = state.accept_blocks(vec![block4.clone()]);
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].reference(), block4.reference());
+    }
+
+    #[tokio::test]
+    async fn test_accepted_block_release_timeout() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut state =
+            AcceptedBlockReleaseState::new(context, dag_state.clone(), Duration::from_millis(1));
+
+        let block = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
+        dag_state.write().accept_blocks(vec![block.clone()]);
+        assert!(state.accept_blocks(vec![block.clone()]).is_empty());
+
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        let released = state.release_timed_out_rounds();
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].reference(), block.reference());
+    }
+
+    fn new_release_state(
+        context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
+    ) -> AcceptedBlockReleaseState {
+        AcceptedBlockReleaseState::new(context, dag_state, Duration::from_secs(60))
+    }
+
+    #[tokio::test]
+    async fn test_accepted_block_release_counts_equivocating_authors_once() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut state = new_release_state(context, dag_state);
+
+        // Two equivocating blocks from authority 0 (same round, different digests) plus one
+        // block from authority 1 cover only 2 of 4 authorities - below quorum.
+        let block1 =
+            VerifiedBlock::new_for_test(TestBlock::new(1, 0).set_timestamp_ms(100).build());
+        let block2 =
+            VerifiedBlock::new_for_test(TestBlock::new(1, 0).set_timestamp_ms(200).build());
+        let block3 = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        assert_ne!(block1.reference(), block2.reference());
+        assert!(
+            state
+                .accept_blocks(vec![block1.clone(), block2.clone(), block3.clone()])
+                .is_empty()
+        );
+
+        // A third distinct authority reaches quorum and releases all buffered blocks.
+        let block4 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
+        let released = state.accept_blocks(vec![block4.clone()]);
+        let mut expected = vec![
+            block1.reference(),
+            block2.reference(),
+            block3.reference(),
+            block4.reference(),
+        ];
+        expected.sort();
+        assert_eq!(
+            released
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
+    #[tokio::test]
+    async fn test_accepted_block_release_quorum_releases_lower_rounds() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut state = new_release_state(context, dag_state);
+
+        // Rounds 1 and 3 stay below quorum with blocks from 2 authorities each.
+        let round1_blocks = (0..2)
+            .map(|author| VerifiedBlock::new_for_test(TestBlock::new(1, author).build()))
+            .collect::<Vec<_>>();
+        let round3_blocks = (0..2)
+            .map(|author| VerifiedBlock::new_for_test(TestBlock::new(3, author).build()))
+            .collect::<Vec<_>>();
+        assert!(state.accept_blocks(round1_blocks.clone()).is_empty());
+        assert!(state.accept_blocks(round3_blocks.clone()).is_empty());
+
+        // Quorum on round 2 releases rounds 1 and 2, but not round 3.
+        let round2_blocks = (0..3)
+            .map(|author| VerifiedBlock::new_for_test(TestBlock::new(2, author).build()))
+            .collect::<Vec<_>>();
+        let released = state.accept_blocks(round2_blocks.clone());
+        let expected = round1_blocks
+            .iter()
+            .chain(round2_blocks.iter())
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            released
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+            expected
+        );
+
+        // A straggler below the released watermark passes through without buffering.
+        let straggler = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
+        let released = state.accept_blocks(vec![straggler.clone()]);
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].reference(), straggler.reference());
+
+        // Only the round 3 blocks are still buffered.
+        let released = state.release_all();
+        assert_eq!(
+            released
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+            round3_blocks
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_accepted_block_release_timeout_releases_lower_rounds() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut state = new_release_state(context, dag_state);
+
+        let block1 = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
+        let block2 = VerifiedBlock::new_for_test(TestBlock::new(2, 0).build());
+        assert!(
+            state
+                .accept_blocks(vec![block1.clone(), block2.clone()])
+                .is_empty()
+        );
+
+        // Backdate only round 2 past the release timeout - the fresh round 1 below it is
+        // released as well.
+        state.buffered_rounds.get_mut(&2).unwrap().first_buffered_at =
+            Instant::now() - Duration::from_secs(61);
+
+        let released = state.release_timed_out_rounds();
+        assert_eq!(
+            released
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+            vec![block1.reference(), block2.reference()]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_accepted_block_release_only_timed_out_rounds() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut state = new_release_state(context, dag_state);
+
+        let block1 = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
+        let block2 = VerifiedBlock::new_for_test(TestBlock::new(2, 0).build());
+        assert!(
+            state
+                .accept_blocks(vec![block1.clone(), block2.clone()])
+                .is_empty()
+        );
+
+        // Backdate round 1 past the release timeout; round 2 stays fresh.
+        state.buffered_rounds.get_mut(&1).unwrap().first_buffered_at =
+            Instant::now() - Duration::from_secs(61);
+
+        let released = state.release_timed_out_rounds();
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].reference(), block1.reference());
+
+        // A straggler for the timed-out round passes through without buffering.
+        let straggler = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        let released = state.accept_blocks(vec![straggler.clone()]);
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].reference(), straggler.reference());
+
+        // Round 2 is still buffered.
+        let released = state.release_all();
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].reference(), block2.reference());
+    }
+
+    #[tokio::test]
+    async fn test_accepted_block_release_gc() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_gc_depth_for_testing(3);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut state = new_release_state(context.clone(), dag_state.clone());
+
+        // Buffer blocks at rounds 1 and 5, both below quorum.
+        let block1 = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
+        let block5 = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
+        assert!(
+            state
+                .accept_blocks(vec![block1.clone(), block5.clone()])
+                .is_empty()
+        );
+
+        // Advance the last commit to a round 5 leader, so gc_round becomes 5 - 3 = 2.
+        dag_state
+            .write()
+            .set_last_commit(TrustedCommit::new_for_test(
+                1,
+                CommitDigest::MIN,
+                context.clock.timestamp_utc_ms(),
+                block5.reference(),
+                vec![],
+            ));
+        assert_eq!(dag_state.read().gc_round(), 2);
+
+        // A new block at a GC'd round passes straight through, and the buffered round 1
+        // entry is pruned.
+        let block2 = VerifiedBlock::new_for_test(TestBlock::new(2, 1).build());
+        let released = state.accept_blocks(vec![block2.clone()]);
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].reference(), block2.reference());
+
+        // Only the round 5 block is still buffered.
+        let released = state.release_all();
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].reference(), block5.reference());
+    }
+
+    #[tokio::test]
+    async fn test_accepted_block_release_next_timeout() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut state = new_release_state(context, dag_state);
+
+        // With nothing buffered the next timeout is far in the future.
+        assert!(
+            state.next_timeout()
+                >= tokio::time::Instant::from_std(Instant::now() + Duration::from_secs(1800))
+        );
+
+        // Buffering a block moves the next timeout to within the release timeout.
+        let block = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
+        assert!(state.accept_blocks(vec![block]).is_empty());
+        assert!(
+            state.next_timeout()
+                <= tokio::time::Instant::from_std(Instant::now() + Duration::from_secs(60))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_observer_stream_releases_blocks_on_quorum() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, keys) = Context::new_for_test(4);
+        // Make the release timeout long enough that only a round quorum can release
+        // blocks within the test duration.
+        context.parameters.leader_timeout = Duration::from_secs(300);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
+
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let block_verifier = Arc::new(NoopBlockVerifier);
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
+        let observer_service = ObserverService::new(
+            context.clone(),
+            core_dispatcher,
+            dag_state,
+            rx_accepted_block,
+            block_verifier,
+            commit_vote_monitor,
+            transaction_vote_tracker,
+            create_mock_synchronizer(),
+            block_sync_service,
+            None,
+        );
+
+        let highest_round_per_authority = vec![0u64; context.committee.size()];
+        let peer = keys[0].0.public().clone();
+        let mut stream = observer_service
+            .handle_stream_blocks(peer, highest_round_per_authority)
+            .await
+            .unwrap();
+
+        // Broadcast round 1 blocks from 3 of 4 authorities to reach quorum.
+        let blocks = (0..3)
+            .map(|author| VerifiedBlock::new_for_test(TestBlock::new(1, author).build()))
+            .collect::<Vec<_>>();
+        for block in &blocks {
+            tx_accepted_block.send(block.clone()).unwrap();
+        }
+
+        let mut received_blocks = Vec::new();
+        while received_blocks.len() < 3 {
+            let item = stream.next().await.unwrap();
+            for block_bytes in item.blocks {
+                let signed: SignedBlock = bcs::from_bytes(&block_bytes).unwrap();
+                received_blocks.push(VerifiedBlock::new_verified(signed, block_bytes));
+            }
+        }
+        assert_eq!(
+            received_blocks
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>(),
+            blocks
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>()
+        );
     }
 
     #[tokio::test]
