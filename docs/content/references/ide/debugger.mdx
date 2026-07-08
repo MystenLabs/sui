@@ -173,24 +173,24 @@ Debugging an onchain transaction is a two-step process:
         The first time you run this command you might be asked to select a debugger type. Select **Move Debugger**.
       :::
 
-Move source code is not stored on chain and a debugging session for an onchain transaction will start in disassembly mode by default. To enable source-level debugging, you can point the debugger at a local package directory containing package sources. The package must be built locally to also include debugging metadata required to enable source-level debugging.
+The chain does not store Move source code and a debugging session for an onchain transaction starts in disassembly mode by default. To enable source-level debugging, you can point the debugger at a local package directory containing package sources. The package must be built locally to also include debugging metadata required to enable source-level debugging.
 
-The source code version of each package should be the same version that was used to build the package used in the transaction. Otherwise, a discrepancy between execution trace (generated from onchain data) and package debugging metadata (generated locally), might result in debugging failures.
+The source code version of each package should be the same version that was used to build the package used in the transaction. Otherwise, a discrepancy between execution trace (generated from onchain data) and package debugging metadata (generated locally) might result in debugging failures.
 
-For example, consider a situation when an onchain transaction executes a call to some public function `foo` which then calls some private function `bar`. The package's source code used to generate the debugging metadata still has public function `foo` but `foo` not longer calls `bar`. When attempting to do source-level debugging in such case, if a call to `bar` was part of the execution trace, the debugger would have no source for function `bar` to display when the call is reached during the debugging session.
+For example, consider a situation when an onchain transaction executes a call to some public function `foo` which then calls some private function `bar`. The package's source code used to generate the debugging metadata still has public function `foo` but `foo` no longer calls `bar`. When attempting to do source-level debugging in such a case, if a call to `bar` was part of the execution trace, the debugger would have no source for function `bar` to display when the call is reached during the debugging session.
 
-Using the newest version of the package sources might still work, particularly for packages whose existing functionality is largely stabilized and its source code rarely changes, such as Sui framework package. However, it will not work if the package was already upgraded on chain after the debugged transaction executed and metadata in its package directory reflects this (in which case you need to obtain package sources from before the upgrade).
+Using the newest version of the package sources might still work, particularly for packages whose existing functionality is largely stabilized and whose source code rarely changes, such as the Sui framework package. However, it does not work if someone already upgraded the package onchain after the debugged transaction executed and metadata in its package directory reflects this (in which case you need to obtain package sources from before the upgrade).
 
-Use the button on top of the window displaying the trace file to add sources to the debugger before starting the debugging session. The explanation on how this machinery works under the hood and how you can add sources to the debugger manually is provided below but is intended only for the advanced users.
+Use the button on top of the window displaying the trace file to add sources to the debugger before starting the debugging session. The following section explains how this machinery works under the hood and how to add sources to the debugger manually, but it is for advanced users only.
 
 ## Advanced source-level debugging instructions
 
 :::info
-    These instructions are intended for advanced users and should be followed only if the default method of adding sources to the debugger via the debugger's UI does not work.
+    These instructions are intended for advanced users. Follow them only if the default method of adding sources to the debugger through the debugger's UI does not work.
 :::
 
 
-Data downloaded from the network for debugging a transaction does not contain the source code for Move calls executed throughout the transaction. You can, however, provide the sources along with additional debugging metadata by hand to enable source-level debugging, if you have access to the source code of the exact versions of packages used throughout the transaction. Below are the instructions on how to handle this simplified case, followed by instructions on how to locate precise versions of packages.
+The data you download from the network for debugging a transaction does not contain the source code for Move calls executed throughout the transaction. You can, however, provide the sources along with additional debugging metadata by hand to enable source-level debugging, if you have access to the source code of the exact versions of packages that the transaction uses. Below are the instructions on how to handle this simplified case, followed by instructions on how to locate precise versions of packages.
 
 Consider the following: a Mainnet transaction with the digest `95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs`. Assume that all commands (unless stated otherwise) are executed in some `$ROOT_DIR` (such as your home directory).
 
