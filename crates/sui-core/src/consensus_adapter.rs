@@ -587,7 +587,6 @@ impl ConsensusAdapter {
         };
 
         if already_processed.is_none() {
-            debug!("Submitting {:?} to consensus", transaction_keys);
             guard.submitted = true;
 
             // Submit the transaction to consensus, racing against the processed waiter in
@@ -616,6 +615,8 @@ impl ConsensusAdapter {
                         .expect("Consensus adapter does not close semaphore"),
                 )
             };
+
+            debug!("Submitting {:?} to consensus", transaction_keys);
 
             observe_stage("acquired_semaphore");
 
@@ -676,6 +677,11 @@ impl ConsensusAdapter {
                             if consensus_positions.len() != transactions.len() {
                                 debug_fatal!(
                                     "Consensus client returned {} positions for {} transactions",
+                                    consensus_positions.len(),
+                                    transactions.len()
+                                );
+                                debug!(
+                                    "Transaction {transaction_keys:?} client returned {} positions for {} transactions",
                                     consensus_positions.len(),
                                     transactions.len()
                                 );
@@ -752,10 +758,12 @@ impl ConsensusAdapter {
             let processed_via_notify;
             guard.processed_method = match select(processed_waiter, submit_fut.boxed()).await {
                 Either::Left((observed, _submit_fut)) => {
+                    debug!("Transaction {transaction_keys:?} processed via notify");
                     processed_via_notify = true;
                     observed
                 }
                 Either::Right((SequencingOutcome::Sequenced(statuses), _processed_waiter)) => {
+                    debug!("Transaction {transaction_keys:?} processed via statuses");
                     processed_via_notify = false;
                     for status in statuses {
                         self.metrics
