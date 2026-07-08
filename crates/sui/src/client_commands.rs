@@ -112,9 +112,9 @@ use move_package_alt::{
 };
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
-use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
+use sui_package_alt::{BuildParams, SuiFlavor, chain_id_base58, find_environment};
 use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
-use sui_types::digests::ChainIdentifier;
+use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 use tracing::{debug, info};
 
 /// Concurrency level for fetching coin metadata for balances.
@@ -193,9 +193,15 @@ pub enum SuiClientCommands {
         processing: TxProcessingArgs,
     },
 
-    /// Query the chain identifier from the rpc endpoint.
+    /// Query the chain identifier from the rpc endpoint. This is the Base58-encoded digest of
+    /// the network's genesis checkpoint, as returned by the gRPC and GraphQL APIs.
     #[clap(name = "chain-identifier")]
-    ChainIdentifier,
+    ChainIdentifier {
+        /// Print the legacy short chain identifier (the first 4 bytes of the digest,
+        /// hex-encoded) instead of the full Base58 form.
+        #[clap(long)]
+        short: bool,
+    },
 
     /// Query a dynamic field by its address.
     #[clap(name = "dynamic-field")]
@@ -930,7 +936,7 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.publish_args.build_config)?;
 
                 let client = context.grpc_client()?;
-                let chain_id = client.get_chain_identifier().await?.to_string();
+                let chain_id = chain_id_base58(&client.get_chain_identifier().await?);
                 let active_env = context.get_active_env()?;
                 let alias = active_env.alias.clone();
 
@@ -1539,8 +1545,13 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 SuiClientCommandResult::NoOutput
             }
-            SuiClientCommands::ChainIdentifier => {
+            SuiClientCommands::ChainIdentifier { short } => {
                 let ci = context.cache_chain_id().await?;
+                let ci = if short {
+                    ChainIdentifier::from(ci.parse::<CheckpointDigest>()?).to_string()
+                } else {
+                    ci
+                };
                 SuiClientCommandResult::ChainIdentifier(ci)
             }
             SuiClientCommands::SplitCoin {
@@ -3976,7 +3987,7 @@ async fn publish_command(
     };
 
     let publish_data = update_publication(
-        &chain_id.to_string(),
+        &chain_id_base58(&chain_id),
         LockCommand::Publish,
         response,
         &build_config,
@@ -4009,7 +4020,8 @@ async fn upgrade_command(
         .sender
         .unwrap_or(context.infer_sender(&payment.gas).await?);
     let client = context.grpc_client()?;
-    let chain_id = client.get_chain_identifier().await?.to_string();
+    let chain_identifier = client.get_chain_identifier().await?;
+    let chain_id = chain_id_base58(&chain_identifier);
 
     // For upgrade, we want to force the root package to have `0x0` as its address
     build_config.root_as_zero = true;
@@ -4076,13 +4088,8 @@ async fn upgrade_command(
     if !skip_verify_compatibility {
         let protocol_version = client.get_protocol_config(None).await?.protocol_version();
 
-        let protocol_config = ProtocolConfig::get_for_version(
-            protocol_version.into(),
-            match ChainIdentifier::from_chain_short_id(&chain_id) {
-                Some(chain_id) => chain_id.chain(),
-                None => Chain::Unknown,
-            },
-        );
+        let protocol_config =
+            ProtocolConfig::get_for_version(protocol_version.into(), chain_identifier.chain());
         check_compatibility(
             client.clone(),
             package_id,

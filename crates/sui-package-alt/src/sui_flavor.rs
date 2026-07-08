@@ -26,7 +26,7 @@ use sui_sdk::wallet_context::WalletContext;
 use tokio::sync::OnceCell;
 use tracing::warn;
 
-use crate::{mainnet_environment, testnet_environment};
+use crate::{chain_ids_match, mainnet_environment, testnet_environment};
 
 const EDITION: &str = "2024";
 const FLAVOR: &str = "sui";
@@ -152,6 +152,10 @@ impl MoveFlavor for SuiFlavor {
         let testnet = testnet_environment();
         let mainnet = mainnet_environment();
         IndexMap::from([(testnet.name, testnet.id), (mainnet.name, mainnet.id)])
+    }
+
+    fn environment_ids_match(&self, a: &EnvironmentID, b: &EnvironmentID) -> bool {
+        chain_ids_match(a, b)
     }
 
     async fn implicit_dependencies(

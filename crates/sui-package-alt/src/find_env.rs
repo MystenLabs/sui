@@ -12,7 +12,7 @@ use move_package_alt::{
 };
 use sui_sdk::wallet_context::WalletContext;
 
-use crate::SuiFlavor;
+use crate::{SuiFlavor, chain_ids_match};
 
 /// Binds together the context for `find_environment` for helper functions
 struct EnvFinder<'a> {
@@ -103,13 +103,16 @@ impl EnvFinder<'_> {
     }
 
     /// Check that the exact environment `active_env` is present in the manifest; returns an error
-    /// if the name is present but the chain ID differs; returns `None` if it's not present
+    /// if the name is present but the chain ID differs; returns `None` if it's not present.
+    ///
+    /// On success, the returned environment carries the manifest's chain ID, which may be a
+    /// different (but equivalent) encoding than the one in the CLI environment.
     fn check_exact(&self, active_env: &Environment) -> anyhow::Result<Option<Environment>> {
         let Some(manifest_id) = self.manifest_envs.get(active_env.name()) else {
             return Ok(None);
         };
 
-        if manifest_id != active_env.id() {
+        if !chain_ids_match(manifest_id, active_env.id()) {
             bail!(
                 "Error: Environment `{active_env}` has chain ID `{chain_id}` in your CLI \
                 environment, but `Move.toml` expects `{active_env}` to have chain ID \
@@ -121,7 +124,10 @@ impl EnvFinder<'_> {
             );
         }
 
-        Ok(Some(active_env.clone()))
+        Ok(Some(Environment::new(
+            active_env.name().clone(),
+            manifest_id.clone(),
+        )))
     }
 
     /// Check that there is exactly one entry of the manifest that matches the provided `chain_id`;
@@ -134,7 +140,7 @@ impl EnvFinder<'_> {
         let candidates: BTreeMap<&EnvironmentName, &EnvironmentID> = self
             .manifest_envs
             .iter()
-            .filter(|(_, v)| v == &&chain_id)
+            .filter(|(_, v)| chain_ids_match(v, &chain_id))
             .collect();
 
         if candidates.is_empty() {
