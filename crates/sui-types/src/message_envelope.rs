@@ -17,8 +17,9 @@ use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
-pub trait Message {
+pub trait Message: Clone {
     type DigestType: Clone + Debug;
     const SCOPE: IntentScope;
 
@@ -35,7 +36,7 @@ pub struct Envelope<T: Message, S> {
     #[serde(skip)]
     digest: OnceCell<T::DigestType>,
 
-    data: T,
+    data: Arc<T>,
     auth_signature: S,
 }
 
@@ -75,7 +76,7 @@ impl<T: Message, S> Envelope<T, S> {
     pub fn new_from_data_and_sig(data: T, sig: S) -> Self {
         Self {
             digest: Default::default(),
-            data,
+            data: Arc::new(data),
             auth_signature: sig,
         }
     }
@@ -85,7 +86,7 @@ impl<T: Message, S> Envelope<T, S> {
     }
 
     pub fn into_data(self) -> T {
-        self.data
+        unwrap_or_clone(self.data)
     }
 
     pub fn into_sig(self) -> S {
@@ -98,12 +99,17 @@ impl<T: Message, S> Envelope<T, S> {
             auth_signature,
             ..
         } = self;
-        (data, auth_signature)
+        (unwrap_or_clone(data), auth_signature)
     }
 
-    /// Remove the authority signatures `S` from this envelope.
+    /// Remove the authority signatures `S` from this envelope. Preserves the cached digest, since
+    /// it is derived solely from `data`.
     pub fn into_unsigned(self) -> Envelope<T, EmptySignInfo> {
-        Envelope::<T, EmptySignInfo>::new(self.into_data())
+        Envelope {
+            digest: self.digest,
+            data: self.data,
+            auth_signature: EmptySignInfo {},
+        }
     }
 
     pub fn auth_sig(&self) -> &S {
@@ -119,8 +125,13 @@ impl<T: Message, S> Envelope<T, S> {
     }
 
     pub fn data_mut_for_testing(&mut self) -> &mut T {
-        &mut self.data
+        Arc::make_mut(&mut self.data)
     }
+}
+
+/// Move the value out of the `Arc`, cloning only if there are other outstanding references.
+fn unwrap_or_clone<T: Clone>(arc: Arc<T>) -> T {
+    Arc::try_unwrap(arc).unwrap_or_else(|arc| (*arc).clone())
 }
 
 impl<T: Message + PartialEq, S: PartialEq> PartialEq for Envelope<T, S> {
@@ -133,7 +144,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
     pub fn new(data: T) -> Self {
         Self {
             digest: OnceCell::new(),
-            data,
+            data: Arc::new(data),
             auth_signature: EmptySignInfo {},
         }
     }
@@ -152,7 +163,7 @@ where
         let auth_signature = Self::sign(epoch, &data, secret, authority);
         Self {
             digest: OnceCell::new(),
-            data,
+            data: Arc::new(data),
             auth_signature,
         }
     }
@@ -182,7 +193,7 @@ where
     ) -> SuiResult<Self> {
         let cert = Self {
             digest: OnceCell::new(),
-            data,
+            data: Arc::new(data),
             auth_signature: AuthorityQuorumSignInfo::<S>::new_from_auth_sign_infos(
                 signatures, committee,
             )?,
@@ -338,7 +349,7 @@ impl<T: Message, S> Deref for Envelope<T, S> {
 
 impl<T: Message, S> DerefMut for Envelope<T, S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data
+        Arc::make_mut(&mut self.data)
     }
 }
 
