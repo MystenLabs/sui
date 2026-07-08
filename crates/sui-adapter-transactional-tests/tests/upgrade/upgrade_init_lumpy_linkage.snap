@@ -55,8 +55,8 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 10, lines 84-91:
 //# programmable --sender A --inputs object(4,1) 0u8 digest(Init_V1_Dep2)
-// When the upgraded package is already in LUMPY, overlapping upgrade linkage is checked for exact
-// equality rather than unified. Init_V0::m::ping puts Init_V0 and at_least(Dep_V1) in LUMPY, so the
+// When the upgraded package is already in Lumpy, overlapping upgrade linkage is checked for exact
+// equality rather than unified. Init_V0::m::ping puts Init_V0 and at_least(Dep_V1) in Lumpy, so the
 // upgrade's Dep_V2 linkage conflicts instead of upgrading the at_least constraint.
 //> 0: Init_V0::m::ping();
 //> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));

@@ -6,13 +6,13 @@ processed 3 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-11:
+task 1, lines 9-10:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 13-18:
+task 2, lines 12-22:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: None, command: Some(1) } }

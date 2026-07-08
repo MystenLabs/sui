@@ -4,7 +4,7 @@
 // tests the multiple attempts at upgrading a package with different layouts for a type
 // in the new package
 
-//# init --protocol-version 126 --addresses v0=0x0 v1=0x0 --accounts A
+//# init --protocol-version 129 --addresses v0=0x0 v1=0x0 --accounts A
 
 //# publish --upgradeable --sender A
 module v0::m {

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Upgrade commands only contribute to the transaction-wide LUMPY linkage when the upgraded package
+// Upgrade commands only contribute to the transaction-wide Lumpy linkage when the upgraded package
 // introduces an `init` function in a new module. 
 
 //# init --addresses Dep_V1=0x0 Dep_V2=0x0 NoInit_V0=0x0 NoInit_V1=0x0 Init_V0=0x0 Init_V1_Dep1=0x0 Init_V1_Dep2=0x0 --accounts A
@@ -82,8 +82,8 @@ module Init_V1_Dep2::init_dep {
 //> sui::package::commit_upgrade(Input(0), Result(1))
 
 //# programmable --sender A --inputs object(4,1) 0u8 digest(Init_V1_Dep2)
-// When the upgraded package is already in LUMPY, overlapping upgrade linkage is checked for exact
-// equality rather than unified. Init_V0::m::ping puts Init_V0 and at_least(Dep_V1) in LUMPY, so the
+// When the upgraded package is already in Lumpy, overlapping upgrade linkage is checked for exact
+// equality rather than unified. Init_V0::m::ping puts Init_V0 and at_least(Dep_V1) in Lumpy, so the
 // upgrade's Dep_V2 linkage conflicts instead of upgrading the at_least constraint.
 //> 0: Init_V0::m::ping();
 //> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));

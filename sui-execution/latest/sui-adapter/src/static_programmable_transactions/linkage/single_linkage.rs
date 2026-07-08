@@ -114,12 +114,12 @@ fn analyze_command<E: ExecutionErrorTrait>(
 
             let current_pkg = get_package(current_package_id, store)?;
 
-            debug_assert!(
+            assert_invariant!(
                 protocol_config.enable_unified_linkage(),
                 "Unified linkage must be enabled before init on upgrade is supported"
             );
 
-            let has_new_module_init = match payload {
+            let new_modules = match payload {
                 PackagePayload::Serialized(_) => {
                     invariant_violation!(
                         "Unexpected serialized package payload in linkage analysis"
@@ -128,10 +128,26 @@ fn analyze_command<E: ExecutionErrorTrait>(
                 PackagePayload::Deserialized(DeserializedPackage {
                     deserialized_modules,
                     ..
-                }) => upgrade_has_new_module_init::<E>(&current_pkg, deserialized_modules)?,
+                }) => deserialized_modules,
             };
 
-            if has_new_module_init {
+            // Whether each module already present in the current package defines an `init`.
+            let current_module_inits = current_pkg
+                .modules()
+                .iter()
+                .map(|(module_id, module)| {
+                    (
+                        module_id.name().as_str(),
+                        module_has_init(module.compiled_module()),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            // reject upgrades where an existing module adds an `init`.
+            reject_existing_module_added_init::<E>(&current_module_inits, new_modules)?;
+
+            // only newly-introduced modules with an `init` contribute to the linkage.
+            if has_new_module_init(&current_module_inits, new_modules) {
                 add_upgrade_init_linkage_to_table::<E>(
                     resolution_table,
                     current_package_id,
@@ -149,41 +165,37 @@ fn analyze_command<E: ExecutionErrorTrait>(
     Ok(())
 }
 
-/// Return true if the upgraded package introduces at least one new module with an `init` function.
-/// Existing modules do not count, even if they add or modify an `init` function.
-fn upgrade_has_new_module_init<E: ExecutionErrorTrait>(
-    current_pkg: &VerifiedPackage,
-    modules: &[CompiledModule],
-) -> Result<bool, E> {
-    let current_module_inits = current_pkg
-        .modules()
-        .iter()
-        .map(|(module_id, module)| {
-            (
-                module_id.name().as_str(),
-                module_has_init(module.compiled_module()),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-
-    let mut has_new_module_init = false;
-    for module in modules {
-        let module_name = module.identifier_at(module.self_handle().name).as_str();
-        let has_init = module_has_init(module);
-        match current_module_inits.get(module_name) {
-            // old module, new init function: error
-            Some(false) if has_init => {
-                return Err(<E>::from_kind(ExecutionErrorKind::PackageUpgradeError {
-                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
-                }));
-            }
-            // old module, no new init function: ignore
-            Some(_) => (),
-            // new module: see if it has an init function
-            None => has_new_module_init |= has_init,
+/// Reject an upgrade in which a module that already exists in the current package (and did not
+/// previously define an `init`) introduces one.
+fn reject_existing_module_added_init<E: ExecutionErrorTrait>(
+    current_module_inits: &BTreeMap<&str, bool>,
+    new_modules: &[CompiledModule],
+) -> Result<(), E> {
+    for new_module in new_modules {
+        let module_name = new_module
+            .identifier_at(new_module.self_handle().name)
+            .as_str();
+        if current_module_inits.get(module_name) == Some(&false) && module_has_init(new_module) {
+            return Err(<E>::from_kind(ExecutionErrorKind::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+            }));
         }
     }
-    Ok(has_new_module_init)
+    Ok(())
+}
+
+/// Return true if the upgrade introduces at least one new module (absent from the current package)
+/// that defines an `init` function. Existing modules never count (rejected by `reject_existing_module_added_init`).
+fn has_new_module_init(
+    current_module_inits: &BTreeMap<&str, bool>,
+    new_modules: &[CompiledModule],
+) -> bool {
+    new_modules.iter().any(|new_module| {
+        let module_name = new_module
+            .identifier_at(new_module.self_handle().name)
+            .as_str();
+        current_module_inits.get(module_name).is_none() && module_has_init(new_module)
+    })
 }
 
 fn module_has_init(module: &CompiledModule) -> bool {
@@ -193,7 +205,16 @@ fn module_has_init(module: &CompiledModule) -> bool {
     })
 }
 
-/// Add the linkage constraints needed to run `init` functions introduced by an upgrade.
+/// Add the linkage constraints introduced by an upgrade, there are two cases based on whether the
+/// upgraded package already participates in the transaction-wide (Lumpy) linkage:
+///
+/// - If the upgraded package's original id is not already in the resolution table, the upgrade
+///   is treated like a fresh publish-with-init: every entry of its resolved linkage is added as an
+///   `exact` constraint.
+/// - If the upgraded package's original id is in the resolution table, then for any `(original_id,
+///   version_id)` as defined in the `Upgrade` command either:
+///   a. It is not in the existing Lumpy linkage, and a `original_id -> exact(version_id)` constraint is introduced; or
+///   b. It is in the existing Lumpy linkage, in which case Lumpy[original_id].id must equal `version_id`.
 fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
     resolution_table: &mut ResolutionTable,
     current_package_id: &ObjectID,

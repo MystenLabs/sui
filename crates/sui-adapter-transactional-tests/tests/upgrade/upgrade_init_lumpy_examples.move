@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Additional end-to-end coverage for upgrade-init LUMPY examples
+// Additional end-to-end coverage for upgrade-init Lumpy examples
 
 //# init --addresses Dep_V1=0x0 Dep_V2=0x0 ConsumerV1=0x0 Extra=0x0 Agree_V0=0x0 Agree_V1=0x0 A0=0x0 A1_Dep1=0x0 D0=0x0 D1_Dep1=0x0 D1_Dep2=0x0 Refine_V0=0x0 Refine_V1_Dep2=0x0 --accounts A
 
@@ -122,8 +122,8 @@ module Refine_V1_Dep2::init_dep {
 }
 
 //# programmable --sender A --inputs object(5,1) 0u8 digest(Agree_V1)
-// The upgraded package is already in LUMPY and overlapping linkage agrees. The upgrade
-// also introduces Extra as an exact dependency that was not already in LUMPY.
+// The upgraded package is already in Lumpy and overlapping linkage agrees. The upgrade
+// also introduces Extra as an exact dependency that was not already in Lumpy.
 //> 0: Agree_V0::m::ping();
 //> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
 //> 2: Upgrade(Agree_V1, [Dep_V1,Extra,sui,std], Agree_V0, Result(1));
@@ -149,7 +149,7 @@ module Refine_V1_Dep2::init_dep {
 //> sui::package::commit_upgrade(Input(3), Result(4))
 
 //# programmable --sender A --inputs object(8,1) 0u8 digest(Refine_V1_Dep2)
-// If the upgraded package is not already in LUMPY, upgrade-init exact linkage uses normal
+// If the upgraded package is not already in Lumpy, upgrade-init exact linkage uses normal
 // unification and can refine an existing at_least(Dep_V1) constraint to exact(Dep_V2).
 //> 0: ConsumerV1::c::consume();
 //> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
