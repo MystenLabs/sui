@@ -18,10 +18,10 @@ exit_code: 0
 share_owned
 ===========
 
-group:   Security
-origin:  Sui
-level:   on by default
-code:    W99000
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99000
 
 possible owned object share
 
@@ -48,10 +48,10 @@ Suppress a specific case with `#[allow(lint(share_owned))]`.
 share_owned
 ===========
 
-group:   Security
-origin:  Sui
-level:   on by default
-code:    W99000
+category: Sui
+origin:   Sui
+level:    on by default
+code:     W99000
 
 possible owned object share
 
