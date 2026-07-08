@@ -7,13 +7,18 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
+    accumulator_event::AccumulatorEvent,
     accumulator_root::AccumulatorObjId,
     base_types::{ObjectID, SequenceNumber, random_object_ref},
     crypto::get_account_key_pair,
-    effects::TestEffectsBuilder,
+    effects::{
+        AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
+        TestEffectsBuilder,
+    },
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
     execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
+    gas_coin::GAS,
 };
 
 use crate::{
@@ -423,6 +428,68 @@ async fn test_should_commit_early_exits() {
             &epoch_store,
         )
     );
+}
+
+#[tokio::test]
+async fn test_should_commit_ignores_zero_net_withdraws() {
+    // A zero-amount withdraw emits a single Split(0) accumulator event, which survives
+    // effects folding as a Split but creates no running max entry. It must be skipped
+    // when recording unsettled withdraws instead of tripping the recording invariant
+    // check.
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
+    let state = TestAuthorityBuilder::new().build().await;
+    let epoch_store = state.epoch_store_for_testing().clone();
+
+    let (sender, keypair) = get_account_key_pair();
+    let tx = VerifiedExecutableTransaction::new_for_testing(
+        TestTransactionBuilder::new(sender, random_object_ref(), 1).build(),
+        &keypair,
+    );
+    let zero_account = ObjectID::random();
+    let withdraw_account = ObjectID::random();
+    // Only the positive withdraw has a running max entry.
+    let running_max_withdraws =
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(withdraw_account), 50)]);
+    let funds_read: Arc<dyn AccountFundsRead> = Arc::new(MockFundsRead::new(
+        SequenceNumber::from_u64(0),
+        BTreeMap::from([(withdraw_account, 100)]),
+    ));
+    let effects = TestEffectsBuilder::new(tx.data())
+        .with_accumulator_events(vec![
+            AccumulatorEvent::new(
+                AccumulatorObjId::new_unchecked(zero_account),
+                AccumulatorWriteV1 {
+                    address: AccumulatorAddress::new(sender, GAS::type_tag()),
+                    operation: AccumulatorOperation::Split,
+                    value: AccumulatorValue::Integer(0),
+                },
+            ),
+            AccumulatorEvent::new(
+                AccumulatorObjId::new_unchecked(withdraw_account),
+                AccumulatorWriteV1 {
+                    address: AccumulatorAddress::new(sender, GAS::type_tag()),
+                    operation: AccumulatorOperation::Split,
+                    value: AccumulatorValue::Integer(50),
+                },
+            ),
+        ])
+        .build();
+
+    assert!(checker.should_commit_object_funds_withdraws(
+        &tx,
+        &effects,
+        &running_max_withdraws,
+        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+            vec![],
+            Some(SequenceNumber::from_u64(0))
+        )),
+        &funds_read,
+        state.execution_scheduler(),
+        &epoch_store,
+    ));
 }
 
 #[tokio::test]

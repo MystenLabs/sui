@@ -104,6 +104,21 @@ impl TestEnv {
         }
     }
 
+    /// Creates another vault object account, in addition to the default one.
+    pub async fn new_vault(&self) -> ObjectID {
+        let gas = self.oref(&self.gas_obj);
+        let tx = TestTransactionBuilder::new(self.sender, gas, self.rgp())
+            .move_call(self.package_id, "object_balance", "new_owned", vec![])
+            .build();
+        let cert = VerifiedExecutableTransaction::new_for_testing(tx, &self.keypair);
+        let (effects, ..) = self
+            .authority
+            .try_execute_immediately(&cert, ExecutionEnv::new(), &self.epoch_store)
+            .unwrap();
+        assert!(effects.status().is_ok());
+        effects.created().into_iter().next().unwrap().0.0
+    }
+
     pub fn oref(&self, object_id: &ObjectID) -> ObjectRef {
         self.authority
             .get_object(object_id)
@@ -408,6 +423,42 @@ async fn test_object_net_deposit_same_transaction() {
         .settle_accumulator_for_testing(&all_effects, None)
         .await;
     assert_eq!(env.get_latest_balance(GAS::type_tag()), 3);
+}
+
+#[tokio::test]
+async fn test_object_zero_amount_withdraw() {
+    // A zero-amount object-fund withdraw emits a single Split(0) accumulator event.
+    // It survives effects folding as a Split (the fold's Merge tie-break only applies
+    // to accounts with multiple writes), but creates no running max entry. It must be
+    // skipped when recording unsettled withdraws instead of tripping the recording
+    // invariant check.
+    telemetry_subscribers::init_for_testing();
+    let env = TestEnv::new().await;
+    let vault: SuiAddress = env.vault_obj.into();
+    let zero_vault = env.new_vault().await;
+    env.fund_address(vault, 2).await;
+
+    // One transaction: withdraw 0 from zero_vault and 2 from the funded vault. The
+    // positive withdraw makes the running max map non-empty, so the zero withdraw
+    // reaches the unsettled recording path.
+    let gas = env.oref(&env.gas_obj);
+    let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(env.package_id, env.oref(&zero_vault)),
+            vec![(0, env.sender)],
+        )
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj)),
+            vec![(2, env.sender)],
+        )
+        .build();
+    let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
+    let effects = env.execute_ok(&cert).await;
+
+    env.authority
+        .settle_accumulator_for_testing(&[effects], None)
+        .await;
+    assert_eq!(env.get_latest_balance(GAS::type_tag()), 0);
 }
 
 #[tokio::test]
