@@ -3,6 +3,7 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::ConsensusAdapter;
+use crate::overload_monitor::AuthorityOverloadInfo;
 use arc_swap::ArcSwap;
 use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
@@ -56,6 +57,9 @@ pub struct AdmissionQueueMetrics {
     pub evictions: IntCounter,
     pub rejections: IntCounter,
     pub duplicate_inserts: IntCounter,
+    /// 1 while the drain is throttled below real consensus capacity by execution
+    /// overload (priority load shedding is active), 0 otherwise.
+    pub drain_throttled: IntGauge,
 }
 
 impl AdmissionQueueMetrics {
@@ -89,6 +93,12 @@ impl AdmissionQueueMetrics {
             duplicate_inserts: register_int_counter_with_registry!(
                 "admission_queue_duplicate_inserts",
                 "Transactions admitted to the queue whose ConsensusTransactionKey duplicated an entry already present. Tallied as spam for DoS protection.",
+                registry,
+            )
+            .unwrap(),
+            drain_throttled: register_int_gauge_with_registry!(
+                "admission_queue_drain_throttled",
+                "1 while the queue drain is throttled below real consensus capacity by execution overload (priority load shedding active), 0 otherwise",
                 registry,
             )
             .unwrap(),
@@ -258,6 +268,35 @@ struct InsertCommand {
     response: oneshot::Sender<SuiResult<bool>>,
 }
 
+/// Consensus inflight budget reduced by the current execution-overload shed
+/// percentage. At 0% shed this is the full `max_pending_transactions`; at 100%
+/// it is 0 and the drain stops entirely. The bounded priority queue fills
+/// against this reduced budget and sheds the lowest-gas-price transactions by
+/// eviction.
+fn effective_max_pending(
+    consensus_adapter: &ConsensusAdapter,
+    overload_info: &AuthorityOverloadInfo,
+) -> u64 {
+    let max_pending = u64::try_from(consensus_adapter.max_pending_transactions()).unwrap();
+    let shed = u64::from(
+        overload_info
+            .load_shedding_percentage
+            .load(Ordering::Relaxed)
+            .min(100),
+    );
+    max_pending * (100 - shed) / 100
+}
+
+/// Whether the drain may submit more to consensus under the current (possibly
+/// shed-reduced) budget.
+fn has_consensus_capacity(
+    consensus_adapter: &ConsensusAdapter,
+    overload_info: &AuthorityOverloadInfo,
+) -> bool {
+    consensus_adapter.num_inflight_transactions()
+        < effective_max_pending(consensus_adapter, overload_info)
+}
+
 /// Cloneable handle for submitting transactions to the admission queue actor.
 /// Held by RPC handlers; the actor runs in a separate spawned task.
 #[derive(Clone)]
@@ -266,15 +305,22 @@ pub struct AdmissionQueueHandle {
     /// The moment the queue last submitted an entry to consensus.
     last_drain: Arc<Mutex<Instant>>,
     queue_depth: Arc<AtomicUsize>,
+    consensus_adapter: Arc<ConsensusAdapter>,
+    overload_info: Arc<AuthorityOverloadInfo>,
     failover_timeout: Duration,
 }
 
 impl AdmissionQueueHandle {
-    /// Returns true if the queue has been non-empty for longer than
-    /// `failover_timeout` without any drain to consensus. Callers should
-    /// bypass the queue entirely when this is true.
+    /// The queue is stuck: it has entries and the drain has capacity to submit
+    /// them (under the current, possibly shed-reduced, budget), yet nothing has
+    /// drained for `failover_timeout`. Callers submit directly to consensus when
+    /// this is true. A queue that is not draining because it is deliberately
+    /// throttled by shedding, or because consensus is saturated, has no capacity
+    /// and so is never a failover.
     pub fn failover_tripped(&self) -> bool {
-        if self.queue_depth.load(Ordering::Relaxed) == 0 {
+        if self.queue_depth.load(Ordering::Relaxed) == 0
+            || !has_consensus_capacity(&self.consensus_adapter, &self.overload_info)
+        {
             return false;
         }
         self.last_drain.lock().unwrap().elapsed() > self.failover_timeout
@@ -328,6 +374,7 @@ pub struct AdmissionQueueManager {
     metrics: Arc<AdmissionQueueMetrics>,
     consensus_adapter: Arc<ConsensusAdapter>,
     slot_freed_notify: Arc<tokio::sync::Notify>,
+    overload_info: Arc<AuthorityOverloadInfo>,
 }
 
 impl AdmissionQueueManager {
@@ -337,6 +384,7 @@ impl AdmissionQueueManager {
         capacity_fraction: f64,
         failover_timeout: Duration,
         slot_freed_notify: Arc<tokio::sync::Notify>,
+        overload_info: Arc<AuthorityOverloadInfo>,
     ) -> Self {
         let max_pending = consensus_adapter.max_pending_transactions();
         let capacity = (max_pending as f64 * capacity_fraction) as usize;
@@ -350,6 +398,7 @@ impl AdmissionQueueManager {
             metrics,
             consensus_adapter,
             slot_freed_notify,
+            overload_info,
         }
     }
 
@@ -363,6 +412,7 @@ impl AdmissionQueueManager {
             metrics: Arc::new(AdmissionQueueMetrics::new_for_tests()),
             consensus_adapter,
             slot_freed_notify,
+            overload_info: Arc::new(AuthorityOverloadInfo::default()),
         }
     }
 
@@ -387,6 +437,7 @@ impl AdmissionQueueManager {
             last_drain: last_drain.clone(),
             queue_depth: queue_depth.clone(),
             last_published_depth: 0,
+            overload_info: self.overload_info.clone(),
         };
         spawn_monitored_task!(event_loop.run());
 
@@ -394,16 +445,17 @@ impl AdmissionQueueManager {
             sender,
             last_drain,
             queue_depth,
+            consensus_adapter: self.consensus_adapter.clone(),
+            overload_info: self.overload_info.clone(),
             failover_timeout: self.failover_timeout,
         }
     }
 }
 
 /// Shared handle to a live admission queue. Holds the manager (for spawning a
-/// fresh per-epoch actor on reconfig), the per-epoch `ArcSwap` handle, and the
-/// cached (config-derived) bypass threshold. Cloned cheaply by `Arc`; passed
-/// both to `ValidatorService` (for hot-path routing) and through
-/// `ValidatorComponents` (for epoch rotation).
+/// fresh per-epoch actor on reconfig) and the per-epoch `ArcSwap` handle. Cloned
+/// cheaply by `Arc`; passed both to `ValidatorService` (for hot-path routing)
+/// and through `ValidatorComponents` (for epoch rotation).
 #[derive(Clone)]
 pub struct AdmissionQueueContext {
     manager: Arc<AdmissionQueueManager>,
@@ -442,6 +494,7 @@ struct AdmissionQueueEventLoop {
     last_drain: Arc<Mutex<Instant>>,
     queue_depth: Arc<AtomicUsize>,
     last_published_depth: usize,
+    overload_info: Arc<AuthorityOverloadInfo>,
 }
 
 impl AdmissionQueueEventLoop {
@@ -449,6 +502,7 @@ impl AdmissionQueueEventLoop {
         loop {
             self.process_pending_inserts();
             self.publish_queue_depth();
+            self.note_throttle();
 
             if !handle_fail_point_if("admission_queue_disable_drain")
                 && !self.queue.is_empty()
@@ -471,13 +525,18 @@ impl AdmissionQueueEventLoop {
                 continue;
             }
 
-            // Queue has entries but consensus is at capacity. Wait for either
-            // a new insert or a freed inflight slot.
-            // Register the notified future BEFORE re-checking capacity to avoid
-            // missing notifications.
+            // Queue has entries but the drain is at capacity — either real
+            // consensus saturation or a deliberate execution-overload throttle.
+            // Wait for a new insert, a freed inflight slot, or a change in the
+            // shed level (which moves the effective cap and so can lift the
+            // throttle). Register both notified futures BEFORE re-checking
+            // capacity to avoid missing notifications.
             let notify = self.slot_freed_notify.clone();
             let slot_freed = notify.notified();
             tokio::pin!(slot_freed);
+            let overload_info = self.overload_info.clone();
+            let shed_changed = overload_info.shed_changed.notified();
+            tokio::pin!(shed_changed);
 
             self.process_pending_inserts();
             if !handle_fail_point_if("admission_queue_disable_drain")
@@ -501,6 +560,8 @@ impl AdmissionQueueEventLoop {
                 }
 
                 _ = &mut slot_freed => {}
+
+                _ = &mut shed_changed => {}
             }
         }
     }
@@ -519,15 +580,31 @@ impl AdmissionQueueEventLoop {
         }
     }
 
+    fn effective_max_pending(&self) -> u64 {
+        effective_max_pending(&self.consensus_adapter, &self.overload_info)
+    }
+
     fn has_consensus_capacity(&self) -> bool {
-        self.consensus_adapter.num_inflight_transactions()
-            < u64::try_from(self.consensus_adapter.max_pending_transactions()).unwrap()
+        has_consensus_capacity(&self.consensus_adapter, &self.overload_info)
+    }
+
+    /// Publish the load-shedding metric: 1 while shedding is actively holding a
+    /// non-empty queue back from draining (the drain has no capacity under the
+    /// shed-reduced budget).
+    fn note_throttle(&self) {
+        let shedding = self
+            .overload_info
+            .load_shedding_percentage
+            .load(Ordering::Relaxed)
+            > 0;
+        let throttled = shedding && !self.queue.is_empty() && !self.has_consensus_capacity();
+        self.queue.metrics.drain_throttled.set(throttled as i64);
     }
 
     fn drain_batch(&mut self) {
-        let max_pending = u64::try_from(self.consensus_adapter.max_pending_transactions()).unwrap();
-        let available =
-            max_pending.saturating_sub(self.consensus_adapter.num_inflight_transactions());
+        let available = self
+            .effective_max_pending()
+            .saturating_sub(self.consensus_adapter.num_inflight_transactions());
         let entries = self.queue.pop_batch(usize::try_from(available).unwrap());
         if entries.is_empty() {
             return;
@@ -826,6 +903,7 @@ mod tests {
             last_drain: Arc::new(Mutex::new(Instant::now())),
             queue_depth: Arc::new(AtomicUsize::new(0)),
             last_published_depth: 0,
+            overload_info: Arc::new(AuthorityOverloadInfo::default()),
         };
 
         let handle = tokio::spawn(event_loop.run());
@@ -868,16 +946,33 @@ mod tests {
         (adapter, epoch_store, slot_freed_notify)
     }
 
-    #[tokio::test]
-    async fn test_failover_tripped_when_actor_stalls() {
-        // Construct a handle with a tiny failover window and no running actor.
-        // Failover requires queue_depth > 0, so simulate a non-empty queue.
-        let handle = AdmissionQueueHandle {
+    fn test_handle(
+        consensus_adapter: Arc<ConsensusAdapter>,
+        overload_info: Arc<AuthorityOverloadInfo>,
+        queue_depth: usize,
+        failover_timeout: Duration,
+    ) -> AdmissionQueueHandle {
+        AdmissionQueueHandle {
             sender: mpsc::channel(1).0,
             last_drain: Arc::new(Mutex::new(Instant::now())),
-            queue_depth: Arc::new(AtomicUsize::new(1)),
-            failover_timeout: Duration::from_millis(10),
-        };
+            queue_depth: Arc::new(AtomicUsize::new(queue_depth)),
+            consensus_adapter,
+            overload_info,
+            failover_timeout,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_failover_tripped_when_actor_stalls() {
+        // Real consensus capacity (max_pending 100, inflight 0) + a non-empty
+        // queue + no drain past the window = a stuck actor.
+        let (adapter, _epoch, _notify) = build_consensus_adapter(100).await;
+        let handle = test_handle(
+            adapter,
+            Arc::new(AuthorityOverloadInfo::default()),
+            1,
+            Duration::from_millis(10),
+        );
         assert!(!handle.failover_tripped());
         tokio::time::sleep(Duration::from_millis(30)).await;
         assert!(handle.failover_tripped());
@@ -885,6 +980,53 @@ mod tests {
         // An empty queue is never a failover, even if last_drain is stale.
         handle.queue_depth.store(0, Ordering::Relaxed);
         assert!(!handle.failover_tripped());
+    }
+
+    /// A stuck actor must be caught even during shedding: capacity exists under
+    /// the shed-reduced budget (40% shed => cap 600, inflight 0) but nothing
+    /// drains for the window, so this is a stall, not a deliberate throttle.
+    #[tokio::test]
+    async fn test_stuck_actor_trips_failover_even_while_shedding() {
+        let (adapter, _epoch, _notify) = build_consensus_adapter(1000).await;
+        let overload_info = Arc::new(AuthorityOverloadInfo::default());
+        overload_info.set_overload(40);
+        let handle = test_handle(adapter, overload_info, 1, Duration::from_millis(10));
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(
+            handle.failover_tripped(),
+            "capacity exists under the shed cap but nothing drained => stuck actor"
+        );
+    }
+
+    /// When the drain has no capacity — full shed or genuine consensus
+    /// saturation — a non-draining queue is expected, not a stall, so failover
+    /// never trips regardless of how stale `last_drain` is.
+    #[tokio::test]
+    async fn test_no_capacity_suppresses_failover() {
+        // 100% shed => effective cap 0 => no capacity.
+        let (adapter, _epoch, _notify) = build_consensus_adapter(1000).await;
+        let overload_info = Arc::new(AuthorityOverloadInfo::default());
+        overload_info.set_overload(100);
+        let handle = test_handle(adapter, overload_info, 1, Duration::from_millis(10));
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(
+            !handle.failover_tripped(),
+            "100% shed: no capacity, deliberate throttle, not a stall"
+        );
+
+        // Genuine saturation (max_pending 0, inflight 0) also means no capacity.
+        let (adapter, _epoch, _notify) = build_consensus_adapter(0).await;
+        let handle = test_handle(
+            adapter,
+            Arc::new(AuthorityOverloadInfo::default()),
+            1,
+            Duration::from_millis(10),
+        );
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(
+            !handle.failover_tripped(),
+            "saturation: no capacity, not a stall"
+        );
     }
 
     #[tokio::test]
@@ -898,6 +1040,7 @@ mod tests {
             0.5,
             Duration::from_millis(10),
             notify,
+            Arc::new(AuthorityOverloadInfo::default()),
         );
         let handle = manager.spawn(epoch_store);
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -935,6 +1078,7 @@ mod tests {
             last_drain: last_drain.clone(),
             queue_depth: Arc::new(AtomicUsize::new(0)),
             last_published_depth: 0,
+            overload_info: Arc::new(AuthorityOverloadInfo::default()),
         };
 
         // Sleep so that if drain_batch erroneously stamps Instant::now() the
@@ -948,6 +1092,152 @@ mod tests {
             *last_drain.lock().unwrap(),
             before,
             "last_drain must not advance when drain_batch drained nothing"
+        );
+    }
+
+    fn event_loop_with_overload(
+        adapter: Arc<ConsensusAdapter>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        notify: Arc<tokio::sync::Notify>,
+        overload_info: Arc<AuthorityOverloadInfo>,
+    ) -> (AdmissionQueueEventLoop, Arc<Mutex<Instant>>) {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let last_drain = Arc::new(Mutex::new(Instant::now()));
+        let event_loop = AdmissionQueueEventLoop {
+            receiver: mpsc::channel(10).1,
+            queue: PriorityAdmissionQueue::new(10, metrics),
+            consensus_adapter: adapter,
+            slot_freed_notify: notify,
+            epoch_store,
+            last_drain: last_drain.clone(),
+            queue_depth: Arc::new(AtomicUsize::new(0)),
+            last_published_depth: 0,
+            overload_info,
+        };
+        (event_loop, last_drain)
+    }
+
+    #[tokio::test]
+    async fn test_effective_max_pending_scales_with_shed() {
+        let (adapter, epoch_store, notify) = build_consensus_adapter(1000).await;
+        let overload_info = Arc::new(AuthorityOverloadInfo::default());
+        let (el, _) = event_loop_with_overload(adapter, epoch_store, notify, overload_info.clone());
+
+        // No overload: full capacity, drain allowed while inflight is below it.
+        assert_eq!(el.effective_max_pending(), 1000);
+        assert!(el.has_consensus_capacity());
+
+        // 40% shed: cap drops to 600.
+        overload_info.set_overload(40);
+        assert_eq!(el.effective_max_pending(), 600);
+
+        // 100% shed: cap is 0, so the drain stops entirely.
+        overload_info.set_overload(100);
+        assert_eq!(el.effective_max_pending(), 0);
+        assert!(!el.has_consensus_capacity());
+    }
+
+    /// The `drain_throttled` metric is 1 only while shedding actively holds a
+    /// non-empty queue back (no capacity under the shed-reduced budget), and 0
+    /// once the shed clears and capacity returns.
+    #[tokio::test]
+    async fn test_drain_throttled_metric() {
+        // 100% shed, queued work, no capacity => metric 1.
+        let (adapter, epoch_store, notify) = build_consensus_adapter(1000).await;
+        let overload_info = Arc::new(AuthorityOverloadInfo::default());
+        overload_info.set_overload(100);
+        let (mut el, _) =
+            event_loop_with_overload(adapter, epoch_store, notify, overload_info.clone());
+        let (entry, _rx) = make_test_entry(100);
+        el.queue.insert(entry).unwrap();
+        el.note_throttle();
+        assert_eq!(el.queue.metrics.drain_throttled.get(), 1);
+
+        // Shed cleared => capacity returns => metric 0.
+        overload_info.clear_overload();
+        el.note_throttle();
+        assert_eq!(el.queue.metrics.drain_throttled.get(), 0);
+    }
+
+    /// Under shed the drain is capped at `effective_max_pending` and submits the
+    /// highest-gas entries first, so the throttle holds back the cheapest work.
+    #[tokio::test]
+    async fn test_drain_capped_by_shed_submits_highest_gas() {
+        // max_pending 10, 40% shed => effective cap 6.
+        let (adapter, epoch_store, notify) = build_consensus_adapter(10).await;
+        let overload_info = Arc::new(AuthorityOverloadInfo::default());
+        overload_info.set_overload(40);
+        let (mut el, _) = event_loop_with_overload(adapter, epoch_store, notify, overload_info);
+
+        for gp in 1..=10u64 {
+            let (entry, _rx) = make_test_entry(gp);
+            el.queue.insert(entry).unwrap();
+        }
+        assert_eq!(el.queue.len(), 10);
+
+        // One drain: capped at 6 (effective cap), popping the 6 highest prices.
+        el.drain_batch();
+        assert_eq!(
+            el.queue.len(),
+            4,
+            "drain capped at effective_max_pending (6 of 10)"
+        );
+        // The 4 held back are the lowest-priced; the drain took prices 5..=10.
+        let held: Vec<u64> = el.queue.pop_batch(10).iter().map(|e| e.gas_price).collect();
+        assert_eq!(held, vec![4, 3, 2, 1]);
+    }
+
+    /// A drainer parked by full shedding must resume promptly when the shed
+    /// clears. No insert and no freed slot occurs, so only the `shed_changed`
+    /// wakeup can restart draining — if it were missing, the actor would park
+    /// forever and this test would time out.
+    #[tokio::test]
+    async fn test_drain_resumes_when_shed_clears() {
+        let (adapter, epoch_store, notify) = build_consensus_adapter(1000).await;
+        let overload_info = Arc::new(AuthorityOverloadInfo::default());
+        overload_info.set_overload(100); // effective cap 0 => the actor parks.
+
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut queue = PriorityAdmissionQueue::new(10, metrics);
+        let (entry, _rx) = make_test_entry(100);
+        queue.insert(entry).unwrap();
+
+        let queue_depth = Arc::new(AtomicUsize::new(0));
+        // Keep the sender alive so the parked actor does not see the channel
+        // close and shut down.
+        let (_sender, receiver) = mpsc::channel(10);
+        let event_loop = AdmissionQueueEventLoop {
+            receiver,
+            queue,
+            consensus_adapter: adapter,
+            slot_freed_notify: notify,
+            epoch_store,
+            last_drain: Arc::new(Mutex::new(Instant::now())),
+            queue_depth: queue_depth.clone(),
+            last_published_depth: 0,
+            overload_info: overload_info.clone(),
+        };
+        tokio::spawn(event_loop.run());
+
+        // While fully shed, the entry must stay parked (never drained).
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(
+            queue_depth.load(Ordering::Relaxed),
+            1,
+            "fully shed: entry stays queued, not drained"
+        );
+
+        // Clearing shed wakes the drainer via `shed_changed`; it then drains.
+        overload_info.clear_overload();
+        let drained = tokio::time::timeout(Duration::from_secs(2), async {
+            while queue_depth.load(Ordering::Relaxed) != 0 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await;
+        assert!(
+            drained.is_ok(),
+            "shed_changed must wake the parked drainer so it resumes draining"
         );
     }
 }

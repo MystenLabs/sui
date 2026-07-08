@@ -762,10 +762,13 @@ async fn test_authority_txn_validation_pushback() {
     let gas_object2 = Object::with_owner_for_testing(sender);
 
     // Initialize an AuthorityState. Disable overload monitor by setting max_load_shedding_percentage to 0;
-    // Enable overload check at transaction validation time.
+    // Enable overload check at transaction validation time. Disable the admission
+    // queue so the probabilistic reject (its fallback) is exercised — with the
+    // queue enabled, execution-overload shedding is done by throttling the drain.
     let overload_config = AuthorityOverloadConfig {
         check_system_overload_at_signing: true,
         max_load_shedding_percentage: 0,
+        admission_queue_enabled: false,
         ..Default::default()
     };
     let authority_state = TestAuthorityBuilder::new()
@@ -826,4 +829,64 @@ async fn test_authority_txn_validation_pushback() {
     // Note: handle_vote_transaction is vote-only and doesn't acquire object locks.
     let result = validator_service.handle_transaction_for_testing_with_overload_check(tx.clone());
     assert!(result.is_ok());
+}
+
+// With the admission queue enabled, execution-overload load shedding is done by
+// throttling the queue drain, so the probabilistic per-tx reject in
+// check_authority_overload must be skipped even under 100% shed.
+#[tokio::test]
+async fn test_queue_enabled_skips_probabilistic_overload_reject() {
+    telemetry_subscribers::init_for_testing();
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, _): (_, AccountKeyPair) = get_key_pair();
+    let gas_object1 = Object::with_owner_for_testing(sender);
+    let gas_object2 = Object::with_owner_for_testing(sender);
+
+    let overload_config = AuthorityOverloadConfig {
+        check_system_overload_at_signing: true,
+        max_load_shedding_percentage: 0,
+        admission_queue_enabled: true,
+        ..Default::default()
+    };
+    let authority_state = TestAuthorityBuilder::new()
+        .with_authority_overload_config(overload_config)
+        .build()
+        .await;
+    authority_state.insert_genesis_objects(&[gas_object1.clone(), gas_object2.clone()]);
+
+    let consensus_adapter = Arc::new(ConsensusAdapter::new(
+        Arc::new(MockConsensusClient::new()),
+        CheckpointStore::new_for_tests(),
+        authority_state.name,
+        100_000,
+        100_000,
+        ConsensusAdapterMetrics::new_test(),
+        Arc::new(tokio::sync::Notify::new()),
+    ));
+    let validator_service = Arc::new(ValidatorService::new_for_tests(
+        authority_state.clone(),
+        consensus_adapter,
+        Arc::new(ValidatorServiceMetrics::new_for_tests()),
+    ));
+
+    // Force 100% shed. With the queue enabled this must NOT reject at signing;
+    // shedding happens via the drain throttle instead.
+    authority_state.overload_info.set_overload(100);
+
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let tx = make_transfer_object_transaction(
+        gas_object1.compute_object_reference(),
+        gas_object2.compute_object_reference(),
+        sender,
+        &sender_key,
+        recipient,
+        rgp,
+    );
+
+    let result = validator_service.handle_transaction_for_testing_with_overload_check(tx.clone());
+    assert!(
+        result.is_ok(),
+        "queue enabled: overload shedding is via the drain, not a signing-time reject"
+    );
 }
