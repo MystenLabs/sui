@@ -28,30 +28,10 @@ pub(super) struct EventRef {
     pub(super) tx_seq_digest: Option<LedgerTxSeqDigest>,
 }
 
-fn bound_to_tuple(bound: Bound<EventPosition>) -> Bound<(u64, u32)> {
-    match bound {
-        Bound::Included(position) => Bound::Included((position.tx_seq, position.event_index)),
-        Bound::Excluded(position) => Bound::Excluded((position.tx_seq, position.event_index)),
-        Bound::Unbounded => Bound::Unbounded,
-    }
-}
-
-fn bounds_to_packed(bounds: &EventScanBounds) -> Range<u64> {
-    event_seq::packed_range(bound_to_tuple(bounds.lo), bound_to_tuple(bounds.hi))
-}
-
 fn bounds_from_packed(range: Range<u64>) -> EventScanBounds {
-    let (start_tx, start_event) = event_seq::decode_event_seq(range.start);
-    let (end_tx, end_event) = event_seq::decode_event_seq(range.end);
     EventScanBounds {
-        lo: Bound::Included(EventPosition {
-            tx_seq: start_tx,
-            event_index: start_event,
-        }),
-        hi: Bound::Excluded(EventPosition {
-            tx_seq: end_tx,
-            event_index: end_event,
-        }),
+        lo: Bound::Included(event_seq::decode_event_seq(range.start).into()),
+        hi: Bound::Excluded(event_seq::decode_event_seq(range.end).into()),
     }
 }
 
@@ -74,7 +54,7 @@ pub(super) fn drain_event_bitmap_hits(
     scan_budget: usize,
     cancel: &CancellationToken,
 ) -> Result<DrainedEventHits, RpcError> {
-    let packed_range = bounds.map(|bounds| bounds_to_packed(&bounds));
+    let packed_range = bounds.map(|bounds| event_seq::packed_range(bounds.lo, bounds.hi));
     let hits = drain_bitmap_hits_with_budget(
         service,
         LedgerBitmapKind::Event,
@@ -92,24 +72,14 @@ pub(super) fn drain_event_bitmap_hits(
         items: hits
             .items
             .into_iter()
-            .map(|event_seq| {
-                let (tx_seq, event_index) = event_seq::decode_event_seq(event_seq);
-                EventPosition {
-                    tx_seq,
-                    event_index,
-                }
-            })
+            .map(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
             .collect(),
         pending_bucket: hits.pending_bucket,
         next_bounds: hits.next_range.map(bounds_from_packed),
         buckets_scanned: hits.buckets_scanned,
-        frontier: hits.coalesced_frontier.map(|event_seq| {
-            let (tx_seq, event_index) = event_seq::decode_event_seq(event_seq);
-            EventPosition {
-                tx_seq,
-                event_index,
-            }
-        }),
+        frontier: hits
+            .coalesced_frontier
+            .map(|seq| EventPosition::from(event_seq::decode_event_seq(seq))),
         scan_limit_hit: hits.scan_limit_hit,
     })
 }
@@ -129,7 +99,7 @@ pub(super) fn next_unfiltered_event_refs(
     event_ref_limit: usize,
     row_scan_limit: usize,
 ) -> Result<UnfilteredScan, RpcError> {
-    let Some(tx_range) = tx_range_for_bounds(bounds) else {
+    let Some(tx_range) = bounds.tx_range() else {
         return Ok(UnfilteredScan {
             refs: Vec::new(),
             next_bounds: None,
@@ -201,19 +171,6 @@ pub(super) fn event_frontier_checkpoint(
         frontier.tx_seq
     };
     tx_checkpoint(service, lookup_tx).map(Some)
-}
-
-fn tx_range_for_bounds(bounds: &EventScanBounds) -> Option<Range<u64>> {
-    let start_tx = match bounds.lo {
-        Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
-        Bound::Unbounded => 0,
-    };
-    let end_tx = match bounds.hi {
-        Bound::Excluded(position) if position.event_index == 0 => position.tx_seq,
-        Bound::Included(position) | Bound::Excluded(position) => position.tx_seq.saturating_add(1),
-        Bound::Unbounded => u64::MAX,
-    };
-    (start_tx < end_tx).then_some(start_tx..end_tx)
 }
 
 fn push_event_refs_for_row_until_limit(

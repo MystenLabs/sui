@@ -42,6 +42,21 @@ impl EventPosition {
     }
 }
 
+impl From<EventPosition> for (u64, u32) {
+    fn from(position: EventPosition) -> Self {
+        (position.tx_seq, position.event_index)
+    }
+}
+
+impl From<(u64, u32)> for EventPosition {
+    fn from((tx_seq, event_index): (u64, u32)) -> Self {
+        Self {
+            tx_seq,
+            event_index,
+        }
+    }
+}
+
 /// Validated, normalized form of `QueryOptions` (the proto wire type).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QueryOptions {
@@ -454,6 +469,25 @@ impl EventScanBounds {
         };
         above_lo && below_hi
     }
+
+    /// Smallest half-open tx range covering every position these bounds could
+    /// admit. An exclusive `hi` at the start of tx N excludes tx N entirely;
+    /// any other bounded endpoint keeps its transaction, since earlier events
+    /// of that tx may still be in bounds. `None` when no tx can qualify.
+    pub fn tx_range(&self) -> Option<Range<u64>> {
+        let start_tx = match self.lo {
+            Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
+            Bound::Unbounded => 0,
+        };
+        let end_tx = match self.hi {
+            Bound::Excluded(position) if position.event_index == 0 => position.tx_seq,
+            Bound::Included(position) | Bound::Excluded(position) => {
+                position.tx_seq.saturating_add(1)
+            }
+            Bound::Unbounded => u64::MAX,
+        };
+        (start_tx < end_tx).then_some(start_tx..end_tx)
+    }
 }
 
 impl ResolvedEventRange {
@@ -652,6 +686,38 @@ mod tests {
 
     fn cp_item(checkpoint: u64) -> CursorToken {
         CursorToken::item(Position::Checkpoints { checkpoint })
+    }
+
+    #[test]
+    fn tx_range_covers_partial_endpoint_transactions() {
+        let bounds = EventScanBounds {
+            lo: Bound::Included(EventPosition {
+                tx_seq: 10,
+                event_index: 2,
+            }),
+            hi: Bound::Excluded(EventPosition::start_of_tx(13)),
+        };
+
+        assert_eq!(bounds.tx_range(), Some(10..13));
+    }
+
+    #[test]
+    fn tx_range_keeps_tx_of_nonzero_exclusive_hi() {
+        let bounds = EventScanBounds {
+            lo: Bound::Unbounded,
+            hi: Bound::Excluded(EventPosition {
+                tx_seq: 13,
+                event_index: 1,
+            }),
+        };
+
+        assert_eq!(bounds.tx_range(), Some(0..14));
+    }
+
+    #[test]
+    fn tx_range_empty_bounds_yield_none() {
+        let bounds = EventScanBounds::tx_span(10, 10);
+        assert_eq!(bounds.tx_range(), None);
     }
 
     #[test]

@@ -45,15 +45,17 @@ pub fn event_seq_lo(tx_seq: u64) -> u64 {
 }
 
 /// Convert semantic event-coordinate bounds into the packed half-open range
-/// scanned by bitmap indexes.
-pub fn packed_range(lo: Bound<(u64, u32)>, hi: Bound<(u64, u32)>) -> Range<u64> {
-    let start = match lo {
+/// scanned by bitmap indexes. Accepts any coordinate type that projects to
+/// `(tx_seq, event_idx)`, so callers can pass their own position type without
+/// this crate knowing about it.
+pub fn packed_range<T: Into<(u64, u32)>>(lo: Bound<T>, hi: Bound<T>) -> Range<u64> {
+    let start = match lo.map(Into::into) {
         Bound::Included((tx_seq, event_idx)) => saturating_lo(tx_seq, event_idx),
         Bound::Excluded((tx_seq, event_idx)) => saturating_successor(tx_seq, event_idx),
         Bound::Unbounded => 0,
     };
 
-    let end = match hi {
+    let end = match hi.map(Into::into) {
         Bound::Included((tx_seq, event_idx)) => saturating_successor(tx_seq, event_idx),
         Bound::Excluded((tx_seq, event_idx)) => saturating_lo(tx_seq, event_idx),
         Bound::Unbounded => u64::MAX,

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::ops::Bound;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -148,18 +147,15 @@ pub(crate) async fn list_events(
         client
             .eval_bitmap_query_stream(
                 query,
-                event_seq::packed_range(
-                    event_bound_to_tuple(event_bounds.lo),
-                    event_bound_to_tuple(event_bounds.hi),
-                ),
+                event_seq::packed_range(event_bounds.lo, event_bounds.hi),
                 BitmapIndexSpec::event(),
                 options.scan_direction(),
                 scan_budget,
                 ctx.bitmap_scan_observer(),
             )
             .map_ok(|m| {
-                m.map_item(decode_event_position)
-                    .map_watermark(decode_event_position)
+                m.map_item(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
+                    .map_watermark(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
                     .map_item(|position| EventRef {
                         position,
                         tx_seq_digest: None,
@@ -573,7 +569,7 @@ fn unfiltered_event_refs(
     source_limit: usize,
 ) -> BoxStream<'static, BitmapScanResult<Watermarked<EventRef, EventPosition>>> {
     async_stream::try_stream! {
-        let Some(tx_range) = tx_range_for_bounds(&bounds) else {
+        let Some(tx_range) = bounds.tx_range() else {
             return;
         };
         let (scan_range, scan_limited, frontier_tx) =
@@ -596,23 +592,6 @@ fn unfiltered_event_refs(
         }
     }
     .boxed()
-}
-
-fn tx_range_for_bounds(bounds: &EventScanBounds) -> Option<std::ops::Range<u64>> {
-    let start_tx = match bounds.lo {
-        std::ops::Bound::Included(position) | std::ops::Bound::Excluded(position) => {
-            position.tx_seq
-        }
-        std::ops::Bound::Unbounded => 0,
-    };
-    let end_tx = match bounds.hi {
-        std::ops::Bound::Excluded(position) if position.event_index == 0 => position.tx_seq,
-        std::ops::Bound::Included(position) | std::ops::Bound::Excluded(position) => {
-            position.tx_seq.saturating_add(1)
-        }
-        std::ops::Bound::Unbounded => u64::MAX,
-    };
-    (start_tx < end_tx).then_some(start_tx..end_tx)
 }
 
 fn clamp_tx_scan_range(
@@ -675,22 +654,6 @@ fn push_event_ref_if_in_bounds(
         position,
         tx_seq_digest: Some(row),
     });
-}
-
-fn event_bound_to_tuple(bound: Bound<EventPosition>) -> Bound<(u64, u32)> {
-    match bound {
-        Bound::Included(position) => Bound::Included((position.tx_seq, position.event_index)),
-        Bound::Excluded(position) => Bound::Excluded((position.tx_seq, position.event_index)),
-        Bound::Unbounded => Bound::Unbounded,
-    }
-}
-
-fn decode_event_position(event_seq: u64) -> EventPosition {
-    let (tx_seq, event_index) = event_seq::decode_event_seq(event_seq);
-    EventPosition {
-        tx_seq,
-        event_index,
-    }
 }
 
 fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
@@ -852,19 +815,6 @@ mod tests {
             &options(Ordering::Descending),
         );
         assert_eq!(event_refs(&refs), vec![(10, 3), (10, 2), (10, 1)]);
-    }
-
-    #[test]
-    fn tx_range_for_event_range_covers_partial_endpoint_transactions() {
-        let bounds = EventScanBounds {
-            lo: Bound::Included(EventPosition {
-                tx_seq: 10,
-                event_index: 2,
-            }),
-            hi: Bound::Excluded(EventPosition::start_of_tx(13)),
-        };
-
-        assert_eq!(tx_range_for_bounds(&bounds), Some(10..13));
     }
 
     #[test]
