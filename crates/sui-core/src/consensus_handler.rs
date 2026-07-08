@@ -2477,24 +2477,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
 
-        let conflict_check_v2 = self
-            .epoch_store
-            .protocol_config()
-            .owned_object_conflict_check_v2();
-
         // Prefetch the cross-commit owned-object lock state for the whole commit in one
         // batched read. These locks are constant for the duration of a commit (new locks
-        // are only written at commit end), so this replaces the per-transaction
-        // quarantine+DB lookup that try_acquire_owned_object_locks_post_consensus used to
-        // do. Over-reading refs of transactions that are later filtered out is harmless.
+        // are only written at commit end). Over-reading refs of transactions that are
+        // later filtered out is harmless.
         //
-        // Under `owned_object_conflict_check_v2` this map contains only quarantined
-        // (unflushed) locks; conflicts with flushed history are detected by the
-        // consumed-check inside try_acquire_owned_object_locks_post_consensus_v2, which
-        // reads the objects view fresh per transaction. Reading the lock overlay before
-        // the objects view is the safe order: overlay entries are removed only after the
-        // corresponding execution outputs are durable.
-        let prefetch_refs = {
+        // The map contains only quarantined (unflushed) locks; conflicts with flushed
+        // history are detected by the consumed-check inside
+        // try_acquire_owned_object_locks_post_consensus_v2, which reads the objects view
+        // fresh per transaction. Reading the lock overlay before the objects view is the
+        // safe order: overlay entries are removed only after the corresponding execution
+        // outputs are durable.
+        let existing_locks = {
             let mut prefetch_refs: Vec<ObjectRef> = Vec::new();
             for (_block, parsed_transactions) in &block_transactions {
                 for parsed in parsed_transactions {
@@ -2508,21 +2502,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
             prefetch_refs.sort();
             prefetch_refs.dedup();
-            prefetch_refs
+            // On a read error fall back to an empty map (treat refs as unlocked) — the
+            // same lenient behavior the per-transaction read had.
+            self.epoch_store
+                .get_owned_object_locks_map(&prefetch_refs)
+                .unwrap_or_default()
         };
-        // On a read error fall back to an empty map (treat refs as unlocked) — the
-        // same lenient behavior the per-transaction read had.
-        let existing_locks = self
-            .epoch_store
-            .get_owned_object_locks_map(&prefetch_refs)
-            .unwrap_or_default();
-        // When the legacy check is authoritative, optionally shadow-run the v2 check
-        // (against the quarantine-only lock state it would see) and report divergence.
-        let shadow_unflushed_locks =
-            (!conflict_check_v2 && owned_object_conflict_check_v2_shadow_enabled()).then(|| {
-                self.epoch_store
-                    .get_unflushed_owned_object_locks_map(&prefetch_refs)
-            });
 
         for (block, parsed_transactions) in block_transactions {
             let author = block.author.value();
@@ -2741,50 +2726,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         continue;
                     };
 
-                    let lock_result = if conflict_check_v2 {
-                        self.epoch_store
-                            .try_acquire_owned_object_locks_post_consensus_v2(
-                                &owned_object_refs,
-                                *tx.digest(),
-                                &owned_object_locks,
-                                &existing_locks,
-                                self.cache_reader.as_ref(),
-                                self.transaction_cache_reader.as_ref(),
-                            )
-                    } else {
-                        let result = self
-                            .epoch_store
-                            .try_acquire_owned_object_locks_post_consensus(
-                                &owned_object_refs,
-                                *tx.digest(),
-                                &owned_object_locks,
-                                &existing_locks,
-                            );
-                        if let Some(shadow_locks) = &shadow_unflushed_locks {
-                            let shadow_result = self
-                                .epoch_store
-                                .try_acquire_owned_object_locks_post_consensus_v2(
-                                    &owned_object_refs,
-                                    *tx.digest(),
-                                    &owned_object_locks,
-                                    shadow_locks,
-                                    self.cache_reader.as_ref(),
-                                    self.transaction_cache_reader.as_ref(),
-                                );
-                            if result.is_ok() != shadow_result.is_ok() {
-                                self.metrics
-                                    .consensus_handler_owned_lock_check_divergence
-                                    .inc();
-                                debug_fatal!(
-                                    "owned-object conflict check divergence for {:?}: legacy={:?}, v2={:?}",
-                                    tx.digest(),
-                                    result.as_ref().err(),
-                                    shadow_result.as_ref().err()
-                                );
-                            }
-                        }
-                        result
-                    };
+                    let lock_result = self
+                        .epoch_store
+                        .try_acquire_owned_object_locks_post_consensus_v2(
+                            &owned_object_refs,
+                            *tx.digest(),
+                            &owned_object_locks,
+                            &existing_locks,
+                            self.cache_reader.as_ref(),
+                            self.transaction_cache_reader.as_ref(),
+                        );
                     match lock_result {
                         Ok(new_locks) => {
                             owned_object_locks.extend(new_locks.into_iter());
@@ -3293,19 +3244,6 @@ fn owned_object_refs_to_lock(
             })
             .collect(),
     )
-}
-
-/// Whether to shadow-run the v2 owned-object conflict check alongside the legacy one
-/// while `owned_object_conflict_check_v2` is off, reporting (never acting on) any
-/// divergence. Always on in debug/simtest builds so the whole test suite validates the
-/// equivalence argument; opt-in via env in release builds for private-testnet soak.
-fn owned_object_conflict_check_v2_shadow_enabled() -> bool {
-    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        cfg!(debug_assertions)
-            || std::env::var("SUI_OWNED_OBJECT_CONFLICT_CHECK_V2_SHADOW")
-                .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-    })
 }
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
@@ -3822,21 +3760,6 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn test_dropped_owned_object_lock_conflict_is_marked_processed() {
-        run_dropped_owned_object_lock_conflict_test().await;
-    }
-
-    // Same scenario with the objects-table-based conflict check as the authoritative
-    // decision path (and the epoch lock table write-only).
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_dropped_owned_object_lock_conflict_is_marked_processed_v2() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_owned_object_conflict_check_v2_for_testing(true);
-            config
-        });
-        run_dropped_owned_object_lock_conflict_test().await;
-    }
-
-    async fn run_dropped_owned_object_lock_conflict_test() {
         telemetry_subscribers::init_for_testing();
 
         let (sender, keypair) = deterministic_random_account_key();

@@ -1155,13 +1155,6 @@ struct FeatureFlags {
     // If true enable unified linkage
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
-
-    // If true, post-consensus owned-object conflict detection uses the objects table
-    // (consumed-check) instead of the flushed portion of the per-epoch
-    // owned_object_locked_transactions table, which becomes write-only and can later be
-    // removed. See docs/in_memory_object_versioning.md.
-    #[serde(skip_serializing_if = "is_false")]
-    owned_object_conflict_check_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4810,10 +4803,6 @@ impl ProtocolConfig {
 
     pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
         self.feature_flags.record_time_estimate_processed = val;
-    }
-
-    pub fn set_owned_object_conflict_check_v2_for_testing(&mut self, val: bool) {
-        self.feature_flags.owned_object_conflict_check_v2 = val;
     }
 
     pub fn set_prepend_prologue_tx_in_consensus_commit_in_checkpoints_for_testing(

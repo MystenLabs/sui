@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityEpochTables, EncG, ExecutionIndicesWithStatsV2, LockDetails, LockDetailsWrapper, PkG,
+    AuthorityEpochTables, EncG, ExecutionIndicesWithStatsV2, LockDetails, PkG,
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
@@ -306,14 +306,10 @@ impl ConsensusCommitOutput {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
         }
 
-        if !self.owned_object_locks.is_empty() {
-            batch.insert_batch(
-                &tables.owned_object_locked_transactions,
-                self.owned_object_locks
-                    .into_iter()
-                    .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
-            )?;
-        }
+        // owned_object_locks are deliberately not persisted: quarantined locks are
+        // rebuilt by consensus replay after a restart, and flushed commits need no lock
+        // state because their durable execution outputs make every locked ref fail the
+        // consumed-check in try_acquire_owned_object_locks_post_consensus_v2.
 
         batch.delete_batch(
             &tables.deferred_transactions_with_aliases_v3,
@@ -794,13 +790,12 @@ impl ConsensusOutputQuarantine {
         ))
     }
 
-    /// Gets owned object locks from the in-memory quarantine only (locks of finalized
-    /// transactions whose commits have not yet been flushed). Locks from flushed commits
-    /// are intentionally not visible here: under `owned_object_conflict_check_v2` they are
+    /// Gets owned object locks (locks of finalized transactions whose commits have not
+    /// yet been flushed). Locks from flushed commits do not exist anywhere: they are
     /// subsumed by the consumed-check against the objects table — a flushed lock implies
     /// the locking transaction's outputs are durable, which implies every locked ref has
     /// a successor version in the objects table.
-    pub(super) fn get_unflushed_owned_object_locks(
+    pub(super) fn get_owned_object_locks(
         &self,
         obj_refs: &[ObjectRef],
     ) -> Vec<Option<LockDetails>> {
@@ -810,28 +805,21 @@ impl ConsensusOutputQuarantine {
             .collect()
     }
 
-    /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
-    pub(super) fn get_owned_object_locks(
-        &self,
-        tables: &AuthorityEpochTables,
-        obj_refs: &[ObjectRef],
-    ) -> SuiResult<Vec<Option<LockDetails>>> {
-        Ok(do_fallback_lookup(
-            obj_refs,
-            |obj_ref| {
-                if let Some(lock) = self.owned_object_locks.get(obj_ref) {
-                    CacheResult::Hit(Some(*lock))
-                } else {
-                    CacheResult::Miss
-                }
-            },
-            |obj_refs| {
-                tables
-                    .multi_get_locked_transactions(obj_refs)
-                    .expect("db error")
-            },
-        ))
+    #[cfg(test)]
+    pub(super) fn insert_owned_object_locks_for_test(
+        &mut self,
+        locks: &[(ObjectRef, TransactionDigest)],
+    ) {
+        for (obj_ref, digest) in locks {
+            self.owned_object_locks.insert(*obj_ref, *digest);
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_owned_object_locks_for_test(&mut self, obj_refs: &[ObjectRef]) {
+        for obj_ref in obj_refs {
+            self.owned_object_locks.remove(obj_ref);
+        }
     }
 
     pub(super) fn get_highest_pending_checkpoint_height(&self) -> Option<CheckpointHeight> {

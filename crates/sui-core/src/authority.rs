@@ -329,7 +329,6 @@ pub struct AuthorityMetrics {
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_dropped_transactions: IntCounterVec,
-    pub consensus_handler_owned_lock_check_divergence: IntCounter,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
     pub accumulator_deposits: IntCounter,
@@ -675,11 +674,6 @@ impl AuthorityMetrics {
                 "consensus_handler_dropped_transactions",
                 "Number of transactions dropped by consensus handler, by drop reason",
                 &["reason"],
-                registry,
-            ).unwrap(),
-            consensus_handler_owned_lock_check_divergence: register_int_counter_with_registry!(
-                "consensus_handler_owned_lock_check_divergence",
-                "Accept/drop divergences between the legacy owned-object conflict check and the shadow-run v2 check. Must stay at zero.",
                 registry,
             ).unwrap(),
             consensus_handler_max_object_costs: register_int_gauge_vec_with_registry!(
