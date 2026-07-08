@@ -59,12 +59,12 @@ envs:
     rpc: "https://fullnode.testnet.sui.io:443"
     ws: ~
     basic_auth: ~
-    chain_id: 4c78adac
+    chain_id: 69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD
   - alias: mainnet
     rpc: "https://fullnode.mainnet.sui.io:443"
     ws: ~
     basic_auth: ~
-    chain_id: 35834a8a
+    chain_id: 4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S
   - alias: devnet
     rpc: "https://fullnode.devnet.sui.io:443"
     ws: ~
