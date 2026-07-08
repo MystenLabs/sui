@@ -52,8 +52,10 @@ use crate::epoch::reconfiguration::ReconfigurationInitiator;
 mod transaction_pool_tests;
 
 /// A sequenced own block whose entries have not fully settled after this many rounds
-/// past its round indicates missed settle coverage; the defensive sweep reaps it.
-const SWEEP_GRACE_ROUNDS: Round = 100;
+/// past its round is reaped by the defensive sweep. Kept below the status cache's
+/// 400-round retention, but generous enough for legitimately slow terminal signals
+/// (e.g. congestion-deferred transactions).
+const SWEEP_GRACE_ROUNDS: Round = 300;
 
 /// Metrics for the transaction pool. Reuses the already-registered
 /// `ConsensusAdapterMetrics` series (prometheus handles are cheap clones sharing the
@@ -531,7 +533,15 @@ impl PoolInner {
 /// commit handler and checkpoint executor via the epoch store.
 pub struct SuiTransactionPool {
     epoch: EpochId,
-    epoch_store: Arc<AuthorityPerEpochStore>,
+    /// Weak: the epoch store (indirectly, via the randomness manager it owns) holds
+    /// the pool context, which holds this pool. A strong reference here would create
+    /// a cycle that keeps the epoch store — and everything it pins — alive forever.
+    epoch_store: std::sync::Weak<AuthorityPerEpochStore>,
+    /// Cached per-epoch constants, so the hot paths don't need the epoch store.
+    reference_gas_price: u64,
+    max_transaction_size_bytes: u64,
+    max_transactions_in_block_bytes: u64,
+    max_num_transactions_in_block: u64,
     /// `pending` user-transaction capacity: the gas auction bound.
     capacity: usize,
     /// Inflight user-transaction budget: `take` stops filling blocks with user
@@ -549,9 +559,14 @@ impl SuiTransactionPool {
         metrics: Arc<TransactionPoolMetrics>,
     ) -> Arc<Self> {
         assert!(capacity > 0);
+        let protocol_config = epoch_store.protocol_config();
         Arc::new(Self {
             epoch: epoch_store.epoch(),
-            epoch_store,
+            reference_gas_price: epoch_store.reference_gas_price(),
+            max_transaction_size_bytes: protocol_config.max_transaction_size_bytes(),
+            max_transactions_in_block_bytes: protocol_config.max_transactions_in_block_bytes(),
+            max_num_transactions_in_block: protocol_config.max_num_transactions_in_block(),
+            epoch_store: Arc::downgrade(&epoch_store),
             capacity,
             max_pending_transactions,
             inner: Arc::new(Mutex::new(PoolInner {
@@ -627,8 +642,9 @@ impl SuiTransactionPool {
         };
         if matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..)) {
             info!(epoch = ?self.epoch, "Submitting EndOfPublish message to consensus");
-            self.epoch_store
-                .record_epoch_pending_certs_process_time_metric();
+            if let Some(epoch_store) = self.epoch_store.upgrade() {
+                epoch_store.record_epoch_pending_certs_process_time_metric();
+            }
         }
         self.submit_entry(kind, 0, vec![transaction], None, None)?;
         Ok(())
@@ -655,6 +671,36 @@ impl SuiTransactionPool {
             _ => classify(&transactions[0]),
         };
         let num_txs = transactions.len();
+
+        // Enforce consensus size limits at admission (as TransactionClient::submit does
+        // today): an entry that cannot fit in a block would otherwise wedge the head of
+        // the take order forever.
+        if num_txs as u64 > self.max_num_transactions_in_block {
+            return Err(SuiErrorKind::FailedToSubmitToConsensus(format!(
+                "transaction bundle count {} exceeds block limit {}",
+                num_txs, self.max_num_transactions_in_block
+            ))
+            .into());
+        }
+        let mut bundle_bytes = 0u64;
+        for bytes in &serialized {
+            if bytes.len() as u64 > self.max_transaction_size_bytes {
+                return Err(SuiErrorKind::FailedToSubmitToConsensus(format!(
+                    "transaction size {}B exceeds limit {}B",
+                    bytes.len(),
+                    self.max_transaction_size_bytes
+                ))
+                .into());
+            }
+            bundle_bytes += bytes.len() as u64;
+        }
+        if bundle_bytes > self.max_transactions_in_block_bytes {
+            return Err(SuiErrorKind::FailedToSubmitToConsensus(format!(
+                "transaction bundle size {}B exceeds block limit {}B",
+                bundle_bytes, self.max_transactions_in_block_bytes
+            ))
+            .into());
+        }
 
         let mut notifications = Notifications::new();
         let mut record_dos_for_coalesced: Option<Arc<PoolEntry>> = None;
@@ -817,16 +863,21 @@ impl SuiTransactionPool {
         if !entry.kind.is_user() {
             return;
         }
-        let rgp = self.epoch_store.reference_gas_price().max(1);
+        let Some(epoch_store) = self.epoch_store.upgrade() else {
+            return;
+        };
+        let rgp = self.reference_gas_price.max(1);
         for tx in &entry.transactions {
             let Some(user_tx) = tx.kind.as_user_transaction() else {
                 continue;
             };
             let amplification_factor = (user_tx.transaction_data().gas_price() / rgp).max(1);
             for addr in addrs {
-                self.epoch_store
-                    .submitted_transaction_cache
-                    .record_submitted_tx(user_tx.digest(), amplification_factor as u32, *addr);
+                epoch_store.submitted_transaction_cache.record_submitted_tx(
+                    user_tx.digest(),
+                    amplification_factor as u32,
+                    *addr,
+                );
             }
         }
     }
@@ -1146,18 +1197,17 @@ impl TransactionPool for SuiTransactionPool {
                         inner.inflight.insert(block_ref, block);
                         continue;
                     }
-                    // A sequenced block's transactions must all have received status
-                    // or processed signals by now; a leftover indicates missed settle
-                    // coverage. Degrade to a metric and a warning instead of leaking.
-                    debug_fatal!(
-                        "Unsettled entries in sequenced block {} far below gc round {}",
-                        block_ref,
-                        gc_round
-                    );
+                    // A sequenced block's transactions should have received status or
+                    // processed signals by now. Legitimate stragglers exist (e.g.
+                    // congestion-deferred transactions whose terminal status arrives
+                    // commits later), so sweep with a warning rather than treating this
+                    // as fatal — an early settle costs only accounting, never
+                    // correctness.
                     for entry in unsettled {
                         warn!(
                             keys = ?entry.keys,
                             %block_ref,
+                            gc_round,
                             "Sweeping unsettled entry in sequenced block",
                         );
                         inner.finish_entry(

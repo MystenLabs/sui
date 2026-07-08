@@ -1470,6 +1470,16 @@ impl SuiNode {
         transaction_pool: Option<TransactionPoolContext>,
         node_role: NodeRole,
     ) -> Result<ValidatorComponents> {
+        // Rotate the transaction pool for the new epoch and register it on the epoch
+        // store for settle callbacks, before any per-epoch component (randomness DKG,
+        // checkpoint service) submits system messages: submissions park in the pool
+        // until consensus starts taking from it.
+        let consensus_transaction_pool = transaction_pool.as_ref().map(|ctx| {
+            let pool = ctx.rotate_for_epoch(epoch_store.clone());
+            epoch_store.set_transaction_pool(&pool);
+            pool as Arc<dyn TransactionPool>
+        });
+
         // System messages are submitted through the transaction pool when enabled,
         // otherwise through the consensus adapter.
         let consensus_submitter: Arc<dyn SubmitToConsensus> = match &transaction_pool {
@@ -1540,14 +1550,6 @@ impl SuiNode {
             backpressure_manager,
             config.congestion_log.clone(),
         );
-
-        // Rotate the transaction pool for the new epoch and register it on the epoch
-        // store for settle callbacks, before consensus starts taking from it.
-        let consensus_transaction_pool = transaction_pool.as_ref().map(|ctx| {
-            let pool = ctx.rotate_for_epoch(epoch_store.clone());
-            epoch_store.set_transaction_pool(&pool);
-            pool as Arc<dyn TransactionPool>
-        });
 
         info!("Starting consensus manager asynchronously");
 
