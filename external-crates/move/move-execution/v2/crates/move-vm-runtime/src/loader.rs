@@ -1580,23 +1580,24 @@ impl LoadedModule {
                         | Bytecode::VecPushBack(si)
                         | Bytecode::VecPopBack(si)
                         | Bytecode::VecUnpack(si, _)
-                        | Bytecode::VecSwap(si)
-                            if !single_signature_token_map.contains_key(si) =>
-                        {
-                            let ty = match module.signature_at(*si).0.first() {
-                                None => {
-                                    return Err(PartialVMError::new(
-                                        StatusCode::VERIFIER_INVARIANT_VIOLATION,
-                                    )
-                                    .with_message(
-                                        "the type argument for vector-related bytecode \
+                        | Bytecode::VecSwap(si) => {
+                            if !single_signature_token_map.contains_key(si) {
+                                let ty = match module.signature_at(*si).0.first() {
+                                    None => {
+                                        return Err(PartialVMError::new(
+                                            StatusCode::VERIFIER_INVARIANT_VIOLATION,
+                                        )
+                                        .with_message(
+                                            "the type argument for vector-related bytecode \
                                                 expects one and only one signature token"
-                                            .to_owned(),
-                                    ));
-                                }
-                                Some(sig_token) => sig_token,
-                            };
-                            single_signature_token_map.insert(*si, cache.make_type(module, ty)?);
+                                                .to_owned(),
+                                        ));
+                                    }
+                                    Some(sig_token) => sig_token,
+                                };
+                                single_signature_token_map
+                                    .insert(*si, cache.make_type(module, ty)?);
+                            }
                         }
                         _ => {}
                     }

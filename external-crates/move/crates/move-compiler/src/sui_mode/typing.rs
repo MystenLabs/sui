@@ -715,19 +715,20 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 check_internal_permit(context, e.exp.loc, mcall)
             }
         }
-        T::UnannotatedExp_::Pack(m, s, _, _)
+        T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test
                 && !otw_special_cases(context)
                 && context.one_time_witness.as_ref().is_some_and(|otw| {
                     otw.as_ref()
                         .is_ok_and(|o| m == context.current_module() && o == s)
-                }) =>
-        {
-            let msg = "Invalid one-time witness construction. One-time witness types \
-                cannot be created manually, but are passed as an argument 'init'";
-            let mut diag = diag!(OTW_USAGE_DIAG, (e.exp.loc, msg));
-            diag.add_note(OTW_NOTE);
-            context.add_diag(diag)
+                })
+            {
+                let msg = "Invalid one-time witness construction. One-time witness types \
+                    cannot be created manually, but are passed as an argument 'init'";
+                let mut diag = diag!(OTW_USAGE_DIAG, (e.exp.loc, msg));
+                diag.add_note(OTW_NOTE);
+                context.add_diag(diag)
+            }
         }
         _ => (),
     }

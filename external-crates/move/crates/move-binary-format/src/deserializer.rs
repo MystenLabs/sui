@@ -1681,15 +1681,15 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             | Opcodes::VEC_PUSH_BACK
             | Opcodes::VEC_POP_BACK
             | Opcodes::VEC_UNPACK
-            | Opcodes::VEC_SWAP
-                if cursor.version() < VERSION_4 =>
-            {
-                return Err(
-                    PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
-                        "Vector operations not available before bytecode version {}",
-                        VERSION_4
-                    )),
-                );
+            | Opcodes::VEC_SWAP => {
+                if cursor.version() < VERSION_4 {
+                    return Err(
+                        PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
+                            "Vector operations not available before bytecode version {}",
+                            VERSION_4
+                        )),
+                    );
+                }
             }
             _ => {}
         };

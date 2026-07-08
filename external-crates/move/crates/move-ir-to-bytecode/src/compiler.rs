@@ -272,10 +272,10 @@ fn verify_move_function_body(code: &[Block]) -> Result<()> {
             match &statement.value {
                 Statement_::Jump(label)
                 | Statement_::JumpIf(_, label)
-                | Statement_::JumpIfFalse(_, label)
-                    if !labels.contains(&label.value) =>
-                {
-                    undeclared.push(&label.value);
+                | Statement_::JumpIfFalse(_, label) => {
+                    if !labels.contains(&label.value) {
+                        undeclared.push(&label.value);
+                    }
                 }
                 _ => {}
             }
@@ -307,10 +307,10 @@ fn verify_bytecode_function_body(code: &[(BlockLabel_, BytecodeBlock)]) -> Resul
             match &statement.value {
                 IRBytecode_::Branch(label)
                 | IRBytecode_::BrTrue(label)
-                | IRBytecode_::BrFalse(label)
-                    if !labels.contains(&label) =>
-                {
-                    undeclared.push(label);
+                | IRBytecode_::BrFalse(label) => {
+                    if !labels.contains(&label) {
+                        undeclared.push(label);
+                    }
                 }
                 _ => {}
             }

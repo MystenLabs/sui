@@ -317,18 +317,18 @@ impl<'a> Instrumenter<'a> {
 
                     // add a trace for written back value if it's a user variable.
                     match action.dst {
-                        BorrowNode::LocalRoot(temp) | BorrowNode::Reference(temp)
-                            if temp < self.builder.fun_env.get_local_count() =>
-                        {
-                            self.builder.emit_with(|id| {
-                                Bytecode::Call(
-                                    id,
-                                    vec![],
-                                    Operation::TraceLocal(temp),
-                                    vec![temp],
-                                    None,
-                                )
-                            });
+                        BorrowNode::LocalRoot(temp) | BorrowNode::Reference(temp) => {
+                            if temp < self.builder.fun_env.get_local_count() {
+                                self.builder.emit_with(|id| {
+                                    Bytecode::Call(
+                                        id,
+                                        vec![],
+                                        Operation::TraceLocal(temp),
+                                        vec![temp],
+                                        None,
+                                    )
+                                });
+                            }
                         }
                         _ => {}
                     }
