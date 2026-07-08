@@ -18,7 +18,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
-use consensus_core::{LimitReached, TransactionPool};
+use consensus_core::LimitReached;
+// Re-exported so downstream crates (e.g. sui-node) can name the consensus-facing trait
+// without a direct consensus-core dependency.
+pub use consensus_core::TransactionPool;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_common::debug_fatal;
 use parking_lot::Mutex;
@@ -42,6 +45,7 @@ use crate::authority::consensus_tx_status_cache::ConsensusTxStatus;
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::{ConsensusAdapterMetrics, SubmitToConsensus};
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify};
+use crate::epoch::reconfiguration::ReconfigurationInitiator;
 
 /// A sequenced own block whose entries have not fully settled after this many rounds
 /// past its round indicates missed settle coverage; the defensive sweep reaps it.
@@ -1314,6 +1318,7 @@ pub struct TransactionPoolContext {
 
 struct TransactionPoolContextInner {
     checkpoint_store: Arc<CheckpointStore>,
+    authority: AuthorityName,
     capacity: usize,
     max_pending_transactions: usize,
     metrics: Arc<TransactionPoolMetrics>,
@@ -1323,6 +1328,7 @@ struct TransactionPoolContextInner {
 impl TransactionPoolContext {
     pub fn new(
         checkpoint_store: Arc<CheckpointStore>,
+        authority: AuthorityName,
         max_pending_transactions: usize,
         metrics: Arc<TransactionPoolMetrics>,
         epoch_store: Arc<AuthorityPerEpochStore>,
@@ -1340,6 +1346,7 @@ impl TransactionPoolContext {
         Self {
             inner: Arc::new(TransactionPoolContextInner {
                 checkpoint_store,
+                authority,
                 capacity,
                 max_pending_transactions,
                 metrics,
@@ -1448,15 +1455,32 @@ impl TransactionPoolContext {
 
     /// Crash recovery: resubmit EndOfPublish if the node restarted after closing user
     /// certs but before the message landed.
-    pub fn recover_end_of_publish(
-        &self,
-        authority: AuthorityName,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
+    pub fn recover_end_of_publish(&self, epoch_store: &Arc<AuthorityPerEpochStore>) {
         if epoch_store.should_send_end_of_publish() {
-            let transaction = ConsensusTransaction::new_end_of_publish(authority);
+            let transaction = ConsensusTransaction::new_end_of_publish(self.inner.authority);
             if let Err(e) = self.submit_to_consensus(&[transaction], epoch_store) {
                 warn!("Failed to recover EndOfPublish submission: {e}");
+            }
+        }
+    }
+}
+
+impl ReconfigurationInitiator for TransactionPoolContext {
+    /// Begins reconfiguration: sets reconfig state to reject new user transactions,
+    /// then submits EndOfPublish.
+    fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) {
+        {
+            let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
+            if !reconfig_guard.should_accept_user_certs() {
+                // Allow caller to call this method multiple times
+                return;
+            }
+            epoch_store.close_user_certs(reconfig_guard);
+        }
+        if epoch_store.should_send_end_of_publish() {
+            let transaction = ConsensusTransaction::new_end_of_publish(self.inner.authority);
+            if let Err(err) = self.submit_to_consensus(&[transaction], epoch_store) {
+                warn!("Error when sending end of publish message: {:?}", err);
             }
         }
     }

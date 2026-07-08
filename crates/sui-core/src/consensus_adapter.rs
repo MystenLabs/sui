@@ -214,6 +214,28 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
     ) -> SuiResult;
 }
 
+// Allows an `Arc<dyn SubmitToConsensus>` to be used where `T: SubmitToConsensus` is
+// required (e.g. `SubmitCheckpointToConsensus<T>` and `Box<dyn SubmitToConsensus>`
+// construction), so callers can select the submitter implementation at runtime.
+impl SubmitToConsensus for Arc<dyn SubmitToConsensus> {
+    fn submit_to_consensus(
+        &self,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
+        (**self).submit_to_consensus(transactions, epoch_store)
+    }
+
+    fn submit_best_effort(
+        &self,
+        transaction: &ConsensusTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        timeout: Duration,
+    ) -> SuiResult {
+        (**self).submit_best_effort(transaction, epoch_store, timeout)
+    }
+}
+
 #[mockall::automock]
 #[async_trait::async_trait]
 pub trait ConsensusClient: Sync + Send + 'static {

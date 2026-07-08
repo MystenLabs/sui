@@ -1464,6 +1464,12 @@ pub struct AuthorityOverloadConfig {
     // reject behavior as when the queue is disabled) until progress resumes.
     #[serde(default = "default_admission_queue_failover_timeout")]
     pub admission_queue_failover_timeout: Duration,
+
+    // Enables the pull-based transaction pool for consensus submission, replacing the
+    // admission queue + consensus adapter submission pipeline. See
+    // sui-core/src/transaction_pool.md.
+    #[serde(default = "default_transaction_pool_enabled")]
+    pub transaction_pool_enabled: bool,
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
@@ -1522,6 +1528,12 @@ fn default_admission_queue_failover_timeout() -> Duration {
     Duration::from_secs(30)
 }
 
+fn default_transaction_pool_enabled() -> bool {
+    // The env var allows enabling the pool wholesale in test runs (e.g. simtest
+    // suites) without editing per-test configs.
+    std::env::var("SUI_TRANSACTION_POOL_ENABLED").is_ok()
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -1541,6 +1553,7 @@ impl Default for AuthorityOverloadConfig {
             admission_queue_bypass_fraction: default_admission_queue_bypass_fraction(),
             admission_queue_enabled: default_admission_queue_enabled(),
             admission_queue_failover_timeout: default_admission_queue_failover_timeout(),
+            transaction_pool_enabled: default_transaction_pool_enabled(),
         }
     }
 }

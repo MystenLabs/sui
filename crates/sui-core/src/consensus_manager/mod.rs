@@ -255,6 +255,9 @@ impl ConsensusManager {
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
+        // When provided, the consensus proposer takes transactions from this pool and
+        // the TransactionClient submission path is unused.
+        transaction_pool: Option<Arc<dyn consensus_core::TransactionPool>>,
         randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) {
         let epoch = epoch_store.epoch();
@@ -353,7 +356,7 @@ impl ConsensusManager {
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),
-            None,
+            transaction_pool,
             commit_consumer,
             registry.clone(),
             *boot_counter,

@@ -358,7 +358,7 @@ where
         epoch_store.clone(),
         checkpoint_service,
         execution_scheduler_sender,
-        consensus_adapter,
+        Arc::new(consensus_adapter),
         authority.get_object_cache_reader().clone(),
         consensus_committee,
         metrics,

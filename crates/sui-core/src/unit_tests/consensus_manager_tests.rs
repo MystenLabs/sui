@@ -103,6 +103,7 @@ async fn test_consensus_manager() {
                     SuiTxValidatorMetrics::new(&Registry::new()),
                 ),
                 None,
+                None,
             )
             .await;
 
@@ -184,6 +185,7 @@ async fn test_consensus_manager_address_update() {
                 SuiTxValidatorMetrics::new(&Registry::new()),
             ),
             None,
+            None,
         )
         .await;
 
@@ -248,6 +250,7 @@ async fn test_consensus_manager_address_update() {
                 Arc::new(CheckpointServiceNoop {}),
                 SuiTxValidatorMetrics::new(&Registry::new()),
             ),
+            None,
             None,
         )
         .await;

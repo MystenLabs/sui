@@ -101,7 +101,8 @@ use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointOutput, CheckpointService, CheckpointStore, LogCheckpointOutput,
     SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
-use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
+use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, SubmitToConsensus};
+use sui_core::transaction_pool::{TransactionPool, TransactionPoolContext, TransactionPoolMetrics};
 use sui_core::consensus_manager::ConsensusManager;
 use sui_core::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
@@ -174,6 +175,7 @@ pub struct ValidatorComponents {
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     admission_queue: Option<AdmissionQueueContext>,
+    transaction_pool: Option<TransactionPoolContext>,
 }
 pub struct P2pComponents {
     p2p_network: Network,
@@ -333,7 +335,7 @@ impl SuiNode {
         metrics: Arc<SuiNodeMetrics>,
         authority: AuthorityName,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        consensus_adapter: Arc<ConsensusAdapter>,
+        consensus_adapter: Arc<dyn SubmitToConsensus>,
     ) {
         let epoch = epoch_store.epoch();
 
@@ -449,7 +451,7 @@ impl SuiNode {
                                     jwk_log!("Submitting JWK to consensus: {:?}", id);
 
                                     let txn = ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
-                                    consensus_adapter.submit(txn, None, &epoch_store, None, None)
+                                    consensus_adapter.submit_to_consensus(&[txn], &epoch_store)
                                         .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
                                         .ok();
                                 }
@@ -925,9 +927,13 @@ impl SuiNode {
             .await?;
 
             if node_role.is_validator() {
-                components
-                    .consensus_adapter
-                    .recover_end_of_publish(&epoch_store);
+                if let Some(pool) = &components.transaction_pool {
+                    pool.recover_end_of_publish(&epoch_store);
+                } else {
+                    components
+                        .consensus_adapter
+                        .recover_end_of_publish(&epoch_store);
+                }
 
                 // Start the gRPC server
                 components.validator_server_handle = Some(
@@ -1020,13 +1026,15 @@ impl SuiNode {
     // Init reconfig process by starting to reject user certs
     pub async fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) -> SuiResult {
         info!("close_epoch (current epoch = {})", epoch_store.epoch());
-        self.validator_components
-            .lock()
-            .await
+        let components_guard = self.validator_components.lock().await;
+        let components = components_guard
             .as_ref()
-            .ok_or_else(|| SuiError::from("Node is not a validator"))?
-            .consensus_adapter
-            .close_epoch(epoch_store);
+            .ok_or_else(|| SuiError::from("Node is not a validator"))?;
+        if let Some(pool) = &components.transaction_pool {
+            pool.close_epoch(epoch_store);
+        } else {
+            components.consensus_adapter.close_epoch(epoch_store);
+        }
         Ok(())
     }
 
@@ -1332,14 +1340,33 @@ impl SuiNode {
 
         let client = Arc::new(UpdatableConsensusClient::new());
         let inflight_slot_freed_notify = Arc::new(tokio::sync::Notify::new());
+        let ca_metrics = ConsensusAdapterMetrics::new(&registry_service.default_registry());
+        // The pull-based transaction pool replaces the admission queue and the
+        // adapter's submission path when enabled.
+        let transaction_pool = config
+            .authority_overload_config
+            .transaction_pool_enabled
+            .then(|| {
+                let pool_metrics = Arc::new(TransactionPoolMetrics::new(
+                    &registry_service.default_registry(),
+                    &ca_metrics,
+                ));
+                TransactionPoolContext::new(
+                    checkpoint_store.clone(),
+                    state.name,
+                    consensus_config.max_pending_transactions(),
+                    pool_metrics,
+                    epoch_store.clone(),
+                )
+            });
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             &committee,
             consensus_config,
             state.name,
-            &registry_service.default_registry(),
             client.clone(),
             checkpoint_store.clone(),
             inflight_slot_freed_notify.clone(),
+            ca_metrics,
         ));
 
         let consensus_manager = Arc::new(ConsensusManager::new(
@@ -1369,6 +1396,7 @@ impl SuiNode {
                 epoch_store.clone(),
                 &registry_service.default_registry(),
                 inflight_slot_freed_notify,
+                transaction_pool.clone(),
             )
             .await?;
             (Some(handle), queue)
@@ -1414,6 +1442,7 @@ impl SuiNode {
             sui_node_metrics,
             sui_tx_validator_metrics,
             admission_queue,
+            transaction_pool,
             node_role,
         )
         .await
@@ -1438,11 +1467,20 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
         admission_queue: Option<AdmissionQueueContext>,
+        transaction_pool: Option<TransactionPoolContext>,
         node_role: NodeRole,
     ) -> Result<ValidatorComponents> {
+        // System messages are submitted through the transaction pool when enabled,
+        // otherwise through the consensus adapter.
+        let consensus_submitter: Arc<dyn SubmitToConsensus> = match &transaction_pool {
+            Some(pool) => Arc::new(pool.clone()),
+            None => Arc::new(consensus_adapter.clone()),
+        };
+
         let checkpoint_service = Self::build_checkpoint_service(
             config,
             consensus_adapter.clone(),
+            transaction_pool.clone(),
             checkpoint_store.clone(),
             epoch_store.clone(),
             state.clone(),
@@ -1464,7 +1502,7 @@ impl SuiNode {
             };
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
-                Box::new(consensus_adapter.clone()),
+                Box::new(consensus_submitter.clone()),
                 randomness_handle,
                 authority_key_pair,
                 randomness_receiver_handle.clone(),
@@ -1480,7 +1518,7 @@ impl SuiNode {
         if node_role.is_validator() {
             ExecutionTimeObserver::spawn(
                 epoch_store.clone(),
-                Box::new(consensus_adapter.clone()),
+                Box::new(consensus_submitter.clone()),
                 config
                     .execution_time_observer_config
                     .clone()
@@ -1497,11 +1535,19 @@ impl SuiNode {
             state.clone(),
             checkpoint_service.clone(),
             epoch_store.clone(),
-            consensus_adapter.clone(),
+            consensus_submitter.clone(),
             throughput_calculator,
             backpressure_manager,
             config.congestion_log.clone(),
         );
+
+        // Rotate the transaction pool for the new epoch and register it on the epoch
+        // store for settle callbacks, before consensus starts taking from it.
+        let consensus_transaction_pool = transaction_pool.as_ref().map(|ctx| {
+            let pool = ctx.rotate_for_epoch(epoch_store.clone());
+            epoch_store.set_transaction_pool(&pool);
+            pool as Arc<dyn TransactionPool>
+        });
 
         info!("Starting consensus manager asynchronously");
 
@@ -1523,6 +1569,7 @@ impl SuiNode {
                         epoch_store,
                         consensus_handler_initializer,
                         sui_tx_validator,
+                        consensus_transaction_pool,
                         Some(randomness_receiver_handle),
                     )
                     .await;
@@ -1546,7 +1593,7 @@ impl SuiNode {
                 sui_node_metrics,
                 state.name,
                 epoch_store.clone(),
-                consensus_adapter.clone(),
+                consensus_submitter.clone(),
             );
         }
 
@@ -1563,12 +1610,14 @@ impl SuiNode {
             checkpoint_metrics,
             sui_tx_validator_metrics,
             admission_queue,
+            transaction_pool,
         })
     }
 
     fn build_checkpoint_service(
         config: &NodeConfig,
         consensus_adapter: Arc<ConsensusAdapter>,
+        transaction_pool: Option<TransactionPoolContext>,
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         state: Arc<AuthorityState>,
@@ -1586,7 +1635,21 @@ impl SuiNode {
             epoch_start_timestamp_ms, epoch_duration_ms
         );
 
-        let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.is_validator() {
+        // The checkpoint output needs both submission and epoch-close (timestamp-based
+        // close) capabilities, so it is built with the concrete submitter type.
+        let checkpoint_output: Box<dyn CheckpointOutput> = if !node_role.is_validator() {
+            Box::new(LogCheckpointOutput::new(checkpoint_metrics.clone()))
+        } else if let Some(pool) = transaction_pool {
+            Box::new(SubmitCheckpointToConsensus::new(
+                pool,
+                state.secret.clone(),
+                config.protocol_public_key(),
+                epoch_start_timestamp_ms
+                    .checked_add(epoch_duration_ms)
+                    .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
+                checkpoint_metrics.clone(),
+            ))
+        } else {
             Box::new(SubmitCheckpointToConsensus::new(
                 consensus_adapter,
                 state.secret.clone(),
@@ -1596,8 +1659,6 @@ impl SuiNode {
                     .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
                 checkpoint_metrics.clone(),
             ))
-        } else {
-            Box::new(LogCheckpointOutput::new(checkpoint_metrics.clone()))
         };
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
@@ -1618,12 +1679,11 @@ impl SuiNode {
         committee: &Committee,
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
-        prometheus_registry: &Registry,
         consensus_client: Arc<dyn ConsensusClient>,
         checkpoint_store: Arc<CheckpointStore>,
         inflight_slot_freed_notify: Arc<tokio::sync::Notify>,
+        ca_metrics: ConsensusAdapterMetrics,
     ) -> ConsensusAdapter {
-        let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
         ConsensusAdapter::new(
@@ -1644,9 +1704,13 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         prometheus_registry: &Registry,
         inflight_slot_freed_notify: Arc<tokio::sync::Notify>,
+        transaction_pool: Option<TransactionPoolContext>,
     ) -> Result<(SpawnOnce, Option<AdmissionQueueContext>)> {
         let overload_config = &config.authority_overload_config;
-        let admission_queue = overload_config.admission_queue_enabled.then(|| {
+        // The transaction pool replaces the admission queue when enabled.
+        let admission_queue = (overload_config.admission_queue_enabled
+            && transaction_pool.is_none())
+        .then(|| {
             let manager = Arc::new(AdmissionQueueManager::new(
                 consensus_adapter.clone(),
                 Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
@@ -1663,6 +1727,7 @@ impl SuiNode {
             Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
             config.policy_config.clone().map(|p| p.client_id_source),
             admission_queue.clone(),
+            transaction_pool,
         );
 
         let mut server_conf = mysten_network::config::Config::new();
@@ -1854,13 +1919,17 @@ impl SuiNode {
                     ),
                 );
                 info!(?transaction, "submitting capabilities to consensus");
-                components.consensus_adapter.submit(
-                    transaction,
-                    None,
-                    &cur_epoch_store,
-                    None,
-                    None,
-                )?;
+                if let Some(pool) = &components.transaction_pool {
+                    pool.submit_to_consensus(&[transaction], &cur_epoch_store)?;
+                } else {
+                    components.consensus_adapter.submit(
+                        transaction,
+                        None,
+                        &cur_epoch_store,
+                        None,
+                        None,
+                    )?;
+                }
             }
 
             let stop_condition = checkpoint_executor.run_epoch(run_with_range).await;
@@ -1956,6 +2025,7 @@ impl SuiNode {
                 checkpoint_metrics,
                 sui_tx_validator_metrics,
                 admission_queue,
+                transaction_pool,
             }) = validator_components_lock_guard.take()
             {
                 info!("Reconfiguring node (was running consensus).");
@@ -2001,6 +2071,7 @@ impl SuiNode {
                             self.metrics.clone(),
                             sui_tx_validator_metrics,
                             admission_queue,
+                            transaction_pool,
                             new_role,
                         )
                         .await?,
