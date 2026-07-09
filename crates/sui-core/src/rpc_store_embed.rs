@@ -35,6 +35,7 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use prometheus::Registry;
 use sui_config::NodeConfig;
+use sui_config::rpc_config::PipelineAvailabilityConfig;
 use sui_consistent_store::ChainId;
 use sui_consistent_store::Db;
 use sui_consistent_store::DbOptions;
@@ -50,11 +51,13 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::service::Service;
+use sui_rpc_store::AvailabilityConfig;
 use sui_rpc_store::ConsistencyConfig;
 use sui_rpc_store::HISTORY_COHORT;
 use sui_rpc_store::Indexer;
 use sui_rpc_store::LIVE_COHORT;
 use sui_rpc_store::METRICS_PREFIX;
+use sui_rpc_store::PipelineAvailability;
 use sui_rpc_store::PipelineLayer;
 use sui_rpc_store::RestoreLayer;
 use sui_rpc_store::RpcStoreReader;
@@ -219,6 +222,50 @@ fn decide(
     Bootstrap::Resume
 }
 
+/// Build the reader's availability policies from `rpc.availability` in the
+/// node config, rejecting malformed policies and pipeline names outside the
+/// embedded cohorts. Called at the top of [`EmbeddedRpcStore::bootstrap`] so
+/// a misconfiguration fails startup in milliseconds rather than after a
+/// multi-hour restore.
+fn availability_policies(config: &NodeConfig) -> anyhow::Result<AvailabilityConfig> {
+    let Some(availability) = config.rpc().and_then(|rpc| rpc.availability()) else {
+        return Ok(AvailabilityConfig::default());
+    };
+
+    let default = to_policy(&availability.default_policy()).context("rpc.availability")?;
+    let mut pipelines = std::collections::BTreeMap::new();
+    for (name, policy) in &availability.pipelines {
+        anyhow::ensure!(
+            LIVE_COHORT.contains(&name.as_str()) || HISTORY_COHORT.contains(&name.as_str()),
+            "rpc.availability.pipelines names unknown pipeline {name:?}; valid pipelines: {:?}",
+            LIVE_COHORT.iter().chain(HISTORY_COHORT).collect::<Vec<_>>(),
+        );
+        if let Some(policy) =
+            to_policy(policy).with_context(|| format!("rpc.availability.pipelines.{name}"))?
+        {
+            pipelines.insert(name.clone(), policy);
+        }
+    }
+
+    Ok(AvailabilityConfig { default, pipelines })
+}
+
+/// Convert one `rpc.availability` policy from its node-YAML shape to the
+/// rpc-store policy value. `None` when neither key is set (an empty
+/// per-pipeline entry is a no-op rather than an error, matching the
+/// permissive node-YAML conventions).
+fn to_policy(config: &PipelineAvailabilityConfig) -> anyhow::Result<Option<PipelineAvailability>> {
+    match (config.enabled, config.max_checkpoint_lag) {
+        (Some(_), Some(_)) => {
+            anyhow::bail!("set at most one of `enabled` / `max-checkpoint-lag`")
+        }
+        (Some(true), None) => Ok(Some(PipelineAvailability::Enabled)),
+        (Some(false), None) => Ok(Some(PipelineAvailability::Disabled)),
+        (None, Some(lag)) => Ok(Some(PipelineAvailability::MaxCheckpointLag(lag))),
+        (None, None) => Ok(None),
+    }
+}
+
 /// A bootstrapped embedded rpc-store, ready to hand to the pruner and
 /// the rpc-api read path and to start tip indexing.
 pub struct EmbeddedRpcStore {
@@ -266,6 +313,11 @@ impl EmbeddedRpcStore {
         chain_identifier: ChainIdentifier,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
+        // Fail fast on a malformed `rpc.availability` block — before the
+        // (potentially hours-long) restore below, and before the node-level
+        // `RpcConfig::validate()` which only runs once HTTP servers build.
+        let availability = availability_policies(config)?;
+
         let perpetual = authority_store.perpetual_tables.clone();
         let path = config.db_path().join(RPC_STORE_DIR);
         let (db, schema) = open_db(&path).await?;
@@ -374,7 +426,11 @@ impl EmbeddedRpcStore {
         }
 
         let store = sui_consistent_store::Store::new(db.clone(), schema.clone());
-        let reader = RpcStoreReader::new(db, schema);
+        // Serving policies live only on this reader: the bootstrap logic
+        // above (`decide`/`cohort_resume`), `indexed_checkpoint_fn`, and the
+        // cohort introspection helpers read watermarks straight off the `Db`
+        // and must not be availability-gated.
+        let reader = RpcStoreReader::new(db, schema).with_availability(availability);
 
         Ok(Self {
             store,
@@ -768,5 +824,95 @@ mod tests {
         );
         // History exactly at the floor resumes.
         assert_eq!(decide(Some(200), 100, Some(true), 100), Bootstrap::Resume);
+    }
+
+    fn policy(enabled: Option<bool>, lag: Option<u64>) -> PipelineAvailabilityConfig {
+        PipelineAvailabilityConfig {
+            enabled,
+            max_checkpoint_lag: lag,
+        }
+    }
+
+    #[test]
+    fn to_policy_maps_each_shape() {
+        assert_eq!(to_policy(&policy(None, None)).unwrap(), None);
+        assert_eq!(
+            to_policy(&policy(Some(true), None)).unwrap(),
+            Some(PipelineAvailability::Enabled)
+        );
+        assert_eq!(
+            to_policy(&policy(Some(false), None)).unwrap(),
+            Some(PipelineAvailability::Disabled)
+        );
+        assert_eq!(
+            to_policy(&policy(None, Some(42))).unwrap(),
+            Some(PipelineAvailability::MaxCheckpointLag(42))
+        );
+        let err = to_policy(&policy(Some(true), Some(42))).unwrap_err();
+        assert!(format!("{err:#}").contains("at most one of"), "{err:#}");
+    }
+
+    fn node_config_with_availability(
+        availability: sui_config::rpc_config::RpcAvailabilityConfig,
+    ) -> NodeConfig {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
+            .build()
+            .validator_configs()[0]
+            .clone();
+        config.rpc = Some(sui_config::RpcConfig {
+            availability: Some(availability),
+            ..Default::default()
+        });
+        config
+    }
+
+    #[test]
+    fn availability_policies_rejects_unknown_pipeline() {
+        let config = node_config_with_availability(sui_config::rpc_config::RpcAvailabilityConfig {
+            pipelines: [("balanec".to_string(), policy(Some(false), None))]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        });
+        let err = availability_policies(&config).unwrap_err();
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("unknown pipeline \"balanec\""),
+            "{message}"
+        );
+        assert!(message.contains("balance"), "{message}");
+    }
+
+    #[test]
+    fn availability_policies_builds_default_and_overrides() {
+        let config = node_config_with_availability(sui_config::rpc_config::RpcAvailabilityConfig {
+            max_checkpoint_lag: Some(100),
+            pipelines: [("balance".to_string(), policy(Some(false), None))]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        });
+        let policies = availability_policies(&config).unwrap();
+        assert_eq!(
+            policies.default,
+            Some(PipelineAvailability::MaxCheckpointLag(100))
+        );
+        assert_eq!(
+            policies.pipelines.get("balance"),
+            Some(&PipelineAvailability::Disabled)
+        );
+    }
+
+    #[test]
+    fn no_availability_block_is_trivial() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
+            .build()
+            .validator_configs()[0]
+            .clone();
+        let policies = availability_policies(&config).unwrap();
+        assert!(policies.default.is_none());
+        assert!(policies.pipelines.is_empty());
     }
 }
