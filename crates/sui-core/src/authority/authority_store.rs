@@ -19,7 +19,6 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
-use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -28,7 +27,7 @@ use sui_types::storage::{
     get_module, get_package,
 };
 use sui_types::sui_system_state::get_sui_system_state;
-use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure};
+use sui_types::{base_types::SequenceNumber, fp_ensure};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
 use typed_store::traits::Map;
@@ -812,43 +811,6 @@ impl AuthorityStore {
             [(tx.digest(), tx.clone().into_unsigned().serializable_ref())],
         )?;
         batch.write()?;
-        Ok(())
-    }
-
-    /// Checks that each provided ObjectRef is the current live version of its object,
-    /// using the `objects` table as the source of truth.
-    /// Returns UserInputError::ObjectNotFound if the object does not exist or its latest
-    ///     entry is a tombstone (mirrors the cache-hit path, which negative-caches these).
-    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if the object's
-    ///     live version differs from the provided ref.
-    pub fn check_owned_objects_are_live(&self, objects: &[ObjectRef]) -> SuiResult {
-        for obj_ref in objects {
-            let latest_ref = self
-                .perpetual_tables
-                .get_latest_object_ref_or_tombstone(obj_ref.0)?;
-            match latest_ref {
-                Some(latest_ref) if latest_ref.2.is_alive() => {
-                    if latest_ref != *obj_ref {
-                        fp_bail!(
-                            UserInputError::ObjectVersionUnavailableForConsumption {
-                                provided_obj_ref: *obj_ref,
-                                current_version: latest_ref.1,
-                            }
-                            .into()
-                        );
-                    }
-                }
-                _ => {
-                    fp_bail!(
-                        UserInputError::ObjectNotFound {
-                            object_id: obj_ref.0,
-                            version: None,
-                        }
-                        .into()
-                    );
-                }
-            }
-        }
         Ok(())
     }
 

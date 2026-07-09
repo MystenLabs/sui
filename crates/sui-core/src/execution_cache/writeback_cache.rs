@@ -1622,6 +1622,7 @@ impl ObjectCacheRead for WritebackCache {
     }
 
     fn get_latest_object_ref_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
+        let ticket = self.object_by_id_cache.get_ticket_for_read(&object_id);
         match self.get_object_entry_by_id_cache_only("latest_objref_or_tombstone", &object_id) {
             CacheResult::Hit((version, entry)) => Some(match entry {
                 ObjectEntry::Object(object) => object.compute_object_reference(),
@@ -1629,10 +1630,34 @@ impl ObjectCacheRead for WritebackCache {
                 ObjectEntry::Wrapped => (object_id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED),
             }),
             CacheResult::NegativeHit => None,
-            CacheResult::Miss => self
-                .record_db_get("latest_objref_or_tombstone")
-                .get_latest_object_ref_or_tombstone(object_id)
-                .expect("db error"),
+            // Populate the object-by-id cache on a miss: this lookup sits on hot paths
+            // (post-consensus owned-object conflict detection, pre-execution liveness
+            // checks) where the same object is typically checked repeatedly, and the DB
+            // fallback is a reverse scan of the objects table.
+            CacheResult::Miss => {
+                let obj = self
+                    .record_db_get("latest_objref_or_tombstone")
+                    .get_latest_object_or_tombstone(object_id)
+                    .expect("db error");
+                match obj {
+                    Some((key, obj)) => {
+                        let obj_ref = match &obj {
+                            ObjectOrTombstone::Object(object) => object.compute_object_reference(),
+                            ObjectOrTombstone::Tombstone(obj_ref) => *obj_ref,
+                        };
+                        self.cache_latest_object_by_id(
+                            &object_id,
+                            LatestObjectCacheEntry::Object(key.1, obj.into()),
+                            ticket,
+                        );
+                        Some(obj_ref)
+                    }
+                    None => {
+                        self.cache_object_not_found(&object_id, ticket);
+                        None
+                    }
+                }
+            }
         }
     }
 
@@ -1930,8 +1955,31 @@ impl ObjectCacheRead for WritebackCache {
                 CacheResult::Miss => Ok(CacheResult::Miss),
             },
             |remaining| {
-                self.record_db_multi_get("object_is_live", remaining.len())
-                    .check_owned_objects_are_live(remaining)?;
+                // Resolves through get_latest_object_ref_or_tombstone so the miss also
+                // populates the object-by-id cache (this runs per certificate at
+                // execution).
+                for obj_ref in remaining {
+                    match self.get_latest_object_ref_or_tombstone(obj_ref.0) {
+                        Some(latest_ref) if latest_ref.2.is_alive() => {
+                            if latest_ref != *obj_ref {
+                                return Err(
+                                    UserInputError::ObjectVersionUnavailableForConsumption {
+                                        provided_obj_ref: *obj_ref,
+                                        current_version: latest_ref.1,
+                                    }
+                                    .into(),
+                                );
+                            }
+                        }
+                        _ => {
+                            return Err(UserInputError::ObjectNotFound {
+                                object_id: obj_ref.0,
+                                version: None,
+                            }
+                            .into());
+                        }
+                    }
+                }
                 Ok(vec![(); remaining.len()])
             },
         )?;

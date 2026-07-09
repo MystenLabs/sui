@@ -3153,13 +3153,35 @@ impl MysticetiConsensusHandler {
             "consensus_deserialized_commits",
             CONSENSUS_HANDLER_DESERIALIZE_CHANNEL_CAPACITY,
         );
+        let cache_reader = consensus_handler.cache_reader.clone();
         tasks.spawn(monitored_future!(async move {
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let transactions: ParsedConsensusTransactions = {
                     let _scope = monitored_scope("ConsensusCommitHandler::deserialize_worker");
                     consensus_commit.transactions()
                 };
-                // The send is intentionally outside the scope above: on the bounded channel it
+                {
+                    // Warm the object-by-id cache for the owned input refs that the
+                    // post-consensus conflict check will resolve on the handler's
+                    // critical path. Cold objects otherwise cost a reverse scan of the
+                    // objects table each, on the serial commit-handler thread; here the
+                    // reads overlap the handler processing the previous commit, and the
+                    // lookups populate the cache.
+                    let _scope = monitored_scope("ConsensusCommitHandler::prefetch_worker");
+                    for (_, parsed_transactions) in &transactions {
+                        for parsed in parsed_transactions {
+                            if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                                &parsed.transaction.kind
+                                && let Some(refs) = owned_object_refs_to_lock(tx_with_claims)
+                            {
+                                for obj_ref in refs {
+                                    cache_reader.get_latest_object_ref_or_tombstone(obj_ref.0);
+                                }
+                            }
+                        }
+                    }
+                }
+                // The send is intentionally outside the scopes above: on the bounded channel it
                 // blocks when the handler is the bottleneck, and that idle-wait would otherwise
                 // inflate the deserialize_worker scope (making it read as CPU work, not waiting).
                 if parsed_sender
