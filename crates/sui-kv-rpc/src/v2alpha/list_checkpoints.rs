@@ -313,7 +313,7 @@ pub(crate) async fn list_checkpoints(
                     checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
                     let wm = item_watermark(&options, Position::Checkpoints { checkpoint: cp_seq }, checkpoint_boundary);
                     let message =
-                        render_full_checkpoint(cp_data, txs, objects.as_ref(), &read_mask)?;
+                        render_full_checkpoint(cp_data, txs, objects, &read_mask)?;
                     emitted += 1;
                     yield response_for(wm, message);
                 }

@@ -3,6 +3,6 @@
 
 pub(crate) mod client;
 mod metrics;
-#[cfg(test)]
-pub(crate) mod mock_server;
+#[cfg(any(test, feature = "testing"))]
+pub mod mock_server;
 pub(crate) mod proto;

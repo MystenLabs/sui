@@ -157,3 +157,9 @@ pub async fn create_tables(host: &str, instance_id: &str) -> Result<()> {
     .await?;
     Ok(())
 }
+
+/// Deterministic in-memory mock BigTable server for cross-crate read/write
+/// path tests. Gated behind the `testing` feature so it never enters normal
+/// builds. See [`crate::bigtable::mock_server`].
+#[cfg(any(test, feature = "testing"))]
+pub use crate::bigtable::mock_server::{MockBigtableServer, ReadRowsCall, ReadRowsResponseOrder};
