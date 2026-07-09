@@ -6,6 +6,7 @@ mod state;
 
 use super::{
     absint::*,
+    ast::BasicBlock,
     cfg::{CFG, MutForwardCFG, MutReverseCFG, ReverseCFG},
     locals,
 };
@@ -184,7 +185,7 @@ mod last_usage {
     use move_proc_macros::growing_stack;
 
     use crate::{
-        cfgir::{CFGContext, liveness::state::LivenessState},
+        cfgir::{CFGContext, ast::BasicBlock, liveness::state::LivenessState},
         diag,
         hlir::{
             ast::*,
