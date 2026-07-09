@@ -1,0 +1,40 @@
+---
+title: RPC and Data Providers
+description: Third-party providers offering Sui gRPC, GraphQL RPC, and Archival Store & Service endpoints.
+keywords: [rpc, grpc, graphql, archival, providers, data access, endpoints]
+---
+
+Third-party infrastructure providers operate Sui [gRPC](/develop/accessing-data/grpc), [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc), and [Archival Store & Service](/develop/accessing-data/archival-store) endpoints that you can use instead of running your own nodes. Each provider offers different network coverage, rate limits, and pricing plans.
+
+:::info Sui Foundation public endpoints
+
+The Sui Foundation operates public-good gRPC, GraphQL, and Archival endpoints on Mainnet, Testnet, and Devnet (gRPC only) with strict rate limits. These endpoints are suitable for development and testing but **not for production workloads**. Use a third-party provider or run your own infrastructure for production.
+
+:::
+
+## Provider matrix
+
+The following table lists providers that have enabled one or more of the current Sui data access interfaces. Check each provider's documentation for pricing, rate limits, and SLA details.
+
+| Provider | gRPC API | GraphQL RPC | Archival Store & Service | References |
+| --- | --- | --- | --- | --- |
+| [QuickNode](https://www.quicknode.com/docs/sui/api-overview) | Testnet, Mainnet | Mainnet | Mainnet | [Docs](https://www.quicknode.com/docs/sui/api-overview) |
+| [BlockPi](https://blockpi.io/chain/sui) | Testnet, Mainnet | Mainnet | Mainnet | [Docs](https://blockpi.io/chain/sui) |
+| [Ankr](https://www.ankr.com/docs/rpc-service/chains/chains-api/sui-grpc/) | Testnet, Mainnet | Mainnet | Mainnet | [Docs](https://www.ankr.com/docs/rpc-service/chains/chains-api/sui-grpc/) |
+| [ZAN](https://zan.top/home/sui-data) | Testnet, Mainnet | Testnet, Mainnet | Testnet, Mainnet | [Docs](https://zan.top/home/sui-data) |
+| [Inodra](https://docs.inodra.com/gateways) | Testnet, Mainnet | Mainnet | Mainnet | [Docs](https://docs.inodra.com/gateways) |
+| [NodeInfra](https://docs.nodeinfra.com/) | Testnet, Mainnet | Mainnet | — | [Docs](https://docs.nodeinfra.com/) |
+| [01.ro](https://01.ro/docs#rpc-sui) | Mainnet | Mainnet | — | [Docs](https://01.ro/docs#rpc-sui) |
+| [Triton One](https://triton.one/chains/sui) | Testnet, Mainnet | — | Mainnet | [Docs](https://triton.one/chains/sui) |
+| [Alchemy](https://www.alchemy.com/rpc/sui) | Mainnet | — | — | [Docs](https://www.alchemy.com/rpc/sui) |
+| [Dwellir](https://www.dwellir.com/networks/sui) | Mainnet | — | — | [Docs](https://www.dwellir.com/networks/sui) |
+| [Blockvision](https://docs.blockvision.org/reference/grpc-for-sui) | Testnet, Mainnet | — | — | [Docs](https://docs.blockvision.org/reference/grpc-for-sui) |
+| [Natsai](https://natsai.xyz/product/sui-grpc/) | Mainnet | — | — | [Docs](https://natsai.xyz/product/sui-grpc/) |
+| [GetBlock](https://docs.getblock.io/api-reference/sui-sui) | Mainnet | — | — | [Docs](https://docs.getblock.io/api-reference/sui-sui) |
+
+## Related links
+
+- [Data Access Interfaces](/develop/accessing-data/data-serving) – Compare gRPC and GraphQL to choose the right interface.
+- [gRPC API](/develop/accessing-data/grpc) – Connect to Sui full nodes using gRPC.
+- [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) – Query Sui data with GraphQL.
+- [Archival Store & Service](/develop/accessing-data/archival-store) – Access historical data beyond full node retention.
