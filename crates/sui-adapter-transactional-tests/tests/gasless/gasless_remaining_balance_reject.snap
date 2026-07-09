@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 9 tasks
 
@@ -36,7 +35,7 @@ task 6, lines 36-39:
 // Reject: withdraw 9500 from 10000, leaving 500 (below min 1000) - fails at voting time
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
-Error: Error checking transaction input objects: Invalid withdraw reservation: Invalid gasless withdrawal from object(3,0). Gasless transactions must either use the entire balance, or leave at least 1000 for token type object(1,0)::usdc::USDC. Remaining amount is 500
+Error: Error checking transaction input objects: Invalid withdraw reservation: Invalid gasless withdrawal of coin type object(1,0)::usdc::USDC. Gasless transactions must either use the entire address balance, or leave at least 1000. Remaining amount would be 500
 
 task 7, lines 41-46:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(3000) @B 2500 @A

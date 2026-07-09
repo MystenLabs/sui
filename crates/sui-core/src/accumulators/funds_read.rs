@@ -42,15 +42,21 @@ pub trait AccountFundsRead: Send + Sync {
         &self,
         requested_amounts: &BTreeMap<AccumulatorObjId, (u64, TypeTag)>,
     ) -> SuiResult {
-        for (object_id, (requested_amount, _type_tag)) in requested_amounts {
+        for (object_id, (requested_amount, type_tag)) in requested_amounts {
             let actual_amount = self.get_latest_account_amount(object_id);
 
             if actual_amount < *requested_amount as u128 {
+                let coin_type = Balance::maybe_get_balance_type_param(type_tag)
+                    .unwrap_or_else(|| type_tag.clone());
                 return Err(SuiErrorKind::UserInputError {
                     error: UserInputError::InvalidWithdrawReservation {
                         error: format!(
-                            "Available amount in account for object id {} is less than requested: {} < {}",
-                            object_id, actual_amount, requested_amount
+                            "Insufficient address balance of coin type {coin_type}: \
+                             the transaction requires {requested_amount} but only \
+                             {actual_amount} is available. Note that the address balance \
+                             does not include funds held in Coin objects owned by the \
+                             address; to spend those funds, use the Coin objects directly \
+                             as transaction inputs.",
                         ),
                     },
                 }
@@ -85,10 +91,10 @@ pub trait AccountFundsRead: Send + Sync {
                 return Err(SuiErrorKind::UserInputError {
                     error: UserInputError::InvalidWithdrawReservation {
                         error: format!(
-                            "Invalid gasless withdrawal from {object_id}. \
-                             Gasless transactions must either use the entire balance, \
-                             or leave at least {min_amount} for token type {coin_type}. \
-                             Remaining amount is {remaining}",
+                            "Invalid gasless withdrawal of coin type {coin_type}. \
+                             Gasless transactions must either use the entire address \
+                             balance, or leave at least {min_amount}. \
+                             Remaining amount would be {remaining}",
                         ),
                     },
                 }

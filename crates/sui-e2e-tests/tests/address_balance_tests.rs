@@ -450,7 +450,7 @@ async fn test_withdraw_non_existent_balance() {
         .build();
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
 
-    assert!(err.to_string().contains("is less than requested"));
+    assert!(err.to_string().contains("Insufficient address balance"));
 }
 
 #[sim_test]
@@ -478,7 +478,7 @@ async fn test_withdraw_insufficient_balance() {
         )
         .build();
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
-    assert!(err.to_string().contains("is less than requested"));
+    assert!(err.to_string().contains("Insufficient address balance"));
 
     // Refresh gas1 after the failed transaction
     let (sender, gas) = test_env.get_sender_and_all_gas(0);
@@ -3486,7 +3486,7 @@ async fn address_balance_stress_test() {
                         }
                         Err(err) => {
                             let err_str = err.to_string();
-                            if err_str.contains("Available amount in account for object id") {
+                            if err_str.contains("Insufficient address balance") {
                                 signing_failure_count.fetch_add(1, Ordering::Relaxed);
                             }
                         }
@@ -4338,7 +4338,7 @@ async fn test_explicit_withdrawal_plus_implicit_gas_exceeds_balance() {
 
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
     assert!(
-        err.to_string().contains("is less than requested"),
+        err.to_string().contains("Insufficient address balance"),
         "Expected insufficient balance error, got: {}",
         err
     );
