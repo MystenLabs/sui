@@ -102,7 +102,6 @@ pub(crate) async fn list_transactions(
         filter_query,
     };
 
-    let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
         let render_contents = should_render_transaction_contents(&read_mask);
         let mut scan = ChunkedScan::new(
@@ -134,10 +133,7 @@ pub(crate) async fn list_transactions(
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(
-                &terminal_options,
-                terminal.position,
-            ));
+            yield watermark_response(terminal.watermark);
         }
         yield end_response(reason);
         info!(
@@ -191,16 +187,14 @@ enum TransactionScanState {
     Unfiltered {
         range: Range<u64>,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal_watermark: Watermark,
     },
     Filtered {
         query: BitmapQuery,
         range: Option<Range<u64>>,
         pending_bucket: Option<PendingBitmapBucket>,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal_watermark: Watermark,
     },
 }
 
@@ -239,10 +233,13 @@ fn next_transaction_chunk(
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
                 let terminal = ChunkTerminal {
                     reason: tx_range.end_reason,
-                    position: Position::Transactions {
-                        checkpoint: tx_range.end_checkpoint,
-                        tx_seq: tx_range.end_position,
-                    },
+                    watermark: terminal_boundary_watermark(
+                        &options,
+                        Position::Transactions {
+                            checkpoint: tx_range.end_checkpoint,
+                            tx_seq: tx_range.end_position,
+                        },
+                    ),
                 };
                 let range = tx_range.range;
                 if range.is_empty() {
@@ -260,14 +257,12 @@ fn next_transaction_chunk(
                         range: Some(range),
                         pending_bucket: None,
                         end_reason: terminal.reason,
-                        end_checkpoint: tx_range.end_checkpoint,
-                        end_position: tx_range.end_position,
+                        terminal_watermark: terminal.watermark,
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
                         end_reason: terminal.reason,
-                        end_checkpoint: tx_range.end_checkpoint,
-                        end_position: tx_range.end_position,
+                        terminal_watermark: terminal.watermark,
                     },
                 };
                 continue;
@@ -275,8 +270,7 @@ fn next_transaction_chunk(
             TransactionScanState::Unfiltered {
                 range,
                 end_reason,
-                end_checkpoint,
-                end_position,
+                terminal_watermark,
             } => {
                 let rows =
                     get_tx_seq_digest_rows(&service, range.clone(), !ascending, chunk_item_limit)?;
@@ -286,15 +280,11 @@ fn next_transaction_chunk(
                     .map(|range| TransactionScanState::Unfiltered {
                         range,
                         end_reason,
-                        end_checkpoint,
-                        end_position,
+                        terminal_watermark: terminal_watermark.clone(),
                     });
                 let terminal = ChunkTerminal {
                     reason: end_reason,
-                    position: Position::Transactions {
-                        checkpoint: end_checkpoint,
-                        tx_seq: end_position,
-                    },
+                    watermark: terminal_watermark,
                 };
                 break (rows, next_state, terminal, None);
             }
@@ -303,8 +293,7 @@ fn next_transaction_chunk(
                 range,
                 pending_bucket,
                 end_reason,
-                end_checkpoint,
-                end_position,
+                terminal_watermark,
             } => {
                 let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
                 let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -341,8 +330,7 @@ fn next_transaction_chunk(
                             range: hits.next_range,
                             pending_bucket: hits.pending_bucket,
                             end_reason,
-                            end_checkpoint,
-                            end_position,
+                            terminal_watermark: terminal_watermark.clone(),
                         },
                     )
                 };
@@ -353,10 +341,7 @@ fn next_transaction_chunk(
                 };
                 let terminal = ChunkTerminal {
                     reason,
-                    position: Position::Transactions {
-                        checkpoint: end_checkpoint,
-                        tx_seq: end_position,
-                    },
+                    watermark: terminal_watermark,
                 };
                 // A transaction member id is its own tx_sequence_number, so the
                 // frontier decodes to itself.

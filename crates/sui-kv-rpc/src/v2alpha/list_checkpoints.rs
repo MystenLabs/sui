@@ -107,7 +107,12 @@ pub(crate) async fn list_checkpoints(
         .instrument(debug_span!("resolve_cp_range"))
         .await?;
     let end_reason = cp_range.end_reason;
-    let end_position = cp_range.end_position;
+    let terminal_watermark = terminal_boundary_watermark(
+        &options,
+        Position::Checkpoints {
+            checkpoint: cp_range.end_position,
+        },
+    );
     let cp_range = cp_range.range;
 
     if cp_range.is_empty() {
@@ -122,14 +127,8 @@ pub(crate) async fn list_checkpoints(
         // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
         // range; still surface the terminal boundary so the client learns the
         // final checkpoint is complete without waiting for the next item.
-        let terminal = reached_range_end(end_reason).then(|| {
-            watermark_response(terminal_boundary_watermark(
-                &options,
-                Position::Checkpoints {
-                    checkpoint: end_position,
-                },
-            ))
-        });
+        let terminal =
+            reached_range_end(end_reason).then(|| watermark_response(terminal_watermark));
         return Ok(stream::iter(
             terminal
                 .into_iter()
@@ -274,7 +273,7 @@ pub(crate) async fn list_checkpoints(
                 end_reason
             };
             if reached_range_end(reason) {
-                yield watermark_response(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }));
+                yield watermark_response(terminal_watermark);
             }
             yield end_response(reason);
             info!(
@@ -356,7 +355,7 @@ pub(crate) async fn list_checkpoints(
             end_reason
         };
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }));
+            yield watermark_response(terminal_watermark);
         }
         yield end_response(reason);
         info!(

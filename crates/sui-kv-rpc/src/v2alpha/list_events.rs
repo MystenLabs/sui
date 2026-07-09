@@ -97,8 +97,14 @@ pub(crate) async fn list_events(
         .instrument(debug_span!("resolve_event_range"))
         .await?;
     let end_reason = event_range.end_reason;
-    let end_checkpoint = event_range.end_checkpoint;
-    let end_position = event_range.end_position;
+    let terminal_watermark = terminal_boundary_watermark(
+        &options,
+        Position::Events {
+            checkpoint: event_range.end_checkpoint,
+            tx_seq: event_range.end_position.tx_seq,
+            event_index: event_range.end_position.event_index,
+        },
+    );
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -114,16 +120,8 @@ pub(crate) async fn list_events(
         // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
         // range; still surface the terminal boundary so the client learns the
         // final checkpoint is complete without waiting for the next item.
-        let terminal = reached_range_end(end_reason).then(|| {
-            watermark_response(terminal_boundary_watermark(
-                &options,
-                Position::Events {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position.tx_seq,
-                    event_index: end_position.event_index,
-                },
-            ))
-        });
+        let terminal =
+            reached_range_end(end_reason).then(|| watermark_response(terminal_watermark));
         return Ok(futures::stream::iter(
             terminal
                 .into_iter()
@@ -312,7 +310,7 @@ pub(crate) async fn list_events(
             end_reason
         };
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, Position::Events { checkpoint: end_checkpoint, tx_seq: end_position.tx_seq, event_index: end_position.event_index }));
+            yield watermark_response(terminal_watermark);
         }
         yield end_response(reason);
         info!(
