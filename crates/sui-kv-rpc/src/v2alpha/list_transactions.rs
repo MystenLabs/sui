@@ -596,10 +596,13 @@ mod tests {
         let digest_wm = digest_only.watermark.as_ref().expect("watermark");
         assert_eq!(
             digest_wm.cursor.as_ref(),
-            Some(&options.cursor_for_item(Position::Transactions {
-                checkpoint: row.checkpoint_number,
-                tx_seq: 42
-            }))
+            Some(
+                &sui_rpc_cursor::CursorToken::item(Position::Transactions {
+                    checkpoint: row.checkpoint_number,
+                    tx_seq: 42,
+                })
+                .encode()
+            )
         );
         assert_eq!(digest_wm.checkpoint, Some(8));
         let transaction = digest_only.transaction.expect("executed transaction");

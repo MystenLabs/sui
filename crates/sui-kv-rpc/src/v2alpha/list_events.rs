@@ -154,12 +154,11 @@ pub(crate) async fn list_events(
                 ctx.bitmap_scan_observer(),
             )
             .map_ok(|m| {
-                m.map_item(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
-                    .map_watermark(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
-                    .map_item(|position| EventRef {
-                        position,
-                        tx_seq_digest: None,
-                    })
+                m.map_item(|seq| EventRef {
+                    position: EventPosition::from(event_seq::decode_event_seq(seq)),
+                    tx_seq_digest: None,
+                })
+                .map_watermark(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
             })
             .boxed()
     } else {

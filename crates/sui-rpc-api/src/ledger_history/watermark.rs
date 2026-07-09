@@ -24,7 +24,7 @@
 //! API-specific frontier-to-candidate adapter.
 
 use sui_inverted_index::ScanDirection;
-use sui_rpc_cursor::Position;
+use sui_rpc_cursor::{CursorToken, Position};
 
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
@@ -89,12 +89,12 @@ pub fn advance_boundary_excluding_cp(
 /// `position` are the item's cursor coordinates (`list_checkpoints` passes
 /// its cp_seq for both).
 pub fn item_watermark(
-    options: &QueryOptions,
+    _options: &QueryOptions,
     position: Position,
     boundary: Option<u64>,
 ) -> Watermark {
     let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_item(position));
+    wm.cursor = Some(CursorToken::item(position).encode());
     set_checkpoint_bound(&mut wm, boundary);
     wm
 }
@@ -105,12 +105,12 @@ pub fn item_watermark(
 /// scanners' direction adjustment); `boundary` is the accumulated
 /// completion boundary.
 pub fn boundary_watermark(
-    options: &QueryOptions,
+    _options: &QueryOptions,
     position: Position,
     boundary: Option<u64>,
 ) -> Watermark {
     let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_boundary(position));
+    wm.cursor = Some(CursorToken::boundary(position).encode());
     set_checkpoint_bound(&mut wm, boundary);
     wm
 }
@@ -137,18 +137,14 @@ pub fn boundary_cursor_cp(cp: u64, direction: ScanDirection) -> u64 {
 /// The `(end_checkpoint, end_position)` cursor resumes exactly past the
 /// scanned range.
 pub fn terminal_boundary_watermark(options: &QueryOptions, end_position: Position) -> Watermark {
-    let end_checkpoint = match end_position {
-        Position::Checkpoints { checkpoint }
-        | Position::Transactions { checkpoint, .. }
-        | Position::Events { checkpoint, .. } => checkpoint,
-    };
+    let end_checkpoint = end_position.checkpoint();
     let boundary = if options.is_ascending() {
         end_checkpoint.checked_sub(1)
     } else {
         Some(end_checkpoint)
     };
     let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_boundary(end_position));
+    wm.cursor = Some(CursorToken::boundary(end_position).encode());
     set_checkpoint_bound(&mut wm, boundary);
     wm
 }
@@ -243,7 +239,7 @@ mod tests {
         };
         let wm = item_watermark(&asc, pos, Some(8));
         assert_eq!(wm.checkpoint, Some(8));
-        assert_eq!(wm.cursor.as_ref(), Some(&asc.cursor_for_item(pos)));
+        assert_eq!(wm.cursor.as_ref(), Some(&CursorToken::item(pos).encode()));
 
         let desc = options(false);
         let wm = item_watermark(&desc, pos, Some(10));
@@ -264,12 +260,18 @@ mod tests {
         };
         let wm = terminal_boundary_watermark(&asc, pos);
         assert_eq!(wm.checkpoint, Some(9));
-        assert_eq!(wm.cursor.as_ref(), Some(&asc.cursor_for_boundary(pos)));
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&CursorToken::boundary(pos).encode())
+        );
 
         let desc = options(false);
         let wm = terminal_boundary_watermark(&desc, pos);
         assert_eq!(wm.checkpoint, Some(10));
-        assert_eq!(wm.cursor.as_ref(), Some(&desc.cursor_for_boundary(pos)));
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&CursorToken::boundary(pos).encode())
+        );
     }
 
     #[test]

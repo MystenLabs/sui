@@ -33,6 +33,16 @@ pub enum Position {
     },
 }
 
+impl Position {
+    pub fn checkpoint(&self) -> u64 {
+        match *self {
+            Position::Checkpoints { checkpoint }
+            | Position::Transactions { checkpoint, .. }
+            | Position::Events { checkpoint, .. } => checkpoint,
+        }
+    }
+}
+
 /// Whether a cursor position is a matched row that was returned to the client (`Item`) or a scan
 /// frontier the server reached (`Boundary`).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

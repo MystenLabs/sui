@@ -28,13 +28,6 @@ pub(super) struct EventRef {
     pub(super) tx_seq_digest: Option<LedgerTxSeqDigest>,
 }
 
-fn bounds_from_packed(range: Range<u64>) -> EventScanBounds {
-    EventScanBounds {
-        lo: Bound::Included(event_seq::decode_event_seq(range.start).into()),
-        hi: Bound::Excluded(event_seq::decode_event_seq(range.end).into()),
-    }
-}
-
 pub(super) struct DrainedEventHits {
     pub(super) items: Vec<EventPosition>,
     pub(super) pending_bucket: Option<PendingBitmapBucket>,
@@ -42,6 +35,21 @@ pub(super) struct DrainedEventHits {
     pub(super) buckets_scanned: usize,
     pub(super) frontier: Option<EventPosition>,
     pub(super) scan_limit_hit: bool,
+}
+
+pub(super) struct UnfilteredScan {
+    pub(super) refs: Vec<EventRef>,
+    pub(super) next_bounds: Option<EventScanBounds>,
+    pub(super) rows_scanned: usize,
+    pub(super) scan_limit_hit: bool,
+    pub(super) frontier: Option<EventPosition>,
+}
+
+fn bounds_from_packed(range: Range<u64>) -> EventScanBounds {
+    EventScanBounds {
+        lo: Bound::Included(event_seq::decode_event_seq(range.start).into()),
+        hi: Bound::Excluded(event_seq::decode_event_seq(range.end).into()),
+    }
 }
 
 pub(super) fn drain_event_bitmap_hits(
@@ -82,14 +90,6 @@ pub(super) fn drain_event_bitmap_hits(
             .map(|seq| EventPosition::from(event_seq::decode_event_seq(seq))),
         scan_limit_hit: hits.scan_limit_hit,
     })
-}
-
-pub(super) struct UnfilteredScan {
-    pub(super) refs: Vec<EventRef>,
-    pub(super) next_bounds: Option<EventScanBounds>,
-    pub(super) rows_scanned: usize,
-    pub(super) scan_limit_hit: bool,
-    pub(super) frontier: Option<EventPosition>,
 }
 
 pub(super) fn next_unfiltered_event_refs(

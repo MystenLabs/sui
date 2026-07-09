@@ -209,13 +209,13 @@ impl QueryOptions {
         let mut cursor_terminal = None;
 
         if let Some(cursor) = &self.after {
-            let position = self.u64_cursor_position(cursor);
+            let position = u64_cursor_position(cursor);
             let Some(after) = (match cursor.kind {
                 sui_rpc_cursor::CursorKind::Item => position.checked_add(1),
                 sui_rpc_cursor::CursorKind::Boundary => Some(position),
             }) else {
                 return ResolvedRange::empty_at(
-                    cursor_checkpoint(cursor),
+                    cursor.position.checkpoint(),
                     position,
                     QueryEndReason::CursorBound,
                 );
@@ -223,10 +223,10 @@ impl QueryOptions {
             if after >= start {
                 start = after;
                 if matches!(self.ordering, Ordering::Descending) || after >= end {
-                    cursor_terminal = Some((cursor_checkpoint(cursor), after));
+                    cursor_terminal = Some((cursor.position.checkpoint(), after));
                 }
                 if matches!(self.ordering, Ordering::Descending) {
-                    end_checkpoint = cursor_checkpoint(cursor);
+                    end_checkpoint = cursor.position.checkpoint();
                     end_position = after;
                     end_reason = QueryEndReason::CursorBound;
                 }
@@ -234,14 +234,14 @@ impl QueryOptions {
         }
 
         if let Some(cursor) = &self.before {
-            let position = self.u64_cursor_position(cursor);
+            let position = u64_cursor_position(cursor);
             if position <= end {
                 end = position;
                 if matches!(self.ordering, Ordering::Ascending) || position <= start {
-                    cursor_terminal = Some((cursor_checkpoint(cursor), position));
+                    cursor_terminal = Some((cursor.position.checkpoint(), position));
                 }
                 if matches!(self.ordering, Ordering::Ascending) {
-                    end_checkpoint = cursor_checkpoint(cursor);
+                    end_checkpoint = cursor.position.checkpoint();
                     end_position = position;
                     end_reason = QueryEndReason::CursorBound;
                 }
@@ -291,10 +291,10 @@ impl QueryOptions {
                 };
                 bounds.lo = candidate;
                 if matches!(self.ordering, Ordering::Descending) || candidate_bounds.is_empty() {
-                    cursor_terminal = Some((cursor_checkpoint(cursor), position));
+                    cursor_terminal = Some((cursor.position.checkpoint(), position));
                 }
                 if matches!(self.ordering, Ordering::Descending) {
-                    end_checkpoint = cursor_checkpoint(cursor);
+                    end_checkpoint = cursor.position.checkpoint();
                     end_position = position;
                     end_reason = QueryEndReason::CursorBound;
                 }
@@ -311,10 +311,10 @@ impl QueryOptions {
                 };
                 bounds.hi = candidate;
                 if matches!(self.ordering, Ordering::Ascending) || candidate_bounds.is_empty() {
-                    cursor_terminal = Some((cursor_checkpoint(cursor), position));
+                    cursor_terminal = Some((cursor.position.checkpoint(), position));
                 }
                 if matches!(self.ordering, Ordering::Ascending) {
-                    end_checkpoint = cursor_checkpoint(cursor);
+                    end_checkpoint = cursor.position.checkpoint();
                     end_position = position;
                     end_reason = QueryEndReason::CursorBound;
                 }
@@ -343,29 +343,13 @@ impl QueryOptions {
             }
         }
     }
-
-    pub fn cursor_for_item(&self, position: Position) -> Bytes {
-        CursorToken::item(position).encode()
-    }
-
-    pub fn cursor_for_boundary(&self, position: Position) -> Bytes {
-        CursorToken::boundary(position).encode()
-    }
-
-    fn u64_cursor_position(&self, cursor: &CursorToken) -> u64 {
-        match cursor.position {
-            Position::Checkpoints { checkpoint } => checkpoint,
-            Position::Transactions { tx_seq, .. } => tx_seq,
-            Position::Events { .. } => panic!("event queries must use apply_event_cursor_bounds"),
-        }
-    }
 }
 
-fn cursor_checkpoint(cursor: &CursorToken) -> u64 {
+fn u64_cursor_position(cursor: &CursorToken) -> u64 {
     match cursor.position {
-        Position::Checkpoints { checkpoint }
-        | Position::Transactions { checkpoint, .. }
-        | Position::Events { checkpoint, .. } => checkpoint,
+        Position::Checkpoints { checkpoint } => checkpoint,
+        Position::Transactions { tx_seq, .. } => tx_seq,
+        Position::Events { .. } => panic!("event queries must use apply_event_cursor_bounds"),
     }
 }
 
@@ -576,9 +560,9 @@ impl CheckpointRange {
         let mut cursor_bound = false;
 
         if let Some(cursor) = &options.after
-            && cursor_checkpoint(cursor) >= start
+            && cursor.position.checkpoint() >= start
         {
-            start = cursor_checkpoint(cursor);
+            start = cursor.position.checkpoint();
             cursor_bound = true;
             if matches!(options.ordering, Ordering::Descending) {
                 low_reason = QueryEndReason::CursorBound;
@@ -587,8 +571,8 @@ impl CheckpointRange {
 
         if let Some(cursor) = &options.before
             && let Some(upper) = match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => cursor_checkpoint(cursor).checked_add(1),
-                sui_rpc_cursor::CursorKind::Boundary => Some(cursor_checkpoint(cursor)),
+                sui_rpc_cursor::CursorKind::Item => cursor.position.checkpoint().checked_add(1),
+                sui_rpc_cursor::CursorKind::Boundary => Some(cursor.position.checkpoint()),
             }
             && upper <= end
         {
@@ -927,16 +911,11 @@ mod tests {
 
     #[test]
     fn item_cursor_can_be_used_as_after_or_before() {
-        let options = QueryOptions {
-            limit_items: 2,
-            ordering: Ordering::Ascending,
-            after: None,
-            before: None,
-        };
-        let token = options.cursor_for_item(Position::Transactions {
+        let token = CursorToken::item(Position::Transactions {
             checkpoint: 1,
             tx_seq: 11,
-        });
+        })
+        .encode();
 
         let mut request = ProtoQueryOptions::default();
         request.after = Some(token.clone());
