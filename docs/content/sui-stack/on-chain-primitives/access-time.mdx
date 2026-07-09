@@ -15,15 +15,13 @@ keywords:
   - use time in transactions
   - 'sui::tx_context'
 goal:
-  description: >-
-    Reader understands access network-based time for your transactions. Sui
-    provides a Clock module to capture near-real time or epoch time in your Sui
-    packages and knows when to use it
+  description: Reader understands access network-based time for your transactions.
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

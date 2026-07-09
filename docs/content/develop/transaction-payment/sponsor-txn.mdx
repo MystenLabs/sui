@@ -14,12 +14,13 @@ keywords:
 goal:
   description: >-
     Reader understands sponsored transactions let you pay gas fees on behalf of
-    another user, reducing onboarding friction for users who don't own SUI
+    another user
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

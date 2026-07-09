@@ -13,14 +13,13 @@ keywords:
   - Move
   - CLI
 goal:
-  description: >-
-    Reader can publish the asset_tokenization and template packages on Sui and
-    interact with your tokenized asset using the CLI and TypeScript scripts
+  description: Reader can publish the asset_tokenization and template packages on Sui
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

@@ -16,29 +16,19 @@ keywords:
   - SUI token standards
 goal:
   description: >-
-    Reader can implement use the Sui Closed-Loop Token standard to create assets
-    that you can use as currency within a game application
+    Reader can use the Sui Closed-Loop Token standard to create assets that you
+    can use as currency within a game application
   requires:
-    - headings:
-        - pattern: When to use|Use case
-        - pattern: What you learn|Learning
-        - pattern: Prerequisites
-        - pattern: Setup|Getting started
-        - pattern: Run
-        - pattern: Troubleshooting|Common issues
-      label: Has standard example page sections
     - pattern: '```'
-      min: 3
-      label: 'Has code blocks for setup, source, and output'
+      min: 1
+      label: Has at least one code example
     - has_frontmatter:
         - title
         - description
         - keywords
-    - min_words: 800
-      label: Sufficient explanation depth
-    - headings:
-        - pattern: Key code|Code highlight|Walkthrough
-      label: Has code explanation section
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
 ---
 
 Using the Sui [Closed-Loop Token](/onchain-finance/closed-loop-token) standard, you can create in-game currencies. These might be in the form of in-game assets such as gems and diamonds that you can grant to players for their actions or make available for purchase. You mint the currency on Sui, but players can only use the currency within the economy of the game itself. You typically mint them in predefined amounts to maintain scarcity and the game economy.

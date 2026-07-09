@@ -22,13 +22,14 @@ keywords:
   - run bridge node
 goal:
   description: >-
-    Operator understands correct configuration of your node ensures optimal
-    performance and valid metrics data
+    Operator can configure their node for optimal performance and valid metrics
+    data
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient operational depth
     - pattern: '```'

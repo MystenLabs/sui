@@ -14,13 +14,13 @@ keywords:
 goal:
   description: >-
     Reader understands assets on Sui, including coins and tokens, are types of
-    objects, and can only be used by their owners unless otherwise defined
-    according to predefined logic in a smart contract
+    objects
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '\]\(/[^)]+\)'

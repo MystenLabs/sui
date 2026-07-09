@@ -15,12 +15,13 @@ keywords:
 goal:
   description: >-
     Operator understands setup instructions for running the checkpoint blob
-    indexer to populate a remote store with protobuf checkpoint blobs
+    indexer to populate a remote store with
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient operational depth
     - pattern: '```'

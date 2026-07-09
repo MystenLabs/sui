@@ -35,13 +35,13 @@ concepts:
 goal:
   description: >-
     Reader can build a decentralized ticketing and loyalty platform on Sui with
-    NFT tickets, cryptographic mint permits, stage-based lifecycle transitions,
-    and gasless transactions
+    NFT tickets, cryptographic mint permits
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

@@ -15,13 +15,13 @@ keywords:
 goal:
   description: >-
     Reader understands understanding risk ratios and how they determine leverage
-    limits, collateral requirements, and liquidation thresholds in DeepBook
-    Margin
+    limits, collateral requirements
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

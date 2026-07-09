@@ -13,14 +13,13 @@ keywords:
 goal:
   description: >-
     Reader can build a custom indexer using the `sui-indexer-alt-framework`
-    module. The example indexer demonstrates a sequential pipeline that extracts
-    transaction digests from Sui checkpoints and stores them in a local
-    PostgreSQL database, the default example storage backend
+    module.
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

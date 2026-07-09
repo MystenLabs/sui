@@ -14,12 +14,13 @@ keywords:
 goal:
   description: >-
     Reader understands zkLogin can be integrated with an application using an
-    OpenID provider's OAuth Client ID and redirect URI and knows when to use it
+    OpenID provider's OAuth Client ID
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

@@ -16,12 +16,13 @@ keywords:
 goal:
   description: >-
     Reader can learn about DeepBook Predict registry setup, oracle creation,
-    quote asset management, and admin configuration entry points
+    quote asset management
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - headings:

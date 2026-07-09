@@ -15,13 +15,13 @@ keywords:
 goal:
   description: >-
     Reader understands elliptic curve verifiable random function is a
-    cryptographic algorithm that enables you to generate a random number and
-    provide proof that the number used a secret key for generation
+    cryptographic algorithm that enables you to generate a
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

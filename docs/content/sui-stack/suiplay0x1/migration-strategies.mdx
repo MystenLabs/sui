@@ -19,15 +19,13 @@ keywords:
   - migrate off-device to on-device
   - migrate on-device to off-device
 goal:
-  description: >-
-    Reader understands suiPlay0X1 is part of the Sui gaming ecosystem. Users can
-    migrate accounts between on-device and off-device versions of a game and
-    knows when to use it
+  description: Reader understands suiPlay0X1 is part of the Sui gaming ecosystem.
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - headings:

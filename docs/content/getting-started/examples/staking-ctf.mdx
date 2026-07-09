@@ -24,10 +24,7 @@ concepts:
   - security_vulnerability
   - balance_management
 goal:
-  description: >-
-    Reader can analyze a staking contract with a time-accumulation vulnerability
-    and exploit the receipt merging logic to claim the flag without waiting a
-    full week
+  description: Reader can analyze a staking contract with a time-accumulation vulnerability
   requires:
     - headings:
         - pattern: When to use|Use case
@@ -44,6 +41,7 @@ goal:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 800
       label: Sufficient explanation depth
     - pattern: mermaid|sequenceDiagram|graph|flowchart

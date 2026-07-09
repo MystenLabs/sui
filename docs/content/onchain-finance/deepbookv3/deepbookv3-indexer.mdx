@@ -20,12 +20,13 @@ keywords:
 goal:
   description: >-
     Reader understands deepBookV3 Indexer provides streamlined, real-time access
-    to order book and trading data from the DeepBookV3 protocol
+    to order book
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

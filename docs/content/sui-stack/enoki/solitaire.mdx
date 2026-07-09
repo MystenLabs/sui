@@ -29,14 +29,14 @@ concepts:
   - event_parsing
 goal:
   description: >-
-    Reader understands play solitaire onchain where every card shuffle uses
-    Sui's Random module and every move is a sponsored transaction verified on
-    the blockchain and knows when to use it
+    Reader can play solitaire onchain where every card shuffle uses Sui's Random
+    module
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

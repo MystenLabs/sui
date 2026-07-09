@@ -17,13 +17,13 @@ keywords:
 goal:
   description: >-
     Reader can choose between gRPC and GraphQL RPC when migrating from the
-    deprecated JSON-RPC API. Includes a method mapping, decision criteria, and
-    common migration gotchas
+    deprecated JSON-RPC API.
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

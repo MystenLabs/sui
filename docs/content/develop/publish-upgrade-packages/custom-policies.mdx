@@ -15,12 +15,13 @@ keywords:
 goal:
   description: >-
     Reader understands custom upgrade policies are used to upgrade live packages
-    while addressing the security risks of single key ownership upgrades
+    while addressing the security risks of single
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

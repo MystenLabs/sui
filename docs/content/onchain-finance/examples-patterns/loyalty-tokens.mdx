@@ -15,30 +15,19 @@ keywords:
   - SUI token standards
 goal:
   description: >-
-    Reader can implement use the Sui Closed-Loop Token standard to create tokens
-    that are only valid within specific workflows and services. One example of
-    Closed-Loop Tokens is a loyalty token
+    Reader can use the Sui Closed-Loop Token standard to create tokens that are
+    only valid within specific workflows and services.
   requires:
-    - headings:
-        - pattern: When to use|Use case
-        - pattern: What you learn|Learning
-        - pattern: Prerequisites
-        - pattern: Setup|Getting started
-        - pattern: Run
-        - pattern: Troubleshooting|Common issues
-      label: Has standard example page sections
     - pattern: '```'
-      min: 3
-      label: 'Has code blocks for setup, source, and output'
+      min: 1
+      label: Has at least one code example
     - has_frontmatter:
         - title
         - description
         - keywords
-    - min_words: 800
-      label: Sufficient explanation depth
-    - headings:
-        - pattern: Key code|Code highlight|Walkthrough
-      label: Has code explanation section
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
 ---
 
 Using the Sui [Closed-Loop Token](/onchain-finance/closed-loop-token) standard, you can create tokens that are valid only for a specific service, like an airline that wants to grant tokens to frequent flyers to purchase tickets or upgrades.

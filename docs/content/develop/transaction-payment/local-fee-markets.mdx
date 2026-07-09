@@ -4,17 +4,22 @@ description: >-
   Object-based local fee markets limit the rate of transactions writing to a
   single shared object, preventing the network from becoming overloaded with
   checkpoints that take too long to execute.
-keywords: [fee markets, gas price, congestion, shared objects, transaction deferral]
+keywords:
+  - fee markets
+  - gas price
+  - congestion
+  - shared objects
+  - transaction deferral
 goal:
   description: >-
     Reader understands object-based local fee markets limit the rate of
-    transactions writing to a single shared object, preventing the network from
-    becoming overloaded with checkpoints that take too long to execute
+    transactions writing to a single shared object
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
 builder_paths:

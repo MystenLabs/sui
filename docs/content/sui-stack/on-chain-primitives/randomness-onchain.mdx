@@ -15,14 +15,13 @@ keywords:
 goal:
   description: >-
     Reader understands randomness is a valuable tool to simulate chance onchain,
-    but can also expose flaws in your logic. Understanding the vulnerabilities
-    and accounting for them can mitigate the threat exposure for your smart
-    contracts and knows when to use it
+    but can also expose flaws in your logic.
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

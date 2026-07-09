@@ -29,13 +29,13 @@ concepts:
 goal:
   description: >-
     Reader can build a React application that authenticates users with OAuth
-    providers and derives Sui wallet addresses using zero-knowledge proofs,
-    enabling passwordless blockchain access
+    providers
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

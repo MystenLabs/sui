@@ -21,13 +21,14 @@ verified_against:
   owner: '@sui-docs/stack-guides'
 goal:
   description: >-
-    Reader can learn how to encrypt Walrus blobs and enforce onchain access
-    control using Seal, by walking through OnlyFins
+    Reader can encrypt Walrus blobs and enforce onchain access control using
+    Seal, by walking through OnlyFins
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

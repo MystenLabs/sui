@@ -23,13 +23,13 @@ keywords:
 goal:
   description: >-
     Reader understands legacy documentation for the pre-v1.63 Move.lock-based
-    address tracking system. For the current package system, see Move Package
-    Management
+    address tracking system.
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

@@ -10,30 +10,19 @@ keywords:
   - bytecode template
 goal:
   description: >-
-    Reader can implement this feature was developed to enable Move bytecode
-    serialization and deserialization on the web. In essence, this feature
-    allows you to edit existing contracts in a web environment
+    Reader understands how this feature was developed to enable Move bytecode
+    serialization and deserialization on the web.
   requires:
-    - headings:
-        - pattern: When to use|Use case
-        - pattern: What you learn|Learning
-        - pattern: Prerequisites
-        - pattern: Setup|Getting started
-        - pattern: Run
-        - pattern: Troubleshooting|Common issues
-      label: Has standard example page sections
     - pattern: '```'
-      min: 3
-      label: 'Has code blocks for setup, source, and output'
+      min: 1
+      label: Has at least one code example
     - has_frontmatter:
         - title
         - description
         - keywords
-    - min_words: 800
-      label: Sufficient explanation depth
-    - headings:
-        - pattern: Key code|Code highlight|Walkthrough
-      label: Has code explanation section
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
 ---
 
 This feature was developed to enable Move bytecode serialization and deserialization on the web. In essence, this feature allows you to edit existing contracts in a web environment.

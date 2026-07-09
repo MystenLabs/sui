@@ -17,13 +17,13 @@ keywords:
 goal:
   description: >-
     Reader understands a Sui transaction must pay for both the computational
-    cost of execution and the long-term cost of storing the objects a
-    transaction creates or mutates
+    cost of execution
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

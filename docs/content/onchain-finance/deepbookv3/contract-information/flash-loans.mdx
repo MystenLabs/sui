@@ -17,12 +17,13 @@ keywords:
 goal:
   description: >-
     Reader can use DeepBookV3 to perform flash loans, uncollateralized loans
-    that are borrowed and repaid within the same programmable transaction block
+    that are borrowed
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
 builder_paths:

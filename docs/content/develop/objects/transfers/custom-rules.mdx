@@ -21,12 +21,13 @@ keywords:
 goal:
   description: >-
     Reader understands custom transfer rules enable you to define a set of rules
-    that must be met before Sui considers a transfer operation valid
+    that must be met before Sui considers a
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

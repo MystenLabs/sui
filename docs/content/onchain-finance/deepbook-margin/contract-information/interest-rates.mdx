@@ -9,12 +9,15 @@ keywords:
   - deepbook margin
   - APR
 goal:
-  description: Reader can learn how interest rates are calculated for margin pool borrowing
+  description: >-
+    Reader understands how interest rates are calculated for margin pool
+    borrowing
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

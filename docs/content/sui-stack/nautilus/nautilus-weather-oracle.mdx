@@ -25,16 +25,13 @@ concepts:
   - nft_minting
   - enclave_attestation
 goal:
-  description: >-
-    Reader can build a verified weather oracle on Sui using Nautilus, where a
-    Trusted Execution Environment fetches weather data, signs it
-    cryptographically, and the Move contract mints an NFT only after verifying
-    the signature
+  description: Reader can build a verified weather oracle on Sui using Nautilus
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

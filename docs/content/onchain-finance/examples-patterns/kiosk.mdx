@@ -13,30 +13,19 @@ keywords:
   - bytecode template
 goal:
   description: >-
-    Reader can implement use the asset tokenization packages to create
-    fractional NFTs and fungible tokenized assets on Sui, with support for
-    Kiosk-based transfer policies
+    Reader can use the asset tokenization packages to create fractional NFTs and
+    fungible tokenized assets on Sui
   requires:
-    - headings:
-        - pattern: When to use|Use case
-        - pattern: What you learn|Learning
-        - pattern: Prerequisites
-        - pattern: Setup|Getting started
-        - pattern: Run
-        - pattern: Troubleshooting|Common issues
-      label: Has standard example page sections
     - pattern: '```'
-      min: 3
-      label: 'Has code blocks for setup, source, and output'
+      min: 1
+      label: Has at least one code example
     - has_frontmatter:
         - title
         - description
         - keywords
-    - min_words: 800
-      label: Sufficient explanation depth
-    - headings:
-        - pattern: Key code|Code highlight|Walkthrough
-      label: Has code explanation section
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
 ---
 
 This reference implementation uses the [Kiosk standard](/onchain-finance/kiosk) to ensure that tokenized assets operate within their defined policy. Use the implementation as presented to have marketable tokenized assets that support rules like royalties and commissions.

@@ -18,12 +18,13 @@ keywords:
 goal:
   description: >-
     Reader understands deepBook Margin Indexer provides access to margin trading
-    events including loans, liquidations, and margin pool operations
+    events including loans, liquidations
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

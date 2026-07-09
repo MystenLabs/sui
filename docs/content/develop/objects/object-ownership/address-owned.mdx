@@ -13,15 +13,13 @@ keywords:
   - accessing owned objects
   - address ownership
 goal:
-  description: >-
-    Reader can address-owned objects are owned by a Sui 32-byte address, which
-    can either be an account address or an object ID. Learn how to create and
-    access these objects
+  description: Reader understands address-owned objects are owned by a Sui 32-byte address
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

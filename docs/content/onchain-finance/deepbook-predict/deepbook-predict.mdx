@@ -18,13 +18,13 @@ verified_against: predict-testnet-4-16
 goal:
   description: >-
     Reader understands prediction market protocol built alongside DeepBook, with
-    binary positions, vertical ranges, oracle-driven pricing, and shared vault
-    liquidity on Sui
+    binary positions, vertical ranges
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - headings:

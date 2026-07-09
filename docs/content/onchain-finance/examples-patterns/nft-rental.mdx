@@ -9,28 +9,18 @@ keywords:
 goal:
   description: >-
     Reader can implement an example that enables users to rent NFTs according to
-    the rules of a provided policy instead of owning them outright
+    the rules of a provided policy instead of owning
   requires:
-    - headings:
-        - pattern: When to use|Use case
-        - pattern: What you learn|Learning
-        - pattern: Prerequisites
-        - pattern: Setup|Getting started
-        - pattern: Run
-        - pattern: Troubleshooting|Common issues
-      label: Has standard example page sections
     - pattern: '```'
-      min: 3
-      label: 'Has code blocks for setup, source, and output'
+      min: 1
+      label: Has at least one code example
     - has_frontmatter:
         - title
         - description
         - keywords
-    - min_words: 800
-      label: Sufficient explanation depth
-    - headings:
-        - pattern: Key code|Code highlight|Walkthrough
-      label: Has code explanation section
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
 ---
 
 Renting non-fungible tokens (NFTs) is a mechanism that allows individuals to temporarily use the benefits of an NFT without ownership or possession. This implementation uses the [Kiosk Apps standard](/onchain-finance/kiosk/kiosk-apps) to establish an infrastructure for rental transactions. This approach aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.

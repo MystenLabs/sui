@@ -18,12 +18,13 @@ keywords:
 goal:
   description: >-
     Reader understands gasless stablecoin transfers on Sui enable peer-to-peer
-    payments of qualified stablecoins to execute without paying gas fees in SUI
+    payments of qualified stablecoins to execute
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

@@ -15,13 +15,13 @@ keywords:
 goal:
   description: >-
     Reader understands sui operates multiple networks including Mainnet for
-    production, Testnet for staging, Devnet for developing new features, and
-    Localnet for local development
+    production, Testnet for staging
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - headings:

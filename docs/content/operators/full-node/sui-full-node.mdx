@@ -19,12 +19,13 @@ keywords:
 goal:
   description: >-
     Node operator understands operate a Sui full node to validate blockchain
-    activities, like transactions, checkpoints, and epoch changes
+    activities, like transactions, checkpoints
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient operational depth
     - pattern: '```'

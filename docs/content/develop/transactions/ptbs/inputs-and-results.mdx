@@ -15,13 +15,13 @@ keywords:
 goal:
   description: >-
     Reader understands programmable transaction blocks accept two types of
-    inputs (objects and pure values) and produce results that subsequent
-    commands can use
+    inputs (objects and pure values)
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

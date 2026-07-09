@@ -10,13 +10,14 @@ keywords:
   - changing keys
 goal:
   description: >-
-    Reader can address aliases can be used to configure the set of keys that are
-    allowed to sign transactions for a particular address on the Sui network
+    Reader understands address aliases can be used to configure the set of keys
+    that are allowed to sign transactions for a
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

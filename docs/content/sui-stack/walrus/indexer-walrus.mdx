@@ -14,16 +14,13 @@ keywords:
   - sequential pipeline
   - blog
 goal:
-  description: >-
-    Reader understands walrus is a content-addressable storage protocol, where
-    data is retrieved using a unique identifier derived from the content itself,
-    rather than from a file path or location. Integrating a custom Sui Indexer
-    with Walrus can provide novel user experiences and knows when to use it
+  description: Reader understands walrus is a content-addressable storage protocol
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

@@ -17,13 +17,13 @@ keywords:
 goal:
   description: >-
     Reader understands cryptographically verifiable Move events that can be
-    verified by a light client without trusting any intermediary, suitable for
-    trustless event consumption
+    verified by a light client without trusting
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

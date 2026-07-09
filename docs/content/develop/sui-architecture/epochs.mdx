@@ -11,13 +11,13 @@ keywords:
 goal:
   description: >-
     Reader understands epochs define time periods on Sui where the validator set
-    remains unchanged. Reconfiguration adjusts network parameters at epoch
-    boundaries
+    remains unchanged.
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - headings:

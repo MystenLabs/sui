@@ -14,12 +14,13 @@ keywords:
 goal:
   description: >-
     Operator understands the archive is a historical record of all transactions
-    on Sui. Enable archiving on your Full nodes as a best practice
+    on Sui.
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient operational depth
     - pattern: '```'

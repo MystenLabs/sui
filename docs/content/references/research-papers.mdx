@@ -16,12 +16,13 @@ keywords:
 pagination_prev: null
 goal:
   description: >-
-    Reader can reference research papers that are relevant to Sui and that one
-    or more Sui team members have co-authored
+    Reader can look up research papers that are relevant to Sui and that one or
+    more Sui team members have co-authored
   requires:
     - has_frontmatter:
         - title
         - description
+      label: Has required frontmatter fields
     - min_words: 100
       label: Has substantive reference content
 ---

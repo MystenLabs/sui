@@ -18,14 +18,13 @@ keywords:
 goal:
   description: >-
     Reader understands offline signing can be used to sign a Sui transaction
-    when a device is not connected to a Sui network, or if the signing wallet
-    uses a different programming language than that of the transaction being
-    signed
+    when a device is not connected to a Sui network
   requires:
     - has_frontmatter:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 300
       label: Sufficient content depth
     - pattern: '```'

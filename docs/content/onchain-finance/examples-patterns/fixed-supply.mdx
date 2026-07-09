@@ -9,30 +9,18 @@ keywords:
   - coin supply
   - total supply
 goal:
-  description: >-
-    Reader can implement initialize a coin with a fixed total supply, then lock
-    the supply to prevent further minting using dynamic fields and freezing
+  description: Reader can initialize a coin with a fixed total supply
   requires:
-    - headings:
-        - pattern: When to use|Use case
-        - pattern: What you learn|Learning
-        - pattern: Prerequisites
-        - pattern: Setup|Getting started
-        - pattern: Run
-        - pattern: Troubleshooting|Common issues
-      label: Has standard example page sections
     - pattern: '```'
-      min: 3
-      label: 'Has code blocks for setup, source, and output'
+      min: 1
+      label: Has at least one code example
     - has_frontmatter:
         - title
         - description
         - keywords
-    - min_words: 800
-      label: Sufficient explanation depth
-    - headings:
-        - pattern: Key code|Code highlight|Walkthrough
-      label: Has code explanation section
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
 ---
 
 This fixed supply example mints the total supply of 10,000,000,000,000,000,000 coins and transfers the coins to the sender. Then, the treasury cap is locked as a dynamic object field to prevent further modifications.

@@ -29,8 +29,7 @@ concepts:
 goal:
   description: >-
     Reader can build a real-time event indexer that subscribes to Sui
-    checkpoints through gRPC, filters for specific Move events, and decodes
-    BCS-encoded event data in TypeScript
+    checkpoints through gRPC
   requires:
     - headings:
         - pattern: When to use|Use case
@@ -47,6 +46,7 @@ goal:
         - title
         - description
         - keywords
+      label: Has required frontmatter fields
     - min_words: 800
       label: Sufficient explanation depth
     - pattern: mermaid|sequenceDiagram|graph|flowchart

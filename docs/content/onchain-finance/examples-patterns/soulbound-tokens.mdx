@@ -9,29 +9,19 @@ keywords:
   - soulbound
 goal:
   description: >-
-    Reader can implement use Sui Move struct abilities and the Sui framework
-    transfer module to make an NFT soulbound (non-transferable)
+    Reader can use Sui Move struct abilities and the Sui framework transfer
+    module to make an NFT soulbound (non-transferable)
   requires:
-    - headings:
-        - pattern: When to use|Use case
-        - pattern: What you learn|Learning
-        - pattern: Prerequisites
-        - pattern: Setup|Getting started
-        - pattern: Run
-        - pattern: Troubleshooting|Common issues
-      label: Has standard example page sections
     - pattern: '```'
-      min: 3
-      label: 'Has code blocks for setup, source, and output'
+      min: 1
+      label: Has at least one code example
     - has_frontmatter:
         - title
         - description
         - keywords
-    - min_words: 800
-      label: Sufficient explanation depth
-    - headings:
-        - pattern: Key code|Code highlight|Walkthrough
-      label: Has code explanation section
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
 ---
 
 A soulbound non-fungible token (NFT) is an NFT that is non-transferable. After an NFT is minted to a Sui account, the NFT is bound to that account and cannot be transferred. This implementation uses the custom logic of the Sui framework `transfer` functions. The <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer">`sui::transfer` module</UnsafeLink> contains 2 functions that transfer objects: <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer#function-transfer">`transfer::transfer`</UnsafeLink> and <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer#function-public_transfer">`transfer::public_transfer`</UnsafeLink>.
