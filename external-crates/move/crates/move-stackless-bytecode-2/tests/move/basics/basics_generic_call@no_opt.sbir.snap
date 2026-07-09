@@ -1,0 +1,21 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: generic_call
+    Function: do_it (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Call 0x0::generic_call::phantom_ty<bool>()
+        reg_1 : u64 = Call 0x0::generic_call::id<u64>(reg_0 : u64)
+        Return(reg_1 : u64)
+
+
+    Function: id (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : T0 = Move(lcl_0)
+        Return(reg_0 : T0)
+
+
+    Function: phantom_ty (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(42u64)
+        Return(reg_0 : u64)
