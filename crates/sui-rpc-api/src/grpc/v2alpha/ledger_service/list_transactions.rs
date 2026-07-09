@@ -420,7 +420,6 @@ fn scan_transaction_watermark(
     let boundary = advance_boundary_excluding_cp(None, cp, options);
     let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
     let watermark = boundary_watermark(
-        options,
         Position::Transactions {
             checkpoint: cursor_cp,
             tx_seq: frontier,
@@ -465,7 +464,6 @@ fn render_transaction_rows(
         checkpoint_boundary =
             advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
         let watermark = item_watermark(
-            options,
             Position::Transactions {
                 checkpoint: row.checkpoint_number,
                 tx_seq: row.tx_sequence_number,

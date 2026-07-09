@@ -176,7 +176,7 @@ pub(crate) async fn list_transactions(
                 match item {
                     Ok(ResolvedWatermarked::Item(row)) => {
                         checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, &options);
-                        let wm = item_watermark(&options, Position::Transactions { checkpoint: row.checkpoint_number, tx_seq: row.tx_sequence_number }, checkpoint_boundary);
+                        let wm = item_watermark(Position::Transactions { checkpoint: row.checkpoint_number, tx_seq: row.tx_sequence_number }, checkpoint_boundary);
                         emitted += 1;
                         let yield_started = Instant::now();
                         yield transaction_response_from_tx_seq_digest(row, &read_mask, wm);
@@ -184,7 +184,7 @@ pub(crate) async fn list_transactions(
                     }
                     Ok(ResolvedWatermarked::Watermark { position, cp }) => {
                         checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
-                        let wm = boundary_watermark(&options, Position::Transactions { checkpoint: boundary_cursor_cp(cp, direction), tx_seq: position }, checkpoint_boundary);
+                        let wm = boundary_watermark(Position::Transactions { checkpoint: boundary_cursor_cp(cp, direction), tx_seq: position }, checkpoint_boundary);
                         yield watermark_response(wm);
                     }
                     Err(BitmapScanError::ScanLimit) => {
@@ -278,7 +278,7 @@ pub(crate) async fn list_transactions(
             match item {
                 Ok(ResolvedWatermarked::Item((tx_seq, tx_offset, tx_data, objects))) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, tx_data.checkpoint_number, &options);
-                    let wm = item_watermark(&options, Position::Transactions { checkpoint: tx_data.checkpoint_number, tx_seq }, checkpoint_boundary);
+                    let wm = item_watermark(Position::Transactions { checkpoint: tx_data.checkpoint_number, tx_seq }, checkpoint_boundary);
                     let render_started = Instant::now();
                     let executed = transaction_to_response(tx_data, &read_mask, &objects, &resolver).await?;
                     ctx.observe_response_render(render_started.elapsed());
@@ -289,7 +289,7 @@ pub(crate) async fn list_transactions(
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
-                    let wm = boundary_watermark(&options, Position::Transactions { checkpoint: boundary_cursor_cp(cp, direction), tx_seq: position }, checkpoint_boundary);
+                    let wm = boundary_watermark(Position::Transactions { checkpoint: boundary_cursor_cp(cp, direction), tx_seq: position }, checkpoint_boundary);
                     yield watermark_response(wm);
                 }
                 Err(BitmapScanError::ScanLimit) => {
@@ -563,10 +563,6 @@ mod tests {
         }
     }
 
-    fn options() -> QueryOptions {
-        QueryOptions::transactions_from_proto(None, 100, 1_000).unwrap()
-    }
-
     #[test]
     fn renders_transaction_response_from_tx_seq_digest() {
         let row = TxSeqDigestData {
@@ -576,10 +572,8 @@ mod tests {
             tx_offset: 5,
             checkpoint_number: 9,
         };
-        let options = options();
         let wm = || {
             item_watermark(
-                &options,
                 Position::Transactions {
                     checkpoint: row.checkpoint_number,
                     tx_seq: row.tx_sequence_number,

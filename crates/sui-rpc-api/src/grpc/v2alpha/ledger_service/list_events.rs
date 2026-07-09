@@ -460,7 +460,6 @@ fn scan_event_watermark(
     let boundary = advance_boundary_excluding_cp(None, cp, options);
     let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
     let watermark = boundary_watermark(
-        options,
         Position::Events {
             checkpoint: cursor_cp,
             tx_seq: frontier.tx_seq,
@@ -556,7 +555,6 @@ fn render_event_chunk(
         checkpoint_boundary =
             advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
         let watermark = item_watermark(
-            options,
             Position::Events {
                 checkpoint: row.checkpoint_number,
                 tx_seq: event_ref.position.tx_seq,
