@@ -1251,7 +1251,7 @@ impl BigTableClient {
     /// from caller-scoped values (avoids lifetime capture in `impl Stream`).
     ///
     /// Splits `digests` into sequential sub-requests of at most
-    /// [`MAX_TX_DIGESTS_PER_REQUEST`] keys so a single call can never
+    /// `MAX_TX_DIGESTS_PER_REQUEST` keys so a single call can never
     /// exceed BigTable's `ReadRowsRequest` size limit, regardless of how many
     /// digests a caller passes. An empty `digests` yields an empty stream and
     /// issues no read.
