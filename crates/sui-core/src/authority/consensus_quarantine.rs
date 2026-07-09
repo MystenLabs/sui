@@ -15,7 +15,7 @@ use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, ObjectRef, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
@@ -301,11 +301,24 @@ impl ConsensusCommitOutput {
             [(LAST_CONSENSUS_STATS_ADDR, consensus_commit_stats)],
         )?;
 
-        // next_shared_object_versions are deliberately not persisted: the epoch-lifetime
-        // map in the quarantine is the only copy. On restart it is rebuilt by lazy
+        // next_shared_object_versions are (mostly) not persisted: the epoch-lifetime
+        // map in the quarantine is the primary copy. On restart it is rebuilt by lazy
         // re-seeding from the objects table (correct for flushed commits, whose
         // transactions are all durably executed) plus consensus replay with
-        // effects-aware seeding (see docs/in_memory_object_versioning.md §6.3).
+        // effects-aware seeding (see docs/in_memory_object_versioning.md §6.3). The
+        // singleton system objects are the exception: their values as of the flushed
+        // watermark are kept durably (see
+        // AuthorityEpochTables::system_object_next_versions).
+        if let Some(next_versions) = &self.next_shared_object_versions {
+            let system_updates: Vec<_> = next_versions
+                .iter()
+                .filter(|(key, _)| AuthorityPerEpochStore::is_system_object_version_key(key))
+                .map(|(key, version)| (*key, *version))
+                .collect();
+            if !system_updates.is_empty() {
+                batch.insert_batch(&tables.system_object_next_versions, system_updates)?;
+            }
+        }
 
         // owned_object_locks are deliberately not persisted: quarantined locks are
         // rebuilt by consensus replay after a restart, and flushed commits need no lock
@@ -732,8 +745,32 @@ impl ConsensusOutputQuarantine {
     }
 
     fn remove_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
-        for obj_ref in output.owned_object_locks.keys() {
-            self.owned_object_locks.remove(obj_ref);
+        // Locks of transactions deferred in this commit must survive the flush: a
+        // deferred transaction is finalized but not yet executed (it is not part of
+        // this commit's checkpoints), so its refs are still live and the consumed-check
+        // cannot stand in for its lock. These locks stay for the rest of the epoch
+        // (exactly as all locks did when they were persisted to the epoch table); after
+        // a restart they are rebuilt from the durable deferred-transactions table.
+        let deferred_digests: HashSet<TransactionDigest> = output
+            .deferred_txns
+            .iter()
+            .flat_map(|(_, txs)| txs.iter().map(|tx| *tx.tx().digest()))
+            .collect();
+        for (obj_ref, lock) in output.owned_object_locks.iter() {
+            if !deferred_digests.contains(lock) {
+                self.owned_object_locks.remove(obj_ref);
+            }
+        }
+    }
+
+    /// Re-inserts the locks of deferred transactions recovered from the durable
+    /// deferral table at epoch-store construction. See `remove_owned_object_locks`.
+    pub(super) fn insert_recovered_deferred_transaction_locks(
+        &mut self,
+        locks: impl Iterator<Item = (ObjectRef, LockDetails)>,
+    ) {
+        for (obj_ref, digest) in locks {
+            self.owned_object_locks.insert(obj_ref, digest);
         }
     }
 }

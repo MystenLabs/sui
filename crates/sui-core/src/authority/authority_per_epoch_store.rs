@@ -71,6 +71,10 @@ use sui_types::transaction::{
     TransactionKey, TransactionKind, TxValidityCheckContext, VerifiedTransaction,
     VerifiedTransactionWithAliases, WithAliases,
 };
+use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
+};
 use tap::TapOptional;
 use tokio::sync::{OnceCell, mpsc};
 use tokio::time::Instant;
@@ -435,6 +439,22 @@ pub struct AuthorityEpochTables {
     /// to disk.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
+    /// Next-version state for the singleton system objects (Clock, randomness state,
+    /// accumulator root) as of the durably flushed consensus watermark — at most one row
+    /// per object, seeded at the first construction of the epoch's store (when the
+    /// durable object versions are exactly the epoch-start values) and updated on every
+    /// quarantine flush.
+    ///
+    /// These are the only consensus objects whose next-version state cannot be recovered
+    /// from effects after a restart: they are mutated exclusively by system transactions
+    /// (prologues, settlement barriers, randomness updates) whose key→digest mappings
+    /// are not reliably resolvable on a node whose checkpoint executor ran ahead of its
+    /// consensus, and — unlike ordinary shared objects — they are read by assignments in
+    /// batches that contain none of their mutators. All other keys are re-derived from
+    /// the objects table plus the effects of already-executed transactions (see
+    /// `compute_effects_version_seeds`).
+    system_object_next_versions: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
+
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_shared_object_versions exactly once for each transaction we receive from
     /// consensus. But, we may also be processing transactions from checkpoints, so we need to
@@ -585,6 +605,10 @@ impl AuthorityEpochTables {
                     bloom_config.clone(),
                     digest_prefix.clone(),
                 ),
+            ),
+            (
+                "system_object_next_versions".to_string(),
+                ThConfig::new_with_config(32 + 8, mutexes, uniform_key, KeySpaceConfig::new()),
             ),
             (
                 "consensus_message_processed".to_string(),
@@ -814,6 +838,32 @@ impl AuthorityPerEpochStore {
             signed_effects_digests_cache.insert(tx_digest, effects_digest);
         }
 
+        // Seed the durable system-object next-version rows exactly once per epoch, at
+        // the first construction of this epoch's store. At that point no transaction of
+        // this epoch can have executed locally (execution requires the epoch store), so
+        // the durable object versions are exactly the epoch-start values. On a restart
+        // the rows already exist and must not be overwritten: by then the durable
+        // objects may reflect execution ahead of the flushed watermark.
+        if tables.system_object_next_versions.is_empty() {
+            let mut seeds = Vec::new();
+            for key in Self::system_object_version_keys(&epoch_start_configuration) {
+                if let Some(object) = object_store.get_object(&key.0) {
+                    // Mirrors the seeding rule in get_or_init_next_object_versions: an
+                    // object whose owner start version does not match was (re)shared by
+                    // a not-yet-executed transaction, and starts at the key's initial
+                    // version.
+                    let version = if object.owner().start_version() == Some(key.1) {
+                        object.version()
+                    } else {
+                        key.1
+                    };
+                    seeds.push((key, version));
+                }
+            }
+            info!(?seeds, "seeding system object next versions at epoch start");
+            tables.system_object_next_versions.multi_insert(seeds)?;
+        }
+
         let epoch_alive_token = CancellationToken::new();
 
         assert_eq!(
@@ -998,6 +1048,45 @@ impl AuthorityPerEpochStore {
         });
 
         s.update_buffer_stake_metric();
+
+        // Deferred transactions recovered from the durable deferral table are finalized
+        // but not yet executed, so their owned-object locks must be reconstructed for
+        // post-consensus conflict detection (their refs are still live, and the
+        // consumed-check only covers executed transactions). Locking all ImmOrOwned
+        // inputs — rather than the claims-filtered set used at filter time, which is
+        // not retained through deferral — is safe: a ref that other transactions claim
+        // immutable is never consulted by their conflict checks.
+        {
+            let deferred_transactions = s.consensus_output_cache.deferred_transactions.lock();
+            let recovered_locks: Vec<(ObjectRef, LockDetails)> = deferred_transactions
+                .values()
+                .flatten()
+                .flat_map(|tx| {
+                    let tx = tx.tx();
+                    let digest = *tx.digest();
+                    tx.transaction_data()
+                        .input_objects()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter_map(move |kind| match kind {
+                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => {
+                                Some((obj_ref, digest))
+                            }
+                            _ => None,
+                        })
+                })
+                .collect();
+            if !recovered_locks.is_empty() {
+                info!(
+                    "recovered {} owned-object locks from deferred transactions",
+                    recovered_locks.len()
+                );
+                s.consensus_quarantine
+                    .write()
+                    .insert_recovered_deferred_transaction_locks(recovered_locks.into_iter());
+            }
+        }
+
         Ok(s)
     }
 
@@ -1603,6 +1692,13 @@ impl AuthorityPerEpochStore {
             .insert_executed_in_epoch(*tx_digest);
     }
 
+    /// Fire an in-memory notification that a barrier transaction has been executed.
+    /// Unlike `insert_tx_key`, this does NOT persist to the DB, avoiding crash
+    /// inconsistency where the key survives restart but the effects do not.
+    pub(crate) fn notify_barrier_executed(&self, key: TransactionKey, digest: TransactionDigest) {
+        self.executed_digests_notify_read.notify(&key, &digest);
+    }
+
     /// Record a mapping from a transaction key (such as TransactionKey::RandomRound) to its digest.
     pub(crate) fn insert_tx_key(
         &self,
@@ -1624,13 +1720,6 @@ impl AuthorityPerEpochStore {
         self.executed_digests_notify_read
             .notify(&tx_key, &tx_digest);
         Ok(())
-    }
-
-    /// Fire an in-memory notification that a barrier transaction has been executed.
-    /// Unlike `insert_tx_key`, this does NOT persist to the DB, avoiding crash
-    /// inconsistency where the key survives restart but the effects do not.
-    pub(crate) fn notify_barrier_executed(&self, key: TransactionKey, digest: TransactionDigest) {
-        self.executed_digests_notify_read.notify(&key, &digest);
     }
 
     pub fn tx_key_to_digest(&self, key: &TransactionKey) -> SuiResult<Option<TransactionDigest>> {
@@ -2137,6 +2226,29 @@ impl AuthorityPerEpochStore {
             .get_next_shared_object_versions(object_keys)
     }
 
+    /// The consensus keys of the singleton system objects tracked durably in
+    /// `system_object_next_versions`.
+    fn system_object_version_keys(
+        epoch_start_configuration: &EpochStartConfiguration,
+    ) -> Vec<ConsensusObjectSequenceKey> {
+        let mut keys = vec![(SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION)];
+        if let Some(version) = epoch_start_configuration.randomness_obj_initial_shared_version() {
+            keys.push((SUI_RANDOMNESS_STATE_OBJECT_ID, version));
+        }
+        if let Some(version) =
+            epoch_start_configuration.accumulator_root_obj_initial_shared_version()
+        {
+            keys.push((SUI_ACCUMULATOR_ROOT_OBJECT_ID, version));
+        }
+        keys
+    }
+
+    pub(crate) fn is_system_object_version_key(key: &ConsensusObjectSequenceKey) -> bool {
+        key.0 == SUI_CLOCK_OBJECT_ID
+            || key.0 == SUI_RANDOMNESS_STATE_OBJECT_ID
+            || key.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+    }
+
     // For each key in objects_to_init, return the next version for that key as recorded in the
     // in-memory next-version map.
     //
@@ -2193,9 +2305,19 @@ impl AuthorityPerEpochStore {
                 .collect());
         }
 
+        // Singleton system objects always resolve from their durable watermark rows.
+        let system_versions = self
+            .tables()?
+            .system_object_next_versions
+            .multi_get(&uninitialized_objects)?;
+
         let versions_to_write: Vec<_> = uninitialized_objects
             .iter()
-            .map(|(id, initial_version)| {
+            .zip_debug_eq(system_versions)
+            .map(|((id, initial_version), system_version)| {
+                if let Some(version) = system_version {
+                    return ((*id, *initial_version), version);
+                }
                 if let Some(seed) = effects_seeds.get(&(*id, *initial_version)) {
                     return ((*id, *initial_version), *seed);
                 }
@@ -2392,13 +2514,12 @@ impl AuthorityPerEpochStore {
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         accumulator_version: Option<SequenceNumber>,
-        cache_reader: &dyn ObjectCacheRead,
     ) -> SuiResult<AssignedVersions> {
-        let assigned_versions = SharedObjVerManager::assign_versions_from_effects(
-            &[(certificate, effects, accumulator_version)],
-            self,
-            cache_reader,
-        );
+        let assigned_versions = SharedObjVerManager::assign_versions_from_effects(&[(
+            certificate,
+            effects,
+            accumulator_version,
+        )]);
         let (_, assigned_versions) = assigned_versions.0.into_iter().next().unwrap();
         Ok(assigned_versions)
     }

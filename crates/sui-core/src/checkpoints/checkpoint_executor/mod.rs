@@ -53,10 +53,7 @@ use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::execution_scheduler_impl::BarrierDependencyBuilder;
 use crate::global_state_hasher::GlobalStateHasher;
-use crate::{
-    checkpoints::CheckpointStore,
-    execution_cache::{ObjectCacheRead, TransactionCacheRead},
-};
+use crate::{checkpoints::CheckpointStore, execution_cache::TransactionCacheRead};
 
 mod data_ingestion_handler;
 pub mod metrics;
@@ -187,7 +184,6 @@ pub struct CheckpointExecutor {
     // TODO: We should use RocksDbStore in the executor
     // to consolidate DB accesses.
     checkpoint_store: Arc<CheckpointStore>,
-    object_cache_reader: Arc<dyn ObjectCacheRead>,
     transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     execution_scheduler: Arc<ExecutionScheduler>,
     global_state_hasher: Arc<GlobalStateHasher>,
@@ -215,7 +211,6 @@ impl CheckpointExecutor {
             epoch_store,
             state: state.clone(),
             checkpoint_store,
-            object_cache_reader: state.get_object_cache_reader().clone(),
             transaction_cache_reader: state.get_transaction_cache_reader().clone(),
             execution_scheduler: state.execution_scheduler().clone(),
             global_state_hasher,
@@ -941,7 +936,6 @@ impl CheckpointExecutor {
                                 txn,
                                 effects,
                                 *accumulator_version,
-                                &*self.object_cache_reader,
                             )
                             .expect("failed to acquire shared version assignments");
 
@@ -1005,12 +999,7 @@ impl CheckpointExecutor {
 
         let assigned_versions = self
             .epoch_store
-            .acquire_shared_version_assignments_from_effects(
-                change_epoch_tx,
-                change_epoch_fx,
-                None,
-                self.object_cache_reader.as_ref(),
-            )
+            .acquire_shared_version_assignments_from_effects(change_epoch_tx, change_epoch_fx, None)
             .expect("Acquiring shared version assignments for change_epoch tx cannot fail");
 
         info!(

@@ -13,13 +13,21 @@ for tidehunter).
 outright, with the new checks unconditional — the flag-gated migration path described in
 §10 is deliberately skipped for performance evaluation. Phase 1+2: liveness and
 post-consensus conflict detection (consumed-check + executed-in-epoch exemption) run
-against the objects table; lock state is quarantine-only; both lock tables deleted.
-Phase 3: `next_shared_object_versions_v2` deleted; the next-version map is epoch-lifetime
-in-memory (quarantine), seeded lazily from the objects table with **effects-aware
-seeding** (§6.3) during replay, plus a debug-build assertion that recomputed assignments
-for executed transactions match their effects. Not yet implemented: overlay eviction for
-the next-version map (§4.3), cleanup of pre-existing marker CFs on old DBs, and the §11
-crash-matrix simtests.
+against the objects table; lock state is quarantine-only; both lock tables deleted, with
+deferred transactions' locks retained past flush and rebuilt from the deferral table at
+construction (I1's deferral carve-out). Phase 3: `next_shared_object_versions_v2`
+deleted; the next-version map is epoch-lifetime in-memory (quarantine), seeded lazily
+from the objects table with **effects-aware seeding** (§6.3) during replay, plus a
+debug-build assertion that recomputed assignments for executed transactions match their
+effects. One durable exception survives (simtest-driven, see I1b): a ≤3-row
+`system_object_next_versions` table holding the watermark values of the singleton system
+objects (Clock, randomness state, accumulator root) — seeded at epoch-store creation,
+updated per flush. These are the only keys whose mutators (prologues, settlement
+barriers) are not digest-resolvable from a node whose checkpoint executor ran ahead of
+its consensus, and which assignments read in batches containing none of their mutators;
+object-chain walk-back was tried and rejected (pruning cuts the chain, round ties are
+ambiguous). Not yet implemented: overlay eviction for the next-version map (§4.3),
+cleanup of pre-existing marker CFs on old DBs, and the §11 crash-matrix simtests.
 
 ---
 
@@ -183,15 +191,34 @@ dropped (`writeback_cache.rs:1315-1356`), and the epoch DB dies with its directo
 
 ## 3. Invariants the proposal rests on
 
-**I1 — Flush ordering (holds today).** A consensus commit's output (locks, next-versions)
-is flushed to the epoch DB only after every transaction in that commit has been executed
-and its outputs durably committed to the perpetual DB. Proof: flush is gated on
-`highest_executed_checkpoint`, which advances only in `handle_finalized_checkpoint`,
-which the checkpoint executor calls *after* `commit_transaction_outputs`
-(`checkpoint_executor/mod.rs:442` before `:456`); every finalized tx of a commit is in
-that commit's checkpoints. Corollary: **flushed lock ⇒ the locked refs are consumed in
-the durable objects table** (via I2). This invariant must be promoted from an accident of
-code order to a documented, asserted contract (§11).
+**I1 — Flush ordering (holds today, with one exception).** A consensus commit's output
+(locks, next-versions) is flushed to the epoch DB only after every transaction in that
+commit has been executed and its outputs durably committed to the perpetual DB. Proof:
+flush is gated on `highest_executed_checkpoint`, which advances only in
+`handle_finalized_checkpoint`, which the checkpoint executor calls *after*
+`commit_transaction_outputs` (`checkpoint_executor/mod.rs:442` before `:456`); every
+finalized tx of a commit is in that commit's checkpoints — **except deferred
+transactions** (randomness/congestion deferral): they are finalized and locked in their
+commit but scheduled (and checkpointed) only later. Their locks must therefore outlive
+the flush and survive restarts explicitly: they are retained in the overlay at flush and
+rebuilt from the durable deferral table at epoch-store construction. With that carve-out,
+the corollary holds: **flushed lock ⇒ the locked refs are consumed in the durable objects
+table** (via I2). Found the hard way — a simtest randomness workload double-spent a
+deferred transaction's gas after its lock evaporated at flush.
+
+**I1b — Checkpoint execution can run ahead of consensus replay.** After a restart, the
+checkpoint executor may execute state-synced certified checkpoints containing
+transactions from commits that consensus has not yet re-processed. Any in-memory state
+consumed by consensus-order processing (the next-version map) must therefore never be
+seeded from the checkpoint-execution path: a synced batch can sit at a "future" point of
+a version chain relative to the commit replay is about to re-process. This is why
+`assign_versions_from_effects` does not touch the next-version map at all, and why the
+accumulator-root key (read by every assignment but touched only by settlements) has a
+dedicated recovery: the first settlement past the flushed height watermark either has
+executed (its recorded input version is the watermark value) or it has not (in which
+case no post-watermark settlement has, and the objects-table seed is clean). Found the
+hard way too — the §6.3 recomputed-vs-effects assertion caught replayed prologues
+assigned Clock versions one ahead of their effects.
 
 **I2 — Every locked ref is consumed by execution.** The post-consensus lock set (all
 non-immutable `ImmOrOwnedMoveObject` inputs, §2.2) equals the exclusive-mutable input set
