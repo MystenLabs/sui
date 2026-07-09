@@ -128,11 +128,10 @@ fn install_reduced_marker(
             input.remove(n);
         }
     }
-    let live_succs: Vec<NodeIndex> = succ_nodes
-        .iter()
-        .copied()
-        .filter(|s| !loop_nodes.contains(s))
-        .collect();
+    // `refine_loop_nodes` guarantees `succ_nodes` and `loop_nodes` are disjoint, so every
+    // succ is live in the residue.
+    debug_assert!(succ_nodes.iter().all(|s| !loop_nodes.contains(s)));
+    let live_succs: Vec<NodeIndex> = succ_nodes.iter().copied().collect();
     // Single-exit loops don't need a per-edge formula: if we exited, we took the one exit,
     // and reach conditions for the post-loop scope should carry no per-loop guard. Using
     // the computed formula here would produce a spurious `if (<exit_cond>) { post_loop }`
