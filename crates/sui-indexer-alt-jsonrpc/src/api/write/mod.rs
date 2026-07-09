@@ -25,10 +25,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_serde::BigInt;
-use sui_types::transaction::GasData;
 use sui_types::transaction::TransactionData;
-use sui_types::transaction::TransactionDataV1;
-use sui_types::transaction::TransactionExpiration;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 
@@ -40,15 +37,17 @@ use crate::error::invalid_params;
 #[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait WriteApi {
-    /// Execute the transaction with options to show different information in the response.
-    /// The only supported request type is `WaitForEffectsCert`: waits for TransactionEffectsCert and then return to client.
-    /// `WaitForLocalExecution` mode has been deprecated.
+    /// Execute the transaction with options to show different information in the response. The only
+    /// supported request type is `WaitForEffectsCert`: waits for TransactionEffectsCert and then
+    /// return to client. `WaitForLocalExecution` mode has been deprecated.
     #[method(name = "executeTransactionBlock")]
     async fn execute_transaction_block(
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
-        /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
+        /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string).
+        /// Signature is committed to the intent message of the transaction data, as base-64 encoded
+        /// string.
         signatures: Vec<Base64>,
         /// options for specifying the content to be returned
         options: Option<SuiTransactionBlockResponseOptions>,
@@ -56,18 +55,20 @@ pub trait WriteApi {
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse>;
 
-    /// Runs the transaction in dev-inspect mode. Which allows for nearly any
-    /// transaction (or Move call) with any arguments. Detailed results are
-    /// provided, including both the transaction effects and any return values.
+    /// Runs the transaction in dev-inspect mode, which allows for nearly any transaction (or Move
+    /// call) with any arguments. Detailed results are provided, including both the transaction
+    /// effects and any return values.
     #[method(name = "devInspectTransactionBlock")]
     async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
-        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
+        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and
+        /// gasPrice).
         tx_bytes: Base64,
-        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
+        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas
+        /// price.
         gas_price: Option<BigInt<u64>>,
-        /// The epoch to perform the call. Will be set from the system state object if not provided
+        /// The epoch to perform the call. Will be set from the system state object if not provided.
         epoch: Option<BigInt<u64>>,
         /// Additional arguments including gas_budget, gas_objects, gas_sponsor and skip_checks.
         additional_args: Option<DevInspectArgs>,
@@ -212,23 +213,22 @@ impl Write {
         let kind = parse_transaction_kind(&tx_bytes)?;
         let (reference_gas_price, max_tx_gas) = gas_defaults(&self.context).await?;
 
-        // Synthesize the full TransactionData the caller would have signed, the same way the
-        // legacy fullnode implementation does. An empty gas payment is replaced by a mock gas
-        // coin on the fullnode during simulation.
-        let tx_data = TransactionData::V1(TransactionDataV1 {
+        // Synthesize the full TransactionData the caller would have signed, the same way the legacy
+        // fullnode implementation does. An empty gas payment is replaced by a mock gas coin on the
+        // fullnode during simulation.
+        let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
             kind,
-            sender: sender_address,
-            gas_data: GasData {
-                payment: gas_objects.unwrap_or_default(),
-                owner: gas_sponsor.unwrap_or(sender_address),
-                price: gas_price.map(|price| *price).unwrap_or(reference_gas_price),
-                budget: gas_budget.map(|budget| *budget).unwrap_or(max_tx_gas),
-            },
-            expiration: TransactionExpiration::None,
-        });
+            sender_address,
+            gas_objects.unwrap_or_default(),
+            gas_budget.map(|budget| *budget).unwrap_or(max_tx_gas),
+            gas_price.map(|price| *price).unwrap_or(reference_gas_price),
+            gas_sponsor.unwrap_or(sender_address),
+        );
 
-        // Capture raw bytes before simulation, which replaces an empty gas payment with a mock
-        // gas coin reference.
+        // The raw transaction data reflects what the caller specified: the gas payment stays empty
+        // here, and the mock gas coin the fullnode injects during simulation only shows up in the
+        // effects (matching the legacy implementation, which captures these bytes before simulation
+        // for the same reason).
         let raw_txn_data = if show_raw_txn_data_and_effects {
             bcs::to_bytes(&tx_data).context("Failed to serialize transaction data")?
         } else {
