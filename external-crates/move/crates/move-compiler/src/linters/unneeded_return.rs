@@ -7,7 +7,7 @@
 use crate::{
     diag,
     expansion::ast::ModuleIdent,
-    linters::StyleCodes,
+    linters::CoreLintCode,
     parser::ast::FunctionName,
     typing::{ast as T, visitor::simple_visitor},
 };
@@ -186,7 +186,7 @@ fn returnable_value(context: &mut Context, exp: &T::Exp) -> bool {
 
 fn report_unneeded_return(context: &mut Context, loc: Loc) {
     context.add_diag(diag!(
-        StyleCodes::UnneededReturn.diag_info(),
+        CoreLintCode::UnneededReturn.diag_info(),
         (
             loc,
             "Remove unnecessary 'return', the expression is already in a 'return' position"

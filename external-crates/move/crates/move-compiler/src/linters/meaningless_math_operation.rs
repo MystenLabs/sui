@@ -7,7 +7,7 @@ use crate::{
     cfgir::visitor::simple_visitor,
     diag,
     hlir::ast::{self as H, Value_},
-    linters::StyleCodes,
+    linters::CoreLintCode,
     parser::ast::BinOp_,
 };
 use move_core_types::u256::U256;
@@ -32,7 +32,7 @@ simple_visitor!(
         if let Some(meaningless_operand) = is_unchanged {
             let msg = "This operation has no effect and can be removed";
             self.add_diag(diag!(
-                StyleCodes::MeaninglessMath.diag_info(),
+                CoreLintCode::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (meaningless_operand, "Because of this operand"),
             ));
@@ -48,7 +48,7 @@ simple_visitor!(
         if let Some(zero_operand) = is_always_zero {
             let msg = "This operation is always zero and can be replaced with '0'";
             self.add_diag(diag!(
-                StyleCodes::MeaninglessMath.diag_info(),
+                CoreLintCode::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (zero_operand, "Because of this operand"),
             ));
@@ -62,7 +62,7 @@ simple_visitor!(
         if let Some(one_operand) = is_always_one {
             let msg = "This operation is always one and can be replaced with '1'";
             self.add_diag(diag!(
-                StyleCodes::MeaninglessMath.diag_info(),
+                CoreLintCode::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (one_operand, "Because of this operand"),
             ));

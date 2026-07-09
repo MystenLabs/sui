@@ -3,7 +3,7 @@
 
 //! Detects and reports explicit self-assignments in code, such as `x = x;`, which are generally unnecessary
 //! and could indicate potential errors or misunderstandings in the code logic.
-use super::StyleCodes;
+use super::CoreLintCode;
 use crate::{
     diag,
     naming::ast::Var,
@@ -166,7 +166,7 @@ fn report_self_assignment(context: &mut Context, case: &str, eloc: Loc, lloc: Lo
     let msg =
         format!("Unnecessary self-{case}. The {case} is redundant and will not change the value");
     context.add_diag(diag!(
-        StyleCodes::SelfAssignment.diag_info(),
+        CoreLintCode::SelfAssignment.diag_info(),
         (eloc, msg),
         (lloc, "This location"),
         (rloc, "Is the same as this location"),

@@ -7,7 +7,7 @@
 
 use crate::{
     diag,
-    linters::StyleCodes,
+    linters::CoreLintCode,
     parser::ast::{BinOp, BinOp_},
     typing::{
         ast::{self as T},
@@ -77,7 +77,7 @@ simple_visitor!(
             Simplification::AlwaysFalse => "is always 'false'".to_string(),
         };
         self.reporter.add_diag(diag!(
-            StyleCodes::CombinableComparisons.diag_info(),
+            CoreLintCode::CombinableComparisons.diag_info(),
             (exp.exp.loc, format!("This comparison {msg}")),
         ));
 

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::SuiLintCode;
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::DiagnosticInfo,
     expansion::ast::ModuleIdent,
     parser::ast::FunctionName,
     sui_mode::{
@@ -16,13 +16,7 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 
-const UNCALLABLE_FUNCTION_SIGNATURE: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::UncallableFunction as u8,
-    "it will not be possible to call this function",
-);
+const UNCALLABLE_FUNCTION_SIGNATURE: DiagnosticInfo = SuiLintCode::UncallableFunction.diag_info();
 
 simple_visitor!(
     UncallableFunction,

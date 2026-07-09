@@ -5,7 +5,7 @@
 // It identifies and reports unnecessary temporary borrow followed by a deref, suggesting either
 // removal or conversion to `copy`.
 
-use crate::linters::StyleCodes;
+use crate::linters::CoreLintCode;
 use crate::{
     diag,
     typing::{
@@ -38,7 +38,7 @@ impl Context<'_> {
         }
         match &deref_exp.exp.value {
             TE::TempBorrow(_, inner) if is_simple_deref_ref_exp(inner) => self.add_diag(diag!(
-                StyleCodes::RedundantRefDeref.diag_info(),
+                CoreLintCode::RedundantRefDeref.diag_info(),
                 (
                     exp.exp.loc,
                     "Redundant borrow-dereference detected. \
@@ -46,7 +46,7 @@ impl Context<'_> {
                 )
             )),
             TE::TempBorrow(_, inner) if all_deref_borrow(inner) => self.add_diag(diag!(
-                StyleCodes::RedundantRefDeref.diag_info(),
+                CoreLintCode::RedundantRefDeref.diag_info(),
                 (
                     exp.exp.loc,
                     "Redundant borrow-dereference detected. \
@@ -54,7 +54,7 @@ impl Context<'_> {
                 )
             )),
             TE::Borrow(false, _, _) if exp.exp.loc != deref_exp.exp.loc => self.add_diag(diag!(
-                StyleCodes::RedundantRefDeref.diag_info(),
+                CoreLintCode::RedundantRefDeref.diag_info(),
                 (
                     exp.exp.loc,
                     "Redundant borrow-dereference detected. \
@@ -62,7 +62,7 @@ impl Context<'_> {
                 )
             )),
             TE::Borrow(_, _, _) | TE::BorrowLocal(_, _) => self.add_diag(diag!(
-                StyleCodes::RedundantRefDeref.diag_info(),
+                CoreLintCode::RedundantRefDeref.diag_info(),
                 (
                     exp.exp.loc,
                     "Redundant borrow-dereference detected. \

@@ -7,7 +7,7 @@
 use crate::{
     diag,
     expansion::ast::ModuleIdent,
-    linters::StyleCodes,
+    linters::CoreLintCode,
     parser::ast::ConstantName,
     typing::{ast as T, visitor::simple_visitor},
 };
@@ -24,7 +24,10 @@ simple_visitor!(
         if !is_valid_name(name) {
             let uid_msg =
                 format!("'{name}' should be ALL_CAPS. Or for error constants, use PascalCase",);
-            let diagnostic = diag!(StyleCodes::ConstantNaming.diag_info(), (cdef.loc, uid_msg));
+            let diagnostic = diag!(
+                CoreLintCode::ConstantNaming.diag_info(),
+                (cdef.loc, uid_msg)
+            );
             self.add_diag(diagnostic);
         }
         false
