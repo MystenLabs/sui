@@ -219,11 +219,11 @@ mod tests {
         );
     }
 
-    /// The already-direction-correct boundary is recorded in the single
-    /// `checkpoint` field as-is. A client reads the bound off the wire frame
-    /// and interprets it per the request's ordering.
+    /// The direction-correct boundary is recorded in the single `checkpoint` field regardless of
+    /// ordering. A client reads the bound off the wire frame and interprets it per the request's
+    /// ordering.
     #[test]
-    fn item_watermark_sets_checkpoint_bound() {
+    fn item_watermark_sets_direction_matching_bound() {
         let pos = Position::Transactions {
             checkpoint: 9,
             tx_seq: 42,
