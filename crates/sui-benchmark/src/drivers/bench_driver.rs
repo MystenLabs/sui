@@ -43,6 +43,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use sui_core::transaction_driver::TransactionDriverError;
 use sui_types::committee::Committee;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_grpc::WaitForEffectsResponse;
@@ -239,6 +240,33 @@ enum NextOp {
         payload: Box<dyn Payload>,
     },
     Retry(RetryType),
+}
+
+/// Whether a failed transaction submission should be retried with the exact same
+/// transaction (`NextOp::Retry`), as opposed to giving up on it (`NextOp::Failure`,
+/// which recycles the payload and builds a new transaction on the same input refs).
+///
+/// Every terminal `TransactionDriverError` retries the same digest, because a terminal
+/// error does not prove the transaction is dead: the driver may have timed out
+/// collecting effects acks for a transaction that did finalize, and a transaction
+/// rejected by over 1/3 of validators (e.g. a chained transaction racing its parent's
+/// execution) can still be finalized through a validator that accepted it. In both
+/// cases building a new transaction on the same input refs equivocates, and the payload
+/// wedges permanently — every rebuilt transaction is terminally rejected with "object
+/// version unavailable for consumption". Resubmitting the same digest is
+/// idempotent: validators respond to an already-executed digest with its effects, which
+/// settles the payload with fresh object refs. A genuinely invalid transaction keeps
+/// failing on retry, but that is no worse than rebuilding an equally invalid
+/// transaction from the same payload state, and it stays visible in `num_error`.
+fn should_retry_same_transaction(err: &anyhow::Error) -> bool {
+    if err.downcast_ref::<TransactionDriverError>().is_some() {
+        return true;
+    }
+    // Fullnode-proxy path surfaces TransactionSubmissionError instead.
+    matches!(
+        err.downcast_ref::<TransactionSubmissionError>(),
+        Some(err) if !matches!(err, TransactionSubmissionError::NonRecoverableTransactionError { .. })
+    )
 }
 
 async fn print_and_start_benchmark() -> &'static Instant {
@@ -894,22 +922,7 @@ async fn run_bench_worker(
                         NextOp::Retry(Box::new((transaction, payload)))
                     }
                     None => {
-                        if err
-                            .downcast::<TransactionSubmissionError>()
-                            .and_then(|err| {
-                                if matches!(
-                                    err,
-                                    TransactionSubmissionError::NonRecoverableTransactionError { .. }
-                                ) {
-                                    Err(err.into())
-                                } else {
-                                    Ok(())
-                                }
-                            })
-                            .is_err()
-                        {
-                            NextOp::Failure { payload }
-                        } else {
+                        if should_retry_same_transaction(&err) {
                             metrics
                                 .num_error
                                 .with_label_values(&[
@@ -919,6 +932,8 @@ async fn run_bench_worker(
                                 ])
                                 .inc();
                             NextOp::Retry(Box::new((transaction, payload)))
+                        } else {
+                            NextOp::Failure { payload }
                         }
                     }
                 }
@@ -1495,6 +1510,42 @@ mod tests {
         fn make_transaction(&mut self) -> Transaction {
             unimplemented!("not needed for recycling tests")
         }
+    }
+
+    #[test]
+    fn test_transaction_driver_errors_retry_same_transaction() {
+        // Terminal driver errors retry the same digest, whether the driver deems them
+        // retriable (timeout: the transaction may have finalized without the client
+        // observing it) or not (validator rejection: the transaction may still be
+        // finalized through a validator that accepted it). Rebuilding a new
+        // transaction on the same input refs instead would equivocate.
+        let timed_out =
+            anyhow::Error::from(TransactionDriverError::TimeoutWithLastRetriableError {
+                last_error: None,
+                attempts: 3,
+                timeout: Duration::from_secs(60),
+            });
+        assert!(should_retry_same_transaction(&timed_out));
+
+        let rejected = anyhow::Error::from(TransactionDriverError::ValidationFailed {
+            error: "object version unavailable for consumption".to_string(),
+        });
+        assert!(should_retry_same_transaction(&rejected));
+    }
+
+    #[test]
+    fn test_submission_errors_keep_legacy_classification() {
+        let non_recoverable =
+            anyhow::Error::from(TransactionSubmissionError::NonRecoverableTransactionError {
+                errors: vec![],
+            });
+        assert!(!should_retry_same_transaction(&non_recoverable));
+
+        let transient = anyhow::Error::from(TransactionSubmissionError::TimeoutBeforeFinality);
+        assert!(should_retry_same_transaction(&transient));
+
+        let opaque = anyhow::anyhow!("connection reset by peer");
+        assert!(!should_retry_same_transaction(&opaque));
     }
 
     #[test]
