@@ -210,7 +210,7 @@ pub(crate) async fn list_transactions(
                 end_reason
             };
             if reached_range_end(reason) {
-                yield watermark_response(terminal_boundary_watermark(Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }));
+                yield watermark_response(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }));
             }
             yield end_response(reason);
             info!(
@@ -315,7 +315,7 @@ pub(crate) async fn list_transactions(
             end_reason
         };
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }));
+            yield watermark_response(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }));
         }
         yield end_response(reason);
 
