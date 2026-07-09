@@ -431,6 +431,29 @@ The cache is sized by config (`object_by_id_cache_size`) — this proposal may j
 larger default on validators, which is still strictly less memory than the tidehunter
 in-memory index of the markers keyspace it replaces.
 
+**Measured at 18K TPS (private-testnet, 2026-07).** The warm lands in the right form from
+both call sites above, but the design's "pure cache hit" expectation did **not** hold: the
+`latest_objref_or_tombstone` hit rate was only **~36.5%** (`execution_cache_hits` /
+`_requests`), and the resulting `objects` reverse seeks (`db_op{op="next_entry"}`) were the
+single largest DB cost, on the saturated single-threaded handler (`handle_consensus_commit`
+≈ 0.98 core, `filter_consensus_txns` ≈ 0.68). Root cause is **eviction, not a missing
+warm**: `object_by_id_cache` is a single count-bounded (default 100k) `MonotonicCache` shared
+with — and churned by — every execution object write (~100k/s at 18K TPS) and every other
+by-id read, so it fully turns over in ~1s, the same order as commit latency, and entries
+warmed at vote/prefetch time are gone before the handler reads them. Vote-time warmup also
+has a structural coverage gap: a node never votes on its **own** proposed blocks (`Core`
+bypasses `verify_and_vote`), so ~1/N of committed txns are never vote-warmed (the pipeline
+prefetch covers those). Levers, in order: **(1)** raise `object_by_id_cache_size` (shipped:
+default is now 10× the object cache — testing whether the working set fits); **(2)** if the
+shared cache still evicts, a **dedicated coherent owned-input cache** (ObjectID → latest-ref)
+kept fresh by the same execution write-through but invalidated only for keys it holds, so it
+is churned by owned-object writes only, not the whole object working set — much higher hit
+rate per byte, at the cost of a write-path coherence hook. Note the point-lookup shortcut
+("point-get the exact claimed `(id, version)`, reverse-scan only on miss") is **not** correct:
+a present historical row does not prove the version is live (a higher consumed version may
+still exist pre-pruning), so the reverse-scan-for-latest is required — which is why caching
+(fewer misses), not cheaper reads, is the lever.
+
 ---
 
 ## 5. Correctness — determinism of the post-consensus decision
@@ -682,6 +705,26 @@ Risks / costs:
 - `latest_ref` on a miss deserializes the object to compute the digest — marginally more
   CPU than a marker point-get. Only on cache misses.
 - The drop-path effects lookup (§5.3) — off the hot path by construction.
+
+**Measured at 18K TPS (private-testnet, 2026-07).** The single-threaded consensus handler
+saturates (~0.98 core) and effective throughput falls below target. The two dominant DB
+costs on that thread, from `db_op` (DBMap layer, both backends) and cache hit/miss counters:
+
+1. **`objects` reverse seek (`op="next_entry"`) — #1 cost.** The per-owned-object
+   `latest_objref_or_tombstone` consumed-check at ~36.5% hit rate (see §4.4). This is a
+   *caching/eviction* problem; being addressed by the cache-size lever (§4.4).
+2. **`executed_effects_digests get` — #2 cost (~186k misses/s, ~1.6% hit).** The
+   effects-aware seeder (§6.3) probes `get_executed_effects` for every toucher of a
+   first-touched key; in steady state no toucher has executed yet, so these are guaranteed
+   misses. **Caching cannot help** (the entries legitimately do not exist yet, and a
+   negative cache would go stale the instant they execute) — the fix is to stop issuing the
+   lookups: probe at most the earliest non-cancelled toucher (and earliest writer, for the
+   §6.3 reader-ordering case) per key rather than every toucher, and/or gate the seeder on
+   replay/executor-ahead being possible. This is independent of the cache work.
+
+The `owned_object_refs_to_lock` recomputation (computed once in the deserialize worker and
+carried on the parsed transaction, rather than recomputed in the prefetch and filter loops)
+and the same-digest lock-map short-circuit are smaller CPU wins on the same thread.
 
 ---
 
