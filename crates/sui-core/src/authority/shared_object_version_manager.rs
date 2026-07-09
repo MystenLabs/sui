@@ -1020,7 +1020,10 @@ mod tests {
         .unwrap();
 
         // Check that the final version of the shared object is the lamport version of the last
-        // transaction.
+        // transaction. The randomness state object is absent: it is touched only by tx5, which is
+        // cancelled, and cancelled-only keys are not seeded into the next-version overlay (an
+        // all-cancelled batch must not initialize the map from a possibly execution-contaminated
+        // objects view). It is seeded lazily from system_object_next_versions when next needed.
         shared_input_next_versions
             .remove(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, SequenceNumber::from_u64(1)));
         assert_eq!(
@@ -1028,10 +1031,6 @@ mod tests {
             HashMap::from([
                 ((id1, init_shared_version_1), SequenceNumber::from_u64(5)), // determined by tx3
                 ((id2, init_shared_version_2), SequenceNumber::from_u64(4)), // determined by tx1
-                (
-                    (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
-                    SequenceNumber::from_u64(1)
-                ), // not mutable
             ])
         );
 
