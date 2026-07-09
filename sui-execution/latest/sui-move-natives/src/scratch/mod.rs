@@ -3,12 +3,15 @@
 
 mod runtime;
 
+use runtime::AddResult;
 pub use runtime::ScratchRuntime;
 
 use crate::{NativesCostTable, get_extension, get_extension_mut};
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
-use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
+use move_core_types::{
+    account_address::AccountAddress, gas_algebra::InternalGas, vm_status::StatusCode,
+};
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
@@ -19,6 +22,7 @@ use move_vm_runtime::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use sui_types::error::VMMemoryLimitExceededSubStatusCode;
 use tracing::instrument;
 
 // These must match the error constants declared in `sui::scratch`.
@@ -71,14 +75,19 @@ pub fn add_impl(
     let ty = safe_unwrap!(ty_args.pop());
 
     let scratch_runtime: &mut ScratchRuntime = get_extension_mut!(context)?;
-    if scratch_runtime.add(key, ty, value).is_err() {
-        return Ok(NativeResult::err(
+    match scratch_runtime.add(key, ty, value) {
+        AddResult::Inserted => Ok(NativeResult::ok(context.gas_used(), smallvec![])),
+        AddResult::Duplicate => Ok(NativeResult::err(
             context.gas_used(),
             E_ENTRY_ALREADY_EXISTS,
-        ));
+        )),
+        // Per-transaction capacity limit exceeded.
+        AddResult::LimitExceeded => Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+            .with_message("Per-transaction scratch size limit was exceeded".to_string())
+            .with_sub_status(
+                VMMemoryLimitExceededSubStatusCode::SCRATCH_SIZE_LIMIT_EXCEEDED as u64,
+            )),
     }
-
-    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
 #[derive(Clone)]

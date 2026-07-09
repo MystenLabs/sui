@@ -6,7 +6,7 @@ use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::execution::{Type, values::Value};
 use move_vm_runtime::natives::extensions::NativeExtensionMarker;
 use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
+use sui_protocol_config::ProtocolConfig;
 
 /// A single scratch entry: the runtime type of the stored value alongside the value itself. The
 /// type is retained so reads and removes can verify the caller's requested type matches what was
@@ -17,20 +17,32 @@ pub struct ScratchEntry {
 }
 
 /// Per-transaction, in-memory scratch store. Entries are keyed by the address derived from the
-/// `(key type, key value)` pair and live only for the duration of the transaction. The key type
-/// and value are not stored directly, only the derived address.
-/// A fresh `ScratchRuntime` is installed per transaction, and the map is dropped at the end of
-/// it.
-#[derive(Tid, Default)]
-pub struct ScratchRuntime {
+/// `(key type, key value)` pair and live only for the duration of the transaction: a fresh
+/// `ScratchRuntime` is installed per transaction, and the map is dropped at the end of it.
+#[derive(Tid)]
+pub struct ScratchRuntime<'a> {
+    protocol_config: &'a ProtocolConfig,
     entries: BTreeMap<AccountAddress, ScratchEntry>,
 }
 
-impl NativeExtensionMarker<'_> for ScratchRuntime {}
+/// The outcome of an `add`.
+pub enum AddResult {
+    /// The entry was inserted.
+    Inserted,
+    /// An entry already existed for the key, so nothing was inserted.
+    Duplicate,
+    /// The store is already at `max_scratch_pad_size` entries, so nothing was inserted.
+    LimitExceeded,
+}
 
-impl ScratchRuntime {
-    pub fn new() -> Self {
-        Self::default()
+impl<'a> NativeExtensionMarker<'a> for ScratchRuntime<'a> {}
+
+impl<'a> ScratchRuntime<'a> {
+    pub fn new(protocol_config: &'a ProtocolConfig) -> Self {
+        Self {
+            protocol_config,
+            entries: BTreeMap::new(),
+        }
     }
 
     /// Removes all entries. Used to reset the store at a transaction boundary in `test_scenario`,
@@ -39,22 +51,18 @@ impl ScratchRuntime {
         self.entries.clear();
     }
 
-    /// Inserts a new entry.
-    /// Returns `Ok(())` if the entry was not already present and was successfully inserted
-    /// Returns or `Err((ty, value))` if an entry already existed for `key`
-    pub fn add(
-        &mut self,
-        key: AccountAddress,
-        ty: Type,
-        value: Value,
-    ) -> Result<(), (Type, Value)> {
-        match self.entries.entry(key) {
-            Entry::Vacant(v) => {
-                v.insert(ScratchEntry { ty, value });
-                Ok(())
-            }
-            Entry::Occupied(_) => Err((ty, value)),
+    /// Inserts a new entry, enforcing the per-transaction entry limit.
+    /// Returns `Duplicate` if an entry already exists for `key` (regardless of its type)
+    /// Returns `LimitExceeded` if inserting would exceed `max_scratch_pad_size`
+    pub fn add(&mut self, key: AccountAddress, ty: Type, value: Value) -> AddResult {
+        if self.entries.contains_key(&key) {
+            return AddResult::Duplicate;
         }
+        if self.entries.len() as u64 >= self.protocol_config.max_scratch_pad_size() {
+            return AddResult::LimitExceeded;
+        }
+        self.entries.insert(key, ScratchEntry { ty, value });
+        AddResult::Inserted
     }
 
     pub fn get(&self, key: &AccountAddress) -> Option<&ScratchEntry> {

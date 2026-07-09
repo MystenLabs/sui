@@ -1648,6 +1648,8 @@ pub struct ProtocolConfig {
     // Cost params for the Move native function `exists_with_type_impl<V: drop>(key: address): bool`
     scratch_exists_with_type_cost_base: Option<u64>,
     scratch_exists_with_type_type_cost: Option<u64>,
+    // Maximum number of entries in the per-transaction `sui::scratch` store.
+    max_scratch_pad_size: Option<u64>,
 
     // `event` module
     // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
@@ -3189,6 +3191,7 @@ impl ProtocolConfig {
             scratch_exists_cost_base: None,
             scratch_exists_with_type_cost_base: None,
             scratch_exists_with_type_type_cost: None,
+            max_scratch_pad_size: None,
 
             // `event` module
             // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
@@ -5095,6 +5098,7 @@ impl ProtocolConfig {
                     cfg.scratch_exists_cost_base = Some(13);
                     cfg.scratch_exists_with_type_cost_base = Some(13);
                     cfg.scratch_exists_with_type_type_cost = Some(1);
+                    cfg.max_scratch_pad_size = Some(4096);
                 }
                 // Use this template when making changes:
                 //

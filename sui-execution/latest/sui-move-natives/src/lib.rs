@@ -1027,16 +1027,8 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ),
         ("scratch", "add_impl", make_native!(scratch::add_impl)),
         ("scratch", "read_impl", make_native!(scratch::read_impl)),
-        (
-            "scratch",
-            "remove_impl",
-            make_native!(scratch::remove_impl),
-        ),
-        (
-            "scratch",
-            "exists_impl",
-            make_native!(scratch::exists_impl),
-        ),
+        ("scratch", "remove_impl", make_native!(scratch::remove_impl)),
+        ("scratch", "exists_impl", make_native!(scratch::exists_impl)),
         (
             "scratch",
             "exists_with_type_impl",
