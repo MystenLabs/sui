@@ -517,8 +517,8 @@ impl<S: ConcurrentStore> Indexer<S> {
             name: H::NAME,
             next_checkpoint,
             build: Box::new(move |ingestion| {
-                let checkpoint_rx =
-                    ingestion.subscribe_bounded(config.ingestion.subscriber_channel_size());
+                let checkpoint_rx = ingestion
+                    .subscribe_bounded(config.ingestion.subscriber_channel_size(), next_checkpoint);
                 concurrent::pipeline::<H>(
                     handler,
                     next_checkpoint,
@@ -572,8 +572,8 @@ impl<T: SequentialStore> Indexer<T> {
             name: H::NAME,
             next_checkpoint,
             build: Box::new(move |ingestion| {
-                let checkpoint_rx =
-                    ingestion.subscribe_bounded(config.ingestion.subscriber_channel_size());
+                let checkpoint_rx = ingestion
+                    .subscribe_bounded(config.ingestion.subscriber_channel_size(), next_checkpoint);
                 sequential::pipeline::<H>(
                     handler,
                     next_checkpoint,
@@ -1316,10 +1316,12 @@ mod tests {
                 .get(),
             24
         );
+        // Pipelines never receive checkpoints below their own watermark, even though the
+        // cohort's ingestion starts at the minimum watermark across members.
         assert_out_of_order!(indexer_metrics, A::NAME, 0);
-        assert_out_of_order!(indexer_metrics, B::NAME, 5);
-        assert_out_of_order!(indexer_metrics, C::NAME, 10);
-        assert_out_of_order!(indexer_metrics, D::NAME, 15);
+        assert_out_of_order!(indexer_metrics, B::NAME, 0);
+        assert_out_of_order!(indexer_metrics, C::NAME, 0);
+        assert_out_of_order!(indexer_metrics, D::NAME, 0);
     }
 
     // test ingestion, no pipelines missing watermarks, first_checkpoint provided
@@ -1364,9 +1366,9 @@ mod tests {
             24
         );
         assert_out_of_order!(metrics, A::NAME, 0);
-        assert_out_of_order!(metrics, B::NAME, 5);
-        assert_out_of_order!(metrics, C::NAME, 10);
-        assert_out_of_order!(metrics, D::NAME, 15);
+        assert_out_of_order!(metrics, B::NAME, 0);
+        assert_out_of_order!(metrics, C::NAME, 0);
+        assert_out_of_order!(metrics, D::NAME, 0);
     }
 
     // test ingestion, some pipelines missing watermarks, no first_checkpoint provided
@@ -1409,9 +1411,9 @@ mod tests {
             30
         );
         assert_out_of_order!(metrics, A::NAME, 0);
-        assert_out_of_order!(metrics, B::NAME, 11);
-        assert_out_of_order!(metrics, C::NAME, 16);
-        assert_out_of_order!(metrics, D::NAME, 21);
+        assert_out_of_order!(metrics, B::NAME, 0);
+        assert_out_of_order!(metrics, C::NAME, 0);
+        assert_out_of_order!(metrics, D::NAME, 0);
     }
 
     // test ingestion, some pipelines missing watermarks, use first_checkpoint
@@ -1455,9 +1457,75 @@ mod tests {
             20
         );
         assert_out_of_order!(metrics, A::NAME, 0);
-        assert_out_of_order!(metrics, B::NAME, 1);
-        assert_out_of_order!(metrics, C::NAME, 6);
-        assert_out_of_order!(metrics, D::NAME, 11);
+        assert_out_of_order!(metrics, B::NAME, 0);
+        assert_out_of_order!(metrics, C::NAME, 0);
+        assert_out_of_order!(metrics, D::NAME, 0);
+    }
+
+    /// Pipelines that share a cohort don't receive checkpoints below their own watermark, even
+    /// though the cohort's ingestion range starts at the minimum watermark across its members.
+    #[tokio::test]
+    async fn test_shared_cohort_pipeline_never_reprocesses_committed_checkpoints() {
+        let registry = Registry::new();
+        let store = FallibleMockStore::default();
+
+        test_pipeline!(A, "concurrent_a");
+        test_pipeline!(B, "concurrent_b");
+
+        let mut conn = store.connect().await.unwrap();
+        set_committer_watermark(&mut conn, A::NAME, 5).await;
+        set_committer_watermark(&mut conn, B::NAME, 20).await;
+
+        let indexer_args = IndexerArgs {
+            last_checkpoint: Some(29),
+            ..Default::default()
+        };
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((30, 1))).await;
+
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+
+        let ingestion_metrics = indexer.ingestion_metrics().clone();
+        let indexer_metrics = indexer.indexer_metrics().clone();
+
+        indexer.run().await.unwrap().join().await.unwrap();
+
+        // Each checkpoint in 6..=29 is fetched exactly once for the cohort.
+        assert_eq!(
+            ingestion_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            24
+        );
+
+        // B was only served the checkpoints past its own watermark (21..=29).
+        assert_eq!(
+            indexer_metrics
+                .total_handler_checkpoints_received
+                .get_metric_with_label_values(&[B::NAME])
+                .unwrap()
+                .get(),
+            9
+        );
+        assert_out_of_order!(indexer_metrics, A::NAME, 0);
+        assert_out_of_order!(indexer_metrics, B::NAME, 0);
+
+        // B never re-committed checkpoints at or below its watermark.
+        let committed = store.data.get(B::NAME).unwrap();
+        for cp in 6..21 {
+            assert!(
+                !committed.contains_key(&cp),
+                "B re-committed checkpoint {cp}"
+            );
+        }
+        for cp in 21..30 {
+            assert!(
+                committed.contains_key(&cp),
+                "B did not commit checkpoint {cp}"
+            );
+        }
     }
 
     #[tokio::test]
