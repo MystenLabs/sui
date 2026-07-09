@@ -85,10 +85,12 @@ pub fn find_lint_doc(query: &str) -> Option<&'static LintDoc> {
 }
 
 /// Parse a rendered `Wxxyyy` code back into its `(category, code)` id. Accepts the forms a user is
-/// likely to paste from diagnostic output: `W99000`, `w99000`, bare `99000`, or `Lint W99000`.
+/// likely to paste from diagnostic output: `W99000`, `w99000`, bare `99000`, or `Lint W99000` —
+/// and the `E`-prefixed equivalents, since `#[deny(lint(...))]` and `--warnings-are-errors`
+/// escalate lints to `error[Lint Exxyyy]`.
 fn parse_rendered_code(s: &str) -> Option<(u8, u8)> {
     let s = s.strip_prefix("Lint ").unwrap_or(s).trim();
-    let digits = s.strip_prefix(['W', 'w']).unwrap_or(s);
+    let digits = s.strip_prefix(['W', 'w', 'E', 'e']).unwrap_or(s);
     if digits.len() != 5 || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
@@ -427,6 +429,8 @@ and often a copy-paste bug where one side should differ.",
     LintDoc {
         name: "unused_return_value",
         origin: LintOrigin::Move,
+        // Only the Sui-mode visitor set runs this by default (vanilla `move` needs `--lint`), but
+        // in practice every consumer of these docs is Sui-flavored, so claim the Sui default.
         default: true,
         category: 2,
         code: 13,
@@ -846,6 +850,9 @@ mod tests {
         assert_eq!(find_lint_doc("W99000").unwrap().name, "share_owned");
         assert_eq!(find_lint_doc("Lint W99000").unwrap().name, "share_owned");
         assert_eq!(find_lint_doc("99000").unwrap().name, "share_owned");
+        // Escalated rendering (`#[deny(lint(...))]`, `--warnings-are-errors`) prints an `E` code.
+        assert_eq!(find_lint_doc("E99000").unwrap().name, "share_owned");
+        assert_eq!(find_lint_doc("Lint E99000").unwrap().name, "share_owned");
         assert!(find_lint_doc("nonsense").is_none());
     }
 }
