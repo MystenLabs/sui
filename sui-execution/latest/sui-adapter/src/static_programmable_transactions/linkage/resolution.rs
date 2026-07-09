@@ -76,6 +76,12 @@ impl ResolutionTable {
 }
 
 impl VersionConstraint {
+    pub(crate) fn object_id(&self) -> ObjectID {
+        match self {
+            VersionConstraint::Exact(_, id) | VersionConstraint::AtLeast(_, id) => *id,
+        }
+    }
+
     pub fn exact(pkg: &VerifiedPackage) -> Option<VersionConstraint> {
         Some(VersionConstraint::Exact(
             pkg.version(),
