@@ -111,7 +111,7 @@ pub async fn test_user_transactions_with_gas_objects(
 
         // Validate and acquire locks (MFP voting phase)
         authority
-            .handle_vote_transaction(&epoch_store, transaction.tx().clone())
+            .handle_vote_transaction(&epoch_store, transaction.tx().clone(), None)
             .unwrap();
         transactions.push(transaction);
     }

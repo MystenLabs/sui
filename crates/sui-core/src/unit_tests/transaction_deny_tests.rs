@@ -96,7 +96,7 @@ fn get_accounts_and_coins(
 fn process_zklogin_tx(tx: Transaction, state: &Arc<AuthorityState>) -> SuiResult<()> {
     let epoch_store = state.epoch_store_for_testing();
     let verified_tx = VerifiedTransaction::new_from_verified(tx);
-    state.handle_vote_transaction(&epoch_store, verified_tx)
+    state.handle_vote_transaction(&epoch_store, verified_tx, None)
 }
 
 fn transfer_with_account(
@@ -127,7 +127,7 @@ fn transfer_with_account(
         .verify_transaction_require_no_aliases(tx)
         .unwrap()
         .into_tx();
-    state.handle_vote_transaction(&epoch_store, tx)
+    state.handle_vote_transaction(&epoch_store, tx, None)
 }
 
 fn handle_move_call_transaction(
@@ -158,7 +158,7 @@ fn handle_move_call_transaction(
         .verify_transaction_require_no_aliases(tx)
         .unwrap()
         .into_tx();
-    state.handle_vote_transaction(&epoch_store, tx)
+    state.handle_vote_transaction(&epoch_store, tx, None)
 }
 
 fn assert_denied<T: std::fmt::Debug>(result: &SuiResult<T>) {
@@ -203,7 +203,7 @@ fn submit_gasless_with_account(
     let tx = to_sender_signed_transaction(data, &sender_account.1);
     let epoch_store = state.epoch_store_for_testing();
     let verified_tx = VerifiedTransaction::new_from_verified(tx);
-    state.handle_vote_transaction(&epoch_store, verified_tx)
+    state.handle_vote_transaction(&epoch_store, verified_tx, None)
 }
 
 #[tokio::test]
@@ -299,7 +299,7 @@ async fn test_shared_object_transaction_disabled() {
         .verify_transaction_require_no_aliases(tx)
         .unwrap()
         .into_tx();
-    let result = state.handle_vote_transaction(&epoch_store, tx);
+    let result = state.handle_vote_transaction(&epoch_store, tx, None);
     assert_denied(&result);
 }
 
@@ -324,7 +324,7 @@ async fn test_package_publish_disabled() {
         .verify_transaction_require_no_aliases(tx)
         .unwrap()
         .into_tx();
-    let result = state.handle_vote_transaction(&epoch_store, tx);
+    let result = state.handle_vote_transaction(&epoch_store, tx, None);
     assert_denied(&result);
 }
 
@@ -512,7 +512,7 @@ async fn test_certificate_deny() {
         .unwrap()
         .into_tx();
     state
-        .handle_vote_transaction(&epoch_store, tx.clone())
+        .handle_vote_transaction(&epoch_store, tx.clone(), None)
         .unwrap();
     // Create an executable transaction as if certified by consensus
     let executable = VerifiedExecutableTransaction::new_from_consensus(tx, epoch_store.epoch());
@@ -674,7 +674,7 @@ async fn test_shared_object_transaction_disabled_dynamic_check() {
         .verify_transaction_require_no_aliases(tx)
         .unwrap()
         .into_tx();
-    let result = state.handle_vote_transaction(&epoch_store, tx);
+    let result = state.handle_vote_transaction(&epoch_store, tx, None);
     assert_denied(&result);
 }
 
@@ -701,7 +701,7 @@ async fn test_package_publish_disabled_dynamic_check() {
         .verify_transaction_require_no_aliases(tx)
         .unwrap()
         .into_tx();
-    let result = state.handle_vote_transaction(&epoch_store, tx);
+    let result = state.handle_vote_transaction(&epoch_store, tx, None);
     assert_denied(&result);
 }
 

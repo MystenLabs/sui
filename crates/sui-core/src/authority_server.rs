@@ -524,7 +524,7 @@ impl ValidatorService {
 
         // Validate the transaction
         self.state
-            .handle_vote_transaction(&epoch_store, transaction)?;
+            .handle_vote_transaction(&epoch_store, transaction, None)?;
 
         Ok(())
     }
@@ -553,7 +553,7 @@ impl ValidatorService {
 
         // Validate the transaction
         self.state
-            .handle_vote_transaction(&epoch_store, transaction)?;
+            .handle_vote_transaction(&epoch_store, transaction, None)?;
 
         Ok(())
     }
@@ -1029,9 +1029,11 @@ impl ValidatorService {
                 }
                 // Then revalidate against live state, which surfaces the terminal
                 // stale-version error once the conflict winner has executed.
-                if let Err(error) =
-                    state.handle_vote_transaction(&epoch_store, verified_transaction.tx().clone())
-                {
+                if let Err(error) = state.handle_vote_transaction(
+                    &epoch_store,
+                    verified_transaction.tx().clone(),
+                    None,
+                ) {
                     // The transaction may have executed while being validated (e.g. it was
                     // deferred rather than dropped).
                     if let Some(effects) = state
@@ -1132,7 +1134,11 @@ impl ValidatorService {
                 );
             }
 
-            match state.handle_vote_transaction(&epoch_store, verified_transaction.tx().clone()) {
+            match state.handle_vote_transaction(
+                &epoch_store,
+                verified_transaction.tx().clone(),
+                None,
+            ) {
                 Ok(_) => { /* continue processing */ }
                 Err(e) => {
                     // Check if transaction has been executed while being validated.

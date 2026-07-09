@@ -48,7 +48,7 @@ pub fn vote_transaction(
         .into_tx();
 
     // Validate the transaction.
-    authority.handle_vote_transaction(&epoch_store, verified_tx.clone())?;
+    authority.handle_vote_transaction(&epoch_store, verified_tx.clone(), None)?;
 
     Ok(verified_tx)
 }

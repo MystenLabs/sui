@@ -86,7 +86,7 @@ impl AuthorityAPI for LocalAuthorityClient {
             // consensus and no one else is voting.
             .verify_transaction_with_current_aliases(deserialized_transaction.clone())
             .map(|_| VerifiedTransaction::new_from_verified(deserialized_transaction))?;
-        state.handle_vote_transaction(&epoch_store, transaction.clone())?;
+        state.handle_vote_transaction(&epoch_store, transaction.clone(), None)?;
         if self.fault_config.fail_after_vote_transaction {
             return Err(SuiErrorKind::GenericAuthorityError {
                 error: "Mock error after vote transaction in submit_transaction".to_owned(),

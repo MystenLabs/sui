@@ -3268,7 +3268,7 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
             let epoch_store = node.state().epoch_store_for_testing();
             let verified_tx = VerifiedTransaction::new_unchecked(signed_tx);
             node.state()
-                .handle_vote_transaction(&epoch_store, verified_tx)
+                .handle_vote_transaction(&epoch_store, verified_tx, None)
         })
         .await;
 

@@ -313,7 +313,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
 
     let err = env
         .authority
-        .handle_vote_transaction(&epoch_store, verified)
+        .handle_vote_transaction(&epoch_store, verified, None)
         .expect_err("validation should fail for denied address");
 
     match err.into_inner() {

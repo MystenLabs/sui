@@ -1260,7 +1260,8 @@ async fn test_access_old_object_pruned() {
                             epoch_store
                                 .verify_transaction_require_no_aliases(tx.clone())
                                 .unwrap()
-                                .into_tx()
+                                .into_tx(),
+                            None
                         )
                         .unwrap_err(),
                     SuiErrorKind::UserInputError {

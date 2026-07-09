@@ -79,7 +79,7 @@ fn handle_transaction_for_test(
         .into_tx();
 
     // Validate the transaction using MFP-style voting
-    authority.handle_vote_transaction(&epoch_store, transaction)?;
+    authority.handle_vote_transaction(&epoch_store, transaction, None)?;
 
     Ok(())
 }
@@ -1472,7 +1472,7 @@ async fn test_shared_object_v2_denied() {
         let verified_tx = epoch_store
             .verify_transaction_require_no_aliases(transaction)
             .unwrap();
-        let response = authority.handle_vote_transaction(&epoch_store, verified_tx.into_tx());
+        let response = authority.handle_vote_transaction(&epoch_store, verified_tx.into_tx(), None);
 
         assert!(
             response.is_ok(),

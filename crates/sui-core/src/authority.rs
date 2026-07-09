@@ -1149,10 +1149,15 @@ impl AuthorityState {
     /// TODO(mysticeti-fastpath): Assess whether we want to optimize the case when the transaction
     /// has already been finalized executed.
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
+    /// `claimed_immutable_ids` are the transaction's immutable-input claims when voting
+    /// on a consensus transaction (`Some(&[])` means it claims no input is immutable and
+    /// is still enforced); `None` skips claim verification for advisory pre-screens that
+    /// have no claims attached.
     pub fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
+        claimed_immutable_ids: Option<&[ObjectID]>,
     ) -> SuiResult<()> {
         debug!("handle_vote_transaction");
 
@@ -1199,6 +1204,14 @@ impl AuthorityState {
 
         let checked_input_objects =
             self.handle_transaction_deny_checks(&transaction, epoch_store)?;
+
+        // The claims control post-consensus locking (an unclaimed frozen input would
+        // acquire a lock that execution never consumes; a false claim would leave a
+        // mutable input unlocked), so completeness must be enforced on every vote —
+        // an empty claim list is itself a claim that no input is immutable.
+        if let Some(claimed_immutable_ids) = claimed_immutable_ids {
+            verify_immutable_object_claims(claimed_immutable_ids, checked_input_objects.inner())?;
+        }
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
 
@@ -6272,6 +6285,48 @@ impl AuthorityState {
             .clear_state_end_of_epoch(&self.execution_lock_for_reconfiguration().await);
         Ok(())
     }
+}
+
+/// Verify a consensus transaction's immutable-input claims exactly match the loaded
+/// input objects: every `ImmOrOwnedMoveObject` input resolving to an immutable object
+/// must be claimed, and every claimed id must be such an input and actually immutable.
+pub(crate) fn verify_immutable_object_claims(
+    claimed_immutable_ids: &[ObjectID],
+    input_objects: &InputObjects,
+) -> SuiResult<()> {
+    if !claimed_immutable_ids.is_empty() {
+        assert_reachable!("transaction has immutable input object claims");
+    }
+    let mut unmatched_claims: BTreeSet<ObjectID> = claimed_immutable_ids.iter().copied().collect();
+    for input in input_objects.iter() {
+        let InputObjectKind::ImmOrOwnedMoveObject(obj_ref) = input.input_object_kind else {
+            continue;
+        };
+        // ImmOrOwned inputs always carry a real object (ObjectReadResult::new forbids
+        // the stream-ended and cancelled kinds for them).
+        let is_immutable = input.as_object().is_some_and(|o| o.is_immutable());
+        let is_claimed = unmatched_claims.remove(&obj_ref.0);
+        if is_immutable && !is_claimed {
+            return Err(SuiErrorKind::ImmutableObjectNotClaimed {
+                object_id: obj_ref.0,
+            }
+            .into());
+        }
+        if !is_immutable && is_claimed {
+            return Err(SuiErrorKind::InvalidImmutableObjectClaim {
+                claimed_object_id: obj_ref.0,
+                found_object_ref: obj_ref,
+            }
+            .into());
+        }
+    }
+    if let Some(claimed_id) = unmatched_claims.pop_first() {
+        return Err(SuiErrorKind::ImmutableObjectClaimNotFoundInInput {
+            object_id: claimed_id,
+        }
+        .into());
+    }
+    Ok(())
 }
 
 #[async_trait]

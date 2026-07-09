@@ -103,7 +103,7 @@ fn handle_transaction_for_test(
         .into_tx();
 
     // Validate the transaction
-    authority.handle_vote_transaction(&epoch_store, transaction)?;
+    authority.handle_vote_transaction(&epoch_store, transaction, None)?;
 
     Ok(())
 }
