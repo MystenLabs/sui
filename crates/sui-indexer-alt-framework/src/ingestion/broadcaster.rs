@@ -46,8 +46,8 @@ const STREAMING_CATCHUP_THRESHOLD: u64 = 1_000;
 ///
 /// Backpressure is **per-subscriber, channel-fill based**: each subscriber's bounded mpsc
 /// channel acts as both transport and the backpressure signal. When any subscriber's channel
-/// fills, [`TrySpawnStreamExt::try_for_each_broadcast_spawned`]'s adaptive controller cuts
-/// ingest concurrency. The task will shut down if the `checkpoints` range completes.
+/// fills, [`TrySpawnStreamExt::try_for_each_broadcast_filtered_spawned`]'s adaptive controller
+/// cuts ingest concurrency. The task will shut down if the `checkpoints` range completes.
 pub(super) fn broadcaster<R>(
     checkpoints: R,
     streaming_client: Option<ArcStreamingClient>,
@@ -169,7 +169,7 @@ fn ingest_and_broadcast_range(
         let concurrency_limit = cohort_metrics.ingestion_concurrency_limit.clone();
         let concurrency_inflight = cohort_metrics.ingestion_concurrency_inflight.clone();
         futures::stream::iter(start..end)
-            .try_for_each_broadcast_spawned(
+            .try_for_each_broadcast_filtered_spawned(
                 ingest_concurrency.into(),
                 |cp| {
                     let client = client.clone();
@@ -181,6 +181,7 @@ fn ingest_and_broadcast_range(
                     }
                 },
                 subscribers,
+                |_, _: &Arc<CheckpointEnvelope>| true,
                 move |stats| {
                     concurrency_limit.set(stats.limit as i64);
                     concurrency_inflight.set(stats.inflight as i64);

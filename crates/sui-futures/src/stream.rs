@@ -10,7 +10,6 @@ use std::sync::Arc;
 use futures::FutureExt;
 use futures::future::try_join_all;
 use futures::stream::Stream;
-use futures::try_join;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
@@ -87,7 +86,7 @@ pub trait TrySpawnStreamExt: Stream {
     /// the limit never changes; for adaptive configs, the limit adjusts based on the fill fraction
     /// of the output channel.
     ///
-    /// Unlike [`try_for_each_broadcast_spawned`](TrySpawnStreamExt::try_for_each_broadcast_spawned),
+    /// Unlike [`try_for_each_broadcast_filtered_spawned`](TrySpawnStreamExt::try_for_each_broadcast_filtered_spawned),
     /// `T` does not need to be `Clone` since there is only a single receiver.
     ///
     /// The `report` callback is invoked each iteration with concurrency stats for metrics.
@@ -105,16 +104,30 @@ pub trait TrySpawnStreamExt: Stream {
         E: Send + 'static,
         R: Fn(ConcurrencyStats);
 
-    /// Process each stream item through a spawned task, broadcasting results to multiple channels.
+    /// Process each stream item through a spawned task, broadcasting results to a filtered
+    /// subset of channels.
     ///
     /// Same as [`try_for_each_send_spawned`](TrySpawnStreamExt::try_for_each_send_spawned) but
-    /// sends a clone of each result to every channel in `txs`. Fill fraction is measured as the
-    /// maximum across all channels. Requires `T: Clone` since values are cloned to each receiver.
-    fn try_for_each_broadcast_spawned<Fut, F, T, E, R>(
+    /// sends a clone of each result to every channel in `txs` for which `filter(i, &value)`
+    /// (where `i` is the channel's position in `txs`) returns `true` -- requires `T: Clone`
+    /// since values are cloned to each receiver. Broadcast to every channel with an always-true
+    /// filter. A value that no channel accepts is dropped, which counts as a successful send.
+    ///
+    /// The filter is invoked concurrently from worker tasks, once per channel index per value,
+    /// so it must be cheap and must not block. A filter that keeps state must manage its own
+    /// synchronization (e.g. through atomics), and observes values in task completion order,
+    /// not stream order.
+    ///
+    /// Channels that reject a value are not touched by that send, so a closed channel only
+    /// stops the pipeline once the filter routes a value to it. The fill fraction that drives
+    /// adaptive concurrency is the maximum across all channels, including ones the filter is
+    /// currently rejecting.
+    fn try_for_each_broadcast_filtered_spawned<Fut, F, T, E, P, R>(
         self,
         config: ConcurrencyConfig,
         f: F,
         txs: Vec<mpsc::Sender<T>>,
+        filter: P,
         report: R,
     ) -> impl Future<Output = Result<(), Break<E>>>
     where
@@ -122,6 +135,7 @@ pub trait TrySpawnStreamExt: Stream {
         F: FnMut(Self::Item) -> Fut,
         T: Clone + Send + Sync + 'static,
         E: Send + 'static,
+        P: Fn(usize, &T) -> bool + Send + Sync + 'static,
         R: Fn(ConcurrencyStats);
 }
 
@@ -144,8 +158,12 @@ trait Sender: Clone + Send + Sync + 'static {
 /// Single-channel sender.
 struct SingleSender<T>(mpsc::Sender<T>);
 
-/// Broadcast sender that clones the value to all channels.
-struct BroadcastSender<T>(Arc<Vec<mpsc::Sender<T>>>);
+/// Broadcast sender that clones the value to the subset of channels chosen by a shared filter.
+/// The unfiltered broadcast path uses this with an always-true filter.
+struct FilteredBroadcastSender<T, P> {
+    txs: Arc<Vec<mpsc::Sender<T>>>,
+    filter: Arc<P>,
+}
 
 impl ConcurrencyConfig {
     pub fn fixed(n: usize) -> Self {
@@ -296,11 +314,12 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
         adaptive_spawn_send(self, config, f, SingleSender(tx), report).await
     }
 
-    async fn try_for_each_broadcast_spawned<Fut, F, T, E, R>(
+    async fn try_for_each_broadcast_filtered_spawned<Fut, F, T, E, P, R>(
         self,
         config: ConcurrencyConfig,
         f: F,
         txs: Vec<mpsc::Sender<T>>,
+        filter: P,
         report: R,
     ) -> Result<(), Break<E>>
     where
@@ -308,9 +327,14 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
         F: FnMut(Self::Item) -> Fut,
         T: Clone + Send + Sync + 'static,
         E: Send + 'static,
+        P: Fn(usize, &T) -> bool + Send + Sync + 'static,
         R: Fn(ConcurrencyStats),
     {
-        adaptive_spawn_send(self, config, f, BroadcastSender(Arc::new(txs)), report).await
+        let sender = FilteredBroadcastSender {
+            txs: Arc::new(txs),
+            filter: Arc::new(filter),
+        };
+        adaptive_spawn_send(self, config, f, sender, report).await
     }
 }
 
@@ -332,36 +356,51 @@ impl<T: Send + 'static> Sender for SingleSender<T> {
     }
 }
 
-impl<T> Clone for BroadcastSender<T> {
+impl<T, P> Clone for FilteredBroadcastSender<T, P> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self {
+            txs: self.txs.clone(),
+            filter: self.filter.clone(),
+        }
     }
 }
 
-impl<T: Clone + Send + Sync + 'static> Sender for BroadcastSender<T> {
+impl<T, P> Sender for FilteredBroadcastSender<T, P>
+where
+    T: Clone + Send + Sync + 'static,
+    P: Fn(usize, &T) -> bool + Send + Sync + 'static,
+{
     type Value = T;
 
     async fn send(&self, value: T) -> Result<(), ()> {
-        let (last, rest) = self.0.split_last().ok_or(())?;
-        let rest_fut = try_join_all(rest.iter().map(|tx| {
-            let v = value.clone();
-            async move { tx.send(v).await.map_err(|_| ()) }
-        }));
-        let last_fut = last.send(value).map(|r| r.map_err(|_| ()));
-        try_join!(rest_fut, last_fut)?;
-        Ok(())
+        // No channels at all is treated like all channels being closed.
+        if self.txs.is_empty() {
+            return Err(());
+        }
+
+        // A value that no channel accepts is dropped, which counts as a successful send.
+        let sends = self
+            .txs
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| (self.filter)(*i, &value))
+            .map(|(_, tx)| {
+                let v = value.clone();
+                async move { tx.send(v).await.map_err(|_| ()) }
+            });
+        try_join_all(sends).await.map(|_| ())
     }
 
     fn fill(&self) -> f64 {
-        self.0
+        self.txs
             .iter()
             .map(|tx| 1.0 - (tx.capacity() as f64 / tx.max_capacity() as f64))
             .fold(0.0f64, f64::max)
     }
 }
 
-/// Shared adaptive concurrency loop used by both `try_for_each_send_spawned` and
-/// `try_for_each_broadcast_spawned`.
+/// Shared adaptive concurrency loop used by the `try_for_each_send_spawned` and
+/// `try_for_each_broadcast_filtered_spawned` methods.
 ///
 /// The algorithm is a result of weeks of trial and error guided by lots of Claude Research queries.
 /// I tried to document where each of the ideas came from in the footnotes of this comment.
@@ -585,6 +624,16 @@ mod tests {
     use futures::stream;
 
     use super::*;
+
+    /// Drain everything currently in `rx` and return it sorted.
+    fn drain_sorted(rx: &mut mpsc::Receiver<u64>) -> Vec<u64> {
+        let mut values = Vec::new();
+        while let Ok(v) = rx.try_recv() {
+            values.push(v);
+        }
+        values.sort();
+        values
+    }
 
     #[tokio::test]
     async fn for_each_explicit_sequential_iteration() {
@@ -817,35 +866,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn broadcast_spawned_basic() {
+    async fn broadcast_filtered_spawned_all_channels() {
         let (tx1, mut rx1) = mpsc::channel(100);
         let (tx2, mut rx2) = mpsc::channel(100);
         let txs = vec![tx1, tx2];
 
         let result = stream::iter(0..5u64)
-            .try_for_each_broadcast_spawned(
+            .try_for_each_broadcast_filtered_spawned(
                 ConcurrencyConfig::fixed(2),
                 |i| async move { Ok::<_, Break<()>>(i * 3) },
                 txs,
+                |_, _: &u64| true,
                 |_| {},
             )
             .await;
 
         assert!(result.is_ok());
 
-        let mut v1 = Vec::new();
-        while let Ok(v) = rx1.try_recv() {
-            v1.push(v);
-        }
-        let mut v2 = Vec::new();
-        while let Ok(v) = rx2.try_recv() {
-            v2.push(v);
-        }
-        v1.sort();
-        v2.sort();
         let expected: Vec<u64> = (0..5).map(|i| i * 3).collect();
-        assert_eq!(v1, expected);
-        assert_eq!(v2, expected);
+        assert_eq!(drain_sorted(&mut rx1), expected);
+        assert_eq!(drain_sorted(&mut rx2), expected);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1103,7 +1143,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn broadcast_spawned_slow_receiver_triggers_decrease() {
+    async fn broadcast_filtered_spawned_slow_receiver_triggers_decrease() {
         let (tx_fast, mut rx_fast) = mpsc::channel(100);
         let (tx_slow, mut rx_slow) = mpsc::channel(4);
         let txs = vec![tx_fast, tx_slow];
@@ -1112,13 +1152,14 @@ mod tests {
         let limits2 = limits.clone();
         let handle = tokio::spawn(async move {
             stream::iter(0..100u64)
-                .try_for_each_broadcast_spawned(
+                .try_for_each_broadcast_filtered_spawned(
                     ConcurrencyConfig::adaptive(10, 1, 20),
                     |i| async move {
                         tokio::time::sleep(Duration::from_millis(5)).await;
                         Ok::<_, Break<()>>(i)
                     },
                     txs,
+                    |_, _: &u64| true,
                     move |stats| {
                         limits2.lock().unwrap().push(stats.limit);
                     },
@@ -1159,21 +1200,270 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn broadcast_spawned_channel_closed() {
+    async fn broadcast_filtered_spawned_routes_per_channel() {
+        let (tx1, mut rx1) = mpsc::channel(100);
+        let (tx2, mut rx2) = mpsc::channel(100);
+
+        let result = stream::iter(0..10u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::fixed(2),
+                |i| async move { Ok::<_, Break<()>>(i) },
+                vec![tx1, tx2],
+                |i, v: &u64| {
+                    if i == 0 {
+                        v.is_multiple_of(2)
+                    } else {
+                        !v.is_multiple_of(2)
+                    }
+                },
+                |_| {},
+            )
+            .await;
+
+        assert!(result.is_ok());
+
+        assert_eq!(drain_sorted(&mut rx1), vec![0, 2, 4, 6, 8]);
+        assert_eq!(drain_sorted(&mut rx2), vec![1, 3, 5, 7, 9]);
+    }
+
+    #[tokio::test]
+    async fn broadcast_filtered_spawned_threshold_filter() {
+        let (tx1, mut rx1) = mpsc::channel(100);
+        let (tx2, mut rx2) = mpsc::channel(100);
+
+        // The shape the indexing framework uses: each channel has a resume point below which
+        // it does not receive values.
+        let next = [0u64, 5];
+        let result = stream::iter(0..10u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::fixed(2),
+                |i| async move { Ok::<_, Break<()>>(i) },
+                vec![tx1, tx2],
+                move |i, v: &u64| *v >= next[i],
+                |_| {},
+            )
+            .await;
+
+        assert!(result.is_ok());
+
+        assert_eq!(drain_sorted(&mut rx1), (0..10).collect::<Vec<_>>());
+        assert_eq!(drain_sorted(&mut rx2), (5..10).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn broadcast_filtered_spawned_drops_unmatched() {
+        let (tx1, mut rx1) = mpsc::channel(100);
+        let (tx2, mut rx2) = mpsc::channel(100);
+
+        let result = stream::iter(0..10u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::fixed(2),
+                |i| async move { Ok::<_, Break<()>>(i) },
+                vec![tx1, tx2],
+                |_, _: &u64| false,
+                |_| {},
+            )
+            .await;
+
+        assert!(result.is_ok());
+        assert!(rx1.try_recv().is_err());
+        assert!(rx2.try_recv().is_err());
+    }
+
+    /// A filter that keeps state does so through its own interior mutability; the combinator
+    /// does not synchronize filter calls.
+    #[tokio::test]
+    async fn broadcast_filtered_spawned_interior_mutability_filter() {
+        let (tx1, mut rx1) = mpsc::channel(100);
+        let (tx2, mut rx2) = mpsc::channel(100);
+
+        // Limit 1 makes completion order match stream order, so the stateful cutoff is
+        // deterministic.
+        let sent = AtomicUsize::new(0);
+        let result = stream::iter(0..10u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::fixed(1),
+                |i| async move { Ok::<_, Break<()>>(i) },
+                vec![tx1, tx2],
+                move |i, _: &u64| {
+                    if i == 0 {
+                        sent.fetch_add(1, Ordering::Relaxed) < 3
+                    } else {
+                        true
+                    }
+                },
+                |_| {},
+            )
+            .await;
+
+        assert!(result.is_ok());
+
+        let mut v1 = Vec::new();
+        while let Ok(v) = rx1.try_recv() {
+            v1.push(v);
+        }
+        let mut v2 = Vec::new();
+        while let Ok(v) = rx2.try_recv() {
+            v2.push(v);
+        }
+        assert_eq!(v1, vec![0, 1, 2]);
+        assert_eq!(v2, (0..10).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn broadcast_filtered_spawned_ignores_closed_filtered_out_channel() {
+        let (tx1, mut rx1) = mpsc::channel(100);
+        let (tx2, rx2) = mpsc::channel(100);
+        drop(rx2);
+
+        let result = stream::iter(0..10u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::fixed(2),
+                |i| async move { Ok::<_, Break<()>>(i) },
+                vec![tx1, tx2],
+                |i, _: &u64| i == 0,
+                |_| {},
+            )
+            .await;
+
+        assert!(result.is_ok());
+
+        assert_eq!(drain_sorted(&mut rx1), (0..10).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn broadcast_filtered_spawned_kept_channel_closed() {
         let (tx1, _rx1) = mpsc::channel(100);
         let (tx2, rx2) = mpsc::channel(100);
         drop(rx2);
 
         let result: Result<(), Break<()>> = stream::iter(0..10u64)
-            .try_for_each_broadcast_spawned(
+            .try_for_each_broadcast_filtered_spawned(
                 ConcurrencyConfig::fixed(2),
                 |i| async move { Ok(i) },
                 vec![tx1, tx2],
+                |_, _: &u64| true,
                 |_| {},
             )
             .await;
 
         assert!(matches!(result, Err(Break::Break)));
+    }
+
+    #[tokio::test]
+    async fn broadcast_filtered_spawned_empty_txs_breaks() {
+        let result: Result<(), Break<()>> = stream::iter(0..10u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::fixed(2),
+                |i| async move { Ok(i) },
+                Vec::new(),
+                |_, _: &u64| true,
+                |_| {},
+            )
+            .await;
+
+        assert!(matches!(result, Err(Break::Break)));
+    }
+
+    /// A channel the filter rejects still drives the adaptive controller: fill is the max
+    /// across ALL channels, so a full rejected channel throttles concurrency to min -- but it
+    /// is never sent to, so it neither blocks the pipeline nor receives values.
+    #[tokio::test]
+    async fn broadcast_filtered_spawned_rejected_full_channel_throttles() {
+        let (tx_active, mut rx_active) = mpsc::channel(500);
+        let (tx_rejected, mut rx_rejected) = mpsc::channel(4);
+        // Pin channel 1's fill at 1.0 forever: pre-fill it and never drain.
+        for v in 0..4u64 {
+            tx_rejected.try_send(v).unwrap();
+        }
+
+        let limits: Arc<Mutex<Vec<usize>>> = Arc::new(Mutex::new(Vec::new()));
+        let limits2 = limits.clone();
+        let result = stream::iter(0..200u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::adaptive(10, 1, 20),
+                |i| async move { Ok::<_, Break<()>>(i) },
+                vec![tx_active, tx_rejected],
+                |i, _: &u64| i == 0,
+                move |stats| limits2.lock().unwrap().push(stats.limit),
+            )
+            .await;
+
+        assert!(result.is_ok());
+
+        // No value lost and no deadlock: the full rejected channel is never sent to.
+        assert_eq!(drain_sorted(&mut rx_active), (0..200).collect::<Vec<_>>());
+        assert_eq!(drain_sorted(&mut rx_rejected), vec![0, 1, 2, 3]);
+
+        let limits = limits.lock().unwrap();
+        assert_eq!(
+            *limits.iter().min().unwrap(),
+            1,
+            "full rejected channel must drive the limit to min"
+        );
+        assert!(
+            limits.windows(2).all(|w| w[1] <= w[0]),
+            "increase branch must never fire while any channel is full: {limits:?}"
+        );
+    }
+
+    /// A panic in a spawned item task resurfaces from the broadcast path instead of being
+    /// swallowed as a clean shutdown.
+    #[tokio::test]
+    #[should_panic(expected = "broadcast worker panicked")]
+    async fn broadcast_filtered_spawned_panic_propagation() {
+        let (tx, _rx) = mpsc::channel(100);
+        let _ = stream::iter(0..10u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::fixed(1),
+                |i| async move {
+                    if i == 3 {
+                        panic!("broadcast worker panicked");
+                    }
+                    Ok::<_, Break<()>>(i)
+                },
+                vec![tx],
+                |_, _: &u64| true,
+                |_| {},
+            )
+            .await;
+    }
+
+    /// The filter is invoked exactly once per channel index per value -- the contract a
+    /// stateful filter relies on.
+    #[tokio::test]
+    async fn broadcast_filtered_spawned_filter_called_once_per_channel_per_value() {
+        let (tx1, mut rx1) = mpsc::channel(100);
+        let (tx2, _rx2) = mpsc::channel(100);
+        let (tx3, _rx3) = mpsc::channel(100);
+
+        let calls: Arc<Mutex<Vec<(usize, u64)>>> = Arc::new(Mutex::new(Vec::new()));
+        let calls2 = calls.clone();
+        let result = stream::iter(0..5u64)
+            .try_for_each_broadcast_filtered_spawned(
+                ConcurrencyConfig::fixed(1),
+                |i| async move { Ok::<_, Break<()>>(i) },
+                vec![tx1, tx2, tx3],
+                move |i, v: &u64| {
+                    calls2.lock().unwrap().push((i, *v));
+                    i == 0
+                },
+                |_| {},
+            )
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(drain_sorted(&mut rx1), (0..5).collect::<Vec<_>>());
+
+        let mut calls = calls.lock().unwrap().clone();
+        calls.sort();
+        let expected: Vec<(usize, u64)> = (0..3usize)
+            .flat_map(|i| (0..5u64).map(move |v| (i, v)))
+            .collect();
+        assert_eq!(
+            calls, expected,
+            "filter must be called exactly once per (channel, value)"
+        );
     }
 
     #[tokio::test]
