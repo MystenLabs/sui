@@ -95,6 +95,14 @@ impl SubmissionAmplification {
             duplicate_copies_per_validator > 0,
             "duplicate copies per validator must be greater than zero"
         );
+        ensure!(
+            amplification_probability == 0.0 || amplification_validators_per_tx > 1,
+            "amplification validators per tx must be greater than one when amplification probability is non-zero"
+        );
+        ensure!(
+            duplicate_probability == 0.0 || duplicate_copies_per_validator > 1,
+            "duplicate copies per validator must be greater than one when duplicate probability is non-zero"
+        );
 
         Ok(Self {
             amplification_probability,
@@ -128,6 +136,12 @@ impl SubmissionAmplification {
         }
     }
 
+    /// Approximate expected submissions per logical transaction, for informational logging.
+    /// It slightly undercounts attempted submissions: when amplification triggers, the extra
+    /// direct submissions are sent in addition to the regular TransactionDriver submission,
+    /// which is not counted here. Conversely, delivered copies may be fewer than attempted,
+    /// since extras are aborted once the regular submission completes and the validator set
+    /// is clamped to the committee size.
     pub fn expected_submission_multiplier(&self) -> f64 {
         (1.0 + self.amplification_probability * (self.amplification_validators_per_tx - 1) as f64)
             * (1.0 + self.duplicate_probability * (self.duplicate_copies_per_validator - 1) as f64)
