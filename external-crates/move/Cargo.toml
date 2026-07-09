@@ -95,7 +95,7 @@ pretty_simple = "0.1.1"
 pretty_assertions = "1.4.1"
 primitive-types = { version = "0.10.1", features = ["impl-serde"] }
 proptest = "1.6.0"
-proptest-derive = "0.5"
+proptest-derive = { version = "0.5", features = ["boxed_union"] }
 quick_cache = { version = "0.6.18", features = ["stats"] }
 quote = "1.0.9"
 rand = "0.8.0"
