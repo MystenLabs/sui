@@ -66,8 +66,12 @@ impl LintDoc {
 static DOCS_BY_NAME: LazyLock<BTreeMap<&'static str, &'static LintDoc>> =
     LazyLock::new(|| LINT_DOCS.iter().map(|d| (d.name, d)).collect());
 
-static DOCS_BY_ID: LazyLock<BTreeMap<(u8, u8), &'static LintDoc>> =
-    LazyLock::new(|| LINT_DOCS.iter().map(|d| ((d.category, d.code), d)).collect());
+static DOCS_BY_ID: LazyLock<BTreeMap<(u8, u8), &'static LintDoc>> = LazyLock::new(|| {
+    LINT_DOCS
+        .iter()
+        .map(|d| ((d.category, d.code), d))
+        .collect()
+});
 
 /// Look up a lint doc from raw `--explain <query>` user input: either a filter name
 /// (`share_owned`) or a rendered diagnostic code (`W99000`).
@@ -120,8 +124,8 @@ impl fmt::Display for LintDoc {
         writeln!(f, "{}", self.name)?;
         writeln!(f, "{}", "=".repeat(self.name.len()))?;
         writeln!(f)?;
-        let category = LinterDiagnosticCategory::try_from_u8(self.category)
-            .map_or("Unknown", |c| c.name());
+        let category =
+            LinterDiagnosticCategory::try_from_u8(self.category).map_or("Unknown", |c| c.name());
         writeln!(f, "category: {category}")?;
         writeln!(f, "origin:   {}", self.origin.label())?;
         writeln!(f, "level:    {level}")?;
