@@ -377,6 +377,7 @@ export default {
           'onchain-finance/examples-patterns/loyalty-tokens',
           'onchain-finance/examples-patterns/in-game-currency',
           'onchain-finance/examples-patterns/soulbound-tokens',
+          'onchain-finance/examples-patterns/staking-rewards',
           'onchain-finance/examples-patterns/nft-rental',
           'onchain-finance/examples-patterns/kiosk',
           'onchain-finance/examples-patterns/wasm-template',
