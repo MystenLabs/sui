@@ -48,6 +48,11 @@ pub enum WithdrawFrom {
     Sender,
     /// The funds are withdrawn from the sponsor's account.
     Sponsor,
+    /// The funds are withdrawn from an allowance funder's account, with the
+    /// transaction sender as the allowance's spender.
+    // TODO(allowances): expose the funder and allowance id, which requires
+    // `withdraw_from` to become a union rather than an enum.
+    Allowance,
 }
 
 impl BalanceWithdraw {
@@ -69,6 +74,7 @@ impl BalanceWithdraw {
         let withdraw_from = Some(match withdraw_from {
             NativeWithdrawFrom::Sender => WithdrawFrom::Sender,
             NativeWithdrawFrom::Sponsor => WithdrawFrom::Sponsor,
+            NativeWithdrawFrom::Allowance { .. } => WithdrawFrom::Allowance,
         });
 
         let type_ = {

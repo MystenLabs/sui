@@ -2414,6 +2414,9 @@ impl SuiCallArg {
                 withdraw_from: match arg.withdraw_from {
                     WithdrawFrom::Sender => SuiWithdrawFrom::Sender,
                     WithdrawFrom::Sponsor => SuiWithdrawFrom::Sponsor,
+                    WithdrawFrom::Allowance { funder, allowance } => {
+                        SuiWithdrawFrom::Allowance { funder, allowance }
+                    }
                 },
             }),
         })
@@ -2512,6 +2515,11 @@ pub enum SuiWithdrawalTypeArg {
 pub enum SuiWithdrawFrom {
     Sender,
     Sponsor,
+    #[serde(rename_all = "camelCase")]
+    Allowance {
+        funder: SuiAddress,
+        allowance: ObjectID,
+    },
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]

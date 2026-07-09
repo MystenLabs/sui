@@ -1837,60 +1837,6 @@ replace_all
 remove
 	entry fun
 	0x2::address_alias
-AuthenticatorState
-	public struct
-	0x2::authenticator_state
-AuthenticatorStateInner
-	public struct
-	0x2::authenticator_state
-JWK
-	public struct
-	0x2::authenticator_state
-JwkId
-	public struct
-	0x2::authenticator_state
-ActiveJwk
-	public struct
-	0x2::authenticator_state
-active_jwk_equal
-	fun
-	0x2::authenticator_state
-jwk_equal
-	fun
-	0x2::authenticator_state
-jwk_id_equal
-	fun
-	0x2::authenticator_state
-string_bytes_lt
-	fun
-	0x2::authenticator_state
-jwk_lt
-	fun
-	0x2::authenticator_state
-create
-	fun
-	0x2::authenticator_state
-load_inner_mut
-	fun
-	0x2::authenticator_state
-load_inner
-	fun
-	0x2::authenticator_state
-check_sorted
-	fun
-	0x2::authenticator_state
-update_authenticator_state
-	fun
-	0x2::authenticator_state
-deduplicate
-	fun
-	0x2::authenticator_state
-expire_jwks
-	fun
-	0x2::authenticator_state
-get_active_jwks
-	fun
-	0x2::authenticator_state
 is_feature_enabled
 	public(package) fun
 	0x2::protocol_config
@@ -1930,6 +1876,18 @@ withdraw_from_accumulator_address
 create_withdrawal
 	public(package) fun
 	0x2::funds_accumulator
+Clock
+	public struct
+	0x2::clock
+timestamp_ms
+	public fun
+	0x2::clock
+create
+	fun
+	0x2::clock
+consensus_commit_prologue
+	fun
+	0x2::clock
 Supply
 	public struct
 	0x2::balance
@@ -1990,6 +1948,108 @@ destroy_storage_rebates
 destroy_supply
 	public(package) fun
 	0x2::balance
+AllowanceWithdrawal
+	public struct
+	0x2::allowance
+Allowance
+	public struct
+	0x2::allowance
+RateLimit
+	public struct
+	0x2::allowance
+Permit
+	public struct
+	0x2::allowance
+permit
+	public fun
+	0x2::allowance
+new
+	entry fun
+	0x2::allowance
+new_for_app
+	entry fun
+	0x2::allowance
+spend_balance
+	public fun
+	0x2::allowance
+spend_balance_as_app
+	public fun
+	0x2::allowance
+revoke
+	public fun
+	0x2::allowance
+rotate_spender
+	public fun
+	0x2::allowance
+assert_signer
+	fun
+	0x2::allowance
+assert_app
+	fun
+	0x2::allowance
+consume
+	fun
+	0x2::allowance
+build_rate_limit
+	fun
+	0x2::allowance
+share_new
+	fun
+	0x2::allowance
+AuthenticatorState
+	public struct
+	0x2::authenticator_state
+AuthenticatorStateInner
+	public struct
+	0x2::authenticator_state
+JWK
+	public struct
+	0x2::authenticator_state
+JwkId
+	public struct
+	0x2::authenticator_state
+ActiveJwk
+	public struct
+	0x2::authenticator_state
+active_jwk_equal
+	fun
+	0x2::authenticator_state
+jwk_equal
+	fun
+	0x2::authenticator_state
+jwk_id_equal
+	fun
+	0x2::authenticator_state
+string_bytes_lt
+	fun
+	0x2::authenticator_state
+jwk_lt
+	fun
+	0x2::authenticator_state
+create
+	fun
+	0x2::authenticator_state
+load_inner_mut
+	fun
+	0x2::authenticator_state
+load_inner
+	fun
+	0x2::authenticator_state
+check_sorted
+	fun
+	0x2::authenticator_state
+update_authenticator_state
+	fun
+	0x2::authenticator_state
+deduplicate
+	fun
+	0x2::authenticator_state
+expire_jwks
+	fun
+	0x2::authenticator_state
+get_active_jwks
+	fun
+	0x2::authenticator_state
 Element
 	public struct
 	0x2::group_ops
@@ -2224,18 +2284,6 @@ put_back
 destroy
 	public fun
 	0x2::borrow
-Clock
-	public struct
-	0x2::clock
-timestamp_ms
-	public fun
-	0x2::clock
-create
-	fun
-	0x2::clock
-consensus_commit_prologue
-	fun
-	0x2::clock
 Url
 	public struct
 	0x2::url

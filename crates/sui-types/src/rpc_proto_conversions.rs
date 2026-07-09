@@ -2841,6 +2841,9 @@ impl From<crate::transaction::FundsWithdrawalArg> for FundsWithdrawal {
         message.set_source(match value.withdraw_from {
             crate::transaction::WithdrawFrom::Sender => Source::Sender,
             crate::transaction::WithdrawFrom::Sponsor => Source::Sponsor,
+            // TODO(allowances): needs a Source::Allowance variant (with funder and
+            // allowance id fields) in the sui.rpc.v2 protos.
+            crate::transaction::WithdrawFrom::Allowance { .. } => Source::Unknown,
         });
 
         message

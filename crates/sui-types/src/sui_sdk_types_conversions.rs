@@ -1284,6 +1284,13 @@ impl From<crate::transaction::CallArg> for Input {
                     crate::transaction::WithdrawFrom::Sponsor => {
                         sui_sdk_types::WithdrawFrom::Sponsor
                     }
+                    crate::transaction::WithdrawFrom::Allowance { .. } => {
+                        // TODO(allowances): needs a WithdrawFrom::Allowance variant in
+                        // sui-sdk-types.
+                        unimplemented!(
+                            "Allowance withdrawals are not yet representable in sui-sdk-types"
+                        )
+                    }
                 };
 
                 Self::FundsWithdrawal(FundsWithdrawal::new(

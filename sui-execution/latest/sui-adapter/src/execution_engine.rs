@@ -922,6 +922,8 @@ mod checked {
                     debug_fatal!("WithdrawFrom::Sponsor is not expected in gasless transactions");
                     tx_ctx.sponsor().unwrap_or(sender)
                 }
+                // Declared funder, verified against the allowance object at signing.
+                WithdrawFrom::Allowance { funder, .. } => funder,
             };
             let Reservation::MaxAmountU64(amount) = fw.reservation;
             let entry = reservations.entry((owner, coin_type)).or_insert(0);

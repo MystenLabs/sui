@@ -1635,10 +1635,17 @@ fn load_withdrawal_arg<Mode: ExecutionMode>(
     let T::WithdrawalInput {
         original_input_index: _,
         ty: _,
-        owner,
+        source,
         amount,
     } = withdrawal;
-    let loaded = Value::funds_accumulator_withdrawal(*owner, *amount);
+    let loaded = match source {
+        T::WithdrawalSource::Direct { owner } => {
+            Value::funds_accumulator_withdrawal(*owner, *amount)
+        }
+        T::WithdrawalSource::Allowance { funder, id } => {
+            Value::allowance_withdrawal(*id, *funder, *amount)
+        }
+    };
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
     charge_gas_!(meter, env, charge_store_loc, &loaded)?;
     Ok(loaded)
