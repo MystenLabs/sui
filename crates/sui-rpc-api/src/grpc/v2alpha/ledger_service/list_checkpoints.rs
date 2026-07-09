@@ -564,7 +564,6 @@ fn scan_checkpoint_watermark(
     // Checkpoint cursors live in checkpoint space: position == checkpoint.
     let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
     let watermark = boundary_watermark(
-        options,
         Position::Checkpoints {
             checkpoint: cursor_cp,
         },
@@ -605,7 +604,6 @@ fn render_checkpoint_seqs(
             service,
             cp_seq,
             read_mask,
-            options,
             checkpoint_boundary,
         )?);
     }
@@ -616,7 +614,6 @@ fn render_checkpoint_seq(
     service: &RpcService,
     cp_seq: u64,
     read_mask: &FieldMaskTree,
-    options: &QueryOptions,
     checkpoint_boundary: Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
     let read_mask = read_mask.to_field_mask();
@@ -632,7 +629,6 @@ fn render_checkpoint_seq(
             )
         })?;
     let watermark = item_watermark(
-        options,
         Position::Checkpoints { checkpoint: cp_seq },
         checkpoint_boundary,
     );

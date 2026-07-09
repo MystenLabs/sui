@@ -271,7 +271,6 @@ pub(crate) async fn list_events(
                 Ok(ResolvedWatermarked::Item(rendered)) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, rendered.checkpoint_number, &options);
                     let wm = item_watermark(
-                        &options,
                         Position::Events { checkpoint: rendered.checkpoint_number, tx_seq: rendered.position.tx_seq, event_index: rendered.position.event_index },
                         checkpoint_boundary,
                     );
@@ -281,7 +280,6 @@ pub(crate) async fn list_events(
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
                     let wm = boundary_watermark(
-                        &options,
                         Position::Events {
                             checkpoint: boundary_cursor_cp(cp, direction),
                             tx_seq: position.tx_seq,
