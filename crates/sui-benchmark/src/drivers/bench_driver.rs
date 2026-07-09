@@ -246,27 +246,31 @@ enum NextOp {
 /// transaction (`NextOp::Retry`), as opposed to giving up on it (`NextOp::Failure`,
 /// which recycles the payload and builds a new transaction on the same input refs).
 ///
-/// Every terminal `TransactionDriverError` retries the same digest, because a terminal
-/// error does not prove the transaction is dead: the driver may have timed out
-/// collecting effects acks for a transaction that did finalize, and a transaction
-/// rejected by over 1/3 of validators (e.g. a chained transaction racing its parent's
-/// execution) can still be finalized through a validator that accepted it. In both
-/// cases building a new transaction on the same input refs equivocates, and the payload
-/// wedges permanently — every rebuilt transaction is terminally rejected with "object
-/// version unavailable for consumption". Resubmitting the same digest is
-/// idempotent: validators respond to an already-executed digest with its effects, which
-/// settles the payload with fresh object refs. A genuinely invalid transaction keeps
-/// failing on retry, but that is no worse than rebuilding an equally invalid
-/// transaction from the same payload state, and it stays visible in `num_error`.
+/// A terminal `TransactionDriverError` for a submitted transaction retries the same
+/// digest, because the error does not prove the transaction is dead: the driver may
+/// have timed out collecting effects acks for a transaction that did finalize, and a
+/// transaction rejected by over 1/3 of validators (e.g. a chained transaction racing
+/// its parent's execution) can still be finalized through a validator that accepted
+/// it. In both cases building a new transaction on the same input refs equivocates,
+/// and the payload wedges permanently — every rebuilt transaction is terminally
+/// rejected with "object version unavailable for consumption". Resubmitting the same
+/// digest is idempotent: validators respond to an already-executed digest with its
+/// effects, which settles the payload with fresh object refs.
 fn should_retry_same_transaction(err: &anyhow::Error) -> bool {
-    if err.downcast_ref::<TransactionDriverError>().is_some() {
-        return true;
+    match err.downcast_ref::<TransactionDriverError>() {
+        // ValidationFailed comes only from the driver's local pre-submission checks
+        // (e.g. gas price under an RGP that rose at an epoch boundary), so the
+        // transaction was never sent to any validator: recycling the payload is
+        // equivocation-free, and only a rebuilt transaction can pass the same check.
+        Some(TransactionDriverError::ValidationFailed { .. }) => false,
+        Some(_) => true,
+        // Other proxies surface opaque anyhow errors (and historically
+        // TransactionSubmissionError): keep the legacy classification for them.
+        None => matches!(
+            err.downcast_ref::<TransactionSubmissionError>(),
+            Some(err) if !matches!(err, TransactionSubmissionError::NonRecoverableTransactionError { .. })
+        ),
     }
-    // Fullnode-proxy path surfaces TransactionSubmissionError instead.
-    matches!(
-        err.downcast_ref::<TransactionSubmissionError>(),
-        Some(err) if !matches!(err, TransactionSubmissionError::NonRecoverableTransactionError { .. })
-    )
 }
 
 async fn print_and_start_benchmark() -> &'static Instant {
@@ -1514,11 +1518,11 @@ mod tests {
 
     #[test]
     fn test_transaction_driver_errors_retry_same_transaction() {
-        // Terminal driver errors retry the same digest, whether the driver deems them
-        // retriable (timeout: the transaction may have finalized without the client
-        // observing it) or not (validator rejection: the transaction may still be
-        // finalized through a validator that accepted it). Rebuilding a new
-        // transaction on the same input refs instead would equivocate.
+        // Terminal driver errors for submitted transactions retry the same digest,
+        // whether the driver deems them retriable (timeout: the transaction may have
+        // finalized without the client observing it) or not (validator rejection: the
+        // transaction may still be finalized through a validator that accepted it).
+        // Rebuilding a new transaction on the same input refs instead would equivocate.
         let timed_out =
             anyhow::Error::from(TransactionDriverError::TimeoutWithLastRetriableError {
                 last_error: None,
@@ -1527,10 +1531,19 @@ mod tests {
             });
         assert!(should_retry_same_transaction(&timed_out));
 
-        let rejected = anyhow::Error::from(TransactionDriverError::ValidationFailed {
-            error: "object version unavailable for consumption".to_string(),
+        let rejected = anyhow::Error::from(TransactionDriverError::RejectedByValidators {
+            submission_non_retriable_errors: Default::default(),
+            submission_retriable_errors: Default::default(),
         });
         assert!(should_retry_same_transaction(&rejected));
+
+        // ValidationFailed is a local pre-submission failure: the transaction never
+        // reached a validator, so recycling the payload cannot equivocate, and only a
+        // rebuilt transaction can pick up fresh state (e.g. an increased gas price).
+        let not_submitted = anyhow::Error::from(TransactionDriverError::ValidationFailed {
+            error: "gas price under reference gas price".to_string(),
+        });
+        assert!(!should_retry_same_transaction(&not_submitted));
     }
 
     #[test]
