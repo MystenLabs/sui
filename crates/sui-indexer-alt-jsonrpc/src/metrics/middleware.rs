@@ -27,6 +27,8 @@ use tracing::warn;
 
 use crate::metrics::RpcMetrics;
 
+const UNKNOWN_METHOD_LABEL: &str = "<UNKNOWN>";
+
 /// Tower Layer that adds middleware to record statistics about RPC requests (how long they took to
 /// serve, how many we have served, how many succeeded or failed, etc).
 #[derive(Clone)]
@@ -97,7 +99,11 @@ where
         let method = if self.layer.methods.contains(request.method_name()) {
             request.method.clone()
         } else {
-            "<UNKNOWN>".into()
+            debug!(
+                requested_method = request.method_name(),
+                "Received unknown JSON-RPC method"
+            );
+            UNKNOWN_METHOD_LABEL.into()
         };
 
         self.layer
