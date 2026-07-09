@@ -171,10 +171,16 @@ fn get_coin_info_from_registry(
         };
 
         let coin_info = indexes.get_coin_info(core_coin_type).map_err(|e| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!("Failed to get coin info for {}: {}", core_coin_type, e),
-            )
+            // Let an unavailable-index signal reach the client as `Unavailable` instead of
+            // masking it behind `Internal`.
+            if e.kind() == sui_types::storage::error::Kind::Unavailable {
+                RpcError::from(e)
+            } else {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("Failed to get coin info for {}: {}", core_coin_type, e),
+                )
+            }
         })?;
 
         let regulated_id = coin_info.and_then(|info| info.regulated_coin_metadata_object_id);

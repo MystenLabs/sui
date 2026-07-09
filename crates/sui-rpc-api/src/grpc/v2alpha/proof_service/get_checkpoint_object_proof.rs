@@ -78,7 +78,7 @@ fn validate_checkpoint_bounds(service: &RpcService, checkpoint_seq: u64) -> Resu
     let indexes = reader.indexes().ok_or_else(RpcError::not_found)?;
     let highest_indexed = indexes
         .get_highest_indexed_checkpoint_seq_number()
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        .map_err(RpcError::from)?
         .unwrap_or(0);
     let lowest_available = reader
         .get_lowest_available_checkpoint_objects()

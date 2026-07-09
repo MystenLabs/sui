@@ -59,7 +59,7 @@ pub fn list_package_versions(
     let mut versions = vec![];
     let iter = indexes
         .package_versions_iter(original_package_id, page_token.map(|t| t.version))
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+        .map_err(RpcError::from)?;
 
     for result in iter.take(page_size + 1) {
         let (version, storage_id) =
