@@ -51,14 +51,16 @@ impl<'a> ScratchRuntime<'a> {
         self.entries.clear();
     }
 
-    /// Inserts a new entry, enforcing the per-transaction entry limit.
+    /// Inserts a new entry, enforcing the per-transaction entry limit (if one is configured).
     /// Returns `Duplicate` if an entry already exists for `key` (regardless of its type)
     /// Returns `LimitExceeded` if inserting would exceed `max_scratch_pad_size`
     pub fn add(&mut self, key: AccountAddress, ty: Type, value: Value) -> AddResult {
         if self.entries.contains_key(&key) {
             return AddResult::Duplicate;
         }
-        if self.entries.len() as u64 >= self.protocol_config.max_scratch_pad_size() {
+        if let Some(max) = self.protocol_config.max_scratch_pad_size_as_option()
+            && self.entries.len() as u64 >= max
+        {
             return AddResult::LimitExceeded;
         }
         self.entries.insert(key, ScratchEntry { ty, value });

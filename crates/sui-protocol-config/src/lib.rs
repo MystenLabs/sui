@@ -4494,7 +4494,7 @@ impl ProtocolConfig {
                     cfg.scratch_exists_cost_base = Some(13);
                     cfg.scratch_exists_with_type_cost_base = Some(13);
                     cfg.scratch_exists_with_type_type_cost = Some(1);
-                    cfg.max_scratch_pad_size = Some(4096);
+                    cfg.max_scratch_pad_size = Some(16 * 1024);
                 }
                 // Use this template when making changes:
                 //
