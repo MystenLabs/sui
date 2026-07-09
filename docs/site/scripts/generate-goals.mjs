@@ -199,7 +199,7 @@ function generateOnboardingGoal(title, body, headings, codeBlocks, h2s, relPath)
     requires.push({ pattern: 'localhost|npm start|pnpm|yarn', min: 1, label: 'Shows how to run the frontend' });
   }
 
-  requires.push({ min_words: 300, label: 'Sufficient walkthrough depth' });
+  requires.push({ min_words: 300, label: 'Needs more walkthrough depth' });
 
   return {
     description: `Reader can ${title.toLowerCase()} and verify the result`,
@@ -225,7 +225,7 @@ function generateExampleGoal(title, body, headings, codeBlocks, h2s) {
 
   requires.push({ pattern: '```', min: 3, label: 'Has code blocks for setup, source, and output' });
   requires.push({ has_frontmatter: ['title', 'description', 'keywords'] });
-  requires.push({ min_words: 800, label: 'Sufficient explanation depth' });
+  requires.push({ min_words: 800, label: 'Needs more explanation depth' });
 
   // Check for architecture diagram
   if (hasPattern(body, 'mermaid|```mermaid|Architecture')) {
@@ -254,7 +254,7 @@ function generateMigrationGoal(title, body, headings) {
     label: 'Covers core concept categories',
   });
   requires.push({ pattern: '```move', min: 1, label: 'Has Move code example' });
-  requires.push({ min_words: 800, label: 'Sufficient comparison depth' });
+  requires.push({ min_words: 800, label: 'Needs more comparison depth' });
   requires.push({ has_frontmatter: ['title', 'description', 'keywords'] });
 
   // Extract source platform from title
@@ -310,7 +310,7 @@ function generateGuideGoal(title, body, headings, codeBlocks, wc) {
   const requires = [];
 
   requires.push({ has_frontmatter: ['title', 'description', 'keywords'] });
-  requires.push({ min_words: 300, label: 'Sufficient content depth' });
+  requires.push({ min_words: 300, label: 'Needs more content depth' });
 
   // Guides with code should have code examples
   if (codeBlocks >= 1) {
@@ -351,7 +351,7 @@ function generateTroubleshootingGoal(title, body, headings, wc) {
     requires.push({ pattern: 'Solution|Fix|Cause', min: 2, label: 'Has problem-solution pairs' });
   }
 
-  requires.push({ min_words: 300, label: 'Sufficient content depth' });
+  requires.push({ min_words: 300, label: 'Needs more content depth' });
 
   if (countPattern(body, '```') >= 2) {
     requires.push({ pattern: '```', min: 2, label: 'Has code examples showing fixes' });
@@ -397,7 +397,7 @@ function generateOperatorGoal(title, body, headings, codeBlocks, wc) {
   const requires = [];
 
   requires.push({ has_frontmatter: ['title', 'description', 'keywords'] });
-  requires.push({ min_words: 300, label: 'Sufficient operational depth' });
+  requires.push({ min_words: 300, label: 'Needs more operational depth' });
 
   if (codeBlocks >= 1) {
     requires.push({ pattern: '```', min: 1, label: 'Has configuration or command examples' });
