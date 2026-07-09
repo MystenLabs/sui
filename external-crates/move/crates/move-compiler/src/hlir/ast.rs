@@ -17,10 +17,11 @@ use crate::{
         unique_map::UniqueMap,
     },
 };
+use move_core_types::parsing::parser::Token;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
 };
 
@@ -234,7 +235,51 @@ pub enum Statement_ {
         name: BlockLabel,
         block: Block,
     },
+    MacroExpansion {
+        macro_info: MacroExpansionInfo,
+        body: Box<Statement>,
+    },
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MacroExpansionInfo {
+    pub macro_name: Symbol,
+    pub invocation_location: Loc,
+    pub expansion_location: Loc,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyntaxInfo {
+    pub info: SyntaxInfoEntry,
+    pub prev: Option<Arc<SyntaxInfo>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SyntaxInfoEntry {
+    MacroExpansion(MacroExpansionInfo),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyntaxLoc {
+    pub loc: Loc,
+    pub syntax_info: SyntaxInfo,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyntaxSpanned<T> {
+    pub syntax_info: SyntaxLoc,
+    pub value: T,
+}
+
+macro_rules! ssp {
+    ($info:pat, $value:pat) => {
+        SyntaxSpanned {
+            syntax_info: $info,
+            value: $value,
+        }
+    };
+}
+
 pub type Statement = Spanned<Statement_>;
 
 pub type Block = VecDeque<Statement>;
@@ -279,6 +324,7 @@ pub enum Command_ {
     },
 }
 pub type Command = Spanned<Command_>;
+pub type AnnotatedCommand = SyntaxSpanned<Command_>;
 
 // TODO: replace this with the `move_ir_types` one when possible.
 #[derive(Debug, PartialEq, Eq, Clone)]

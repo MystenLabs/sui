@@ -13,7 +13,9 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     expansion::ast::{Attributes, ModuleIdent, Mutability},
-    hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
+    hlir::ast::{
+        self as H, BlockLabel, Label, SyntaxInfo, SyntaxInfoEntry, Value, Value_, Var,
+    },
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
@@ -59,6 +61,8 @@ struct Context<'env> {
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
     loop_bounds: BTreeMap<Label, G::LoopInfo>,
+    // Macro scope information to stamp out syntax location information
+    syntax_info: Option<Arc<SyntaxInfo>>,
     debug: CFGIRDebugFlags,
 }
 
@@ -73,6 +77,7 @@ impl<'env> Context<'env> {
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
+            syntax_info: None,
             debug: CFGIRDebugFlags {
                 print_blocks: false,
                 print_optimized_blocks: false,
@@ -146,6 +151,21 @@ impl<'env> Context<'env> {
         assert!(self.named_blocks.is_empty());
         self.label_count = 0;
         self.loop_bounds = BTreeMap::new();
+    }
+
+    fn with_syntax_info<T, F>(&mut self, info: SyntaxInfoEntry, body: F) -> T
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        // Make `SyntaxInfo::new`
+        let new_info = SyntaxInfo {
+            info,
+            prev: self.syntax_info.clone(),
+        };
+        let prev_info = std::mem::replace(&mut self.syntax_info, Some(Arc::new(new_info)));
+        let result = body(self);
+        let _ = std::mem::replace(&mut self.syntax_info, prev_info);
+        result
     }
 }
 
@@ -436,6 +456,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
             }
             S::Loop { block, .. } => dep_block(set, block),
             S::NamedBlock { block, .. } => dep_block(set, block),
+            S::MacroExpansion { body, .. } => dep_stmt(set, &body.value),
         }
     }
 
@@ -1012,6 +1033,10 @@ fn statement(
 
             (entry_block, new_blocks)
         }
+        S::MacroExpansion { macro_info, body } => context
+            .with_syntax_info(SyntaxInfoEntry::MacroExpansion(macro_info), |context| {
+                statement(context, *body, current_block)
+            }),
         S::Command(sp!(cloc, C::Break(name))) => {
             // Discard the current block because it's dead code.
             let break_jump = make_jump(cloc, context.named_block_end_label(&name), true);
