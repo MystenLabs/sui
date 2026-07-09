@@ -304,6 +304,228 @@ Flip only moves a tx direct-accept → pending → indirect-accept. Same outcome
 3. Incident-data discriminators still decisive: finalized_commits row for the diverged
    commit; rejected-set diff vs certified checkpoint; CCP field diff (assignments vs d2).
 
+## ROUND 8 — execution-time surface, mid-epoch lens (user redirect)
+User: bug occurs at ANY time, not only epoch transitions; Antithesis uses real code paths →
+epoch-boundary stored-obs pollution rejected as primary cause (still a latent landmine:
+get_stored_execution_time_observations has no epoch guard, authority_per_epoch_store.rs:1509).
+
+Verified solo this round (all consistent):
+- No pruning/deletion on execution_time_observations table.
+- Observation dedup key = ConsensusTransactionKey::ExecutionTimeObservation(AuthorityName,
+  generation) (messages_consensus.rs:253) → same-(authority,gen) duplicates can't reach the
+  estimator or the table twice → (generation, authority) table-key overwrite hazard dead for
+  processed txns.
+- Quarantine debt/next-version maps are RefCountedHashMap (consensus_quarantine.rs:991-1021):
+  insert bumps refcount + takes newest value; flush-remove decrements → flushing an older
+  output cannot clobber a newer quarantined value. Clobbering theory dead.
+- Stale debt rows self-correct: payable debt implies residual ≤ budget, so stale (round, debt)
+  decays to 0 by the next round — snapshot+decay design is deterministic regardless of which
+  commits touched the object. Debts fully verified (again).
+- Formal argument: estimator@replay == estimator@live given (a) table rows == processed
+  observations ≤ P (unconditional staging, atomic flush with P), (b) max-gen-wins rebuild ==
+  sequential application (order-independent due to strict > check), (c) replayed commits
+  deliver identical observation txns (dedup state quarantine-consistent).
+- Exotic asymmetry found (Byzantine-only): a generation==0 observation live-creates an entry
+  with median Some(ZERO) (flag default_none_duration_for_new_keys=false) and never updates it,
+  while rebuild's final median pass recomputes → None → default_duration. live=0 vs
+  rebuild=default. Requires gen-0 observation — honest senders use SystemTime micros. Noted.
+
+Dispatched adversarial auditors:
+A. ExecutionTimeObserver end-to-end (local observations, generations across restarts,
+   indebted objects → any non-consensus feedback into commit processing).
+B. Estimator load/store/rebuild with assume-it's-broken framing + CURRENT mainnet values and
+   introduction versions of default_none_duration_for_new_keys / enable_observation_chunking /
+   ExecutionTimeEstimateParams (recent flag flip would match incident timing).
+C. Full diffs of 44791e888f / 3ab366bc03 / b9149cbf0b (commit-handler pipelining) — hunting a
+   live-vs-replay interleaving break of the single-threaded model.
+
+### Round 8 results — execution-time surface exhaustively CLEAN on current mainnet
+A. Observer: all-clear. Strictly one-way producer (local timings/utilization/indebted/
+   generations affect only WHICH observation txns get submitted). No state read by commit
+   processing. Theoretical (gen,source) table collision doubly dead (rate limiter + dedup).
+B. Estimator load/rebuild: all-clear for current config. Key protocol facts:
+   - default_none_duration_for_new_keys: false at v84 (mainnet ETE enable, patch to 1.48),
+     flipped TRUE at v88 — the flip REMOVED the only real asymmetry (gen-0 default-median
+     Some(ZERO)-vs-None divergence exists only with flag=false + Byzantine gen-0 sender).
+   - Chunking ON at v102 (Some(18)); merge_sorted_chunks deterministic, epoch-stable.
+   - stored_observations_limit 20(v84)→18(v94)→180(v102); median threshold 3334 from v86.
+   - last_consensus_stats + execution_time_observations in same WriteBatch (re-verified).
+   - Only writer = process_observations_from_consensus; scheduling only calls &self
+     get_estimate (no unpersisted mutation during CCP construction).
+C. Pipelining diffs (44791e888f, 3ab366bc03, b9149cbf0b): all-clear. Only pure BCS
+   deserialization made concurrent (capacity-2 FIFO); filter/dedup/estimator/congestion all
+   remain on the single Stage-2 task in identical intra-commit order; commits strictly
+   serialized. try_lock().expect guards would panic, not diverge.
+   INCIDENTAL: admin accessors get_estimated_tx_cost / get_consensus_tx_cost_estimates take
+   the estimator mutex via .lock().await (authority_per_epoch_store.rs:3352, 3362) — an
+   admin call timed against commit handling PANICS the handler on try_lock().expect. Crash
+   hazard, not divergence. Worth fixing separately.
+
+## ELIMINATION CONCLUSION (round 8)
+Every component that computes execution-time estimates is now verified replay-deterministic
+under the premises {epoch tables atomic at P; replayed commits byte-identical; same epoch;
+same binary}. If incident estimates truly differed, an INPUT differed:
+  (i) replayed commit content ≠ original (consensus store integrity: WAL tail, or commit
+      re-derivation/commit-sync differences), or
+  (ii) the costed transaction set differed (rejected-set of a commit never handled locally —
+      re-finalization; our synthetic probe showed robustness but only for injected rejects
+      under one choreography).
+Next discriminating steps (need incident data):
+  1. How exactly was "differing estimates" observed in the incident (which logs/artifacts)?
+  2. Extract the diverged commit from the incident consensus store; byte-compare content +
+     rejected set against a healthy peer's copy. Decides (i) vs (ii) vs state.
+  3. Instrument now for the next occurrence: at CCP construction log (commit index, hash of
+     estimator consensus_observations, costed-tx count, folded estimate stream hash) — one
+     log line pinpoints which component diverges.
+
+## ROUND 9 — commit-processing delay + proper seed search (user redirect)
+Rationale: checkpoint-executor-ahead-of-local-consensus-handler is a necessary precondition
+for the fork (canonical CCP effects durable via state sync while local resume pointer P
+lags). Stalling handle_consensus_commit widens this window directly, cheaper than
+choreographing crashes/restarts to induce it.
+- Added `fail_point_async!("handle-consensus-commit-delay")` at the very top of
+  handle_consensus_commit (consensus_handler.rs), before any protocol-config asserts.
+  Commit 91f8916e31.
+- Wired into EXISTING test_simulated_load_reconfig_with_crashes_and_delays (not our new
+  test) via register_fail_point_async(delay_failpoint(500..3000, 0.05)) — composes with its
+  existing crash failpoints (batch-write-before, crash, highest-executed-checkpoint, etc.)
+  rather than needing separate choreography.
+- Smoke tests (p=0.01 then p=0.05, single seed each): both passed, 84s.
+- Proper tool: scripts/simtest/seed-search.py (parallel across cores, not sequential
+  MSIM_TEST_NUM). Correct invocation: --test simtest (binary name, NOT "sui-benchmark::simtest"
+  — cargo test target names don't include package prefix).
+- Launched: 200 seeds, test_simulated_load_reconfig_with_crashes_and_delays, log-dir capturing
+  per-seed logs + failures.ndjson.
+- RESULT: 200/200 PASSED. Reachability confirms real exercise of the suspect machinery
+  (not just idling through the delay): "successfully loads stored execution time
+  observations", "receives some valid execution time observations", "cancelled
+  transactions", "cancelled randomness-using transaction", "cancelled non-randomness-using
+  transaction" all reached across the sweep. Combined with existing crash failpoints
+  (batch-write-before, crash, highest-executed-checkpoint) and DKG-failure injection
+  (rb-dkg 6%).
+- Conclusion: widening the state-sync-ahead window via direct handler delay, at p=0.05 over
+  200 seeds with active estimator/congestion/cancellation traffic and real crashes, still did
+  not reproduce the fork. This is now the strongest negative evidence yet that
+  "checkpoint-executor-ahead-of-local-consensus" alone (even combined with torn-cut crashes
+  and reject-vote-driven re-finalization, per Round 7) is insufficient — some other
+  ingredient is still missing, OR the reproduction requires a specific interleaving/scale
+  this harness's crash timing/probabilities don't hit, OR (per Round 8 elimination) the true
+  cause lies outside anything a same-binary, same-host, single-process-kill simtest can
+  produce (e.g. consensus-store content loss across host-changing upgrades).
+
+## ROUND 10 — real local-cluster reproduction attempt (user redirect)
+Moving from simtest to a real 4-validator local cluster with actual OS-process sui-node
+instances, so restarts hit genuine signal/runtime-drop/OS-scheduling behavior rather than
+msim's virtual clock and cooperative scheduling — a categorically different (and closer to
+production) test of the same hypothesis.
+
+Setup (in scratchpad/localnet/):
+- `sui genesis --committee-size 4 --epoch-duration-ms 600000` generates network.yaml,
+  genesis.blob, per-validator config files (127.0.0.1-PORT.yaml), fullnode.yaml, keystore.
+  Confirmed: db paths/ports already unique per validator (keyed on pubkey) — no manual editing
+  needed; sui genesis already splits network.yaml into individual validator config files.
+- Protocol version: MAX_PROTOCOL_VERSION=129 unconditionally sets ExecutionTimeEstimate mode
+  at v84 for ALL chains (not just Mainnet — verified the v84 block in
+  crates/sui-protocol-config/src/lib.rs applies per_object_congestion_control_mode outside
+  the `if chain == Mainnet` guard), so local genesis (Chain::Unknown) gets ETE by default.
+- `run_experiment.py`: launches 4 validators + 1 fullnode as real subprocesses
+  (CRASH_ON_PANIC=1 so fatal! panics escalate to process exit(12) instead of just killing a
+  tokio task silently), RUST_LOG tuned to surface execution_time_estimator debug logs
+  ("sharing new execution time observation") and checkpoint/consensus info logs. Runs `stress`
+  bench pointed at the live cluster (LocalValidatorAggregatorProxy, needs one fullnode RPC for
+  reconfig) with --shared-counter 100 --num-shared-counters 1 (single hot object, forces
+  serialization + congestion) --transfer-object 0. Then repeatedly: let validator-3 run 8-20s,
+  SIGTERM, wait a random 0.2-4s grace period, SIGKILL if still alive, immediately relaunch
+  pointed at the same config/db (mimics real upgrade-restart timing incl. graceful-then-forced
+  kill). Scans all node logs every cycle for fatal!/panic/monotonic-version patterns.
+- primary-gas-owner-id quirk: despite the flag name, in local (non-fullnode-execution) mode
+  stress treats it as a SuiAddress (ObjectID::from_hex_literal(..).into()) and searches
+  genesis objects for that address's gas coin — use `sui client active-address`, not an object
+  id.
+- Build in progress (debug profile): sui, sui-node, stress.
+
+### Round 10 execution notes
+- User challenge (correct): confirm ETE observations are ACTUALLY sent, not just enabled —
+  congestion mode being on doesn't guarantee the observer's share-threshold (object must be
+  "overutilized": accumulated execution time on the object exceeds target_utilization% of
+  wall-clock time since last measurement, execution_time_estimator.rs:336-413) is ever crossed.
+- First attempt found ZERO observations after 30s warmup — investigated rather than assumed
+  benign: `stress` had actually crashed instantly on a CLI parse error. Root cause:
+  `--fullnode-rpc-addresses` uses `num_args(1..)` with no terminator, so a bare following token
+  (`bench`) gets greedily consumed as a second URL, eating the subcommand entirely ("error:
+  unexpected argument '--shared-counter' found"). Fix: use `--fullnode-rpc-addresses=URL`
+  (`=` form limits clap to one value regardless of num_args). Confirmed via `stress help bench`
+  that --shared-counter/--num-shared-counters etc. are the correct flag names.
+- Second attempt (fixed CLI): real load flowed (TPS~31, single shared counter, p50 latency
+  837ms indicating real contention on the object) and **3 execution-time observation shares
+  were confirmed within 60s** — answers the user's question affirmatively once real congestion
+  exists. (Note: achieved TPS collapsed to 0 after ~15s with no_gas climbing to 2000 — the
+  bench driver's gas-object pool likely got exhausted/locked up by the single-hot-object
+  contention pattern; worth tuning gas-request-chunk-size / primary gas supply for longer runs.)
+- Same run hit an UNRELATED crash within ~8s of load starting, before any kill/restart cycle:
+  two validators (0 and 3) independently panicked at the identical location,
+  writeback_cache.rs:756 ("object_by_id cache is incoherent for..."), inside a
+  `cfg!(debug_assertions)` block (writeback_cache.rs:718, sibling checks at :277, :1510).
+  Root-caused: this fires ONLY in debug builds — confirmed `[profile.release]` in root
+  Cargo.toml does not set `debug-assertions = true` (unlike `[profile.simulator]`, which does).
+  Very likely a TOCTOU race in the paranoid check itself (snapshots object_by_id_cache then
+  separately re-reads dirty.objects/store non-atomically) under heavy concurrent access to one
+  hot object — orthogonal to the CCP-replay investigation and irreproducible in real (release)
+  validators or in Antithesis. NOT chased further; noted as a possible independent finding.
+- Pivoted to `--release` build for sui/sui-node/stress (also gives `panic = 'abort'`, i.e. any
+  panic — including our target `fatal!` — aborts the process immediately, no dependency on
+  CRASH_ON_PANIC's telemetry-hook escalation).
+- Release run with shared-counter workload: real throughput (~200-220 TPS sustained, 0 errors,
+  in_flight staying low ~25-40 i.e. no backlog) but ZERO ETE observations after 60s. Root
+  cause (not a harness bug this time): shared-counter's per-tx execution time is sub-ms, so
+  even 200 sequential executions/sec on one object stays far below the observer's
+  overutilization threshold (accumulated LOCAL execution time must exceed ~30-50% of elapsed
+  wall-clock time since last measurement, execution_time_estimator.rs:336-413,364-379,463-465
+  `overutilized()`). High serialized THROUGHPUT on a hot object ≠ high object UTILIZATION from
+  the estimator's perspective — the latter only cares about actual time spent executing, not
+  submission/serialization rate.
+- Switched to the `slow` workload (crates/sui-benchmark/src/workloads/slow.rs /
+  data/slow/sources/slow.move): explicitly designed for this — attaches an UNUSED mutable
+  shared object purely "to activate congestion control" (slow.rs:92-97), while `bimodal()`
+  does real CPU-bound work (alternates every 10s between allocating 10x10-byte and
+  100x100-byte vectors). One shared `Obj` created once in `init()`, reused by every payload —
+  guaranteed single-object hotness matching our max-contention goal. Confirmed via source read
+  before relaunch (not assumed).
+- Regenerated genesis fresh (release binaries). Result: **31 execution-time observation
+  shares within 60s**, and the bimodal pattern is directly visible in the stress client's own
+  latency stats (p99 767-1109ms during "slow" 10s windows vs 244-335ms during "fast" windows).
+  Genuine, sustained ETE/congestion-control traffic confirmed — not merely enabled, actually
+  triggered by real contention.
+- Kill/restart loop against validator-3 (4-validator committee, quorum 3) with this live
+  congestion background: 8-20s uptime, SIGTERM, 0.2-4s grace, SIGKILL if still alive,
+  immediate restart pointed at same config/db. First long run hit a FATAL_PATTERNS false
+  positive: bare regex `"fork"` matched a base64 digest substring inside a routine proposer
+  log line ("...forkjwBs3ioU=..."). Fixed: tightened to `"fork detected!"` (the actual
+  checkpoint-executor fork-detection log text, checkpoint_executor/utils.rs:169) and
+  `"thread '.*' panicked at"` (matches any real Rust panic, superset of the removed bare
+  pattern). Relaunched clean.
+
+### Round 10 RESULT — real-cluster negative result, precondition confirmed exercised
+~65 minutes, 212 kill/restart cycles on validator-3, spanning 5 epoch transitions (epoch 2→6).
+Confirmed genuinely severe, sustained conditions throughout — this was not a quiet run:
+- Real congestion: p99 latency spiked as high as 13.5s; 7727+ cancellation/congestion log
+  events per validator (`cancelled`/`CONGESTED`/`expensive tx cost`).
+- Real ETE traffic: ~500-550 "sharing new execution time observation" shares per validator.
+- **Real state-sync-ahead-of-consensus catch-up, repeatedly**: validator-3 executed bursts of
+  up to 42 already-certified checkpoints within a single second, multiple times across the
+  run (23:16:59, 23:22:25, 23:33:30, 23:36:59, 23:54:45) — direct evidence the necessary
+  precondition (checkpoint executor racing ahead of local consensus commit processing after
+  restart) was genuinely and repeatedly exercised, not just theorized.
+- One instance of the known epoch-boundary race: "change epoch tx has already been executed
+  via state sync" (validator-3 only, once) — this is the ALREADY-HANDLED case noted in Round 1
+  (`execute_change_epoch_tx`'s crash-recovery comment, mod.rs:989-996), not a fork.
+- **Zero forks, zero fatal patterns, zero unexpected crashes** across the entire run.
+
+This is the strongest negative evidence yet: real OS processes, real SIGTERM/SIGKILL (not
+simulated), real congestion-driven execution-time-estimate traffic, real repeated state-sync-
+ahead catch-up racing, sustained for over an hour across multiple epochs — and the fork does
+not reproduce. Run left going in background for extended coverage; will report if it changes.
+
 ## CONCLUSION (round 2)
 Every CCP input is verified replay-symmetric EXCEPT the rejected-transaction set of commits
 that were persisted but never finalized before the crash. Those are re-finalized on restart
