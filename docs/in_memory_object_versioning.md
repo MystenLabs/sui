@@ -228,7 +228,15 @@ exclusive-mutable input's version even on failure, cancellation, or the
 insufficient-funds short-circuit (`ensure_active_inputs_mutated`,
 `temporary_store.rs:331`; explicitly "so locks advance" in `execution_engine.rs:418-419`).
 So once a finalized tx's outputs are durable, each of its locked refs `(id, v, d)` has a
-successor version `> v` (or tombstone) in the objects table.
+successor version `> v` in the objects table — **for mutations**. For **deletions and
+wraps** the only evidence is a tombstone, and object retention guarantees only the *latest*
+version of a live object or a tombstone *until the pruner removes it* — tombstones are not
+durably retained. So I2's "consumed ⇒ observable in the objects table" holds unconditionally
+for mutated refs (the retained latest live version is strictly `> v`) but **fails for a
+deleted/wrapped ref once its tombstone is pruned**: `latest_ref(id)` degrades from
+`Tombstone(v')` to `NeverExisted`, which the consumed-check (§4.2, arm at "creator pending")
+maps to ACCEPT. This is a known correctness gap — see the note below the consumed-check and
+§5.2.
 
 **I3 — Post-consensus decisions are deterministic functions of consensus history.** The
 accept/drop decision at a given consensus position must be identical on every honest
@@ -317,7 +325,41 @@ check_owned_ref(R = (id, v, d), tx_digest, current_commit_locks, overlay):
 The `< v` / `NeverExisted` → ACCEPT arm is load-bearing: post-consensus checks must never
 depend on local execution progress in the "not yet caught up" direction (I3). The
 consumed-check only fires in the "already caught up" direction, where §5.2 shows it is
-exactly equivalent to the flushed-lock lookup.
+exactly equivalent to the flushed-lock lookup — **except for deleted/wrapped refs**.
+
+> **Deletion gap (I2).** The `Tombstone(v') if v' >= v => DROP(consumed)` arm relies on the
+> tombstone being present. Object retention keeps only the latest live version or a tombstone
+> *until the pruner removes it*, so once a deleted/wrapped ref's tombstone is pruned,
+> `latest_ref(id)` returns `NeverExisted` and the loser of an equivocation is silently
+> **accepted** instead of dropped. Two failure modes: (a) a node that crashes and replays a
+> commit whose loser claims a since-deleted-and-pruned ref accepts it while non-crashed peers
+> (overlay lock or unpruned tombstone) drop it → checkpoint fork; (b) if every validator has
+> pruned, all accept and the loser waits forever on an input version that can never appear →
+> deterministic scheduler stall. Mutations are unaffected (the retained latest live version is
+> strictly `> v`).
+>
+> **Backend status.** On tidehunter the objects keyspace compactor retains the latest entry
+> per `ObjectID` — for a deleted object that entry *is* the tombstone — so the gap does not
+> reproduce there (`authority_store_tables.rs`, `objects_compactor`). It reproduces only on
+> the RocksDB pruner, which point-deletes tombstone rows (`authority_store_pruner.rs`).
+>
+> **Fix (implemented for RocksDB): retain tombstones for the epoch of the deletion.** The
+> consumed-check replaces a *flushed owned-object lock*, and those locks lived for the whole
+> epoch (the removed `owned_object_locked_transactions` table was per-epoch, dropped at
+> reconfig); the deletion evidence must have the same lifetime. A tighter "prune once the
+> quarantine flush watermark passes the deleting commit" gate is **not sufficient**: consensus
+> GC only bounds a *single block's* staleness (`gc_depth`, ~60 rounds), but garbage-collected
+> transactions are resubmitted and transaction expiration is epoch-granular, so a validly-
+> sequenced conflicting claimant can land in an unflushed commit an unbounded number of commits
+> after the deleter — the drain watermark can prune evidence a later replayed commit still
+> needs. The epoch boundary is the only watermark that provably clears the replay set (I4).
+> Concretely, `prune_for_eligible_epochs` now tracks a `tombstone_safe_ceiling` (the highest
+> checkpoint of an already-completed epoch) and only prunes tombstones at or below it;
+> superseded live versions prune unchanged. Cost: deletion tombstones survive to epoch end on
+> RocksDB validators — still a net reduction versus the removed lock+marker tables, which held
+> an entry per owned-object-touching transaction, not just per deletion. A durable per-epoch
+> deleted-ref set consulted before the `NeverExisted → ACCEPT` arm would be a tighter but
+> more invasive alternative if the tombstone storage proves material.
 
 Per-tx exemption (checked before per-ref checks): if the transaction already has durable
 effects with `executed_epoch == current epoch`, accept unconditionally and re-insert its
@@ -411,7 +453,13 @@ Claim: at the moment validator V processes position P, for any claimed ref R of 
 is unflushed — lock is in the overlay — or it flushed, which by I1 means T's outputs are
 durable, and by I2 R is consumed in the durable objects table. Either way V drops T', as
 does every other validator (each sees its own overlay-or-consumed state, or the lock
-table on the old binary).
+table on the old binary). **Caveat (deletion gap):** this step invokes I2's "consumed ⇒
+observable," which holds for mutations but not for a deletion/wrap whose tombstone the pruner
+has removed — see the note under §4.2. There, a flushed T that *deleted* R leaves no durable
+evidence, so V (overlay lock already flushed away, tombstone pruned) can wrongly ACCEPT T'
+while a peer still holding the overlay lock DROPs it. The equivalence therefore holds
+unconditionally only while deletion evidence outlives the replay window; the fix candidates
+under §4.2 restore that.
 
 *(⇐)* Suppose V sees R consumed but no lock. Consumption means some executed tx bumped R.
 Only finalized txs execute (consensus-scheduled or certified-checkpoint execution — both

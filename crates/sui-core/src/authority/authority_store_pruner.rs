@@ -157,6 +157,7 @@ impl AuthorityStorePruner {
         pruned_tx_seq_exclusive: u64,
         rpc_store: Option<&RpcStore>,
         enable_pruning_tombstones: bool,
+        tombstone_safe_ceiling: CheckpointSequenceNumber,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
@@ -164,12 +165,16 @@ impl AuthorityStorePruner {
         // Collect objects keys that need to be deleted from `transaction_effects`.
         let mut live_object_keys_to_prune = vec![];
         let mut object_tombstones_to_prune = vec![];
-        for (_checkpoint, effects) in &transaction_effects {
+        for (checkpoint, effects) in &transaction_effects {
             for (object_id, seq_number) in effects.modified_at_versions() {
                 live_object_keys_to_prune.push(ObjectKey(object_id, seq_number));
             }
 
-            if enable_pruning_tombstones {
+            // Retain tombstones from the current (not-yet-completed) epoch: the
+            // post-consensus consumed-check depends on them to reject double-spends of
+            // deleted owned objects (see the retention rationale in
+            // `prune_for_eligible_epochs`).
+            if enable_pruning_tombstones && *checkpoint <= tombstone_safe_ceiling {
                 for deleted_object_key in effects.all_tombstones() {
                     object_tombstones_to_prune
                         .push(ObjectKey(deleted_object_key.0, deleted_object_key.1));
@@ -251,16 +256,23 @@ impl AuthorityStorePruner {
         pruned_tx_seq_exclusive: u64,
         rpc_store: Option<&RpcStore>,
         _: bool,
+        tombstone_safe_ceiling: CheckpointSequenceNumber,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
         let mut objects_to_prune = vec![];
 
-        for (_checkpoint, effects) in &transaction_effects {
-            for (object_id, version) in effects
-                .modified_at_versions()
-                .into_iter()
-                .chain(effects.all_tombstones())
+        for (checkpoint, effects) in &transaction_effects {
+            // Superseded versions always prune; deletion/wrap tombstones are retained for
+            // the current epoch so the post-consensus consumed-check can still reject
+            // double-spends of deleted owned objects (see the retention rationale in
+            // `prune_for_eligible_epochs`).
+            let tombstones = if *checkpoint <= tombstone_safe_ceiling {
+                effects.all_tombstones()
+            } else {
+                vec![]
+            };
+            for (object_id, version) in effects.modified_at_versions().into_iter().chain(tombstones)
             {
                 debug!("Pruning object {:?} version {:?}", object_id, version);
                 objects_to_prune.push(ObjectKey(object_id, version));
@@ -491,6 +503,25 @@ impl AuthorityStorePruner {
             .map(|c| c.epoch())
             .unwrap_or_default();
 
+        // Deletion/wrap tombstones are the objects table's only record that an owned ref
+        // was consumed, and the post-consensus `check_owned_object_conflicts_v2`
+        // consumed-check reads them to drop the loser of an equivocation (a flushed
+        // owned-object lock is subsumed by "the ref is consumed in the objects table" —
+        // see docs/in_memory_object_versioning.md, invariant I2). Unlike a mutation, whose
+        // successor *live* version is always retained and is strictly greater than the
+        // consumed version, a deletion leaves only the tombstone; pruning it makes
+        // `latest_ref` degrade to `NeverExisted`, which the consumed-check maps to ACCEPT.
+        // A validly-sequenced conflicting claimant can appear at any point up to epoch end
+        // (consensus GC only bounds a single block's staleness; garbage-collected
+        // transactions are resubmitted, and transaction expiration is epoch-granular), and
+        // consensus replay after a crash re-runs every not-yet-flushed commit. So the
+        // tombstone must outlive the epoch in which the deletion occurred — matching the
+        // per-epoch lifetime of the removed `owned_object_locked_transactions` table.
+        // Reconfiguration (invariant I4) durably commits every owned-input consumption of
+        // the old epoch, so tombstones from strictly-earlier epochs are safe to prune.
+        // Superseded (non-tombstone) versions are unaffected and prune as before.
+        let mut tombstone_safe_ceiling: CheckpointSequenceNumber = 0;
+
         let mut checkpoints_to_prune = vec![];
         let mut checkpoint_content_to_prune = vec![];
         // Each effect is tagged with the checkpoint it is pruned from so the
@@ -522,6 +553,12 @@ impl AuthorityStorePruner {
                 break;
             }
             checkpoint_number = *checkpoint.sequence_number();
+            // Checkpoints are walked in ascending order and epoch is monotonic in
+            // checkpoint sequence, so this tracks the highest checkpoint belonging to an
+            // already-completed epoch — the ceiling below which tombstones may be pruned.
+            if checkpoint.epoch() < current_epoch {
+                tombstone_safe_ceiling = checkpoint_number;
+            }
             pruned_tx_seq_exclusive = checkpoint.network_total_transactions;
 
             let content = checkpoint_store
@@ -559,6 +596,7 @@ impl AuthorityStorePruner {
                             pruned_tx_seq_exclusive,
                             rpc_store,
                             !config.killswitch_tombstone_pruning,
+                            tombstone_safe_ceiling,
                         )
                         .await?
                     }
@@ -591,6 +629,7 @@ impl AuthorityStorePruner {
                         pruned_tx_seq_exclusive,
                         rpc_store,
                         !config.killswitch_tombstone_pruning,
+                        tombstone_safe_ceiling,
                     )
                     .await?
                 }
@@ -1094,6 +1133,8 @@ mod tests {
     use sui_types::base_types::ObjectDigest;
     use sui_types::effects::TransactionEffects;
     use sui_types::effects::TransactionEffectsAPI;
+    #[cfg(not(tidehunter))]
+    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,
@@ -1202,6 +1243,8 @@ mod tests {
         num_versions_per_object: u64,
         num_object_versions_to_retain: u64,
         total_unique_object_ids: u32,
+        effects_checkpoint: CheckpointSequenceNumber,
+        tombstone_safe_ceiling: CheckpointSequenceNumber,
     ) -> Vec<ObjectKey> {
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
@@ -1230,13 +1273,14 @@ mod tests {
                 ));
             }
             AuthorityStorePruner::prune_objects_and_indexes(
-                vec![(0, effects)],
+                vec![(effects_checkpoint, effects)],
                 &db,
-                0,
+                effects_checkpoint,
                 metrics,
                 0,
                 None,
                 true,
+                tombstone_safe_ceiling,
             )
             .await
             .unwrap();
@@ -1251,12 +1295,20 @@ mod tests {
     #[tokio::test]
     async fn test_pruning_objects() {
         let path = tempfile::tempdir().unwrap().keep();
-        let to_keep = run_pruner(&path, 3, 2, 1000).await;
+        let to_keep = run_pruner(&path, 3, 2, 1000, 0, u64::MAX).await;
         assert_eq!(
             HashSet::from_iter(to_keep),
             get_keys_after_pruning(&path).unwrap()
         );
-        run_pruner(&tempfile::tempdir().unwrap().keep(), 3, 2, 1000).await;
+        run_pruner(
+            &tempfile::tempdir().unwrap().keep(),
+            3,
+            2,
+            1000,
+            0,
+            u64::MAX,
+        )
+        .await;
     }
 
     // Tests pruning deleted objects (object tombstones).
@@ -1264,14 +1316,64 @@ mod tests {
     #[tokio::test]
     async fn test_pruning_tombstones() {
         let path = tempfile::tempdir().unwrap().keep();
-        let to_keep = run_pruner(&path, 0, 0, 1000).await;
+        let to_keep = run_pruner(&path, 0, 0, 1000, 0, u64::MAX).await;
         assert_eq!(to_keep.len(), 0);
         assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
 
         let path = tempfile::tempdir().unwrap().keep();
-        let to_keep = run_pruner(&path, 3, 0, 1000).await;
+        let to_keep = run_pruner(&path, 3, 0, 1000, 0, u64::MAX).await;
         assert_eq!(to_keep.len(), 0);
         assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
+    }
+
+    // Tombstones from checkpoints above the safe ceiling (i.e. the current, not-yet-
+    // completed epoch) must be retained so the post-consensus consumed-check can still
+    // observe the deletion; only tombstones at or below the ceiling (an already-completed
+    // epoch) are eligible for pruning.
+    #[cfg(not(tidehunter))]
+    #[tokio::test]
+    async fn test_tombstones_retained_above_safe_ceiling() {
+        // Returns how many tombstones were scheduled for deletion when the deletion effects
+        // sit at `effects_checkpoint` and the safe ceiling is `tombstone_safe_ceiling`. The
+        // `num_pruned_tombstones` metric reflects exactly the ceiling gate (it counts the
+        // collected tombstones before any DB scan), so it isolates the retention behavior
+        // from the separate `modified_at` version pruning.
+        async fn pruned_tombstone_count(
+            effects_checkpoint: CheckpointSequenceNumber,
+            tombstone_safe_ceiling: CheckpointSequenceNumber,
+        ) -> u64 {
+            let path = tempfile::tempdir().unwrap().keep();
+            let db = Arc::new(AuthorityPerpetualTables::open(&path, None, None));
+            let registry = Registry::default();
+            let metrics = AuthorityStorePruningMetrics::new(&registry);
+            let mut effects = TransactionEffects::default();
+            for id in ObjectID::in_range(ObjectID::ZERO, 10).unwrap() {
+                effects.unsafe_add_object_tombstone_for_testing((
+                    id,
+                    SequenceNumber::from_u64(1),
+                    ObjectDigest::MIN,
+                ));
+            }
+            AuthorityStorePruner::prune_objects_and_indexes(
+                vec![(effects_checkpoint, effects)],
+                &db,
+                effects_checkpoint,
+                metrics.clone(),
+                0,
+                None,
+                true,
+                tombstone_safe_ceiling,
+            )
+            .await
+            .unwrap();
+            metrics.num_pruned_tombstones.get()
+        }
+
+        // Deletion above the safe ceiling (current epoch): tombstones are retained.
+        assert_eq!(pruned_tombstone_count(10, 5).await, 0);
+        // Deletion at/below the ceiling (already-completed epoch): tombstones prune.
+        assert_eq!(pruned_tombstone_count(10, 10).await, 10);
+        assert_eq!(pruned_tombstone_count(3, 10).await, 10);
     }
 
     #[cfg(not(target_env = "msvc"))]
@@ -1335,6 +1437,7 @@ mod tests {
             0,
             None,
             true,
+            u64::MAX,
         )
         .await;
         info!("Total pruned keys = {:?}", total_pruned);
