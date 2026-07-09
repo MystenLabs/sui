@@ -771,6 +771,31 @@ Rollback rule for both epoch phases: never remove the dual-write before the read
 release has soaked for at least one release cycle, because an old binary restarted
 mid-epoch would otherwise miss flushed rows that peers on the old binary still consult.
 
+**Mid-epoch upgrade is fail-fast, not fork.** Deploying a binary that maintains
+`system_object_next_versions` onto a node whose current epoch was run by a binary that did
+not (a mid-epoch upgrade) has no safe seed: the durable objects run ahead of the flushed
+consensus watermark under load, so seeding the system rows from them would diverge the
+first replayed prologue/settlement. `AuthorityPerEpochStore::new` therefore `fatal!`s when
+`system_object_next_versions` is empty but `last_consensus_stats_v2` is not (the epoch has
+already flushed commits), refusing to start rather than fork silently. A fresh-genesis
+deployment is unaffected (both tables start empty → normal seed).
+
+**Network rollout uses a protocol-config flag; the fatal is only a backstop.** This whole
+feature is consensus-visible (every validator must make the same lock/version decision), so
+on a live network it must be gated behind a `ProtocolConfig` feature flag that flips at an
+epoch boundary — the standard pattern, and the §10 phases above. The rollout is then:
+1. Ship the binary with the feature (and this seeding) gated **off** by default, still
+   writing the old tables (the dual-write above). Validators do a **normal rolling upgrade
+   mid-epoch**; with the flag off the new seeding path never runs, so the fatal never fires.
+2. At an epoch boundary the protocol version bump enables the flag **fleet-wide at once**.
+   That epoch is fresh (both tables empty, `last_consensus_stats_v2` empty), so seeding from
+   epoch-start object versions is exactly the safe case.
+Under that gating the fatal can only fire on a mis-gated activation (the flag flipping
+mid-epoch), which the per-epoch protocol-version invariant forbids. The current branch
+removed the old tables outright for performance evaluation, so it is **not** yet gated —
+a network rollout requires re-introducing the flag and the dual-write before relying on the
+fatal as a backstop rather than a hard deployment constraint.
+
 ---
 
 ## 11. Testing

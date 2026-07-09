@@ -23,7 +23,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{debug_fatal, in_test_configuration};
+use mysten_common::{debug_fatal, fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
@@ -845,6 +845,33 @@ impl AuthorityPerEpochStore {
         // the rows already exist and must not be overwritten: by then the durable
         // objects may reflect execution ahead of the flushed watermark.
         if tables.system_object_next_versions.is_empty() {
+            // An empty table together with an already-advanced consensus watermark means
+            // this epoch processed (and flushed) consensus commits under a binary that did
+            // not maintain these rows — a mid-epoch binary upgrade. Seeding from the
+            // objects table now is unsafe: under load the durable objects run ahead of the
+            // flushed consensus watermark (`last_consensus_stats_v2`), so the seed would be
+            // too high and diverge the first not-yet-executed prologue/settlement — a
+            // silent fork in release builds. Refuse to start rather than fork.
+            //
+            // NETWORK ROLLOUT: this fatal is a backstop, not the deployment path. On a live
+            // network this whole feature must be gated behind a `ProtocolConfig` feature
+            // flag that flips at an epoch boundary (the standard pattern for consensus-
+            // visible behavior — see design doc §10, not yet implemented on this branch,
+            // which removed the old tables outright for performance evaluation). Under that
+            // gating, binaries roll out mid-epoch with the flag OFF (old table-based
+            // behavior, this seeding path never runs); the flag activates fleet-wide at an
+            // epoch boundary, where the epoch is fresh (both tables empty) and seeding from
+            // epoch-start object versions is safe. The fatal below can then only fire on a
+            // mis-gated activation (the flag flipping mid-epoch), which the per-epoch
+            // protocol-version invariant forbids. Deploying THIS (ungated) binary requires a
+            // fresh genesis or an epoch-boundary restart.
+            if !tables.last_consensus_stats_v2.is_empty() {
+                fatal!(
+                    "system_object_next_versions is empty but this epoch has already \
+                     processed consensus commits: deploying this binary mid-epoch is \
+                     unsupported. Deploy at an epoch boundary."
+                );
+            }
             let mut seeds = Vec::new();
             for key in Self::system_object_version_keys(&epoch_start_configuration) {
                 if let Some(object) = object_store.get_object(&key.0) {
