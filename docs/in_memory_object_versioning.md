@@ -29,6 +29,12 @@ object-chain walk-back was tried and rejected (pruning cuts the chain, round tie
 ambiguous). Not yet implemented: overlay eviction for the next-version map (§4.3),
 cleanup of pre-existing marker CFs on old DBs, and the §11 crash-matrix simtests.
 
+**Post-review direction (2026-07-09, doc-only):** see **§13** — the review findings
+concentrate entirely in the two epoch-table removals, and three moves close all of them:
+revert Component C (the next-version table is the one irreducibly durable piece; §13.2),
+fix the C5 exemption via the pre-publish executed mark instead of Design A (§13.3), and
+enforce immutable-claim completeness at vote (§13.4). Components A and B stand.
+
 ---
 
 ## 1. Executive summary
@@ -681,8 +687,10 @@ inventing a new liveness cache.
 
 ### 7.4 Effects-visibility races (C5 / C6 / C7) — analysis, NOT yet implemented
 
-Status: **analysis only — no code committed.** C5 and C6 have a designed fix; C7 needs a
-design decision (below) before any of it is built. Captured here so the work is not lost.
+Status: **analysis only — no code committed.** Superseded by the §13 simplification
+review, which resolves the open decision below: C6/C7 close by reverting Component C,
+and C5 has a smaller fix than Design A (§13, move 2). The analysis is kept because it
+explains *why* those are the right moves.
 
 **Root cause.** `WritebackCache::write_transaction_outputs`
 (`writeback_cache.rs`) publishes a transaction's OUTPUT OBJECT writes into the dirty cache
@@ -893,7 +901,8 @@ fatal as a backstop rather than a hard deployment constraint.
 2. **Exemption source**: `executed_effects` + `effects.executed_epoch` (proposed,
    durability-atomic with objects) vs `executed_transactions_to_checkpoint`
    (watermark-coupled). Confirm pruner retention of current-epoch effects is a hard
-   guarantee, not a tuning default.
+   guarantee, not a tuning default. *Largely resolved by §13.3: use both — the
+   epoch-store executed mark for the live window, current-epoch effects for post-crash.*
 3. **`checkpoint_queue_drained` interaction**: flush batching means "flushed" can lag
    "checkpoint executed" by several commits; the proofs only use flushed ⇒ durable, which
    still holds, but the shadow mode should specifically cover long undrained stretches.
@@ -903,3 +912,137 @@ fatal as a backstop rather than a hard deployment constraint.
 5. Sizing: whether validators should get a larger `object_by_id_cache` default once it
    becomes the primary liveness structure (measure hit rate at 15k with vote-warmup
    first).
+
+## 13. Simplification review (2026-07-09) — three moves close every open finding
+
+A design-level re-examination of all findings from the max-effort review, looking for
+structural simplifications rather than per-finding patches. Conclusion: **three moves
+resolve every open correctness finding, delete the two most subtle mechanisms this
+design introduced, and remove one of the two measured hot-path costs.** Doc-only for
+now; nothing below is implemented.
+
+### 13.1 The findings sort cleanly by component
+
+| Component | Findings | Status |
+|---|---|---|
+| **A — markers** (perpetual table; the storage prize) | none | clean |
+| **B — lock table** (epoch) | C1 ✓, C4 ✓ fixed; C5, C2, C9 open | all three have small local fixes (§13.3, §13.4) |
+| **C — next-versions** (epoch) | C6, C7, C14, P2 — all open | root cause is irreducible; revert (§13.2) |
+
+Component A — the reason this project exists (the largest perpetual keyspace, its
+tidehunter in-memory index, two writes per owned object per transaction) — attracted
+zero findings. Every open correctness finding attaches to the two *epoch-table*
+removals, which are the smallest share of the win.
+
+### 13.2 Move 1 — revert Component C (reinstate `next_shared_object_versions_v2`)
+
+**Why C is different in kind from B.** The lock decision is *set membership* over
+consumption history: it is re-derivable at any time from durable execution state plus
+replay, and stays deterministic under checkpoint-execution-ahead because acceptance and
+execution cross-imply — a winner that executed ahead is exempted by its own effects; a
+loser never executed anywhere, so the consumed-check drops it (§5.2, §5.3). Version
+assignment is *counter arithmetic*: replay of a commit needs each key's counter **at the
+flushed watermark W**, and no bounded read of durable state reproduces that value —
+the objects table is contaminated by executor-ahead writes (C7), a first-touch pin holds
+the wrong value for any key already advanced by flushed commits, and an effects-chain
+walk-back (latest version → `previous_transaction` → its effects → `dependencies` →
+producer of the input version, recursively) is sound but unbounded: for a hot key behind
+a large sync-ahead window the walk is as long as the window. The only value that works
+is the one the deleted table stored, written at flush. This is not a wart of the
+implementation; it is the shape of the problem.
+
+**Therefore: restore the durable table and the immediate init-pin writes (main's
+`get_or_init_next_object_versions`), and delete the reconstruction machinery** —
+`compute_effects_version_seeds`, the `effects_seeder` parameter and its ordering
+contract (§6.3, §7.2), and the `system_object_next_versions` exception table together
+with its I1b carve-out story and the §10 mid-epoch `fatal!` (system keys become ordinary
+rows again; a mid-epoch binary upgrade is back to being trivially safe). Phase 3 of the
+migration plan disappears outright.
+
+One move closes: **C7** and **C6** (seed is the durable watermark value; the seeder
+never consults effects or a contaminable store during replay), **C14** (cold overlay
+entries evict to the table again — the old bounded-memory model), **P2** (the
+`executed_effects_digests` probing — the **#2 measured hot cost, ~186k guaranteed
+misses/s at 18K TPS** — is deleted, not optimized). What it re-adds is the cheap kind of
+DB traffic: bloom-filtered point-gets on overlay miss and a few rows per touched key per
+flush, which never appeared in any handler profile. Net at the bottleneck, the revert is
+perf-*positive*.
+
+The recomputed-vs-effects assertion (`verify_assignment_matches_effects`) is worth
+keeping as debug/simtest hardening even though the mechanism it was built to check is
+gone.
+
+**Pre-existing hazard worth one line of hardening while reinstating:** the init pin
+lands in the epoch DB while execution outputs land in the perpetual DB — two WALs with
+no cross-ordering. A machine crash (not process crash) can lose an unsynced pin while
+keeping the outputs it was supposed to guard against, reproducing the contaminated-seed
+fork in a very narrow window. This existed on main for years. The pin is written once
+per key per epoch, so writing it with `sync = true` is free and closes the window.
+
+### 13.3 Move 2 — C5 without touching the writeback cache
+
+§7.4's Design A (publish `pending_transaction_writes` before object writes + a combined
+reader) is unnecessary. The ordering it tries to create **already exists** one level up:
+`commit_certificate` (`authority.rs:1790-1802`) inserts the epoch-store executed mark
+(`insert_executed_in_epoch`) *before* calling `write_transaction_outputs`, and the
+comment there documents the ordering as intentional. `write_transaction_outputs` has
+exactly one production caller, so this covers checkpoint-executor-driven execution —
+precisely the C5 trigger path.
+
+Fix: the exemption in `try_acquire_owned_object_locks_post_consensus_v2` reads
+`transactions_executed_in_cur_epoch(digest) || (durable effects with executed_epoch ==
+current)` instead of `get_executed_effects` alone. Coverage is airtight by construction:
+
+- **Live window:** an object write visible to the consumed-check implies the mark was
+  already inserted (program order on the executing thread + lock release/acquire on the
+  shared maps). Mark pruning is safe: `remove_executed_in_epoch` runs only after the
+  digests are committed to `executed_transactions_to_checkpoint` — which is the same
+  lookup's DB fallback.
+- **Post-crash:** consumption durably visible ⇒ effects durably visible (objects and
+  effects commit in one perpetual-DB batch), so the existing effects branch covers it.
+
+Both reads stay on the reject path only. No publish-order change, no new reader, no
+`load_checkpoint` / accumulator-barrier / legacy-hasher exposure.
+
+### 13.4 Move 3 — C2 + C9 with one vote-path gate
+
+`verify_immutable_object_claims` (`consensus_validator.rs:333`) already enforces exact
+two-way set equality between claimed and actual immutable inputs — including the
+completeness direction (`ImmutableObjectNotClaimed`). C9 exists only because the whole
+check is gated on `!claimed_immutable_ids.is_empty()` (`consensus_validator.rs:312`): a
+Byzantine submitter who strips the *entire* claim list skips verification. (Partial
+stripping is already caught.)
+
+Fix: enforce claim completeness unconditionally. The owned input objects are already
+loaded at vote time by `validate_owned_object_versions`, so folding the immutability
+check there costs zero extra reads. Under I5, a claim-less frozen input can then never
+finalize, which closes both findings at once:
+
+- **C9** becomes unreachable: every locked ref is genuinely exclusive-mutable, restoring
+  I2 exactly — no lock can outlive its consumption evidence. Keep a `debug_fatal!` on
+  the post-consensus path for the BFT-violation case.
+- **C2**'s recovery over-lock becomes provably harmless — honest claimants skip refs
+  they claimed immutable, claim-less claimants can't finalize, and the C1 retention rule
+  drops the over-lock when the deferred holder executes. The deferral record needs **no
+  schema change**, and the existing safety comment above the rebuild
+  (`authority_per_epoch_store.rs:1080-1085`) becomes true as written.
+
+### 13.5 What remains after the three moves
+
+- **Finding 9 (production fork detector):** demoted from "critical multiplier" to
+  ordinary hardening — the seeding-fork class it was most needed for dies with the
+  revert. Land after the moves so it never crash-loops on a known race.
+- **Perf #1 (consumed-check reverse seeks, 36.5% by-id hit rate):** unchanged by the
+  moves; the 10× cache default is deployed and under measurement. Decision ladder if it
+  fails: dedicated coherent owned-input latest-ref cache → as last resort revert
+  Component B too (restores the epoch lock table; A and its storage win are untouched
+  and carry no findings).
+- **Cleanups:** P1 (owned-refs computed once, carried on the parsed tx), P3 (same-digest
+  short-circuit), R1 (v1/v2 dedup), and the leftover artifacts — orthogonal, unaffected.
+
+End state if all three moves land: the feature keeps its headline (both owned-object
+lock structures gone, liveness and conflicts answered by the objects table), the one
+table whose contents are genuinely irreducible stays, and every mechanism whose
+correctness argument needed more than a paragraph — effects-aware seeding, the §7.2
+ordering contract, the system-object exception table, Design A — is deleted rather than
+defended.
