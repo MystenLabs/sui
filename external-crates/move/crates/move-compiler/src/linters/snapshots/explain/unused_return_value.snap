@@ -6,7 +6,7 @@ unused_return_value
 ===================
 
 category: Suspicious
-origin:   Core
+origin:   Move
 level:    on by default
 code:     W02013
 

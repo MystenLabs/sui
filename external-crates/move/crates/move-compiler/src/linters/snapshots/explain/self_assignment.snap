@@ -6,7 +6,7 @@ self_assignment
 ===============
 
 category: Suspicious
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W02008
 

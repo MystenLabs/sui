@@ -6,7 +6,7 @@ abort_without_constant
 ======================
 
 category: Style
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W04005
 

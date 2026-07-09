@@ -6,7 +6,7 @@ unnecessary_math
 ================
 
 category: Complexity
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W01003
 

@@ -7,29 +7,13 @@
 //! emitted diagnostics so the hint can name the right lint.
 
 use crate::linters::LinterDiagnosticCategory;
-use std::fmt;
-
-/// The category name for a diagnostic `category` byte, exactly as defined by
-/// [`LinterDiagnosticCategory`]. Referencing the enum discriminants keeps this in lockstep with the
-/// linter — the docs never invent categories of their own.
-fn category_label(category: u8) -> &'static str {
-    use LinterDiagnosticCategory::*;
-    match category {
-        c if c == Correctness as u8 => "Correctness",
-        c if c == Complexity as u8 => "Complexity",
-        c if c == Suspicious as u8 => "Suspicious",
-        c if c == Deprecated as u8 => "Deprecated",
-        c if c == Style as u8 => "Style",
-        c if c == Sui as u8 => "Sui",
-        _ => "Unknown",
-    }
-}
+use std::{collections::BTreeMap, fmt, sync::LazyLock};
 
 /// Where a lint originates.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LintOrigin {
     /// Generic Move linter (`move_compiler::linters`).
-    Core,
+    Move,
     /// Sui-specific linter (`move_compiler::sui_mode::linters`).
     Sui,
 }
@@ -37,7 +21,7 @@ pub enum LintOrigin {
 impl LintOrigin {
     fn label(self) -> &'static str {
         match self {
-            LintOrigin::Core => "Core",
+            LintOrigin::Move => "Move",
             LintOrigin::Sui => "Sui",
         }
     }
@@ -79,42 +63,50 @@ impl LintDoc {
     }
 }
 
-/// Look up a lint doc by its filter name (`share_owned`) or by its rendered code, accepting
-/// `W99000`, `w99000`, `99000`, or a `Lint `-prefixed form.
+static DOCS_BY_NAME: LazyLock<BTreeMap<&'static str, &'static LintDoc>> =
+    LazyLock::new(|| LINT_DOCS.iter().map(|d| (d.name, d)).collect());
+
+static DOCS_BY_ID: LazyLock<BTreeMap<(u8, u8), &'static LintDoc>> =
+    LazyLock::new(|| LINT_DOCS.iter().map(|d| ((d.category, d.code), d)).collect());
+
+/// Look up a lint doc from raw `--explain <query>` user input: either a filter name
+/// (`share_owned`) or a rendered diagnostic code (`W99000`).
 pub fn find_lint_doc(query: &str) -> Option<&'static LintDoc> {
     let q = query.trim();
-    if let Some(doc) = LINT_DOCS.iter().find(|d| d.name == q) {
+    if let Some(doc) = DOCS_BY_NAME.get(q) {
         return Some(doc);
     }
-    let norm = q
-        .strip_prefix("Lint ")
-        .unwrap_or(q)
-        .trim()
-        .trim_start_matches(['W', 'w']);
-    LINT_DOCS
-        .iter()
-        .find(|d| d.rendered_code().trim_start_matches('W') == norm)
+    let (category, code) = parse_rendered_code(q)?;
+    lint_doc_by_id(category, code)
+}
+
+/// Parse a rendered `Wxxyyy` code back into its `(category, code)` id. Accepts the forms a user is
+/// likely to paste from diagnostic output: `W99000`, `w99000`, bare `99000`, or `Lint W99000`.
+fn parse_rendered_code(s: &str) -> Option<(u8, u8)> {
+    let s = s.strip_prefix("Lint ").unwrap_or(s).trim();
+    let digits = s.strip_prefix(['W', 'w']).unwrap_or(s);
+    if digits.len() != 5 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some((digits[..2].parse().ok()?, digits[2..].parse().ok()?))
 }
 
 /// Look up a lint doc by its diagnostic `(category, code)`. Used to attach the `--explain` hint to
 /// emitted lint diagnostics.
 pub fn lint_doc_by_id(category: u8, code: u8) -> Option<&'static LintDoc> {
-    LINT_DOCS
-        .iter()
-        .find(|d| d.category == category && d.code == code)
+    DOCS_BY_ID.get(&(category, code)).copied()
 }
 
-fn indent(s: &str, pad: &str) -> String {
-    s.lines()
-        .map(|l| {
-            if l.is_empty() {
-                String::new()
-            } else {
-                format!("{pad}{l}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+/// Write `s` indented by two spaces, preserving blank lines, with a trailing newline.
+fn write_indented(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result {
+    for line in s.lines() {
+        if line.is_empty() {
+            writeln!(f)?;
+        } else {
+            writeln!(f, "  {line}")?;
+        }
+    }
+    Ok(())
 }
 
 /// The `--explain <name>` output for a single lint.
@@ -128,7 +120,9 @@ impl fmt::Display for LintDoc {
         writeln!(f, "{}", self.name)?;
         writeln!(f, "{}", "=".repeat(self.name.len()))?;
         writeln!(f)?;
-        writeln!(f, "category: {}", category_label(self.category))?;
+        let category = LinterDiagnosticCategory::try_from_u8(self.category)
+            .map_or("Unknown", |c| c.name());
+        writeln!(f, "category: {category}")?;
         writeln!(f, "origin:   {}", self.origin.label())?;
         writeln!(f, "level:    {level}")?;
         writeln!(f, "code:     {}", self.rendered_code())?;
@@ -139,16 +133,16 @@ impl fmt::Display for LintDoc {
         if let Some(when_ok) = self.when_ok {
             writeln!(f)?;
             writeln!(f, "When it's OK:")?;
-            writeln!(f, "{}", indent(when_ok, "  "))?;
+            write_indented(f, when_ok)?;
         }
         writeln!(f)?;
         writeln!(f, "Example:")?;
         writeln!(f)?;
         writeln!(f, "  // flagged")?;
-        writeln!(f, "{}", indent(self.example.bad, "  "))?;
+        write_indented(f, self.example.bad)?;
         writeln!(f)?;
         writeln!(f, "  // suggested")?;
-        writeln!(f, "{}", indent(self.example.good, "  "))?;
+        write_indented(f, self.example.good)?;
         writeln!(f)?;
         writeln!(
             f,
@@ -173,22 +167,11 @@ impl fmt::Display for LintIndex<'_> {
         )?;
         let width = LINT_DOCS.iter().map(|d| d.name.len()).max().unwrap_or(0);
         // Categories in `LinterDiagnosticCategory` order; empty ones are skipped.
-        const CATEGORIES: &[&str] = &[
-            "Correctness",
-            "Complexity",
-            "Suspicious",
-            "Deprecated",
-            "Style",
-            "Sui",
-        ];
-        for category in CATEGORIES {
+        for category in LinterDiagnosticCategory::ALL {
             let mut any = false;
-            for doc in LINT_DOCS
-                .iter()
-                .filter(|d| &category_label(d.category) == category)
-            {
+            for doc in LINT_DOCS.iter().filter(|d| d.category == *category as u8) {
                 if !any {
-                    writeln!(f, "{category}")?;
+                    writeln!(f, "{}", category.name())?;
                     any = true;
                 }
                 writeln!(f, "    {:width$}  {}", doc.name, doc.summary, width = width)?;
@@ -205,7 +188,7 @@ impl fmt::Display for LintIndex<'_> {
 // Registry
 //**************************************************************************************************
 
-// A flat registry; `render_index` groups by category. The `(category, code)` pairs are the lints'
+// A flat registry; `LintIndex` groups by category. The `(category, code)` pairs are the lints'
 // actual diagnostic ids (see `LinterDiagnosticCategory`), used to render `Wxxyyy` and match
 // emitted diagnostics.
 pub const LINT_DOCS: &[LintDoc] = &[
@@ -386,7 +369,7 @@ field — or drop the parameter if it truly isn't needed.",
     },
     LintDoc {
         name: "loop_without_exit",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 2,
         code: 6,
@@ -406,7 +389,7 @@ is a false positive.",
     },
     LintDoc {
         name: "self_assignment",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 2,
         code: 8,
@@ -422,7 +405,7 @@ typo or an unfinished edit.",
     },
     LintDoc {
         name: "always_equal_operands",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 2,
         code: 11,
@@ -439,7 +422,7 @@ and often a copy-paste bug where one side should differ.",
     },
     LintDoc {
         name: "unused_return_value",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: true,
         category: 2,
         code: 13,
@@ -536,7 +519,7 @@ API upgrade-compatible.",
     },
     LintDoc {
         name: "constant_naming",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 4,
         code: 1,
@@ -556,7 +539,7 @@ error constants, such as `ENotAuthorized`.",
     },
     LintDoc {
         name: "abort_without_constant",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 4,
         code: 5,
@@ -575,7 +558,7 @@ documents the failure and keeps codes consistent across the module.",
     },
     LintDoc {
         name: "unnecessary_math",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 1,
         code: 3,
@@ -592,7 +575,7 @@ with an absorbing operand (`* 0`, `0 / x`, `x % 1`, `0 % x`) is `0`; and `1 % x`
     },
     LintDoc {
         name: "unnecessary_conditional",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 1,
         code: 7,
@@ -609,7 +592,7 @@ conditional only adds noise.",
     },
     LintDoc {
         name: "redundant_ref_deref",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 1,
         code: 9,
@@ -628,7 +611,7 @@ borrow (`*(&s.f)`), is a no-op the compiler already performs for you.",
     },
     LintDoc {
         name: "combinable_comparisons",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 1,
         code: 12,
@@ -644,7 +627,7 @@ Two comparisons over the same operand pair joined by `&&`/`||` often collapse to
     },
     LintDoc {
         name: "while_true",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 4,
         code: 2,
@@ -660,7 +643,7 @@ Two comparisons over the same operand pair joined by `&&`/`||` often collapse to
     },
     LintDoc {
         name: "unneeded_return",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 4,
         code: 4,
@@ -680,7 +663,7 @@ operand doesn't yield a value (e.g. `return abort E`), is left alone.",
     },
     LintDoc {
         name: "unnecessary_unit",
-        origin: LintOrigin::Core,
+        origin: LintOrigin::Move,
         default: false,
         category: 4,
         code: 10,

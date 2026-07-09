@@ -6,7 +6,7 @@ combinable_comparisons
 ======================
 
 category: Complexity
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W01012
 

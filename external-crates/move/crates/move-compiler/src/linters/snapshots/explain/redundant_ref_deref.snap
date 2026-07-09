@@ -6,7 +6,7 @@ redundant_ref_deref
 ===================
 
 category: Complexity
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W01009
 

@@ -6,7 +6,7 @@ constant_naming
 ===============
 
 category: Style
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W04001
 

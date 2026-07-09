@@ -6,7 +6,7 @@ unnecessary_unit
 ================
 
 category: Style
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W04010
 

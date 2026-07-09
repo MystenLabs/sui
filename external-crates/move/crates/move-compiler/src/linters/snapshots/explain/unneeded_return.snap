@@ -6,7 +6,7 @@ unneeded_return
 ===============
 
 category: Style
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W04004
 

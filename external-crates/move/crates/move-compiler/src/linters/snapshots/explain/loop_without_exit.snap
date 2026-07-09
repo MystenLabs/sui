@@ -6,7 +6,7 @@ loop_without_exit
 =================
 
 category: Suspicious
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W02006
 

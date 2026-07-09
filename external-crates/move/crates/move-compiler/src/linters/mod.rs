@@ -49,6 +49,33 @@ pub enum LinterDiagnosticCategory {
     Sui = 99,
 }
 
+impl LinterDiagnosticCategory {
+    /// All categories, in the order they should be displayed.
+    pub const ALL: &'static [Self] = &[
+        Self::Correctness,
+        Self::Complexity,
+        Self::Suspicious,
+        Self::Deprecated,
+        Self::Style,
+        Self::Sui,
+    ];
+
+    pub fn try_from_u8(value: u8) -> Option<Self> {
+        Self::ALL.iter().copied().find(|c| *c as u8 == value)
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Correctness => "Correctness",
+            Self::Complexity => "Complexity",
+            Self::Suspicious => "Suspicious",
+            Self::Deprecated => "Deprecated",
+            Self::Style => "Style",
+            Self::Sui => "Sui",
+        }
+    }
+}
+
 macro_rules! lints {
     (
         $(

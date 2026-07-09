@@ -6,7 +6,7 @@ always_equal_operands
 =====================
 
 category: Suspicious
-origin:   Core
+origin:   Move
 level:    requires `--lint`
 code:     W02011
 
