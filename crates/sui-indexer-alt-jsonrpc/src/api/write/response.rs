@@ -134,10 +134,10 @@ pub(super) async fn dev_inspect(
 
     let effects = effects_response(&effects)?;
 
-    // The legacy implementation derives `error` from the execution result, which is not part of
-    // the gRPC simulate response, so recover it from the effects' execution status. On failure,
-    // command outputs are not reported (matching the legacy behavior of returning `results:
-    // None` alongside an error).
+    // Like the legacy implementation, exactly one of `results` and `error` is set, depending on
+    // whether execution succeeded. The error message itself may be different. Legacy stringifies
+    // the executor's `ExecutionError`, which is not part of the gRPC simulate response. Here, it is
+    // recovered from the effects' execution status instead.
     let (results, error) = match effects.status() {
         SuiExecutionStatus::Success => (
             Some(
@@ -410,23 +410,7 @@ fn command_output_value(
 
 /// Convert an argument from the gRPC response into the JSON-RPC response type.
 fn sui_argument(argument: &proto::Argument) -> Result<SuiArgument, RpcError<Error>> {
-    use proto::argument::ArgumentKind;
-
-    Ok(match argument.kind() {
-        ArgumentKind::Gas => SuiArgument::GasCoin,
-        ArgumentKind::Input => SuiArgument::Input(argument.input() as u16),
-        ArgumentKind::Result => match argument.subresult {
-            Some(subresult) => {
-                SuiArgument::NestedResult(argument.result() as u16, subresult as u16)
-            }
-            None => SuiArgument::Result(argument.result() as u16),
-        },
-        // Covers `ArgumentKind::Unknown` as well as variants introduced by future proto updates
-        // (the enum is `#[non_exhaustive]`).
-        _ => {
-            return Err(crate::error::internal_error!(
-                "Unknown argument kind in command output"
-            ));
-        }
-    })
+    let argument = sui_sdk_types::Argument::try_from(argument)
+        .context("Invalid argument in command output")?;
+    Ok(sui_types::transaction::Argument::from(argument).into())
 }
