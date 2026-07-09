@@ -6,6 +6,9 @@ use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 
 use anyhow::Context;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
+use move_core_types::ident_str;
 use prometheus::Registry;
 use reqwest::Client;
 use serde_json::Value;
@@ -26,7 +29,16 @@ use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
+use sui_rpc::field::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_swarm_config::genesis_config::AccountConfig;
+use sui_types::MOVE_STDLIB_PACKAGE_ID;
+use sui_types::TypeTag;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionKind;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use url::Url;
@@ -175,6 +187,51 @@ impl WriteTestCluster {
             .await
             .context("Failed to parse JSON-RPC response")
     }
+}
+
+/// BCS- and Base64-encode a `TransactionKind`, the input format for
+/// `sui_devInspectTransactionBlock`.
+fn encode_transaction_kind(kind: &TransactionKind) -> String {
+    Base64::encode(bcs::to_bytes(kind).expect("Failed to serialize TransactionKind"))
+}
+
+/// Extract a byte vector from a JSON array of numbers.
+fn json_bytes(value: &Value) -> Vec<u8> {
+    value
+        .as_array()
+        .expect("Expected a JSON array of bytes")
+        .iter()
+        .map(|b| b.as_u64().unwrap() as u8)
+        .collect()
+}
+
+/// A transaction that calls the non-entry function `std::option::none<u64>()` and leaves its
+/// result unused -- only valid under dev-inspect.
+fn option_none_transaction_kind() -> TransactionKind {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        ident_str!("option").to_owned(),
+        ident_str!("none").to_owned(),
+        vec![TypeTag::U64],
+        vec![],
+    );
+    TransactionKind::programmable(builder.finish())
+}
+
+/// A transaction that fails execution with an arithmetic error (division by zero).
+fn divide_by_zero_transaction_kind() -> TransactionKind {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let one = builder.pure(1u64).expect("Failed to create pure input");
+    let zero = builder.pure(0u64).expect("Failed to create pure input");
+    builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        ident_str!("u64").to_owned(),
+        ident_str!("divide_and_round_up").to_owned(),
+        vec![],
+        vec![one, zero],
+    );
+    TransactionKind::programmable(builder.finish())
 }
 
 #[tokio::test]
@@ -636,4 +693,238 @@ async fn test_execute_and_dry_run_gas_costs_agree() {
         dry_run["result"]["effects"]["gasUsed"],
         execute["result"]["effects"]["gasUsed"],
     );
+}
+
+#[tokio::test]
+async fn test_dev_inspect_returns_values() {
+    telemetry_subscribers::init_for_testing();
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        response["error"].is_null(),
+        "RPC error: {}",
+        response["error"]
+    );
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "success");
+    assert!(result["error"].is_null());
+
+    // One command, returning `std::option::Option<u64>`. The BCS encoding of `none` is a single
+    // zero byte (an empty vector).
+    let results = result["results"].as_array().unwrap();
+    assert_eq!(results.len(), 1);
+
+    let return_values = results[0]["returnValues"].as_array().unwrap();
+    assert_eq!(return_values.len(), 1);
+    assert_eq!(return_values[0][0], json!([0]));
+    assert!(
+        return_values[0][1]
+            .as_str()
+            .unwrap()
+            .contains("option::Option<u64>"),
+        "Unexpected return type: {}",
+        return_values[0][1],
+    );
+
+    // Raw transaction data and effects were not requested.
+    assert!(result["rawTxnData"].is_null());
+    assert!(result["rawEffects"].is_null());
+}
+
+#[tokio::test]
+async fn test_dev_inspect_synthesized_transaction_defaults() {
+    telemetry_subscribers::init_for_testing();
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+    let reference_gas_price = cluster.onchain_cluster.get_reference_gas_price().await;
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+                "additional_args": { "showRawTxnDataAndEffects": true },
+            }),
+        )
+        .await
+        .unwrap();
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "success");
+
+    // The raw transaction data reflects the synthesized `TransactionData`: gas price defaults to
+    // the reference gas price, the sender sponsors the gas, and the gas payment is left empty (a
+    // mock gas coin is injected fullnode-side).
+    let tx_data: TransactionData = bcs::from_bytes(&json_bytes(&result["rawTxnData"])).unwrap();
+    assert_eq!(tx_data.sender(), sender);
+
+    let gas_data = tx_data.gas_data();
+    assert_eq!(gas_data.owner, sender);
+    assert_eq!(gas_data.price, reference_gas_price);
+    assert!(gas_data.payment.is_empty());
+    assert!(gas_data.budget > 0);
+
+    assert!(!result["rawEffects"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_dev_inspect_with_checks_enabled() {
+    telemetry_subscribers::init_for_testing();
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+                "additional_args": { "skipChecks": false },
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        response["error"].is_null(),
+        "RPC error: {}",
+        response["error"]
+    );
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "success");
+    assert_eq!(result["results"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_dev_inspect_execution_failure() {
+    telemetry_subscribers::init_for_testing();
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&divide_by_zero_transaction_kind()),
+            }),
+        )
+        .await
+        .unwrap();
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "failure");
+    assert!(!result["error"].is_null(), "Expected an execution error");
+    assert!(result["results"].is_null());
+}
+
+#[tokio::test]
+async fn test_dev_inspect_matches_grpc_simulation() {
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+
+    telemetry_subscribers::init_for_testing();
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+                "additional_args": { "showRawTxnDataAndEffects": true },
+            }),
+        )
+        .await
+        .unwrap();
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "success");
+
+    // Re-run the exact transaction the RPC synthesized (from its raw bytes) against the
+    // fullnode's gRPC simulation endpoint with checks disabled -- the primitive dev-inspect is
+    // built on -- and check that the RPC response is a faithful rendering of the gRPC response.
+    let mut proto_tx = proto::Transaction::default();
+    proto_tx.bcs = Some(json_bytes(&result["rawTxnData"]).into());
+
+    let request = proto::SimulateTransactionRequest::new(proto_tx)
+        .with_read_mask(FieldMask::from_paths([
+            "transaction.effects.bcs",
+            "command_outputs",
+        ]))
+        .with_checks(proto::simulate_transaction_request::TransactionChecks::Disabled)
+        .with_do_gas_selection(false);
+
+    let mut grpc =
+        TransactionExecutionServiceClient::connect(cluster.onchain_cluster.rpc_url().to_string())
+            .await
+            .unwrap();
+
+    let simulated = grpc.simulate_transaction(request).await.unwrap().into_inner();
+
+    // The effects must be byte-identical.
+    let grpc_effects = simulated
+        .transaction
+        .as_ref()
+        .unwrap()
+        .effects
+        .as_ref()
+        .unwrap()
+        .bcs
+        .as_ref()
+        .unwrap()
+        .value()
+        .to_vec();
+    assert_eq!(json_bytes(&result["rawEffects"]), grpc_effects);
+
+    // Return values must match, value for value and type for type.
+    let results = result["results"].as_array().unwrap();
+    assert_eq!(results.len(), simulated.command_outputs.len());
+    for (json_result, grpc_result) in results.iter().zip(&simulated.command_outputs) {
+        let json_returns = json_result["returnValues"].as_array().unwrap();
+        assert_eq!(json_returns.len(), grpc_result.return_values.len());
+        for (json_return, grpc_return) in json_returns.iter().zip(&grpc_result.return_values) {
+            let grpc_bcs = grpc_return.value.as_ref().unwrap();
+            assert_eq!(json_bytes(&json_return[0]), grpc_bcs.value().to_vec());
+
+            let json_type: TypeTag = json_return[1].as_str().unwrap().parse().unwrap();
+            let grpc_type: TypeTag = grpc_bcs.name().parse().unwrap();
+            assert_eq!(json_type, grpc_type);
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_dev_inspect_invalid_tx_bytes() {
+    telemetry_subscribers::init_for_testing();
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": "invalid_tx_bytes",
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response["error"]["code"], -32602);
 }

@@ -421,7 +421,9 @@ fn sui_argument(argument: &proto::Argument) -> Result<SuiArgument, RpcError<Erro
             }
             None => SuiArgument::Result(argument.result() as u16),
         },
-        ArgumentKind::Unknown => {
+        // Covers `ArgumentKind::Unknown` as well as variants introduced by future proto updates
+        // (the enum is `#[non_exhaustive]`).
+        _ => {
             return Err(crate::error::internal_error!(
                 "Unknown argument kind in command output"
             ));

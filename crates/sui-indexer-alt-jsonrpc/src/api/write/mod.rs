@@ -45,9 +45,7 @@ pub trait WriteApi {
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
-        /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string).
-        /// Signature is committed to the intent message of the transaction data, as base-64 encoded
-        /// string.
+        /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
         signatures: Vec<Base64>,
         /// options for specifying the content to be returned
         options: Option<SuiTransactionBlockResponseOptions>,
@@ -62,11 +60,9 @@ pub trait WriteApi {
     async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
-        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and
-        /// gasPrice).
+        /// BCS encoded TransactionKind (as opposed to TransactionData, which includes gasBudget and gasPrice).
         tx_bytes: Base64,
-        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas
-        /// price.
+        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price.
         gas_price: Option<BigInt<u64>>,
         /// The epoch to perform the call. Will be set from the system state object if not provided.
         epoch: Option<BigInt<u64>>,
