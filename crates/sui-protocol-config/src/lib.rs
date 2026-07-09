@@ -1160,6 +1160,7 @@ struct FeatureFlags {
     // Enable allowance-sourced funds withdrawals (`WithdrawFrom::Allowance`).
     // Requires `enable_accumulators`.
     #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
     enable_allowances: bool,
 }
 

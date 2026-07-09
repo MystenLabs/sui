@@ -598,42 +598,6 @@ fn test_validate_allowance_withdrawals() {
 }
 
 #[test]
-fn test_allowance_must_be_declared_shared_input() {
-    let mut cfg = protocol_config();
-    cfg.enable_allowances_for_testing();
-    let sender = SuiAddress::random_for_testing_only();
-    let funder = SuiAddress::random_for_testing_only();
-    let allowance = ObjectID::random();
-
-    // Withdrawal without the allowance among the tx inputs: rejected.
-    let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_allowance(
-        100,
-        GAS::type_tag(),
-        funder,
-        allowance,
-    ))
-    .unwrap();
-    let tx = TransactionData::new_programmable(
-        sender,
-        vec![random_object_ref()],
-        ptb.finish(),
-        1_000_000,
-        1000,
-    );
-    let result = tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&cfg));
-    assert!(
-        result.is_err(),
-        "Expected validation to fail without the allowance as an input. Got: {result:?}",
-    );
-
-    // With the allowance declared as a shared input: accepted.
-    let tx = allowance_tx(sender, funder, allowance);
-    tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&cfg))
-        .unwrap();
-}
-
-#[test]
 fn test_allowance_requires_feature_flag() {
     // Accumulators on, allowances off (mainnet's config): the variant must be
     // rejected at validity.

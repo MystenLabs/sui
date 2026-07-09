@@ -515,6 +515,8 @@ fn compute_input_reservations(
         let owner = match arg.withdraw_from {
             WithdrawFrom::Sender => transaction_signer,
             WithdrawFrom::Sponsor => gas_data.owner,
+            // Declared funder, verified against the allowance object at signing.
+            WithdrawFrom::Allowance { funder, .. } => funder,
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
         *reservations

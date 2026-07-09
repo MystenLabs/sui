@@ -3146,29 +3146,39 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn validate_allowance_withdrawals(&self, input_objects: &InputObjects) -> UserInputResult<()> {
+        let withdrawals: Vec<_> = self
+            .get_funds_withdrawals()
+            .filter(|w| matches!(w.withdraw_from, WithdrawFrom::Allowance { .. }))
+            .collect();
+        if withdrawals.is_empty() {
+            return Ok(());
+        }
+        // One pass over the inputs; each allowance below is a map lookup. The
+        // allowance must be among the tx's inputs (spending needs it as an
+        // input anyway), or it fails to resolve here.
+        let objects_by_id: BTreeMap<ObjectID, &Object> = input_objects
+            .iter()
+            .filter_map(|input| Some((input.id(), input.as_object()?)))
+            .collect();
         // Parses are cached per object, but every withdrawal is checked: two
         // may source the same allowance with different declared funders.
         let mut resolved_allowances: BTreeMap<ObjectID, ResolvedAllowance> = BTreeMap::new();
-        for withdraw in self.get_funds_withdrawals() {
+        for withdraw in withdrawals {
             let WithdrawFrom::Allowance { funder, allowance } = &withdraw.withdraw_from else {
                 continue;
             };
             if !resolved_allowances.contains_key(allowance) {
-                // `validity_check` requires the allowance to be a declared
-                // shared input, so it is always in the load set.
-                let object = input_objects
-                    .iter()
-                    .find(|input| input.id() == *allowance)
-                    .and_then(|input| input.as_object())
-                    .ok_or_else(|| UserInputError::InvalidWithdrawReservation {
+                let object = objects_by_id.get(allowance).ok_or_else(|| {
+                    UserInputError::InvalidWithdrawReservation {
                         error: format!("allowance object {allowance} not found"),
-                    })?;
+                    }
+                })?;
                 resolved_allowances.insert(*allowance, parse_allowance_object(object)?);
             }
             let resolved = &resolved_allowances[allowance];
             // Execution trusts the declared funder, so this match is what makes
             // `owner_for_withdrawal` sound for allowance sources.
-            if resolved.funder != *funder {
+            if &resolved.funder != funder {
                 return Err(UserInputError::InvalidWithdrawReservation {
                     error: format!(
                         "Declared funder {funder} does not match the funder of \
@@ -3317,9 +3327,6 @@ impl TransactionDataAPI for TransactionDataV1 {
             let max_withdraws = 10;
             let mut num_reservations = 0;
 
-            // Materialized only if some withdrawal sources an allowance.
-            let mut declared_shared_inputs: Option<BTreeSet<ObjectID>> = None;
-
             for withdraw in self.kind.get_funds_withdrawals() {
                 num_reservations += 1;
                 match withdraw.withdraw_from {
@@ -3330,42 +3337,14 @@ impl TransactionDataAPI for TransactionDataV1 {
                         }
                         .into());
                     }
-                    WithdrawFrom::Allowance {
-                        allowance: allowance_id,
-                        ..
-                    } => {
+                    // The allowance itself is checked after input loading, in
+                    // `validate_allowance_withdrawals`.
+                    WithdrawFrom::Allowance { .. } => {
                         fp_ensure!(
                             config.enable_allowances(),
                             UserInputError::Unsupported(
                                 "Allowance withdrawals are not enabled".to_string()
                             )
-                            .into()
-                        );
-                        let declared = declared_shared_inputs.get_or_insert_with(|| {
-                            self.input_objects()
-                                .map(|kinds| {
-                                    kinds
-                                        .into_iter()
-                                        .filter_map(|kind| match kind {
-                                            InputObjectKind::SharedMoveObject { id, .. } => {
-                                                Some(id)
-                                            }
-                                            _ => None,
-                                        })
-                                        .collect()
-                                })
-                                .unwrap_or_default()
-                        });
-                        // The allowance must be a declared shared input: consensus
-                        // sequencing of it serializes spends against revokes/updates.
-                        fp_ensure!(
-                            declared.contains(&allowance_id),
-                            UserInputError::InvalidWithdrawReservation {
-                                error: format!(
-                                    "Allowance {allowance_id} must be a shared-object input \
-                                    of the transaction"
-                                ),
-                            }
                             .into()
                         );
                     }

@@ -33,7 +33,7 @@ async fn test_allowance_issue_and_spend() {
     if has_mainnet_protocol_config_override() {
         return;
     }
-    // Genesis at protocol version 128 (unsnapshotted) deploys the source-built
+    // Genesis at the max protocol version (unsnapshotted) deploys the source-built
     // framework, which includes `sui::allowance`, and enables the flag.
     let mut test_env = TestEnvBuilder::new().build().await;
 
