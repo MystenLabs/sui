@@ -3,12 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::cfg::MutForwardCFG,
+    cfgir::{
+        ast::{SyntaxCommand, ssp},
+        cfg::MutForwardCFG,
+    },
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
-        BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
-        TypeName_, UnannotatedExp_, Value, Value_, Var,
+        BaseType, BaseType_, Command_, Exp, FunctionSignature, SingleType, TypeName, TypeName_,
+        UnannotatedExp_, Value, Value_, Var,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
     parser::ast::{BinOp, BinOp_, ConstantName, UnaryOp, UnaryOp_},
@@ -63,7 +66,7 @@ struct Context<'a> {
 // Some(changed) to keep
 // None to remove the cmd
 #[growing_stack]
-fn optimize_cmd(context: &Context, sp!(_, cmd_): &mut Command) -> Option<bool> {
+fn optimize_cmd(context: &Context, ssp!(_, cmd_): &mut SyntaxCommand) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
         C::Assign(_, _ls, e) => optimize_exp(context, e),

@@ -8,13 +8,13 @@ use crate::{
     cfgir::{
         CFGContext,
         absint::{AbstractDomain, JoinResult, TransferFunctions},
-        ast as G,
+        ast::{self as G, ssp},
         cfg::ImmForwardCFG,
     },
     command_line::compiler::Visitor,
     diagnostics::{Diagnostic, Diagnostics, filter::FilterScope},
     expansion::ast::ModuleIdent,
-    hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
+    hlir::ast::{self as H, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     parser::ast::{ConstantName, DatatypeName, Field, FunctionName},
     shared::CompilationEnv,
 };
@@ -221,10 +221,10 @@ pub trait CFGIRVisitorContext {
         }
     }
 
-    fn visit_command_custom(&mut self, _cmd: &H::Command) -> bool {
+    fn visit_command_custom(&mut self, _cmd: &G::SyntaxCommand) -> bool {
         false
     }
-    fn visit_command(&mut self, cmd: &H::Command) {
+    fn visit_command(&mut self, cmd: &G::SyntaxCommand) {
         use H::Command_ as C;
         if self.visit_command_custom(cmd) {
             return;
@@ -596,7 +596,7 @@ pub trait SimpleAbsInt: Sized {
         &self,
         _context: &mut Self::ExecutionContext,
         _state: &mut Self::State,
-        _cmd: &Command,
+        _cmd: &G::SyntaxCommand,
     ) -> bool {
         false
     }
@@ -604,13 +604,13 @@ pub trait SimpleAbsInt: Sized {
         &self,
         context: &mut Self::ExecutionContext,
         state: &mut Self::State,
-        cmd: &Command,
+        cmd: &G::SyntaxCommand,
     ) {
         use H::Command_ as C;
         if self.command_custom(context, state, cmd) {
             return;
         }
-        let sp!(_, cmd_) = cmd;
+        let ssp!(_, cmd_) = cmd;
         match cmd_ {
             C::Assign(_, ls, e) => {
                 let values = self.exp(context, state, e);
@@ -838,7 +838,7 @@ impl<V: SimpleAbsInt> TransferFunctions for V {
         pre: &mut Self::State,
         lbl: Label,
         idx: usize,
-        cmd: &Command,
+        cmd: &G::SyntaxCommand,
     ) -> Diagnostics {
         let mut context = self.start_command(lbl, idx, pre);
         self.command(&mut context, pre, cmd);
@@ -868,19 +868,19 @@ pub fn cfg_satisfies<FCommand, FExp>(
     mut p_exp: FExp,
 ) -> bool
 where
-    FCommand: FnMut(&Command) -> bool,
+    FCommand: FnMut(&G::SyntaxCommand) -> bool,
     FExp: FnMut(&Exp) -> bool,
 {
     cfg_satisfies_(cfg, &mut p_command, &mut p_exp)
 }
 
 pub fn command_satisfies<FCommand, FExp>(
-    cmd: &Command,
+    cmd: &G::SyntaxCommand,
     mut p_command: FCommand,
     mut p_exp: FExp,
 ) -> bool
 where
-    FCommand: FnMut(&Command) -> bool,
+    FCommand: FnMut(&G::SyntaxCommand) -> bool,
     FExp: FnMut(&Exp) -> bool,
 {
     command_satisfies_(cmd, &mut p_command, &mut p_exp)
@@ -902,7 +902,7 @@ pub fn calls_special_function(
 
 pub fn calls_special_function_command(
     special: &[(AccountAddress, &str, &str)],
-    cmd: &Command,
+    cmd: &G::SyntaxCommand,
 ) -> bool {
     command_satisfies(cmd, |_| true, |e| is_special_function(special, e))
 }
@@ -921,7 +921,7 @@ fn is_special_function(special: &[(AccountAddress, &str, &str)], e: &Exp) -> boo
 
 fn cfg_satisfies_(
     cfg: &ImmForwardCFG,
-    p_command: &mut impl FnMut(&Command) -> bool,
+    p_command: &mut impl FnMut(&G::SyntaxCommand) -> bool,
     p_exp: &mut impl FnMut(&Exp) -> bool,
 ) -> bool {
     cfg.blocks().values().any(|block| {
@@ -932,8 +932,8 @@ fn cfg_satisfies_(
 }
 
 fn command_satisfies_(
-    cmd @ sp!(_, cmd_): &Command,
-    p_command: &mut impl FnMut(&Command) -> bool,
+    cmd @ ssp!(_, cmd_): &G::SyntaxCommand,
+    p_command: &mut impl FnMut(&G::SyntaxCommand) -> bool,
     p_exp: &mut impl FnMut(&Exp) -> bool,
 ) -> bool {
     use H::Command_ as C;

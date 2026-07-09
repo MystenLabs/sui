@@ -6,8 +6,8 @@ use crate::{
     diagnostics::filter::FilterScope,
     expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},
     hlir::ast::{
-        BaseType, Command, Command_, EnumDefinition, FunctionSignature, Label, SingleType,
-        StructDefinition, Var, Visibility,
+        BaseType, Command_, EnumDefinition, FunctionSignature, Label, MacroExpansionInfo,
+        SingleType, StructDefinition, Var, Visibility,
     },
     parser::ast::{ConstantName, DatatypeName, ENTRY_MODIFIER, FunctionName, TargetKind},
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
@@ -106,7 +106,51 @@ pub struct Function {
 
 pub type BasicBlocks = BTreeMap<Label, BasicBlock>;
 
-pub type BasicBlock = VecDeque<Command>;
+pub type BasicBlock = VecDeque<SyntaxCommand>;
+
+/// Syntactic context for code that was produced by an expansion (e.g., a macro), tracking the
+/// chain of expansions that produced it, innermost first.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyntaxInfo {
+    pub info: SyntaxInfoEntry,
+    pub prev: Option<Arc<SyntaxInfo>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SyntaxInfoEntry {
+    MacroExpansion(MacroExpansionInfo),
+}
+
+/// A location plus the expansion context (if any) the code at that location came from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyntaxLoc {
+    pub loc: Loc,
+    pub syntax_info: Option<Arc<SyntaxInfo>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyntaxSpanned<T> {
+    pub sloc: SyntaxLoc,
+    pub value: T,
+}
+
+pub type SyntaxCommand = SyntaxSpanned<Command_>;
+
+macro_rules! ssp {
+    (_, $value:pat) => {
+        crate::cfgir::ast::SyntaxSpanned { value: $value, .. }
+    };
+    ($sloc:pat, _) => {
+        crate::cfgir::ast::SyntaxSpanned { sloc: $sloc, .. }
+    };
+    ($sloc:pat, $value:pat) => {
+        crate::cfgir::ast::SyntaxSpanned {
+            sloc: $sloc,
+            value: $value,
+        }
+    };
+}
+pub(crate) use ssp;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum LoopEnd {
@@ -141,6 +185,28 @@ impl LoopEnd {
     }
 }
 
+impl SyntaxInfo {
+    pub fn new(info: SyntaxInfoEntry, prev: Option<Arc<SyntaxInfo>>) -> Self {
+        Self { info, prev }
+    }
+}
+
+impl SyntaxLoc {
+    pub fn new(loc: Loc, syntax_info: Option<Arc<SyntaxInfo>>) -> Self {
+        Self { loc, syntax_info }
+    }
+}
+
+impl<T> SyntaxSpanned<T> {
+    pub fn new(sloc: SyntaxLoc, value: T) -> Self {
+        Self { sloc, value }
+    }
+
+    pub fn loc(&self) -> Loc {
+        self.sloc.loc
+    }
+}
+
 //**************************************************************************************************
 // Label util
 //**************************************************************************************************
@@ -166,7 +232,7 @@ fn remap_labels_block(remapping: &BTreeMap<Label, Label>, block: &mut BasicBlock
     }
 }
 
-fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Command) {
+fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, ssp!(_, cmd_): &mut SyntaxCommand) {
     use Command_::*;
     match cmd_ {
         Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
@@ -374,6 +440,12 @@ impl AstDebug for (&Label, &BasicBlock) {
     fn ast_debug(&self, w: &mut AstWriter) {
         w.write(format!("label {}:", (self.0).0));
         w.indent(4, |w| w.semicolon(self.1, |w, cmd| cmd.ast_debug(w)))
+    }
+}
+
+impl<T: AstDebug> AstDebug for SyntaxSpanned<T> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        self.value.ast_debug(w)
     }
 }
 

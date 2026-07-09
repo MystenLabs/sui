@@ -2128,6 +2128,7 @@ fn still_has_break(name: &BlockLabel, block: &Block) -> bool {
                 block,
             } => has_break_block(name, block),
             S::NamedBlock { name: _, block } => has_break_block(name, block),
+            S::MacroExpansion { body, .. } => has_break(name, body),
             hcmd!(C::Break(break_name)) => break_name == name,
             S::Command(_) => false,
             S::VariantMatch {

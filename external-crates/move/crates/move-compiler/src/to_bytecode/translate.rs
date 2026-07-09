@@ -5,7 +5,10 @@
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
     PreCompiledProgramInfo,
-    cfgir::{ast as G, translate::move_value_from_value_},
+    cfgir::{
+        ast::{self as G, ssp},
+        translate::move_value_from_value_,
+    },
     compiled_unit::*,
     diag,
     diagnostics::{DiagnosticReporter, Diagnostics, filter::FilterStack},
@@ -1046,7 +1049,12 @@ fn label(lbl: H::Label) -> IR::BlockLabel_ {
     IR::BlockLabel_(format!("{}", lbl).into())
 }
 
-fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): H::Command) {
+fn command(
+    context: &mut Context,
+    code: &mut IR::BytecodeBlock,
+    ssp!(sloc, cmd_): G::SyntaxCommand,
+) {
+    let loc = sloc.loc;
     use H::Command_ as C;
     use IR::Bytecode_ as B;
     match cmd_ {
