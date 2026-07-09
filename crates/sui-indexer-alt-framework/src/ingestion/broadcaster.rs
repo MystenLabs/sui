@@ -34,6 +34,18 @@ use crate::metrics::CohortMetrics;
 /// path catch up first.
 const STREAMING_CATCHUP_THRESHOLD: u64 = 1_000;
 
+/// A subscription to the ingestion service: the channel checkpoints are delivered on, and the
+/// first checkpoint the subscriber still needs. The broadcaster does not deliver checkpoints
+/// below `next_checkpoint` -- the subscriber has already processed them.
+#[derive(Clone)]
+pub(super) struct Subscriber {
+    /// Checkpoints are delivered on this channel.
+    pub(super) tx: mpsc::Sender<Arc<CheckpointEnvelope>>,
+
+    /// The subscriber's resume point: checkpoints below it are not delivered.
+    pub(super) next_checkpoint: u64,
+}
+
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
 /// via either streaming or ingesting, or both.
 ///
@@ -46,14 +58,15 @@ const STREAMING_CATCHUP_THRESHOLD: u64 = 1_000;
 ///
 /// Backpressure is **per-subscriber, channel-fill based**: each subscriber's bounded mpsc
 /// channel acts as both transport and the backpressure signal. When any subscriber's channel
-/// fills, [`TrySpawnStreamExt::try_for_each_broadcast_spawned`]'s adaptive controller cuts
-/// ingest concurrency. The task will shut down if the `checkpoints` range completes.
+/// fills, [`TrySpawnStreamExt::try_for_each_broadcast_filtered_spawned`]'s adaptive controller
+/// cuts ingest concurrency. Checkpoints below a subscriber's `next_checkpoint` are not
+/// delivered to it. The task will shut down if the `checkpoints` range completes.
 pub(super) fn broadcaster<R>(
     checkpoints: R,
     streaming_client: Option<ArcStreamingClient>,
     config: IngestionConfig,
     client: IngestionClient,
-    subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
+    subscribers: Vec<Subscriber>,
 ) -> Service
 where
     R: std::ops::RangeBounds<u64> + Send + 'static,
@@ -155,21 +168,26 @@ where
 
 /// Fetch and broadcast checkpoints from a range [start..end) to subscribers. The adaptive
 /// controller reads the max `fill` across subscribers (channel capacity for bounded,
-/// `len / soft_limit` for unbounded) and adjusts ingest concurrency to match.
+/// `len / soft_limit` for unbounded) and adjusts ingest concurrency to match. Each checkpoint
+/// is only delivered to subscribers whose `next_checkpoint` it has reached.
 fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
     ingest_concurrency: ConcurrencyConfig,
     client: IngestionClient,
-    subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
+    subscribers: Vec<Subscriber>,
     cohort_metrics: Arc<CohortMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
         let concurrency_limit = cohort_metrics.ingestion_concurrency_limit.clone();
         let concurrency_inflight = cohort_metrics.ingestion_concurrency_inflight.clone();
+        let (txs, next_checkpoints): (Vec<_>, Vec<_>) = subscribers
+            .into_iter()
+            .map(|s| (s.tx, s.next_checkpoint))
+            .unzip();
         futures::stream::iter(start..end)
-            .try_for_each_broadcast_spawned(
+            .try_for_each_broadcast_filtered_spawned(
                 ingest_concurrency.into(),
                 |cp| {
                     let client = client.clone();
@@ -180,7 +198,10 @@ fn ingest_and_broadcast_range(
                         Ok(Arc::new(checkpoint_envelope))
                     }
                 },
-                subscribers,
+                txs,
+                move |i, envelope: &Arc<CheckpointEnvelope>| {
+                    *envelope.checkpoint.summary.sequence_number() >= next_checkpoints[i]
+                },
                 move |stats| {
                     concurrency_limit.set(stats.limit as i64);
                     concurrency_inflight.set(stats.inflight as i64);
@@ -199,7 +220,7 @@ async fn setup_streaming_task(
     end_cp: u64,
     streaming_backoff_batch_size: &mut u64,
     config: &IngestionConfig,
-    subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
+    subscribers: &[Subscriber],
     cohort_metrics: &Arc<CohortMetrics>,
 ) -> (TaskGuard<u64>, u64) {
     // No streaming client configured so we ingest all the way to end_cp.
@@ -291,7 +312,7 @@ async fn stream_and_broadcast_range(
     mut lo: u64,
     hi: u64,
     mut stream: impl Stream<Item = Result<CheckpointEnvelope, Error>> + Unpin,
-    subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
+    subscribers: Vec<Subscriber>,
     cohort_metrics: Arc<CohortMetrics>,
 ) -> u64 {
     let latest_streamed = cohort_metrics.latest_streamed_checkpoint.clone();
@@ -362,14 +383,18 @@ fn noop_streaming_task(checkpoint_hi: u64) -> TaskGuard<u64> {
     TaskGuard::new(tokio::spawn(async move { checkpoint_hi }))
 }
 
-/// Send a checkpoint to all subscribers. Returns an error if any subscriber's channel is closed.
+/// Send a checkpoint to every subscriber whose `next_checkpoint` it has reached; subscribers
+/// still below their resume point have already processed it. Returns an error if any selected
+/// subscriber's channel is closed.
 async fn send_checkpoint(
     checkpoint_envelope: Arc<CheckpointEnvelope>,
-    subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
+    subscribers: &[Subscriber],
 ) -> Result<Vec<()>, mpsc::error::SendError<Arc<CheckpointEnvelope>>> {
+    let sequence_number = *checkpoint_envelope.checkpoint.summary.sequence_number();
     let futures = subscribers
         .iter()
-        .map(|s| s.send(checkpoint_envelope.clone()));
+        .filter(|s| s.next_checkpoint <= sequence_number)
+        .map(|s| s.tx.send(checkpoint_envelope.clone()));
     try_join_all(futures).await
 }
 
@@ -449,16 +474,36 @@ mod tests {
         result
     }
 
-    /// Build a subscribers list with a single bounded subscriber of the given capacity. Returns
-    /// the senders vec (to pass into `broadcaster(...)`) and the subscriber's stream.
-    fn single_subscriber(
+    /// Build a single bounded subscriber with the given channel capacity and resume point.
+    /// Returns the subscriber (to pass into `broadcaster(...)`) and its stream.
+    fn subscriber(
         capacity: usize,
+        next_checkpoint: u64,
     ) -> (
-        Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
+        Subscriber,
         impl Stream<Item = Arc<CheckpointEnvelope>> + Send + Unpin + 'static,
     ) {
         let (tx, rx) = mpsc::channel(capacity);
-        (vec![tx], tokio_stream::wrappers::ReceiverStream::new(rx))
+        (
+            Subscriber {
+                tx,
+                next_checkpoint,
+            },
+            tokio_stream::wrappers::ReceiverStream::new(rx),
+        )
+    }
+
+    /// Build a subscribers list with a single bounded subscriber of the given capacity that
+    /// receives everything. Returns the subscribers vec (to pass into `broadcaster(...)`) and
+    /// the subscriber's stream.
+    fn single_subscriber(
+        capacity: usize,
+    ) -> (
+        Vec<Subscriber>,
+        impl Stream<Item = Arc<CheckpointEnvelope>> + Send + Unpin + 'static,
+    ) {
+        let (sub, rx) = subscriber(capacity, 0);
+        (vec![sub], rx)
     }
 
     /// Receive `count` checkpoints from the stream and return their sequence numbers as a BTreeSet.
@@ -552,11 +597,9 @@ mod tests {
 
     #[tokio::test]
     async fn multiple_physical_subscribers() {
-        let (tx1, rx1) = mpsc::channel(1);
-        let (tx2, rx2) = mpsc::channel(1);
-        let subscribers = vec![tx1, tx2];
-        let mut subscriber_rx1 = tokio_stream::wrappers::ReceiverStream::new(rx1);
-        let mut subscriber_rx2 = tokio_stream::wrappers::ReceiverStream::new(rx2);
+        let (sub1, mut subscriber_rx1) = subscriber(1, 0);
+        let (sub2, mut subscriber_rx2) = subscriber(1, 0);
+        let subscribers = vec![sub1, sub2];
 
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
@@ -582,6 +625,85 @@ mod tests {
 
         // The broadcaster should shut down gracefully
         svc.join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn ingest_skips_below_subscriber_next_checkpoint() {
+        let (sub1, mut rx1) = subscriber(10, 0);
+        let (sub2, mut rx2) = subscriber(10, 5);
+
+        let metrics = test_ingestion_metrics();
+        let mut svc = broadcaster(
+            0..10,
+            None,
+            test_config(),
+            mock_client_with_range(0..10, metrics.clone()),
+            vec![sub1, sub2],
+        );
+
+        assert_eq!(recv_set(&mut rx1, 10).await, BTreeSet::from_iter(0..10));
+        assert_eq!(recv_set(&mut rx2, 5).await, BTreeSet::from_iter(5..10));
+
+        svc.join().await.unwrap();
+
+        // The broadcaster is done and its senders are dropped: an empty channel here proves
+        // checkpoints below the resume point were never delivered, not merely delivered late.
+        assert!(expect_recv(&mut rx2).await.is_none());
+    }
+
+    /// A dropped subscriber that ingestion has not yet reached does not stop the broadcaster:
+    /// checkpoints below its resume point are never routed to it, so its closed channel goes
+    /// unnoticed for the whole range.
+    #[tokio::test]
+    async fn dropped_filtered_subscriber_does_not_stop_broadcaster() {
+        let (sub1, mut rx1) = subscriber(20, 0);
+        let (sub2, rx2) = subscriber(1, 100);
+        drop(rx2);
+
+        let metrics = test_ingestion_metrics();
+        let mut svc = broadcaster(
+            0..20,
+            None,
+            test_config(),
+            mock_client_with_range(0..20, metrics.clone()),
+            vec![sub1, sub2],
+        );
+
+        assert_eq!(recv_set(&mut rx1, 20).await, BTreeSet::from_iter(0..20));
+
+        svc.join().await.unwrap();
+    }
+
+    /// Once ingestion reaches a dropped subscriber's resume point, the failed send is noticed
+    /// and the broadcaster winds down without completing the range.
+    #[tokio::test]
+    async fn broadcaster_stops_when_range_reaches_dropped_subscriber() {
+        let (sub1, mut rx1) = subscriber(40, 0);
+        let (sub2, rx2) = subscriber(1, 10);
+        drop(rx2);
+
+        let metrics = test_ingestion_metrics();
+        let mut svc = broadcaster(
+            0..40,
+            None,
+            test_config(),
+            mock_client_with_range(0..40, metrics.clone()),
+            vec![sub1, sub2],
+        );
+
+        svc.join().await.unwrap();
+
+        // The live subscriber received everything below the dropped subscriber's resume point,
+        // plus at most the few checkpoints that were in flight when the send failure hit.
+        let mut received = BTreeSet::new();
+        while let Some(checkpoint_envelope) = expect_recv(&mut rx1).await {
+            received.insert(*checkpoint_envelope.checkpoint.summary.sequence_number());
+        }
+        assert!(received.is_superset(&BTreeSet::from_iter(0..10)));
+        // With fixed ingest concurrency 2, at most checkpoints 10 and 11 can be in flight when
+        // the first failed send is recorded, and no further tasks spawn after it -- so the live
+        // subscriber can receive checkpoints 0..12 at most.
+        assert!(received.len() <= 12);
     }
 
     // =============== Streaming Tests ==================
@@ -631,6 +753,48 @@ mod tests {
         );
 
         svc.join().await.unwrap();
+    }
+
+    /// The streaming path also skips delivering checkpoints below a subscriber's resume point.
+    #[tokio::test]
+    async fn streaming_skips_below_subscriber_next_checkpoint() {
+        let (sub1, mut rx1) = subscriber(10, 0);
+        let (sub2, mut rx2) = subscriber(10, 5);
+
+        let streaming_client = MockStreamingClient::new(0..10, None);
+
+        let metrics = test_ingestion_metrics();
+        let mut svc = broadcaster(
+            0..10,
+            Some(Arc::new(streaming_client)),
+            test_config(),
+            mock_client_with_range(0..10, metrics.clone()),
+            vec![sub1, sub2],
+        );
+
+        assert_eq!(recv_vec(&mut rx1, 10).await, Vec::from_iter(0..10));
+        assert_eq!(recv_vec(&mut rx2, 5).await, Vec::from_iter(5..10));
+
+        // Everything was delivered by streaming, so the skipped deliveries were the streaming
+        // path's doing, not the ingest path's.
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            10
+        );
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+
+        svc.join().await.unwrap();
+
+        assert!(expect_recv(&mut rx2).await.is_none());
     }
 
     #[tokio::test]
