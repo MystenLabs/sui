@@ -668,12 +668,80 @@ not-executed at check time cannot have contaminated the earlier store read for k
 mutates; later touchers cannot execute before earlier ones per-object). All overlay
 mutations stay under the existing quarantine write lock.
 
+> **This paragraph's premise is false** under checkpoint-execution-ahead-of-consensus-
+> replay (I1b), and read-only shared inputs break "later touchers cannot execute before
+> earlier ones." See §7.4.
+
 ### 7.3 Warmup writers
 
 Vote-time and pipeline warmers insert through the existing `MonotonicCache` ticketed
 protocol, which already guarantees a stale read can never clobber a newer concurrent
 execution write — this is precisely why reusing `object_by_id_cache` is preferable to
 inventing a new liveness cache.
+
+### 7.4 Effects-visibility races (C5 / C6 / C7) — analysis, NOT yet implemented
+
+Status: **analysis only — no code committed.** C5 and C6 have a designed fix; C7 needs a
+design decision (below) before any of it is built. Captured here so the work is not lost.
+
+**Root cause.** `WritebackCache::write_transaction_outputs`
+(`writeback_cache.rs`) publishes a transaction's OUTPUT OBJECT writes into the dirty cache
+*before* it inserts `transaction_effects` and `executed_effects_digests` (the "this tx
+executed" gate `get_executed_effects` reads). So a reader can observe a tx's object writes
+without yet observing its effects/executed-mark — a non-atomic publish. Three consensus
+bugs follow, all reachable only when the checkpoint executor runs ahead of consensus replay
+(I1b, e.g. crash-recovery with deferral):
+
+- **C5** — the post-consensus owned-lock exemption
+  (`try_acquire_owned_object_locks_post_consensus_v2`) reads the consumed-check (objects)
+  then `get_executed_effects`; a catching-up node sees its own certified tx's input
+  consumed but not-yet-executed → drops it → checkpoint-fork `fatal!`.
+- **C6** — the shared-object seeder (`compute_effects_version_seeds` +
+  `get_or_init_next_object_versions` store-candidate) reads the store (sees an *in-batch*
+  toucher's object write) but that toucher's effects aren't visible yet → seeds the
+  next-version map from a contaminated store value.
+- **C7** — the contaminating mutator is in a *later* commit than the batch being seeded, so
+  it is never among the batch's assignables; the seeder cannot find its effects, and the
+  store-candidate fallback is contaminated. This falsifies §7.2's premise.
+
+**C5 / C6 — designed fix (safe, no table).** The naive reorder — publish
+`executed_effects_digests` before the object writes — is **unsafe**: it inverts the
+`executed-mark visible ⇒ output objects visible` relationship that real readers depend on
+(the checkpoint executor's `load_checkpoint` reads output objects at pipeline stage 3,
+before commit, and panics if absent; the accumulator settlement barrier reads written
+fields that are not its declared inputs; the legacy pre-effects-v2 hasher). The safe change
+publishes only `pending_transaction_writes` (which carries the effects inline) *before* the
+object writes, adds a `get_executed_effects_including_pending(digest)` reader (pending map
+first, else the committed path), and uses it in the exemption (C5) and the seeder (C6).
+This gives `object write visible ⇒ effects visible` without ever moving
+`executed_effects_digests`, so every `executed ⇒ objects` reader keeps its guarantee.
+
+**C7 — needs a durable next-version-at-watermark; open decision.** On replay,
+`get_or_init` must seed a key touched in the replay window with its next-version *at the
+flushed watermark W*. A "minimal first-touch init-pin" (write the key's seed once, at first
+touch) is **insufficient**: for a hot object mutated before W and re-touched during replay
+(the common case), first-touch value ≠ W value. Example: X goes `v0→v1` in a flushed
+commit, then `v1→v2` in a replay-window commit; the correct seed is `v1`, but a first-touch
+pin holds `v0` and the executor-contaminated store holds `v2`. The only value that is
+correct is the next-version at W — exactly what the removed `next_shared_object_versions_v2`
+stored (written at flush). Options:
+1. **Persist the next-version map at flush (revert Component C).** Reinstate a durable
+   next-version table written at flush = the watermark value per key. Fully closes C6+C7,
+   and also fixes the §8 unbounded-memory gap (evict cold map entries to the table, re-read
+   on demand — the old memory model). Amortized at-flush write. Cost: reverts the largest of
+   the three table removals; the owned-lock and marker removals stand.
+2. **Execution-ordering constraint (no table).** Prevent the checkpoint executor from
+   advancing a shared object's version ahead of consensus replay, so the store is never
+   contaminated when the seeder reads it. Closes C7 with no durable table but serializes
+   execution behind consensus replay for shared objects — hurts state-sync/catch-up
+   parallelism, i.e. the throughput this whole project targets.
+3. **Flag-gate C7 as a known limitation.** Ship C5/C6, rely on the debug-only
+   `verify_assignment_matches_effects` to catch C7 in simtest/CI, and close it before any
+   mainnet rollout. Not gap-free in release.
+
+Related: option 1 subsumes the P2 seeder cost (the durable read replaces the guaranteed-miss
+`get_executed_effects` probing, §9); options 2–3 leave §9's ≤2-probe reduction as the P2
+fix.
 
 ---
 
