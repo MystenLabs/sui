@@ -34,9 +34,7 @@ use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedRange;
-use crate::ledger_history::watermark::advance_boundary_excluding_cp;
-use crate::ledger_history::watermark::frontier_boundary_watermark;
-use crate::ledger_history::watermark::item_watermark;
+use crate::ledger_history::watermark::CheckpointBoundary;
 use crate::ledger_history::watermark::reached_range_end;
 use crate::ledger_history::watermark::terminal_boundary_watermark;
 
@@ -233,11 +231,11 @@ fn next_transaction_chunk(
                 let terminal = ChunkTerminal {
                     reason: tx_range.end_reason,
                     watermark: terminal_boundary_watermark(
-                        &options,
                         Position::Transactions {
                             checkpoint: tx_range.end_checkpoint,
                             tx_seq: tx_range.end_position,
                         },
+                        ascending,
                     ),
                 };
                 let range = tx_range.range;
@@ -354,7 +352,6 @@ fn next_transaction_chunk(
     }
     let scan_watermark = scan_transaction_watermark(
         &service,
-        &options,
         scan_limited,
         rows.is_empty(),
         frontier,
@@ -364,7 +361,9 @@ fn next_transaction_chunk(
         &service,
         rows,
         &read_mask,
-        &options,
+        // Fresh per chunk; sound because rows are emitted in scan-checkpoint
+        // order, so the boundary stays monotonic across chunks.
+        CheckpointBoundary::new(ascending),
         render_contents,
         cancel,
     )?;
@@ -385,7 +384,6 @@ fn next_transaction_chunk(
 /// A transaction's member id is its own `tx_sequence_number`, so the frontier decodes to itself.
 fn scan_transaction_watermark(
     service: &RpcService,
-    options: &QueryOptions,
     scan_limited: bool,
     no_items: bool,
     coalesced_frontier: Option<u64>,
@@ -400,13 +398,11 @@ fn scan_transaction_watermark(
     let Some(cp) = sequence_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-    let watermark = frontier_boundary_watermark(
-        options,
-        Position::Transactions {
-            checkpoint: cp,
-            tx_seq: frontier,
-        },
-    );
+    let mut boundary = CheckpointBoundary::new(ascending);
+    let watermark = boundary.frontier_watermark(Position::Transactions {
+        checkpoint: cp,
+        tx_seq: frontier,
+    });
     Ok(Some(watermark_response(watermark)))
 }
 
@@ -414,7 +410,7 @@ fn render_transaction_rows(
     service: &RpcService,
     rows: Vec<LedgerTxSeqDigest>,
     read_mask: &FieldMaskTree,
-    options: &QueryOptions,
+    mut boundary: CheckpointBoundary,
     render_contents: bool,
     cancel: &CancellationToken,
 ) -> Result<Vec<ListTransactionsResponse>, RpcError> {
@@ -435,22 +431,14 @@ fn render_transaction_rows(
     };
 
     let mut items = Vec::with_capacity(rows.len());
-    // Per-chunk running boundary; monotonic across chunks because rows are
-    // emitted in scan-checkpoint order.
-    let mut checkpoint_boundary: Option<u64> = None;
     for row in rows {
         if cancel.is_cancelled() {
             return Err(cancelled());
         }
-        checkpoint_boundary =
-            advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
-        let watermark = item_watermark(
-            Position::Transactions {
-                checkpoint: row.checkpoint_number,
-                tx_seq: row.tx_sequence_number,
-            },
-            checkpoint_boundary,
-        );
+        let watermark = boundary.item_watermark_entered(Position::Transactions {
+            checkpoint: row.checkpoint_number,
+            tx_seq: row.tx_sequence_number,
+        });
         let response = if render_contents {
             let transaction_read = transaction_reads
                 .next()

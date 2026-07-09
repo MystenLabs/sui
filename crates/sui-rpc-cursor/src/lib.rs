@@ -42,8 +42,12 @@ impl Position {
         }
     }
 
+<<<<<<< HEAD
     /// The same position with its `checkpoint` coordinate replaced; the
     /// scalar coordinates are preserved.
+=======
+    /// This position with its checkpoint coordinate replaced.
+>>>>>>> 41c4782816b (CheckpointBoundary type to consolidate watermarking and driving the checkpoint. Distinction between entering and completing a checkpoint, really down to not-list-checkpoint vs list-checkpoint. remove QueryOptions from watermark.rs)
     pub fn with_checkpoint(self, checkpoint: u64) -> Self {
         match self {
             Position::Checkpoints { .. } => Position::Checkpoints { checkpoint },
@@ -271,6 +275,38 @@ mod tests {
         ] {
             assert_eq!(CursorToken::decode(&token.encode()).unwrap(), token);
         }
+    }
+
+    #[test]
+    fn with_checkpoint_replaces_only_the_checkpoint() {
+        assert_eq!(
+            Position::Transactions {
+                checkpoint: 1,
+                tx_seq: 7,
+            }
+            .with_checkpoint(5),
+            Position::Transactions {
+                checkpoint: 5,
+                tx_seq: 7,
+            }
+        );
+        assert_eq!(
+            Position::Events {
+                checkpoint: 1,
+                tx_seq: 7,
+                event_index: 3,
+            }
+            .with_checkpoint(5),
+            Position::Events {
+                checkpoint: 5,
+                tx_seq: 7,
+                event_index: 3,
+            }
+        );
+        assert_eq!(
+            Position::Checkpoints { checkpoint: 1 }.with_checkpoint(5),
+            Position::Checkpoints { checkpoint: 5 }
+        );
     }
 
     #[test]

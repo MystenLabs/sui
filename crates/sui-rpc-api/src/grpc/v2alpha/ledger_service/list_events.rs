@@ -57,9 +57,7 @@ use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::validate_checkpoint_bounds;
-use crate::ledger_history::watermark::advance_boundary_excluding_cp;
-use crate::ledger_history::watermark::frontier_boundary_watermark;
-use crate::ledger_history::watermark::item_watermark;
+use crate::ledger_history::watermark::CheckpointBoundary;
 use crate::ledger_history::watermark::reached_range_end;
 use crate::ledger_history::watermark::terminal_boundary_watermark;
 
@@ -240,12 +238,12 @@ fn next_event_chunk(
             let terminal = ChunkTerminal {
                 reason: event_range.end_reason,
                 watermark: terminal_boundary_watermark(
-                    &options,
                     Position::Events {
                         checkpoint: event_range.end_checkpoint,
                         tx_seq: event_range.end_position.tx_seq,
                         event_index: event_range.end_position.event_index,
                     },
+                    ascending,
                 ),
             };
             let bounds = event_range.bounds;
@@ -394,15 +392,18 @@ fn next_event_chunk(
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
+
     let scan_watermark = scan_event_watermark(
         &service,
-        &options,
         scan_limited,
         refs.is_empty(),
         frontier,
         ascending,
     )?;
-    let mut items = render_event_chunk(&service, refs, &read_mask, &options, cancel)?;
+
+    let checkpoint_boundary = CheckpointBoundary::new(ascending);
+    let mut items = render_event_chunk(&service, refs, &read_mask, checkpoint_boundary, cancel)?;
+
     let produced = items.len();
     if let Some(watermark) = scan_watermark {
         items.push(watermark);
@@ -421,7 +422,6 @@ fn next_event_chunk(
 /// to its checkpoint; yields nothing at genesis (asc) where no progress can be claimed.
 fn scan_event_watermark(
     service: &RpcService,
-    options: &QueryOptions,
     scan_limited: bool,
     no_items: bool,
     frontier: Option<EventPosition>,
@@ -436,14 +436,12 @@ fn scan_event_watermark(
     let Some(cp) = event_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-    let watermark = frontier_boundary_watermark(
-        options,
-        Position::Events {
-            checkpoint: cp,
-            tx_seq: frontier.tx_seq,
-            event_index: frontier.event_index,
-        },
-    );
+    let mut checkpoint_boundary = CheckpointBoundary::new(ascending);
+    let watermark = checkpoint_boundary.frontier_watermark(Position::Events {
+        checkpoint: cp,
+        tx_seq: frontier.tx_seq,
+        event_index: frontier.event_index,
+    });
     Ok(Some(watermark_response(watermark)))
 }
 
@@ -451,7 +449,7 @@ fn render_event_chunk(
     service: &RpcService,
     refs: Vec<EventRef>,
     read_mask: &FieldMaskTree,
-    options: &QueryOptions,
+    mut checkpoint_boundary: CheckpointBoundary,
     cancel: &CancellationToken,
 ) -> Result<Vec<ListEventsResponse>, RpcError> {
     let rows = tx_seq_digest_rows_for_event_refs(service, &refs)?;
@@ -472,9 +470,6 @@ fn render_event_chunk(
     }
 
     let mut items = Vec::with_capacity(refs.len());
-    // Per-chunk running boundary; monotonic across chunks because items are
-    // emitted in scan-checkpoint order.
-    let mut checkpoint_boundary: Option<u64> = None;
     for (event_ref, row) in refs.into_iter().zip_debug_eq(rows) {
         if cancel.is_cancelled() {
             return Err(cancelled());
@@ -529,16 +524,11 @@ fn render_event_chunk(
         if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
             proto_event.event_index = Some(event_ref.position.event_index);
         }
-        checkpoint_boundary =
-            advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
-        let watermark = item_watermark(
-            Position::Events {
-                checkpoint: row.checkpoint_number,
-                tx_seq: event_ref.position.tx_seq,
-                event_index: event_ref.position.event_index,
-            },
-            checkpoint_boundary,
-        );
+        let watermark = checkpoint_boundary.item_watermark_entered(Position::Events {
+            checkpoint: row.checkpoint_number,
+            tx_seq: event_ref.position.tx_seq,
+            event_index: event_ref.position.event_index,
+        });
 
         let mut item = EventItem::default();
         item.watermark = Some(watermark);

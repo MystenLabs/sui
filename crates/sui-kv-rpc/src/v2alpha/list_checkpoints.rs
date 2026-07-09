@@ -31,9 +31,8 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
-use sui_rpc_api::ledger_history::watermark::advance_checkpoint_boundary;
+use sui_rpc_api::ledger_history::watermark::CheckpointBoundary;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
-use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::reached_range_end;
 use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
@@ -102,16 +101,17 @@ pub(crate) async fn list_checkpoints(
     let limit_items = options.limit_items;
     let ordering = options.ordering;
     let direction = options.scan_direction();
+    let ascending = options.is_ascending();
 
     let cp_range = async { Ok::<_, RpcError>(resolve_cp_range(checkpoint_range, &options)) }
         .instrument(debug_span!("resolve_cp_range"))
         .await?;
     let end_reason = cp_range.end_reason;
     let terminal_watermark = terminal_boundary_watermark(
-        &options,
         Position::Checkpoints {
             checkpoint: cp_range.end_position,
         },
+        ascending,
     );
     let cp_range = cp_range.range;
 
@@ -219,13 +219,12 @@ pub(crate) async fn list_checkpoints(
         return Ok(async_stream::try_stream! {
             futures::pin_mut!(cp_data_stream);
             let mut emitted = 0usize;
-            let mut checkpoint_boundary: Option<u64> = None;
+            let mut checkpoint_boundary = CheckpointBoundary::new(ascending);
             let mut scan_limit_hit = false;
             while let Some(item) = cp_data_stream.next().await {
                 match item {
                     Ok(ResolvedWatermarked::Item((cp_seq, cp_data))) => {
-                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                        let wm = item_watermark(Position::Checkpoints { checkpoint: cp_seq }, checkpoint_boundary);
+                        let wm = checkpoint_boundary.item_watermark_covered(Position::Checkpoints { checkpoint: cp_seq });
                         emitted += 1;
                         let message =
                             crate::render::checkpoint_to_response(cp_data, &read_mask)?;
@@ -241,13 +240,13 @@ pub(crate) async fn list_checkpoints(
                         } else {
                             raw_cp.checked_add(1)
                         };
-                        let Some(cp_frontier) = clamp_cp_frontier_past_last(cp_frontier, checkpoint_boundary, direction) else {
+                        let Some(cp_frontier) = clamp_cp_frontier_past_last(cp_frontier, checkpoint_boundary.bound(), direction) else {
                             continue;
                         };
-                        if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
-                            checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
+                        if let Some(c) = frontier_to_boundary_candidate(cp_frontier, ascending) {
+                            checkpoint_boundary.checkpoint_covered(c);
                         }
-                        let wm = boundary_watermark(Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary);
+                        let wm = boundary_watermark(Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary.bound());
                         yield watermark_response(wm);
                     }
                     Err(BitmapScanError::ScanLimit) => {
@@ -304,13 +303,12 @@ pub(crate) async fn list_checkpoints(
     Ok(async_stream::try_stream! {
         futures::pin_mut!(cp_full_stream);
         let mut emitted = 0usize;
-        let mut checkpoint_boundary: Option<u64> = None;
+        let mut checkpoint_boundary = CheckpointBoundary::new(ascending);
         let mut scan_limit_hit = false;
         while let Some(item) = cp_full_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item((cp_seq, cp_data, txs, objects))) => {
-                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                    let wm = item_watermark(Position::Checkpoints { checkpoint: cp_seq }, checkpoint_boundary);
+                    let wm = checkpoint_boundary.item_watermark_covered(Position::Checkpoints { checkpoint: cp_seq });
                     let message =
                         render_full_checkpoint(cp_data, txs, objects, &read_mask)?;
                     emitted += 1;
@@ -323,13 +321,13 @@ pub(crate) async fn list_checkpoints(
                     } else {
                         raw_cp.checked_add(1)
                     };
-                    let Some(cp_frontier) = clamp_cp_frontier_past_last(cp_frontier, checkpoint_boundary, direction) else {
+                    let Some(cp_frontier) = clamp_cp_frontier_past_last(cp_frontier, checkpoint_boundary.bound(), direction) else {
                         continue;
                     };
-                    if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
-                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
+                    if let Some(c) = frontier_to_boundary_candidate(cp_frontier, ascending) {
+                        checkpoint_boundary.checkpoint_covered(c);
                     }
-                    let wm = boundary_watermark(Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary);
+                    let wm = boundary_watermark(Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary.bound());
                     yield watermark_response(wm);
                 }
                 Err(BitmapScanError::ScanLimit) => {
@@ -372,10 +370,10 @@ pub(crate) async fn list_checkpoints(
 }
 
 /// Convert a cp-space scan frontier from `filtered_checkpoint_seq_stream`
-/// into a checkpoint-boundary candidate for `advance_checkpoint_boundary`.
+/// into a checkpoint-boundary candidate for `CheckpointBoundary::checkpoint_covered`.
 ///
 /// ListCheckpoints dedupes cp_seq, so "cp X emitted" ≡ "cp X complete" and
-/// the item path feeds the item's cp straight into `advance_checkpoint_boundary`.
+/// the item path feeds the item's cp straight into `CheckpointBoundary::checkpoint_covered`.
 /// The frontier path needs this adjustment instead:
 ///
 /// - Ascending: frontier means "all matching cps strictly less than `p`
@@ -385,8 +383,8 @@ pub(crate) async fn list_checkpoints(
 ///
 /// Returns `None` only when `p == 0` ascending (no preceding cp), in
 /// which case the boundary stays at whatever the items have built up.
-fn frontier_to_boundary_candidate(frontier: u64, options: &QueryOptions) -> Option<u64> {
-    if options.is_ascending() {
+fn frontier_to_boundary_candidate(frontier: u64, ascending: bool) -> Option<u64> {
+    if ascending {
         frontier.checked_sub(1)
     } else {
         Some(frontier)
