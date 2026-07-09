@@ -4,20 +4,22 @@
 use std::collections::VecDeque;
 
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc_cursor::Position;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::sync::DropGuard;
 
 use crate::RpcError;
 
-/// How a query stream ended, plus the typed exclusive range boundary the scan
-/// reached. The boundary lets the caller build the terminal progress watermark
-/// when the scan completed naturally.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// How a query stream ended, plus the prebuilt terminal boundary watermark.
+/// The watermark's value depends only on the resolved range and the request
+/// ordering, so it is built once at range resolution; the scan contributes
+/// only `reason`, which gates whether the caller emits it (natural completion
+/// only).
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ChunkTerminal {
     pub(crate) reason: QueryEndReason,
-    pub(crate) position: Position,
+    pub(crate) watermark: Watermark,
 }
 
 pub(crate) struct ScanChunkDone<State, Item> {
@@ -201,10 +203,7 @@ mod tests {
                     next_state: (state < 2).then_some(state + 1),
                     terminal: ChunkTerminal {
                         reason: QueryEndReason::CheckpointBound,
-                        position: Position::Transactions {
-                            checkpoint: 0,
-                            tx_seq: 0,
-                        },
+                        watermark: Watermark::default(),
                     },
                     remaining_scan_budget: scan_budget - 1,
                 })
@@ -221,10 +220,7 @@ mod tests {
             scan.into_terminal(),
             Some(ChunkTerminal {
                 reason: QueryEndReason::CheckpointBound,
-                position: Position::Transactions {
-                    checkpoint: 0,
-                    tx_seq: 0
-                },
+                watermark: Watermark::default(),
             })
         );
         assert_eq!(
@@ -246,10 +242,7 @@ mod tests {
                     next_state: None,
                     terminal: ChunkTerminal {
                         reason: QueryEndReason::CheckpointBound,
-                        position: Position::Transactions {
-                            checkpoint: 0,
-                            tx_seq: 0,
-                        },
+                        watermark: Watermark::default(),
                     },
                     remaining_scan_budget: args.scan_budget,
                 })

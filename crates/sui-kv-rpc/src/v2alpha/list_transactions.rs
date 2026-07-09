@@ -93,8 +93,13 @@ pub(crate) async fn list_transactions(
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
     let end_reason = tx_range.end_reason;
-    let end_checkpoint = tx_range.end_checkpoint;
-    let end_position = tx_range.end_position;
+    let terminal_watermark = terminal_boundary_watermark(
+        &options,
+        Position::Transactions {
+            checkpoint: tx_range.end_checkpoint,
+            tx_seq: tx_range.end_position,
+        },
+    );
     let tx_range = tx_range.range;
 
     if tx_range.is_empty() {
@@ -108,15 +113,8 @@ pub(crate) async fn list_transactions(
         // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
         // range; still surface the terminal boundary so the client learns the
         // final checkpoint is complete without waiting for the next item.
-        let terminal = reached_range_end(end_reason).then(|| {
-            watermark_response(terminal_boundary_watermark(
-                &options,
-                Position::Transactions {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position,
-                },
-            ))
-        });
+        let terminal =
+            reached_range_end(end_reason).then(|| watermark_response(terminal_watermark));
         return Ok(futures::stream::iter(
             terminal
                 .into_iter()
@@ -210,7 +208,7 @@ pub(crate) async fn list_transactions(
                 end_reason
             };
             if reached_range_end(reason) {
-                yield watermark_response(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }));
+                yield watermark_response(terminal_watermark);
             }
             yield end_response(reason);
             info!(
@@ -315,7 +313,7 @@ pub(crate) async fn list_transactions(
             end_reason
         };
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }));
+            yield watermark_response(terminal_watermark);
         }
         yield end_response(reason);
 

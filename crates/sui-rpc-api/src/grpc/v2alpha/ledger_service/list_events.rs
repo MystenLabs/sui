@@ -103,7 +103,6 @@ pub(crate) async fn list_events(
         filter_query,
     };
 
-    let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
         let unfiltered_row_scan_budget = endpoint.max_limit_items as usize;
         let mut scan = ChunkedScan::new(
@@ -137,10 +136,7 @@ pub(crate) async fn list_events(
         // Natural completion proves the range's final checkpoint complete; emit a
         // terminal watermark carrying that bound and the resume cursor.
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(
-                &terminal_options,
-                terminal.position,
-            ));
+            yield watermark_response(terminal.watermark);
         }
         yield end_response(reason);
         info!(
@@ -199,16 +195,14 @@ enum EventScanState {
         // rows per request.
         row_scan_budget: usize,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: EventPosition,
+        terminal_watermark: Watermark,
     },
     Filtered {
         query: BitmapQuery,
         bounds: Option<EventScanBounds>,
         pending_bucket: Option<PendingBitmapBucket>,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: EventPosition,
+        terminal_watermark: Watermark,
     },
 }
 
@@ -246,11 +240,14 @@ fn next_event_chunk(
             }
             let terminal = ChunkTerminal {
                 reason: event_range.end_reason,
-                position: Position::Events {
-                    checkpoint: event_range.end_checkpoint,
-                    tx_seq: event_range.end_position.tx_seq,
-                    event_index: event_range.end_position.event_index,
-                },
+                watermark: terminal_boundary_watermark(
+                    &options,
+                    Position::Events {
+                        checkpoint: event_range.end_checkpoint,
+                        tx_seq: event_range.end_position.tx_seq,
+                        event_index: event_range.end_position.event_index,
+                    },
+                ),
             };
             let bounds = event_range.bounds;
             if event_range.is_empty() {
@@ -268,15 +265,13 @@ fn next_event_chunk(
                     bounds: Some(bounds),
                     pending_bucket: None,
                     end_reason: terminal.reason,
-                    end_checkpoint: event_range.end_checkpoint,
-                    end_position: event_range.end_position,
+                    terminal_watermark: terminal.watermark,
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
                     row_scan_budget: unfiltered_row_scan_budget,
                     end_reason: terminal.reason,
-                    end_checkpoint: event_range.end_checkpoint,
-                    end_position: event_range.end_position,
+                    terminal_watermark: terminal.watermark,
                 },
             };
             return next_event_chunk(
@@ -296,8 +291,7 @@ fn next_event_chunk(
             bounds,
             row_scan_budget,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark,
         } => {
             if cancel.is_cancelled() {
                 return Err(cancelled());
@@ -319,8 +313,7 @@ fn next_event_chunk(
                     bounds,
                     row_scan_budget,
                     end_reason,
-                    end_checkpoint,
-                    end_position,
+                    terminal_watermark: terminal_watermark.clone(),
                 })
             };
             let reason = if request_exhausted {
@@ -330,11 +323,7 @@ fn next_event_chunk(
             };
             let terminal = ChunkTerminal {
                 reason,
-                position: Position::Events {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position.tx_seq,
-                    event_index: end_position.event_index,
-                },
+                watermark: terminal_watermark,
             };
             let scan_watermark = scan_event_watermark(
                 &service,
@@ -351,8 +340,7 @@ fn next_event_chunk(
             bounds,
             pending_bucket,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark,
         } => {
             let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
             let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -389,8 +377,7 @@ fn next_event_chunk(
                         bounds: hits.next_bounds,
                         pending_bucket: hits.pending_bucket,
                         end_reason,
-                        end_checkpoint,
-                        end_position,
+                        terminal_watermark: terminal_watermark.clone(),
                     },
                 )
             };
@@ -401,11 +388,7 @@ fn next_event_chunk(
             };
             let terminal = ChunkTerminal {
                 reason,
-                position: Position::Events {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position.tx_seq,
-                    event_index: end_position.event_index,
-                },
+                watermark: terminal_watermark,
             };
             let scan_watermark = scan_event_watermark(
                 &service,
