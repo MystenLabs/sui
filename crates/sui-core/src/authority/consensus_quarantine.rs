@@ -675,7 +675,7 @@ impl ConsensusOutputQuarantine {
                 // — they are epoch-lifetime, see the field comment.
                 self.remove_processed_consensus_messages(&output);
                 self.remove_congestion_control_debts(&output);
-                self.remove_owned_object_locks(&output);
+                self.remove_owned_object_locks(epoch_store, &output)?;
                 output.write_to_batch(epoch_store, batch)?;
             }
         }
@@ -744,23 +744,39 @@ impl ConsensusOutputQuarantine {
         }
     }
 
-    fn remove_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
-        // Locks of transactions deferred in this commit must survive the flush: a
-        // deferred transaction is finalized but not yet executed (it is not part of
-        // this commit's checkpoints), so its refs are still live and the consumed-check
-        // cannot stand in for its lock. These locks stay for the rest of the epoch
-        // (exactly as all locks did when they were persisted to the epoch table); after
-        // a restart they are rebuilt from the durable deferred-transactions table.
-        let deferred_digests: HashSet<TransactionDigest> = output
-            .deferred_txns
+    fn remove_owned_object_locks(
+        &mut self,
+        epoch_store: &AuthorityPerEpochStore,
+        output: &ConsensusCommitOutput,
+    ) -> SuiResult {
+        // A lock may be dropped at flush only once its holder's execution outputs are
+        // durable: then the locked ref is consumed in the objects table and the
+        // consumed-check stands in for the lock. A finalized-but-unexecuted transaction
+        // (e.g. one deferred for congestion/randomness) is not part of this commit's
+        // checkpoints, so its refs are still live and its lock must survive — these locks
+        // stay for the rest of the epoch (as all locks did when persisted to the epoch
+        // table) and are rebuilt from the durable deferred-transactions table on restart.
+        //
+        // Key retention on the holder's *execution* state, not on `output.deferred_txns`:
+        // lock acquisition (`filter_consensus_txns`) runs before dedup, so a cross-commit
+        // duplicate of a deferred transaction re-records that still-unexecuted
+        // transaction's locks in a later commit whose `deferred_txns` does not list it.
+        // Removing them on the deferred-set check would drop a lock the network still
+        // holds, letting a conflicting transaction double-spend the ref.
+        let locked_digests: Vec<TransactionDigest> =
+            output.owned_object_locks.values().copied().collect();
+        let executed = epoch_store.transactions_executed_in_cur_epoch(&locked_digests)?;
+        let executed_digests: HashSet<TransactionDigest> = locked_digests
             .iter()
-            .flat_map(|(_, txs)| txs.iter().map(|tx| *tx.tx().digest()))
+            .zip(executed)
+            .filter_map(|(digest, is_executed)| is_executed.then_some(*digest))
             .collect();
         for (obj_ref, lock) in output.owned_object_locks.iter() {
-            if !deferred_digests.contains(lock) {
+            if executed_digests.contains(lock) {
                 self.owned_object_locks.remove(obj_ref);
             }
         }
+        Ok(())
     }
 
     /// Re-inserts the locks of deferred transactions recovered from the durable
@@ -1206,5 +1222,56 @@ mod tests {
         // C2 has height=5 <= 5, drained=true => drain boundary at index 1.
         // Both outputs drained.
         assert_eq!(quarantine.output_queue_len_for_testing(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_flush_retains_locks_of_unexecuted_holders() {
+        // A lock is dropped at flush only if its holder has executed in this epoch; a
+        // finalized-but-unexecuted holder's lock must survive. This covers a cross-commit
+        // duplicate of a deferred transaction, whose locks are re-recorded into a commit
+        // that does not list it in `deferred_txns` — the removal must key on execution
+        // state, not that per-commit set, or the retained lock is dropped prematurely.
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, epoch_store.metrics.clone());
+
+        let unexecuted_ref = sui_types::base_types::random_object_ref();
+        let unexecuted_holder = TransactionDigest::random();
+        let executed_ref = sui_types::base_types::random_object_ref();
+        let executed_holder = TransactionDigest::random();
+
+        // Only `executed_holder` has executed in this epoch.
+        epoch_store
+            .consensus_output_cache
+            .insert_executed_in_epoch(executed_holder);
+
+        let mut c = make_output(5, 1, true);
+        c.set_owned_object_locks(HashMap::from([
+            (unexecuted_ref, unexecuted_holder),
+            (executed_ref, executed_holder),
+        ]));
+        quarantine.push_consensus_output(c, &epoch_store).unwrap();
+
+        let pc = epoch_store.protocol_config();
+        for seq in 1..=5 {
+            quarantine.insert_builder_summary(seq, make_builder_summary(seq, seq, pc));
+        }
+        let mut batch = epoch_store.db_batch_for_test();
+        quarantine
+            .update_highest_executed_checkpoint(5, &epoch_store, &mut batch)
+            .unwrap();
+        batch.write().unwrap();
+
+        // The output flushed, but the overlay keeps the unexecuted holder's lock and
+        // drops only the executed holder's.
+        assert_eq!(quarantine.output_queue_len_for_testing(), 0);
+        assert_eq!(
+            quarantine.get_owned_object_locks(&[unexecuted_ref]),
+            vec![Some(unexecuted_holder)]
+        );
+        assert_eq!(
+            quarantine.get_owned_object_locks(&[executed_ref]),
+            vec![None]
+        );
     }
 }

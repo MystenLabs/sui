@@ -206,6 +206,17 @@ the corollary holds: **flushed lock ⇒ the locked refs are consumed in the dura
 table** (via I2). Found the hard way — a simtest randomness workload double-spent a
 deferred transaction's gas after its lock evaporated at flush.
 
+The retention rule is therefore "**drop a lock at flush iff its holder is executed in the
+current epoch**" (`transactions_executed_in_cur_epoch`), *not* "iff its holder is in this
+commit's deferred set." The distinction is load-bearing: lock acquisition
+(`filter_consensus_txns`) runs *before* deduplication, so a cross-commit duplicate of a
+deferred transaction re-records that still-unexecuted transaction's locks into a later
+commit whose `deferred_txns` does not list it. Keying removal on the output-local deferred
+set would drop those locks at the later commit's flush while the holder is still finalized-
+but-unexecuted, letting a conflicting transaction pass the lock maps and the consumed-check
+(the ref is still live) and double-spend it. Keying on execution state closes this: an
+unexecuted holder's locks are retained no matter which commit recorded them.
+
 **I1b — Checkpoint execution can run ahead of consensus replay.** After a restart, the
 checkpoint executor may execute state-synced certified checkpoints containing
 transactions from commits that consensus has not yet re-processed. Any in-memory state
