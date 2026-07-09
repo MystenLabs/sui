@@ -875,7 +875,11 @@ async fn test_dev_inspect_matches_grpc_simulation() {
             .await
             .unwrap();
 
-    let simulated = grpc.simulate_transaction(request).await.unwrap().into_inner();
+    let simulated = grpc
+        .simulate_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
 
     // The effects must be byte-identical.
     let grpc_effects = simulated

@@ -39,7 +39,11 @@ async fn test_latest_version() {
     cluster.create_checkpoint().await;
 
     let response = get_protocol_config(&cluster, json!([])).await;
-    assert!(response["error"].is_null(), "RPC error: {}", response["error"]);
+    assert!(
+        response["error"].is_null(),
+        "RPC error: {}",
+        response["error"]
+    );
 
     let result = &response["result"];
     let min = ProtocolVersion::MIN.as_u64().to_string();
@@ -76,7 +80,11 @@ async fn test_specific_version() {
 
     let min = ProtocolVersion::MIN.as_u64();
     let response = get_protocol_config(&cluster, json!([min.to_string()])).await;
-    assert!(response["error"].is_null(), "RPC error: {}", response["error"]);
+    assert!(
+        response["error"].is_null(),
+        "RPC error: {}",
+        response["error"]
+    );
 
     assert_eq!(
         response["result"]["protocolVersion"].as_str().unwrap(),
