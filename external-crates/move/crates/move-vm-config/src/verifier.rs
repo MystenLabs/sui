@@ -38,9 +38,9 @@ pub struct VerifierConfig {
     pub disable_entry_point_signature_check: bool,
     /// If true, the verifier will run only the regex reference safety check.
     pub switch_to_regex_reference_safety: bool,
-    /// Reject functions with an `&mut TxContext` parameter that return `&mut T`
-    /// for some `T != TxContext` unless the parameter list also contains a
-    /// non-`TxContext` `&mut U`. See `sui_verifier::tx_context_restrictions_verifier`.
+    /// Reject functions with an `&mut TxContext` parameter that return any
+    /// `&mut _` unless the parameter list also contains a non-`TxContext`
+    /// `&mut U`. See `sui_verifier::tx_context_restrictions_verifier`.
     pub check_tx_context_restrictions: bool,
     pub disallow_jump_orphans: bool,
     pub max_generic_instantiation_type_nodes_per_function: Option<usize>,

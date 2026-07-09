@@ -5,6 +5,8 @@
 // &mut TxContext cannot be chained into a generic identity function whose
 // type parameter unifies to TxContext, because auto-injection fills the
 // generic's slot after unification.
+// Pinned to v129 because tx_context_mut_id itself is rejected by the v130
+// tx_context_restrictions_verifier.
 
 //# init --addresses test=0x0 --protocol-version 129 --allow-references-in-ptbs
 

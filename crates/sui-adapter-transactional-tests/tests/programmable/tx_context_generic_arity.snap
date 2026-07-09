@@ -3,13 +3,13 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
-task 1, lines 11-20:
+task 1, lines 13-22:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 22-26:
+task 2, lines 24-28:
 //# programmable
 // Result(0) is `&mut TxContext`. gen_mut_id<TxContext>'s single &mut T slot
 // is auto-injected, so passing Result(0) is one arg too many.

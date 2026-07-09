@@ -369,8 +369,8 @@ const MAINNET_USDB: &str =
 //              Add an epoch close deadline failsafe for deferred transactions.
 // Version 131: Enable sharing transaction deny configs between validators via consensus.
 //              Enable tx_context_restrictions_verifier: reject function
-//              signatures with `&mut TxContext` + a `&mut T` return
-//              (T != TxContext) that have no non-TxContext `&mut U` parameter.
+//              signatures with `&mut TxContext` + any `&mut _` return that
+//              have no non-`TxContext` `&mut U` parameter.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1024,8 +1024,8 @@ struct FeatureFlags {
     allow_references_in_ptbs: bool,
 
     // If true, the tx_context_restrictions_verifier pass runs at Move module
-    // publish time and rejects signatures with `&mut TxContext` + a `&mut T`
-    // return (T != TxContext) that have no non-TxContext `&mut U` parameter.
+    // publish time and rejects signatures with `&mut TxContext` + any `&mut _`
+    // return that have no non-`TxContext` `&mut U` parameter.
     #[serde(skip_serializing_if = "is_false")]
     check_tx_context_restrictions: bool,
 

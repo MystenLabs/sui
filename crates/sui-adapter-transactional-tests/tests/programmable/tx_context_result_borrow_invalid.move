@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // tests invalid attempts at manually supplying &mut/&TxContext
+// Pinned to v129 because the module publishes an identity `mut_id(&mut TxContext): &mut TxContext`
+// which the v130 tx_context_restrictions_verifier rejects.
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 

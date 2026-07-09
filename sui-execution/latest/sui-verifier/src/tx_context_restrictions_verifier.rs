@@ -3,13 +3,13 @@
 
 //! Enforces a signature-level rule at Move module publish time:
 //!
-//! > If a function has an `&mut TxContext` parameter and returns `&mut T` for
-//! > some `T != TxContext`, its parameter list must also contain at least
-//! > one `&mut U` where `U != TxContext`.
+//! > If a function has an `&mut TxContext` parameter and any `&mut _` in its
+//! > return list, its parameter list must also contain at least one `&mut U`
+//! > for some `U != TxContext`.
 //!
-//! Gated on `VerifierConfig::check_tx_context_restrictions`, which is
-//! populated from `ProtocolConfig::allow_references_in_ptbs`. The pass
-//! activates in the same protocol version as Section 1.
+//! Gated on `VerifierConfig::check_tx_context_restrictions`, populated from
+//! `ProtocolConfig::check_tx_context_restrictions()`. Activates at protocol
+//! version 130.
 //!
 //! Functions that do not take `&mut TxContext` are out of scope: they cannot
 //! use `TxContext` as a mutable root because they never hold one. The rule
@@ -62,11 +62,10 @@ fn verify_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result
         .partition(|t| TxContext::kind(module, t) == TxContextKind::Mutable);
     if !tx_context_muts.is_empty() && other_muts.is_empty() {
         return Err(
-            "Function takes `&mut TxContext` and returns `&mut T` for some \
-             `T != TxContext`, but has no non-`TxContext` `&mut U` parameter. \
-             `TxContext` cannot serve as the mutable root for a returned reference \
-             to a different type; add a mutable reference parameter to that type \
-             or return by value.",
+            "Function takes `&mut TxContext` and returns a mutable reference, \
+             but has no non-`TxContext` `&mut U` parameter. `TxContext` cannot \
+             serve as the mutable root for a returned reference; add a mutable \
+             reference parameter of another type or return by value.",
         );
     }
     Ok(())

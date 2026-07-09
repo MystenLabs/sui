@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tx_context_restrictions_verifier: a function that takes a `TxContext`
-// reference and returns `&mut T` must also have a non-TxContext `&mut U`
+// tx_context_restrictions_verifier: a function that takes `&mut TxContext`
+// and returns a mutable reference must also have a non-`TxContext` `&mut U`
 // parameter. Each publish below violates the rule and must be rejected.
 
 //# init --check-tx-context-restrictions
