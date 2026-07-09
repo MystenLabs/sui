@@ -357,6 +357,7 @@ const MAINNET_USDB: &str =
 // Version 127: Enable always_advance_dkg_to_resolution.
 //              Update gas prices for range proofs and ristretto group operations.
 //              Enable Ristretto255 group operations and bulletproofs verification on testnet.
+//              Enable init functions for newly introduced modules during package upgrade.
 //              Enable timestamp_based_epoch_close on mainnet.
 // Version 128: Make some additional bounds to binary tables explicit.
 // Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
@@ -952,6 +953,10 @@ struct FeatureFlags {
     // Check for `init` for new modules to a package on upgrade.
     #[serde(skip_serializing_if = "is_false")]
     check_for_init_during_upgrade: bool,
+
+    // If true, run `init` for newly introduced modules during package upgrade.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_init_on_upgrade: bool,
 
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
@@ -4483,7 +4488,7 @@ impl ProtocolConfig {
                 }
                 130 => {
                     cfg.feature_flags.record_net_unsettled_object_withdraws = true;
-
+                    cfg.feature_flags.enable_init_on_upgrade = true;
                     cfg.scratch_add_cost_base = Some(13);
                     cfg.scratch_read_cost_base = Some(13);
                     cfg.scratch_read_value_cost = Some(1);

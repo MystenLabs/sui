@@ -88,11 +88,7 @@ pub fn advance_boundary_excluding_cp(
 /// plus the current direction-matching checkpoint boundary. `cp` /
 /// `position` are the item's cursor coordinates (`list_checkpoints` passes
 /// its cp_seq for both).
-pub fn item_watermark(
-    _options: &QueryOptions,
-    position: Position,
-    boundary: Option<u64>,
-) -> Watermark {
+pub fn item_watermark(position: Position, boundary: Option<u64>) -> Watermark {
     let mut wm = Watermark::default();
     wm.cursor = Some(CursorToken::item(position).encode());
     set_checkpoint_bound(&mut wm, boundary);
@@ -104,11 +100,7 @@ pub fn item_watermark(
 /// its scan domain (see [`boundary_cursor_cp`] for the per-checkpoint
 /// scanners' direction adjustment); `boundary` is the accumulated
 /// completion boundary.
-pub fn boundary_watermark(
-    _options: &QueryOptions,
-    position: Position,
-    boundary: Option<u64>,
-) -> Watermark {
+pub fn boundary_watermark(position: Position, boundary: Option<u64>) -> Watermark {
     let mut wm = Watermark::default();
     wm.cursor = Some(CursorToken::boundary(position).encode());
     set_checkpoint_bound(&mut wm, boundary);
@@ -227,23 +219,21 @@ mod tests {
         );
     }
 
-    /// The direction-correct boundary is recorded in the single `checkpoint`
-    /// field regardless of ordering. A client reads the bound off the wire
-    /// frame and interprets it per the request's ordering.
+    /// The direction-correct boundary is recorded in the single `checkpoint` field regardless of
+    /// ordering. A client reads the bound off the wire frame and interprets it per the request's
+    /// ordering.
     #[test]
     fn item_watermark_sets_direction_matching_bound() {
-        let asc = options(true);
         let pos = Position::Transactions {
             checkpoint: 9,
             tx_seq: 42,
         };
-        let wm = item_watermark(&asc, pos, Some(8));
+        let wm = item_watermark(pos, Some(8));
         assert_eq!(wm.checkpoint, Some(8));
         assert_eq!(wm.cursor.as_ref(), Some(&CursorToken::item(pos).encode()));
 
-        let desc = options(false);
-        let wm = item_watermark(&desc, pos, Some(10));
-        assert_eq!(wm.checkpoint, Some(10));
+        let wm = item_watermark(pos, None);
+        assert_eq!(wm.checkpoint, None);
     }
 
     /// On natural completion the terminal frame claims the range's final

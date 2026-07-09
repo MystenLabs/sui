@@ -1365,6 +1365,7 @@
                 "enable_gasless": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
+                "enable_init_on_upgrade": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_multi_epoch_transaction_expiration": false,
                 "enable_nitro_attestation": false,
@@ -1920,6 +1921,7 @@
                 "max_push_size": {
                   "u64": "10000"
                 },
+                "max_scratch_pad_size": null,
                 "max_serialized_tx_effects_size_bytes": {
                   "u64": "524288"
                 },
@@ -2027,6 +2029,13 @@
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
+                "scratch_add_cost_base": null,
+                "scratch_exists_cost_base": null,
+                "scratch_exists_with_type_cost_base": null,
+                "scratch_exists_with_type_type_cost": null,
+                "scratch_read_cost_base": null,
+                "scratch_read_value_cost": null,
+                "scratch_remove_cost_base": null,
                 "sip_45_consensus_amplification_threshold": null,
                 "storage_fund_reinvest_rate": {
                   "u64": "500"
@@ -2240,6 +2249,7 @@
                 "enable_gasless": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
+                "enable_init_on_upgrade": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_multi_epoch_transaction_expiration": false,
                 "enable_nitro_attestation": false,

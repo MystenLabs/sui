@@ -32,6 +32,7 @@ pub fn refine_linkage<Mode: ExecutionMode>(
         &mut txn,
         linkage_analysis,
         package_store,
+        protocol_config,
     )?;
 
     Ok(txn)
