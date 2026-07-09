@@ -273,7 +273,6 @@ impl ObserverNetworkService for ObserverService {
         const MAX_BLOCKS_PER_POLL: usize = 20;
         let live_block_stream = quorum_gated_accepted_block_stream(
             self.context.clone(),
-            self.dag_state.clone(),
             BroadcastStream::<VerifiedBlock>::new(
                 PeerId::Observer(Box::new(peer)),
                 broadcast_rx,
@@ -340,7 +339,6 @@ impl ObserverNetworkService for ObserverService {
 
 fn quorum_gated_accepted_block_stream(
     context: Arc<Context>,
-    dag_state: Arc<RwLock<DagState>>,
     mut source: BroadcastStream<VerifiedBlock>,
     max_blocks_per_item: usize,
 ) -> ReceiverStream<Vec<VerifiedBlock>> {
@@ -348,7 +346,7 @@ fn quorum_gated_accepted_block_stream(
     let (tx, rx) = mpsc::channel(max_blocks_per_item);
 
     mysten_metrics::spawn_monitored_task!(async move {
-        let mut state = AcceptedBlockReleaseState::new(context, dag_state, release_timeout);
+        let mut state = AcceptedBlockReleaseState::new(context, release_timeout);
 
         loop {
             let released = tokio::select! {
@@ -420,7 +418,6 @@ impl Default for BufferedRound {
 
 struct AcceptedBlockReleaseState {
     context: Arc<Context>,
-    dag_state: Arc<RwLock<DagState>>,
     release_timeout: Duration,
     buffered_rounds: BTreeMap<Round, BufferedRound>,
     // Highest round released so far. Releasing a round (on quorum or timeout) also releases
@@ -430,23 +427,19 @@ struct AcceptedBlockReleaseState {
 }
 
 impl AcceptedBlockReleaseState {
-    fn new(
-        context: Arc<Context>,
-        dag_state: Arc<RwLock<DagState>>,
-        release_timeout: Duration,
-    ) -> Self {
+    fn new(context: Arc<Context>, release_timeout: Duration) -> Self {
         Self {
             context,
-            dag_state,
             release_timeout,
             buffered_rounds: BTreeMap::new(),
             last_released_round: 0,
         }
     }
 
-    fn accept_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> Vec<VerifiedBlock> {
-        let gc_round = self.dag_state.read().gc_round();
-        self.prune(gc_round);
+    fn accept_blocks(&mut self, mut blocks: Vec<VerifiedBlock>) -> Vec<VerifiedBlock> {
+        // Process blocks in ascending order, so released blocks come out in increasing round
+        // order without re-sorting the (potentially much larger) output.
+        sort_blocks(&mut blocks);
 
         let mut immediately_release = Vec::new();
         for block in blocks {
@@ -466,7 +459,6 @@ impl AcceptedBlockReleaseState {
                 immediately_release.extend(self.release_rounds_up_to(round));
             }
         }
-        sort_blocks(&mut immediately_release);
         immediately_release
     }
 
@@ -481,30 +473,30 @@ impl AcceptedBlockReleaseState {
             })
             .max();
 
-        let mut released = match max_timed_out_round {
+        match max_timed_out_round {
             Some(round) => self.release_rounds_up_to(round),
             None => Vec::new(),
-        };
-        sort_blocks(&mut released);
-        released
+        }
     }
 
     fn release_all(&mut self) -> Vec<VerifiedBlock> {
-        let mut released = match self.buffered_rounds.keys().next_back().copied() {
+        match self.buffered_rounds.keys().next_back().copied() {
             Some(max_round) => self.release_rounds_up_to(max_round),
             None => Vec::new(),
-        };
-        sort_blocks(&mut released);
-        released
+        }
     }
 
     fn next_timeout(&self) -> tokio::time::Instant {
+        // Effectively no timeout when nothing is buffered - the select loop re-evaluates on
+        // every incoming batch anyway.
+        const NO_BUFFERED_ROUNDS_TIMEOUT: Duration = Duration::from_secs(3600);
+
         let next_timeout = self
             .buffered_rounds
             .values()
             .map(|buffered| buffered.first_buffered_at + self.release_timeout)
             .min()
-            .unwrap_or_else(|| Instant::now() + Duration::from_secs(3600));
+            .unwrap_or_else(|| Instant::now() + NO_BUFFERED_ROUNDS_TIMEOUT);
         tokio::time::Instant::from_std(next_timeout)
     }
 
@@ -518,12 +510,6 @@ impl AcceptedBlockReleaseState {
             .into_values()
             .flat_map(|buffered| buffered.blocks)
             .collect()
-    }
-
-    fn prune(&mut self, gc_round: Round) {
-        self.last_released_round = self.last_released_round.max(gc_round);
-        self.buffered_rounds
-            .retain(|round, _| *round > self.last_released_round);
     }
 }
 
@@ -543,7 +529,6 @@ mod tests {
     use crate::{
         block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
-        commit::CommitDigest,
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::MockCoreThreadDispatcher,
@@ -634,29 +619,24 @@ mod tests {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
 
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let mut state = AcceptedBlockReleaseState::new(
-            context.clone(),
-            dag_state.clone(),
-            Duration::from_secs(60),
-        );
+        let mut state = new_release_state(context.clone());
 
         let block1 = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
         let block2 = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
         let block3 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
         let block4 = VerifiedBlock::new_for_test(TestBlock::new(1, 3).build());
 
-        dag_state
-            .write()
-            .accept_blocks(vec![block1.clone(), block2.clone()]);
+        // Adding two blocks will not form a quorum, so they are not released.
         assert!(
             state
                 .accept_blocks(vec![block1.clone(), block2.clone()])
                 .is_empty()
         );
+        assert_eq!(state.buffered_rounds.len(), 1);
+        assert_eq!(state.buffered_rounds[&1].blocks.len(), 2);
 
-        dag_state.write().accept_blocks(vec![block3.clone()]);
+        // Adding a third block forms a quorum, so all the buffered blocks are released and
+        // the round's buffer is cleaned up.
         let released = state.accept_blocks(vec![block3.clone()]);
         assert_eq!(
             released
@@ -665,11 +645,14 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![block1.reference(), block2.reference(), block3.reference()]
         );
+        assert!(state.buffered_rounds.is_empty());
+        assert_eq!(state.last_released_round, 1);
 
-        dag_state.write().accept_blocks(vec![block4.clone()]);
+        // Adding a forth block gets immediately released, as the round already reached quorum and released earlier.
         let released = state.accept_blocks(vec![block4.clone()]);
         assert_eq!(released.len(), 1);
         assert_eq!(released[0].reference(), block4.reference());
+        assert!(state.buffered_rounds.is_empty());
     }
 
     #[tokio::test]
@@ -678,69 +661,21 @@ mod tests {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
 
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let mut state =
-            AcceptedBlockReleaseState::new(context, dag_state.clone(), Duration::from_millis(1));
+        let mut state = AcceptedBlockReleaseState::new(context, Duration::from_millis(1));
 
         let block = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
-        dag_state.write().accept_blocks(vec![block.clone()]);
         assert!(state.accept_blocks(vec![block.clone()]).is_empty());
+        assert_eq!(state.buffered_rounds.len(), 1);
 
         tokio::time::sleep(Duration::from_millis(2)).await;
         let released = state.release_timed_out_rounds();
         assert_eq!(released.len(), 1);
         assert_eq!(released[0].reference(), block.reference());
+        assert!(state.buffered_rounds.is_empty());
     }
 
-    fn new_release_state(
-        context: Arc<Context>,
-        dag_state: Arc<RwLock<DagState>>,
-    ) -> AcceptedBlockReleaseState {
-        AcceptedBlockReleaseState::new(context, dag_state, Duration::from_secs(60))
-    }
-
-    #[tokio::test]
-    async fn test_accepted_block_release_counts_equivocating_authors_once() {
-        telemetry_subscribers::init_for_testing();
-        let (context, _) = Context::new_for_test(4);
-        let context = Arc::new(context);
-
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let mut state = new_release_state(context, dag_state);
-
-        // Two equivocating blocks from authority 0 (same round, different digests) plus one
-        // block from authority 1 cover only 2 of 4 authorities - below quorum.
-        let block1 =
-            VerifiedBlock::new_for_test(TestBlock::new(1, 0).set_timestamp_ms(100).build());
-        let block2 =
-            VerifiedBlock::new_for_test(TestBlock::new(1, 0).set_timestamp_ms(200).build());
-        let block3 = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
-        assert_ne!(block1.reference(), block2.reference());
-        assert!(
-            state
-                .accept_blocks(vec![block1.clone(), block2.clone(), block3.clone()])
-                .is_empty()
-        );
-
-        // A third distinct authority reaches quorum and releases all buffered blocks.
-        let block4 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
-        let released = state.accept_blocks(vec![block4.clone()]);
-        let mut expected = vec![
-            block1.reference(),
-            block2.reference(),
-            block3.reference(),
-            block4.reference(),
-        ];
-        expected.sort();
-        assert_eq!(
-            released
-                .iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-            expected
-        );
+    fn new_release_state(context: Arc<Context>) -> AcceptedBlockReleaseState {
+        AcceptedBlockReleaseState::new(context, Duration::from_secs(60))
     }
 
     #[tokio::test]
@@ -749,9 +684,7 @@ mod tests {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
 
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let mut state = new_release_state(context, dag_state);
+        let mut state = new_release_state(context);
 
         // Rounds 1 and 3 stay below quorum with blocks from 2 authorities each.
         let round1_blocks = (0..2)
@@ -762,6 +695,10 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(state.accept_blocks(round1_blocks.clone()).is_empty());
         assert!(state.accept_blocks(round3_blocks.clone()).is_empty());
+        assert_eq!(
+            state.buffered_rounds.keys().copied().collect::<Vec<_>>(),
+            vec![1, 3]
+        );
 
         // Quorum on round 2 releases rounds 1 and 2, but not round 3.
         let round2_blocks = (0..3)
@@ -781,11 +718,22 @@ mod tests {
             expected
         );
 
+        // The released rounds are cleaned up, only round 3 remains buffered.
+        assert_eq!(
+            state.buffered_rounds.keys().copied().collect::<Vec<_>>(),
+            vec![3]
+        );
+        assert_eq!(state.last_released_round, 2);
+
         // A straggler below the released watermark passes through without buffering.
         let straggler = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
         let released = state.accept_blocks(vec![straggler.clone()]);
         assert_eq!(released.len(), 1);
         assert_eq!(released[0].reference(), straggler.reference());
+        assert_eq!(
+            state.buffered_rounds.keys().copied().collect::<Vec<_>>(),
+            vec![3]
+        );
 
         // Only the round 3 blocks are still buffered.
         let released = state.release_all();
@@ -799,6 +747,7 @@ mod tests {
                 .map(|block| block.reference())
                 .collect::<Vec<_>>()
         );
+        assert!(state.buffered_rounds.is_empty());
     }
 
     #[tokio::test]
@@ -807,9 +756,7 @@ mod tests {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
 
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let mut state = new_release_state(context, dag_state);
+        let mut state = new_release_state(context);
 
         let block1 = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
         let block2 = VerifiedBlock::new_for_test(TestBlock::new(2, 0).build());
@@ -832,6 +779,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![block1.reference(), block2.reference()]
         );
+        assert!(state.buffered_rounds.is_empty());
+        assert_eq!(state.last_released_round, 2);
     }
 
     #[tokio::test]
@@ -840,9 +789,7 @@ mod tests {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
 
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let mut state = new_release_state(context, dag_state);
+        let mut state = new_release_state(context);
 
         let block1 = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
         let block2 = VerifiedBlock::new_for_test(TestBlock::new(2, 0).build());
@@ -859,62 +806,26 @@ mod tests {
         let released = state.release_timed_out_rounds();
         assert_eq!(released.len(), 1);
         assert_eq!(released[0].reference(), block1.reference());
+        assert_eq!(
+            state.buffered_rounds.keys().copied().collect::<Vec<_>>(),
+            vec![2]
+        );
 
         // A straggler for the timed-out round passes through without buffering.
         let straggler = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
         let released = state.accept_blocks(vec![straggler.clone()]);
         assert_eq!(released.len(), 1);
         assert_eq!(released[0].reference(), straggler.reference());
+        assert_eq!(
+            state.buffered_rounds.keys().copied().collect::<Vec<_>>(),
+            vec![2]
+        );
 
         // Round 2 is still buffered.
         let released = state.release_all();
         assert_eq!(released.len(), 1);
         assert_eq!(released[0].reference(), block2.reference());
-    }
-
-    #[tokio::test]
-    async fn test_accepted_block_release_gc() {
-        telemetry_subscribers::init_for_testing();
-        let (mut context, _) = Context::new_for_test(4);
-        context.protocol_config.set_gc_depth_for_testing(3);
-        let context = Arc::new(context);
-
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let mut state = new_release_state(context.clone(), dag_state.clone());
-
-        // Buffer blocks at rounds 1 and 5, both below quorum.
-        let block1 = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
-        let block5 = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
-        assert!(
-            state
-                .accept_blocks(vec![block1.clone(), block5.clone()])
-                .is_empty()
-        );
-
-        // Advance the last commit to a round 5 leader, so gc_round becomes 5 - 3 = 2.
-        dag_state
-            .write()
-            .set_last_commit(TrustedCommit::new_for_test(
-                1,
-                CommitDigest::MIN,
-                context.clock.timestamp_utc_ms(),
-                block5.reference(),
-                vec![],
-            ));
-        assert_eq!(dag_state.read().gc_round(), 2);
-
-        // A new block at a GC'd round passes straight through, and the buffered round 1
-        // entry is pruned.
-        let block2 = VerifiedBlock::new_for_test(TestBlock::new(2, 1).build());
-        let released = state.accept_blocks(vec![block2.clone()]);
-        assert_eq!(released.len(), 1);
-        assert_eq!(released[0].reference(), block2.reference());
-
-        // Only the round 5 block is still buffered.
-        let released = state.release_all();
-        assert_eq!(released.len(), 1);
-        assert_eq!(released[0].reference(), block5.reference());
+        assert!(state.buffered_rounds.is_empty());
     }
 
     #[tokio::test]
@@ -923,9 +834,7 @@ mod tests {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
 
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let mut state = new_release_state(context, dag_state);
+        let mut state = new_release_state(context);
 
         // With nothing buffered the next timeout is far in the future.
         assert!(
