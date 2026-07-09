@@ -9,14 +9,16 @@
 //!
 //! Per-pipeline enable/disable is expressed through
 //! [`PipelineLayer`]: every pipeline maps to an
-//! `Option<CommitterLayer>` field; `Some(_)` means the pipeline is
-//! registered (with the supplied committer overrides), `None` means
-//! it is skipped. The standalone binary populates the layer from
-//! its TOML config; the embedded-fullnode caller builds it
-//! programmatically via [`PipelineLayer::embedded`] so the raw
-//! chain CFs (served by the fullnode's perpetual store) are not
-//! double-written by this indexer.
+//! `Option<PipelineConfig>` field; `Some(_)` means the pipeline is
+//! registered (with the supplied committer overrides and optional
+//! availability policy), `None` means it is skipped. The standalone
+//! binary populates the layer from its TOML config; the
+//! embedded-fullnode caller builds it programmatically via
+//! [`PipelineLayer::embedded`] so the raw chain CFs (served by the
+//! fullnode's perpetual store) are not double-written by this
+//! indexer.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -39,8 +41,14 @@ pub struct ServiceConfig {
     /// individual fields.
     pub committer: CommitterLayer,
 
+    /// Default availability policy applied to every pipeline
+    /// without a `[pipeline.<name>.availability]` override. Absent
+    /// (the default) means every pipeline is always served. See
+    /// [`PipelineAvailability`].
+    pub availability: Option<PipelineAvailability>,
+
     /// Per-pipeline enable/disable plus optional committer
-    /// overrides.
+    /// overrides and availability policies.
     pub pipeline: PipelineLayer,
 
     /// Pruning policy for the historical CFs. Absent (the default)
@@ -150,11 +158,78 @@ impl PrunerConfig {
     }
 }
 
+/// Read-availability policy for a pipeline: serve it
+/// unconditionally (`enabled = true`), never serve it
+/// (`enabled = false`), or serve it only while its committed
+/// watermark is within `max-checkpoint-lag` checkpoints of the tip
+/// (the highest committed watermark across all pipelines). A policy
+/// section sets exactly one of the two keys. Reads that need a
+/// pipeline that is not served fail as unavailable, and such a
+/// pipeline is excluded from the reader's cross-pipeline watermark
+/// bounds so it stops pinning the reported tip.
+///
+/// The top-level `[availability]` key sets a default policy for
+/// every pipeline, and `[pipeline.<name>.availability]` overrides
+/// it for a single pipeline (e.g. `enabled = true` exempts one
+/// pipeline from a configured default). A pipeline with neither is
+/// always served, so this feature is opt-in:
+///
+/// ```toml
+/// [availability]
+/// max-checkpoint-lag = 100          # default for every pipeline
+///
+/// [pipeline.balance.availability]
+/// enabled = false                   # never serve
+///
+/// [pipeline.object-by-owner.availability]
+/// enabled = true                    # always serve, exempt from the default
+/// ```
+///
+/// The policy is read-side only: it never affects whether a
+/// pipeline indexes. Registration (`Some`/`None` in
+/// [`PipelineLayer`]) remains the write-side switch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(try_from = "AvailabilityLayer", into = "AvailabilityLayer")]
+pub enum PipelineAvailability {
+    /// Always serve the pipeline.
+    Enabled,
+
+    /// Never serve the pipeline.
+    Disabled,
+
+    /// Serve the pipeline only while its committed watermark is
+    /// within this many checkpoints of the tip.
+    MaxCheckpointLag(u64),
+}
+
+/// TOML mirror of [`PipelineAvailability`]: a policy section sets
+/// exactly one of these keys, validated when converting to the
+/// enum.
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct AvailabilityLayer {
+    pub enabled: Option<bool>,
+    pub max_checkpoint_lag: Option<u64>,
+}
+
+/// Resolved availability policies: the top-level `[availability]`
+/// default plus the `[pipeline.<name>.availability]` overrides.
+/// Handed to the reader; see
+/// [`RpcStoreReader::with_availability`](crate::RpcStoreReader::with_availability).
+#[derive(Clone, Debug, Default)]
+pub struct AvailabilityConfig {
+    /// Default policy applied to every pipeline without an override.
+    pub default: Option<PipelineAvailability>,
+
+    /// Per-pipeline overrides, keyed by pipeline name.
+    pub pipelines: BTreeMap<String, PipelineAvailability>,
+}
+
 /// Per-pipeline registration + override map. Every pipeline that
 /// writes to a CF in [`RpcStoreSchema`] has a corresponding
-/// `Option<CommitterLayer>` field here.
+/// `Option<PipelineConfig>` field here.
 ///
-/// `Some(layer)` registers the pipeline with the supplied committer
+/// `Some(entry)` registers the pipeline with the supplied committer
 /// overrides folded onto the shared [`CommitterLayer`] default;
 /// `None` skips the pipeline entirely (e.g. the raw chain CFs in
 /// the embedded-fullnode case, where the fullnode populates them
@@ -165,28 +240,43 @@ impl PrunerConfig {
 ///
 /// [`RpcStoreSchema`]: crate::RpcStoreSchema
 #[derive(Default, Deserialize, Serialize)]
-#[serde(default, rename_all = "kebab-case")]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PipelineLayer {
     // --- Raw chain data ---
-    pub epochs: Option<CommitterLayer>,
-    pub checkpoint_summary: Option<CommitterLayer>,
-    pub checkpoint_contents: Option<CommitterLayer>,
-    pub checkpoint_seq_by_digest: Option<CommitterLayer>,
-    pub transactions: Option<CommitterLayer>,
-    pub tx_seq_by_digest: Option<CommitterLayer>,
-    pub tx_metadata_by_seq: Option<CommitterLayer>,
-    pub effects: Option<CommitterLayer>,
-    pub events: Option<CommitterLayer>,
-    pub objects: Option<CommitterLayer>,
-    pub object_version_by_checkpoint: Option<CommitterLayer>,
+    pub epochs: Option<PipelineConfig>,
+    pub checkpoint_summary: Option<PipelineConfig>,
+    pub checkpoint_contents: Option<PipelineConfig>,
+    pub checkpoint_seq_by_digest: Option<PipelineConfig>,
+    pub transactions: Option<PipelineConfig>,
+    pub tx_seq_by_digest: Option<PipelineConfig>,
+    pub tx_metadata_by_seq: Option<PipelineConfig>,
+    pub effects: Option<PipelineConfig>,
+    pub events: Option<PipelineConfig>,
+    pub objects: Option<PipelineConfig>,
+    pub object_version_by_checkpoint: Option<PipelineConfig>,
 
     // --- Indexes ---
-    pub object_by_owner: Option<CommitterLayer>,
-    pub object_by_type: Option<CommitterLayer>,
-    pub balance: Option<CommitterLayer>,
-    pub package_versions: Option<CommitterLayer>,
-    pub transaction_bitmap: Option<CommitterLayer>,
-    pub event_bitmap: Option<CommitterLayer>,
+    pub object_by_owner: Option<PipelineConfig>,
+    pub object_by_type: Option<PipelineConfig>,
+    pub balance: Option<PipelineConfig>,
+    pub package_versions: Option<PipelineConfig>,
+    pub transaction_bitmap: Option<PipelineConfig>,
+    pub event_bitmap: Option<PipelineConfig>,
+}
+
+/// Per-pipeline registration entry, under `[pipeline.<name>]`. An
+/// empty entry registers the pipeline with all-default settings.
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct PipelineConfig {
+    /// Committer overrides folded onto the shared `[committer]`
+    /// default.
+    pub committer: CommitterLayer,
+
+    /// Overrides the top-level `[availability]` default for this
+    /// pipeline. Read-side only: it does not affect whether the
+    /// pipeline indexes.
+    pub availability: Option<PipelineAvailability>,
 }
 
 /// Per-pipeline committer overrides. Every field is optional; an
@@ -210,36 +300,124 @@ impl ServiceConfig {
         Self {
             consistency: ConsistencyConfig::default(),
             committer: CommitterConfig::default().into(),
+            availability: None,
             pipeline: PipelineLayer::all(),
             pruner: Some(PrunerConfig::default()),
         }
     }
+
+    /// The resolved per-pipeline availability policies, for handing
+    /// to [`RpcStoreReader::with_availability`](crate::RpcStoreReader::with_availability).
+    pub fn availability_config(&self) -> AvailabilityConfig {
+        AvailabilityConfig {
+            default: self.availability,
+            pipelines: self.pipeline.availability_overrides(),
+        }
+    }
+}
+
+impl PipelineAvailability {
+    /// Whether a pipeline whose committed watermark is at
+    /// `committed` (`None` = no watermark yet) should be served,
+    /// given the current `tip` (the highest committed watermark
+    /// across all pipelines).
+    pub fn is_available(&self, committed: Option<u64>, tip: u64) -> bool {
+        match self {
+            Self::Enabled => true,
+            Self::Disabled => false,
+            Self::MaxCheckpointLag(lag) => committed.is_some_and(|c| tip.saturating_sub(c) <= *lag),
+        }
+    }
+}
+
+impl AvailabilityConfig {
+    /// The policy gating `pipeline`, if any: its own override when
+    /// configured, otherwise the default.
+    pub fn policy_for(&self, pipeline: &str) -> Option<PipelineAvailability> {
+        self.pipelines.get(pipeline).copied().or(self.default)
+    }
+
+    /// No policy configured anywhere — the reader's zero-cost fast
+    /// path.
+    pub fn is_trivial(&self) -> bool {
+        self.default.is_none() && self.pipelines.is_empty()
+    }
 }
 
 impl PipelineLayer {
-    /// Every pipeline enabled with default committer overrides
-    /// (`Some(CommitterLayer::default())`). The standalone-binary
+    /// Every pipeline enabled with default settings
+    /// (`Some(PipelineConfig::default())`). The standalone-binary
     /// default.
     pub fn all() -> Self {
         Self {
-            epochs: Some(CommitterLayer::default()),
-            checkpoint_summary: Some(CommitterLayer::default()),
-            checkpoint_contents: Some(CommitterLayer::default()),
-            checkpoint_seq_by_digest: Some(CommitterLayer::default()),
-            transactions: Some(CommitterLayer::default()),
-            tx_seq_by_digest: Some(CommitterLayer::default()),
-            tx_metadata_by_seq: Some(CommitterLayer::default()),
-            effects: Some(CommitterLayer::default()),
-            events: Some(CommitterLayer::default()),
-            objects: Some(CommitterLayer::default()),
-            object_version_by_checkpoint: Some(CommitterLayer::default()),
-            object_by_owner: Some(CommitterLayer::default()),
-            object_by_type: Some(CommitterLayer::default()),
-            balance: Some(CommitterLayer::default()),
-            package_versions: Some(CommitterLayer::default()),
-            transaction_bitmap: Some(CommitterLayer::default()),
-            event_bitmap: Some(CommitterLayer::default()),
+            epochs: Some(PipelineConfig::default()),
+            checkpoint_summary: Some(PipelineConfig::default()),
+            checkpoint_contents: Some(PipelineConfig::default()),
+            checkpoint_seq_by_digest: Some(PipelineConfig::default()),
+            transactions: Some(PipelineConfig::default()),
+            tx_seq_by_digest: Some(PipelineConfig::default()),
+            tx_metadata_by_seq: Some(PipelineConfig::default()),
+            effects: Some(PipelineConfig::default()),
+            events: Some(PipelineConfig::default()),
+            objects: Some(PipelineConfig::default()),
+            object_version_by_checkpoint: Some(PipelineConfig::default()),
+            object_by_owner: Some(PipelineConfig::default()),
+            object_by_type: Some(PipelineConfig::default()),
+            balance: Some(PipelineConfig::default()),
+            package_versions: Some(PipelineConfig::default()),
+            transaction_bitmap: Some(PipelineConfig::default()),
+            event_bitmap: Some(PipelineConfig::default()),
         }
+    }
+
+    /// Per-pipeline availability overrides, keyed by pipeline name.
+    /// Field idents match `Processor::NAME` for every pipeline
+    /// (pinned by `availability_override_keys_match_pipeline_names`).
+    fn availability_overrides(&self) -> BTreeMap<String, PipelineAvailability> {
+        // Exhaustive destructure so adding a pipeline field forces a
+        // decision here.
+        let Self {
+            epochs,
+            checkpoint_summary,
+            checkpoint_contents,
+            checkpoint_seq_by_digest,
+            transactions,
+            tx_seq_by_digest,
+            tx_metadata_by_seq,
+            effects,
+            events,
+            objects,
+            object_version_by_checkpoint,
+            object_by_owner,
+            object_by_type,
+            balance,
+            package_versions,
+            transaction_bitmap,
+            event_bitmap,
+        } = self;
+
+        [
+            ("epochs", epochs),
+            ("checkpoint_summary", checkpoint_summary),
+            ("checkpoint_contents", checkpoint_contents),
+            ("checkpoint_seq_by_digest", checkpoint_seq_by_digest),
+            ("transactions", transactions),
+            ("tx_seq_by_digest", tx_seq_by_digest),
+            ("tx_metadata_by_seq", tx_metadata_by_seq),
+            ("effects", effects),
+            ("events", events),
+            ("objects", objects),
+            ("object_version_by_checkpoint", object_version_by_checkpoint),
+            ("object_by_owner", object_by_owner),
+            ("object_by_type", object_by_type),
+            ("balance", balance),
+            ("package_versions", package_versions),
+            ("transaction_bitmap", transaction_bitmap),
+            ("event_bitmap", event_bitmap),
+        ]
+        .into_iter()
+        .filter_map(|(name, entry)| Some((name.to_string(), entry.as_ref()?.availability?)))
+        .collect()
     }
 
     /// The embedded-fullnode cohort: every pipeline this indexer owns
@@ -275,20 +453,20 @@ impl PipelineLayer {
     pub fn embedded() -> Self {
         Self {
             // Live cohort: restored to the tip, follows live.
-            object_by_owner: Some(CommitterLayer::default()),
-            object_by_type: Some(CommitterLayer::default()),
-            balance: Some(CommitterLayer::default()),
+            object_by_owner: Some(PipelineConfig::default()),
+            object_by_type: Some(PipelineConfig::default()),
+            balance: Some(PipelineConfig::default()),
             // History cohort: seeded to L, backfills upward.
             // `object_version_by_checkpoint` and `package_versions` are
             // additionally restored at the tip for their floor rows (see
             // the cohort docs in `restore.rs`).
-            epochs: Some(CommitterLayer::default()),
-            object_version_by_checkpoint: Some(CommitterLayer::default()),
-            package_versions: Some(CommitterLayer::default()),
-            tx_seq_by_digest: Some(CommitterLayer::default()),
-            tx_metadata_by_seq: Some(CommitterLayer::default()),
-            transaction_bitmap: Some(CommitterLayer::default()),
-            event_bitmap: Some(CommitterLayer::default()),
+            epochs: Some(PipelineConfig::default()),
+            object_version_by_checkpoint: Some(PipelineConfig::default()),
+            package_versions: Some(PipelineConfig::default()),
+            tx_seq_by_digest: Some(PipelineConfig::default()),
+            tx_metadata_by_seq: Some(PipelineConfig::default()),
+            transaction_bitmap: Some(PipelineConfig::default()),
+            event_bitmap: Some(PipelineConfig::default()),
             ..Self::default()
         }
     }
@@ -350,6 +528,41 @@ impl From<CommitterConfig> for CommitterLayer {
             write_concurrency: Some(config.write_concurrency),
             collect_interval_ms: Some(config.collect_interval_ms),
             watermark_interval_ms: Some(config.watermark_interval_ms),
+        }
+    }
+}
+
+impl TryFrom<AvailabilityLayer> for PipelineAvailability {
+    type Error = String;
+
+    fn try_from(layer: AvailabilityLayer) -> Result<Self, Self::Error> {
+        match (layer.enabled, layer.max_checkpoint_lag) {
+            (Some(_), Some(_)) => {
+                Err("'enabled' and 'max-checkpoint-lag' are mutually exclusive".to_string())
+            }
+            (Some(true), None) => Ok(Self::Enabled),
+            (Some(false), None) => Ok(Self::Disabled),
+            (None, Some(lag)) => Ok(Self::MaxCheckpointLag(lag)),
+            (None, None) => Err("expected 'enabled' or 'max-checkpoint-lag'".to_string()),
+        }
+    }
+}
+
+impl From<PipelineAvailability> for AvailabilityLayer {
+    fn from(value: PipelineAvailability) -> Self {
+        match value {
+            PipelineAvailability::Enabled => Self {
+                enabled: Some(true),
+                max_checkpoint_lag: None,
+            },
+            PipelineAvailability::Disabled => Self {
+                enabled: Some(false),
+                max_checkpoint_lag: None,
+            },
+            PipelineAvailability::MaxCheckpointLag(lag) => Self {
+                enabled: None,
+                max_checkpoint_lag: Some(lag),
+            },
         }
     }
 }
@@ -437,5 +650,211 @@ mod tests {
         // Unset fields inherit from `base`.
         assert_eq!(merged.collect_interval_ms, 200);
         assert_eq!(merged.watermark_interval_ms, 500);
+    }
+
+    #[test]
+    fn availability_within_tip_respects_lag() {
+        let a = PipelineAvailability::MaxCheckpointLag(100);
+        // At the tip, and exactly at the lag boundary (inclusive), are available.
+        assert!(a.is_available(Some(1_000_000), 1_000_000));
+        assert!(a.is_available(Some(999_900), 1_000_000));
+        // One checkpoint beyond the lag budget is unavailable.
+        assert!(!a.is_available(Some(999_899), 1_000_000));
+        // A watermark momentarily ahead of the recorded tip saturates to zero lag.
+        assert!(a.is_available(Some(1_000_050), 1_000_000));
+        // No watermark yet ⇒ not caught up ⇒ unavailable.
+        assert!(!a.is_available(None, 1_000_000));
+    }
+
+    #[test]
+    fn enabled_and_disabled_ignore_lag() {
+        assert!(PipelineAvailability::Enabled.is_available(None, 1_000_000));
+        assert!(!PipelineAvailability::Disabled.is_available(Some(1_000_000), 1_000_000));
+    }
+
+    #[test]
+    fn availability_default_and_overrides_parse_from_toml() {
+        let config: ServiceConfig = toml::from_str(
+            r#"
+            [availability]
+            max-checkpoint-lag = 100
+
+            [pipeline.balance.availability]
+            enabled = false
+
+            [pipeline.object-by-owner.availability]
+            enabled = true
+
+            [pipeline.epochs.availability]
+            max-checkpoint-lag = 1000
+            "#,
+        )
+        .unwrap();
+
+        let availability = config.availability_config();
+        assert_eq!(
+            availability.policy_for("balance"),
+            Some(PipelineAvailability::Disabled)
+        );
+        assert_eq!(
+            availability.policy_for("object_by_owner"),
+            Some(PipelineAvailability::Enabled)
+        );
+        assert_eq!(
+            availability.policy_for("epochs"),
+            Some(PipelineAvailability::MaxCheckpointLag(1000))
+        );
+        // A pipeline with no override falls back to the default.
+        assert_eq!(
+            availability.policy_for("object_by_type"),
+            Some(PipelineAvailability::MaxCheckpointLag(100))
+        );
+    }
+
+    #[test]
+    fn overrides_without_a_default_gate_only_themselves() {
+        let config: ServiceConfig = toml::from_str(
+            r#"
+            [pipeline.balance.availability]
+            enabled = false
+            "#,
+        )
+        .unwrap();
+
+        let availability = config.availability_config();
+        assert_eq!(
+            availability.policy_for("balance"),
+            Some(PipelineAvailability::Disabled)
+        );
+        assert_eq!(availability.policy_for("object_by_owner"), None);
+        assert!(!availability.is_trivial());
+        assert!(ServiceConfig::default().availability_config().is_trivial());
+    }
+
+    #[test]
+    fn availability_enabled_and_lag_are_mutually_exclusive() {
+        let err = toml::from_str::<ServiceConfig>(
+            r#"
+            [pipeline.balance.availability]
+            enabled = true
+            max-checkpoint-lag = 100
+            "#,
+        )
+        .err()
+        .unwrap();
+        assert!(
+            err.to_string().contains("mutually exclusive"),
+            "unexpected error: {err}",
+        );
+    }
+
+    #[test]
+    fn empty_availability_sections_are_rejected() {
+        // A policy section exists only to set a policy, so one of its keys is mandatory.
+        for toml in ["[availability]", "[pipeline.balance.availability]"] {
+            let err = toml::from_str::<ServiceConfig>(toml).err().unwrap();
+            assert!(
+                err.to_string()
+                    .contains("expected 'enabled' or 'max-checkpoint-lag'"),
+                "unexpected error for {toml:?}: {err}",
+            );
+        }
+    }
+
+    #[test]
+    fn availability_sections_reject_unknown_fields() {
+        for toml in [
+            "[availability]\nmode = \"off\"",
+            "[pipeline.balance]\nmode = \"off\"",
+            "[pipeline.balance.availability]\nenabled = true\nmode = \"off\"",
+            // Old flat committer keys must fail loudly now that they nest
+            // under `[pipeline.<name>.committer]`.
+            "[pipeline.balance]\nwrite-concurrency = 4",
+            // Misspelled pipeline names are no longer silently ignored.
+            "[pipeline.balanec]\n",
+        ] {
+            let result = toml::from_str::<ServiceConfig>(toml);
+            assert!(result.is_err(), "expected {toml:?} to be rejected");
+        }
+    }
+
+    #[test]
+    fn nested_committer_overrides_still_merge() {
+        let config: ServiceConfig = toml::from_str(
+            r#"
+            [pipeline.balance.committer]
+            write-concurrency = 8
+            "#,
+        )
+        .unwrap();
+        let merged = config
+            .pipeline
+            .balance
+            .unwrap()
+            .committer
+            .finish(CommitterConfig::default());
+        assert_eq!(merged.write_concurrency, 8);
+    }
+
+    #[test]
+    fn empty_pipeline_section_registers_with_defaults_and_no_policy() {
+        let config: ServiceConfig = toml::from_str("[pipeline.balance]").unwrap();
+        assert!(config.pipeline.balance.is_some());
+        assert!(config.availability_config().is_trivial());
+    }
+
+    #[test]
+    fn availability_policies_roundtrip_through_toml() {
+        for policy in [
+            PipelineAvailability::Enabled,
+            PipelineAvailability::Disabled,
+            PipelineAvailability::MaxCheckpointLag(100),
+        ] {
+            let config = ServiceConfig {
+                availability: Some(policy),
+                ..ServiceConfig::default()
+            };
+            let serialized = toml::to_string_pretty(&config).unwrap();
+            let parsed: ServiceConfig = toml::from_str(&serialized).unwrap();
+            assert_eq!(
+                parsed.availability,
+                Some(policy),
+                "roundtrip failed for {policy:?}:\n{serialized}",
+            );
+        }
+    }
+
+    #[test]
+    fn availability_override_keys_match_pipeline_names() {
+        let mut layer = PipelineLayer::all();
+        for entry in [
+            &mut layer.epochs,
+            &mut layer.checkpoint_summary,
+            &mut layer.checkpoint_contents,
+            &mut layer.checkpoint_seq_by_digest,
+            &mut layer.transactions,
+            &mut layer.tx_seq_by_digest,
+            &mut layer.tx_metadata_by_seq,
+            &mut layer.effects,
+            &mut layer.events,
+            &mut layer.objects,
+            &mut layer.object_version_by_checkpoint,
+            &mut layer.object_by_owner,
+            &mut layer.object_by_type,
+            &mut layer.balance,
+            &mut layer.package_versions,
+            &mut layer.transaction_bitmap,
+            &mut layer.event_bitmap,
+        ] {
+            entry.as_mut().unwrap().availability = Some(PipelineAvailability::Enabled);
+        }
+
+        let keys: std::collections::BTreeSet<_> =
+            layer.availability_overrides().into_keys().collect();
+        let names: std::collections::BTreeSet<_> = crate::indexer::restore::ALL_PIPELINES
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        assert_eq!(keys, names);
     }
 }

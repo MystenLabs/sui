@@ -13,6 +13,7 @@
 use std::sync::Arc;
 
 use sui_consistent_store::reader::Reader;
+use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
@@ -35,6 +36,9 @@ use crate::schema::primitives::U64Be;
 
 impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
+        if !self.pipelines_available(&[crate::indexer::epochs::Epochs::NAME]) {
+            return None;
+        }
         match self.schema().get_committee(epoch) {
             Ok(Some(committee)) => Some(Arc::new(committee)),
             Ok(None) => None,
@@ -46,6 +50,7 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
     }
 
     fn get_latest_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
+        self.require_pipelines(&[crate::indexer::checkpoint_summary::CheckpointSummary::NAME])?;
         // The latest checkpoint header in `checkpoint_summary` is
         // the highest committed checkpoint. Read paths that require
         // every CF to be in sync at this checkpoint should be
@@ -92,6 +97,12 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        if !self.pipelines_available(&[
+            crate::indexer::checkpoint_seq_by_digest::CheckpointSeqByDigest::NAME,
+            crate::indexer::checkpoint_summary::CheckpointSummary::NAME,
+        ]) {
+            return None;
+        }
         let seq = match self.schema().get_checkpoint_seq_by_digest(digest) {
             Ok(Some(seq)) => seq,
             Ok(None) => return None,
@@ -113,6 +124,10 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
+        if !self.pipelines_available(&[crate::indexer::checkpoint_summary::CheckpointSummary::NAME])
+        {
+            return None;
+        }
         match self.schema().get_checkpoint_summary(sequence_number) {
             Ok(summary) => summary,
             Err(e) => {
@@ -139,6 +154,11 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<CheckpointContents> {
+        if !self
+            .pipelines_available(&[crate::indexer::checkpoint_contents::CheckpointContents::NAME])
+        {
+            return None;
+        }
         match self.schema().get_checkpoint_contents(sequence_number) {
             Ok(contents) => contents,
             Err(e) => {
@@ -152,6 +172,12 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
     }
 
     fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
+        if !self.pipelines_available(&[
+            crate::indexer::tx_seq_by_digest::TxSeqByDigest::NAME,
+            crate::indexer::transactions::Transactions::NAME,
+        ]) {
+            return None;
+        }
         let tx_seq = match self.schema().get_tx_seq_by_digest(tx_digest) {
             Ok(Some(seq)) => seq,
             Ok(None) => return None,
@@ -174,6 +200,12 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
     }
 
     fn get_transaction_effects(&self, tx_digest: &TransactionDigest) -> Option<TransactionEffects> {
+        if !self.pipelines_available(&[
+            crate::indexer::tx_seq_by_digest::TxSeqByDigest::NAME,
+            crate::indexer::effects::Effects::NAME,
+        ]) {
+            return None;
+        }
         let tx_seq = match self.schema().get_tx_seq_by_digest(tx_digest) {
             Ok(Some(seq)) => seq,
             Ok(None) => return None,
@@ -193,6 +225,12 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
     }
 
     fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
+        if !self.pipelines_available(&[
+            crate::indexer::tx_seq_by_digest::TxSeqByDigest::NAME,
+            crate::indexer::events::Events::NAME,
+        ]) {
+            return None;
+        }
         // `event_digest` is named for the trait but our index
         // resolves by transaction digest (events are keyed by
         // tx_seq in this store).
@@ -217,6 +255,12 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
         &self,
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>> {
+        if !self.pipelines_available(&[
+            crate::indexer::tx_seq_by_digest::TxSeqByDigest::NAME,
+            crate::indexer::effects::Effects::NAME,
+        ]) {
+            return None;
+        }
         let tx_seq = match self.schema().get_tx_seq_by_digest(digest) {
             Ok(Some(seq)) => seq,
             Ok(None) => return None,
@@ -242,6 +286,12 @@ impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
         &self,
         digest: &TransactionDigest,
     ) -> Option<CheckpointSequenceNumber> {
+        if !self.pipelines_available(&[
+            crate::indexer::tx_seq_by_digest::TxSeqByDigest::NAME,
+            crate::indexer::tx_metadata_by_seq::TxMetadataBySeq::NAME,
+        ]) {
+            return None;
+        }
         let tx_seq = match self.schema().get_tx_seq_by_digest(digest) {
             Ok(Some(seq)) => seq,
             Ok(None) => return None,
@@ -408,6 +458,28 @@ mod tests {
             .unwrap();
         batch.commit().unwrap();
         assert_eq!(reader.get_lowest_available_checkpoint().unwrap(), 42);
+    }
+
+    #[test]
+    fn gated_checkpoint_reads_are_withheld() {
+        use crate::config::PipelineAvailability;
+        use crate::reader::availability;
+        use sui_types::storage::error::Kind;
+
+        let (_dir, db, reader) = fresh_reader();
+        let summary = seed_checkpoint(&db, &reader, 7);
+        let reader = reader.with_availability(availability(
+            None,
+            &[("checkpoint_summary", PipelineAvailability::Disabled)],
+        ));
+
+        // Result-returning read fails as unavailable...
+        let err = reader.get_latest_checkpoint().unwrap_err();
+        assert_eq!(err.kind(), Kind::Unavailable);
+
+        // ...and Option-returning reads withhold the (present) row.
+        assert!(reader.get_checkpoint_by_sequence_number(7).is_none());
+        assert!(reader.get_checkpoint_by_digest(&summary.digest()).is_none());
     }
 
     #[test]

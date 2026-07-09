@@ -33,6 +33,7 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::reader::Reader;
+use sui_indexer_alt_framework::pipeline::Processor;
 use sui_protocol_config::ProtocolConfig;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::ObjectID;
@@ -64,6 +65,14 @@ impl<R: Reader + Send + Sync> RpcStoreReader<R> {
         struct_tag: &StructTag,
         overlay: &ObjectSet,
     ) -> StorageResult<Option<MoveTypeLayout>> {
+        // Layouts read package objects (via `objects`) and the protocol
+        // version (via `epochs`); an error rather than `Ok(None)` lets
+        // clients distinguish "gated" from "layout unknown".
+        self.require_pipelines(&[
+            crate::indexer::objects::Objects::NAME,
+            crate::indexer::epochs::Epochs::NAME,
+        ])?;
+
         let Some(protocol_config) = self.live_protocol_config()? else {
             return Ok(None);
         };

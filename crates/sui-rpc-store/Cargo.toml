@@ -36,3 +36,4 @@ typed-store-error.workspace = true
 futures.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
+toml.workspace = true
