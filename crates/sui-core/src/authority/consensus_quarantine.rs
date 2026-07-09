@@ -13,6 +13,7 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, hash_map};
@@ -301,23 +302,11 @@ impl ConsensusCommitOutput {
             [(LAST_CONSENSUS_STATS_ADDR, consensus_commit_stats)],
         )?;
 
-        // next_shared_object_versions are (mostly) not persisted: the epoch-lifetime
-        // map in the quarantine is the primary copy. On restart it is rebuilt by lazy
-        // re-seeding from the objects table (correct for flushed commits, whose
-        // transactions are all durably executed) plus consensus replay with
-        // effects-aware seeding (see docs/in_memory_object_versioning.md §6.3). The
-        // singleton system objects are the exception: their values as of the flushed
-        // watermark are kept durably (see
-        // AuthorityEpochTables::system_object_next_versions).
         if let Some(next_versions) = &self.next_shared_object_versions {
-            let system_updates: Vec<_> = next_versions
-                .iter()
-                .filter(|(key, _)| AuthorityPerEpochStore::is_system_object_version_key(key))
-                .map(|(key, version)| (*key, *version))
-                .collect();
-            if !system_updates.is_empty() {
-                batch.insert_batch(&tables.system_object_next_versions, system_updates)?;
-            }
+            batch.insert_batch(
+                &tables.next_shared_object_versions_v2,
+                next_versions.iter().map(|(key, version)| (*key, *version)),
+            )?;
         }
 
         // owned_object_locks are deliberately not persisted: quarantined locks are
@@ -501,15 +490,8 @@ pub(crate) struct ConsensusOutputQuarantine {
     // Checkpoint Builder output
     builder_checkpoint_summary: BTreeMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
 
-    // Next shared object versions, for every consensus object key touched this epoch.
-    // This is the only copy of this state — nothing is persisted. Seeds are inserted by
-    // `get_or_init_next_object_versions` (from the objects table, or from effects during
-    // replay — see docs/in_memory_object_versioning.md §6.3), advancements by
-    // `push_consensus_output`. Entries live until the end of the epoch; on restart the
-    // map is rebuilt by lazy re-seeding plus consensus replay. (Entries whose
-    // assignments are all durably executed could be evicted and re-seeded on demand —
-    // deferred, see the design doc.)
-    shared_object_next_versions: HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
+    // Any un-committed next versions are stored here.
+    shared_object_next_versions: RefCountedHashMap<ConsensusObjectSequenceKey, SequenceNumber>,
 
     // The most recent congestion control debts for objects. Uses a ref-count to track
     // which objects still exist in some element of output_queue.
@@ -535,7 +517,7 @@ impl ConsensusOutputQuarantine {
 
             output_queue: VecDeque::new(),
             builder_checkpoint_summary: BTreeMap::new(),
-            shared_object_next_versions: HashMap::new(),
+            shared_object_next_versions: RefCountedHashMap::new(),
             processed_consensus_messages: RefCountedHashMap::new(),
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
             congestion_control_object_debts: RefCountedHashMap::new(),
@@ -671,8 +653,7 @@ impl ConsensusOutputQuarantine {
         if let Some(idx) = last_drain_idx {
             for _ in 0..=idx {
                 let output = self.output_queue.pop_front().unwrap();
-                // Note: shared_object_next_versions entries are deliberately not removed
-                // — they are epoch-lifetime, see the field comment.
+                self.remove_shared_object_next_versions(&output);
                 self.remove_processed_consensus_messages(&output);
                 self.remove_congestion_control_debts(&output);
                 self.remove_owned_object_locks(epoch_store, &output)?;
@@ -689,7 +670,7 @@ impl ConsensusOutputQuarantine {
 }
 
 impl ConsensusOutputQuarantine {
-    pub(super) fn insert_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
+    fn insert_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
         if let Some(next_versions) = output.next_shared_object_versions.as_ref() {
             for (object_id, next_version) in next_versions {
                 self.shared_object_next_versions
@@ -738,6 +719,19 @@ impl ConsensusOutputQuarantine {
         }
     }
 
+    fn remove_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
+        if let Some(next_versions) = output.next_shared_object_versions.as_ref() {
+            for object_id in next_versions.keys() {
+                if !self.shared_object_next_versions.remove(object_id) {
+                    fatal!(
+                        "Shared object next version not found in quarantine: {:?}",
+                        object_id
+                    );
+                }
+            }
+        }
+    }
+
     fn insert_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
         for (obj_ref, lock) in &output.owned_object_locks {
             self.owned_object_locks.insert(*obj_ref, *lock);
@@ -768,7 +762,7 @@ impl ConsensusOutputQuarantine {
         let executed = epoch_store.transactions_executed_in_cur_epoch(&locked_digests)?;
         let executed_digests: HashSet<TransactionDigest> = locked_digests
             .iter()
-            .zip(executed)
+            .zip_debug_eq(executed)
             .filter_map(|(digest, is_executed)| is_executed.then_some(*digest))
             .collect();
         for (obj_ref, lock) in output.owned_object_locks.iter() {
@@ -818,28 +812,25 @@ impl ConsensusOutputQuarantine {
 
     pub(super) fn get_next_shared_object_versions(
         &self,
-        object_keys: &[ConsensusObjectSequenceKey],
-    ) -> Vec<Option<SequenceNumber>> {
-        object_keys
-            .iter()
-            .map(|object_key| self.shared_object_next_versions.get(object_key).copied())
-            .collect()
-    }
-
-    /// Inserts lazily-initialized next-version seeds. Callers must hold the
-    /// per-object-id `version_assignment_mutex_table` locks for the affected keys, which
-    /// guarantees a key is seeded at most once between epoch start and epoch end.
-    pub(super) fn insert_next_shared_object_version_seeds(
-        &mut self,
-        seeds: impl Iterator<Item = (ConsensusObjectSequenceKey, SequenceNumber)>,
-    ) {
-        for (key, version) in seeds {
-            let prev = self.shared_object_next_versions.insert(key, version);
-            assert!(
-                prev.is_none(),
-                "next shared object version seeded twice: {key:?} (prev: {prev:?}, seed: {version:?})"
-            );
-        }
+        tables: &AuthorityEpochTables,
+        objects_to_init: &[ConsensusObjectSequenceKey],
+    ) -> SuiResult<Vec<Option<SequenceNumber>>> {
+        Ok(do_fallback_lookup(
+            objects_to_init,
+            |object_key| {
+                if let Some(next_version) = self.shared_object_next_versions.get(object_key) {
+                    CacheResult::Hit(Some(*next_version))
+                } else {
+                    CacheResult::Miss
+                }
+            },
+            |object_keys| {
+                tables
+                    .next_shared_object_versions_v2
+                    .multi_get(object_keys)
+                    .expect("db error")
+            },
+        ))
     }
 
     /// Gets owned object locks (locks of finalized transactions whose commits have not

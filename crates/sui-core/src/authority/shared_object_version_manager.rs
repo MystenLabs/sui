@@ -26,7 +26,7 @@ use sui_types::storage::{
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
 use sui_types::{SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber, error::SuiResult};
-use tracing::{debug, info, trace};
+use tracing::trace;
 
 pub struct SharedObjVerManager {}
 
@@ -275,51 +275,15 @@ impl SharedObjVerManager {
     where
         T: AsTx + 'a,
     {
-        // Keys touched only by cancelled transactions are excluded: cancelled
-        // transactions are assigned sentinel versions without reading or advancing the
-        // next-version state, so such keys need no seed from this batch — and no safe
-        // seed may be derivable here, since every effects provider records sentinels
-        // and the objects table may already reflect later-commit executions. The next
-        // batch with a non-cancelled toucher seeds them.
-        let version_keys = collect_version_keys(
+        #[cfg(not(debug_assertions))]
+        let _ = transaction_cache_reader;
+
+        let mut shared_input_next_versions = get_or_init_versions(
             assignables
                 .clone()
-                .filter(|a| {
-                    !a.key()
-                        .as_digest()
-                        .is_some_and(|digest| cancelled_txns.contains_key(digest))
-                })
                 .flat_map(|a| a.shared_input_objects(epoch_store)),
             epoch_store,
-        );
-
-        // Effects-aware seeding (docs/in_memory_object_versioning.md §6.3): keys are
-        // normally seeded from the objects table, but during replay (or when checkpoint
-        // execution runs ahead of consensus) the objects table may already contain
-        // versions written by the execution of the very transactions being assigned
-        // here, which would produce a seed ahead of what the assignment should start
-        // from. For every key that is about to be seeded, if some assignable in this
-        // batch already has current-epoch effects, the earliest such assignable's
-        // recorded (non-cancelled) input version for the key is the correct seed:
-        // every earlier toucher in the batch either was cancelled (does not constrain
-        // the seed) or has not mutated the key durably (or the executed one could not
-        // have executed before it). In the common case nothing is uninitialized (or
-        // nothing is executed yet) and no effects are read.
-        //
-        // The seeder is invoked by get_or_init_next_object_versions AFTER its objects
-        // read — that ordering is what makes the store fallback safe against execution
-        // racing ahead concurrently (see the comment there).
-        let mut shared_input_next_versions = epoch_store.get_or_init_next_object_versions(
-            &version_keys,
             cache_reader,
-            |uninitialized| {
-                compute_effects_version_seeds(
-                    epoch_store,
-                    transaction_cache_reader,
-                    assignables.clone(),
-                    uninitialized,
-                )
-            },
         )?;
         let mut assigned_versions = Vec::new();
         for assignable in assignables {
@@ -363,14 +327,23 @@ impl SharedObjVerManager {
             // Accumulator version
             Option<SequenceNumber>,
         )],
+        epoch_store: &AuthorityPerEpochStore,
+        cache_reader: &dyn ObjectCacheRead,
     ) -> AssignedTxAndVersions {
-        // Note: unlike the consensus path, this deliberately does not touch the
-        // in-memory next-version state. That state is derived purely in
-        // consensus-processing order (with effects-aware seeding for recovery, see
-        // `compute_effects_version_seeds`); seeding it from here would poison it when
-        // checkpoint execution runs ahead of consensus replay after a restart, because
-        // this batch may sit at a "future" point of the version chain relative to the
-        // commit consensus replay is about to re-process.
+        // We don't care about the results since we can use effects to assign versions.
+        // But we must call it to make sure whenever a consensus object is touched the first time
+        // during an epoch, either through consensus or through checkpoint executor,
+        // its next version must be initialized. This is because we initialize the next version
+        // of a consensus object in an epoch by reading the current version from the object store.
+        // This must be done before we mutate it the first time, otherwise we would be initializing
+        // it with the wrong version.
+        let _ = get_or_init_versions(
+            certs_and_effects.iter().flat_map(|(cert, _, _)| {
+                cert.transaction_data().shared_input_objects().into_iter()
+            }),
+            epoch_store,
+            cache_reader,
+        );
         let mut assigned_versions = Vec::new();
         for (cert, effects, accumulator_version) in certs_and_effects {
             let initial_version_map: BTreeMap<_, _> = cert
@@ -552,19 +525,17 @@ impl SharedObjVerManager {
     }
 }
 
-/// The deduplicated set of consensus object keys whose next-version state a batch of
-/// assignables needs (always including the accumulator root when enabled, since every
-/// assignment reads its version).
-fn collect_version_keys<'a>(
+fn get_or_init_versions<'a>(
     shared_input_objects: impl Iterator<Item = SharedInputObject> + 'a,
     epoch_store: &AuthorityPerEpochStore,
-) -> Vec<ConsensusObjectSequenceKey> {
-    let mut keys: Vec<_> = shared_input_objects
+    cache_reader: &dyn ObjectCacheRead,
+) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
+    let mut shared_input_objects: Vec<_> = shared_input_objects
         .map(|so| so.into_id_and_version())
         .collect();
 
     if epoch_store.accumulators_enabled() {
-        keys.push((
+        shared_input_objects.push((
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
             epoch_store
                 .epoch_start_config()
@@ -573,15 +544,17 @@ fn collect_version_keys<'a>(
         ));
     }
 
-    keys.sort();
-    keys.dedup();
-    keys
+    shared_input_objects.sort();
+    shared_input_objects.dedup();
+
+    epoch_store.get_or_init_next_object_versions(&shared_input_objects, cache_reader)
 }
 
 /// Resolves an assignable's transaction digest, if it has one. System assignables
 /// (settlements, prologues, randomness updates) get theirs via the durable
 /// transaction_key_to_digest mapping, which is only present once the transaction was
 /// built — absent means it cannot have been executed, which is all callers care about.
+#[cfg(debug_assertions)]
 fn assignable_digest<T: AsTx>(
     epoch_store: &AuthorityPerEpochStore,
     assignable: &Schedulable<T>,
@@ -590,71 +563,6 @@ fn assignable_digest<T: AsTx>(
         TransactionKey::Digest(digest) => Some(digest),
         key => epoch_store.tx_key_to_digest(&key).ok().flatten(),
     }
-}
-
-/// For each uninitialized key, the input version recorded by the earliest assignable in
-/// the batch that touches it and has current-epoch effects with a real (non-cancelled)
-/// assignment for it. See the comment at the call site in
-/// `assign_versions_from_consensus`.
-fn compute_effects_version_seeds<'a, T: AsTx + 'a>(
-    epoch_store: &AuthorityPerEpochStore,
-    transaction_cache_reader: &dyn TransactionCacheRead,
-    assignables: impl Iterator<Item = &'a Schedulable<T>>,
-    uninitialized: &[ConsensusObjectSequenceKey],
-) -> HashMap<ConsensusObjectSequenceKey, SequenceNumber> {
-    let uninitialized: HashSet<_> = uninitialized.iter().copied().collect();
-    let mut seeds: HashMap<ConsensusObjectSequenceKey, SequenceNumber> = HashMap::new();
-    for assignable in assignables {
-        if seeds.len() == uninitialized.len() {
-            break;
-        }
-        let wanted_keys: Vec<_> = assignable
-            .shared_input_objects(epoch_store)
-            .map(|so| so.into_id_and_version())
-            .filter(|key| uninitialized.contains(key) && !seeds.contains_key(key))
-            .collect();
-        if wanted_keys.is_empty() {
-            continue;
-        }
-        let Some(digest) = assignable_digest(epoch_store, assignable) else {
-            debug!(key = ?assignable.key(), "effects-seeding: no digest for assignable");
-            continue;
-        };
-        let Some(effects) = transaction_cache_reader.get_executed_effects(&digest) else {
-            debug!(key = ?assignable.key(), ?digest, "effects-seeding: no executed effects");
-            continue;
-        };
-        if effects.executed_epoch() != epoch_store.epoch() {
-            debug!(key = ?assignable.key(), ?digest, "effects-seeding: epoch mismatch");
-            continue;
-        }
-        let recorded_inputs: HashMap<_, _> = effects
-            .input_consensus_objects()
-            .into_iter()
-            .map(|iso| iso.id_and_version())
-            .collect();
-        for key in wanted_keys {
-            if let Some(version) = recorded_inputs.get(&key.0)
-                && version.is_valid()
-            {
-                info!(
-                    ?key,
-                    ?version,
-                    ?digest,
-                    "seeding next shared object version from executed effects"
-                );
-                seeds.insert(key, *version);
-            }
-        }
-    }
-
-    // Note: the singleton system objects (Clock, randomness state, accumulator root)
-    // are not recovered here — batches may need them without containing any of their
-    // mutators, and their mutators' digests are not reliably resolvable. Their seeds
-    // come from the durable AuthorityEpochTables::system_object_next_versions rows
-    // inside get_or_init_next_object_versions.
-
-    seeds
 }
 
 /// If the assignable already executed in this epoch, its recomputed version assignment
@@ -1020,10 +928,7 @@ mod tests {
         .unwrap();
 
         // Check that the final version of the shared object is the lamport version of the last
-        // transaction. The randomness state object is absent: it is touched only by tx5, which is
-        // cancelled, and cancelled-only keys are not seeded into the next-version overlay (an
-        // all-cancelled batch must not initialize the map from a possibly execution-contaminated
-        // objects view). It is seeded lazily from system_object_next_versions when next needed.
+        // transaction.
         shared_input_next_versions
             .remove(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, SequenceNumber::from_u64(1)));
         assert_eq!(
@@ -1031,6 +936,10 @@ mod tests {
             HashMap::from([
                 ((id1, init_shared_version_1), SequenceNumber::from_u64(5)), // determined by tx3
                 ((id2, init_shared_version_2), SequenceNumber::from_u64(4)), // determined by tx1
+                (
+                    (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                    SequenceNumber::from_u64(1)
+                ), // not mutable
             ])
         );
 
@@ -1128,12 +1037,15 @@ mod tests {
                 .map(|(cert, effect)| (cert, effect, None))
                 .collect::<Vec<_>>()
                 .as_slice(),
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
         );
-        // The effects path must not touch the consensus next-version state (it may run
-        // ahead of consensus replay after a restart).
+        // Check that the shared object's next version is always initialized in the epoch store.
         assert_eq!(
-            epoch_store.get_next_object_version(&id, init_shared_version),
-            None
+            epoch_store
+                .get_next_object_version(&id, init_shared_version)
+                .unwrap(),
+            init_shared_version
         );
         assert_eq!(
             assigned_versions.0,

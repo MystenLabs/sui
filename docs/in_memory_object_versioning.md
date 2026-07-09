@@ -29,11 +29,15 @@ object-chain walk-back was tried and rejected (pruning cuts the chain, round tie
 ambiguous). Not yet implemented: overlay eviction for the next-version map (§4.3),
 cleanup of pre-existing marker CFs on old DBs, and the §11 crash-matrix simtests.
 
-**Post-review direction (2026-07-09, doc-only):** see **§13** — the review findings
+**Post-review direction (2026-07-09, IMPLEMENTED):** see **§13** — the review findings
 concentrate entirely in the two epoch-table removals, and three moves close all of them:
 revert Component C (the next-version table is the one irreducibly durable piece; §13.2),
 fix the C5 exemption via the pre-publish executed mark instead of Design A (§13.3), and
-enforce immutable-claim completeness at vote (§13.4). Components A and B stand.
+enforce immutable-claim completeness at vote (§13.4). Components A and B stand. All
+three moves are now implemented on the branch; **Phase 3 above no longer describes the
+branch** — `next_shared_object_versions_v2` is durable again (init pins + flush writes,
+main's model), and §4.3/§6.3's reconstruction machinery is deleted. §4.3, §6.3, and
+§7.4 are retained as the record of why reconstruction was abandoned.
 
 ---
 
@@ -391,6 +395,10 @@ gives the consuming version and the effects/objects tables identify the consumer
 
 ### 4.3 Component C — next-version overlay (replaces `next_shared_object_versions_v2`)
 
+> **REVERTED (2026-07-09, §13.2).** The table is durable again with main's init-pin +
+> flush-write model. This section and §6.3 are kept as the record of the design that
+> was tried and why it was abandoned (C6/C7: the watermark value is not reconstructible).
+
 Unify the two in-memory pieces that already exist — the quarantine's refcounted
 `shared_object_next_versions` and the (currently table-persisted) lazy init pins — into
 one epoch-store map:
@@ -585,6 +593,9 @@ For **next-versions** (Component C) the same table applies, with recovery = re-r
 
 ### 6.3 Effects-aware seeding (replaces the durable init pin)
 
+> **REVERTED (2026-07-09, §13.2).** The durable init pin is back; this mechanism is
+> deleted. Kept for the record — §7.4 explains why it was unsound (C6/C7).
+
 The pin exists to defeat this race: object S first touched this epoch by tx T in commit
 C > W; T assigned S at seed v0; T executed (durable: S now at v5); crash; replay of C
 re-seeds S. Seeding from the objects table yields v5 — but peers assigned T at v0.
@@ -685,12 +696,11 @@ protocol, which already guarantees a stale read can never clobber a newer concur
 execution write — this is precisely why reusing `object_by_id_cache` is preferable to
 inventing a new liveness cache.
 
-### 7.4 Effects-visibility races (C5 / C6 / C7) — analysis, NOT yet implemented
+### 7.4 Effects-visibility races (C5 / C6 / C7) — RESOLVED via §13
 
-Status: **analysis only — no code committed.** Superseded by the §13 simplification
-review, which resolves the open decision below: C6/C7 close by reverting Component C,
-and C5 has a smaller fix than Design A (§13, move 2). The analysis is kept because it
-explains *why* those are the right moves.
+Status: **resolved (2026-07-09).** C6/C7 closed by reverting Component C (§13.2); C5
+closed by the two-source exemption (§13.3) — smaller than Design A below, which was
+never built. The analysis is kept because it explains *why* those are the right moves.
 
 **Root cause.** `WritebackCache::write_transaction_outputs`
 (`writeback_cache.rs`) publishes a transaction's OUTPUT OBJECT writes into the dirty cache
@@ -918,8 +928,11 @@ fatal as a backstop rather than a hard deployment constraint.
 A design-level re-examination of all findings from the max-effort review, looking for
 structural simplifications rather than per-finding patches. Conclusion: **three moves
 resolve every open correctness finding, delete the two most subtle mechanisms this
-design introduced, and remove one of the two measured hot-path costs.** Doc-only for
-now; nothing below is implemented.
+design introduced, and remove one of the two measured hot-path costs.** All three are
+now implemented on the branch (2026-07-09): §13.2 as "reinstate durable
+next_shared_object_versions_v2", §13.3 as the two-source exemption in
+`try_acquire_owned_object_locks_post_consensus_v2`, §13.4 as the unconditional
+`verify_immutable_object_claims` inside `handle_vote_transaction`.
 
 ### 13.1 The findings sort cleanly by component
 

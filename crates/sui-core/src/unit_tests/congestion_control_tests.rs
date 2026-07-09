@@ -376,7 +376,12 @@ async fn test_congestion_control_execution_cancellation() {
         .unwrap();
     let assigned_versions = authority_state_2
         .epoch_store_for_testing()
-        .acquire_shared_version_assignments_from_effects(&executable, effects, None)
+        .acquire_shared_version_assignments_from_effects(
+            &executable,
+            effects,
+            None,
+            authority_state_2.get_object_cache_reader().as_ref(),
+        )
         .unwrap();
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     let (effects_2, execution_error) = authority_state_2

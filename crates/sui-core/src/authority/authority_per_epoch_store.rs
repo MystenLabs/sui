@@ -23,7 +23,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{debug_fatal, fatal, in_test_configuration};
+use mysten_common::{debug_fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
@@ -70,10 +70,6 @@ use sui_types::transaction::{
     StoredExecutionTimeObservations, Transaction, TransactionData, TransactionDataAPI,
     TransactionKey, TransactionKind, TxValidityCheckContext, VerifiedTransaction,
     VerifiedTransactionWithAliases, WithAliases,
-};
-use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 use tap::TapOptional;
 use tokio::sync::{OnceCell, mpsc};
@@ -439,21 +435,14 @@ pub struct AuthorityEpochTables {
     /// to disk.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    /// Next-version state for the singleton system objects (Clock, randomness state,
-    /// accumulator root) as of the durably flushed consensus watermark — at most one row
-    /// per object, seeded at the first construction of the epoch's store (when the
-    /// durable object versions are exactly the epoch-start values) and updated on every
-    /// quarantine flush.
-    ///
-    /// These are the only consensus objects whose next-version state cannot be recovered
-    /// from effects after a restart: they are mutated exclusively by system transactions
-    /// (prologues, settlement barriers, randomness updates) whose key→digest mappings
-    /// are not reliably resolvable on a node whose checkpoint executor ran ahead of its
-    /// consensus, and — unlike ordinary shared objects — they are read by assignments in
-    /// batches that contain none of their mutators. All other keys are re-derived from
-    /// the objects table plus the effects of already-executed transactions (see
-    /// `compute_effects_version_seeds`).
-    system_object_next_versions: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
+    /// Next available shared object versions for each shared object. Rows are written
+    /// durably at two points: lazy init pins (`get_or_init_next_object_versions` writes
+    /// a key's seed immediately at its first touch this epoch, before any of its
+    /// touchers can execute) and quarantine flush (the values as of the flushed
+    /// consensus watermark). Consensus replay after a restart therefore always seeds a
+    /// key from its watermark-consistent value, never from an objects table that
+    /// checkpoint execution may have advanced past the watermark.
+    next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_shared_object_versions exactly once for each transaction we receive from
@@ -579,6 +568,7 @@ impl AuthorityEpochTables {
         let value_cache_size = default_value_cache_size();
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
+        let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
         let builder_checkpoint_summary_v2_config = KeySpaceConfig::new()
             .disable_unload()
             .with_value_cache_size(default_value_cache_size());
@@ -607,8 +597,8 @@ impl AuthorityEpochTables {
                 ),
             ),
             (
-                "system_object_next_versions".to_string(),
-                ThConfig::new_with_config(32 + 8, mutexes, uniform_key, KeySpaceConfig::new()),
+                "next_shared_object_versions_v2".to_string(),
+                ThConfig::new_with_config(32 + 8, mutexes, uniform_key, lru_only_config.clone()),
             ),
             (
                 "consensus_message_processed".to_string(),
@@ -836,59 +826,6 @@ impl AuthorityPerEpochStore {
         for item in tables.signed_effects_digests.safe_iter() {
             let (tx_digest, effects_digest) = item?;
             signed_effects_digests_cache.insert(tx_digest, effects_digest);
-        }
-
-        // Seed the durable system-object next-version rows exactly once per epoch, at
-        // the first construction of this epoch's store. At that point no transaction of
-        // this epoch can have executed locally (execution requires the epoch store), so
-        // the durable object versions are exactly the epoch-start values. On a restart
-        // the rows already exist and must not be overwritten: by then the durable
-        // objects may reflect execution ahead of the flushed watermark.
-        if tables.system_object_next_versions.is_empty() {
-            // An empty table together with an already-advanced consensus watermark means
-            // this epoch processed (and flushed) consensus commits under a binary that did
-            // not maintain these rows — a mid-epoch binary upgrade. Seeding from the
-            // objects table now is unsafe: under load the durable objects run ahead of the
-            // flushed consensus watermark (`last_consensus_stats_v2`), so the seed would be
-            // too high and diverge the first not-yet-executed prologue/settlement — a
-            // silent fork in release builds. Refuse to start rather than fork.
-            //
-            // NETWORK ROLLOUT: this fatal is a backstop, not the deployment path. On a live
-            // network this whole feature must be gated behind a `ProtocolConfig` feature
-            // flag that flips at an epoch boundary (the standard pattern for consensus-
-            // visible behavior — see design doc §10, not yet implemented on this branch,
-            // which removed the old tables outright for performance evaluation). Under that
-            // gating, binaries roll out mid-epoch with the flag OFF (old table-based
-            // behavior, this seeding path never runs); the flag activates fleet-wide at an
-            // epoch boundary, where the epoch is fresh (both tables empty) and seeding from
-            // epoch-start object versions is safe. The fatal below can then only fire on a
-            // mis-gated activation (the flag flipping mid-epoch), which the per-epoch
-            // protocol-version invariant forbids. Deploying THIS (ungated) binary requires a
-            // fresh genesis or an epoch-boundary restart.
-            if !tables.last_consensus_stats_v2.is_empty() {
-                fatal!(
-                    "system_object_next_versions is empty but this epoch has already \
-                     processed consensus commits: deploying this binary mid-epoch is \
-                     unsupported. Deploy at an epoch boundary."
-                );
-            }
-            let mut seeds = Vec::new();
-            for key in Self::system_object_version_keys(&epoch_start_configuration) {
-                if let Some(object) = object_store.get_object(&key.0) {
-                    // Mirrors the seeding rule in get_or_init_next_object_versions: an
-                    // object whose owner start version does not match was (re)shared by
-                    // a not-yet-executed transaction, and starts at the key's initial
-                    // version.
-                    let version = if object.owner().start_version() == Some(key.1) {
-                        object.version()
-                    } else {
-                        key.1
-                    };
-                    seeds.push((key, version));
-                }
-            }
-            info!(?seeds, "seeding system object next versions at epoch start");
-            tables.system_object_next_versions.multi_insert(seeds)?;
         }
 
         let epoch_alive_token = CancellationToken::new();
@@ -2195,9 +2132,11 @@ impl AuthorityPerEpochStore {
         obj: &ObjectID,
         start_version: SequenceNumber,
     ) -> Option<SequenceNumber> {
-        self.consensus_quarantine
-            .read()
-            .get_next_shared_object_versions(&[(*obj, start_version)])[0]
+        self.tables()
+            .expect("test should not cross epoch boundary")
+            .next_shared_object_versions_v2
+            .get(&(*obj, start_version))
+            .unwrap()
     }
 
     pub fn insert_finalized_transactions(
@@ -2258,54 +2197,29 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    /// The consensus keys of the singleton system objects tracked durably in
-    /// `system_object_next_versions`.
-    fn system_object_version_keys(
-        epoch_start_configuration: &EpochStartConfiguration,
-    ) -> Vec<ConsensusObjectSequenceKey> {
-        let mut keys = vec![(SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION)];
-        if let Some(version) = epoch_start_configuration.randomness_obj_initial_shared_version() {
-            keys.push((SUI_RANDOMNESS_STATE_OBJECT_ID, version));
-        }
-        if let Some(version) =
-            epoch_start_configuration.accumulator_root_obj_initial_shared_version()
-        {
-            keys.push((SUI_ACCUMULATOR_ROOT_OBJECT_ID, version));
-        }
-        keys
-    }
-
-    pub(crate) fn is_system_object_version_key(key: &ConsensusObjectSequenceKey) -> bool {
-        key.0 == SUI_CLOCK_OBJECT_ID
-            || key.0 == SUI_RANDOMNESS_STATE_OBJECT_ID
-            || key.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID
-    }
-
     // For each key in objects_to_init, return the next version for that key as recorded in the
-    // in-memory next-version map.
+    // next_shared_object_versions table.
     //
-    // If any keys are missing, then we need to seed them. `effects_seeds` takes priority:
-    // it contains seeds recovered from the effects of already-executed transactions in
-    // the batch being assigned, which protects replay from observing versions that were
-    // written to the objects table by the pre-crash execution of the very transactions
-    // being replayed (docs/in_memory_object_versioning.md §6.3). Otherwise we check if a
-    // previous version of the object has been written. If so, then the object was
-    // written in a previous epoch, and we seed with that value. If no version of the
-    // object has yet been written, we seed with the initial version recorded in the
-    // certificate (which is a function of the lamport version computation of the
-    // transaction that created the shared object originally - which transaction may not
-    // yet have been executed on this node).
+    // If any keys are missing, then we need to initialize the table. We first check if a previous
+    // version of that object has been written. If so, then the object was written in a previous
+    // epoch, and we initialize next_shared_object_versions to that value. If no version of the
+    // object has yet been written, we initialize the object to the initial version recorded in the
+    // certificate (which is a function of the lamport version computation of the transaction that
+    // created the shared object originally - which transaction may not yet have been executed on
+    // this node).
     //
-    // Because all paths that assign shared versions for a shared object transaction call
-    // this function, it is impossible for parent_sync to be updated before this function
-    // completes successfully for each affected object id.
+    // The init rows are written durably at once (bypassing the quarantine): both the
+    // consensus path and the checkpoint-executor path pin a key before any of its
+    // touchers execute, so consensus replay after a crash re-reads the pre-mutation
+    // seed instead of an objects table that execution may have advanced.
+    //
+    // Because all paths that assign shared versions for a shared object transaction call this
+    // function, it is impossible for parent_sync to be updated before this function completes
+    // successfully for each affected object id.
     pub(crate) fn get_or_init_next_object_versions(
         &self,
         objects_to_init: &[ConsensusObjectSequenceKey],
         cache_reader: &dyn ObjectCacheRead,
-        effects_seeder: impl FnOnce(
-            &[ConsensusObjectSequenceKey],
-        ) -> HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
     ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
         // get_or_init_next_object_versions can be called
         // from consensus or checkpoint executor,
@@ -2313,11 +2227,12 @@ impl AuthorityPerEpochStore {
         let _locks = self
             .version_assignment_mutex_table
             .acquire_locks(objects_to_init.iter().map(|(id, _)| *id));
+        let tables = self.tables()?;
 
         let next_versions = self
             .consensus_quarantine
             .read()
-            .get_next_shared_object_versions(objects_to_init);
+            .get_next_shared_object_versions(&tables, objects_to_init)?;
 
         let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
             .iter()
@@ -2339,22 +2254,16 @@ impl AuthorityPerEpochStore {
                 .collect());
         }
 
-        // Singleton system objects always resolve from their durable watermark rows.
-        let system_versions = self
-            .tables()?
-            .system_object_next_versions
-            .multi_get(&uninitialized_objects)?;
-
-        // Note: we don't actually need to read from the transaction here, as no writer
-        // can update object_store until after get_or_init_next_object_versions
-        // completes.
-        let store_candidates: Vec<SequenceNumber> = uninitialized_objects
+        let versions_to_write: Vec<_> = uninitialized_objects
             .iter()
             .map(|(id, initial_version)| {
+                // Note: we don't actually need to read from the transaction here, as no writer
+                // can update object_store until after get_or_init_next_object_versions
+                // completes.
                 match cache_reader.get_object(id) {
                     Some(obj) => {
                         if obj.owner().start_version() == Some(*initial_version) {
-                            obj.version()
+                            ((*id, *initial_version), obj.version())
                         } else {
                             // If we can't find a matching start version, treat the object as
                             // if it's absent.
@@ -2363,32 +2272,11 @@ impl AuthorityPerEpochStore {
                                     assert!(*initial_version >= obj_start_version,
                                             "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
                                 }
-                            *initial_version
+                            ((*id, *initial_version), *initial_version)
                         }
                     }
-                    None => *initial_version,
+                    None => ((*id, *initial_version), *initial_version),
                 }
-            })
-            .collect();
-
-        // The effects seeder must run AFTER the object reads above: the object view
-        // includes dirty state from execution racing ahead of consensus (checkpoint
-        // executor re-executing synced commits), which is not bounded by any watermark.
-        // If the seeder then finds a key's earliest in-batch toucher unexecuted,
-        // per-object execution ordering guarantees no later toucher was executed when
-        // the object was read, so the store candidate is uncontaminated; when it finds
-        // effects, they win over the store candidate.
-        let effects_seeds = effects_seeder(&uninitialized_objects);
-
-        let versions_to_write: Vec<_> = uninitialized_objects
-            .iter()
-            .zip_debug_eq(system_versions)
-            .zip_debug_eq(store_candidates)
-            .map(|((key, system_version), store_candidate)| {
-                let version = system_version
-                    .or_else(|| effects_seeds.get(key).copied())
-                    .unwrap_or(store_candidate);
-                (*key, version)
             })
             .collect();
 
@@ -2406,9 +2294,9 @@ impl AuthorityPerEpochStore {
             ?versions_to_write,
             "initializing next_shared_object_versions"
         );
-        self.consensus_quarantine
-            .write()
-            .insert_next_shared_object_version_seeds(versions_to_write.into_iter());
+        tables
+            .next_shared_object_versions_v2
+            .multi_insert(versions_to_write)?;
 
         Ok(ret)
     }
@@ -2562,12 +2450,13 @@ impl AuthorityPerEpochStore {
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         accumulator_version: Option<SequenceNumber>,
+        cache_reader: &dyn ObjectCacheRead,
     ) -> SuiResult<AssignedVersions> {
-        let assigned_versions = SharedObjVerManager::assign_versions_from_effects(&[(
-            certificate,
-            effects,
-            accumulator_version,
-        )]);
+        let assigned_versions = SharedObjVerManager::assign_versions_from_effects(
+            &[(certificate, effects, accumulator_version)],
+            self,
+            cache_reader,
+        );
         let (_, assigned_versions) = assigned_versions.0.into_iter().next().unwrap();
         Ok(assigned_versions)
     }
@@ -3296,12 +3185,6 @@ impl AuthorityPerEpochStore {
             &BTreeMap::new(),
             &mut output,
         )?;
-        // Version advancements normally reach the in-memory next-version map when the
-        // consensus handler pushes the commit output into the quarantine; apply them
-        // directly here since this test path bypasses the handler.
-        self.consensus_quarantine
-            .write()
-            .insert_shared_object_next_versions(&output);
         let mut batch = self.db_batch()?;
         output.set_default_commit_stats_for_testing();
         output.write_to_batch(self, &mut batch)?;
