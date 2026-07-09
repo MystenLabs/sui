@@ -35,13 +35,13 @@ Response: {
     "sentByA": {
       "edges": [
         {
-          "cursor": "CAIQARgAIAE=",
+          "cursor": "KAE6BAgAEAE=",
           "node": {
             "digest": "BRt87zhiL5c9dFr38gjvhF3gmRh7iUYZUcfokRzVYSxo"
           }
         },
         {
-          "cursor": "CAIQARgAIAI=",
+          "cursor": "KAE6BAgAEAI=",
           "node": {
             "digest": "7425XHh77rijYLf2ZktyFTcFn9ThZbLPcrenkGokkM6Q"
           }
@@ -51,7 +51,7 @@ Response: {
     "affectedB": {
       "edges": [
         {
-          "cursor": "CAIQARgAIAE=",
+          "cursor": "KAE6BAgAEAE=",
           "node": {
             "digest": "BRt87zhiL5c9dFr38gjvhF3gmRh7iUYZUcfokRzVYSxo"
           }
@@ -61,7 +61,7 @@ Response: {
     "affectedC": {
       "edges": [
         {
-          "cursor": "CAIQARgAIAI=",
+          "cursor": "KAE6BAgAEAI=",
           "node": {
             "digest": "7425XHh77rijYLf2ZktyFTcFn9ThZbLPcrenkGokkM6Q"
           }
