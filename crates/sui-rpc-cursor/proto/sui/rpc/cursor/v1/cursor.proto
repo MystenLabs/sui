@@ -19,7 +19,9 @@ enum CursorKind {
 // by which `position` member is set.
 message CursorToken {
     // Tags 1-4 belonged to an earlier version of this schema; reserved so
-    // stale tokens are rejected instead of misread.
+    // those bytes are never misread. Servers may still accept them through a
+    // decode-only legacy fallback (see sui-rpc-cursor); new implementations
+    // need only the current fields.
     reserved 1 to 4;
 
     // Orthogonal to `position`: the same coordinate can be either a returned

@@ -71,7 +71,56 @@ impl CursorToken {
     }
 
     pub fn decode(bytes: &[u8]) -> anyhow::Result<Self> {
-        Self::try_from(grpc::CursorToken::decode(bytes)?)
+        // Current format first. Legacy bytes also decode "successfully" here —
+        // their tags 1-4 are reserved, so prost skips them as unknown fields —
+        // but the resulting all-defaults message fails validation, sending us
+        // to the fallback. Bytes that fail both surface the current-format
+        // error.
+        let token = grpc::CursorToken::decode(bytes)?;
+        match Self::try_from(token) {
+            Ok(token) => Ok(token),
+            Err(err) => Self::decode_legacy(bytes).map_err(|_| err),
+        }
+    }
+
+    /// Decode-only compatibility with the pre-explicit-coordinate schema
+    /// (tags 1-4, now reserved): checkpoint, transaction, and event cursors
+    /// minted before the format change keep resuming. The event arm hard-codes
+    /// the frozen historical bitpacking rather than importing the storage crate.
+    /// Nothing mints this format.
+    fn decode_legacy(bytes: &[u8]) -> anyhow::Result<Self> {
+        let legacy = LegacyCursorToken::decode(bytes)?;
+        let kind = match legacy.kind {
+            1 => CursorKind::Item,
+            2 => CursorKind::Boundary,
+            k => anyhow::bail!("unknown legacy cursor kind: {k}"),
+        };
+        let checkpoint = legacy
+            .checkpoint
+            .context("legacy cursor missing checkpoint")?;
+        let position = legacy.position.context("legacy cursor missing position")?;
+        let position = match legacy.query_type {
+            // Legacy checkpoint cursors minted `checkpoint == position`; use
+            // `position`, the coordinate old scans resumed from.
+            1 => Position::Checkpoints {
+                checkpoint: position,
+            },
+            2 => Position::Transactions {
+                checkpoint,
+                tx_seq: position,
+            },
+            // Legacy event cursors packed the coordinate into one u64:
+            // `(tx_seq << 16) | event_index`. The constant is the FROZEN
+            // historical wire format, deliberately not shared with the live
+            // storage encoding, which is free to diverge.
+            3 => Position::Events {
+                checkpoint,
+                tx_seq: position >> 16,
+                event_index: (position & 0xFFFF) as u32,
+            },
+            q => anyhow::bail!("unknown legacy cursor query_type: {q}"),
+        };
+        Ok(Self { kind, position })
     }
 }
 
@@ -165,6 +214,25 @@ impl TryFrom<grpc::CursorToken> for CursorToken {
     }
 }
 
+/// Wire mirror of the previous `CursorToken` schema (tags 1-4, reserved in the
+/// current message; disjoint from the current fields 5-8, which is what makes
+/// the decode fallback unambiguous in both directions). Private and
+/// decode-only: deliberately absent from `cursor.proto`, which stays the spec
+/// for third-party implementations.
+#[derive(Clone, PartialEq, prost::Message)]
+struct LegacyCursorToken {
+    /// Legacy QueryType: 1 = checkpoints, 2 = transactions, 3 = events.
+    #[prost(int32, tag = "1")]
+    query_type: i32,
+    /// Legacy CursorKind: 1 = item, 2 = boundary.
+    #[prost(int32, tag = "2")]
+    kind: i32,
+    #[prost(uint64, optional, tag = "3")]
+    checkpoint: Option<u64>,
+    #[prost(uint64, optional, tag = "4")]
+    position: Option<u64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,6 +299,83 @@ mod tests {
         }
         .encode_to_vec();
 
+        assert!(CursorToken::decode(&bytes).is_err());
+    }
+
+    #[test]
+    fn decodes_legacy_transactions_cursor() {
+        // query_type=TRANSACTIONS(2), kind=ITEM(1), checkpoint=42, position=7,
+        // exactly as the previous schema serialized them.
+        let bytes = [0x08, 0x02, 0x10, 0x01, 0x18, 0x2a, 0x20, 0x07];
+        assert_eq!(
+            CursorToken::decode(&bytes).unwrap(),
+            CursorToken::item(Position::Transactions {
+                checkpoint: 42,
+                tx_seq: 7,
+            })
+        );
+    }
+
+    #[test]
+    fn decodes_legacy_checkpoints_cursor() {
+        // query_type=CHECKPOINTS(1), kind=BOUNDARY(2); legacy checkpoint
+        // cursors carried the cp_seq in both fields.
+        let bytes = [0x08, 0x01, 0x10, 0x02, 0x18, 0x05, 0x20, 0x05];
+        assert_eq!(
+            CursorToken::decode(&bytes).unwrap(),
+            CursorToken::boundary(Position::Checkpoints { checkpoint: 5 })
+        );
+    }
+
+    #[test]
+    fn decodes_legacy_events_cursor() {
+        let bytes = LegacyCursorToken {
+            query_type: 3,
+            kind: 1,
+            checkpoint: Some(9),
+            position: Some((42u64 << 16) | 7),
+        }
+        .encode_to_vec();
+        assert_eq!(
+            CursorToken::decode(&bytes).unwrap(),
+            CursorToken::item(Position::Events {
+                checkpoint: 9,
+                tx_seq: 42,
+                event_index: 7,
+            })
+        );
+    }
+
+    #[test]
+    fn decodes_legacy_events_boundary_fencepost() {
+        let bytes = LegacyCursorToken {
+            query_type: 3,
+            kind: 2,
+            checkpoint: Some(6),
+            position: Some((5u64 << 16) | 0xFFFF),
+        }
+        .encode_to_vec();
+        assert_eq!(
+            CursorToken::decode(&bytes).unwrap(),
+            CursorToken::boundary(Position::Events {
+                checkpoint: 6,
+                tx_seq: 5,
+                event_index: 65535,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_legacy_token_with_missing_fields() {
+        // Discriminant present but coordinates absent — must not become a
+        // "position 0" cursor.
+        let bytes = LegacyCursorToken {
+            query_type: 2,
+            kind: 1,
+            checkpoint: None,
+            position: None,
+        }
+        .encode_to_vec();
         assert!(CursorToken::decode(&bytes).is_err());
     }
 }
