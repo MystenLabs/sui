@@ -4484,9 +4484,6 @@ impl ProtocolConfig {
                 130 => {
                     cfg.feature_flags.record_net_unsettled_object_withdraws = true;
 
-                    // `scratch` module native costs. scratch is a pure in-memory,
-                    // per-transaction store (no object-store/DB access, no serialization),
-                    // so it is cheaper than the dynamic_field analogs.
                     cfg.scratch_add_cost_base = Some(13);
                     cfg.scratch_read_cost_base = Some(13);
                     cfg.scratch_read_value_cost = Some(1);
@@ -4494,7 +4491,8 @@ impl ProtocolConfig {
                     cfg.scratch_exists_cost_base = Some(13);
                     cfg.scratch_exists_with_type_cost_base = Some(13);
                     cfg.scratch_exists_with_type_type_cost = Some(1);
-                    cfg.max_scratch_pad_size = Some(16 * 1024);
+                    let max_commands = cfg.max_programmable_tx_commands() as u64;
+                    cfg.max_scratch_pad_size = Some(16 * max_commands);
                 }
                 // Use this template when making changes:
                 //
