@@ -275,9 +275,20 @@ impl SharedObjVerManager {
     where
         T: AsTx + 'a,
     {
+        // Keys touched only by cancelled transactions are excluded: cancelled
+        // transactions are assigned sentinel versions without reading or advancing the
+        // next-version state, so such keys need no seed from this batch — and no safe
+        // seed may be derivable here, since every effects provider records sentinels
+        // and the objects table may already reflect later-commit executions. The next
+        // batch with a non-cancelled toucher seeds them.
         let version_keys = collect_version_keys(
             assignables
                 .clone()
+                .filter(|a| {
+                    !a.key()
+                        .as_digest()
+                        .is_some_and(|digest| cancelled_txns.contains_key(digest))
+                })
                 .flat_map(|a| a.shared_input_objects(epoch_store)),
             epoch_store,
         );
@@ -294,27 +305,21 @@ impl SharedObjVerManager {
         // the seed) or has not mutated the key durably (or the executed one could not
         // have executed before it). In the common case nothing is uninitialized (or
         // nothing is executed yet) and no effects are read.
-        let uninitialized: Vec<ConsensusObjectSequenceKey> = epoch_store
-            .multi_get_next_shared_object_versions(&version_keys)
-            .into_iter()
-            .zip_debug_eq(&version_keys)
-            .filter_map(|(version, key)| version.is_none().then_some(*key))
-            .collect();
-        let effects_seeds = if uninitialized.is_empty() {
-            Default::default()
-        } else {
-            compute_effects_version_seeds(
-                epoch_store,
-                transaction_cache_reader,
-                assignables.clone(),
-                &uninitialized,
-            )
-        };
-
+        //
+        // The seeder is invoked by get_or_init_next_object_versions AFTER its objects
+        // read — that ordering is what makes the store fallback safe against execution
+        // racing ahead concurrently (see the comment there).
         let mut shared_input_next_versions = epoch_store.get_or_init_next_object_versions(
             &version_keys,
             cache_reader,
-            &effects_seeds,
+            |uninitialized| {
+                compute_effects_version_seeds(
+                    epoch_store,
+                    transaction_cache_reader,
+                    assignables.clone(),
+                    uninitialized,
+                )
+            },
         )?;
         let mut assigned_versions = Vec::new();
         for assignable in assignables {

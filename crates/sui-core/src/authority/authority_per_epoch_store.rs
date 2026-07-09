@@ -2153,7 +2153,9 @@ impl AuthorityPerEpochStore {
         obj: &ObjectID,
         start_version: SequenceNumber,
     ) -> Option<SequenceNumber> {
-        self.multi_get_next_shared_object_versions(&[(*obj, start_version)])[0]
+        self.consensus_quarantine
+            .read()
+            .get_next_shared_object_versions(&[(*obj, start_version)])[0]
     }
 
     pub fn insert_finalized_transactions(
@@ -2214,18 +2216,6 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    /// Returns the next-version state for each key, keys missing from the in-memory map
-    /// as `None`. Used to decide whether effects-aware seeding is needed before calling
-    /// `get_or_init_next_object_versions`.
-    pub(crate) fn multi_get_next_shared_object_versions(
-        &self,
-        object_keys: &[ConsensusObjectSequenceKey],
-    ) -> Vec<Option<SequenceNumber>> {
-        self.consensus_quarantine
-            .read()
-            .get_next_shared_object_versions(object_keys)
-    }
-
     /// The consensus keys of the singleton system objects tracked durably in
     /// `system_object_next_versions`.
     fn system_object_version_keys(
@@ -2271,7 +2261,9 @@ impl AuthorityPerEpochStore {
         &self,
         objects_to_init: &[ConsensusObjectSequenceKey],
         cache_reader: &dyn ObjectCacheRead,
-        effects_seeds: &HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
+        effects_seeder: impl FnOnce(
+            &[ConsensusObjectSequenceKey],
+        ) -> HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
     ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
         // get_or_init_next_object_versions can be called
         // from consensus or checkpoint executor,
@@ -2311,23 +2303,16 @@ impl AuthorityPerEpochStore {
             .system_object_next_versions
             .multi_get(&uninitialized_objects)?;
 
-        let versions_to_write: Vec<_> = uninitialized_objects
+        // Note: we don't actually need to read from the transaction here, as no writer
+        // can update object_store until after get_or_init_next_object_versions
+        // completes.
+        let store_candidates: Vec<SequenceNumber> = uninitialized_objects
             .iter()
-            .zip_debug_eq(system_versions)
-            .map(|((id, initial_version), system_version)| {
-                if let Some(version) = system_version {
-                    return ((*id, *initial_version), version);
-                }
-                if let Some(seed) = effects_seeds.get(&(*id, *initial_version)) {
-                    return ((*id, *initial_version), *seed);
-                }
-                // Note: we don't actually need to read from the transaction here, as no writer
-                // can update object_store until after get_or_init_next_object_versions
-                // completes.
+            .map(|(id, initial_version)| {
                 match cache_reader.get_object(id) {
                     Some(obj) => {
                         if obj.owner().start_version() == Some(*initial_version) {
-                            ((*id, *initial_version), obj.version())
+                            obj.version()
                         } else {
                             // If we can't find a matching start version, treat the object as
                             // if it's absent.
@@ -2336,11 +2321,32 @@ impl AuthorityPerEpochStore {
                                     assert!(*initial_version >= obj_start_version,
                                             "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
                                 }
-                            ((*id, *initial_version), *initial_version)
+                            *initial_version
                         }
                     }
-                    None => ((*id, *initial_version), *initial_version),
+                    None => *initial_version,
                 }
+            })
+            .collect();
+
+        // The effects seeder must run AFTER the object reads above: the object view
+        // includes dirty state from execution racing ahead of consensus (checkpoint
+        // executor re-executing synced commits), which is not bounded by any watermark.
+        // If the seeder then finds a key's earliest in-batch toucher unexecuted,
+        // per-object execution ordering guarantees no later toucher was executed when
+        // the object was read, so the store candidate is uncontaminated; when it finds
+        // effects, they win over the store candidate.
+        let effects_seeds = effects_seeder(&uninitialized_objects);
+
+        let versions_to_write: Vec<_> = uninitialized_objects
+            .iter()
+            .zip_debug_eq(system_versions)
+            .zip_debug_eq(store_candidates)
+            .map(|((key, system_version), store_candidate)| {
+                let version = system_version
+                    .or_else(|| effects_seeds.get(key).copied())
+                    .unwrap_or(store_candidate);
+                (*key, version)
             })
             .collect();
 
