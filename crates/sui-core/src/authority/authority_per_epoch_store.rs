@@ -1950,11 +1950,26 @@ impl AuthorityPerEpochStore {
         );
 
         if let Err(error) = result {
-            // The effects lookup is only needed on the (rare) reject path, keeping the
-            // accept path free of transaction-store reads.
-            let executed_in_current_epoch = transaction_cache_reader
-                .get_executed_effects(&tx_digest)
-                .is_some_and(|effects| effects.executed_epoch() == self.epoch());
+            // The exemption lookups run only on the (rare) reject path, keeping the
+            // accept path free of transaction-store reads. Two sources make the check
+            // race-free against execution publishing this transaction's outputs
+            // concurrently:
+            // - The epoch-store executed mark covers the live publish window: it is
+            //   inserted before write_transaction_outputs (commit_certificate), so if
+            //   the conflict check above observed this transaction's own consumption,
+            //   the mark is already visible. Effects alone would race — they are
+            //   published after the object writes, so a mid-publish read could see the
+            //   consumption but not yet the effects and wrongly reject an executed
+            //   transaction (checkpoint fork).
+            // - Durable current-epoch effects cover restarts: the in-memory mark is
+            //   lost on crash (and its durable backing can lag), but effects commit
+            //   atomically with the object writes in the perpetual store, so a durably
+            //   visible consumption implies visible effects.
+            let executed_in_current_epoch = self
+                .transactions_executed_in_cur_epoch(&[tx_digest])?[0]
+                || transaction_cache_reader
+                    .get_executed_effects(&tx_digest)
+                    .is_some_and(|effects| effects.executed_epoch() == self.epoch());
             if !executed_in_current_epoch {
                 return Err(error);
             }

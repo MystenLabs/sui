@@ -2322,6 +2322,18 @@ async fn test_owned_object_conflict_check_v2() {
     // as happens during crash replay or when checkpoint execution runs ahead of
     // consensus.
     check(&[live_ref, gas_ref], transfer_digest, &no_locks, &no_locks).unwrap();
+
+    // Exemption via the epoch-store executed mark alone, with no effects visible: this
+    // is the mid-publish window (commit_certificate inserts the mark before
+    // write_transaction_outputs publishes objects and effects) in which the
+    // consumed-check can already observe the consumption.
+    let mark_only_digest = TransactionDigest::random();
+    assert!(
+        tx_cache.get_executed_effects(&mark_only_digest).is_none(),
+        "digest must have no effects for this case to cover the mark"
+    );
+    epoch_store.insert_executed_in_epoch(&mark_only_digest);
+    check(&[live_ref], mark_only_digest, &no_locks, &no_locks).unwrap();
 }
 
 #[tokio::test]
