@@ -243,6 +243,7 @@ impl CheckpointContents {
             if let Some(streamed) = &self.streamed_data {
                 return Ok(Some(Transaction::paginate_preloaded_transactions(
                     self.scope.clone(),
+                    summary.sequence_number,
                     &streamed.transactions,
                     &page,
                     filter,
