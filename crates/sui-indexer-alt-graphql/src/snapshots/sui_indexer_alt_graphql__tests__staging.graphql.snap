@@ -4663,6 +4663,11 @@ enum WithdrawFrom {
 	The funds are withdrawn from the sponsor's account.
 	"""
 	SPONSOR
+	"""
+	The funds are withdrawn from an allowance funder's account, with the
+	transaction sender as the allowance's spender.
+	"""
+	ALLOWANCE
 }
 
 type WithdrawMaxAmountU64 {
