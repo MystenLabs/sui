@@ -361,7 +361,7 @@ mod test {
         }
         state
             .database_for_testing()
-            .prune_objects_and_compact_for_testing(state.get_checkpoint_store(), None)
+            .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
             .await;
     }
 
@@ -737,8 +737,6 @@ mod test {
     // simtest has low timeout tolerance and it is not designed to test performance.
     #[sim_test(config = "test_config_low_latency()")]
     async fn test_simulated_load_large_consensus_commit_prologue_size() {
-        let test_cluster = build_test_cluster(4, 10_000, 1).await;
-
         let mut additional_cancelled_txns = Vec::new();
         let num_txns = thread_rng().gen_range(500..2000);
         info!("Adding additional {num_txns} cancelled txns in consensus commit prologue.");
@@ -758,9 +756,19 @@ mod test {
             additional_cancelled_txns.push((TransactionDigest::random(), assigned_object_versions));
         }
 
+        // Register the fail point before the cluster starts processing any consensus commits.
+        // `register_fail_point_arg` mutates process-global state with no synchronization to
+        // consensus rounds; registering it after `build_test_cluster` had already let validators
+        // start committing meant different validators could observe it becoming active on
+        // different rounds (whichever round each validator happened to be processing at the
+        // moment the registration landed), causing them to build different (but individually
+        // self-consistent) ConsensusCommitPrologue transactions for the same round - a real
+        // checkpoint fork.
         register_fail_point_arg("additional_cancelled_txns_for_tests", move || {
             Some(additional_cancelled_txns.clone())
         });
+
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
 
         test_simulated_load(test_cluster.clone(), 30).await;
     }
@@ -1632,7 +1640,7 @@ mod test {
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::NAME, 0.1)
+        .with_probability(SharedCounterIncrement::NAME, 0.2)
         .with_probability(SharedCounterRead::NAME, 0.1)
         .with_probability(RandomnessRead::NAME, 0.1)
         .with_probability(AddressBalanceDeposit::NAME, 0.1)
@@ -1711,7 +1719,11 @@ mod test {
         // `> 100` bar flake ~3% of the time. A `> 50` bar still asserts that
         // shared-object congestion control actually kicked in, with comfortable
         // margin below the observed floor.
-        assert!(metrics_sum.cancellation_count > 50);
+        assert!(
+            metrics_sum.cancellation_count > 50,
+            "cancellation_count too low: {}",
+            metrics_sum.cancellation_count
+        );
 
         if address_aliases_enabled {
             let alias_add_stats = metrics

@@ -7,73 +7,85 @@ use async_graphql::Context;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
+use futures::StreamExt;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::QueryType;
-use tokio::sync::broadcast;
-use tracing::warn;
 
-use crate::api::scalars::cursor::ByteCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
+use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::EventCursor;
 use crate::api::types::event::filter::EventFilter;
+use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::config::Limits;
+use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::scope::Scope;
-use crate::task::streaming::CheckpointBroadcaster;
 use crate::task::streaming::StreamingPackageStore;
+use crate::task::streaming::SubscriptionBroadcast;
+use crate::task::streaming::broadcast_error;
 
 #[derive(Default)]
 pub struct Subscription;
 
 #[async_graphql::Subscription]
 impl Subscription {
-    /// Subscribe to checkpoints as they are finalized, starting from the current tip.
+    /// Subscribe to checkpoints as they are finalized.
+    ///
+    /// Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number) to resume from a known point. If both are provided, the subscription resumes from whichever is later.
     ///
     /// This subscription is not yet available for use.
     async fn checkpoints(
         &self,
         ctx: &Context<'_>,
+        after: Option<CCheckpoint>,
+        after_checkpoint: Option<UInt53>,
     ) -> Result<
         impl futures::Stream<Item = Result<Edge<String, Checkpoint, EmptyFields>, RpcError>>,
         RpcError,
     > {
-        let package_store = ctx.data::<Arc<StreamingPackageStore>>()?.clone();
+        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
-        let resolver_limits = limits.package_resolver();
-        let mut receiver = ctx.data::<CheckpointBroadcaster>()?.resubscribe();
+        let config: &SubscriptionConfig = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
+        let fetcher: &LedgerGrpcReader = ctx.data()?;
 
-        Ok(async_stream::stream! {
-            loop {
-                match receiver.recv().await {
-                    Ok(processed) => {
-                        let sequence_number = processed.summary.sequence_number;
-                        let scope = Scope::for_streamed_checkpoint(
-                            package_store.clone(),
-                            resolver_limits.clone(),
-                            processed.clone(),
-                        );
-                        let cursor = CCheckpoint::new(sequence_number).encode_cursor();
-                        yield Ok(Edge::new(
-                            cursor,
-                            Checkpoint {
-                                sequence_number,
-                                scope,
-                                streamed_data: Some(processed),
-                            },
-                        ));
-                    }
-                    Err(e) => {
-                        yield Err(broadcast_error(e));
-                        break;
-                    }
-                }
-            }
-        })
+        let resume_from: Option<u64> = match (after.map(|c| *c), after_checkpoint.map(u64::from)) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
+        let package_store = package_store.clone();
+        let resolver_limits = limits.package_resolver();
+
+        let stream = broadcast
+            .clone()
+            .subscribe(resume_from, fetcher.clone(), config);
+
+        Ok(stream.map(move |item| {
+            item.map(|processed| {
+                let sequence_number = processed.summary.sequence_number;
+                let scope = Scope::for_streamed_checkpoint(
+                    package_store.clone(),
+                    resolver_limits.clone(),
+                    processed.clone(),
+                );
+                let cursor = CCheckpoint::new(sequence_number).encode_cursor();
+                Edge::new(
+                    cursor,
+                    Checkpoint {
+                        sequence_number,
+                        scope,
+                        streamed_data: Some(processed),
+                    },
+                )
+            })
+        }))
     }
 
     /// Subscribe to transactions as they are finalized, with optional filtering.
@@ -91,10 +103,13 @@ impl Subscription {
         impl futures::Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>>,
         RpcError,
     > {
-        let package_store = ctx.data::<Arc<StreamingPackageStore>>()?.clone();
+        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
+
+        let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
-        let mut receiver = ctx.data::<CheckpointBroadcaster>()?.resubscribe();
+        let mut receiver = broadcast.broadcaster().resubscribe();
         let filter = filter.unwrap_or_default();
 
         Ok(async_stream::stream! {
@@ -113,10 +128,12 @@ impl Subscription {
                             if !filter.matches(&tx.contents) {
                                 continue;
                             }
-                            let cursor = ByteCursor::new(
-                                CursorToken::item(QueryType::Transactions, processed.summary.sequence_number, tx.tx_sequence_number)
-                                .encode().to_vec()
-                            ).encode_cursor();
+                            let cursor = CTransaction::new(OpaqueCursor::new(CursorToken::item(
+                                QueryType::Transactions,
+                                processed.summary.sequence_number,
+                                tx.tx_sequence_number,
+                            )))
+                            .encode_cursor();
                             yield Transaction::with_contents(scope.clone(), tx.contents.clone())
                                 .map(|transaction| Edge::new(cursor, transaction));
                         }
@@ -145,10 +162,13 @@ impl Subscription {
         impl futures::Stream<Item = Result<Edge<String, Event, EmptyFields>, RpcError>>,
         RpcError,
     > {
-        let package_store = ctx.data::<Arc<StreamingPackageStore>>()?.clone();
+        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
+
+        let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
-        let mut receiver = ctx.data::<CheckpointBroadcaster>()?.resubscribe();
+        let mut receiver = broadcast.broadcaster().resubscribe();
         let filter = filter.unwrap_or_default();
 
         Ok(async_stream::stream! {
@@ -199,23 +219,5 @@ impl Subscription {
                 }
             }
         })
-    }
-}
-
-fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
-    match e {
-        broadcast::error::RecvError::Lagged(missed_count) => {
-            warn!(missed_count, "Subscription lagged, disconnecting");
-            anyhow::anyhow!(
-                "Subscription too slow: missed {missed_count} checkpoints. \
-                 Please reconnect and use the query API to backfill \
-                 from your last seen sequenceNumber."
-            )
-            .into()
-        }
-        broadcast::error::RecvError::Closed => {
-            warn!("Checkpoint broadcast channel closed");
-            anyhow::anyhow!("Checkpoint stream has been shut down. Please reconnect.").into()
-        }
     }
 }

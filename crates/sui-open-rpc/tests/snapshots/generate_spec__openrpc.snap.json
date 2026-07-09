@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.75.0"
+    "version": "1.76.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "129",
+              "maxSupportedProtocolVersion": "130",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1377,6 +1377,7 @@
                 "enable_poseidon": false,
                 "enable_ptb_execution_v2": false,
                 "enable_ristretto255_group_ops": false,
+                "enable_unified_linkage": false,
                 "enable_vdf": false,
                 "enable_verify_bulletproofs_ristretto255": false,
                 "end_of_epoch_transaction_supported": false,
@@ -1428,6 +1429,7 @@
                 "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
+                "record_net_unsettled_object_withdraws": false,
                 "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relax_valid_during_for_owned_inputs": false,
@@ -2250,6 +2252,7 @@
                 "enable_poseidon": false,
                 "enable_ptb_execution_v2": false,
                 "enable_ristretto255_group_ops": false,
+                "enable_unified_linkage": false,
                 "enable_vdf": false,
                 "enable_verify_bulletproofs_ristretto255": false,
                 "end_of_epoch_transaction_supported": false,
@@ -2382,6 +2385,7 @@
                 "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
+                "record_net_unsettled_object_withdraws": false,
                 "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relax_valid_during_for_owned_inputs": false,

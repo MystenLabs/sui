@@ -4,8 +4,7 @@
 //! Sequential pipeline that feeds the
 //! [`schema::balance`](crate::schema::balance) CF.
 //!
-//! Mirrors `index_transactions` in `sui-core::rpc_index`: for
-//! every transaction in the checkpoint, call
+//! For every transaction in the checkpoint, call
 //! [`sui_types::balance_change::derive_detailed_balance_changes_2`]
 //! and forward the returned `(coin_amount, address_amount)`
 //! deltas straight into the CF as a single combined merge operand
@@ -87,15 +86,13 @@ impl Restore for Balance {
     ///
     /// - **Coin half**: address-owned (and consensus-address-owned)
     ///   `Coin<T>` objects. The coin's `balance` field is credited
-    ///   to the `(owner, coin_type)` row's coin component. Mirrors
-    ///   `index_object`'s coin path in `sui-core::rpc_index`.
+    ///   to the `(owner, coin_type)` row's coin component.
     ///
     /// - **Address half**: dynamic-field objects parented to
     ///   [`SUI_ACCUMULATOR_ROOT_OBJECT_ID`]. These carry the
     ///   per-`(owner, coin_type)` accumulator balance, which the
     ///   tip pipeline would otherwise re-derive from
-    ///   `AccumulatorWrite` events. Mirrors `get_address_balance_info`
-    ///   in `sui-core::rpc_index`.
+    ///   `AccumulatorWrite` events.
     ///
     /// Everything else (shared / immutable objects, non-coin
     /// address-owned objects, dynamic fields under other parents)
@@ -127,8 +124,7 @@ impl Restore for Balance {
 
 /// Extract the `(coin_type, balance)` pair for a coin object, or
 /// `None` if `object` is not a coin or carries a non-struct type
-/// tag. Mirrors `get_balance_and_type_if_coin` in
-/// `sui-core::rpc_index`.
+/// tag.
 fn coin_balance_for_restore(object: &Object) -> anyhow::Result<Option<(TypeTag, u64)>> {
     Ok(Coin::extract_balance_if_coin(object)
         .map_err(|e| anyhow::anyhow!("Failed to deserialize coin object {}: {e}", object.id()))?
@@ -141,8 +137,7 @@ fn coin_balance_for_restore(object: &Object) -> anyhow::Result<Option<(TypeTag, 
 /// Extract `(owner, coin_type, balance)` from a dynamic-field
 /// object parented to the accumulator root. Returns `None` for
 /// non-balance fields, fields whose value cannot be parsed as a
-/// `u128`, or non-positive balances. Mirrors
-/// `get_address_balance_info` in `sui-core::rpc_index`.
+/// `u128`, or non-positive balances.
 fn address_balance_info(object: &Object) -> Option<(SuiAddress, TypeTag, i128)> {
     let move_object = object.data.try_as_move()?;
     let TypeTag::Struct(coin_type) = move_object.type_().balance_accumulator_field_type_maybe()?

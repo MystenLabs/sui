@@ -48,7 +48,6 @@ use super::chunked_scan::cancelled;
 use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
-use super::ledger_read::ensure_ledger_history_enabled;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
@@ -72,7 +71,6 @@ pub(crate) async fn list_checkpoints(
     service: RpcService,
     request: ListCheckpointsRequest,
 ) -> Result<ListCheckpointsStream, RpcError> {
-    ensure_ledger_history_enabled(&service)?;
     let started = Instant::now();
     let start_checkpoint = request.start_checkpoint;
     let end_checkpoint = request.end_checkpoint;
@@ -664,7 +662,7 @@ fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
 
 fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListCheckpointsResponse::default();
     response.response = Some(list_checkpoints_response::Response::End(end));

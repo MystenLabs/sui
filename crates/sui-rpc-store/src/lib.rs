@@ -24,11 +24,12 @@ pub mod reader;
 pub mod schema;
 
 use std::path::Path;
+use std::sync::Arc;
 
 use prometheus::Registry;
 use sui_consistent_store::DbOptions;
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
+use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
@@ -90,13 +91,13 @@ pub async fn start_indexer(
     // `registry`.
     let ingestion_metrics = IngestionMetrics::new(metrics_prefix, registry);
     let ingestion_client = IngestionClient::new(client_args.ingestion, ingestion_metrics)?;
-    let streaming_client: Option<BoxedStreamingClient> =
+    let streaming_client: Option<ArcStreamingClient> =
         client_args.streaming.streaming_url.map(|uri| {
-            Box::new(GrpcStreamingClient::new(
+            Arc::new(GrpcStreamingClient::new(
                 uri,
                 ingestion_config.streaming_connection_timeout(),
                 ingestion_config.streaming_statement_timeout(),
-            )) as BoxedStreamingClient
+            )) as ArcStreamingClient
         });
 
     let mut indexer = Indexer::new(

@@ -115,7 +115,7 @@ mod checked {
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
         ) -> Result<Self, ExecutionError> {
-            let init_linkage = if protocol_config.package_upgrades_supported() {
+            let init_linkage = if protocol_config.package_upgrades() {
                 LinkageInfo::Unset
             } else {
                 LinkageInfo::Universal

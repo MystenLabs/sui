@@ -28,7 +28,6 @@ use crate::api::types::checkpoint::filter::cp_by_epoch;
 use crate::api::types::checkpoint::filter::cp_unfiltered;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas::GasCostSummary;
-use crate::api::types::transaction;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::TransactionConnection;
@@ -224,7 +223,7 @@ impl CheckpointContents {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError<transaction::Error>>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         async {
             let Some((summary, _, _)) = &self.contents else {
                 return Ok(None);
@@ -244,6 +243,7 @@ impl CheckpointContents {
             if let Some(streamed) = &self.streamed_data {
                 return Ok(Some(Transaction::paginate_preloaded_transactions(
                     self.scope.clone(),
+                    summary.sequence_number,
                     &streamed.transactions,
                     &page,
                     filter,

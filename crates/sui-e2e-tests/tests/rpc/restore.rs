@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Restore/resume behavior of the embedded `sui-rpc-store` index backend
-//! (`use_experimental_rpc_store`).
+//! Restore/resume behavior of the embedded `sui-rpc-store` index backend.
 //!
 //! Each test drives a dedicated fullnode through a sequence of restarts,
 //! toggling its index configuration between runs, and checks two things:
@@ -47,12 +46,10 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionPredicate;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_predicate;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::AuthorityName;
 use sui_types::base_types::SuiAddress;
@@ -70,13 +67,11 @@ const SUI_COIN_TYPE: &str =
 /// history cohort from genesis, so this is generous.
 const WAIT_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// An rpc config that builds the embedded `sui-rpc-store` index backend
-/// with the ledger-history (bitmap) cohort enabled.
+/// An rpc config that builds the embedded `sui-rpc-store` index backend,
+/// which indexes both the live and ledger-history (bitmap) cohorts.
 fn embedded_indexing_config() -> RpcConfig {
     RpcConfig {
         enable_indexing: Some(true),
-        use_experimental_rpc_store: Some(true),
-        ledger_history_indexing: Some(true),
         ..Default::default()
     }
 }
@@ -86,7 +81,6 @@ fn embedded_indexing_config() -> RpcConfig {
 fn no_indexing_config() -> RpcConfig {
     RpcConfig {
         enable_indexing: Some(false),
-        use_experimental_rpc_store: Some(false),
         ..Default::default()
     }
 }
@@ -259,10 +253,8 @@ async fn sui_balance(rpc_url: &str, owner: SuiAddress) -> u64 {
 fn sender_filter(sender: SuiAddress) -> TransactionFilter {
     let mut sender_filter = SenderFilter::default();
     sender_filter.address = Some(sender.to_string());
-    let mut predicate = TransactionPredicate::default();
-    predicate.predicate = Some(transaction_predicate::Predicate::Sender(sender_filter));
     let mut literal = TransactionLiteral::default();
-    literal.polarity = Some(transaction_literal::Polarity::Include(predicate));
+    literal.predicate = Some(transaction_literal::Predicate::Sender(sender_filter));
     let mut term = TransactionTerm::default();
     term.literals = vec![literal];
     let mut filter = TransactionFilter::default();
@@ -277,7 +269,7 @@ async fn list_transaction_digests_by_sender(rpc_url: &str, sender: SuiAddress) -
         .await
         .unwrap();
     let mut options = QueryOptions::default();
-    options.limit_items = Some(500);
+    options.limit = Some(500);
     let mut request = ListTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest"]));
     request.filter = Some(sender_filter(sender));

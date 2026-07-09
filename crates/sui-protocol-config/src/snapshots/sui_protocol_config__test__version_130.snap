@@ -151,6 +151,7 @@ feature_flags:
   address_aliases: true
   fix_checkpoint_signature_mapping: true
   enable_object_funds_withdraw: true
+  record_net_unsettled_object_withdraws: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
@@ -173,6 +174,7 @@ feature_flags:
   limit_groth16_pvk_inputs: true
   granular_post_execution_checks: true
   early_exit_on_iffw: true
+  enable_unified_linkage: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

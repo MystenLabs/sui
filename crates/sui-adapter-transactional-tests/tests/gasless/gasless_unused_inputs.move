@@ -8,7 +8,7 @@
 // 3. Unused Object inputs (always rejected)
 // 4. Pure inputs that exceed the size limit (32 bytes)
 
-//# init --addresses test=0x0 --accounts A B --enable-gasless --enable-accumulators --gasless-max-pure-input-bytes 32 --gasless-max-unused-inputs 1
+//# init --addresses test=0x0 --accounts A B --enable-gasless --gasless-max-pure-input-bytes 32 --gasless-max-unused-inputs 1
 
 //# publish --sender A
 #[allow(deprecated_usage)]

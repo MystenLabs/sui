@@ -7,7 +7,7 @@
 // re-smash undoes the override. The gas charge falls back to the original
 // smash-target location -- sponsor's Coin -- not the recipient's AB.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 //# publish
 module test::big;

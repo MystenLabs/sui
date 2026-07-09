@@ -700,21 +700,21 @@ impl EndOfEpochTransactionKind {
                 }
             }
             Self::DenyListStateCreate => {
-                if !config.enable_coin_deny_list_v1() {
+                if !config.enable_coin_deny_list() {
                     return Err(UserInputError::Unsupported(
                         "coin deny list not enabled".to_string(),
                     ));
                 }
             }
             Self::BridgeStateCreate(_) => {
-                if !config.enable_bridge() {
+                if !config.bridge() {
                     return Err(UserInputError::Unsupported(
                         "bridge not enabled".to_string(),
                     ));
                 }
             }
             Self::BridgeCommitteeInit(_) => {
-                if !config.enable_bridge() {
+                if !config.bridge() {
                     return Err(UserInputError::Unsupported(
                         "bridge not enabled".to_string(),
                     ));
@@ -851,7 +851,7 @@ impl CallArg {
                 },
 
                 ObjectArg::Receiving(_) => {
-                    if !config.receiving_objects_supported() {
+                    if !config.receive_objects() {
                         return Err(UserInputError::Unsupported(format!(
                             "receiving objects is not supported at {:?}",
                             config.version
@@ -3835,7 +3835,7 @@ impl SenderSignedData {
         for sig in &self.inner().tx_signatures {
             match sig {
                 GenericSignature::MultiSig(_) => {
-                    if !config.supports_upgraded_multisig() {
+                    if !config.upgraded_multisig_supported() {
                         return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "upgraded multisig format not enabled on this network".to_string(),

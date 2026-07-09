@@ -181,9 +181,12 @@ jobs:
       - name: cargo test with tidehunter
         run: |
           RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core -p typed-store --features typed-store/tidehunter
-      - name: cargo check sui-tool with tidehunter + tideconsole
+      - run: rustup component add clippy
+      # Same lint set as `cargo xclippy` (see .cargo/config.toml), denying warnings, but scoped
+      # to the crates whose build.rs emits cfg(tidehunter) so tidehunter-only code is linted too.
+      - name: cargo clippy with tidehunter
         run: |
-          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo check --quiet -p sui-tool --features typed-store/tidehunter,sui-tool/tideconsole
+          USE_TIDEHUNTER=1 cargo clippy --all-targets -p sui-core -p sui-tool -p sui-benchmark -p typed-store -p consensus-core --features typed-store/tidehunter,sui-tool/tideconsole -- -Wclippy::all -Wclippy::disallowed_methods -Wclippy::disallowed_macros -Aclippy::unnecessary_get_then_check -D warnings
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash

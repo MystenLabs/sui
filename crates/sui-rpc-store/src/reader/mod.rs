@@ -90,6 +90,36 @@ impl<R: Reader> RpcStoreReader<R> {
     pub fn schema(&self) -> &RpcStoreSchema<R> {
         &self.schema
     }
+
+    /// The highest checkpoint the live-object cohort (owned objects, types,
+    /// balances) has committed -- `min(checkpoint_hi_inclusive)` across its
+    /// pipelines, or `None` if any has no watermark yet.
+    ///
+    /// The embedded indexer follows the tip asynchronously, so this lags the
+    /// executed tip and bounds the checkpoint at which the live-object index
+    /// surface is readable. The history cohort backfills independently and is
+    /// deliberately excluded here -- its availability is exposed separately.
+    pub fn highest_live_committed_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
+    > {
+        let framework = self.db().framework();
+        let mut min_hi: Option<u64> = None;
+        for name in crate::LIVE_COHORT {
+            let key = sui_consistent_store::PipelineTaskKey::new(*name);
+            let Some(watermark) = framework
+                .watermarks
+                .get(&key)
+                .map_err(sui_types::storage::error::Error::custom)?
+            else {
+                return Ok(None);
+            };
+            let hi = watermark.checkpoint_hi_inclusive;
+            min_hi = Some(min_hi.map_or(hi, |m| m.min(hi)));
+        }
+        Ok(min_hi)
+    }
 }
 
 impl RpcStoreReader<Db> {

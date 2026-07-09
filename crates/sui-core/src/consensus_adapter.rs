@@ -11,7 +11,7 @@ use std::time::Instant;
 use consensus_core::BlockStatus;
 use futures::FutureExt;
 use futures::StreamExt;
-use futures::future::{self, Either, select};
+use futures::future::{self, Either, join_all, select};
 use futures::stream::FuturesUnordered;
 use mysten_common::debug_fatal;
 use mysten_metrics::{
@@ -44,6 +44,9 @@ use tokio::time::{self};
 use tracing::{Instrument, debug, debug_span, info, instrument, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::consensus_tx_status_cache::{
+    ConsensusTxStatus, NotifyReadConsensusTxStatusResult,
+};
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
@@ -58,6 +61,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_success: IntCounterVec,
     pub sequencing_certificate_failures: IntCounterVec,
     pub sequencing_certificate_status: IntCounterVec,
+    pub sequencing_certificate_settled_status: IntCounterVec,
     pub sequencing_certificate_inflight: IntGaugeVec,
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
@@ -96,6 +100,13 @@ impl ConsensusAdapterMetrics {
                 sequencing_certificate_status: register_int_counter_vec_with_registry!(
                 "sequencing_certificate_status",
                 "The status of the certificate sequencing as reported by consensus. The status can be either sequenced or garbage collected.",
+                &["tx_type", "status"],
+                registry,
+            )
+                .unwrap(),
+            sequencing_certificate_settled_status: register_int_counter_vec_with_registry!(
+                "sequencing_certificate_settled_status",
+                "The terminal per-position consensus status (finalized, rejected or dropped) of transactions whose submission settled via position status.",
                 &["tx_type", "status"],
                 registry,
             )
@@ -181,6 +192,14 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult;
 
+    /// Submits a system transaction to consensus once, without waiting for it to
+    /// be sequenced and without retrying if it is garbage collected, bounded by
+    /// `timeout`. Suits periodic, self-superseding messages (e.g. execution time
+    /// observations) where a missed submission is replaced by the next one.
+    ///
+    /// For system transactions only. User transactions are rejected:
+    /// this fire-and-forget, no-retry, backpressure-free path would
+    /// silently mishandle them.
     fn submit_best_effort(
         &self,
         transaction: &ConsensusTransaction,
@@ -469,6 +488,7 @@ impl ConsensusAdapter {
         // - If is_soft_bundle, then all transactions are of CertifiedTransaction or UserTransaction kind.
         // - If not is_soft_bundle, then transactions must contain exactly 1 tx, and transactions[0] can be of any kind.
         let is_soft_bundle = transactions.len() > 1;
+        let is_system_message = !transactions[0].is_user_transaction();
 
         let mut transaction_keys = Vec::new();
         let mut tx_consensus_positions = tx_consensus_positions;
@@ -503,7 +523,7 @@ impl ConsensusAdapter {
                 .unwrap_or_default();
             SuiErrorKind::TransactionProcessing {
                 digest,
-                status: format!("processed via {}", method.processed_via()),
+                status: format!("processed via {}", method.method_name()),
             }
             .into()
         };
@@ -554,12 +574,20 @@ impl ConsensusAdapter {
             debug!("Submitting {:?} to consensus", transaction_keys);
             guard.submitted = true;
 
-            let _permit: SemaphorePermit = self
-                .submit_semaphore
-                .acquire()
-                .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
-                .await
-                .expect("Consensus adapter does not close semaphore");
+            // System messages (checkpoint signatures, EndOfPublish, capability
+            // notifications, randomness DKG, etc.) are not buffered behind user
+            // tx; they are excluded from the semaphore.
+            let _permit: Option<SemaphorePermit> = if is_system_message {
+                None
+            } else {
+                Some(
+                    self.submit_semaphore
+                        .acquire()
+                        .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
+                        .await
+                        .expect("Consensus adapter does not close semaphore"),
+                )
+            };
             let _in_flight_submission_guard =
                 GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
@@ -584,7 +612,7 @@ impl ConsensusAdapter {
                         // consensus adapter due to an error or GC. They can handle retries
                         // as needed if the consensus position does not return the desired
                         // results (e.g. not sequenced due to garbage collection).
-                        let _ = tx_consensus_positions.send(Ok(consensus_positions));
+                        let _ = tx_consensus_positions.send(Ok(consensus_positions.clone()));
                     }
 
                     match status_waiter.await {
@@ -595,11 +623,51 @@ impl ConsensusAdapter {
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "sequenced"])
                                 .inc();
-                            // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
                             debug!(
                                 "Transaction {transaction_keys:?} has been sequenced by consensus."
                             );
-                            break;
+                            if is_system_message {
+                                // System messages have consensus positions too, but the
+                                // commit handler only assigns per-position statuses to
+                                // user transactions, so their completion is signaled by
+                                // the processed flag instead.
+                                break SequencingOutcome::BlockSequenced;
+                            }
+                            if consensus_positions.len() != transactions.len() {
+                                debug_fatal!(
+                                    "Consensus client returned {} positions for {} transactions",
+                                    consensus_positions.len(),
+                                    transactions.len()
+                                );
+                                break SequencingOutcome::BlockSequenced;
+                            }
+                            // The block is committed, and the commit handler assigns every
+                            // user transaction position a terminal status.
+                            match self
+                                .wait_for_position_statuses(&consensus_positions, epoch_store)
+                                .await
+                            {
+                                Some(statuses) => break SequencingOutcome::Sequenced(statuses),
+                                None => {
+                                    // A position expired from the status cache before it
+                                    // was read: the block was committed and its commit
+                                    // processed more than the retention window ago, so a
+                                    // terminal status existed and was merely missed. End
+                                    // the submission instead of resubmitting — a missed
+                                    // Finalized outcome needs nothing further from this
+                                    // task (the digest is durably recorded as processed
+                                    // and will execute), the other outcomes are terminal,
+                                    // and transaction-level retries belong to the client.
+                                    debug!(
+                                        "Transaction {transaction_keys:?} status expired before being read. Ending submission."
+                                    );
+                                    self.metrics
+                                        .sequencing_certificate_status
+                                        .with_label_values(&[tx_type, "status_expired"])
+                                        .inc();
+                                    break SequencingOutcome::StatusExpired;
+                                }
+                            }
                         }
                         Ok(status @ BlockStatus::GarbageCollected(_)) => {
                             tracing::Span::current()
@@ -643,7 +711,21 @@ impl ConsensusAdapter {
                     processed_via_notify = true;
                     observed
                 }
-                Either::Right(((), processed_waiter)) => {
+                Either::Right((SequencingOutcome::Sequenced(statuses), _processed_waiter)) => {
+                    processed_via_notify = false;
+                    for status in statuses {
+                        self.metrics
+                            .sequencing_certificate_settled_status
+                            .with_label_values(&[tx_type, status_label(status)])
+                            .inc();
+                    }
+                    ProcessedMethod::ConsensusStatusReceived
+                }
+                Either::Right((SequencingOutcome::StatusExpired, _processed_waiter)) => {
+                    processed_via_notify = false;
+                    ProcessedMethod::ConsensusStatusExpired
+                }
+                Either::Right((SequencingOutcome::BlockSequenced, processed_waiter)) => {
                     debug!("Submitted {transaction_keys:?} to consensus");
                     processed_via_notify = false;
                     processed_waiter.await
@@ -662,7 +744,7 @@ impl ConsensusAdapter {
         }
         debug!(
             "{transaction_keys:?} processed via {}",
-            guard.processed_method.processed_via()
+            guard.processed_method.method_name()
         );
 
         // After a user transaction or soft bundle submission,
@@ -825,9 +907,9 @@ impl ConsensusAdapter {
         }
 
         if seen_checkpoint {
-            Some(ProcessedMethod::Checkpoint)
+            Some(ProcessedMethod::CheckpointExecuted)
         } else {
-            Some(ProcessedMethod::Consensus)
+            Some(ProcessedMethod::ConsensusMessageProcessed)
         }
     }
 
@@ -866,15 +948,14 @@ impl ConsensusAdapter {
                 Either::Right(future::pending())
             };
 
-            // We wait for each transaction individually to be processed by consensus or executed in a checkpoint. We could equally just
-            // get notified in aggregate when all transactions are processed, but with this approach can get notified in a more fine-grained way
-            // as transactions can be marked as processed in different ways. This is mostly a concern for the soft-bundle transactions.
+            // Wait for each key individually so soft bundles can complete even
+            // when different transactions are observed through different paths.
             notifications.push(async move {
                 tokio::select! {
                     processed = epoch_store.consensus_messages_processed_notify(vec![transaction_key]) => {
                         processed.expect("Storage error when waiting for consensus message processed");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["consensus"]).inc();
-                        return ProcessedMethod::Consensus;
+                        return ProcessedMethod::ConsensusMessageProcessed;
                     },
                     processed = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests), if !transaction_digests.is_empty() => {
                         processed.expect("Storage error when waiting for transaction executed in checkpoint");
@@ -884,17 +965,40 @@ impl ConsensusAdapter {
                         self.metrics.sequencing_certificate_processed.with_label_values(&["synced_checkpoint"]).inc();
                     }
                 }
-                ProcessedMethod::Checkpoint
+                ProcessedMethod::CheckpointExecuted
             });
         }
 
         let processed_methods = notifications.collect::<Vec<ProcessedMethod>>().await;
         for method in processed_methods {
-            if method == ProcessedMethod::Checkpoint {
-                return ProcessedMethod::Checkpoint;
+            if method == ProcessedMethod::CheckpointExecuted {
+                return ProcessedMethod::CheckpointExecuted;
             }
         }
-        ProcessedMethod::Consensus
+        ProcessedMethod::ConsensusMessageProcessed
+    }
+
+    /// Waits until every consensus position reaches a terminal status (Finalized, Rejected or Dropped).
+    /// Returns `None` if any position expired from the status cache before its status was read,
+    /// in which case the submit loop treats the sequenced block as already handled and settles with
+    /// `StatusExpired`.
+    async fn wait_for_position_statuses(
+        &self,
+        consensus_positions: &[ConsensusPosition],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<Vec<ConsensusTxStatus>> {
+        join_all(consensus_positions.iter().map(|position| {
+            epoch_store
+                .consensus_tx_status_cache
+                .notify_read_transaction_status(*position)
+        }))
+        .await
+        .into_iter()
+        .map(|result| match result {
+            NotifyReadConsensusTxStatusResult::Status(status) => Some(status),
+            NotifyReadConsensusTxStatusResult::Expired(_) => None,
+        })
+        .collect()
     }
 }
 
@@ -945,6 +1049,66 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     }
 }
 
+impl SubmitToConsensus for Arc<ConsensusAdapter> {
+    fn submit_to_consensus(
+        &self,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
+        self.submit_batch(transactions, None, epoch_store, None, None)
+            .map(|_| ())
+    }
+
+    fn submit_best_effort(
+        &self,
+        transaction: &ConsensusTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        // timeout is required, or the spawned task can run forever
+        timeout: Duration,
+    ) -> SuiResult {
+        if transaction.is_user_transaction() {
+            debug_fatal!("submit_best_effort called with a user transaction");
+            return Err(SuiErrorKind::GenericAuthorityError {
+                error: "submit_best_effort does not accept user transactions".to_string(),
+            }
+            .into());
+        }
+
+        // There is no submit semaphone on this path as it services system msgs only.
+        let _in_flight_submission_guard =
+            GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+
+        let key = SequencedConsensusTransactionKey::External(transaction.key());
+        let tx_type = classify(transaction);
+
+        let async_stage = {
+            let transaction = transaction.clone();
+            let epoch_store = epoch_store.clone();
+            let this = self.clone();
+
+            async move {
+                let result = tokio::time::timeout(
+                    timeout,
+                    this.submit_inner(&[transaction], &epoch_store, &[key], tx_type),
+                )
+                .await;
+
+                if let Err(e) = result {
+                    warn!("Consensus submission timed out: {e:?}");
+                    this.metrics
+                        .sequencing_best_effort_timeout
+                        .with_label_values(&[tx_type])
+                        .inc();
+                }
+            }
+        };
+
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.within_alive_epoch(async_stage));
+        Ok(())
+    }
+}
+
 struct CancelOnDrop<T>(JoinHandle<T>);
 
 impl<T> Deref for CancelOnDrop<T> {
@@ -973,28 +1137,6 @@ struct InflightDropGuard<'a> {
     inflight_count: u64,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum ProcessedMethod {
-    Consensus,
-    Checkpoint,
-}
-
-impl ProcessedMethod {
-    fn processed_via(self) -> &'static str {
-        match self {
-            ProcessedMethod::Consensus => "consensus output",
-            ProcessedMethod::Checkpoint => "checkpoint execution",
-        }
-    }
-
-    fn latency_metric_label(self) -> &'static str {
-        match self {
-            ProcessedMethod::Consensus => "processed_via_consensus",
-            ProcessedMethod::Checkpoint => "processed_via_checkpoint",
-        }
-    }
-}
-
 impl<'a> InflightDropGuard<'a> {
     pub fn acquire(
         adapter: &'a ConsensusAdapter,
@@ -1019,7 +1161,7 @@ impl<'a> InflightDropGuard<'a> {
             start: Instant::now(),
             submitted: false,
             tx_type,
-            processed_method: ProcessedMethod::Consensus,
+            processed_method: ProcessedMethod::ConsensusMessageProcessed,
             inflight_count,
         }
     }
@@ -1051,68 +1193,57 @@ impl Drop for InflightDropGuard<'_> {
             .with_label_values(&[
                 submitted,
                 self.tx_type,
-                self.processed_method.latency_metric_label(),
+                self.processed_method.metric_label(),
             ])
             .observe(latency.as_secs_f64());
     }
 }
 
-impl SubmitToConsensus for Arc<ConsensusAdapter> {
-    fn submit_to_consensus(
-        &self,
-        transactions: &[ConsensusTransaction],
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        self.submit_batch(transactions, None, epoch_store, None, None)
-            .map(|_| ())
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum ProcessedMethod {
+    ConsensusMessageProcessed,
+    ConsensusStatusReceived,
+    ConsensusStatusExpired,
+    CheckpointExecuted,
+}
+
+impl ProcessedMethod {
+    fn method_name(self) -> &'static str {
+        match self {
+            ProcessedMethod::ConsensusMessageProcessed => "consensus (processed message)",
+            ProcessedMethod::ConsensusStatusReceived => "consensus (transaction status)",
+            ProcessedMethod::ConsensusStatusExpired => "consensus (status expired)",
+            ProcessedMethod::CheckpointExecuted => "checkpoint execution",
+        }
     }
 
-    fn submit_best_effort(
-        &self,
-        transaction: &ConsensusTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        // timeout is required, or the spawned task can run forever
-        timeout: Duration,
-    ) -> SuiResult {
-        let permit = match self.submit_semaphore.clone().try_acquire_owned() {
-            Ok(permit) => permit,
-            Err(_) => {
-                return Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into());
-            }
-        };
+    fn metric_label(self) -> &'static str {
+        match self {
+            ProcessedMethod::ConsensusMessageProcessed => "consensus_message",
+            ProcessedMethod::ConsensusStatusReceived => "consensus_status",
+            ProcessedMethod::ConsensusStatusExpired => "consensus_status_expired",
+            ProcessedMethod::CheckpointExecuted => "checkpoint_execution",
+        }
+    }
+}
 
-        let _in_flight_submission_guard =
-            GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+/// Outcome of the submit loop in `submit_and_wait_inner`.
+enum SequencingOutcome {
+    /// A user-transaction submission that was sequenced and whose positions all
+    /// reached a terminal consensus status; nothing further to wait for.
+    Sequenced(Vec<ConsensusTxStatus>),
+    /// A system-message submission whose block was sequenced.
+    BlockSequenced,
+    /// A user-transaction submission whose block was sequenced, but at least one
+    /// position expired from the status cache before its status was read. The
+    /// terminal outcome existed and was missed; nothing further to wait for.
+    StatusExpired,
+}
 
-        let key = SequencedConsensusTransactionKey::External(transaction.key());
-        let tx_type = classify(transaction);
-
-        let async_stage = {
-            let transaction = transaction.clone();
-            let epoch_store = epoch_store.clone();
-            let this = self.clone();
-
-            async move {
-                let _permit = permit; // Hold permit for lifetime of task
-
-                let result = tokio::time::timeout(
-                    timeout,
-                    this.submit_inner(&[transaction], &epoch_store, &[key], tx_type),
-                )
-                .await;
-
-                if let Err(e) = result {
-                    warn!("Consensus submission timed out: {e:?}");
-                    this.metrics
-                        .sequencing_best_effort_timeout
-                        .with_label_values(&[tx_type])
-                        .inc();
-                }
-            }
-        };
-
-        let epoch_store = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.within_alive_epoch(async_stage));
-        Ok(())
+fn status_label(status: ConsensusTxStatus) -> &'static str {
+    match status {
+        ConsensusTxStatus::Finalized => "finalized",
+        ConsensusTxStatus::Rejected => "rejected",
+        ConsensusTxStatus::Dropped => "dropped",
     }
 }

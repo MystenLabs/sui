@@ -1,0 +1,45 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5312400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-17:
+//# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5662000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 19-21:
+//# publish --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3382000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 27-32:
+//# programmable --sender A --inputs @A
+// publish pins DepV1 exact (v1); B type-arg pins Dep at_least 2 => exact(1) < at_least(2) =>
+// Exact/AtLeast conflict.
+//> 0: Publish(Test, [DepV1, sui, std]);
+//> 1: Gen::m::id<DepV2::M1::B>();
+//> TransferObjects([Result(0)], Input(0))
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(1) } }
+
+task 6, lines 34-39:
+//# programmable --sender A --inputs @A
+// Same B type as MakeMoveVec element: pins Dep at_least 2 => exact(1) < at_least(2) =>
+// Exact/AtLeast conflict.
+//> 0: Publish(Test, [DepV1, sui, std]);
+//> 1: MakeMoveVec<DepV2::M1::B>([]);
+//> TransferObjects([Result(0)], Input(0))
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(1) } }

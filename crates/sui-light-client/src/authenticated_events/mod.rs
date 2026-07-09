@@ -101,13 +101,15 @@ impl TryFrom<EventItem> for AuthenticatedEvent {
             contents: event_bytes.to_vec(),
         };
 
-        let checkpoint = item
+        // The ledger position now lives on the `Event` message rather than the
+        // enclosing `EventItem`.
+        let checkpoint = proto_event
             .checkpoint
             .ok_or_else(|| ClientError::InternalError("Missing checkpoint".to_string()))?;
-        let transaction_offset = item
-            .transaction_offset
-            .ok_or_else(|| ClientError::InternalError("Missing transaction_offset".to_string()))?;
-        let event_index = item
+        let transaction_offset = proto_event
+            .transaction_index
+            .ok_or_else(|| ClientError::InternalError("Missing transaction_index".to_string()))?;
+        let event_index = proto_event
             .event_index
             .ok_or_else(|| ClientError::InternalError("Missing event_index".to_string()))?;
 
