@@ -622,7 +622,15 @@ impl ExecutionCacheConfig {
                 ExecutionCacheConfig::WritebackCache {
                     object_by_id_cache_size,
                     ..
-                } => object_by_id_cache_size.unwrap_or(self.object_cache_size()),
+                } =>
+                // Sized 10x the object cache: the post-consensus owned-object consumed-check
+                // resolves each owned input through this cache (latest_objref_or_tombstone),
+                // and at high TPS a smaller cache is churned by execution writes before the
+                // consensus handler reads the entries warmed at vote/prefetch time, forcing an
+                // objects-table reverse scan on the single-threaded handler.
+                {
+                    object_by_id_cache_size.unwrap_or(self.object_cache_size() * 10)
+                }
             })
     }
 
