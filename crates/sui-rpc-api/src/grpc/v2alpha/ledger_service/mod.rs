@@ -14,6 +14,7 @@ use crate::RpcService;
 
 mod bitmap_scan;
 mod chunked_scan;
+mod event_scan;
 mod ledger_read;
 mod list_checkpoints;
 mod list_events;

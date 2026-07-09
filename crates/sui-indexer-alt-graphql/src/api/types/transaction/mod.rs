@@ -22,7 +22,7 @@ use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
 use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::QueryType;
+use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
@@ -309,9 +309,10 @@ impl Transaction {
             filtered,
             |tx| {
                 MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-                    QueryType::Transactions,
-                    source_cp_sequence_number,
-                    tx.tx_sequence_number,
+                    Position::Transactions {
+                        checkpoint: source_cp_sequence_number,
+                        tx_seq: tx.tx_sequence_number,
+                    },
                 )))
             },
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
@@ -389,9 +390,10 @@ impl Transaction {
             tx_digests(ctx, &tx_sequence_numbers).await?,
             |(s, _)| {
                 MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-                    QueryType::Transactions,
-                    0,
-                    *s,
+                    Position::Transactions {
+                        checkpoint: 0,
+                        tx_seq: *s,
+                    },
                 )))
             },
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
@@ -474,7 +476,10 @@ impl TransactionConnection {
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
         match self {
-            CTransaction::Primary(c) => c.position,
+            CTransaction::Primary(c) => match c.position {
+                Position::Transactions { tx_seq, .. } => tx_seq,
+                _ => unreachable!("validated at decode"),
+            },
             CTransaction::Secondary(c) => **c,
         }
     }
@@ -482,7 +487,11 @@ impl TxBoundsCursor for CTransaction {
 
 impl ByteCursor for CursorToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        CursorToken::decode(bytes)
+        let cursor = CursorToken::decode(bytes)?;
+        if !matches!(cursor.position, Position::Transactions { .. }) {
+            anyhow::bail!("invalid cursor");
+        }
+        Ok(cursor)
     }
 
     fn encode_cursor(&self) -> bytes::Bytes {
@@ -832,9 +841,10 @@ mod tests {
 
     fn primary_cursor(checkpoint: u64, position: u64) -> CTransaction {
         MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-            QueryType::Transactions,
-            checkpoint,
-            position,
+            Position::Transactions {
+                checkpoint,
+                tx_seq: position,
+            },
         )))
     }
 
@@ -854,7 +864,10 @@ mod tests {
     fn edge_positions(conn: &TransactionConnection) -> Vec<u64> {
         conn.edges
             .iter()
-            .map(|e| edge_token(&e.cursor).position)
+            .map(|e| match edge_token(&e.cursor).position {
+                Position::Transactions { tx_seq, .. } => tx_seq,
+                position => panic!("expected transactions position, got {position:?}"),
+            })
             .collect()
     }
 
@@ -876,9 +889,11 @@ mod tests {
 
         for edge in &conn.edges {
             let token = edge_token(&edge.cursor);
-            assert_eq!(token.query_type, QueryType::Transactions);
             assert_eq!(token.kind, CursorKind::Item);
-            assert_eq!(token.checkpoint, STREAMED_CP,);
+            let Position::Transactions { checkpoint, .. } = token.position else {
+                panic!("expected transactions position, got {:?}", token.position);
+            };
+            assert_eq!(checkpoint, STREAMED_CP);
         }
 
         assert_eq!(

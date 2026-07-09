@@ -10,10 +10,10 @@ use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use sui_inverted_index::BitmapScanError;
 use sui_inverted_index::BitmapScanResult;
+use sui_inverted_index::event_seq;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
-use sui_kvstore::tables::event_bitmap_index;
 use sui_kvstore::tables::transactions::col;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskTree;
@@ -30,8 +30,10 @@ use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::EventPosition;
+use sui_rpc_api::ledger_history::query_options::EventScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::query_options::ResolvedEventRange;
 use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -39,7 +41,7 @@ use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::reached_range_end;
 use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc_cursor::QueryType;
+use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
 use tracing::debug_span;
@@ -81,11 +83,10 @@ pub(crate) async fn list_events(
         checkpoint_hi_exclusive,
     )?;
     let read_mask = Arc::new(validate_event_read_mask(request.read_mask)?);
-    let options = QueryOptions::from_proto(
+    let options = QueryOptions::events_from_proto(
         request.options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
-        QueryType::Events,
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -98,7 +99,7 @@ pub(crate) async fn list_events(
     let end_reason = event_range.end_reason;
     let end_checkpoint = event_range.end_checkpoint;
     let end_position = event_range.end_position;
-    let event_range = event_range.range;
+    let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
         info!(
@@ -116,8 +117,11 @@ pub(crate) async fn list_events(
         let terminal = reached_range_end(end_reason).then(|| {
             watermark_response(terminal_boundary_watermark(
                 &options,
-                end_checkpoint,
-                end_position,
+                Position::Events {
+                    checkpoint: end_checkpoint,
+                    tx_seq: end_position.tx_seq,
+                    event_index: end_position.event_index,
+                },
             ))
         });
         return Ok(futures::stream::iter(
@@ -131,70 +135,69 @@ pub(crate) async fn list_events(
 
     let scan_budget = ctx.scan_budget(BitmapIndexSpec::event());
 
-    // Stage A: stream of EventRefs. Filtered requests discover event_seq
-    // values through the event bitmap (per-bucket and periodic-frontier
-    // watermarks). Unfiltered requests scan tx_seq_digest rows and expand
-    // each row's event_count into concrete EventRefs.
+    // Stage A: stream of EventRefs. Filtered requests discover event positions
+    // through the event bitmap. Unfiltered requests scan tx_seq_digest rows and
+    // expand each row's event_count into concrete EventRefs.
     let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-    let event_ref_stream: BoxStream<'static, BitmapScanResult<Watermarked<EventRef>>> =
-        if let Some(filter) = &request.filter {
-            let query = ctx.event_filter_query(filter)?;
-            client
-                .eval_bitmap_query_stream(
-                    query,
-                    event_range.clone(),
-                    BitmapIndexSpec::event(),
-                    options.scan_direction(),
-                    scan_budget,
-                    ctx.bitmap_scan_observer(),
-                )
-                .map_ok(|m| {
-                    m.map_item(|event_seq| {
-                        let (tx_seq, event_idx) = event_bitmap_index::decode_event_seq(event_seq);
-                        EventRef {
-                            event_seq,
-                            tx_seq,
-                            event_idx,
-                            tx_seq_digest: None,
-                        }
-                    })
-                })
-                .boxed()
-        } else {
-            unfiltered_event_refs(
-                client.clone(),
-                event_range.clone(),
-                options.clone(),
-                endpoint.max_limit_items as usize,
+    let event_ref_stream: BoxStream<
+        'static,
+        BitmapScanResult<Watermarked<EventRef, EventPosition>>,
+    > = if let Some(filter) = &request.filter {
+        let query = ctx.event_filter_query(filter)?;
+        client
+            .eval_bitmap_query_stream(
+                query,
+                event_seq::packed_range(event_bounds.lo, event_bounds.hi),
+                BitmapIndexSpec::event(),
+                options.scan_direction(),
+                scan_budget,
+                ctx.bitmap_scan_observer(),
             )
-        };
+            .map_ok(|m| {
+                m.map_item(|seq| EventRef {
+                    position: EventPosition::from(event_seq::decode_event_seq(seq)),
+                    tx_seq_digest: None,
+                })
+                .map_watermark(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
+            })
+            .boxed()
+    } else {
+        unfiltered_event_refs(
+            client.clone(),
+            event_bounds,
+            options.clone(),
+            endpoint.max_limit_items as usize,
+        )
+    };
     let ref_stream = take_items(event_ref_stream, limit_items);
 
     // Stage B (filtered path only): enrich refs with tx_seq_digest. The
     // unfiltered path already populates `tx_seq_digest` from point lookups,
     // so we skip this stage there.
-    let ref_with_digest_stream: BoxStream<'static, BitmapScanResult<Watermarked<EventRef>>> =
-        if filtered {
-            pipelined_chunks(
-                ref_stream,
-                tx_seq_digest_stage.chunk_size,
-                tx_seq_digest_stage.concurrency,
-                {
+    let ref_with_digest_stream: BoxStream<
+        'static,
+        BitmapScanResult<Watermarked<EventRef, EventPosition>>,
+    > = if filtered {
+        pipelined_chunks(
+            ref_stream,
+            tx_seq_digest_stage.chunk_size,
+            tx_seq_digest_stage.concurrency,
+            {
+                let client = client.clone();
+                move |refs| {
                     let client = client.clone();
-                    move |refs| {
-                        let client = client.clone();
-                        async move {
-                            attach_tx_seq_digests(client, refs)
-                                .await
-                                .map(|s| s.map_err(BitmapScanError::Source).boxed())
-                                .map_err(BitmapScanError::Source)
-                        }
+                    async move {
+                        attach_tx_seq_digests(client, refs)
+                            .await
+                            .map(|s| s.map_err(BitmapScanError::Source).boxed())
+                            .map_err(BitmapScanError::Source)
                     }
-                },
-            )
-        } else {
-            ref_stream
-        };
+                }
+            },
+        )
+    } else {
+        ref_stream
+    };
 
     let columns: Arc<[&'static str]> = Arc::from([col::EVENTS, col::CHECKPOINT_NUMBER]);
 
@@ -245,9 +248,9 @@ pub(crate) async fn list_events(
                             render_event(event_ref, tx, &read_mask, &resolver, wants_json)
                                 .await
                                 .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))?;
-                        Ok::<Watermarked<RenderedEvent>, BitmapScanError>(Watermarked::Item(
-                            rendered,
-                        ))
+                        Ok::<Watermarked<RenderedEvent, EventPosition>, BitmapScanError>(
+                            Watermarked::Item(rendered),
+                        )
                     }
                     Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
                 }
@@ -269,8 +272,7 @@ pub(crate) async fn list_events(
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, rendered.checkpoint_number, &options);
                     let wm = item_watermark(
                         &options,
-                        rendered.checkpoint_number,
-                        rendered.event_seq,
+                        Position::Events { checkpoint: rendered.checkpoint_number, tx_seq: rendered.position.tx_seq, event_index: rendered.position.event_index },
                         checkpoint_boundary,
                     );
                     emitted += 1;
@@ -278,7 +280,15 @@ pub(crate) async fn list_events(
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
-                    let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
+                    let wm = boundary_watermark(
+                        &options,
+                        Position::Events {
+                            checkpoint: boundary_cursor_cp(cp, direction),
+                            tx_seq: position.tx_seq,
+                            event_index: position.event_index,
+                        },
+                        checkpoint_boundary,
+                    );
                     yield watermark_response(wm);
                 }
                 Err(BitmapScanError::ScanLimit) => {
@@ -304,7 +314,7 @@ pub(crate) async fn list_events(
             end_reason
         };
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+            yield watermark_response(terminal_boundary_watermark(&options, Position::Events { checkpoint: end_checkpoint, tx_seq: end_position.tx_seq, event_index: end_position.event_index }));
         }
         yield end_response(reason);
         info!(
@@ -346,14 +356,14 @@ async fn attach_tx_seq_digests(
         return Ok(futures::stream::empty().boxed());
     }
 
-    let mut unique_seqs: Vec<u64> = refs.iter().map(|p| p.tx_seq).collect();
+    let mut unique_seqs: Vec<u64> = refs.iter().map(|p| p.position.tx_seq).collect();
     unique_seqs.sort_unstable();
     unique_seqs.dedup();
     // tx_seq -> indices of refs sharing that tx_seq, so a single arriving
     // digest can release all dependent refs at once.
     let mut indices_by_seq: HashMap<u64, Vec<usize>> = HashMap::new();
     for (i, p) in refs.iter().enumerate() {
-        indices_by_seq.entry(p.tx_seq).or_default().push(i);
+        indices_by_seq.entry(p.position.tx_seq).or_default().push(i);
     }
 
     let digest_stream = client.resolve_tx_digests_stream(unique_seqs).await?;
@@ -410,8 +420,9 @@ async fn fetch_txs_for_refs(
     for (i, p) in refs.iter().enumerate() {
         let row = p.tx_seq_digest.ok_or_else(|| {
             anyhow::anyhow!(
-                "list_events: selected event {} is missing transaction digest",
-                p.event_seq
+                "list_events: selected event {}/{} is missing transaction digest",
+                p.position.tx_seq,
+                p.position.event_index
             )
         })?;
         if seen_digests.insert(row.digest) {
@@ -457,12 +468,12 @@ async fn fetch_txs_for_refs(
 
 /// Carries the rendered `EventItem` (without its `watermark` field — the
 /// main loop fills that in with the current checkpoint boundary) plus
-/// the cp and packed event_seq the main loop needs to update the
+/// the checkpoint and event position the main loop needs to update the
 /// watermark.
 struct RenderedEvent {
     item: EventItem,
     checkpoint_number: u64,
-    event_seq: u64,
+    position: EventPosition,
 }
 
 async fn render_event(
@@ -476,20 +487,20 @@ async fn render_event(
         RpcError::new(
             tonic::Code::Internal,
             format!(
-                "list_events: selected event {} transaction {} has no events column",
-                event_ref.event_seq, tx.digest
+                "list_events: selected event {}/{} transaction {} has no events column",
+                event_ref.position.tx_seq, event_ref.position.event_index, tx.digest
             ),
         )
     })?;
     let event = tx_events
         .data
-        .get(event_ref.event_idx as usize)
+        .get(event_ref.position.event_index as usize)
         .ok_or_else(|| {
             RpcError::new(
                 tonic::Code::Internal,
                 format!(
-                    "list_events: selected event {} index {} out of range for transaction {}",
-                    event_ref.event_seq, event_ref.event_idx, tx.digest
+                    "list_events: selected event {}/{} index out of range for transaction {}",
+                    event_ref.position.tx_seq, event_ref.position.event_index, tx.digest
                 ),
             )
         })?;
@@ -515,7 +526,7 @@ async fn render_event(
         proto_event.transaction_index = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
     }
     if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
-        proto_event.event_index = Some(event_ref.event_idx);
+        proto_event.event_index = Some(event_ref.position.event_index);
     }
 
     let mut item = EventItem::default();
@@ -524,7 +535,7 @@ async fn render_event(
     Ok(RenderedEvent {
         item,
         checkpoint_number: tx.checkpoint_number,
-        event_seq: event_ref.event_seq,
+        position: event_ref.position,
     })
 }
 
@@ -543,25 +554,21 @@ fn end_response(reason: QueryEndReason) -> ListEventsResponse {
 /// events, so those rows are carried forward instead of being fetched again.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct EventRef {
-    event_seq: u64,
-    tx_seq: u64,
-    event_idx: u32,
+    position: EventPosition,
     tx_seq_digest: Option<TxSeqDigestData>,
 }
 
-/// Range-scan `tx_seq_digest` across the tx range covered by `event_range`,
-/// using each row's `event_count` to enumerate real event_seqs per tx without
-/// touching the tx body.
+/// Range-scan `tx_seq_digest` across the tx range covered by `bounds`,
+/// using each row's `event_count` to enumerate real event coordinates per tx
+/// without touching the tx body.
 fn unfiltered_event_refs(
     client: BigTableClient,
-    event_range: std::ops::Range<u64>,
+    bounds: EventScanBounds,
     options: QueryOptions,
     source_limit: usize,
-) -> BoxStream<'static, BitmapScanResult<Watermarked<EventRef>>> {
+) -> BoxStream<'static, BitmapScanResult<Watermarked<EventRef, EventPosition>>> {
     async_stream::try_stream! {
-        let lower_bound = event_range.start;
-        let upper_bound = event_range.end;
-        let Some(tx_range) = tx_range_for_event_range(event_range) else {
+        let Some(tx_range) = bounds.tx_range() else {
             return;
         };
         let (scan_range, scan_limited, frontier_tx) =
@@ -573,26 +580,17 @@ fn unfiltered_event_refs(
 
         futures::pin_mut!(rows);
         while let Some(row) = rows.next().await {
-            for event_ref in expand_event_refs(row?, lower_bound, upper_bound, &options) {
+            for event_ref in expand_event_refs(row?, bounds, &options) {
                 yield Watermarked::Item(event_ref);
             }
         }
 
         if scan_limited {
-            yield Watermarked::Watermark(event_bitmap_index::event_seq_lo(frontier_tx));
+            yield Watermarked::Watermark(EventPosition::start_of_tx(frontier_tx));
             Err(BitmapScanError::ScanLimit)?;
         }
     }
     .boxed()
-}
-
-fn tx_range_for_event_range(event_range: std::ops::Range<u64>) -> Option<std::ops::Range<u64>> {
-    let last_event_seq = event_range.end.checked_sub(1)?;
-    let start_tx = event_bitmap_index::decode_event_seq(event_range.start).0;
-    let end_tx = event_bitmap_index::decode_event_seq(last_event_seq)
-        .0
-        .checked_add(1)?;
-    (start_tx < end_tx).then_some(start_tx..end_tx)
 }
 
 fn clamp_tx_scan_range(
@@ -618,8 +616,7 @@ fn clamp_tx_scan_range(
 
 fn expand_event_refs(
     row: TxSeqDigestData,
-    lower_bound: u64,
-    upper_bound: u64,
+    bounds: EventScanBounds,
     options: &QueryOptions,
 ) -> Vec<EventRef> {
     if row.event_count == 0 {
@@ -628,12 +625,12 @@ fn expand_event_refs(
 
     let mut refs = Vec::with_capacity(row.event_count as usize);
     if options.is_ascending() {
-        for event_idx in 0..row.event_count {
-            push_event_ref_if_in_bounds(&mut refs, row, event_idx, lower_bound, upper_bound);
+        for event_index in 0..row.event_count {
+            push_event_ref_if_in_bounds(&mut refs, row, event_index, bounds);
         }
     } else {
-        for event_idx in (0..row.event_count).rev() {
-            push_event_ref_if_in_bounds(&mut refs, row, event_idx, lower_bound, upper_bound);
+        for event_index in (0..row.event_count).rev() {
+            push_event_ref_if_in_bounds(&mut refs, row, event_index, bounds);
         }
     }
     refs
@@ -642,18 +639,18 @@ fn expand_event_refs(
 fn push_event_ref_if_in_bounds(
     refs: &mut Vec<EventRef>,
     row: TxSeqDigestData,
-    event_idx: u32,
-    lower_bound: u64,
-    upper_bound: u64,
+    event_index: u32,
+    bounds: EventScanBounds,
 ) {
-    let event_seq = event_bitmap_index::encode_event_seq(row.tx_sequence_number, event_idx);
-    if event_seq < lower_bound || event_seq >= upper_bound {
+    let position = EventPosition {
+        tx_seq: row.tx_sequence_number,
+        event_index,
+    };
+    if !bounds.contains(position) {
         return;
     }
     refs.push(EventRef {
-        event_seq,
-        tx_seq: row.tx_sequence_number,
-        event_idx,
+        position,
         tx_seq_digest: Some(row),
     });
 }
@@ -668,34 +665,43 @@ fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTre
     Ok(FieldMaskTree::from(read_mask))
 }
 
-/// Resolve the packed-event_seq scan window from the logical checkpoint bounds.
-/// The checkpoint window is first clamped to indexed history and any cursor
-/// bounds, then shifted into packed event space. Query cursors are applied
-/// in that packed space so they can resume from the middle of a transaction's
-/// events. Filtered scans are additionally bounded at runtime by the
-/// per-request bitmap bucket budget; that limit surfaces as SCAN_LIMIT, not
-/// as an up-front cp-range clamp.
+/// Resolve the explicit event-coordinate scan window from the logical checkpoint
+/// bounds. Filtered scans are additionally bounded at runtime by the per-request
+/// bitmap bucket budget; that limit surfaces as SCAN_LIMIT, not as an up-front
+/// cp-range clamp.
 async fn resolve_event_range(
     client: &BigTableClient,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedRange, RpcError> {
+) -> Result<ResolvedEventRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
     if cp_range.is_empty() {
         let tx_boundary =
             checkpoint_to_tx_boundary(client, cp_range.terminal_checkpoint(options.ordering))
                 .await?;
-        let event_boundary = event_bitmap_index::event_seq_lo(tx_boundary);
-        return Ok(cp_range.with_range(event_boundary..event_boundary, options.ordering));
+        return Ok(ResolvedEventRange::empty_at(
+            cp_range.terminal_checkpoint(options.ordering),
+            EventPosition::start_of_tx(tx_boundary),
+            cp_range.end_reason,
+        ));
     }
 
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    let start_event_seq = event_bitmap_index::event_seq_lo(tx_range.start);
-    let end_event_seq = event_bitmap_index::event_seq_lo(tx_range.end);
-    Ok(options
-        .apply_cursor_bounds(cp_range.with_range(start_event_seq..end_event_seq, options.ordering)))
+    Ok(options.apply_event_cursor_bounds(ResolvedEventRange {
+        bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
+        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
+        end_position: match options.ordering {
+            sui_rpc_api::ledger_history::query_options::Ordering::Ascending => {
+                EventPosition::start_of_tx(tx_range.end)
+            }
+            sui_rpc_api::ledger_history::query_options::Ordering::Descending => {
+                EventPosition::start_of_tx(tx_range.start)
+            }
+        },
+        end_reason: cp_range.end_reason,
+    }))
 }
 
 async fn checkpoint_to_tx_boundary(
@@ -713,6 +719,7 @@ mod tests {
     use sui_types::digests::TransactionDigest;
 
     use super::*;
+    use std::ops::Bound;
     use sui_rpc_api::ledger_history::query_options::Ordering;
 
     fn options(ordering: Ordering) -> QueryOptions {
@@ -722,7 +729,7 @@ mod tests {
             Ordering::Descending => 1,
         });
 
-        QueryOptions::from_proto(Some(&request), 100, 100, QueryType::Events).unwrap()
+        QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap()
     }
 
     fn tx_row(tx_sequence_number: u64, event_count: u32) -> TxSeqDigestData {
@@ -734,14 +741,13 @@ mod tests {
             checkpoint_number: 7,
         }
     }
-
     fn event_refs(refs: &[EventRef]) -> Vec<(u64, u32)> {
         refs.iter()
             .map(|r| {
                 let row = r.tx_seq_digest.expect("unfiltered refs carry digest row");
-                assert_eq!(row.tx_sequence_number, r.tx_seq);
-                assert!(row.event_count > r.event_idx);
-                (r.tx_seq, r.event_idx)
+                assert_eq!(row.tx_sequence_number, r.position.tx_seq);
+                assert!(row.event_count > r.position.event_index);
+                (r.position.tx_seq, r.position.event_index)
             })
             .collect()
     }
@@ -751,8 +757,7 @@ mod tests {
         let row = tx_row(10, 0);
         let refs = expand_event_refs(
             row,
-            event_bitmap_index::event_seq_lo(10),
-            event_bitmap_index::event_seq_lo(11),
+            EventScanBounds::tx_span(10, 11),
             &options(Ordering::Ascending),
         );
         assert!(refs.is_empty());
@@ -763,16 +768,30 @@ mod tests {
         let row = tx_row(10, 4);
         let refs = expand_event_refs(
             row,
-            event_bitmap_index::encode_event_seq(10, 1),
-            event_bitmap_index::encode_event_seq(10, 3),
+            EventScanBounds {
+                lo: Bound::Included(EventPosition {
+                    tx_seq: 10,
+                    event_index: 1,
+                }),
+                hi: Bound::Excluded(EventPosition {
+                    tx_seq: 10,
+                    event_index: 3,
+                }),
+            },
             &options(Ordering::Ascending),
         );
         assert_eq!(event_refs(&refs), vec![(10, 1), (10, 2)]);
         assert_eq!(
-            refs.iter().map(|r| r.event_seq).collect::<Vec<_>>(),
+            refs.iter().map(|r| r.position).collect::<Vec<_>>(),
             vec![
-                event_bitmap_index::encode_event_seq(10, 1),
-                event_bitmap_index::encode_event_seq(10, 2),
+                EventPosition {
+                    tx_seq: 10,
+                    event_index: 1
+                },
+                EventPosition {
+                    tx_seq: 10,
+                    event_index: 2
+                },
             ]
         );
     }
@@ -782,19 +801,19 @@ mod tests {
         let row = tx_row(10, 4);
         let refs = expand_event_refs(
             row,
-            event_bitmap_index::encode_event_seq(10, 1),
-            event_bitmap_index::encode_event_seq(10, 4),
+            EventScanBounds {
+                lo: Bound::Included(EventPosition {
+                    tx_seq: 10,
+                    event_index: 1,
+                }),
+                hi: Bound::Excluded(EventPosition {
+                    tx_seq: 10,
+                    event_index: 4,
+                }),
+            },
             &options(Ordering::Descending),
         );
         assert_eq!(event_refs(&refs), vec![(10, 3), (10, 2), (10, 1)]);
-    }
-
-    #[test]
-    fn tx_range_for_event_range_covers_partial_endpoint_transactions() {
-        let range =
-            event_bitmap_index::encode_event_seq(10, 2)..event_bitmap_index::event_seq_lo(13);
-
-        assert_eq!(tx_range_for_event_range(range), Some(10..13));
     }
 
     #[test]

@@ -197,34 +197,34 @@ pub(super) fn get_tx_seq_digest_rows(
     Ok(rows)
 }
 
-/// Resolve a bitmap scan frontier (absolute member-id position) to the
-/// checkpoint that bounds the covered range. The watermark proves coverage up to
-/// `frontier - 1` ascending (the last position emitted) or `frontier` descending;
-/// `decode_tx_seq` maps that position to the transaction whose checkpoint we
-/// look up. Returns `None` only when the ascending frontier is at genesis, where
-/// nothing is yet covered. Frontiers stay within the request's contiguous tx
-/// range, so the exact `tx_seq` lookup always resolves.
-pub(super) fn resolve_frontier_checkpoint(
-    service: &RpcService,
-    frontier: u64,
-    ascending: bool,
-    decode_tx_seq: impl FnOnce(u64) -> u64,
-) -> Result<Option<u64>, RpcError> {
-    let lookup_position = if ascending {
-        match frontier.checked_sub(1) {
-            Some(p) => p,
-            None => return Ok(None),
-        }
-    } else {
-        frontier
-    };
-    let tx_seq = decode_tx_seq(lookup_position);
+/// Resolve a transaction sequence number to its containing checkpoint.
+pub(super) fn tx_checkpoint(service: &RpcService, tx_seq: u64) -> Result<u64, RpcError> {
     let checkpoint = get_tx_seq_digest_multi(service, &[tx_seq])?
         .into_iter()
         .next()
         .expect("multi-get of one tx_seq returns one row")
         .checkpoint_number;
-    Ok(Some(checkpoint))
+    Ok(checkpoint)
+}
+
+/// Resolve a u64 scan frontier to the checkpoint that bounds the covered range.
+/// The watermark proves coverage up to `frontier - 1` ascending or `frontier`
+/// descending. Returns `None` only when the ascending frontier is at genesis,
+/// where nothing is yet covered.
+pub(super) fn sequence_frontier_checkpoint(
+    service: &RpcService,
+    frontier: u64,
+    ascending: bool,
+) -> Result<Option<u64>, RpcError> {
+    let lookup_position = if ascending {
+        match frontier.checked_sub(1) {
+            Some(position) => position,
+            None => return Ok(None),
+        }
+    } else {
+        frontier
+    };
+    tx_checkpoint(service, lookup_position).map(Some)
 }
 
 /// Classify a missing `tx_seq_digest` row encountered during a scan. The serving
