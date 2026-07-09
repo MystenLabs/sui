@@ -4,14 +4,16 @@
 //! Utilities for working with chain identifier strings.
 //!
 //! A chain identifier can appear in two formats:
-//! - the canonical form: the full genesis checkpoint digest, Base58-encoded (the format returned
-//!   by the gRPC and GraphQL APIs), e.g. `4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S`;
-//! - the legacy short form: the first 4 bytes of the digest, hex-encoded (the format returned by
-//!   JSON-RPC and written by older tooling into `Move.toml` and `client.yaml`), e.g. `35834a8a`.
+//! - the legacy short form: the first 4 bytes of the digest, hex-encoded, e.g. `35834a8a`. This is
+//!   the format returned by JSON-RPC, the format rendered by `ChainIdentifier`'s `Display`, and the
+//!   only format this tooling ever *writes* — into `Move.toml` and `client.yaml`.
+//! - the full Base58 form: the full genesis checkpoint digest, Base58-encoded (the format returned
+//!   by the gRPC and GraphQL APIs), e.g. `4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S`.
 //!
-//! New identifiers are written in the canonical form, but manifests and caches produced by older
-//! tooling still contain short forms, so comparisons must treat the two encodings of the same
-//! digest as equal.
+//! We never write the Base58 form, but a user may paste it (e.g. copied from a gRPC/GraphQL
+//! response or an explorer) into a `Move.toml` `[environments]` entry, while the CLI environment
+//! and `client.yaml` cache hold the hex short form. Comparisons must therefore treat the two
+//! encodings of the same digest as equal.
 
 use std::str::FromStr;
 
