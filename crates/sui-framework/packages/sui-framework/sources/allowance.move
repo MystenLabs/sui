@@ -32,7 +32,8 @@ const ENoLimit: vector<u8> = b"Allowance must have a lifetime cap or a rate limi
 #[error(code = 8)]
 const EWrongAllowance: vector<u8> = b"Withdrawal was issued for a different allowance";
 #[error(code = 9)]
-const EBadRateLimit: vector<u8> = b"Rate limit needs a positive period and amount, both set or neither";
+const EBadRateLimit: vector<u8> =
+    b"Rate limit needs a positive period and amount, both set or neither";
 #[error(code = 10)]
 const ENotStarted: vector<u8> = b"Allowance is not active yet; it has a future start timestamp";
 #[error(code = 11)]
@@ -64,7 +65,7 @@ public struct AllowanceWithdrawal<phantom T: store> has drop {
 public struct Allowance<phantom T> has key {
     id: UID,
     funder: address,
-    /// Always `Some` today: the sign-time DoS gate needs a concrete signer.
+    /// Always `Some` in the first release.
     /// `Option` so app-bound allowances can later go keyless.
     spender: Option<address>,
     /// When set, only the app's module can spend and rotate; the signer path
@@ -73,12 +74,13 @@ public struct Allowance<phantom T> has key {
     /// `None` = no lifetime total; at least one of cap / rate limit must be
     /// set. Amounts are `u256` (matching `Withdrawal.limit`); times are ms.
     lifetime_cap: Option<u256>,
+    /// The total spend, to date, of this allowance. Gets bumped on every spend.
     current_spend: u256,
     /// Inclusive activation time; `None` = active on issue.
     start_timestamp_ms: Option<u64>,
     expiration_timestamp_ms: Option<u64>,
     rate_limit: Option<RateLimit>,
-    /// custom label, at most 128 bytes; only present for off-chain consumption 
+    /// custom label, at most 128 bytes; only present for off-chain consumption
     /// (adding a short desc or label for an allowance, not consulted by any check)
     name: String,
 }
@@ -203,7 +205,7 @@ public fun rotate_spender<T, A>(self: &mut Allowance<T>, _: Permit<A>, new_spend
     self.spender = option::some(new_spender);
 }
 
-// TODO: Add update endpoints to be able to alter limits, expirations etc. 
+// TODO: Add update endpoints to be able to alter limits, expirations etc.
 
 /// Signer path: no controlling app, and the tx sender is the spender.
 fun assert_signer<T>(self: &Allowance<T>, ctx: &TxContext) {
@@ -289,12 +291,9 @@ fun share_new<T>(
     assert!(lifetime_cap.is_some() || rate_limit.is_some(), ENoLimit);
     assert!(name.length() <= MAX_NAME_LENGTH, ENameTooLong);
     lifetime_cap.do_ref!(|cap| assert!(*cap > 0, EZeroLifetimeCap));
-    
+
     if (start_timestamp_ms.is_some() && expiration_timestamp_ms.is_some()) {
-        assert!(
-            *start_timestamp_ms.borrow() < *expiration_timestamp_ms.borrow(),
-            EBadTimeWindow,
-        );
+        assert!(*start_timestamp_ms.borrow() < *expiration_timestamp_ms.borrow(), EBadTimeWindow);
     };
 
     let allowance = Allowance<T> {
@@ -332,4 +331,3 @@ public fun new_withdrawal_for_testing<T: store>(
         inner: sui::funds_accumulator::create_withdrawal<T>(funder, amount),
     }
 }
-

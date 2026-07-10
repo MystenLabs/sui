@@ -122,7 +122,7 @@ A shared object (discoverable + revocable); the spending tx references it by id.
 <code>spender: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;</code>
 </dt>
 <dd>
- Always <code>Some</code> today: the sign-time DoS gate needs a concrete signer.
+ Always <code>Some</code> in the first release.
  <code>Option</code> so app-bound allowances can later go keyless.
 </dd>
 <dt>
@@ -143,6 +143,7 @@ A shared object (discoverable + revocable); the spending tx references it by id.
 <code>current_spend: u256</code>
 </dt>
 <dd>
+ The total spend, to date, of this allowance. Gets bumped on every spend.
 </dd>
 <dt>
 <code>start_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;</code>
