@@ -525,7 +525,9 @@ fn select_gas(
                 .and_then(|withdrawals| {
                     let sui_type = Balance::type_tag(GAS::type_tag());
                     let sui_account_id = AccumulatorValue::get_field_id(owner, &sui_type).ok()?;
-                    withdrawals.get(&sui_account_id).map(|(amount, _)| *amount)
+                    withdrawals
+                        .get(&sui_account_id)
+                        .map(|(amount, _, _)| *amount)
                 })
                 .unwrap_or(0);
 

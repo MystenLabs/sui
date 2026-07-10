@@ -1015,7 +1015,7 @@ impl AuthorityState {
         input_object_kinds: &[InputObjectKind],
         receiving_objects_refs: &[ObjectRef],
         protocol_config: &ProtocolConfig,
-    ) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+    ) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
         // - the loads are cached anyway
@@ -1110,7 +1110,7 @@ impl AuthorityState {
 
         let funds_withdraw_types = declared_withdrawals
             .values()
-            .filter_map(|(_, type_tag)| {
+            .filter_map(|(_, type_tag, _)| {
                 Balance::maybe_get_balance_type_param(type_tag)
                     .map(|ty| ty.to_canonical_string(false))
             })
