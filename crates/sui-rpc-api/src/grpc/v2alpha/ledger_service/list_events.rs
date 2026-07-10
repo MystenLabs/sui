@@ -35,8 +35,8 @@ use crate::RpcService;
 use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::EventScanBounds;
-use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::EventScanRange;
+use crate::ledger_history::query_options::QueryOptions;
 
 use super::query_end::query_end;
 
