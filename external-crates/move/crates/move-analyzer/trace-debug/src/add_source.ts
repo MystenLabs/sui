@@ -115,7 +115,7 @@ function normalizePackageId(packageId: string): string {
  * @returns published ids found across all environments (empty if the file records
  * none), or `undefined` if the file does not exist.
  */
-function readPublishedFileIds(pkgRoot: string): string[] | undefined {
+function readIdsFromPublishedFile(pkgRoot: string): string[] | undefined {
     const pubFilePath = path.join(pkgRoot, PUBLISHED_FILE_NAME);
     if (!fs.existsSync(pubFilePath)) {
         return undefined;
@@ -143,7 +143,7 @@ function readPublishedFileIds(pkgRoot: string): string[] | undefined {
  * @returns published ids found across all environments (empty if the lock file is
  * missing or records no published ids).
  */
-function readLockPublishedIds(pkgRoot: string): string[] {
+function readIdsFromLockFile(pkgRoot: string): string[] {
     const lockFilePath = path.join(pkgRoot, LOCK_FILE_NAME);
     if (!fs.existsSync(lockFilePath)) {
         return [];
@@ -172,7 +172,7 @@ function readLockPublishedIds(pkgRoot: string): string[] {
  * @returns the published id, or `undefined` if the manifest is missing or does not
  * record one.
  */
-function readManifestPublishedId(pkgRoot: string): string | undefined {
+function readIdFromManifest(pkgRoot: string): string | undefined {
     const manifestPath = path.join(pkgRoot, MANIFEST_FILE_NAME);
     if (!fs.existsSync(manifestPath)) {
         return undefined;
@@ -198,9 +198,10 @@ function readManifestPublishedId(pkgRoot: string): string | undefined {
  * shown).
  */
 function readPublishedIds(pkgRoot: string): string[] {
-    // the published file, when present, ends the search even if it records no ids
-    // (the package is then simply not published)
-    const publishedFileIds = readPublishedFileIds(pkgRoot);
+    // The published file, when present, is authoritative and ends the search
+    // even if it records no ids (the package is then simply not published).
+    // `undefined` means the file is absent and fallbacks should be tried.
+    const publishedFileIds = readIdsFromPublishedFile(pkgRoot);
     if (publishedFileIds !== undefined) {
         if (publishedFileIds.length === 0) {
             vscode.window.showWarningMessage(
@@ -211,11 +212,11 @@ function readPublishedIds(pkgRoot: string): string[] {
         }
         return publishedFileIds;
     }
-    const lockIds = readLockPublishedIds(pkgRoot);
+    const lockIds = readIdsFromLockFile(pkgRoot);
     if (lockIds.length > 0) {
         return lockIds;
     }
-    const manifestId = readManifestPublishedId(pkgRoot);
+    const manifestId = readIdFromManifest(pkgRoot);
     if (manifestId) {
         return [manifestId];
     }
