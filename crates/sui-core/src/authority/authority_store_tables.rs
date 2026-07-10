@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::authority::authority_store::LockDetailsWrapperDeprecated;
 #[cfg(tidehunter)]
 use crate::authority::epoch_marker_key::EPOCH_MARKER_KEY_SIZE;
 use crate::authority::epoch_marker_key::EpochMarkerKey;
@@ -72,13 +71,6 @@ pub struct AuthorityPerpetualTables {
     /// been written out, and which must be retried. But, they cannot be retried unless their input
     /// objects are still accessible!
     pub(crate) objects: DBMap<ObjectKey, StoreObjectWrapper>,
-
-    /// DEPRECATED: markers of live address-owned object refs. Nothing reads this table
-    /// anymore; writes are still maintained so that rolling back to a previous binary
-    /// finds a correctly maintained table. The table (and its writes) will be removed
-    /// entirely in a follow-up once this version is deployed everywhere.
-    #[rename = "owned_object_transaction_locks"]
-    pub(crate) live_owned_object_markers: DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
@@ -187,10 +179,6 @@ impl AuthorityPerpetualTables {
                 objects_table_config(db_options.clone()),
             ),
             (
-                "owned_object_transaction_locks".to_string(),
-                owned_object_transaction_locks_table_config(db_options.clone()),
-            ),
-            (
                 "transactions".to_string(),
                 transactions_table_config(db_options.clone()),
             ),
@@ -252,10 +240,6 @@ impl AuthorityPerpetualTables {
         let epoch_tx_digest_prefix_key =
             KeyType::from_prefix_bits((8/*EpochId*/ + 8/*TransactionDigest prefix*/) * 8 + 12);
         let object_indexing = KeyIndexing::fixed(32 + 8); //  KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
-        // todo can figure way to scramble off 8 bytes in the middle
-        let obj_ref_size = 32 + 8 + 32 + 8;
-        let owned_object_transaction_locks_indexing =
-            KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
         let mut objects_config = KeySpaceConfig::new()
             .with_max_dirty_keys(16 * default_max_dirty_keys())
@@ -272,17 +256,6 @@ impl AuthorityPerpetualTables {
                     mutexes * 4,
                     KeyType::uniform(1),
                     objects_config,
-                ),
-            ),
-            (
-                "owned_object_transaction_locks".to_string(),
-                ThConfig::new_with_config_indexing(
-                    owned_object_transaction_locks_indexing,
-                    mutexes * 16,
-                    KeyType::uniform(default_cells_per_mutex()),
-                    bloom_config
-                        .clone()
-                        .with_max_dirty_keys(16 * default_max_dirty_keys()),
                 ),
             ),
             (
@@ -948,18 +921,6 @@ impl Iterator for LiveSetIter<'_> {
 }
 
 // These functions are used to initialize the DB tables
-#[cfg(not(tidehunter))]
-fn owned_object_transaction_locks_table_config(db_options: DBOptions) -> DBOptions {
-    DBOptions {
-        options: db_options
-            .clone()
-            .optimize_for_write_throughput()
-            .optimize_for_read(read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024))
-            .options,
-        rw_options: db_options.rw_options.set_ignore_range_deletions(false),
-    }
-}
-
 #[cfg(not(tidehunter))]
 fn objects_table_config(db_options: DBOptions) -> DBOptions {
     db_options
