@@ -5,12 +5,14 @@ mod response;
 
 use anyhow::Context as _;
 use diesel::ExpressionMethods;
+use diesel::JoinOnDsl;
 use diesel::QueryDsl;
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use prost_types::FieldMask;
 use sui_indexer_alt_schema::schema::kv_epoch_starts;
+use sui_indexer_alt_schema::schema::kv_protocol_configs;
 use sui_json_rpc_types::DevInspectArgs;
 use sui_json_rpc_types::DevInspectResults;
 use sui_json_rpc_types::DryRunTransactionBlockResponse;
@@ -18,7 +20,6 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::base_types::SuiAddress;
@@ -310,11 +311,16 @@ impl Write {
     }
 }
 
-/// Fetch the reference gas price of the latest epoch, and the maximum gas budget under the
-/// protocol version that epoch started with. These are the defaults dev-inspect uses when the
-/// request does not specify a gas price or budget.
+/// Fetch the reference gas price of the latest epoch, and the maximum gas budget under the protocol
+/// version that epoch started with. These are the defaults dev-inspect uses when the request does
+/// not specify a gas price or budget.
+///
+/// The max budget is read from `kv_protocol_configs` (rather than this binary's own
+/// `ProtocolConfig`) so that the RPC keeps working when the chain's protocol version is newer than
+/// the binary.
 async fn gas_defaults(ctx: &Context) -> Result<(u64, u64), RpcError<Error>> {
     use kv_epoch_starts::dsl as e;
+    use kv_protocol_configs::dsl as p;
 
     let mut conn = ctx
         .pg_reader()
@@ -322,27 +328,26 @@ async fn gas_defaults(ctx: &Context) -> Result<(u64, u64), RpcError<Error>> {
         .await
         .context("Failed to connect to the database")?;
 
-    let (protocol_version, reference_gas_price): (i64, i64) = conn
+    // The inner join skips epoch rows whose protocol configs have not been indexed yet, falling
+    // back to the previous epoch's values for the duration of that (sub-second) window, rather than
+    // failing the request.
+    let (reference_gas_price, max_tx_gas): (i64, Option<String>) = conn
         .first(
             e::kv_epoch_starts
-                .select((e::protocol_version, e::reference_gas_price))
-                .order(e::epoch.desc()),
+                .inner_join(p::kv_protocol_configs.on(p::protocol_version.eq(e::protocol_version)))
+                .filter(p::config_name.eq("max_tx_gas"))
+                .order(e::epoch.desc())
+                .select((e::reference_gas_price, p::config_value)),
         )
         .await
-        .context("Failed to fetch latest epoch's gas parameters")?;
+        .context("Failed to fetch the latest epoch's gas parameters")?;
 
-    let chain = ctx
-        .chain_identifier()
-        .context("Chain identifier not available")?
-        .chain();
+    let max_tx_gas: u64 = max_tx_gas
+        .context("max_tx_gas is not set")?
+        .parse()
+        .context("Failed to parse max_tx_gas")?;
 
-    let config =
-        ProtocolConfig::get_for_version_if_supported((protocol_version as u64).into(), chain)
-            .with_context(|| {
-                format!("Protocol version {protocol_version} of the latest epoch is not supported")
-            })?;
-
-    Ok((reference_gas_price as u64, config.max_tx_gas()))
+    Ok((reference_gas_price as u64, max_tx_gas))
 }
 
 fn parse_transaction_kind(tx_bytes: &Base64) -> Result<TransactionKind, RpcError<Error>> {

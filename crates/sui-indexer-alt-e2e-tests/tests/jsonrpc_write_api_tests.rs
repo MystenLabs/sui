@@ -4,6 +4,7 @@
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use anyhow::Context;
 use fastcrypto::encoding::Base64;
@@ -121,13 +122,30 @@ impl WriteTestCluster {
         .await
         .context("Failed to start JSON-RPC server")?;
 
-        Ok(Self {
+        let cluster = Self {
             onchain_cluster,
             rpc_url,
             service: rpc_service.merge(indexer_service),
             database,
             client: Client::new(),
+        };
+
+        // Dev-inspect reads its gas defaults from `kv_epoch_starts` and `kv_protocol_configs`.
+        // The latter is only populated once the indexer's pipeline processes the genesis
+        // checkpoint, so wait for it before handing the cluster to a test.
+        tokio::time::timeout(Duration::from_secs(60), async {
+            loop {
+                let response = cluster.execute_jsonrpc("sui_getProtocolConfig", json!([])).await;
+                if matches!(&response, Ok(r) if r["error"].is_null()) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
         })
+        .await
+        .context("Timed out waiting for the genesis protocol config to be indexed")?;
+
+        Ok(cluster)
     }
 
     async fn transfer_transaction(&self) -> anyhow::Result<(String, String, Vec<String>)> {

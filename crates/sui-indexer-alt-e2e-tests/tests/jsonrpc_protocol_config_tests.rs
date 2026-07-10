@@ -78,8 +78,10 @@ async fn test_specific_version() {
     let mut cluster = FullCluster::new().await.unwrap();
     cluster.create_checkpoint().await;
 
-    let min = ProtocolVersion::MIN.as_u64();
-    let response = get_protocol_config(&cluster, json!([min.to_string()])).await;
+    // The simulator's chain runs at the max supported version, so that is the only version the
+    // indexer has records for.
+    let version = ProtocolVersion::MAX.as_u64();
+    let response = get_protocol_config(&cluster, json!([version.to_string()])).await;
     assert!(
         response["error"].is_null(),
         "RPC error: {}",
@@ -88,25 +90,27 @@ async fn test_specific_version() {
 
     assert_eq!(
         response["result"]["protocolVersion"].as_str().unwrap(),
-        min.to_string(),
+        version.to_string(),
     );
 }
 
 #[tokio::test]
-async fn test_unsupported_version() {
+async fn test_unknown_version() {
     telemetry_subscribers::init_for_testing();
     let mut cluster = FullCluster::new().await.unwrap();
     cluster.create_checkpoint().await;
 
-    let unsupported = ProtocolVersion::MAX.as_u64() + 1;
-    let response = get_protocol_config(&cluster, json!([unsupported.to_string()])).await;
+    // Configs are served from the database, so any version the indexer has not seen -- here, a
+    // version the chain has not reached -- is not found.
+    let unknown = ProtocolVersion::MAX.as_u64() + 1;
+    let response = get_protocol_config(&cluster, json!([unknown.to_string()])).await;
 
     assert_eq!(response["error"]["code"], -32602);
     assert!(
         response["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("Unsupported protocol version"),
+            .contains("not found"),
         "Unexpected error message: {}",
         response["error"]["message"],
     );
