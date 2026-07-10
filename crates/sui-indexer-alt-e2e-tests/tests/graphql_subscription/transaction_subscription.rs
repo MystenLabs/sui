@@ -12,7 +12,7 @@ use async_graphql::connection::CursorType;
 use serde_json::Value;
 use serde_json::json;
 use sui_indexer_alt_graphql::CTransaction;
-use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_types::base_types::SuiAddress;
 use tokio_stream::StreamExt;
 
@@ -185,13 +185,18 @@ async fn test_transaction_subscription_field_coverage() {
 }
 
 /// Decode a transaction edge's `cursor` field into its `(checkpoint, tx_sequence)` position.
-fn decode_tx_cursor(item: &serde_json::Value) -> (u64, u64) {
-    let cursor = item["data"]["transactions"]["cursor"]
+fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
+    let cursor = edge["cursor"]
         .as_str()
         .expect("transaction edge missing cursor");
-    let bytes = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
-    let token = CursorToken::decode(&bytes).expect("cursor is not a valid CursorToken");
-    (token.checkpoint, token.position)
+    let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
+    let CTransaction::Primary(opaque) = ct else {
+        panic!("expected an opaque transaction cursor");
+    };
+    match opaque.position {
+        Position::Transactions { checkpoint, tx_seq } => (checkpoint, tx_seq),
+        position => panic!("expected a transactions cursor, got {position:?}"),
+    }
 }
 
 /// Live path: transactions stream in tx_sequence order, each carrying a strictly increasing
@@ -220,27 +225,34 @@ async fn test_transaction_subscription_ordering() {
             .into_iter()
             .collect();
 
-    // Consume edges in arrival order; each must carry a strictly larger cursor than the last.
+    // Consume edges in arrival order (each payload is a batch); each must carry a strictly larger
+    // cursor than the last.
     let mut seen = std::collections::BTreeSet::new();
     let mut prev_cursor: Option<(u64, u64)> = None;
     while seen.len() < expected.len() {
         let item = stream.next().await.expect("stream ended before all txs");
-        let digest = item["data"]["transactions"]["node"]["digest"]
-            .as_str()
-            .expect("edge missing digest")
-            .to_string();
-        if !expected.contains(&digest) {
-            continue;
+        let edges = item["data"]["transactions"]
+            .as_array()
+            .expect("transactions payload is not a batch array")
+            .clone();
+        for edge in &edges {
+            let digest = edge["node"]["digest"]
+                .as_str()
+                .expect("edge missing digest")
+                .to_string();
+            if !expected.contains(&digest) {
+                continue;
+            }
+            let cursor = decode_tx_cursor(edge);
+            if let Some(prev) = prev_cursor {
+                assert!(
+                    cursor > prev,
+                    "cursors not strictly increasing: {prev:?} then {cursor:?}",
+                );
+            }
+            prev_cursor = Some(cursor);
+            seen.insert(digest);
         }
-        let cursor = decode_tx_cursor(&item);
-        if let Some(prev) = prev_cursor {
-            assert!(
-                cursor > prev,
-                "cursors not strictly increasing: {prev:?} then {cursor:?}",
-            );
-        }
-        prev_cursor = Some(cursor);
-        seen.insert(digest);
     }
 
     assert_eq!(seen, expected, "did not observe exactly the executed txs");
@@ -314,11 +326,15 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
         .subscribe_with_variables(&query, Some(json!({ "sender": sender.to_string() })))
         .await;
     let first_item = stream.next().await.expect("no backfilled edge");
-    let first_digest = first_item["data"]["transactions"]["node"]["digest"]
+    let first_edge = first_item["data"]["transactions"]
+        .as_array()
+        .and_then(|edges| edges.first())
+        .expect("backfill payload has no edge");
+    let first_digest = first_edge["node"]["digest"]
         .as_str()
         .expect("edge missing digest")
         .to_string();
-    let after = first_item["data"]["transactions"]["cursor"]
+    let after = first_edge["cursor"]
         .as_str()
         .expect("backfill edge missing cursor")
         .to_string();
@@ -340,11 +356,9 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
 
     let remaining: Vec<String> = expected.iter().cloned().collect();
     let item = wait_for_matching_item(&mut stream, &remaining, transaction_digest).await;
-    let got = item["data"]["transactions"]["node"]["digest"]
-        .as_str()
-        .unwrap();
-    assert_ne!(
-        got, first_digest,
+    let got = transaction_digest(&item);
+    assert!(
+        !got.contains(&first_digest.as_str()),
         "resume-by-cursor re-delivered the tx at the cursor",
     );
 }
@@ -392,9 +406,116 @@ async fn test_transaction_subscription_live_backfill_parity() {
     });
 }
 
+/// Backfill batching: several matching transactions from one checkpoint arrive coalesced into a
+/// single payload, not one payload per transaction (the default batch cap far exceeds the count).
+#[tokio::test]
+async fn test_transaction_subscription_backfill_batches_matches() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    let resume_from = cluster.validator_checkpoint_tip();
+    let expected: std::collections::BTreeSet<String> =
+        transfer_coins(&mut cluster.validator, &[100, 200, 300])
+            .await
+            .into_iter()
+            .collect();
+    // Advance past the txs so they are delivered by the backfill scan, not live.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+
+    let sizes = collect_batch_sizes(&mut stream, &expected).await;
+    assert_eq!(sizes, vec![3], "expected one batch of 3, got {sizes:?}");
+}
+
+/// Live batching: each payload holds matches from a single checkpoint. Live never mixes checkpoints
+/// into one batch, even though backfill may.
+#[tokio::test]
+async fn test_transaction_subscription_live_batches_per_checkpoint() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                transactions(filter: { sentAddress: $sender }) { cursor node { digest } }
+            }"#,
+            sender_var(sender),
+        )
+        .await;
+
+    // Two soft bundles separated in time so they land in distinct checkpoints.
+    let mut expected = std::collections::BTreeSet::new();
+    expected.extend(transfer_coins(&mut cluster.validator, &[100, 200]).await);
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    expected.extend(transfer_coins(&mut cluster.validator, &[300, 400]).await);
+
+    let mut seen = std::collections::BTreeSet::new();
+    let mut checkpoints_seen: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+    while seen.len() < expected.len() {
+        let item = stream.next().await.expect("stream ended before all txs");
+        let edges = item["data"]["transactions"]
+            .as_array()
+            .expect("transactions payload is not a batch array")
+            .clone();
+        // Each edge's cursor encodes its checkpoint (`effects.checkpoint` is gated in streaming
+        // mode); a live batch must come from a single checkpoint.
+        let cps: std::collections::BTreeSet<u64> =
+            edges.iter().map(|e| decode_tx_cursor(e).0).collect();
+        assert_eq!(cps.len(), 1, "a live batch mixed checkpoints: {cps:?}");
+        checkpoints_seen.extend(cps.iter().copied());
+        for edge in &edges {
+            if let Some(d) = edge["node"]["digest"].as_str()
+                && expected.contains(d)
+            {
+                seen.insert(d.to_string());
+            }
+        }
+    }
+    assert!(
+        checkpoints_seen.len() >= 2,
+        "expected matches across >= 2 checkpoints, got {checkpoints_seen:?}",
+    );
+}
+
 /// The `{ "sender": ... }` variables shared by the filtered subscription queries.
 fn sender_var(sender: SuiAddress) -> Option<Value> {
     Some(json!({ "sender": sender.to_string() }))
+}
+
+/// Collect payloads until all `expected` digests are seen, returning each payload's edge count so a
+/// test can assert how matches were batched.
+async fn collect_batch_sizes(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+    expected: &std::collections::BTreeSet<String>,
+) -> Vec<usize> {
+    let mut sizes = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    while seen.len() < expected.len() {
+        let item = stream.next().await.expect("stream ended before all txs");
+        let edges = item["data"]["transactions"]
+            .as_array()
+            .expect("transactions payload is not a batch array")
+            .clone();
+        sizes.push(edges.len());
+        for edge in &edges {
+            if let Some(d) = edge["node"]["digest"].as_str()
+                && expected.contains(d)
+            {
+                seen.insert(d.to_string());
+            }
+        }
+    }
+    sizes
 }
 
 /// The rich transaction-subscription query: live by default, or resuming from a checkpoint
@@ -462,13 +583,19 @@ async fn collect_nodes(
             .next()
             .await
             .expect("stream ended before all expected txs");
-        let node = item["data"]["transactions"]["node"].clone();
-        let digest = node["digest"]
-            .as_str()
-            .expect("edge missing digest")
-            .to_string();
-        if expected.contains(&digest) {
-            by_digest.insert(digest, node);
+        let edges = item["data"]["transactions"]
+            .as_array()
+            .expect("transactions payload is not a batch array")
+            .clone();
+        for edge in &edges {
+            let node = edge["node"].clone();
+            let digest = node["digest"]
+                .as_str()
+                .expect("edge missing digest")
+                .to_string();
+            if expected.contains(&digest) {
+                by_digest.insert(digest, node);
+            }
         }
     }
     expected.iter().map(|d| by_digest[d].clone()).collect()
