@@ -297,6 +297,14 @@ dynamic_field_has_child_object_cost_base: 52
 dynamic_field_has_child_object_with_ty_cost_base: 52
 dynamic_field_has_child_object_with_ty_type_cost_per_byte: 2
 dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: 2
+scratch_add_cost_base: 13
+scratch_read_cost_base: 13
+scratch_read_value_cost: 1
+scratch_remove_cost_base: 13
+scratch_exists_cost_base: 13
+scratch_exists_with_type_cost_base: 13
+scratch_exists_with_type_type_cost: 1
+max_scratch_pad_size: 16384
 event_emit_cost_base: 52
 event_emit_value_size_derivation_cost_per_byte: 2
 event_emit_tag_size_derivation_cost_per_byte: 5

@@ -364,6 +364,7 @@ const MAINNET_USDB: &str =
 //              Enable unified linkage in PTBs
 // Version 130: Record unsettled object-funds withdraws using per-account net amounts
 //              from transaction effects instead of running-max withdraw amounts.
+//              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1659,6 +1660,22 @@ pub struct ProtocolConfig {
     dynamic_field_has_child_object_with_ty_type_cost_per_byte: Option<u64>,
     dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Option<u64>,
 
+    // `scratch` module
+    // Cost params for the Move native function `add_impl<V: drop>(key: address, value: V)`
+    scratch_add_cost_base: Option<u64>,
+    // Cost params for the Move native function `read_impl<V: copy + drop>(key: address): V`
+    scratch_read_cost_base: Option<u64>,
+    scratch_read_value_cost: Option<u64>,
+    // Cost params for the Move native function `remove_impl<V: drop>(key: address): V`
+    scratch_remove_cost_base: Option<u64>,
+    // Cost params for the Move native function `exists_impl(key: address): bool`
+    scratch_exists_cost_base: Option<u64>,
+    // Cost params for the Move native function `exists_with_type_impl<V: drop>(key: address): bool`
+    scratch_exists_with_type_cost_base: Option<u64>,
+    scratch_exists_with_type_type_cost: Option<u64>,
+    // Maximum number of entries in the per-transaction `sui::scratch` store.
+    max_scratch_pad_size: Option<u64>,
+
     // `event` module
     // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
     event_emit_cost_base: Option<u64>,
@@ -2562,6 +2579,16 @@ impl ProtocolConfig {
             dynamic_field_has_child_object_with_ty_cost_base: Some(100),
             dynamic_field_has_child_object_with_ty_type_cost_per_byte: Some(2),
             dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Some(2),
+
+            // `scratch` module: introduced in protocol version 130
+            scratch_add_cost_base: None,
+            scratch_read_cost_base: None,
+            scratch_read_value_cost: None,
+            scratch_remove_cost_base: None,
+            scratch_exists_cost_base: None,
+            scratch_exists_with_type_cost_base: None,
+            scratch_exists_with_type_type_cost: None,
+            max_scratch_pad_size: None,
 
             // `event` module
             // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
@@ -4462,6 +4489,15 @@ impl ProtocolConfig {
                 130 => {
                     cfg.feature_flags.record_net_unsettled_object_withdraws = true;
                     cfg.feature_flags.enable_init_on_upgrade = true;
+                    cfg.scratch_add_cost_base = Some(13);
+                    cfg.scratch_read_cost_base = Some(13);
+                    cfg.scratch_read_value_cost = Some(1);
+                    cfg.scratch_remove_cost_base = Some(13);
+                    cfg.scratch_exists_cost_base = Some(13);
+                    cfg.scratch_exists_with_type_cost_base = Some(13);
+                    cfg.scratch_exists_with_type_type_cost = Some(1);
+                    let max_commands = cfg.max_programmable_tx_commands() as u64;
+                    cfg.max_scratch_pad_size = Some(16 * max_commands);
                 }
                 // Use this template when making changes:
                 //
