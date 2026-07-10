@@ -486,7 +486,7 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                                 .last()
                                 .is_some_and(|segment| segment.ident == "bool") =>
                         {
-                            let protocol_config_getter = if skip_protocol_config_accessor {
+                            let getter = if skip_protocol_config_accessor {
                                 quote! {}
                             } else {
                                 quote! {
@@ -494,6 +494,15 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                                     pub fn #field_name(&self) -> #field_type {
                                         self.feature_flags.#field_name
                                     }
+                                }
+                            };
+                            let setter_name: proc_macro2::TokenStream =
+                                format!("set_{}_for_testing", field_name).parse().unwrap();
+                            let protocol_config_getter = quote! {
+                                #getter
+
+                                pub fn #setter_name(&mut self, val: bool) {
+                                    self.feature_flags.#field_name = val;
                                 }
                             };
                             Some((

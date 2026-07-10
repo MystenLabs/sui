@@ -843,7 +843,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_safe_mode_recovery() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_disable_bridge_for_testing();
+            config.set_bridge_for_testing(false);
             config
         });
 
@@ -896,7 +896,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn sui_system_mock_smoke_test() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_disable_bridge_for_testing();
+            config.set_bridge_for_testing(false);
             config
         });
 
@@ -915,7 +915,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn sui_system_state_shallow_upgrade_test() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_disable_bridge_for_testing();
+            config.set_bridge_for_testing(false);
             config
         });
 
@@ -952,7 +952,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn sui_system_state_deep_upgrade_test() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_disable_bridge_for_testing();
+            config.set_bridge_for_testing(false);
             config
         });
 
