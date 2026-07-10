@@ -29,11 +29,6 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
-    - headings:
-        - pattern: Object types
-        - pattern: Referring to objects
-        - pattern: Object ownership
-      label: Has expected section structure
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
@@ -47,6 +42,9 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: Object model concepts
     stage: Environment
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
 ---
 
 An object is a fundamental unit of storage on the network. Every resource, asset, or piece of data onchain is an object. Many other blockchains structure storage around accounts containing key-value stores. Sui's storage is structured around objects addressable by unique IDs onchain.

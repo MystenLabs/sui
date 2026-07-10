@@ -28,11 +28,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: Create Accounts
-        - pattern: Transfer a balance
-        - pattern: Clawback a balance
-      label: Has expected section structure
 ---
 
 The Permissioned Asset Standard (PAS) is a permissioned asset framework on Sui. Assets of different types live under **Accounts** (one per address, independent of types) and can only move between Accounts through hot potato requests that must be approved and resolved in the same programmable transaction block (PTB).

@@ -26,11 +26,28 @@ const dryRun = !process.argv.includes('--apply');
 
 // ─── Builder path definitions ───────────────────────────────────────────────
 //
+// SOURCE OF TRUTH
+//   Path definitions, step ordering, and eval status are transcribed from the
+//   builder-path evals dashboard:
+//     https://docs-analytics-dashboard.vercel.app/evals
+//   Snapshot date: 2026-07-10. The per-path `score` fields below are the
+//   dashboard coverage scores at that snapshot, retained for provenance even
+//   though they are not written into page frontmatter.
+//
+//   This table is a manual snapshot and WILL drift from the dashboard. When
+//   updating, re-pull from the dashboard and bump the snapshot date above so
+//   the frontmatter's origin stays verifiable.
+//
 // eval values:
 //   'covered'  – evaluated, fully documented (from dashboard)
 //   'partial'  – evaluated, has gaps (from dashboard)
 //   'missing'  – evaluated, no adequate docs (from dashboard)
 //   null       – not yet evaluated in dashboard
+
+const BUILDER_PATHS_SOURCE = {
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals',
+  snapshotDate: '2026-07-10',
+};
 
 const BUILDER_PATHS = [
   {
@@ -356,6 +373,14 @@ function main() {
       }
       return entry;
     });
+
+    // Record where the eval data came from, so the frontmatter is verifiable.
+    if (entries.some(e => e.eval !== null)) {
+      data.builder_paths_source = {
+        dashboard: BUILDER_PATHS_SOURCE.dashboard,
+        snapshot: BUILDER_PATHS_SOURCE.snapshotDate,
+      };
+    }
 
     if (dryRun) {
       const evalCount = entries.filter(e => e.eval !== null).length;

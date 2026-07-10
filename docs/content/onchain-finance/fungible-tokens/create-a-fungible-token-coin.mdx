@@ -22,11 +22,6 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
-    - headings:
-        - pattern: Use the Coin standard
-        - pattern: Managing coins
-        - pattern: Address balances
-      label: Has expected section structure
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
@@ -36,6 +31,9 @@ builder_paths:
     step: Custom coin creation
     stage: Move Contract
     eval: covered
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
 ---
 
 The Coin standard uses the [`sui::coin`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) module to define fungible assets called coins that have `key` and `store` abilities. Coins support wrapping and public transfer functionality.

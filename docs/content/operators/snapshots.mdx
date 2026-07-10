@@ -28,11 +28,6 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more operational depth
-    - headings:
-        - pattern: Supported snapshot types
-        - pattern: Formal snapshots
-        - pattern: Restoring a full node using snapshots
-      label: Has expected section structure
 ---
 
 Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for full node operators.

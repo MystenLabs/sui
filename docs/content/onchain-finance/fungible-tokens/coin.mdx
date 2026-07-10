@@ -23,8 +23,8 @@ keywords:
 pagination_prev: null
 goal:
   description: >-
-    Reader understands the Coin standard enables you to create a broad range of
-    fungible tokens on the Sui network to satisfy a
+    Reader understands how the Coin standard supports creating a broad range of
+    fungible tokens on Sui
   requires:
     - has_frontmatter:
         - title
@@ -36,11 +36,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: Fungible tokens
-        - pattern: Coin creation
-        - pattern: Treasury capability
-      label: Has expected section structure
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -51,6 +46,9 @@ builder_paths:
     step: Coin/Balance representation
     stage: Environment
     eval: partial
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
 ---
 
 :::tip

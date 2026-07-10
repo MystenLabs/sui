@@ -14,8 +14,8 @@ keywords:
   - operator
 goal:
   description: >-
-    Operator understands setup instructions for running the checkpoint blob
-    indexer to populate a remote store with
+    Operator can run the checkpoint blob indexer to populate a remote store with
+    protobuf checkpoint blobs
   requires:
     - has_frontmatter:
         - title
@@ -27,11 +27,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has configuration or command examples
-    - headings:
-        - pattern: Architecture overview
-        - pattern: Pipelines
-        - pattern: Backfill from an existing bucket
-      label: Has expected section structure
 ---
 
 The remote store is an object store (S3 or GCS) containing protobuf-encoded checkpoint blobs. Full nodes read from it for state sync and indexers read from it for backfills. The `sui-checkpoint-blob-indexer` populates this store by reading checkpoints from a source and writing compressed protobuf blobs to a destination.

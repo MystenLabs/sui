@@ -16,8 +16,8 @@ keywords:
   - event completeness
 goal:
   description: >-
-    Reader understands cryptographically verifiable Move events that can be
-    verified by a light client without trusting
+    Reader understands how authenticated events let a light client
+    cryptographically verify Move events without trusting an intermediary
   requires:
     - has_frontmatter:
         - title
@@ -29,11 +29,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: Why authenticated events\?
-        - pattern: Quick start
-        - pattern: Architecture
-      label: Has expected section structure
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook

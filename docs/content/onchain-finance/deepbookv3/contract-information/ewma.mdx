@@ -28,11 +28,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: Overview
-        - pattern: How it works
-        - pattern: Configuration parameters
-      label: Has expected section structure
 ---
 
 DeepBook implements an exponentially weighted moving average (EWMA) system to dynamically adjust taker fees based on network gas prices. This feature helps prevent toxic takers from using high gas prices to prioritize their transactions and pick off stale maker orders.

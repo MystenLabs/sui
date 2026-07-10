@@ -24,10 +24,6 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
-    - headings:
-        - pattern: Read functions
-        - pattern: Structs
-      label: Has expected section structure
 ---
 
 The Predict vault holds accepted quote assets and takes the opposite side of every trade. `predict.move` owns pricing and trading orchestration; `vault.move` is the state machine for balances, exposure, mark-to-market liability, max payout, and settled-oracle compaction.

@@ -27,11 +27,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: Upgrade considerations
-        - pattern: Upgrade requirements
-        - pattern: Upgrading
-      label: Has expected section structure
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
@@ -54,6 +49,9 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: Upgrade storage contracts
     stage: Ship
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
 ---
 
 <AgentPrompt

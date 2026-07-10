@@ -27,10 +27,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: 'The `sui::clock::Clock` module'
-        - pattern: Epoch timestamps
-      label: Has expected section structure
 ---
 
 If you need a near real-time measurement (within a few seconds) for your application, use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every network checkpoint. If you do not need the current time, use the `epoch_timestamp_ms` function to refer to the timestamp of when the current epoch started.

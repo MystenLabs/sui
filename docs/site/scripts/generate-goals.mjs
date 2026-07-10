@@ -317,16 +317,10 @@ function generateGuideGoal(title, body, headings, codeBlocks, wc) {
     requires.push({ pattern: '```', min: 1, label: 'Has code examples' });
   }
 
-  // Guides should have at least 2 H2 sections for structure
-  const h2count = headings.filter(h => h.level === 2).length;
-  if (h2count >= 2) {
-    requires.push({
-      headings: headings.filter(h => h.level === 2).slice(0, 3).map(h => ({
-        pattern: escapeRegex(h.text).substring(0, 40),
-      })),
-      label: 'Has expected section structure',
-    });
-  }
+  // NOTE: Do not emit a "Has expected section structure" check derived from the
+  // page's own current headings — that is tautological (it only asserts the page
+  // has the headings it already has). Prescriptive structure checks belong in the
+  // archetype generators that know the intended structure (example, migration).
 
   // If it links to other pages, it should be well-connected
   const internalLinks = countPattern(body, '\\]\\(/[^)]+\\)');
@@ -403,16 +397,8 @@ function generateOperatorGoal(title, body, headings, codeBlocks, wc) {
     requires.push({ pattern: '```', min: 1, label: 'Has configuration or command examples' });
   }
 
-  // Operator pages should have clear steps or sections
-  const h2count = headings.filter(h => h.level === 2).length;
-  if (h2count >= 2) {
-    requires.push({
-      headings: headings.filter(h => h.level === 2).slice(0, 3).map(h => ({
-        pattern: escapeRegex(h.text).substring(0, 40),
-      })),
-      label: 'Has expected section structure',
-    });
-  }
+  // NOTE: No page-derived "Has expected section structure" check — see the note
+  // in generateGuideGoal. It would be tautological.
 
   return {
     description: `Operator can ${title.toLowerCase()} following the documented procedure`,
@@ -445,10 +431,6 @@ function generateIndexGoal(title, headings) {
       { has_frontmatter: ['title', 'description'] },
     ],
   };
-}
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────

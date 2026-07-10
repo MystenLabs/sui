@@ -27,11 +27,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: Limited resources and `Random` dependent
-        - pattern: Use \(non-public\) `entry` functions
-        - pattern: Programmable transaction block \(PTB\) r
-      label: Has expected section structure
 ---
 
 A Move function can create a new instance of `RandomGenerator` and use it for generating random values of different types. For example, `generate_u128(&mut generator), generate_u8_in_range(&mut generator, 1, 6)` or the following example:

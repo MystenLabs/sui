@@ -31,11 +31,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: Transaction components
-        - pattern: Inputs and results
-        - pattern: '`Argument` structure and usage'
-      label: Has expected section structure
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
@@ -45,6 +40,9 @@ builder_paths:
     step: PTB composition examples
     stage: Advanced
     eval: missing
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
 ---
 
 :::tip Local network prerequisite

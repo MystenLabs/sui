@@ -20,8 +20,8 @@ keywords:
   - object abilities
 goal:
   description: >-
-    Reader understands custom transfer rules enable you to define a set of rules
-    that must be met before Sui considers a
+    Reader can define custom transfer rules that must be satisfied before Sui
+    considers a transfer valid
   requires:
     - has_frontmatter:
         - title
@@ -33,10 +33,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: '`store` ability'
-        - pattern: Example
-      label: Has expected section structure
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation

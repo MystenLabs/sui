@@ -23,17 +23,15 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
-    - headings:
-        - pattern: Operating environment
-        - pattern: Storage locations for key data
-        - pattern: Troubleshooting
-      label: Has expected section structure
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: zkLogin example
     stage: Auth
     eval: partial
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
 ---
 
 The Sui community created an example to facilitate a comprehensive understanding of each step involved in Sui zkLogin for developers.

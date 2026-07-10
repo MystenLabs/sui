@@ -28,11 +28,6 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
-    - headings:
-        - pattern: Query PAS balances
-        - pattern: Non-policy assets in Accounts
-        - pattern: Key points
-      label: Has expected section structure
 ---
 
 The Permissioned Asset Standard (PAS) does not expose dedicated read APIs in the SDK. This is by design. PAS stores assets in standard Sui objects with deterministic addresses, so you query them using the same RPC methods you use for any other address-owned data (for example, balance queries and owned object queries).

@@ -327,13 +327,15 @@ function evaluateGoalRequires(goal, body, data, headings) {
       result.pass = missing.length === 0;
       result.detail = missing.length > 0 ? `missing headings: ${missing.join(', ')}` : 'all present';
     } else if (req.links_to) {
-      // Check that body contains links to specific paths
+      // Check that body links to specific paths, via either a markdown link
+      // [text](/path) or a JSX component attribute href="/path" (e.g. <Card href=...>).
       const missing = [];
       for (const target of req.links_to) {
         // Escape special regex chars in path
         const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(`\\]\\(${escaped}`, 'g');
-        if (!re.test(body)) missing.push(target);
+        const mdLink = new RegExp(`\\]\\(${escaped}`);
+        const hrefAttr = new RegExp(`href=["']${escaped}(["'#/])`);
+        if (!mdLink.test(body) && !hrefAttr.test(body)) missing.push(target);
       }
       result.pass = missing.length === 0;
       result.detail = missing.length > 0 ? `missing links to: ${missing.join(', ')}` : 'all present';
