@@ -192,8 +192,7 @@ async fn find_gas_coins_and_address(
     let mut retry_delay = Duration::from_millis(500);
     // Preserved and returned if every attempt comes up empty, so the caller sees the original
     // "no coins" message (or the last transient query error) rather than a generic timeout.
-    let mut last_err =
-        FaucetError::Wallet("No address found with sufficient coins".to_string());
+    let mut last_err = FaucetError::Wallet("No address found with sufficient coins".to_string());
 
     for attempt in 0..=GAS_COIN_LOOKUP_RETRIES {
         match scan_for_gas_coins(wallet, config).await {
