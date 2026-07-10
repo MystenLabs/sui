@@ -59,8 +59,9 @@ export enum UseDeclaration {
     FriendAccess = 'friend_access',
     UseFun = 'use_fun',
 
-    // all of the nodes below are implemented in `import-grouping.ts`
-    // hence should never be printed directly.
+    // the nodes below are consumed by `imports-grouping.ts` when grouping is
+    // enabled; they are printed directly for annotated imports, imports with
+    // comments, uses inside function bodies, and `autoGroupImports: 'none'`.
 
     UseModule = 'use_module',
     UseMember = 'use_member',

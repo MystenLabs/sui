@@ -416,7 +416,7 @@ export class Tree {
      * a trailing comment and a leading comment.
      */
     private assignLeadingComments(): Tree {
-        let comments = [];
+        let comments: Comment[] = [];
         let prev = this.previousNamedSibling;
         let newline = false;
 
@@ -428,32 +428,24 @@ export class Tree {
             prev = prev.previousNamedSibling;
         }
 
-        if (prev?.type == 'block_comment') {
-            if (prev.isUsedComment) return this;
-
+        // collect the whole run of comments above the node; `newline` tracks
+        // whether a line break separates a comment from whatever follows it,
+        // so inline block comments (`/* a */ /* b */ node`) stay inline
+        while (prev?.isComment && !prev.isUsedComment) {
             comments.unshift({
                 type: prev.type as 'line_comment' | 'block_comment',
                 text: prev.text,
-                newline,
+                newline: prev.type == 'line_comment' ? true : newline,
             });
 
             prev.isUsedComment = true;
-            this.leadingComment = comments;
-            return this;
-        }
+            prev = prev.previousNamedSibling;
 
-        while (prev?.isComment || (prev?.isNewline && !prev?.isUsedComment)) {
-            if (prev.isUsedComment) break;
-            if (prev.isComment) {
-                comments.unshift({
-                    type: prev.type as 'line_comment' | 'block_comment',
-                    text: prev.text,
-                    newline: true,
-                });
-                prev.isUsedComment = true;
+            newline = false;
+            while (prev?.isNewline) {
+                newline = true;
+                prev = prev.previousNamedSibling;
             }
-
-            prev = prev.previousNamedSibling; // move to the previous comment
         }
 
         this.leadingComment = comments;

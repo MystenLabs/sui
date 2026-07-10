@@ -7,7 +7,7 @@ import { AstPath, Doc, doc } from 'prettier';
 import { inlineTrailingComment, printIdentifier } from '../utilities';
 import * as VectorExpression from './expression/vector_expression';
 import { printBreakableBlock } from './expression/block';
-const { line, group, join, fill, ifBreak, softline, indent, lineSuffix } = doc.builders;
+const { line, group, hardline, join, fill, ifBreak, softline, indent, lineSuffix } = doc.builders;
 
 /** The type of the node implemented in this file */
 export const NODE_TYPE = 'constant';
@@ -34,10 +34,20 @@ export default function (path: AstPath<Node>): treeFn | null {
  */
 function printConstant(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
     const expression = path.node.nonFormattingChildren[2];
+    const typeNode = path.node.nonFormattingChildren[1];
     const trailing = lineSuffix(inlineTrailingComment(path));
     path.node.disableTrailingComment();
 
-    const printCb = (path: AstPath<Node>) => printConstExpression(path, options, print);
+    // a trailing line comment on the type is printed after the `=`
+    // (`const C: u8 = // comment`), and the value moves to the next line
+    let eqComment: Doc = '';
+    const printCb = (path: AstPath<Node>) => {
+        if (path.node === typeNode && path.node.trailingComment?.type == 'line_comment') {
+            eqComment = lineSuffix(inlineTrailingComment(path));
+            path.node.disableTrailingComment();
+        }
+        return printConstExpression(path, options, print);
+    };
     const groupId = Symbol('type_group');
 
     if (path.node.nonFormattingChildren.length !== 3) {
@@ -49,9 +59,11 @@ function printConstant(path: AstPath<Node>, options: MoveOptions, print: printFn
 
     // const <ident> : <type> = <expr>;
     parts.push('const ', identDoc!);
-    parts.push(': ', group(typeDoc!, { id: groupId }), ' =');
+    parts.push(': ', group(typeDoc!, { id: groupId }), ' =', eqComment);
 
-    if (expression?.isList) {
+    if (eqComment !== '') {
+        parts.push(indent(hardline), indent(exprDoc!));
+    } else if (expression?.isList) {
         parts.push(
             group([
                 ifBreak(indent(line), ' ', { groupId }),

@@ -65,7 +65,6 @@ function printVectorExpression(path: AstPath<Node>, options: MoveOptions, print:
     return [
         'vector<',
         // do not break the type in vector literal
-        // indent(softline),
         group(path.call(print, 'nonFormattingChildren', 0), { shouldBreak: false }),
         '>',
         group(

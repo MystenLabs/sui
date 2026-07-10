@@ -39,7 +39,6 @@ export default function (path: AstPath<Node>): treeFn | null {
 export enum Module {
     ModuleExtensionDefinition = 'module_extension_definition',
     ModuleDefinition = 'module_definition',
-    BlockComment = 'block_comment',
     ModuleIdentity = 'module_identity',
     ModuleIdentifier = 'module_identifier',
     ModuleBody = 'module_body',
@@ -92,8 +91,12 @@ export function printModuleDefinition(
     // if we're using the label, we must add a semicolon and print the body in a
     // new line
     if (useLabel) {
-        // print hard lines only if there is more than one child
-        if (path.node.nonFormattingChildren[1]!.children.length > 1) {
+        const body = path.node.nonFormattingChildren[1]!;
+        const hasContent =
+            body.nonFormattingChildren.length > 0 || body.namedChildren.some((n) => n.isComment);
+
+        // print hard lines only if the body has members (or comments) to print
+        if (hasContent) {
             return result.concat([
                 ';',
                 hardline,
@@ -129,11 +132,24 @@ function printModuleIdentity(path: AstPath<Node>, options: ParserOptions, print:
  */
 const separatedMembers = [
     FunctionDefinition.FunctionDefinition,
+    FunctionDefinition.NativeFunctionDefinition,
+    FunctionDefinition.MacroFunctionDefinition,
     StructDefinition.StructDefinition,
+    StructDefinition.NativeStructDefinition,
     Constant.NODE_TYPE,
     UseDeclaration.UseDeclaration,
     UseDeclaration.FriendDeclaration,
     EnumDefinition.EnumDefinition,
+] as string[];
+
+/**
+ * Function-like members are always separated by an empty line, even from each
+ * other (unlike e.g. constants, which are allowed to be glued together).
+ */
+const functionMembers = [
+    FunctionDefinition.FunctionDefinition,
+    FunctionDefinition.NativeFunctionDefinition,
+    FunctionDefinition.MacroFunctionDefinition,
 ] as string[];
 
 /**
@@ -188,8 +204,8 @@ function printModuleBody(path: AstPath<Node>, options: MoveOptions, print: print
 
         // force add empty line after function definitions
         if (
-            path.node.type === FunctionDefinition.FunctionDefinition &&
-            next?.type === FunctionDefinition.FunctionDefinition
+            functionMembers.includes(path.node.type) &&
+            functionMembers.includes(next?.type || '')
         ) {
             return bodyDoc.push([path.call(print), hardline]);
         }
