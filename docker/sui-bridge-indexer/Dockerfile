@@ -2,7 +2,7 @@
 #
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
-FROM rust:1.92-bullseye AS builder
+FROM rust:1.96.1-bullseye AS builder
 RUN apt-get update \
  && apt-get install -y --no-install-recommends cmake clang libpq5 libpq-dev postgresql ca-certificates \
  && rm -rf /var/lib/apt/lists/*

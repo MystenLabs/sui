@@ -770,7 +770,7 @@ impl KeyToolCommand {
                     multisig: vec![],
                 };
 
-                for (pk, w) in pks.into_iter().zip_debug_eq(weights.into_iter()) {
+                for (pk, w) in pks.into_iter().zip_debug_eq(weights) {
                     output.multisig.push(MultiSigOutput {
                         address: Into::<SuiAddress>::into(&pk),
                         public_base64_key: pk.encode_base64(),

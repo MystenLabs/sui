@@ -841,7 +841,7 @@ pub(crate) async fn start_bridge_cluster(
     for (i, ((kp, server_listen_port), approved_governance_actions)) in bridge_authority_keys
         .iter()
         .zip_debug_eq(bridge_server_ports.iter())
-        .zip_debug_eq(approved_governance_actions.into_iter())
+        .zip_debug_eq(approved_governance_actions)
         .enumerate()
     {
         // prepare node config (server + client)
