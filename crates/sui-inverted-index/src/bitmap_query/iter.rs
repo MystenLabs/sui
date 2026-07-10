@@ -25,15 +25,17 @@ use roaring::RoaringBitmap;
 
 use super::BitmapBucketIteratorSource;
 use super::BitmapQuery;
-use super::BitmapScanError;
 use super::DedupedQuery;
 use super::LeafHead;
+use super::LeafStop;
 use super::ScanDirection;
+use super::ScanStop;
 use super::Watermarked;
 use super::WatermarkedBucket;
 use super::bound_in_direction;
 use super::bucket_edges;
 use super::build_term_specs;
+use super::collapse;
 use super::count_on_floor_refs;
 use super::eval_term_at_bucket;
 use super::frontier_advanced;
@@ -142,9 +144,10 @@ where
             // can only be retired when no satisfiable term still references it.
             recompute_unreferenced(&terms, &class, &mut unreferenced);
 
-            // Consume any budget-error frame so the error surfaces (after the
-            // floor watermark below).
-            let mut errors: Vec<BitmapScanError> = Vec::new();
+            // Consume any stop frame so the error surfaces. The collapse below
+            // bundles this round's floor into a ScanLimit terminal; Fault and
+            // Cancelled stops still follow the floor beacon.
+            let mut errors: Vec<LeafStop> = Vec::new();
             for i in 0..leaf_count {
                 if !unreferenced[i] && matches!(class[i], Some(LeafHead::Error)) {
                     match leaves[i].next() {
@@ -172,16 +175,15 @@ where
                 .map(|&i| front[i])
                 .reduce(|a, b| bound_in_direction(a, b, direction))
                 .expect("active non-empty");
-            if frontier_advanced(last_emitted, floor_pos, direction) {
+            let collapsed = (!errors.is_empty()).then(|| collapse(errors, floor_pos));
+            let scan_limited = matches!(collapsed, Some(ScanStop::ScanLimit { .. }));
+            if !scan_limited && frontier_advanced(last_emitted, floor_pos, direction) {
                 pending.push_back(Ok(Watermarked::Watermark(floor_pos)));
                 last_emitted = Some(floor_pos);
             }
-
-            // Budget exhausted: the floor watermark above is the resume cursor;
-            // everything below it was fully evaluated in prior rounds.
-            if !errors.is_empty() {
+            if let Some(stop) = collapsed {
                 done = true;
-                pending.push_back(Err(BitmapScanError::collapse(errors)));
+                pending.push_back(Err(stop));
                 continue;
             }
 
@@ -601,13 +603,11 @@ mod tests {
         }
     }
 
-    /// Budget exhaustion mid-dense-scan surfaces `BitmapScanError::ScanLimit`
-    /// after a floor watermark, and resuming from that watermark covers the
-    /// remaining buckets exactly once.
+    /// Budget exhaustion mid-dense-scan bundles the merged floor in the
+    /// terminal, and resuming from that frontier covers every remaining bucket
+    /// exactly once without relying on a terminal-round progress beacon.
     #[tokio::test]
-    async fn unanchored_budget_exhaustion_resumes_at_watermark() {
-        use crate::bitmap_query::BitmapScanError;
-
+    async fn unanchored_budget_exhaustion_resumes_at_terminal_frontier() {
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::new()),
         };
@@ -628,7 +628,7 @@ mod tests {
         .await;
 
         let mut covered: Vec<u64> = Vec::new();
-        let mut last_watermark = 0;
+        let mut resume_from = None;
         let mut limit_hit = false;
         for item in first {
             match item {
@@ -636,21 +636,23 @@ mod tests {
                     assert_eq!(bitmap, full_bucket());
                     covered.push(bucket);
                 }
-                Ok(Watermarked::Watermark(p)) => last_watermark = p,
-                Err(e) => {
-                    assert!(matches!(e, BitmapScanError::ScanLimit));
+                Ok(Watermarked::Watermark(_)) => {}
+                Err(ScanStop::ScanLimit { scan_frontier }) => {
+                    resume_from = Some(scan_frontier);
                     limit_hit = true;
                 }
+                Err(other) => panic!("expected ScanLimit, got {other:?}"),
             }
         }
         assert!(limit_hit, "3-bucket budget cannot cover 10 dense buckets");
         assert_eq!(covered, vec![0, 1, 2]);
-        assert_eq!(last_watermark, 3 * BUCKET_SIZE);
+        let resume_from = resume_from.expect("ScanLimit must carry a resume frontier");
+        assert_eq!(resume_from, 3 * BUCKET_SIZE);
 
         let resumed: Vec<_> = eval_bitmap_query_bucket_stream(
             source,
             query,
-            last_watermark..(10 * BUCKET_SIZE),
+            resume_from..(10 * BUCKET_SIZE),
             BUCKET_SIZE,
             ScanDirection::Ascending,
             BitmapScanBudget::new(1_000_000),

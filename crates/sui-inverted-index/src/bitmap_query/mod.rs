@@ -52,89 +52,107 @@ pub(crate) use stream::BitmapScanBudget;
 #[cfg(test)]
 pub(crate) use stream::eval_bitmap_query_bucket_stream;
 
-/// Terminal signal raised by a bitmap evaluator on the bucket channel's `Err`.
-/// It must be an error rather than a silent end-of-stream: the driver reads a
-/// clean end as "scanned the whole range" and advances the resume cursor to the
-/// terminus, so a budget or cancel stop has to short-circuit the `try_stream!`
-/// pipeline to truncate the scan at the current floor. The variant is chosen at
-/// the source, so each List handler maps it to a wire outcome with one
-/// exhaustive match.
+/// Terminal raised by a single leaf/backend bucket stream. Positionless by
+/// construction — one leaf cannot know the merged multi-term floor. Leaf stops
+/// never reach a List driver: the DNF evaluators consume them and re-raise a
+/// [`ScanStop`] carrying the merged frontier.
 #[derive(Debug, thiserror::Error)]
-pub enum BitmapScanError {
-    /// The per-request bucket-scan limit was reached: a graceful early stop. The
-    /// handler ends the stream with `QUERY_END_REASON_SCAN_LIMIT` and the last
-    /// emitted watermark as the continuation cursor.
+pub enum LeafStop {
+    /// This leaf's share of the bucket-scan budget is exhausted.
     #[error("bitmap scan limit reached")]
-    ScanLimit,
-    /// The scan was cancelled (the request's cancellation token fired). The
-    /// handler ends the stream with a gRPC `Cancelled` status.
+    BudgetExhausted,
+    /// The request's cancellation token fired.
     #[error("bitmap scan cancelled")]
     Cancelled,
-    /// A backend/storage fault. The handler ends the stream with a gRPC
-    /// `Internal` status carrying this error unchanged.
+    /// A backend/storage fault.
     #[error(transparent)]
-    Source(anyhow::Error),
+    Fault(anyhow::Error),
 }
 
-impl BitmapScanError {
-    /// Reduce the terminal errors raised by several leaves in one driver round
-    /// to a single disposition. Precedence: `Source` > `ScanLimit` > `Cancelled`.
-    ///
-    /// - `Source` outranks everything: a real fault must surface as `Internal`,
-    ///   never be masked as a clean `SCAN_LIMIT` end or a `Cancelled` status.
-    /// - `ScanLimit` outranks `Cancelled`: a scan-limit stop already emitted its
-    ///   frontier watermark, so ending the stream cleanly with a continuation
-    ///   cursor is strictly more useful than a `Cancelled` error — the cancel
-    ///   (a deadline/timeout) loses nothing, the resume point is already on the
-    ///   wire.
-    ///
-    /// Multiple concurrent faults are combined into one `Source` so a correlated
-    /// failure keeps every leaf's message instead of an arbitrary one. Panics on
-    /// empty input — the evaluator only collapses when at least one leaf errored.
-    pub(crate) fn collapse(errs: Vec<BitmapScanError>) -> BitmapScanError {
-        assert!(!errs.is_empty(), "BitmapScanError::collapse on empty Vec");
-        let mut cancelled = false;
-        let mut scan_limit = false;
-        let mut faults: Vec<anyhow::Error> = Vec::new();
-        for e in errs {
-            match e {
-                BitmapScanError::Cancelled => cancelled = true,
-                BitmapScanError::ScanLimit => scan_limit = true,
-                BitmapScanError::Source(err) => faults.push(err),
-            }
-        }
-        match faults.len() {
-            0 => {
-                if scan_limit {
-                    BitmapScanError::ScanLimit
-                } else {
-                    debug_assert!(cancelled, "collapse saw only non-erroring leaves");
-                    BitmapScanError::Cancelled
-                }
-            }
-            1 => BitmapScanError::Source(faults.pop().expect("len == 1")),
-            n => {
-                let combined = faults
-                    .iter()
-                    .enumerate()
-                    .map(|(i, err)| format!("  [{i}] {err}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                BitmapScanError::Source(anyhow::anyhow!(
-                    "{n} concurrent bitmap scan faults:\n{combined}"
-                ))
-            }
-        }
-    }
+/// Terminal signal of a merged bitmap eval stream, raised on the error channel
+/// so the `try_stream!` pipeline short-circuits (a clean end-of-stream means
+/// "scanned the whole range"). The List handlers map each variant to a wire
+/// outcome with one exhaustive match.
+///
+/// Mental model: leaves raise positionless [`LeafStop`]s; the evaluator turns
+/// them into a `ScanStop` that ALWAYS carries the resume frontier on
+/// `ScanLimit`; in-band `Watermarked::Watermark`s are only mid-scan progress
+/// beacons, never the resume channel.
+#[derive(Debug, thiserror::Error)]
+pub enum ScanStop {
+    /// Budget exhausted: a graceful early stop. The handler ends the stream
+    /// with `QUERY_END_REASON_SCAN_LIMIT`; the frontier is the resume cursor.
+    #[error("bitmap scan limit reached")]
+    ScanLimit {
+        /// Merged floor position every term provably scanned to when the budget
+        /// died — the exact value the stopping round's progress beacon would
+        /// have carried. It lives in the scanned index's member-id domain
+        /// (tx-seq for transaction/checkpoint indexes; encoded event-seq — see
+        /// `event_seq` — for the event index). Consumers apply their existing
+        /// domain conversion and resume arithmetic.
+        scan_frontier: u64,
+    },
+    /// Cancelled → gRPC `Cancelled` status.
+    #[error("bitmap scan cancelled")]
+    Cancelled,
+    /// Backend/storage fault → gRPC `Internal`, error carried unchanged.
+    #[error(transparent)]
+    Fault(anyhow::Error),
 }
 
-impl From<anyhow::Error> for BitmapScanError {
+impl From<anyhow::Error> for LeafStop {
     fn from(err: anyhow::Error) -> Self {
-        BitmapScanError::Source(err)
+        LeafStop::Fault(err)
     }
 }
 
-pub type BitmapScanResult<T> = std::result::Result<T, BitmapScanError>;
+impl From<anyhow::Error> for ScanStop {
+    fn from(err: anyhow::Error) -> Self {
+        ScanStop::Fault(err)
+    }
+}
+
+/// Reduce the leaf stops raised in one evaluator round to the driver-facing
+/// terminal. Precedence: Fault > BudgetExhausted > Cancelled (a real fault must
+/// surface as Internal; a budget stop with its frontier beats a bare Cancel —
+/// the resume point costs nothing to deliver). `frontier` is the merged floor
+/// the caller computed for this round; it is bound into `ScanLimit` only.
+/// Panics on empty input — evaluators only collapse when a leaf actually erred.
+pub(crate) fn collapse(stops: Vec<LeafStop>, scan_frontier: u64) -> ScanStop {
+    assert!(!stops.is_empty(), "collapse on empty Vec");
+    let mut cancelled = false;
+    let mut budget = false;
+    let mut faults: Vec<anyhow::Error> = Vec::new();
+    for s in stops {
+        match s {
+            LeafStop::Cancelled => cancelled = true,
+            LeafStop::BudgetExhausted => budget = true,
+            LeafStop::Fault(err) => faults.push(err),
+        }
+    }
+    match faults.len() {
+        0 => {
+            if budget {
+                ScanStop::ScanLimit { scan_frontier }
+            } else {
+                debug_assert!(cancelled, "collapse saw only non-erroring leaves");
+                ScanStop::Cancelled
+            }
+        }
+        1 => ScanStop::Fault(faults.pop().expect("len == 1")),
+        n => {
+            let combined = faults
+                .iter()
+                .enumerate()
+                .map(|(i, err)| format!("  [{i}] {err}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            ScanStop::Fault(anyhow::anyhow!(
+                "{n} concurrent bitmap scan faults:\n{combined}"
+            ))
+        }
+    }
+}
 
 /// Item or progress watermark flowing through a bitmap eval pipeline.
 /// `Watermark(p)` means every Item with position strictly before `p`
@@ -166,13 +184,13 @@ impl<T, P> Watermarked<T, P> {
 /// A stream of `(bucket_id, RoaringBitmap)` in the requested bucket order.
 /// Bitmap positions are **relative** to the bucket (u32 offsets `[0, BUCKET_SIZE)`)
 /// - edge trimming against the requested range happens at the flatten step.
-pub type BucketItem = BitmapScanResult<(u64, RoaringBitmap)>;
+pub type BucketItem = Result<(u64, RoaringBitmap), LeafStop>;
 pub type BucketStream = BoxStream<'static, BucketItem>;
 
 /// A bucket stream that interleaves data buckets with progress watermarks.
 /// The flat DNF driver derives each watermark from the slowest leaf's
 /// position, so the output always reflects "every source has scanned past P."
-pub(crate) type WatermarkedBucket = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>;
+pub(crate) type WatermarkedBucket = Result<Watermarked<(u64, RoaringBitmap)>, ScanStop>;
 pub type WatermarkedBucketStream = BoxStream<'static, WatermarkedBucket>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

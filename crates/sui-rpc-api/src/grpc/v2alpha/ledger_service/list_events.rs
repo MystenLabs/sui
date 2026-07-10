@@ -126,9 +126,16 @@ pub(crate) async fn list_events(
         );
 
         let mut last_watermark: Option<Watermark> = None;
-        while let Some(response) = scan.next_item().await? {
+        let mut fused = false;
+        while let Some(mut response) = scan.next_item().await? {
             if response.watermark.is_some() {
                 last_watermark = response.watermark.clone();
+            }
+            if response.event.is_some() && scan.produced() == limit_items && scan.exhausted() {
+                let mut end = QueryEnd::default();
+                end.reason = Some(QueryEndReason::ItemLimit as i32);
+                response.end = Some(end);
+                fused = true;
             }
             yield response;
         }
@@ -136,15 +143,20 @@ pub(crate) async fn list_events(
         let emitted = scan.produced();
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
-        let final_watermark = if reached_range_end(reason) {
-            Some(terminal_boundary_watermark(
-                &terminal_options,
-                terminal.position,
-            ))
-        } else {
-            last_watermark
-        };
-        yield end_response(final_watermark, reason);
+        if !fused {
+            let candidate = if reached_range_end(reason) {
+                Some(terminal_boundary_watermark(
+                    &terminal_options,
+                    terminal.position,
+                ))
+            } else if reason == QueryEndReason::ScanLimit {
+                terminal.scan_frontier_watermark
+            } else {
+                None
+            };
+            let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
+            yield end_response(final_watermark, reason);
+        }
         info!(
             filtered,
             limit_items,
@@ -253,6 +265,7 @@ fn next_event_chunk(
                     tx_seq: event_range.end_position.tx_seq,
                     event_index: event_range.end_position.event_index,
                 },
+                scan_frontier_watermark: None,
             };
             let bounds = event_range.bounds;
             if event_range.is_empty() {
@@ -330,6 +343,22 @@ fn next_event_chunk(
             } else {
                 end_reason
             };
+            let frontier_watermark = if request_exhausted || scan.refs.is_empty() {
+                scan_event_watermark(
+                    &service,
+                    &options,
+                    scan.scan_limit_hit,
+                    scan.frontier,
+                    ascending,
+                )?
+            } else {
+                None
+            };
+            let scan_watermark = if !request_exhausted && scan.refs.is_empty() {
+                frontier_watermark.clone().map(watermark_response)
+            } else {
+                None
+            };
             let terminal = ChunkTerminal {
                 reason,
                 position: Position::Events {
@@ -337,15 +366,8 @@ fn next_event_chunk(
                     tx_seq: end_position.tx_seq,
                     event_index: end_position.event_index,
                 },
+                scan_frontier_watermark: request_exhausted.then_some(frontier_watermark).flatten(),
             };
-            let scan_watermark = scan_event_watermark(
-                &service,
-                &options,
-                scan.scan_limit_hit,
-                scan.refs.is_empty(),
-                scan.frontier,
-                ascending,
-            )?;
             (scan.refs, next_state, terminal, scan_watermark)
         }
         EventScanState::Filtered {
@@ -401,6 +423,16 @@ fn next_event_chunk(
             } else {
                 end_reason
             };
+            let frontier_watermark = if request_exhausted || refs.is_empty() {
+                scan_event_watermark(&service, &options, scan_limited, frontier, ascending)?
+            } else {
+                None
+            };
+            let scan_watermark = if !request_exhausted && refs.is_empty() {
+                frontier_watermark.clone().map(watermark_response)
+            } else {
+                None
+            };
             let terminal = ChunkTerminal {
                 reason,
                 position: Position::Events {
@@ -408,15 +440,8 @@ fn next_event_chunk(
                     tx_seq: end_position.tx_seq,
                     event_index: end_position.event_index,
                 },
+                scan_frontier_watermark: request_exhausted.then_some(frontier_watermark).flatten(),
             };
-            let scan_watermark = scan_event_watermark(
-                &service,
-                &options,
-                scan_limited,
-                refs.is_empty(),
-                frontier,
-                ascending,
-            )?;
             (refs, next_state, terminal, scan_watermark)
         }
     };
@@ -438,19 +463,17 @@ fn next_event_chunk(
     })
 }
 
-/// Build the scan watermark frame for a filtered chunk that matched
-/// nothing while the scan budget ran out mid-gap. Resolves the coalesced
-/// frontier to its checkpoint; yields nothing at genesis (asc) where no progress
-/// can be claimed.
+/// Build the scan watermark for a chunk whose scan budget ran out mid-gap.
+/// Resolves the coalesced frontier to its checkpoint; yields nothing at genesis
+/// (asc) where no progress can be claimed.
 fn scan_event_watermark(
     service: &RpcService,
     options: &QueryOptions,
     scan_limited: bool,
-    no_items: bool,
     frontier: Option<EventPosition>,
     ascending: bool,
-) -> Result<Option<ListEventsResponse>, RpcError> {
-    if !(scan_limited && no_items) {
+) -> Result<Option<Watermark>, RpcError> {
+    if !scan_limited {
         return Ok(None);
     }
     let Some(frontier) = frontier else {
@@ -469,7 +492,7 @@ fn scan_event_watermark(
         },
         boundary,
     );
-    Ok(Some(watermark_response(watermark)))
+    Ok(Some(watermark))
 }
 
 fn render_event_chunk(

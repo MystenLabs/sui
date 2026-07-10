@@ -8,8 +8,8 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use sui_inverted_index::BitmapScanError;
-use sui_inverted_index::BitmapScanResult;
+use sui_inverted_index::ScanDirection;
+use sui_inverted_index::ScanStop;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
@@ -122,7 +122,7 @@ pub(crate) async fn list_transactions(
     // Filtered requests are sparse bitmap hits and still use chunked
     // multi_get lookups. Unfiltered requests scan the dense tx_seq_digest
     // keyspace directly, bounded by limit_items.
-    let digest_stream: BoxStream<'static, BitmapScanResult<Watermarked<TxSeqDigestData>>> =
+    let digest_stream: BoxStream<'static, Result<Watermarked<TxSeqDigestData>, ScanStop>> =
         if let Some(filter) = &request.filter {
             let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
             let query = ctx.transaction_filter_query(filter)?;
@@ -146,8 +146,8 @@ pub(crate) async fn list_transactions(
                         async move {
                             fetch_tx_seq_digests(client, seqs)
                                 .await
-                                .map(|s| s.map_err(BitmapScanError::Source).boxed())
-                                .map_err(BitmapScanError::Source)
+                                .map(|s| s.map_err(ScanStop::Fault).boxed())
+                                .map_err(ScanStop::Fault)
                         }
                     }
                 },
@@ -164,7 +164,9 @@ pub(crate) async fn list_transactions(
             let mut emitted = 0usize;
             let mut checkpoint_boundary: Option<u64> = None;
             let mut last_watermark: Option<Watermark> = None;
+            let mut scan_limit_frontier: Option<u64> = None;
             let mut scan_limit_hit = false;
+            let mut fused = false;
             while let Some(item) = digest_stream.next().await {
                 match item {
                     Ok(ResolvedWatermarked::Item(row)) => {
@@ -172,44 +174,72 @@ pub(crate) async fn list_transactions(
                         let wm = item_watermark(Position::Transactions { checkpoint: row.checkpoint_number, tx_seq: row.tx_sequence_number }, checkpoint_boundary);
                         last_watermark = Some(wm.clone());
                         emitted += 1;
+                        let mut response = transaction_response_from_tx_seq_digest(row, &read_mask, wm);
                         let yield_started = Instant::now();
-                        yield transaction_response_from_tx_seq_digest(row, &read_mask, wm);
+                        if emitted == limit_items {
+                            let mut end = QueryEnd::default();
+                            end.reason = Some(QueryEndReason::ItemLimit as i32);
+                            response.end = Some(end);
+                            yield response;
+                            ctx.observe_stream_item_yield_wait(yield_started.elapsed());
+                            fused = true;
+                            break;
+                        }
+                        yield response;
                         ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                     }
                     Ok(ResolvedWatermarked::Watermark { position, cp }) => {
-                        checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
-                        let wm = boundary_watermark(Position::Transactions { checkpoint: boundary_cursor_cp(cp, direction), tx_seq: position }, checkpoint_boundary);
+                        let wm = transaction_boundary_watermark(
+                            &options,
+                            direction,
+                            &mut checkpoint_boundary,
+                            position,
+                            cp,
+                        );
                         last_watermark = Some(wm.clone());
                         yield watermark_response(wm);
                     }
-                    Err(BitmapScanError::ScanLimit) => {
+                    Err(ScanStop::ScanLimit { scan_frontier }) => {
+                        scan_limit_frontier = Some(scan_frontier);
                         scan_limit_hit = true;
                         break;
                     }
-                    Err(BitmapScanError::Cancelled) => {
+                    Err(ScanStop::Cancelled) => {
                         Err(RpcError::new(
                             tonic::Code::Cancelled,
-                            BitmapScanError::Cancelled.to_string(),
+                            ScanStop::Cancelled.to_string(),
                         ))?;
                     }
-                    Err(BitmapScanError::Source(inner)) => {
+                    Err(ScanStop::Fault(inner)) => {
                         Err(RpcError::from(inner))?;
                     }
                 }
             }
-            let reason = if scan_limit_hit {
-                QueryEndReason::ScanLimit
-            } else if emitted == limit_items {
+            let reason = if fused {
                 QueryEndReason::ItemLimit
+            } else if scan_limit_hit {
+                QueryEndReason::ScanLimit
             } else {
                 end_reason
             };
-            let final_watermark = if reached_range_end(reason) {
-                Some(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }))
-            } else {
-                last_watermark
-            };
-            yield end_response(final_watermark, reason);
+            if !fused {
+                let candidate = if reached_range_end(reason) {
+                    Some(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }))
+                } else if scan_limit_hit {
+                    mint_scan_limit_watermark(
+                        &client,
+                        &options,
+                        direction,
+                        &mut checkpoint_boundary,
+                        scan_limit_frontier,
+                    )
+                    .await?
+                } else {
+                    None
+                };
+                let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
+                yield end_response(final_watermark, reason);
+            }
             info!(
                 filtered,
                 limit_items,
@@ -240,8 +270,8 @@ pub(crate) async fn list_transactions(
                 async move {
                     fetch_transactions(client, columns, rows)
                         .await
-                        .map(|s| s.map_err(BitmapScanError::Source).boxed())
-                        .map_err(BitmapScanError::Source)
+                        .map(|s| s.map_err(ScanStop::Fault).boxed())
+                        .map_err(ScanStop::Fault)
                 }
             }
         },
@@ -251,7 +281,7 @@ pub(crate) async fn list_transactions(
     // watermarks pass through pipelined_keyed_batches unchanged.
     let txn_with_objects_stream: BoxStream<
         'static,
-        BitmapScanResult<Watermarked<TransactionWithObjectsStreamItem>>,
+        Result<Watermarked<TransactionWithObjectsStreamItem>, ScanStop>,
     > = resolve::with_object_maps(
         tx_stream,
         client.clone(),
@@ -271,7 +301,9 @@ pub(crate) async fn list_transactions(
         let mut emitted = 0usize;
         let mut checkpoint_boundary: Option<u64> = None;
         let mut last_watermark: Option<Watermark> = None;
+        let mut scan_limit_frontier: Option<u64> = None;
         let mut scan_limit_hit = false;
+        let mut fused = false;
         while let Some(item) = txn_with_objects_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item((tx_seq, tx_offset, tx_data, objects))) => {
@@ -282,44 +314,72 @@ pub(crate) async fn list_transactions(
                     let executed = transaction_to_response(tx_data, &read_mask, &objects, &resolver).await?;
                     ctx.observe_response_render(render_started.elapsed());
                     emitted += 1;
+                    let mut response = transaction_item_response(wm, executed, tx_offset, &read_mask);
                     let yield_started = Instant::now();
-                    yield transaction_item_response(wm, executed, tx_offset, &read_mask);
+                    if emitted == limit_items {
+                        let mut end = QueryEnd::default();
+                        end.reason = Some(QueryEndReason::ItemLimit as i32);
+                        response.end = Some(end);
+                        yield response;
+                        ctx.observe_stream_item_yield_wait(yield_started.elapsed());
+                        fused = true;
+                        break;
+                    }
+                    yield response;
                     ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
-                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
-                    let wm = boundary_watermark(Position::Transactions { checkpoint: boundary_cursor_cp(cp, direction), tx_seq: position }, checkpoint_boundary);
+                    let wm = transaction_boundary_watermark(
+                        &options,
+                        direction,
+                        &mut checkpoint_boundary,
+                        position,
+                        cp,
+                    );
                     last_watermark = Some(wm.clone());
                     yield watermark_response(wm);
                 }
-                Err(BitmapScanError::ScanLimit) => {
+                Err(ScanStop::ScanLimit { scan_frontier }) => {
+                    scan_limit_frontier = Some(scan_frontier);
                     scan_limit_hit = true;
                     break;
                 }
-                Err(BitmapScanError::Cancelled) => {
+                Err(ScanStop::Cancelled) => {
                     Err(RpcError::new(
                         tonic::Code::Cancelled,
-                        BitmapScanError::Cancelled.to_string(),
+                        ScanStop::Cancelled.to_string(),
                     ))?;
                 }
-                Err(BitmapScanError::Source(inner)) => {
+                Err(ScanStop::Fault(inner)) => {
                     Err(RpcError::from(inner))?;
                 }
             }
         }
-        let reason = if scan_limit_hit {
-            QueryEndReason::ScanLimit
-        } else if emitted == limit_items {
+        let reason = if fused {
             QueryEndReason::ItemLimit
+        } else if scan_limit_hit {
+            QueryEndReason::ScanLimit
         } else {
             end_reason
         };
-        let final_watermark = if reached_range_end(reason) {
-            Some(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }))
-        } else {
-            last_watermark
-        };
-        yield end_response(final_watermark, reason);
+        if !fused {
+            let candidate = if reached_range_end(reason) {
+                Some(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }))
+            } else if scan_limit_hit {
+                mint_scan_limit_watermark(
+                    &client,
+                    &options,
+                    direction,
+                    &mut checkpoint_boundary,
+                    scan_limit_frontier,
+                )
+                .await?
+            } else {
+                None
+            };
+            let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
+            yield end_response(final_watermark, reason);
+        }
 
         info!(
             filtered,
@@ -341,18 +401,73 @@ fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
     response
 }
 
+fn transaction_boundary_watermark(
+    options: &QueryOptions,
+    direction: ScanDirection,
+    checkpoint_boundary: &mut Option<u64>,
+    position: u64,
+    cp: u64,
+) -> Watermark {
+    *checkpoint_boundary = advance_boundary_excluding_cp(*checkpoint_boundary, cp, options);
+    boundary_watermark(
+        options,
+        Position::Transactions {
+            checkpoint: boundary_cursor_cp(cp, direction),
+            tx_seq: position,
+        },
+        *checkpoint_boundary,
+    )
+}
+
+async fn mint_scan_limit_watermark(
+    client: &BigTableClient,
+    options: &QueryOptions,
+    direction: ScanDirection,
+    checkpoint_boundary: &mut Option<u64>,
+    frontier: Option<u64>,
+) -> Result<Option<Watermark>, RpcError> {
+    let Some(position) = frontier else {
+        return Ok(None);
+    };
+
+    let resolve_checkpoint = client.tx_wm_resolver(direction);
+    let Some(cp) = resolve_checkpoint(position)
+        .await
+        .map_err(|err| match err {
+            ScanStop::Fault(inner) => RpcError::from(inner),
+            ScanStop::Cancelled => {
+                RpcError::new(tonic::Code::Cancelled, ScanStop::Cancelled.to_string())
+            }
+            ScanStop::ScanLimit { .. } => RpcError::new(
+                tonic::Code::Internal,
+                "unexpected scan limit while resolving transaction watermark",
+            ),
+        })?
+    else {
+        return Ok(None);
+    };
+
+    Ok(Some(transaction_boundary_watermark(
+        options,
+        direction,
+        checkpoint_boundary,
+        position,
+        cp,
+    )))
+}
+
 async fn scan_tx_seq_digests(
     client: BigTableClient,
     range: std::ops::Range<u64>,
     limit: usize,
     options: &QueryOptions,
-) -> Result<BoxStream<'static, BitmapScanResult<Watermarked<TxSeqDigestData>>>, RpcError> {
+) -> Result<BoxStream<'static, Result<Watermarked<TxSeqDigestData>, ScanStop>>, RpcError> {
     let rows = client
         .scan_tx_seq_digests_stream(range, options.scan_direction(), limit)
         .await?;
     Ok(rows
         .map_ok(Watermarked::Item)
-        .map_err(BitmapScanError::Source)
+        .map_err(ScanStop::Fault)
         .boxed())
 }
 

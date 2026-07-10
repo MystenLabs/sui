@@ -8,8 +8,8 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use sui_inverted_index::BitmapScanError;
-use sui_inverted_index::BitmapScanResult;
+use sui_inverted_index::ScanDirection;
+use sui_inverted_index::ScanStop;
 use sui_inverted_index::event_seq;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
@@ -126,6 +126,11 @@ pub(crate) async fn list_events(
     }
 
     let scan_budget = ctx.scan_budget(BitmapIndexSpec::event());
+    let frontier_to_position: fn(u64) -> EventPosition = if filtered {
+        |seq| EventPosition::from(event_seq::decode_event_seq(seq))
+    } else {
+        EventPosition::start_of_tx
+    };
 
     // Stage A: stream of EventRefs. Filtered requests discover event positions
     // through the event bitmap. Unfiltered requests scan tx_seq_digest rows and
@@ -133,7 +138,7 @@ pub(crate) async fn list_events(
     let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
     let event_ref_stream: BoxStream<
         'static,
-        BitmapScanResult<Watermarked<EventRef, EventPosition>>,
+        Result<Watermarked<EventRef, EventPosition>, ScanStop>,
     > = if let Some(filter) = &request.filter {
         let query = ctx.event_filter_query(filter)?;
         client
@@ -168,7 +173,7 @@ pub(crate) async fn list_events(
     // so we skip this stage there.
     let ref_with_digest_stream: BoxStream<
         'static,
-        BitmapScanResult<Watermarked<EventRef, EventPosition>>,
+        Result<Watermarked<EventRef, EventPosition>, ScanStop>,
     > = if filtered {
         pipelined_chunks(
             ref_stream,
@@ -181,8 +186,8 @@ pub(crate) async fn list_events(
                     async move {
                         attach_tx_seq_digests(client, refs)
                             .await
-                            .map(|s| s.map_err(BitmapScanError::Source).boxed())
-                            .map_err(BitmapScanError::Source)
+                            .map(|s| s.map_err(ScanStop::Fault).boxed())
+                            .map_err(ScanStop::Fault)
                     }
                 }
             },
@@ -207,8 +212,8 @@ pub(crate) async fn list_events(
                 async move {
                     fetch_txs_for_refs(client, columns, refs)
                         .await
-                        .map(|s| s.map_err(BitmapScanError::Source).boxed())
-                        .map_err(BitmapScanError::Source)
+                        .map(|s| s.map_err(ScanStop::Fault).boxed())
+                        .map_err(ScanStop::Fault)
                 }
             }
         },
@@ -239,8 +244,8 @@ pub(crate) async fn list_events(
                         let rendered =
                             render_event(event_ref, tx, &read_mask, &resolver, wants_json)
                                 .await
-                                .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))?;
-                        Ok::<Watermarked<RenderedEvent, EventPosition>, BitmapScanError>(
+                                .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))?;
+                        Ok::<Watermarked<RenderedEvent, EventPosition>, ScanStop>(
                             Watermarked::Item(rendered),
                         )
                     }
@@ -259,6 +264,8 @@ pub(crate) async fn list_events(
         let mut checkpoint_boundary: Option<u64> = None;
         let mut last_watermark: Option<Watermark> = None;
         let mut scan_limit_hit = false;
+        let mut scan_limit_frontier: Option<u64> = None;
+        let mut fused = false;
         while let Some(item) = event_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item(rendered)) => {
@@ -269,49 +276,69 @@ pub(crate) async fn list_events(
                     );
                     last_watermark = Some(wm.clone());
                     emitted += 1;
-                    yield event_item_response(rendered.event, wm);
+                    let mut response = event_item_response(rendered.event, wm);
+                    if emitted == limit_items {
+                        let mut end = QueryEnd::default();
+                        end.reason = Some(QueryEndReason::ItemLimit as i32);
+                        response.end = Some(end);
+                        yield response;
+                        fused = true;
+                        break;
+                    }
+                    yield response;
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
-                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
-                    let wm = boundary_watermark(
-                        Position::Events {
-                            checkpoint: boundary_cursor_cp(cp, direction),
-                            tx_seq: position.tx_seq,
-                            event_index: position.event_index,
-                        },
-                        checkpoint_boundary,
+                    let wm = event_boundary_watermark(
+                        &options,
+                        direction,
+                        &mut checkpoint_boundary,
+                        position,
+                        cp,
                     );
                     last_watermark = Some(wm.clone());
                     yield watermark_response(wm);
                 }
-                Err(BitmapScanError::ScanLimit) => {
+                Err(ScanStop::ScanLimit { scan_frontier }) => {
+                    scan_limit_frontier = Some(scan_frontier);
                     scan_limit_hit = true;
                     break;
                 }
-                Err(BitmapScanError::Cancelled) => {
+                Err(ScanStop::Cancelled) => {
                     Err(RpcError::new(
                         tonic::Code::Cancelled,
-                        BitmapScanError::Cancelled.to_string(),
+                        ScanStop::Cancelled.to_string(),
                     ))?;
                 }
-                Err(BitmapScanError::Source(inner)) => {
+                Err(ScanStop::Fault(inner)) => {
                     Err(RpcError::from(inner))?;
                 }
             }
         }
-        let reason = if scan_limit_hit {
-            QueryEndReason::ScanLimit
-        } else if emitted == limit_items {
+        let reason = if fused {
             QueryEndReason::ItemLimit
+        } else if scan_limit_hit {
+            QueryEndReason::ScanLimit
         } else {
             end_reason
         };
-        let final_watermark = if reached_range_end(reason) {
-            Some(terminal_boundary_watermark(&options, Position::Events { checkpoint: end_checkpoint, tx_seq: end_position.tx_seq, event_index: end_position.event_index }))
-        } else {
-            last_watermark
-        };
-        yield end_response(final_watermark, reason);
+        if !fused {
+            let candidate = if reached_range_end(reason) {
+                Some(terminal_boundary_watermark(&options, Position::Events { checkpoint: end_checkpoint, tx_seq: end_position.tx_seq, event_index: end_position.event_index }))
+            } else if scan_limit_hit {
+                mint_scan_limit_watermark(
+                    &client,
+                    direction,
+                    &options,
+                    scan_limit_frontier,
+                    frontier_to_position,
+                    &mut checkpoint_boundary,
+                ).await?
+            } else {
+                None
+            };
+            let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
+            yield end_response(final_watermark, reason);
+        }
         info!(
             filtered,
             wants_json,
@@ -539,6 +566,63 @@ fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListEve
     response
 }
 
+fn event_boundary_watermark(
+    options: &QueryOptions,
+    direction: ScanDirection,
+    checkpoint_boundary: &mut Option<u64>,
+    position: EventPosition,
+    cp: u64,
+) -> Watermark {
+    *checkpoint_boundary = advance_boundary_excluding_cp(*checkpoint_boundary, cp, options);
+    boundary_watermark(
+        options,
+        Position::Events {
+            checkpoint: boundary_cursor_cp(cp, direction),
+            tx_seq: position.tx_seq,
+            event_index: position.event_index,
+        },
+        *checkpoint_boundary,
+    )
+}
+
+async fn mint_scan_limit_watermark(
+    client: &BigTableClient,
+    direction: ScanDirection,
+    options: &QueryOptions,
+    frontier: Option<u64>,
+    frontier_to_position: fn(u64) -> EventPosition,
+    checkpoint_boundary: &mut Option<u64>,
+) -> Result<Option<Watermark>, RpcError> {
+    let Some(frontier) = frontier else {
+        return Ok(None);
+    };
+
+    let position = frontier_to_position(frontier);
+    let resolver = client.event_wm_resolver(direction);
+    let cp = match resolver(position).await {
+        Ok(Some(cp)) => cp,
+        Ok(None) => return Ok(None),
+        Err(ScanStop::Cancelled) => {
+            return Err(RpcError::new(
+                tonic::Code::Cancelled,
+                ScanStop::Cancelled.to_string(),
+            ));
+        }
+        Err(err @ ScanStop::ScanLimit { .. }) => {
+            return Err(RpcError::new(tonic::Code::Internal, err.to_string()));
+        }
+        Err(ScanStop::Fault(inner)) => return Err(RpcError::from(inner)),
+    };
+
+    Ok(Some(event_boundary_watermark(
+        options,
+        direction,
+        checkpoint_boundary,
+        position,
+        cp,
+    )))
+}
+
 /// A reference to a single event from the bitmap scan or tx_seq_digest lookup,
 /// carrying just enough to look up the concrete event after a bulk tx fetch.
 /// Unfiltered discovery already reads tx_seq_digest rows to enumerate real
@@ -551,13 +635,14 @@ struct EventRef {
 
 /// Range-scan `tx_seq_digest` across the tx range covered by `bounds`,
 /// using each row's `event_count` to enumerate real event coordinates per tx
-/// without touching the tx body.
+/// without touching the tx body. This direct driver source speaks the terminal
+/// [`ScanStop`] type because it is its own single-source merge.
 fn unfiltered_event_refs(
     client: BigTableClient,
     bounds: EventScanBounds,
     options: QueryOptions,
     source_limit: usize,
-) -> BoxStream<'static, BitmapScanResult<Watermarked<EventRef, EventPosition>>> {
+) -> BoxStream<'static, Result<Watermarked<EventRef, EventPosition>, ScanStop>> {
     async_stream::try_stream! {
         let Some(tx_range) = bounds.tx_range() else {
             return;
@@ -567,7 +652,7 @@ fn unfiltered_event_refs(
         let rows = client
             .scan_tx_seq_digests_stream(scan_range, options.scan_direction(), source_limit)
             .await
-            .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))?;
+            .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))?;
 
         futures::pin_mut!(rows);
         while let Some(row) = rows.next().await {
@@ -577,8 +662,9 @@ fn unfiltered_event_refs(
         }
 
         if scan_limited {
-            yield Watermarked::Watermark(EventPosition::start_of_tx(frontier_tx));
-            Err(BitmapScanError::ScanLimit)?;
+            Err(ScanStop::ScanLimit {
+                scan_frontier: frontier_tx,
+            })?;
         }
     }
     .boxed()

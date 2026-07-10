@@ -9,9 +9,8 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
-use sui_inverted_index::BitmapScanError;
-use sui_inverted_index::BitmapScanResult;
 use sui_inverted_index::ScanDirection;
+use sui_inverted_index::ScanStop;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::tables;
@@ -138,7 +137,7 @@ pub(crate) async fn list_checkpoints(
     // requests use sparse bitmap-eval over transactions and then fetch the
     // deduped checkpoint rows. Unfiltered requests scan the dense checkpoint
     // keyspace directly, bounded by limit_items.
-    let cp_data_stream: BoxStream<'static, BitmapScanResult<Watermarked<(u64, CheckpointData)>>> =
+    let cp_data_stream: BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, ScanStop>> =
         if let Some(filter) = &request.filter {
             let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
             let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
@@ -167,8 +166,8 @@ pub(crate) async fn list_checkpoints(
                         async move {
                             resolve_checkpoint_seqs(client, tx_seqs)
                                 .await
-                                .map(|s| s.map_err(BitmapScanError::Source).boxed())
-                                .map_err(BitmapScanError::Source)
+                                .map(|s| s.map_err(ScanStop::Fault).boxed())
+                                .map_err(ScanStop::Fault)
                         }
                     }
                 },
@@ -188,8 +187,8 @@ pub(crate) async fn list_checkpoints(
                         async move {
                             fetch_checkpoint_data(client, columns, seqs)
                                 .await
-                                .map(|s| s.map_err(BitmapScanError::Source).boxed())
-                                .map_err(BitmapScanError::Source)
+                                .map(|s| s.map_err(ScanStop::Fault).boxed())
+                                .map_err(ScanStop::Fault)
                         }
                     }
                 },
@@ -215,6 +214,8 @@ pub(crate) async fn list_checkpoints(
             let mut checkpoint_boundary: Option<u64> = None;
             let mut last_watermark: Option<Watermark> = None;
             let mut scan_limit_hit = false;
+            let mut scan_limit_frontier: Option<u64> = None;
+            let mut fused = false;
             while let Some(item) = cp_data_stream.next().await {
                 match item {
                     Ok(ResolvedWatermarked::Item((cp_seq, cp_data))) => {
@@ -224,56 +225,71 @@ pub(crate) async fn list_checkpoints(
                         emitted += 1;
                         let message =
                             crate::render::checkpoint_to_response(cp_data, &read_mask)?;
-                        yield response_for(wm, message);
+                        let mut response = response_for(wm, message);
+                        if emitted == limit_items {
+                            let mut end = QueryEnd::default();
+                            end.reason = Some(QueryEndReason::ItemLimit as i32);
+                            response.end = Some(end);
+                            yield response;
+                            fused = true;
+                            break;
+                        }
+                        yield response;
                     }
                     Ok(ResolvedWatermarked::Watermark { position: _, cp: raw_cp }) => {
-                        // Tx-space → cp-space translation done in the
-                        // combinator; here we just clamp past anything
-                        // we've already emitted and convert to a
-                        // boundary cursor.
-                        let cp_frontier = if direction.is_ascending() {
-                            Some(raw_cp)
-                        } else {
-                            raw_cp.checked_add(1)
-                        };
-                        let Some(cp_frontier) = clamp_cp_frontier_past_last(cp_frontier, checkpoint_boundary, direction) else {
+                        let Some(wm) = checkpoint_boundary_watermark(
+                            raw_cp,
+                            direction,
+                            &options,
+                            &mut checkpoint_boundary,
+                        ) else {
                             continue;
                         };
-                        if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
-                            checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
-                        }
-                        let wm = boundary_watermark(Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary);
+
                         last_watermark = Some(wm.clone());
                         yield watermark_response(wm);
                     }
-                    Err(BitmapScanError::ScanLimit) => {
+                    Err(ScanStop::ScanLimit { scan_frontier }) => {
+                        scan_limit_frontier = Some(scan_frontier);
                         scan_limit_hit = true;
                         break;
                     }
-                    Err(BitmapScanError::Cancelled) => {
+                    Err(ScanStop::Cancelled) => {
                         Err(RpcError::new(
                             tonic::Code::Cancelled,
-                            BitmapScanError::Cancelled.to_string(),
+                            ScanStop::Cancelled.to_string(),
                         ))?;
                     }
-                    Err(BitmapScanError::Source(inner)) => {
+                    Err(ScanStop::Fault(inner)) => {
                         Err(RpcError::from(inner))?;
                     }
                 }
             }
-            let reason = if scan_limit_hit {
-                QueryEndReason::ScanLimit
-            } else if emitted == limit_items {
+            let reason = if fused {
                 QueryEndReason::ItemLimit
+            } else if scan_limit_hit {
+                QueryEndReason::ScanLimit
             } else {
                 end_reason
             };
-            let final_watermark = if reached_range_end(reason) {
-                Some(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }))
-            } else {
-                last_watermark
-            };
-            yield end_response(final_watermark, reason);
+            if !fused {
+                let candidate = if reached_range_end(reason) {
+                    Some(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }))
+                } else if scan_limit_hit {
+                    mint_scan_limit_watermark(
+                        &client,
+                        direction,
+                        &options,
+                        scan_limit_frontier,
+                        &mut checkpoint_boundary,
+                    )
+                    .await?
+                } else {
+                    None
+                };
+                let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
+                yield end_response(final_watermark, reason);
+            }
             info!(
                 filtered,
                 limit_items,
@@ -305,6 +321,8 @@ pub(crate) async fn list_checkpoints(
         let mut checkpoint_boundary: Option<u64> = None;
         let mut last_watermark: Option<Watermark> = None;
         let mut scan_limit_hit = false;
+        let mut scan_limit_frontier: Option<u64> = None;
+        let mut fused = false;
         while let Some(item) = cp_full_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item((cp_seq, cp_data, txs, objects))) => {
@@ -314,53 +332,71 @@ pub(crate) async fn list_checkpoints(
                     let message =
                         render_full_checkpoint(cp_data, txs, objects, &read_mask)?;
                     emitted += 1;
-                    yield response_for(wm, message);
+                    let mut response = response_for(wm, message);
+                    if emitted == limit_items {
+                        let mut end = QueryEnd::default();
+                        end.reason = Some(QueryEndReason::ItemLimit as i32);
+                        response.end = Some(end);
+                        yield response;
+                        fused = true;
+                        break;
+                    }
+                    yield response;
                 }
                 Ok(ResolvedWatermarked::Watermark { position: _, cp: raw_cp }) => {
-                    // See light-path arm — same clamp + boundary logic.
-                    let cp_frontier = if direction.is_ascending() {
-                        Some(raw_cp)
-                    } else {
-                        raw_cp.checked_add(1)
-                    };
-                    let Some(cp_frontier) = clamp_cp_frontier_past_last(cp_frontier, checkpoint_boundary, direction) else {
+                    let Some(wm) = checkpoint_boundary_watermark(
+                        raw_cp,
+                        direction,
+                        &options,
+                        &mut checkpoint_boundary,
+                    ) else {
                         continue;
                     };
-                    if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
-                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
-                    }
-                    let wm = boundary_watermark(Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary);
+
                     last_watermark = Some(wm.clone());
                     yield watermark_response(wm);
                 }
-                Err(BitmapScanError::ScanLimit) => {
+                Err(ScanStop::ScanLimit { scan_frontier }) => {
+                    scan_limit_frontier = Some(scan_frontier);
                     scan_limit_hit = true;
                     break;
                 }
-                Err(BitmapScanError::Cancelled) => {
+                Err(ScanStop::Cancelled) => {
                     Err(RpcError::new(
                         tonic::Code::Cancelled,
-                        BitmapScanError::Cancelled.to_string(),
+                        ScanStop::Cancelled.to_string(),
                     ))?;
                 }
-                Err(BitmapScanError::Source(inner)) => {
+                Err(ScanStop::Fault(inner)) => {
                     Err(RpcError::from(inner))?;
                 }
             }
         }
-        let reason = if scan_limit_hit {
-            QueryEndReason::ScanLimit
-        } else if emitted == limit_items {
+        let reason = if fused {
             QueryEndReason::ItemLimit
+        } else if scan_limit_hit {
+            QueryEndReason::ScanLimit
         } else {
             end_reason
         };
-        let final_watermark = if reached_range_end(reason) {
-            Some(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }))
-        } else {
-            last_watermark
-        };
-        yield end_response(final_watermark, reason);
+        if !fused {
+            let candidate = if reached_range_end(reason) {
+                Some(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }))
+            } else if scan_limit_hit {
+                mint_scan_limit_watermark(
+                    &client,
+                    direction,
+                    &options,
+                    scan_limit_frontier,
+                    &mut checkpoint_boundary,
+                )
+                .await?
+            } else {
+                None
+            };
+            let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
+            yield end_response(final_watermark, reason);
+        }
         info!(
             filtered,
             limit_items,
@@ -396,6 +432,69 @@ fn frontier_to_boundary_candidate(frontier: u64, options: &QueryOptions) -> Opti
     }
 }
 
+fn checkpoint_boundary_watermark(
+    raw_cp: u64,
+    direction: ScanDirection,
+    options: &QueryOptions,
+    checkpoint_boundary: &mut Option<u64>,
+) -> Option<Watermark> {
+    // Tx-space → cp-space translation is already done by the resolver; here we
+    // clamp past anything we've already emitted and convert to a boundary
+    // cursor.
+    let cp_frontier = if direction.is_ascending() {
+        Some(raw_cp)
+    } else {
+        raw_cp.checked_add(1)
+    };
+    let cp_frontier = clamp_cp_frontier_past_last(cp_frontier, *checkpoint_boundary, direction)?;
+    if let Some(c) = frontier_to_boundary_candidate(cp_frontier, options) {
+        *checkpoint_boundary = advance_checkpoint_boundary(*checkpoint_boundary, c, options);
+    }
+    Some(boundary_watermark(
+        options,
+        Position::Checkpoints {
+            checkpoint: cp_frontier,
+        },
+        *checkpoint_boundary,
+    ))
+}
+
+async fn mint_scan_limit_watermark(
+    client: &BigTableClient,
+    direction: ScanDirection,
+    options: &QueryOptions,
+    frontier: Option<u64>,
+    checkpoint_boundary: &mut Option<u64>,
+) -> Result<Option<Watermark>, RpcError> {
+    let Some(frontier) = frontier else {
+        return Ok(None);
+    };
+    let resolver = client.tx_wm_resolver(direction);
+    let raw_cp = match resolver(frontier).await {
+        Ok(Some(cp)) => cp,
+        Ok(None) => return Ok(None),
+        Err(ScanStop::Cancelled) => {
+            return Err(RpcError::new(
+                tonic::Code::Cancelled,
+                ScanStop::Cancelled.to_string(),
+            ));
+        }
+        Err(ScanStop::Fault(inner)) => return Err(RpcError::from(inner)),
+        Err(ScanStop::ScanLimit { .. }) => {
+            return Err(RpcError::new(
+                tonic::Code::Internal,
+                "unexpected scan limit while resolving checkpoint frontier",
+            ));
+        }
+    };
+    Ok(checkpoint_boundary_watermark(
+        raw_cp,
+        direction,
+        options,
+        checkpoint_boundary,
+    ))
+}
+
 fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
     let mut response = ListCheckpointsResponse::default();
     response.watermark = Some(watermark);
@@ -408,14 +507,14 @@ async fn scan_checkpoint_data(
     range: std::ops::Range<u64>,
     limit: usize,
     options: &QueryOptions,
-) -> Result<BoxStream<'static, BitmapScanResult<Watermarked<(u64, CheckpointData)>>>, RpcError> {
+) -> Result<BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, ScanStop>>, RpcError> {
     let column_filter = BigTableClient::column_filter(&columns);
     let rows = client
         .scan_checkpoints_stream(range, options.scan_direction(), limit, Some(column_filter))
         .await?;
     Ok(rows
         .map_ok(Watermarked::Item)
-        .map_err(BitmapScanError::Source)
+        .map_err(ScanStop::Fault)
         .boxed())
 }
 

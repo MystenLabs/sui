@@ -263,9 +263,9 @@ where
         }
     }
 
-    // Exited via `break` or via `None`. If `has_more()` promises further data, the cursor to resume
-    // from must be present — sourced from the last watermark received. Every frame carries one,
-    // including the final end frame.
+    // Exited via `break` or via `None`. If `has_more()` promises further data, the resume cursor
+    // comes from the latest watermark received — on the fused last item, a ScanLimit end frame, or
+    // a prior beacon; a bare end frame is only sent when no progress claim exists.
     ensure!(
         !page.has_more() || page.last_cursor().is_some(),
         "{rpc_name}: server reported more results but did not provide resume cursor — cannot continue",
@@ -334,12 +334,9 @@ mod tests {
         let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
         page.apply(frame(item_response(b"c1")));
         page.apply(frame(watermark_response(b"w2")));
-        page.apply(frame(item_response(b"c3")));
-        page.apply(frame(end_response_with_cursor(
-            b"c3e",
-            proto::QueryEndReason::ItemLimit,
-        )));
-
+        let mut last = item_response(b"c3");
+        last.end = end_response(proto::QueryEndReason::ItemLimit).end;
+        page.apply(frame(last));
         assert_eq!(page.items.len(), 2);
         // Per-item cursors are preserved on `PageItem` — that's the whole point of the
         // payload/cursor split. The standalone watermark at `w2` does not produce a `PageItem`.
@@ -349,10 +346,7 @@ mod tests {
             page.first_cursor().map(|c| c.as_ref()),
             Some(b"c1".as_ref())
         );
-        assert_eq!(
-            page.last_cursor().map(|c| c.as_ref()),
-            Some(b"c3e".as_ref())
-        );
+        assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"c3".as_ref()));
         assert_eq!(page.end_reason, Some(proto::QueryEndReason::ItemLimit));
     }
 

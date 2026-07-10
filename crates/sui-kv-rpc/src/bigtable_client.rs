@@ -38,9 +38,9 @@ use prometheus::HistogramVec;
 use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
 use sui_inverted_index::BitmapQuery;
-use sui_inverted_index::BitmapScanError;
-use sui_inverted_index::BitmapScanResult;
 use sui_inverted_index::ScanDirection;
+use sui_inverted_index::ScanStop;
+use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
@@ -325,10 +325,7 @@ impl BigTableClient {
         direction: ScanDirection,
         budget: u64,
         on_metrics: F,
-    ) -> BoxStream<
-        'static,
-        sui_inverted_index::BitmapScanResult<sui_inverted_index::Watermarked<u64>>,
-    >
+    ) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>>
     where
         F: FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static,
     {
@@ -376,7 +373,7 @@ impl BigTableClient {
                 client
                     .tx_seq_checkpoint(lookup_tx_seq)
                     .await
-                    .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))
+                    .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
     }
@@ -406,7 +403,7 @@ impl BigTableClient {
                 client
                     .tx_seq_checkpoint(lookup_tx_seq)
                     .await
-                    .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))
+                    .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
     }
@@ -415,7 +412,7 @@ impl BigTableClient {
 /// Future returned by resolver closures from
 /// [`BigTableClient::tx_wm_resolver`] and [`BigTableClient::event_wm_resolver`].
 pub(crate) type WmResolverFut =
-    std::pin::Pin<Box<dyn Future<Output = BitmapScanResult<Option<u64>>> + Send>>;
+    std::pin::Pin<Box<dyn Future<Output = Result<Option<u64>, ScanStop>> + Send>>;
 
 struct LimitedPermit {
     _permit: OwnedSemaphorePermit,

@@ -125,9 +125,19 @@ pub(crate) async fn list_transactions(
         );
 
         let mut last_watermark: Option<Watermark> = None;
-        while let Some(response) = scan.next_item().await? {
+        let mut fused = false;
+        while let Some(mut response) = scan.next_item().await? {
             if response.watermark.is_some() {
                 last_watermark = response.watermark.clone();
+            }
+            if response.transaction.is_some()
+                && scan.produced() == limit_items
+                && scan.exhausted()
+            {
+                let mut end = QueryEnd::default();
+                end.reason = Some(QueryEndReason::ItemLimit as i32);
+                response.end = Some(end);
+                fused = true;
             }
             yield response;
         }
@@ -135,15 +145,20 @@ pub(crate) async fn list_transactions(
         let emitted = scan.produced();
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
-        let final_watermark = if reached_range_end(reason) {
-            Some(terminal_boundary_watermark(
-                &terminal_options,
-                terminal.position,
-            ))
-        } else {
-            last_watermark
-        };
-        yield end_response(final_watermark, reason);
+        if !fused {
+            let candidate = if reached_range_end(reason) {
+                Some(terminal_boundary_watermark(
+                    &terminal_options,
+                    terminal.position,
+                ))
+            } else if reason == QueryEndReason::ScanLimit {
+                terminal.scan_frontier_watermark
+            } else {
+                None
+            };
+            let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
+            yield end_response(final_watermark, reason);
+        }
         info!(
             filtered,
             limit_items,
@@ -247,6 +262,7 @@ fn next_transaction_chunk(
                         checkpoint: tx_range.end_checkpoint,
                         tx_seq: tx_range.end_position,
                     },
+                    scan_frontier_watermark: None,
                 };
                 let range = tx_range.range;
                 if range.is_empty() {
@@ -299,6 +315,7 @@ fn next_transaction_chunk(
                         checkpoint: end_checkpoint,
                         tx_seq: end_position,
                     },
+                    scan_frontier_watermark: None,
                 };
                 break (rows, next_state, terminal, None);
             }
@@ -355,23 +372,34 @@ fn next_transaction_chunk(
                 } else {
                     end_reason
                 };
+                let frontier_watermark = if request_exhausted || rows.is_empty() {
+                    // A transaction member id is its own tx_sequence_number, so
+                    // the frontier decodes to itself.
+                    scan_transaction_watermark(
+                        &service,
+                        &options,
+                        scan_limited,
+                        coalesced_frontier,
+                        ascending,
+                    )?
+                } else {
+                    None
+                };
+                let scan_watermark = if !request_exhausted && rows.is_empty() {
+                    frontier_watermark.clone().map(watermark_response)
+                } else {
+                    None
+                };
                 let terminal = ChunkTerminal {
                     reason,
                     position: Position::Transactions {
                         checkpoint: end_checkpoint,
                         tx_seq: end_position,
                     },
+                    scan_frontier_watermark: request_exhausted
+                        .then_some(frontier_watermark)
+                        .flatten(),
                 };
-                // A transaction member id is its own tx_sequence_number, so the
-                // frontier decodes to itself.
-                let scan_watermark = scan_transaction_watermark(
-                    &service,
-                    &options,
-                    scan_limited,
-                    rows.is_empty(),
-                    coalesced_frontier,
-                    ascending,
-                )?;
                 break (rows, next_state, terminal, scan_watermark);
             }
         }
@@ -401,18 +429,17 @@ fn next_transaction_chunk(
     })
 }
 
-/// Scan watermark for a filtered chunk that matched nothing before the
-/// scan budget ran out mid-gap. A transaction's member id is its own
-/// `tx_sequence_number`, so the frontier decodes to itself.
+/// Scan watermark for a filtered chunk whose scan budget ran out mid-gap.
+/// A transaction's member id is its own `tx_sequence_number`, so the frontier
+/// decodes to itself.
 fn scan_transaction_watermark(
     service: &RpcService,
     options: &QueryOptions,
     scan_limited: bool,
-    no_items: bool,
     coalesced_frontier: Option<u64>,
     ascending: bool,
-) -> Result<Option<ListTransactionsResponse>, RpcError> {
-    if !(scan_limited && no_items) {
+) -> Result<Option<Watermark>, RpcError> {
+    if !scan_limited {
         return Ok(None);
     }
     let Some(frontier) = coalesced_frontier else {
@@ -430,7 +457,7 @@ fn scan_transaction_watermark(
         },
         boundary,
     );
-    Ok(Some(watermark_response(watermark)))
+    Ok(Some(watermark))
 }
 
 fn render_transaction_rows(

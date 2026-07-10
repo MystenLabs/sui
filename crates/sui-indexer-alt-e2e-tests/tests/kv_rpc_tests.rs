@@ -67,9 +67,8 @@ const DEFAULT_CHECKPOINT_RANGE_END: u64 = 3_000_000;
 enum WmFrame {
     /// Frame carrying a payload and its watermark.
     Item,
-    /// Payload-less frame carrying a watermark: progress frames and the folded
-    /// final `{ watermark, end }` frame. `ItemLimit` ends now add one repeated
-    /// cursor entry here.
+    /// Payload-less frame carrying a watermark: progress beacons and the
+    /// natural-completion / ScanLimit terminal frames.
     Standalone,
 }
 
@@ -3438,6 +3437,24 @@ async fn test_list_checkpoints_query_options() {
         "exact checkpoint response size"
     );
     assert_item_limit_end(exact_result.end, exact_result.end_reason);
+    assert_eq!(
+        standalone_watermark_count(&exact_result.frames),
+        0,
+        "ItemLimit must not emit a standalone watermark frame"
+    );
+    assert!(
+        matches!(exact_result.frames.last(), Some((WmFrame::Item, _))),
+        "ItemLimit must end on the last item frame"
+    );
+    assert_eq!(
+        exact_result
+            .checkpoints
+            .last()
+            .and_then(|response| response.end.as_ref())
+            .map(|end| end.reason()),
+        Some(QueryEndReason::ItemLimit),
+        "last checkpoint item must carry the ItemLimit end"
+    );
     let exact_first_cursor = first_checkpoint_cursor(
         &exact_result,
         "exact checkpoint response should have a first cursor",
@@ -4083,14 +4100,6 @@ async fn test_list_transactions_resume_from_standalone_watermark() {
         "expected at least one standalone WM to validate as a resume point"
     );
 }
-
-// NOTE: ScanLimit end-reason resumption is intentionally NOT covered e2e.
-// `BUCKET_SIZE = 65_536` (transaction_bitmap_index) means any feasible test
-// dataset fits in a single bitmap bucket, so a real bucket-budget exhaustion
-// cannot be provoked without either mocking BigTable or making BUCKET_SIZE
-// configurable — both are out of scope. The ScanLimit cursor contract is
-// unit-tested in `sui-inverted-index` (budget validation) and handler-level
-// tests in `sui-kv-rpc`.
 
 /// Execute `n` self-transfers from `sender` (each matched by a sender filter on
 /// `sender`), then create a single checkpoint containing them. Returns that

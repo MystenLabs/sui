@@ -4,6 +4,7 @@
 use std::collections::VecDeque;
 
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -14,10 +15,13 @@ use crate::RpcError;
 /// How a query stream ended, plus the typed exclusive range boundary the scan
 /// reached. The boundary lets the caller build the terminal progress watermark
 /// when the scan completed naturally.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ChunkTerminal {
     pub(crate) reason: QueryEndReason,
     pub(crate) position: Position,
+    /// Fresh boundary watermark at the scan frontier; Some only on
+    /// request-exhausted ScanLimit chunks with a resolvable frontier.
+    pub(crate) scan_frontier_watermark: Option<Watermark>,
 }
 
 pub(crate) struct ScanChunkDone<State, Item> {
@@ -140,6 +144,12 @@ where
         self.produced
     }
 
+    /// True when no buffered frame remains and no further chunk is in flight —
+    /// the next `next_item()` call would return `None`.
+    pub(crate) fn exhausted(&self) -> bool {
+        self.buffered.is_empty() && self.current.is_none()
+    }
+
     #[cfg(test)]
     pub(super) fn cancel_token(&self) -> CancellationToken {
         self.cancel.clone()
@@ -205,6 +215,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
+                        scan_frontier_watermark: None,
                     },
                     remaining_scan_budget: scan_budget - 1,
                 })
@@ -225,6 +236,7 @@ mod tests {
                     checkpoint: 0,
                     tx_seq: 0
                 },
+                scan_frontier_watermark: None,
             })
         );
         assert_eq!(
@@ -250,6 +262,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
+                        scan_frontier_watermark: None,
                     },
                     remaining_scan_budget: args.scan_budget,
                 })

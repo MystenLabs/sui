@@ -28,18 +28,19 @@ use roaring::RoaringBitmap;
 
 use super::BitmapBucketSource;
 use super::BitmapQuery;
-use super::BitmapScanError;
-use super::BitmapScanResult;
 use super::BucketItem;
 use super::BucketStream;
 use super::DedupedQuery;
 use super::LeafHead;
+use super::LeafStop;
 use super::ScanDirection;
+use super::ScanStop;
 use super::Watermarked;
 use super::WatermarkedBucketStream;
 use super::bound_in_direction;
 use super::bucket_edges;
 use super::build_term_specs;
+use super::collapse;
 use super::count_on_floor_refs;
 use super::eval_term_at_bucket;
 use super::frontier_advanced;
@@ -131,8 +132,8 @@ impl<F: FnOnce(BitmapScanMetrics) + Send + 'static> Drop for ObserveOnDrop<F> {
 
 /// Evaluate a DNF `BitmapQuery` against a backend-provided bitmap source.
 ///
-/// `budget` caps evaluated buckets across all dimension scans (see
-/// [`BitmapScanError::ScanLimit`] and [`BitmapScanMetrics`]). `on_metrics`
+/// `budget` caps evaluated buckets across all dimension scans (see scan-limit
+/// handling and [`BitmapScanMetrics`]). `on_metrics`
 /// fires exactly once when the eval stream is dropped.
 ///
 /// Output emits `Watermarked::Item(absolute_member_id)` interleaved with
@@ -146,7 +147,7 @@ pub fn eval_bitmap_query_stream<S, F>(
     direction: ScanDirection,
     budget: u64,
     on_metrics: F,
-) -> BoxStream<'static, BitmapScanResult<Watermarked<u64>>>
+) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>>
 where
     S: BitmapBucketSource,
     F: FnOnce(BitmapScanMetrics) + Send + 'static,
@@ -158,7 +159,7 @@ where
         // error surfaces on its own. `on_metrics` is dropped uncalled.
         return async_stream::stream! {
             // Misconfiguration is a genuine fault, not a `ScanLimit` stop.
-            yield Err(BitmapScanError::Source(anyhow::anyhow!(
+            yield Err(ScanStop::Fault(anyhow::anyhow!(
                 "bitmap scan budget {budget} is insufficient for {leaves} leaf streams; \
                  server is misconfigured"
             )));
@@ -316,9 +317,10 @@ where
             // it — or when its head is at EOF.
             recompute_unreferenced(&terms, &class, &mut unreferenced);
 
-            // Consume any budget-error frame so the error surfaces (after the
-            // floor watermark below).
-            let mut errors: Vec<BitmapScanError> = Vec::new();
+            // Consume any stop frame so the error surfaces; the collapse below
+            // bundles this round's floor into a ScanLimit terminal. Other stops
+            // still follow the floor beacon.
+            let mut errors: Vec<LeafStop> = Vec::new();
             for i in 0..leaf_count {
                 if !unreferenced[i] && matches!(class[i], Some(LeafHead::Error)) {
                     match Pin::new(&mut leaves[i]).next().await {
@@ -345,15 +347,14 @@ where
                 .map(|&i| front[i])
                 .reduce(|a, b| bound_in_direction(a, b, direction))
                 .expect("active non-empty");
-            if frontier_advanced(last_emitted, floor_pos, direction) {
+            let collapsed = (!errors.is_empty()).then(|| collapse(errors, floor_pos));
+            let scan_limited = matches!(collapsed, Some(ScanStop::ScanLimit { .. }));
+            if !scan_limited && frontier_advanced(last_emitted, floor_pos, direction) {
                 yield Watermarked::Watermark(floor_pos);
                 last_emitted = Some(floor_pos);
             }
-
-            // Budget exhausted: the floor watermark above is the resume cursor;
-            // everything below it was fully evaluated in prior rounds.
-            if !errors.is_empty() {
-                Err(BitmapScanError::collapse(errors))?;
+            if let Some(stop) = collapsed {
+                Err(stop)?;
             }
 
             // Evaluate the DNF at the nearest bucket any active leaf sits on.
@@ -435,8 +436,8 @@ where
 
 /// Wrap a raw per-dimension bucket stream with the shared scan budget: charge
 /// one bucket per pull (the first via `take_first`, the rest via `try_take`),
-/// yielding [`BitmapScanError::ScanLimit`] when the pool is empty. Never a silent
-/// EOF — the driver must see the error to truncate at the floor.
+/// yielding [`LeafStop::BudgetExhausted`] when the pool is empty — never a
+/// silent EOF.
 fn budgeted_bucket_stream<S>(
     inner: S,
     budget: BitmapScanBudget,
@@ -453,26 +454,23 @@ where
                 budget.take_first();
                 first = false;
             } else if !budget.try_take() {
-                Err(BitmapScanError::ScanLimit)?;
+                Err(LeafStop::BudgetExhausted)?;
             }
             yield item;
         }
     }
 }
 
-/// Convenience adapter: wrap a single raw `BucketStream` into a
-/// `WatermarkedBucketStream` with one `Watermark(post_bucket)` after each
-/// bucket plus one final at the range terminus on EOF.
-///
-/// The DNF eval pipeline budgets and merges leaves itself; this helper is for
-/// backend-side consumers (e.g. RocksDB single-dimension scans) that want
-/// bucket-level output without the full eval machinery.
+/// Convenience adapter for a single leaf-typed raw `BucketStream`: add one
+/// `Watermark(post_bucket)` after each bucket plus one final watermark at the
+/// range terminus on EOF. This adapter never merges dimensions, so it preserves
+/// [`LeafStop`] and never mints a driver-facing [`ScanStop`].
 pub fn buckets_with_watermarks<S>(
     stream: S,
     range: Range<u64>,
     bucket_size: u64,
     direction: ScanDirection,
-) -> impl Stream<Item = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>> + Send + 'static
+) -> impl Stream<Item = Result<Watermarked<(u64, RoaringBitmap)>, LeafStop>> + Send + 'static
 where
     S: Stream<Item = BucketItem> + Send + 'static,
 {
@@ -524,14 +522,15 @@ where
 /// Flatten marked bucket bitmaps into absolute member ids with
 /// edge-bucket trimming against `range`. Watermarks pass through
 /// unchanged.
-pub fn flatten_watermarked_buckets<S>(
+pub fn flatten_watermarked_buckets<S, E>(
     stream: S,
     range: Range<u64>,
     bucket_size: u64,
     direction: ScanDirection,
-) -> impl Stream<Item = BitmapScanResult<Watermarked<u64>>> + Send + 'static
+) -> impl Stream<Item = Result<Watermarked<u64>, E>> + Send + 'static
 where
-    S: Stream<Item = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>> + Send + 'static,
+    S: Stream<Item = Result<Watermarked<(u64, RoaringBitmap)>, E>> + Send + 'static,
+    E: Send + 'static,
 {
     async_stream::try_stream! {
         if range.is_empty() {
@@ -641,8 +640,8 @@ mod tests {
     /// Drain into (items, watermarks) parallel vecs. Order between the
     /// two is lost; for ordering checks collect `Watermarked` directly.
     async fn drain_marked(
-        stream: BoxStream<'static, BitmapScanResult<Watermarked<u64>>>,
-    ) -> BitmapScanResult<(Vec<u64>, Vec<u64>)> {
+        stream: BoxStream<'static, Result<Watermarked<u64>, ScanStop>>,
+    ) -> Result<(Vec<u64>, Vec<u64>), ScanStop> {
         let all: Vec<Watermarked<u64>> = stream.try_collect().await?;
         let mut items = Vec::new();
         let mut watermarks = Vec::new();
@@ -670,12 +669,11 @@ mod tests {
     /// Tightest-budget starvation. `term1 = (a AND b)` is disjoint (matches
     /// nothing) and `term2 = c`'s only data sits far ahead of the request floor.
     /// With `budget == unique_leaf_count`, round 1 still fetches every leaf's first
-    /// bucket, so the driver derives a real floor watermark before the budget
-    /// exhausts advancing `a`. The scan therefore ends with that forward-progress
-    /// watermark ahead of `SCAN_LIMIT` — never a cursorless error that would
-    /// livelock the client on retry.
+    /// bucket, so the driver derives a real merged floor before the budget
+    /// exhausts advancing `a`. The stopping round must emit no in-band beacon;
+    /// its floor is carried by `ScanStop::ScanLimit` as the resume frontier.
     #[tokio::test]
-    async fn nested_term_starvation_emits_frontier_before_scan_limit() {
+    async fn nested_term_starvation_bundles_frontier_in_scan_limit() {
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
                 (
@@ -708,30 +706,33 @@ mod tests {
             3,
             |_| {},
         );
-        // Collect rather than try_collect: short-circuiting on Err would
-        // drop the pre-error watermark under test.
-        let all: Vec<BitmapScanResult<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
 
-        let last_ok =
-            all.iter().rev().find_map(|r| r.as_ref().ok()).expect(
-                "a frontier watermark must surface before the (otherwise cursorless) error",
-            );
-        match last_ok {
-            Watermarked::Watermark(p) => assert!(
-                *p > 0,
-                "frontier must reflect real progress past the request floor (got {p})"
-            ),
-            Watermarked::Item(_) => panic!("disjoint intersect must not emit items here"),
-        }
+        let watermarks: Vec<u64> = all
+            .iter()
+            .filter_map(|r| match r {
+                Ok(Watermarked::Watermark(position)) => Some(*position),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(watermarks, vec![0, BUCKET_SIZE]);
+        assert_eq!(
+            all.len(),
+            watermarks.len() + 1,
+            "the stopping round must add only its terminal, not another beacon"
+        );
         let err = all
             .last()
             .expect("non-empty")
             .as_ref()
             .expect_err("scan must terminate with an error");
-        assert!(
-            matches!(err, BitmapScanError::ScanLimit),
-            "expected ScanLimit, got {err:?}"
-        );
+        match err {
+            ScanStop::ScanLimit { scan_frontier } => assert_eq!(
+                *scan_frontier, BUCKET_SIZE,
+                "terminal must carry the merged floor reached in the stopping round"
+            ),
+            other => panic!("expected ScanLimit, got {other:?}"),
+        }
     }
 
     /// Flush-on-error: a budget error truncates the scan at the floor, but
@@ -779,7 +780,7 @@ mod tests {
             3,
             |_| {},
         );
-        let all: Vec<BitmapScanResult<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
 
         // c's bucket-0 match (member id 7) is delivered despite term1 dying.
         let items: Vec<u64> = all
@@ -791,22 +792,18 @@ mod tests {
             .collect();
         assert_eq!(items, vec![7], "c's below-floor match must be delivered");
 
-        // Resume frontier advances to term1's death floor (post of bucket 0),
-        // not stuck at the request floor 0.
-        let last_wm = all
+        let watermarks: Vec<u64> = all
             .iter()
-            .rev()
-            .find_map(|r| match r {
-                Ok(Watermarked::Watermark(p)) => Some(*p),
+            .filter_map(|r| match r {
+                Ok(Watermarked::Watermark(position)) => Some(*position),
                 _ => None,
             })
-            .expect("a frontier watermark must surface");
-        assert_eq!(last_wm, BUCKET_SIZE, "frontier must advance past floor");
-        // The delivered item is below the resume cursor, so a resume won't
-        // re-emit it.
-        assert!(
-            items.iter().all(|&i| i < last_wm),
-            "items must be below the resume cursor"
+            .collect();
+        assert_eq!(watermarks, vec![0, BUCKET_SIZE]);
+        assert_eq!(
+            all.len(),
+            items.len() + watermarks.len() + 1,
+            "the stopping round must add only its terminal, not another beacon"
         );
 
         let err = all
@@ -814,9 +811,17 @@ mod tests {
             .expect("non-empty")
             .as_ref()
             .expect_err("scan must terminate with an error");
+        let scan_frontier = match err {
+            ScanStop::ScanLimit { scan_frontier } => *scan_frontier,
+            other => panic!("expected ScanLimit, got {other:?}"),
+        };
+        assert_eq!(
+            scan_frontier, BUCKET_SIZE,
+            "terminal frontier must advance to term1's death floor"
+        );
         assert!(
-            matches!(err, BitmapScanError::ScanLimit),
-            "expected ScanLimit, got {err:?}"
+            items.iter().all(|&i| i < scan_frontier),
+            "delivered items must be below the resume frontier"
         );
     }
 
@@ -1075,9 +1080,9 @@ mod tests {
         // Defensive runtime guard: a per-request budget smaller than the
         // query's leaf count would produce a cursorless SCAN_LIMIT
         // (merged watermarks stay None until every child reports). The
-        // eval surfaces this as a plain anyhow error — distinct from
-        // BitmapScanError::ScanLimit — so the handler propagates it as
-        // Internal rather than SCAN_LIMIT.
+        // eval surfaces this as a plain anyhow error — distinct from a
+        // scan-limit stop — so the handler propagates it as Internal rather
+        // than SCAN_LIMIT.
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([(
                 test_key(b"a"),
@@ -1100,8 +1105,8 @@ mod tests {
         let err = drain_marked(stream).await.unwrap_err();
 
         assert!(
-            matches!(err, BitmapScanError::Source(_)),
-            "must be a Source fault (cursorless), never a clean ScanLimit end"
+            matches!(err, ScanStop::Fault(_)),
+            "must be a Fault (cursorless), never a clean ScanLimit end"
         );
         assert!(
             err.to_string().contains("insufficient for"),
@@ -1118,8 +1123,8 @@ mod tests {
     #[tokio::test]
     async fn scan_budget_shared_across_dimensions() {
         // Three include dimensions with several buckets each. Budget = 4
-        // should be consumed across all per-dimension fetches before
-        // `BitmapScanError::ScanLimit` surfaces from the merged eval stream.
+        // should be consumed across all per-dimension fetches before a
+        // scan-limit stop surfaces from the merged eval stream.
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
                 (
@@ -1155,17 +1160,17 @@ mod tests {
         let err = drain_marked(stream).await.unwrap_err();
 
         assert!(
-            matches!(err, BitmapScanError::ScanLimit),
+            matches!(err, ScanStop::ScanLimit { .. }),
             "expected ScanLimit, got {err:?}"
         );
         // All four buckets were evaluated through budgeted_bucket_stream
-        // before the fifth try_take() failed and surfaced BitmapScanError::ScanLimit.
+        // before the fifth try_take() failed and surfaced a scan-limit stop.
         assert_eq!(metrics.lock().unwrap().unwrap().buckets_evaluated, 4);
     }
 
     /// Budget exhausting on an exclude leaf must NOT be mistaken for the
     /// exclude reaching its range terminus. With silent EOF semantics, includes
-    /// past the exclude cutoff would leak unfiltered. With `BitmapScanError::ScanLimit`,
+    /// past the exclude cutoff would leak unfiltered. With scan-limit errors,
     /// the error propagates and the eval pipeline short-circuits cleanly.
     #[tokio::test]
     async fn scan_budget_exclude_side_exhaustion_does_not_leak_includes() {
@@ -1189,7 +1194,7 @@ mod tests {
         // Budget = leaf count gives every leaf one bucket fetch (the
         // minimum the runtime guard allows; see
         // `scan_budget_below_unique_leaf_count_yields_misconfig_error`). Once
-        // the budget exhausts mid-scan, `BitmapScanError::ScanLimit` propagates
+        // the budget exhausts mid-scan, the scan-limit stop propagates
         // without the driver mistaking the exclude leaf's error for a
         // natural EOF.
         let stream = eval_bitmap_query_stream(
@@ -1206,17 +1211,17 @@ mod tests {
         // Must error, not return Ok with leaked include rows.
         let err = result.expect_err("must surface scan-limit, not silently emit includes");
         assert!(
-            matches!(err, BitmapScanError::ScanLimit),
+            matches!(err, ScanStop::ScanLimit { .. }),
             "expected ScanLimit, got {err:?}"
         );
     }
 
     /// Disjoint-intersect: the leaves advance but the term matches nothing, so
-    /// no item is ever emitted. The driver's floor watermark must still surface
-    /// real progress before the budget error; otherwise handlers fall back to
-    /// the request lower bound and the client livelocks on retry.
+    /// no item is ever emitted. Budget exhaustion must bundle the newly reached
+    /// floor in `ScanStop::ScanLimit`; the stopping round must not duplicate it
+    /// as an in-band progress beacon.
     #[tokio::test]
-    async fn sparse_intersect_emits_frontier_watermark_before_scan_limit() {
+    async fn sparse_intersect_bundles_frontier_in_scan_limit() {
         // include "a" at buckets [0, 1, 2, ...], include "b" at bucket 100 —
         // disjoint, so the driver advances the floor through a's buckets one by
         // one and emits zero output. Budget=4 forces error mid-scan.
@@ -1249,33 +1254,39 @@ mod tests {
             4,
             |_| {},
         );
-        // Don't try_collect — short-circuiting on Err would drop the
-        // pre-error watermark we're verifying.
-        let all: Vec<BitmapScanResult<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
 
-        let last_ok = all
-            .iter()
-            .rev()
-            .find_map(|r| r.as_ref().ok())
-            .expect("expected a watermark item before the error");
-        match last_ok {
-            Watermarked::Watermark(p) => {
-                assert!(
-                    *p > 0,
-                    "frontier watermark must reflect real progress (got {p})"
-                );
-            }
-            Watermarked::Item(_) => panic!("disjoint intersect must not emit items"),
-        }
+        assert!(
+            all.iter().all(|r| !matches!(r, Ok(Watermarked::Item(_)))),
+            "disjoint intersect must not emit items"
+        );
         let err = all
             .last()
             .expect("non-empty")
             .as_ref()
             .expect_err("scan must terminate with an error");
-        assert!(
-            matches!(err, BitmapScanError::ScanLimit),
-            "expected ScanLimit, got {err:?}"
+        let scan_frontier = match err {
+            ScanStop::ScanLimit { scan_frontier } => *scan_frontier,
+            other => panic!("expected ScanLimit, got {other:?}"),
+        };
+        assert_eq!(
+            scan_frontier,
+            3 * BUCKET_SIZE,
+            "terminal must carry the stopping round's merged floor"
         );
+        let watermarks: Vec<u64> = all
+            .iter()
+            .filter_map(|r| match r {
+                Ok(Watermarked::Watermark(position)) => Some(*position),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            watermarks,
+            vec![0, BUCKET_SIZE, 2 * BUCKET_SIZE, 3 * BUCKET_SIZE],
+            "the stopping round must not append another frontier beacon"
+        );
+        assert_eq!(all.len(), watermarks.len() + 1);
     }
 
     #[tokio::test]
@@ -1518,94 +1529,121 @@ mod tests {
         );
     }
 
-    /// Single-error `collapse` returns that error.
+    /// A lone leaf budget stop becomes a merged scan limit carrying the exact
+    /// floor supplied by the evaluator.
     #[test]
-    fn collapse_single_scan_limit() {
+    fn collapse_single_budget_stop_binds_frontier() {
         assert!(matches!(
-            BitmapScanError::collapse(vec![BitmapScanError::ScanLimit]),
-            BitmapScanError::ScanLimit
+            collapse(vec![LeafStop::BudgetExhausted], 17 * BUCKET_SIZE),
+            ScanStop::ScanLimit { scan_frontier } if scan_frontier == 17 * BUCKET_SIZE
         ));
     }
 
-    /// All-`ScanLimit` aggregate collapses to a single `ScanLimit`.
+    /// Several leaf budget stops collapse to one scan limit without losing the
+    /// evaluator's merged floor.
     #[test]
-    fn collapse_all_scan_limit() {
+    fn collapse_all_budget_stops_bind_frontier() {
         assert!(matches!(
-            BitmapScanError::collapse(
-                vec![BitmapScanError::ScanLimit, BitmapScanError::ScanLimit,]
+            collapse(
+                vec![LeafStop::BudgetExhausted, LeafStop::BudgetExhausted],
+                23 * BUCKET_SIZE
             ),
-            BitmapScanError::ScanLimit
+            ScanStop::ScanLimit { scan_frontier } if scan_frontier == 23 * BUCKET_SIZE
         ));
     }
 
-    /// A `Source` fault co-occurring with a `ScanLimit` must win: masking the
-    /// fault as a clean `ScanLimit` end would silently corrupt results.
+    /// A storage fault co-occurring with budget exhaustion must win: masking
+    /// the fault as a graceful scan limit would silently corrupt results.
     #[test]
-    fn collapse_fault_outranks_scan_limit() {
-        let collapsed = BitmapScanError::collapse(vec![
-            BitmapScanError::ScanLimit,
-            BitmapScanError::Source(anyhow::anyhow!("storage boom")),
-        ]);
+    fn collapse_fault_outranks_budget_stop() {
+        let collapsed = collapse(
+            vec![
+                LeafStop::BudgetExhausted,
+                LeafStop::Fault(anyhow::anyhow!("storage boom")),
+            ],
+            7,
+        );
         match collapsed {
-            BitmapScanError::Source(e) => assert!(e.to_string().contains("storage boom")),
-            other => panic!("expected Source fault to win, got {other:?}"),
+            ScanStop::Fault(e) => assert!(e.to_string().contains("storage boom")),
+            other => panic!("expected Fault to win, got {other:?}"),
         }
     }
 
-    /// A `Source` fault outranks both `ScanLimit` and `Cancelled`: a real fault
-    /// must never be masked as a clean end or a cancel.
+    /// A storage fault outranks both budget exhaustion and cancellation.
     #[test]
-    fn collapse_source_outranks_scan_limit_and_cancelled() {
-        let collapsed = BitmapScanError::collapse(vec![
-            BitmapScanError::ScanLimit,
-            BitmapScanError::Cancelled,
-            BitmapScanError::Source(anyhow::anyhow!("storage boom")),
-        ]);
+    fn collapse_fault_outranks_budget_stop_and_cancelled() {
+        let collapsed = collapse(
+            vec![
+                LeafStop::BudgetExhausted,
+                LeafStop::Cancelled,
+                LeafStop::Fault(anyhow::anyhow!("storage boom")),
+            ],
+            11,
+        );
         match collapsed {
-            BitmapScanError::Source(e) => assert!(e.to_string().contains("storage boom")),
-            other => panic!("expected Source to win, got {other:?}"),
+            ScanStop::Fault(e) => assert!(e.to_string().contains("storage boom")),
+            other => panic!("expected Fault to win, got {other:?}"),
         }
     }
 
-    /// `ScanLimit` outranks `Cancelled`: the scan-limit frontier is a usable
-    /// continuation cursor, strictly better than ending on a cancel.
+    /// Budget exhaustion outranks cancellation because it preserves a usable
+    /// merged resume frontier.
     #[test]
-    fn collapse_scan_limit_outranks_cancelled() {
+    fn collapse_budget_stop_outranks_cancelled() {
         assert!(matches!(
-            BitmapScanError::collapse(
-                vec![BitmapScanError::Cancelled, BitmapScanError::ScanLimit,]
-            ),
-            BitmapScanError::ScanLimit
+            collapse(vec![LeafStop::Cancelled, LeafStop::BudgetExhausted], 29),
+            ScanStop::ScanLimit { scan_frontier: 29 }
         ));
     }
 
-    /// Several concurrent faults combine into one `Source` that keeps every
-    /// leaf's message rather than dropping all but one.
+    /// Cancellation remains cancellation when no higher-precedence leaf stop
+    /// occurred in the evaluator round.
+    #[test]
+    fn collapse_all_cancelled() {
+        assert!(matches!(
+            collapse(vec![LeafStop::Cancelled, LeafStop::Cancelled], 31),
+            ScanStop::Cancelled
+        ));
+    }
+
+    /// Several concurrent faults combine into one terminal fault that retains
+    /// every leaf's message rather than dropping all but one.
     #[test]
     fn collapse_combines_concurrent_faults() {
-        let collapsed = BitmapScanError::collapse(vec![
-            BitmapScanError::Source(anyhow::anyhow!("boom one")),
-            BitmapScanError::Source(anyhow::anyhow!("boom two")),
-        ]);
+        let collapsed = collapse(
+            vec![
+                LeafStop::Fault(anyhow::anyhow!("boom one")),
+                LeafStop::Fault(anyhow::anyhow!("boom two")),
+            ],
+            37,
+        );
         match collapsed {
-            BitmapScanError::Source(e) => {
+            ScanStop::Fault(e) => {
                 let s = e.to_string();
                 assert!(s.contains("boom one"), "missing first fault: {s}");
                 assert!(s.contains("boom two"), "missing second fault: {s}");
             }
-            other => panic!("expected combined Source, got {other:?}"),
+            other => panic!("expected combined Fault, got {other:?}"),
         }
     }
 
-    /// `From<anyhow::Error>` is a fault funnel: every `anyhow` becomes `Source`.
-    /// Terminal dispositions are decided at the source and never reconstructed
-    /// here, so this never produces `ScanLimit`/`Cancelled`.
+    /// `From<anyhow::Error>` on the leaf channel preserves backend failures as
+    /// leaf faults rather than manufacturing a terminal disposition.
     #[test]
-    fn from_anyhow_funnels_to_source() {
-        let fault: anyhow::Error = anyhow::anyhow!("storage boom");
-        match BitmapScanError::from(fault) {
-            BitmapScanError::Source(e) => assert!(e.to_string().contains("storage boom")),
-            other => panic!("expected Source, got {other:?}"),
+    fn from_anyhow_funnels_to_leaf_fault() {
+        match LeafStop::from(anyhow::anyhow!("leaf storage boom")) {
+            LeafStop::Fault(e) => assert!(e.to_string().contains("leaf storage boom")),
+            other => panic!("expected leaf Fault, got {other:?}"),
+        }
+    }
+
+    /// `From<anyhow::Error>` on the merged channel preserves backend failures
+    /// as terminal faults rather than manufacturing a scan limit or cancel.
+    #[test]
+    fn from_anyhow_funnels_to_scan_fault() {
+        match ScanStop::from(anyhow::anyhow!("merged storage boom")) {
+            ScanStop::Fault(e) => assert!(e.to_string().contains("merged storage boom")),
+            other => panic!("expected scan Fault, got {other:?}"),
         }
     }
 }

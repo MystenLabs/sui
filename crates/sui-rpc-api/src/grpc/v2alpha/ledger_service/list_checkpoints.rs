@@ -123,9 +123,19 @@ pub(crate) async fn list_checkpoints(
         );
 
         let mut last_watermark: Option<Watermark> = None;
-        while let Some(response) = scan.next_item().await? {
+        let mut fused = false;
+        while let Some(mut response) = scan.next_item().await? {
             if response.watermark.is_some() {
                 last_watermark = response.watermark.clone();
+            }
+            if response.checkpoint.is_some()
+                && scan.produced() == limit_items
+                && scan.exhausted()
+            {
+                let mut end = QueryEnd::default();
+                end.reason = Some(QueryEndReason::ItemLimit as i32);
+                response.end = Some(end);
+                fused = true;
             }
             yield response;
         }
@@ -133,15 +143,20 @@ pub(crate) async fn list_checkpoints(
         let emitted = scan.produced();
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
-        let final_watermark = if reached_range_end(reason) {
-            Some(terminal_boundary_watermark(
-                &terminal_options,
-                terminal.position,
-            ))
-        } else {
-            last_watermark
-        };
-        yield end_response(final_watermark, reason);
+        if !fused {
+            let candidate = if reached_range_end(reason) {
+                Some(terminal_boundary_watermark(
+                    &terminal_options,
+                    terminal.position,
+                ))
+            } else if reason == QueryEndReason::ScanLimit {
+                terminal.scan_frontier_watermark
+            } else {
+                None
+            };
+            let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
+            yield end_response(final_watermark, reason);
+        }
         info!(
             filtered,
             limit_items,
@@ -239,6 +254,7 @@ fn next_checkpoint_chunk(
                 position: Position::Checkpoints {
                     checkpoint: cp_range.end_position,
                 },
+                scan_frontier_watermark: None,
             };
             let range = cp_range.range;
             if range.is_empty() {
@@ -380,6 +396,7 @@ fn next_unfiltered_checkpoint_chunk(
             position: Position::Checkpoints {
                 checkpoint: end_position,
             },
+            scan_frontier_watermark: None,
         },
         remaining_scan_budget: scan_budget,
     })
@@ -508,14 +525,16 @@ fn next_filtered_checkpoint_chunk(
     } else {
         end_reason
     };
-    let scan_watermark = scan_checkpoint_watermark(
-        &service,
-        &options,
-        scan_limited,
-        cp_seqs.is_empty(),
-        frontier,
-        ascending,
-    )?;
+    let frontier_watermark = if request_exhausted || cp_seqs.is_empty() {
+        scan_checkpoint_watermark(&service, &options, scan_limited, frontier, ascending)?
+    } else {
+        None
+    };
+    let scan_watermark = if !request_exhausted && cp_seqs.is_empty() {
+        frontier_watermark.clone().map(watermark_response)
+    } else {
+        None
+    };
 
     if cancel.is_cancelled() {
         return Err(cancelled());
@@ -534,24 +553,24 @@ fn next_filtered_checkpoint_chunk(
             position: Position::Checkpoints {
                 checkpoint: end_position,
             },
+            scan_frontier_watermark: request_exhausted.then_some(frontier_watermark).flatten(),
         },
         remaining_scan_budget,
     })
 }
 
-/// Scan watermark for a filtered checkpoint chunk that surfaced no new
-/// checkpoints before the scan budget ran out. The filter scans the transaction
-/// bitmap, so the frontier is a `tx_sequence_number`; resolve it to its
-/// checkpoint and emit a checkpoint-space watermark there.
+/// Scan watermark for a filtered checkpoint chunk whose scan budget ran out.
+/// The filter scans the transaction bitmap, so the frontier is a
+/// `tx_sequence_number`; resolve it to its checkpoint and emit a
+/// checkpoint-space watermark there.
 fn scan_checkpoint_watermark(
     service: &RpcService,
     options: &QueryOptions,
     scan_limited: bool,
-    no_items: bool,
     frontier: Option<u64>,
     ascending: bool,
-) -> Result<Option<ListCheckpointsResponse>, RpcError> {
-    if !(scan_limited && no_items) {
+) -> Result<Option<Watermark>, RpcError> {
+    if !scan_limited {
         return Ok(None);
     }
     let Some(frontier) = frontier else {
@@ -573,7 +592,7 @@ fn scan_checkpoint_watermark(
         },
         boundary,
     );
-    Ok(Some(watermark_response(watermark)))
+    Ok(Some(watermark))
 }
 
 fn checkpoint_seqs_for_range(

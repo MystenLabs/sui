@@ -68,7 +68,9 @@ struct EventsResult {
 
 struct CheckpointsResult {
     checkpoints: Vec<ListCheckpointsResponse>,
-    // Watermarks from payload-less frames (scan/terminal), in stream order.
+    // Watermarks from payload-less frames (scan beacons or the natural / ScanLimit
+    // terminal frame), in stream order. ItemLimit contributes none: its end signal
+    // is fused onto the last item frame, which keeps its own watermark.
     watermarks: Vec<Watermark>,
     end: bool,
     end_cursor: Option<Bytes>,
@@ -2512,12 +2514,12 @@ async fn test_list_events_item_watermark_boundary() {
 }
 
 // Natural completion (the scan drains the whole range without hitting the item
-// limit) folds the terminal `Watermark` onto the final `QueryEnd` frame,
-// claiming the range's final checkpoint complete. An item-limited query stops
-// early with `ItemLimit` and repeats the last item watermark on that end frame,
-// so the resume cursor is still visible at stream termination. (The mid-stream
-// sparse-gap scan watermark is not reachable in e2e: it needs the scan to cross
-// ~16M empty tx_seqs to exhaust the per-chunk bucket budget.)
+// limit) emits a payload-free terminal frame whose `Watermark` claims the
+// range's final checkpoint complete. An item-limited query instead fuses the
+// `ItemLimit` end onto the final item frame — no payload-free watermark frame is
+// emitted, and that item carries its own watermark as the resume cursor. (The
+// mid-stream sparse-gap scan watermark is not reachable in e2e: it needs the
+// scan to cross ~16M empty tx_seqs to exhaust the per-chunk bucket budget.)
 #[sim_test]
 async fn test_list_checkpoints_terminal_watermark() {
     let cluster = new_cluster().await;
@@ -2568,7 +2570,9 @@ async fn test_list_checkpoints_terminal_watermark() {
         "resuming past the terminal watermark should yield no more items"
     );
 
-    // Item-limited query: the end frame repeats the last item's watermark.
+    // Item-limited query: the `ItemLimit` end is fused onto the final item frame,
+    // so no payload-free watermark frame is emitted and the last item carries both
+    // its own watermark and the end signal.
     let mut req = ListCheckpointsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     req.start_checkpoint = Some(start);
@@ -2577,19 +2581,39 @@ async fn test_list_checkpoints_terminal_watermark() {
     req.options = Some(query_options(2));
     let limited = list_checkpoints_result(&mut client, req).await;
     assert_item_limit_end(limited.end, limited.end_reason);
-    let last_item_watermark = limited
+    assert!(
+        limited.watermarks.is_empty(),
+        "item-limited query must not emit a payload-free watermark frame"
+    );
+    let last_checkpoint = limited
         .checkpoints
         .last()
-        .and_then(|item| item.watermark.as_ref())
-        .expect("last item watermark");
+        .expect("item-limited query returns checkpoints");
     assert_eq!(
-        limited.watermarks.len(),
-        1,
-        "item-limited query repeats the last item watermark on the end frame"
+        last_checkpoint.end.as_ref().map(|qe| qe.reason()),
+        Some(QueryEndReason::ItemLimit),
+        "the fused last item frame carries the ItemLimit end"
     );
-    let end_watermark = &limited.watermarks[0];
-    assert_eq!(end_watermark.cursor, last_item_watermark.cursor);
-    assert_eq!(end_watermark.checkpoint, last_item_watermark.checkpoint);
+    let cursor = last_checkpoint
+        .watermark
+        .as_ref()
+        .and_then(|wm| wm.cursor.clone())
+        .expect("fused last item carries its own watermark cursor");
+
+    // Resuming from the fused item's own cursor covers exactly the remaining
+    // checkpoints once: item page plus resume page equals the full matching set.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_sender(sender));
+    req.options = Some(query_options_after(100, cursor));
+    let resumed = list_checkpoints_result(&mut client, req).await;
+    assert_eq!(
+        limited.checkpoints.len() + resumed.checkpoints.len(),
+        resp.checkpoints.len(),
+        "item page plus resume page covers the full matching set exactly once"
+    );
 }
 
 #[sim_test]
