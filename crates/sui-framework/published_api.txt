@@ -3784,6 +3784,15 @@ exists
 exists_with_type
 	public fun
 	0x2::scratch
+read_opt
+	public fun
+	0x2::scratch
+remove_opt
+	public fun
+	0x2::scratch
+replace
+	public fun
+	0x2::scratch
 hash_type_and_key
 	fun
 	0x2::scratch
