@@ -1957,6 +1957,9 @@ Allowance
 RateLimit
 	public struct
 	0x2::allowance
+AllowanceCap
+	public struct
+	0x2::allowance
 Permit
 	public struct
 	0x2::allowance

@@ -83,6 +83,9 @@ pub struct ResolvedAllowance {
     pub spender: Option<SuiAddress>,
     /// The accumulated type `T` of `Allowance<T>` (e.g. `Balance<SUI>`).
     pub funds_type: TypeTag,
+    /// The most one tx could spend: min(lifetime remaining, rate-limit amount).
+    /// The full rate amount counts, since the window may reset before execution.
+    pub spend_limit: U256,
 }
 
 /// Parses an object as an `Allowance`, extracting the sign-time-relevant fields.
@@ -108,9 +111,20 @@ pub fn parse_allowance_object(object: &Object) -> UserInputResult<ResolvedAllowa
         .into_iter()
         .next()
         .expect("checked by is_allowance");
+    let lifetime_remaining = allowance
+        .lifetime_cap
+        .map(|cap| cap.checked_sub(allowance.current_spend).unwrap_or(U256::zero()));
+    let rate_limit_amount = allowance.rate_limit.as_ref().map(|rl| rl.limit);
+    // The tightest limit present; issuance guarantees at least one.
+    let spend_limit = lifetime_remaining
+        .into_iter()
+        .chain(rate_limit_amount)
+        .min()
+        .ok_or_else(|| invalid(format!("allowance {id} has no lifetime cap or rate limit")))?;
     Ok(ResolvedAllowance {
         funder: allowance.funder,
         spender: allowance.spender,
         funds_type,
+        spend_limit,
     })
 }

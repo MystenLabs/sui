@@ -13,6 +13,7 @@ redeem in one step, so limits are never consumed without funds moving.
 -  [Struct `AllowanceWithdrawal`](#sui_allowance_AllowanceWithdrawal)
 -  [Struct `Allowance`](#sui_allowance_Allowance)
 -  [Struct `RateLimit`](#sui_allowance_RateLimit)
+-  [Struct `AllowanceCap`](#sui_allowance_AllowanceCap)
 -  [Struct `Permit`](#sui_allowance_Permit)
 -  [Constants](#@Constants_0)
 -  [Function `permit`](#sui_allowance_permit)
@@ -207,6 +208,39 @@ window.
 
 </details>
 
+<a name="sui_allowance_AllowanceCap"></a>
+
+## Struct `AllowanceCap`
+
+Revocation authority for one allowance, sent to the funder at issuance.
+Key-only, so it cannot leave its owner's account except through this module.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/allowance.md#sui_allowance_AllowanceCap">AllowanceCap</a>&lt;<b>phantom</b> T&gt; <b>has</b> key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code><a href="../sui/allowance.md#sui_allowance">allowance</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
 <a name="sui_allowance_Permit"></a>
 
 ## Struct `Permit`
@@ -295,16 +329,6 @@ allowance API has its own authorization type instead of <code>internal::Permit</
 
 
 
-<a name="sui_allowance_ENotFunder"></a>
-
-
-
-<pre><code>#[error]
-<b>const</b> <a href="../sui/allowance.md#sui_allowance_ENotFunder">ENotFunder</a>: vector&lt;u8&gt; = b"Only the funder may update or <a href="../sui/allowance.md#sui_allowance_revoke">revoke</a> this <a href="../sui/allowance.md#sui_allowance">allowance</a>";
-</code></pre>
-
-
-
 <a name="sui_allowance_ENoLimit"></a>
 
 
@@ -365,6 +389,16 @@ allowance API has its own authorization type instead of <code>internal::Permit</
 
 
 
+<a name="sui_allowance_EWrongCap"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/allowance.md#sui_allowance_EWrongCap">EWrongCap</a>: vector&lt;u8&gt; = b"Cap does not match this <a href="../sui/allowance.md#sui_allowance">allowance</a>";
+</code></pre>
+
+
+
 <a name="sui_allowance_permit"></a>
 
 ## Function `permit`
@@ -395,6 +429,7 @@ Only <code>A</code>'s module can create <code>internal::Permit&lt;A&gt;</code>, 
 ## Function `new`
 
 Issue a signer-only allowance funded by the sender, delegating to <code>spender</code>.
+The sender receives the <code><a href="../sui/allowance.md#sui_allowance_AllowanceCap">AllowanceCap</a></code> for it.
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_new">new</a>&lt;T&gt;(spender: <b>address</b>, lifetime_cap: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, start_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, expiration_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_period_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_amount: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -540,9 +575,10 @@ signer required.
 
 ## Function `revoke`
 
+Possession of the matching cap is what authorizes revocation; no signer check.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_revoke">revoke</a>&lt;T&gt;(self: <a href="../sui/allowance.md#sui_allowance_Allowance">sui::allowance::Allowance</a>&lt;T&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_revoke">revoke</a>&lt;T&gt;(self: <a href="../sui/allowance.md#sui_allowance_Allowance">sui::allowance::Allowance</a>&lt;T&gt;, cap: <a href="../sui/allowance.md#sui_allowance_AllowanceCap">sui::allowance::AllowanceCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -551,13 +587,15 @@ signer required.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_revoke">revoke</a>&lt;T&gt;(self: <a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a>&lt;T&gt;, ctx: &TxContext) {
-    <b>assert</b>!(self.funder == ctx.sender(), <a href="../sui/allowance.md#sui_allowance_ENotFunder">ENotFunder</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_revoke">revoke</a>&lt;T&gt;(self: <a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a>&lt;T&gt;, cap: <a href="../sui/allowance.md#sui_allowance_AllowanceCap">AllowanceCap</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/allowance.md#sui_allowance_AllowanceCap">AllowanceCap</a> { id: cap_id, <a href="../sui/allowance.md#sui_allowance">allowance</a> } = cap;
+    <b>assert</b>!(<a href="../sui/allowance.md#sui_allowance">allowance</a> == self.id.to_inner(), <a href="../sui/allowance.md#sui_allowance_EWrongCap">EWrongCap</a>);
     <b>let</b> <a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a> {
         id,
         ..,
     } = self;
     id.delete();
+    cap_id.delete();
 }
 </code></pre>
 
@@ -769,6 +807,11 @@ Both <code>Some</code> (a limit) or both <code>None</code> (no limit); a mismatc
         expiration_timestamp_ms,
         rate_limit,
     };
+    <b>let</b> cap = <a href="../sui/allowance.md#sui_allowance_AllowanceCap">AllowanceCap</a>&lt;T&gt; {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        <a href="../sui/allowance.md#sui_allowance">allowance</a>: <a href="../sui/allowance.md#sui_allowance">allowance</a>.id.to_inner(),
+    };
+    <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(cap, ctx.sender());
     <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/allowance.md#sui_allowance">allowance</a>);
 }
 </code></pre>

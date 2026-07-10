@@ -54,6 +54,7 @@ use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::{Either, Itertools};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
+use move_core_types::u256::U256;
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use mysten_common::{ZipDebugEqIteratorExt, assert_reachable, debug_fatal};
@@ -3146,11 +3147,11 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn validate_allowance_withdrawals(&self, input_objects: &InputObjects) -> UserInputResult<()> {
-        let withdrawals: Vec<_> = self
+        let allowance_withdrawals: Vec<_> = self
             .get_funds_withdrawals()
             .filter(|w| matches!(w.withdraw_from, WithdrawFrom::Allowance { .. }))
             .collect();
-        if withdrawals.is_empty() {
+        if allowance_withdrawals.is_empty() {
             return Ok(());
         }
         // One pass over the inputs; each allowance below is a map lookup. The
@@ -3163,7 +3164,8 @@ impl TransactionDataAPI for TransactionDataV1 {
         // Parses are cached per object, but every withdrawal is checked: two
         // may source the same allowance with different declared funders.
         let mut resolved_allowances: BTreeMap<ObjectID, ResolvedAllowance> = BTreeMap::new();
-        for withdraw in withdrawals {
+        let mut reserved: BTreeMap<ObjectID, U256> = BTreeMap::new();
+        for withdraw in allowance_withdrawals {
             let WithdrawFrom::Allowance { funder, allowance } = &withdraw.withdraw_from else {
                 continue;
             };
@@ -3200,6 +3202,19 @@ impl TransactionDataAPI for TransactionDataV1 {
                         allowance,
                         resolved.funds_type,
                         withdraw.type_arg.to_type_tag()
+                    ),
+                });
+            }
+            let Reservation::MaxAmountU64(amount) = withdraw.reservation;
+            let total = reserved.entry(*allowance).or_insert_with(U256::zero);
+            // u64 amounts can't overflow a u256 sum; saturate anyway, never panic.
+            *total = total.checked_add(U256::from(amount)).unwrap_or(U256::max_value());
+            // Over the spend limit can never clear; reject
+            if *total > resolved.spend_limit {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: format!(
+                        "Reservations against allowance {allowance} exceed its spend limit {}",
+                        resolved.spend_limit
                     ),
                 });
             }

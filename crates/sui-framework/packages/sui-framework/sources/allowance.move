@@ -28,8 +28,6 @@ const EExpired: vector<u8> = b"Allowance has expired";
 const EExceedsLifetimeCap: vector<u8> = b"Spend would exceed the lifetime cap";
 #[error(code = 5)]
 const EExceedsRateLimit: vector<u8> = b"Spend would exceed the current rate-limit window";
-#[error(code = 6)]
-const ENotFunder: vector<u8> = b"Only the funder may update or revoke this allowance";
 #[error(code = 7)]
 const ENoLimit: vector<u8> = b"Allowance must have a lifetime cap or a rate limit";
 #[error(code = 8)]
@@ -43,6 +41,8 @@ const EHasApp: vector<u8> = b"App-controlled allowance: spending must go through
 #[error(code = 12)]
 const EWrongFunder: vector<u8> =
     b"Withdrawal debits a different address than this allowance's funder";
+#[error(code = 13)]
+const EWrongCap: vector<u8> = b"Cap does not match this allowance";
 
 /// Created by the core for a declared allowance source. Only the bound
 /// allowance's spend paths can unpack it. Dropping it is fine: funds only
@@ -82,6 +82,13 @@ public struct RateLimit has copy, drop, store {
     window_start_ms: u64,
 }
 
+/// Revocation authority for one allowance, sent to the funder at issuance.
+/// Key-only, so it cannot leave its owner's account except through this module.
+public struct AllowanceCap<phantom T> has key {
+    id: UID,
+    allowance: ID,
+}
+
 /// App authorization for the `_as_app` endpoints. A separate type so the
 /// allowance API has its own authorization type instead of `internal::Permit`.
 public struct Permit<phantom A>() has drop;
@@ -97,6 +104,7 @@ public fun permit<A>(_: internal::Permit<A>): Permit<A> {
 // cannot create an allowance funded by the caller inside some other call.
 
 /// Issue a signer-only allowance funded by the sender, delegating to `spender`.
+/// The sender receives the `AllowanceCap` for it.
 entry fun new<T>(
     spender: address,
     lifetime_cap: Option<u256>,
@@ -167,13 +175,16 @@ public fun spend_balance_as_app<C, A>(
     balance::redeem_funds(self.consume(w, clock))
 }
 
-public fun revoke<T>(self: Allowance<T>, ctx: &TxContext) {
-    assert!(self.funder == ctx.sender(), ENotFunder);
+/// Possession of the matching cap is what authorizes revocation; no signer check.
+public fun revoke<T>(self: Allowance<T>, cap: AllowanceCap<T>) {
+    let AllowanceCap { id: cap_id, allowance } = cap;
+    assert!(allowance == self.id.to_inner(), EWrongCap);
     let Allowance {
         id,
         ..,
     } = self;
     id.delete();
+    cap_id.delete();
 }
 
 /// App-only: rotate the spender key without the funder reissuing.
@@ -269,6 +280,11 @@ fun share_new<T>(
         expiration_timestamp_ms,
         rate_limit,
     };
+    let cap = AllowanceCap<T> {
+        id: object::new(ctx),
+        allowance: allowance.id.to_inner(),
+    };
+    transfer::transfer(cap, ctx.sender());
     transfer::share_object(allowance);
 }
 

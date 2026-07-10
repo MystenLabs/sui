@@ -94,8 +94,8 @@ mod checked {
             &input_objects,
             &[],
         )?;
-        // The allowance behind a `WithdrawFrom::Allowance` is a declared shared
-        // input (enforced by validity_check), so it is already loaded here.
+        // Resolves each declared allowance among the already-loaded inputs;
+        // a withdrawal whose allowance is not an input fails here.
         transaction.validate_allowance_withdrawals(&input_objects)?;
         check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
@@ -129,8 +129,8 @@ mod checked {
             &input_objects,
             &[gas_object_ref],
         )?;
-        // The allowance behind a `WithdrawFrom::Allowance` is a declared shared
-        // input (enforced by validity_check), so it is already loaded here.
+        // Resolves each declared allowance among the already-loaded inputs;
+        // a withdrawal whose allowance is not an input fails here.
         transaction.validate_allowance_withdrawals(&input_objects)?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
         // Runs verifier, which could be expensive.
