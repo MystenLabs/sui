@@ -9,12 +9,11 @@
 /// redeem in one step, so limits are never consumed without funds moving.
 module sui::allowance;
 
+use std::string::String;
 use std::type_name::{Self, TypeName};
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::funds_accumulator::Withdrawal;
-
-// === Errors ===
 
 #[error(code = 0)]
 const ENotSpender: vector<u8> = b"Transaction sender is not this allowance's spender";
@@ -33,9 +32,9 @@ const ENoLimit: vector<u8> = b"Allowance must have a lifetime cap or a rate limi
 #[error(code = 8)]
 const EWrongAllowance: vector<u8> = b"Withdrawal was issued for a different allowance";
 #[error(code = 9)]
-const EBadRateLimit: vector<u8> = b"Rate limit needs both a period and an amount, or neither";
+const EBadRateLimit: vector<u8> = b"Rate limit needs a positive period and amount, both set or neither";
 #[error(code = 10)]
-const ENotStarted: vector<u8> = b"Allowance is not active yet; tt has a future start timestamp.";
+const ENotStarted: vector<u8> = b"Allowance is not active yet; it has a future start timestamp";
 #[error(code = 11)]
 const EHasApp: vector<u8> = b"App-controlled allowance: spending must go through `spend_as_app`";
 #[error(code = 12)]
@@ -43,6 +42,14 @@ const EWrongFunder: vector<u8> =
     b"Withdrawal debits a different address than this allowance's funder";
 #[error(code = 13)]
 const EWrongCap: vector<u8> = b"Cap does not match this allowance";
+#[error(code = 14)]
+const ENameTooLong: vector<u8> = b"Name exceeds the 128-byte limit";
+#[error(code = 15)]
+const EZeroLifetimeCap: vector<u8> = b"Lifetime cap must be greater than zero";
+#[error(code = 16)]
+const EBadTimeWindow: vector<u8> = b"Expiration must be after the start time";
+
+const MAX_NAME_LENGTH: u64 = 128;
 
 /// Created by the core for a declared allowance source. Only the bound
 /// allowance's spend paths can unpack it. Dropping it is fine: funds only
@@ -71,6 +78,16 @@ public struct Allowance<phantom T> has key {
     start_timestamp_ms: Option<u64>,
     expiration_timestamp_ms: Option<u64>,
     rate_limit: Option<RateLimit>,
+    /// custom label, at most 128 bytes; only present for off-chain consumption 
+    /// (adding a short desc or label for an allowance, not consulted by any check)
+    name: String,
+}
+
+/// Revocation for an allowance, sent to the funder at issuance (key-only, non-transferrable).
+/// Also used for discoverability (funder -> allowances)
+public struct AllowanceCap<phantom T> has key {
+    id: UID,
+    allowance: ID,
 }
 
 /// A tumbling per-window cap: at most `limit` per `period_ms`, resetting each
@@ -82,13 +99,6 @@ public struct RateLimit has copy, drop, store {
     window_start_ms: u64,
 }
 
-/// Revocation authority for one allowance, sent to the funder at issuance.
-/// Key-only, so it cannot leave its owner's account except through this module.
-public struct AllowanceCap<phantom T> has key {
-    id: UID,
-    allowance: ID,
-}
-
 /// App authorization for the `_as_app` endpoints. A separate type so the
 /// allowance API has its own authorization type instead of `internal::Permit`.
 public struct Permit<phantom A>() has drop;
@@ -98,14 +108,11 @@ public fun permit<A>(_: internal::Permit<A>): Permit<A> {
     Permit()
 }
 
-// === Issuance ===
-//
 // `entry`, not `public`: issuance must be an explicit PTB command, so a contract
 // cannot create an allowance funded by the caller inside some other call.
 
-/// Issue a signer-only allowance funded by the sender, delegating to `spender`.
-/// The sender receives the `AllowanceCap` for it.
 entry fun new<T>(
+    name: String,
     spender: address,
     lifetime_cap: Option<u256>,
     start_timestamp_ms: Option<u64>,
@@ -115,6 +122,7 @@ entry fun new<T>(
     ctx: &mut TxContext,
 ) {
     share_new<T>(
+        name,
         spender,
         option::none(),
         lifetime_cap,
@@ -127,6 +135,7 @@ entry fun new<T>(
 
 /// Like `new`, but also binds the controlling app `A` (see `Allowance.app`).
 entry fun new_for_app<T, A>(
+    name: String,
     spender: address,
     lifetime_cap: Option<u256>,
     start_timestamp_ms: Option<u64>,
@@ -136,6 +145,7 @@ entry fun new_for_app<T, A>(
     ctx: &mut TxContext,
 ) {
     share_new<T>(
+        name,
         spender,
         option::some(type_name::with_defining_ids<A>()),
         lifetime_cap,
@@ -193,6 +203,8 @@ public fun rotate_spender<T, A>(self: &mut Allowance<T>, _: Permit<A>, new_spend
     self.spender = option::some(new_spender);
 }
 
+// TODO: Add update endpoints to be able to alter limits, expirations etc. 
+
 /// Signer path: no controlling app, and the tx sender is the spender.
 fun assert_signer<T>(self: &Allowance<T>, ctx: &TxContext) {
     assert!(self.app.is_none(), EHasApp);
@@ -217,22 +229,23 @@ fun consume<T: store>(
     // This can only happen if we have a bug in the core, so this is just for in-depth defense.
     assert!(inner.owner() == self.funder, EWrongFunder);
     let amount = inner.limit();
-
     let now = clock.timestamp_ms();
-    if (self.start_timestamp_ms.is_some()) {
-        assert!(now >= *self.start_timestamp_ms.borrow(), ENotStarted);
-    };
-    if (self.expiration_timestamp_ms.is_some()) {
-        assert!(now <= *self.expiration_timestamp_ms.borrow(), EExpired);
-    };
 
-    if (self.lifetime_cap.is_some()) {
-        assert!(self.current_spend + amount <= *self.lifetime_cap.borrow(), EExceedsLifetimeCap);
-    };
+    self.start_timestamp_ms.do_ref!(|start_timestamp_ms| {
+        assert!(now >= *start_timestamp_ms, ENotStarted);
+    });
+
+    self.expiration_timestamp_ms.do_ref!(|expiration_timestamp_ms| {
+        assert!(now <= *expiration_timestamp_ms, EExpired);
+    });
+
+    self.lifetime_cap.do_ref!(|lifetime_cap| {
+        assert!(self.current_spend + amount <= *lifetime_cap, EExceedsLifetimeCap);
+    });
+
     self.current_spend = self.current_spend + amount;
 
-    if (self.rate_limit.is_some()) {
-        let rl = self.rate_limit.borrow_mut();
+    self.rate_limit.do_mut!(|rl| {
         // Tumbling window: reset once the period has elapsed.
         if (now >= rl.window_start_ms + rl.period_ms) {
             rl.window_start_ms = now;
@@ -240,7 +253,7 @@ fun consume<T: store>(
         };
         assert!(rl.spent + amount <= rl.limit, EExceedsRateLimit);
         rl.spent = rl.spent + amount;
-    };
+    });
 
     inner
 }
@@ -248,17 +261,22 @@ fun consume<T: store>(
 /// Both `Some` (a limit) or both `None` (no limit); a mismatch aborts.
 fun build_rate_limit(period_ms: Option<u64>, amount: Option<u256>): Option<RateLimit> {
     assert!(period_ms.is_some() == amount.is_some(), EBadRateLimit);
-    if (period_ms.is_none()) option::none()
-    else
-        option::some(RateLimit {
-            period_ms: *period_ms.borrow(),
-            limit: *amount.borrow(),
-            spent: 0,
-            window_start_ms: 0,
-        })
+    if (period_ms.is_none()) return option::none();
+
+    let period_ms = *period_ms.borrow();
+    let limit = *amount.borrow();
+    // A zero period resets the window on every spend; a zero amount spends nothing.
+    assert!(period_ms > 0 && limit > 0, EBadRateLimit);
+    option::some(RateLimit {
+        period_ms,
+        limit,
+        spent: 0,
+        window_start_ms: 0,
+    })
 }
 
 fun share_new<T>(
+    name: String,
     spender: address,
     app: Option<TypeName>,
     lifetime_cap: Option<u256>,
@@ -267,10 +285,21 @@ fun share_new<T>(
     rate_limit: Option<RateLimit>,
     ctx: &mut TxContext,
 ) {
-    // we do not allow unlimited allowances (TODO: Do we want to?)
+    // we do not allow unlimited allowances (TODO: Do we?)
     assert!(lifetime_cap.is_some() || rate_limit.is_some(), ENoLimit);
+    assert!(name.length() <= MAX_NAME_LENGTH, ENameTooLong);
+    lifetime_cap.do_ref!(|cap| assert!(*cap > 0, EZeroLifetimeCap));
+    
+    if (start_timestamp_ms.is_some() && expiration_timestamp_ms.is_some()) {
+        assert!(
+            *start_timestamp_ms.borrow() < *expiration_timestamp_ms.borrow(),
+            EBadTimeWindow,
+        );
+    };
+
     let allowance = Allowance<T> {
         id: object::new(ctx),
+        name,
         funder: ctx.sender(),
         spender: option::some(spender),
         app,

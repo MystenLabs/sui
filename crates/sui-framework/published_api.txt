@@ -1954,10 +1954,10 @@ AllowanceWithdrawal
 Allowance
 	public struct
 	0x2::allowance
-RateLimit
+AllowanceCap
 	public struct
 	0x2::allowance
-AllowanceCap
+RateLimit
 	public struct
 	0x2::allowance
 Permit

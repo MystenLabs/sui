@@ -111,8 +111,6 @@ fn withdrawal_input(w: &T::WithdrawalInput) -> anyhow::Result<()> {
         "withdrawal input must have exactly one type argument, got {}",
         dt.type_arguments.len()
     );
-    // Both withdrawal types have drop: dropping one is fine, funds only move
-    // on redemption.
     anyhow::ensure!(ty.abilities().has_drop(), "withdrawal type must have drop");
     // The source and the type must agree on the withdrawal's kind.
     match &w.source {

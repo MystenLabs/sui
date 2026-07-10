@@ -7,6 +7,7 @@
 #[allow(unused_mut_ref)]
 module sui::allowance_tests;
 
+use std::string::String;
 use sui::allowance::{Self, Allowance, AllowanceCap};
 use sui::balance::Balance;
 use sui::clock::{Self, Clock};
@@ -17,6 +18,9 @@ public struct TEST has store {}
 
 /// Controlling-app marker; defined here so the test module can create `Permit<APP>`.
 public struct APP {}
+
+/// A second app marker for wrong-app tests.
+public struct APP2 {}
 
 const FUNDER: address = @0xF;
 const SPENDER: address = @0x5;
@@ -42,6 +46,7 @@ macro fun test_tx($sender: address, $body: |&mut Scenario, &mut Clock|) {
 /// Readable issuance: `new_allowance().lifetime_cap(1000).create<Balance<TEST>>(ctx)`.
 /// Spender defaults to SPENDER; everything else defaults to unset.
 public struct AllowanceBuilder has drop {
+    name: String,
     spender: address,
     cap: Option<u256>,
     start_ms: Option<u64>,
@@ -52,6 +57,7 @@ public struct AllowanceBuilder has drop {
 
 fun new_allowance(): AllowanceBuilder {
     AllowanceBuilder {
+        name: b"test allowance".to_string(),
         spender: SPENDER,
         cap: option::none(),
         start_ms: option::none(),
@@ -59,6 +65,11 @@ fun new_allowance(): AllowanceBuilder {
         rate_period_ms: option::none(),
         rate_amount: option::none(),
     }
+}
+
+fun named(mut self: AllowanceBuilder, name: String): AllowanceBuilder {
+    self.name = name;
+    self
 }
 
 fun lifetime_cap(mut self: AllowanceBuilder, cap: u256): AllowanceBuilder {
@@ -86,8 +97,10 @@ fun rate_limit(mut self: AllowanceBuilder, period_ms: u64, amount: u256): Allowa
 /// Issue an `Allowance<T>` through the real `new` entry function (shares the
 /// allowance, sends the cap to the tx sender).
 fun create<T>(self: AllowanceBuilder, ctx: &mut TxContext) {
-    let AllowanceBuilder { spender, cap, start_ms, expiry_ms, rate_period_ms, rate_amount } = self;
+    let AllowanceBuilder { name, spender, cap, start_ms, expiry_ms, rate_period_ms, rate_amount } =
+        self;
     allowance::new<T>(
+        name,
         spender,
         cap,
         start_ms,
@@ -100,8 +113,10 @@ fun create<T>(self: AllowanceBuilder, ctx: &mut TxContext) {
 
 /// Same, app-bound to `A` through `new_for_app`.
 fun create_for_app<T, A>(self: AllowanceBuilder, ctx: &mut TxContext) {
-    let AllowanceBuilder { spender, cap, start_ms, expiry_ms, rate_period_ms, rate_amount } = self;
+    let AllowanceBuilder { name, spender, cap, start_ms, expiry_ms, rate_period_ms, rate_amount } =
+        self;
     allowance::new_for_app<T, A>(
+        name,
         spender,
         cap,
         start_ms,
@@ -353,6 +368,112 @@ fun test_withdrawal_bound_to_other_allowance_rejected() {
         let second = ts::most_recent_id_shared<Allowance<Balance<TEST>>>().destroy_some();
         let mut alw = ts::take_shared_by_id<Allowance<Balance<TEST>>>(scenario, second);
         spend(&mut alw, first, FUNDER, 100, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::ENameTooLong)]
+fun test_name_too_long_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        let mut name = b"".to_string();
+        129u8.do!(|_| name.append(b"x".to_string()));
+        // 128 bytes is the inclusive limit; 129 aborts.
+        new_allowance()
+            .named(name.substring(0, 128))
+            .lifetime_cap(1000)
+            .create<Balance<TEST>>(scenario.ctx());
+        new_allowance()
+            .named(name)
+            .lifetime_cap(1000)
+            .create<Balance<TEST>>(scenario.ctx());
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::ENoLimit)]
+fun test_no_limit_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        new_allowance().create<Balance<TEST>>(scenario.ctx());
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EBadRateLimit)]
+fun test_one_sided_rate_limit_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        // A period without an amount; the builder cannot express this shape.
+        allowance::new<Balance<TEST>>(
+            b"test allowance".to_string(),
+            SPENDER,
+            option::none(),
+            option::none(),
+            option::none(),
+            option::some(100),
+            option::none(),
+            scenario.ctx(),
+        );
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EBadRateLimit)]
+fun test_zero_rate_period_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        new_allowance().rate_limit(0, 500).create<Balance<TEST>>(scenario.ctx());
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EZeroLifetimeCap)]
+fun test_zero_lifetime_cap_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        new_allowance().lifetime_cap(0).create<Balance<TEST>>(scenario.ctx());
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EBadTimeWindow)]
+fun test_expiry_before_start_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        new_allowance()
+            .lifetime_cap(1000)
+            .starts_at_ms(100)
+            .expires_at_ms(50)
+            .create<Balance<TEST>>(scenario.ctx());
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EWrongApp)]
+fun test_wrong_app_permit_rejected() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().lifetime_cap(1000).create_for_app<Balance<TEST>, APP>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+        // A permit for a different app than the allowance is bound to.
+        let b = alw.spend_balance_as_app(
+            allowance::permit(internal::permit<APP2>()),
+            allowance::new_withdrawal_for_testing<Balance<TEST>>(id, FUNDER, 100),
+            clock,
+        );
+        b.destroy_for_testing();
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::ENoApp)]
+fun test_app_spend_on_plain_allowance_rejected() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().lifetime_cap(1000).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+        spend_as_app(&mut alw, id, 100, clock);
         ts::return_shared(alw);
     });
 }

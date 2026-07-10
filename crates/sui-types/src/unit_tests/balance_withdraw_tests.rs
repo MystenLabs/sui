@@ -479,6 +479,7 @@ fn capped_allowance_input_objects(
 ) -> InputObjects {
     let contents = Allowance {
         id: UID::new(allowance),
+        name: "".to_string(),
         funder,
         spender: Some(spender),
         app: None,

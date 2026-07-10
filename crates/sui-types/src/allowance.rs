@@ -55,6 +55,7 @@ pub struct Allowance {
     pub start_timestamp_ms: Option<u64>,
     pub expiration_timestamp_ms: Option<u64>,
     pub rate_limit: Option<RateLimit>,
+    pub name: String,
 }
 
 impl Allowance {

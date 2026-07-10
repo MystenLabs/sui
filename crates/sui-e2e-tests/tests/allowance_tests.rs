@@ -48,6 +48,7 @@ async fn test_allowance_issue_and_spend() {
     let (_, funder_gas) = test_env.get_sender_and_gas(0);
     let mut builder = ProgrammableTransactionBuilder::new();
     let args = vec![
+        builder.pure("".to_string()).unwrap(), // name
         builder.pure(spender).unwrap(),
         builder.pure(Some(U256::from(SPEND))).unwrap(), // lifetime_cap
         builder.pure(None::<u64>).unwrap(),             // start_timestamp_ms

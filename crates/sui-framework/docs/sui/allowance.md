@@ -12,8 +12,8 @@ redeem in one step, so limits are never consumed without funds moving.
 
 -  [Struct `AllowanceWithdrawal`](#sui_allowance_AllowanceWithdrawal)
 -  [Struct `Allowance`](#sui_allowance_Allowance)
--  [Struct `RateLimit`](#sui_allowance_RateLimit)
 -  [Struct `AllowanceCap`](#sui_allowance_AllowanceCap)
+-  [Struct `RateLimit`](#sui_allowance_RateLimit)
 -  [Struct `Permit`](#sui_allowance_Permit)
 -  [Constants](#@Constants_0)
 -  [Function `permit`](#sui_allowance_permit)
@@ -160,6 +160,46 @@ A shared object (discoverable + revocable); the spending tx references it by id.
 </dt>
 <dd>
 </dd>
+<dt>
+<code>name: <a href="../std/string.md#std_string_String">std::string::String</a></code>
+</dt>
+<dd>
+ custom label, at most 128 bytes; only present for off-chain consumption
+ (adding a short desc or label for an allowance, not consulted by any check)
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_allowance_AllowanceCap"></a>
+
+## Struct `AllowanceCap`
+
+Revocation for an allowance, sent to the funder at issuance (key-only, non-transferrable).
+Also used for discoverability (funder -> allowances)
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/allowance.md#sui_allowance_AllowanceCap">AllowanceCap</a>&lt;<b>phantom</b> T&gt; <b>has</b> key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code><a href="../sui/allowance.md#sui_allowance">allowance</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+</dd>
 </dl>
 
 
@@ -200,39 +240,6 @@ window.
 </dd>
 <dt>
 <code>window_start_ms: u64</code>
-</dt>
-<dd>
-</dd>
-</dl>
-
-
-</details>
-
-<a name="sui_allowance_AllowanceCap"></a>
-
-## Struct `AllowanceCap`
-
-Revocation authority for one allowance, sent to the funder at issuance.
-Key-only, so it cannot leave its owner's account except through this module.
-
-
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/allowance.md#sui_allowance_AllowanceCap">AllowanceCap</a>&lt;<b>phantom</b> T&gt; <b>has</b> key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
-</dt>
-<dd>
-</dd>
-<dt>
-<code><a href="../sui/allowance.md#sui_allowance">allowance</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -354,7 +361,7 @@ allowance API has its own authorization type instead of <code>internal::Permit</
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/allowance.md#sui_allowance_EBadRateLimit">EBadRateLimit</a>: vector&lt;u8&gt; = b"Rate limit needs both a period and an amount, or neither";
+<b>const</b> <a href="../sui/allowance.md#sui_allowance_EBadRateLimit">EBadRateLimit</a>: vector&lt;u8&gt; = b"Rate limit needs a positive period and amount, both set or neither";
 </code></pre>
 
 
@@ -364,7 +371,7 @@ allowance API has its own authorization type instead of <code>internal::Permit</
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/allowance.md#sui_allowance_ENotStarted">ENotStarted</a>: vector&lt;u8&gt; = b"<a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a> is not active yet; tt <b>has</b> a future start timestamp.";
+<b>const</b> <a href="../sui/allowance.md#sui_allowance_ENotStarted">ENotStarted</a>: vector&lt;u8&gt; = b"<a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a> is not active yet; it <b>has</b> a future start timestamp";
 </code></pre>
 
 
@@ -399,6 +406,45 @@ allowance API has its own authorization type instead of <code>internal::Permit</
 
 
 
+<a name="sui_allowance_ENameTooLong"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/allowance.md#sui_allowance_ENameTooLong">ENameTooLong</a>: vector&lt;u8&gt; = b"Name exceeds the 128-byte limit";
+</code></pre>
+
+
+
+<a name="sui_allowance_EZeroLifetimeCap"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/allowance.md#sui_allowance_EZeroLifetimeCap">EZeroLifetimeCap</a>: vector&lt;u8&gt; = b"Lifetime cap must be greater than zero";
+</code></pre>
+
+
+
+<a name="sui_allowance_EBadTimeWindow"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/allowance.md#sui_allowance_EBadTimeWindow">EBadTimeWindow</a>: vector&lt;u8&gt; = b"Expiration must be after the start time";
+</code></pre>
+
+
+
+<a name="sui_allowance_MAX_NAME_LENGTH"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/allowance.md#sui_allowance_MAX_NAME_LENGTH">MAX_NAME_LENGTH</a>: u64 = 128;
+</code></pre>
+
+
+
 <a name="sui_allowance_permit"></a>
 
 ## Function `permit`
@@ -428,11 +474,9 @@ Only <code>A</code>'s module can create <code>internal::Permit&lt;A&gt;</code>, 
 
 ## Function `new`
 
-Issue a signer-only allowance funded by the sender, delegating to <code>spender</code>.
-The sender receives the <code><a href="../sui/allowance.md#sui_allowance_AllowanceCap">AllowanceCap</a></code> for it.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_new">new</a>&lt;T&gt;(spender: <b>address</b>, lifetime_cap: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, start_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, expiration_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_period_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_amount: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_new">new</a>&lt;T&gt;(name: <a href="../std/string.md#std_string_String">std::string::String</a>, spender: <b>address</b>, lifetime_cap: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, start_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, expiration_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_period_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_amount: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -442,6 +486,7 @@ The sender receives the <code><a href="../sui/allowance.md#sui_allowance_Allowan
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_new">new</a>&lt;T&gt;(
+    name: String,
     spender: <b>address</b>,
     lifetime_cap: Option&lt;u256&gt;,
     start_timestamp_ms: Option&lt;u64&gt;,
@@ -451,6 +496,7 @@ The sender receives the <code><a href="../sui/allowance.md#sui_allowance_Allowan
     ctx: &<b>mut</b> TxContext,
 ) {
     <a href="../sui/allowance.md#sui_allowance_share_new">share_new</a>&lt;T&gt;(
+        name,
         spender,
         option::none(),
         lifetime_cap,
@@ -473,7 +519,7 @@ The sender receives the <code><a href="../sui/allowance.md#sui_allowance_Allowan
 Like <code><a href="../sui/allowance.md#sui_allowance_new">new</a></code>, but also binds the controlling app <code>A</code> (see <code><a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a>.app</code>).
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_new_for_app">new_for_app</a>&lt;T, A&gt;(spender: <b>address</b>, lifetime_cap: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, start_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, expiration_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_period_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_amount: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_new_for_app">new_for_app</a>&lt;T, A&gt;(name: <a href="../std/string.md#std_string_String">std::string::String</a>, spender: <b>address</b>, lifetime_cap: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, start_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, expiration_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_period_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_amount: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -483,6 +529,7 @@ Like <code><a href="../sui/allowance.md#sui_allowance_new">new</a></code>, but a
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/allowance.md#sui_allowance_new_for_app">new_for_app</a>&lt;T, A&gt;(
+    name: String,
     spender: <b>address</b>,
     lifetime_cap: Option&lt;u256&gt;,
     start_timestamp_ms: Option&lt;u64&gt;,
@@ -492,6 +539,7 @@ Like <code><a href="../sui/allowance.md#sui_allowance_new">new</a></code>, but a
     ctx: &<b>mut</b> TxContext,
 ) {
     <a href="../sui/allowance.md#sui_allowance_share_new">share_new</a>&lt;T&gt;(
+        name,
         spender,
         option::some(type_name::with_defining_ids&lt;A&gt;()),
         lifetime_cap,
@@ -709,18 +757,17 @@ callers' responsibility.
     <b>assert</b>!(inner.owner() == self.funder, <a href="../sui/allowance.md#sui_allowance_EWrongFunder">EWrongFunder</a>);
     <b>let</b> amount = inner.limit();
     <b>let</b> now = <a href="../sui/clock.md#sui_clock">clock</a>.timestamp_ms();
-    <b>if</b> (self.start_timestamp_ms.is_some()) {
-        <b>assert</b>!(now &gt;= *self.start_timestamp_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>(), <a href="../sui/allowance.md#sui_allowance_ENotStarted">ENotStarted</a>);
-    };
-    <b>if</b> (self.expiration_timestamp_ms.is_some()) {
-        <b>assert</b>!(now &lt;= *self.expiration_timestamp_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>(), <a href="../sui/allowance.md#sui_allowance_EExpired">EExpired</a>);
-    };
-    <b>if</b> (self.lifetime_cap.is_some()) {
-        <b>assert</b>!(self.current_spend + amount &lt;= *self.lifetime_cap.<a href="../sui/borrow.md#sui_borrow">borrow</a>(), <a href="../sui/allowance.md#sui_allowance_EExceedsLifetimeCap">EExceedsLifetimeCap</a>);
-    };
+    self.start_timestamp_ms.do_ref!(|start_timestamp_ms| {
+        <b>assert</b>!(now &gt;= *start_timestamp_ms, <a href="../sui/allowance.md#sui_allowance_ENotStarted">ENotStarted</a>);
+    });
+    self.expiration_timestamp_ms.do_ref!(|expiration_timestamp_ms| {
+        <b>assert</b>!(now &lt;= *expiration_timestamp_ms, <a href="../sui/allowance.md#sui_allowance_EExpired">EExpired</a>);
+    });
+    self.lifetime_cap.do_ref!(|lifetime_cap| {
+        <b>assert</b>!(self.current_spend + amount &lt;= *lifetime_cap, <a href="../sui/allowance.md#sui_allowance_EExceedsLifetimeCap">EExceedsLifetimeCap</a>);
+    });
     self.current_spend = self.current_spend + amount;
-    <b>if</b> (self.rate_limit.is_some()) {
-        <b>let</b> rl = self.rate_limit.borrow_mut();
+    self.rate_limit.do_mut!(|rl| {
         // Tumbling window: reset once the period <b>has</b> elapsed.
         <b>if</b> (now &gt;= rl.window_start_ms + rl.period_ms) {
             rl.window_start_ms = now;
@@ -728,7 +775,7 @@ callers' responsibility.
         };
         <b>assert</b>!(rl.spent + amount &lt;= rl.limit, <a href="../sui/allowance.md#sui_allowance_EExceedsRateLimit">EExceedsRateLimit</a>);
         rl.spent = rl.spent + amount;
-    };
+    });
     inner
 }
 </code></pre>
@@ -755,14 +802,17 @@ Both <code>Some</code> (a limit) or both <code>None</code> (no limit); a mismatc
 
 <pre><code><b>fun</b> <a href="../sui/allowance.md#sui_allowance_build_rate_limit">build_rate_limit</a>(period_ms: Option&lt;u64&gt;, amount: Option&lt;u256&gt;): Option&lt;<a href="../sui/allowance.md#sui_allowance_RateLimit">RateLimit</a>&gt; {
     <b>assert</b>!(period_ms.is_some() == amount.is_some(), <a href="../sui/allowance.md#sui_allowance_EBadRateLimit">EBadRateLimit</a>);
-    <b>if</b> (period_ms.is_none()) option::none()
-    <b>else</b>
-        option::some(<a href="../sui/allowance.md#sui_allowance_RateLimit">RateLimit</a> {
-            period_ms: *period_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>(),
-            limit: *amount.<a href="../sui/borrow.md#sui_borrow">borrow</a>(),
-            spent: 0,
-            window_start_ms: 0,
-        })
+    <b>if</b> (period_ms.is_none()) <b>return</b> option::none();
+    <b>let</b> period_ms = *period_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>();
+    <b>let</b> limit = *amount.<a href="../sui/borrow.md#sui_borrow">borrow</a>();
+    // A zero period resets the window on every spend; a zero amount spends nothing.
+    <b>assert</b>!(period_ms &gt; 0 && limit &gt; 0, <a href="../sui/allowance.md#sui_allowance_EBadRateLimit">EBadRateLimit</a>);
+    option::some(<a href="../sui/allowance.md#sui_allowance_RateLimit">RateLimit</a> {
+        period_ms,
+        limit,
+        spent: 0,
+        window_start_ms: 0,
+    })
 }
 </code></pre>
 
@@ -776,7 +826,7 @@ Both <code>Some</code> (a limit) or both <code>None</code> (no limit); a mismatc
 
 
 
-<pre><code><b>fun</b> <a href="../sui/allowance.md#sui_allowance_share_new">share_new</a>&lt;T&gt;(spender: <b>address</b>, app: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;, lifetime_cap: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, start_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, expiration_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_limit: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/allowance.md#sui_allowance_RateLimit">sui::allowance::RateLimit</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/allowance.md#sui_allowance_share_new">share_new</a>&lt;T&gt;(name: <a href="../std/string.md#std_string_String">std::string::String</a>, spender: <b>address</b>, app: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>&gt;, lifetime_cap: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u256&gt;, start_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, expiration_timestamp_ms: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, rate_limit: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/allowance.md#sui_allowance_RateLimit">sui::allowance::RateLimit</a>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -786,6 +836,7 @@ Both <code>Some</code> (a limit) or both <code>None</code> (no limit); a mismatc
 
 
 <pre><code><b>fun</b> <a href="../sui/allowance.md#sui_allowance_share_new">share_new</a>&lt;T&gt;(
+    name: String,
     spender: <b>address</b>,
     app: Option&lt;TypeName&gt;,
     lifetime_cap: Option&lt;u256&gt;,
@@ -794,10 +845,19 @@ Both <code>Some</code> (a limit) or both <code>None</code> (no limit); a mismatc
     rate_limit: Option&lt;<a href="../sui/allowance.md#sui_allowance_RateLimit">RateLimit</a>&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    // we do not allow unlimited allowances (TODO: Do we want to?)
+    // we do not allow unlimited allowances (TODO: Do we?)
     <b>assert</b>!(lifetime_cap.is_some() || rate_limit.is_some(), <a href="../sui/allowance.md#sui_allowance_ENoLimit">ENoLimit</a>);
+    <b>assert</b>!(name.length() &lt;= <a href="../sui/allowance.md#sui_allowance_MAX_NAME_LENGTH">MAX_NAME_LENGTH</a>, <a href="../sui/allowance.md#sui_allowance_ENameTooLong">ENameTooLong</a>);
+    lifetime_cap.do_ref!(|cap| <b>assert</b>!(*cap &gt; 0, <a href="../sui/allowance.md#sui_allowance_EZeroLifetimeCap">EZeroLifetimeCap</a>));
+    <b>if</b> (start_timestamp_ms.is_some() && expiration_timestamp_ms.is_some()) {
+        <b>assert</b>!(
+            *start_timestamp_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>() &lt; *expiration_timestamp_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>(),
+            <a href="../sui/allowance.md#sui_allowance_EBadTimeWindow">EBadTimeWindow</a>,
+        );
+    };
     <b>let</b> <a href="../sui/allowance.md#sui_allowance">allowance</a> = <a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a>&lt;T&gt; {
         id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        name,
         funder: ctx.sender(),
         spender: option::some(spender),
         app,
