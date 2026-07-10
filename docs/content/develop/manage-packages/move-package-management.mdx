@@ -27,7 +27,7 @@ If you do need to add a persistent environment (for example, a custom Devnet dep
 devnet = "aba3e445"
 ```
 
-Use `sui client chain-identifier` to find the chain ID for your network. Note that `mainnet` and `testnet` are implicitly available and do not need to be listed.
+Use `sui client chain-identifier` to find the chain ID for your network. The command displays the chain ID in both Base58 and Hex formats; either format can be used in `Move.toml`. Note that `mainnet` and `testnet` are implicitly available and do not need to be listed.
 
 :::
 
@@ -238,7 +238,7 @@ By default, the available environments are `mainnet` and `testnet`, but you can 
 devnet = "aba3e445"
 ```
 
-The right-hand side of the entry is the chain identifier for the network. You can find the chain ID using `sui client chain-identifier`. The chain identifier is used to ensure dependencies agree on the meaning of the environment name, and to reset package addresses if the network is wiped and restarted.
+The right-hand side of the entry is the chain identifier for the network. You can find the chain ID using `sui client chain-identifier`, which displays it in both Base58 and Hex formats. Either format is accepted in the `[environments]` section. The chain identifier is used to ensure dependencies agree on the meaning of the environment name, and to reset package addresses if the network is wiped and restarted.
 
 :::caution
 

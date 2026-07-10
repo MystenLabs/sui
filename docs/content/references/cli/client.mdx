@@ -59,6 +59,34 @@ Active environment switched to [mainnet]
 
 If you run `sui client envs` after this command, you see the asterisk in the `active` column on the `mainnet` row of the table.
 
+### Get the chain identifier
+
+Use the `sui client chain-identifier` command to query the chain identifier of the current network. The command prints it in both encodings: the full Base58-encoded genesis checkpoint digest (the format returned by the gRPC and GraphQL APIs) and the legacy hex short form (its first 4 bytes). Either value can be used as a chain ID in the `[environments]` section of `Move.toml`.
+
+```sh
+$ sui client chain-identifier
+```
+```sh
+Base58: 4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S
+Hex: 35834a8a
+```
+
+Use the `--format` option to print only one encoding:
+
+```sh
+$ sui client chain-identifier --format base58
+```
+```sh
+4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S
+```
+
+```sh
+$ sui client chain-identifier --format hex
+```
+```sh
+35834a8a
+```
+
 ### Get current active address
 
 Use the `sui client active-address` command to reveal the current address. The CLI uses the current active address to execute address-specific CLI commands (like `sui client objects`) when you don't provide them with a Sui address value.

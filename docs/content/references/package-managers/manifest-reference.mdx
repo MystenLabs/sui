@@ -50,3 +50,5 @@ usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "pack
 ascii = { use-environment = "ascii" }
 usdc = { use-environment = "testnet" }
 ```
+
+The chain ID on the right-hand side of an `[environments]` entry can be specified in either the legacy hex short form (for example, `4c78adac`) or the full Base58 form (for example, `69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD`). Both formats are accepted interchangeably. Run `sui client chain-identifier` to find the chain ID for your network in both formats.
