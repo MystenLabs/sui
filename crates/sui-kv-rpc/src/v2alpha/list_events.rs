@@ -34,10 +34,7 @@ use sui_rpc_api::ledger_history::query_options::EventPosition;
 use sui_rpc_api::ledger_history::query_options::EventScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedEventRange;
-use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
-use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
-use sui_rpc_api::ledger_history::watermark::boundary_watermark;
-use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::CheckpointBoundary;
 use sui_rpc_api::ledger_history::watermark::reached_range_end;
 use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
@@ -91,6 +88,7 @@ pub(crate) async fn list_events(
     let limit_items = options.limit_items;
     let ordering = options.ordering;
     let direction = options.scan_direction();
+    let ascending = options.is_ascending();
     let wants_json = read_mask.contains(ProtoEvent::JSON_FIELD.name);
 
     let event_range = resolve_event_range(&client, checkpoint_range, &options)
@@ -98,12 +96,12 @@ pub(crate) async fn list_events(
         .await?;
     let end_reason = event_range.end_reason;
     let terminal_watermark = terminal_boundary_watermark(
-        &options,
         Position::Events {
             checkpoint: event_range.end_checkpoint,
             tx_seq: event_range.end_position.tx_seq,
             event_index: event_range.end_position.event_index,
         },
+        ascending,
     );
     let event_bounds = event_range.bounds;
 
@@ -262,29 +260,23 @@ pub(crate) async fn list_events(
     Ok(async_stream::try_stream! {
         futures::pin_mut!(event_stream);
         let mut emitted = 0usize;
-        let mut checkpoint_boundary: Option<u64> = None;
+        let mut checkpoint_boundary = CheckpointBoundary::new(ascending);
         let mut scan_limit_hit = false;
         while let Some(item) = event_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item(rendered)) => {
-                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, rendered.checkpoint_number, &options);
-                    let wm = item_watermark(
+                    let wm = checkpoint_boundary.item_watermark_entered(
                         Position::Events { checkpoint: rendered.checkpoint_number, tx_seq: rendered.position.tx_seq, event_index: rendered.position.event_index },
-                        checkpoint_boundary,
                     );
                     emitted += 1;
                     yield event_item_response(rendered.item, wm);
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
-                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
-                    let wm = boundary_watermark(
-                        Position::Events {
-                            checkpoint: boundary_cursor_cp(cp, direction),
-                            tx_seq: position.tx_seq,
-                            event_index: position.event_index,
-                        },
-                        checkpoint_boundary,
-                    );
+                    let wm = checkpoint_boundary.frontier_watermark(Position::Events {
+                        checkpoint: cp,
+                        tx_seq: position.tx_seq,
+                        event_index: position.event_index,
+                    });
                     yield watermark_response(wm);
                 }
                 Err(BitmapScanError::ScanLimit) => {
