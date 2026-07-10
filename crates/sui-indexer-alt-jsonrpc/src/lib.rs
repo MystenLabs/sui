@@ -34,6 +34,7 @@ use crate::api::move_utils::MoveUtils;
 use crate::api::name_service::NameService;
 use crate::api::objects::Objects;
 use crate::api::objects::QueryObjects;
+use crate::api::protocol::Protocol;
 use crate::api::rpc_module::RpcModule;
 use crate::api::transactions::QueryTransactions;
 use crate::api::transactions::Transactions;
@@ -308,6 +309,7 @@ pub async fn start_rpc(
     rpc.add_module(MoveUtils(context.clone()))?;
     rpc.add_module(NameService(context.clone()))?;
     rpc.add_module(Objects(context.clone()))?;
+    rpc.add_module(Protocol(context.clone()))?;
     rpc.add_module(QueryObjects(context.clone()))?;
     rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
