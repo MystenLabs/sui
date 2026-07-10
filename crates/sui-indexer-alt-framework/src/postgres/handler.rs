@@ -71,10 +71,9 @@ pub trait Handler: Processor<Value: FieldCount> {
 /// Calculate the maximum number of rows that can be inserted in a single batch,
 /// given the number of fields per row.
 const fn max_chunk_rows<T: FieldCount>() -> usize {
-    if T::FIELD_COUNT == 0 {
-        i16::MAX as usize
-    } else {
-        i16::MAX as usize / T::FIELD_COUNT
+    match (i16::MAX as usize).checked_div(T::FIELD_COUNT) {
+        Some(rows) => rows,
+        None => i16::MAX as usize,
     }
 }
 

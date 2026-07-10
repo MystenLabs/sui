@@ -286,8 +286,7 @@ pub trait ObjectCacheRead: Send + Sync {
                     .iter()
                     .map(|(_, k)| ObjectKey(k.0.id(), *k.1))
                     .collect::<Vec<_>>(),
-            )
-            .into_iter(),
+            ),
         ) {
             // If the key exists at the specified version, then the object is available.
             if has_key {
@@ -479,7 +478,7 @@ pub trait TransactionCacheRead: Send + Sync {
         }
 
         let effects = self.multi_get_effects(&fetch_digests);
-        for (i, effects) in fetch_indices.into_iter().zip_debug_eq(effects.into_iter()) {
+        for (i, effects) in fetch_indices.into_iter().zip_debug_eq(effects) {
             results[i] = effects;
         }
 

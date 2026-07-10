@@ -734,10 +734,7 @@ impl TestCluster {
             .collect();
 
         let wait_responses = join_all(wait_futures).await;
-        for ((index, _), response) in submitted_positions
-            .into_iter()
-            .zip_debug_eq(wait_responses.into_iter())
-        {
+        for ((index, _), response) in submitted_positions.into_iter().zip_debug_eq(wait_responses) {
             match response? {
                 WaitForEffectsResponse::Executed { details, .. } => {
                     let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
@@ -856,7 +853,7 @@ impl TestCluster {
 
         let results: SuiResult<Vec<_>> = digests
             .into_iter()
-            .zip_debug_eq(responses.into_iter())
+            .zip_debug_eq(responses)
             .map(|(digest, response)| Ok((digest, response?)))
             .collect();
 
