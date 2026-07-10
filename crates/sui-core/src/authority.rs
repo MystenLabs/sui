@@ -3737,7 +3737,13 @@ impl AuthorityState {
             object_funds_checker: ArcSwapOption::empty(),
             object_funds_checker_metrics,
             pending_post_processing: Arc::new(DashMap::new()),
-            post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(num_cpus::get())),
+            // CLAUDE: debugging-only env override to impersonate CI runner CPU count in simtests.
+            post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(
+                std::env::var("CLAUDE_FAKE_NUM_CPUS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_else(num_cpus::get),
+            )),
         });
         state.init_object_funds_checker().await;
 

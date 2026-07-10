@@ -54,8 +54,17 @@ impl IngestionConfig {
     /// controller's dead band (0.6..0.85) has integer room to maneuver on small machines.
     pub fn subscriber_channel_size(&self) -> usize {
         self.subscriber_channel_size
-            .unwrap_or_else(|| (num_cpus::get() / 2).max(4))
+            .unwrap_or_else(|| (claude_fake_num_cpus() / 2).max(4))
     }
+}
+
+// CLAUDE: debugging-only override so a simtest can impersonate the CI runner's CPU count,
+// which feeds channel sizes and adaptive concurrency and therefore the msim schedule.
+pub(crate) fn claude_fake_num_cpus() -> usize {
+    std::env::var("CLAUDE_FAKE_NUM_CPUS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(num_cpus::get)
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to

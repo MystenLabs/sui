@@ -267,7 +267,7 @@ pub(crate) fn pipeline<H: Handler>(
     let concurrency = fanout.unwrap_or(ConcurrencyConfig::Adaptive {
         initial: 1,
         min: 1,
-        max: num_cpus::get().max(1),
+        max: crate::pipeline::claude_fake_num_cpus().max(1),
         dead_band: None,
     });
     let min_eager_rows = min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
@@ -275,17 +275,17 @@ pub(crate) fn pipeline<H: Handler>(
     let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
 
     let processor_channel_size = processor_channel_size
-        .unwrap_or_else(|| num_cpus::get() / 2)
+        .unwrap_or_else(|| crate::pipeline::claude_fake_num_cpus() / 2)
         .max(1);
     let (processor_tx, collector_rx) = mpsc::channel(processor_channel_size);
 
     let collector_channel_size = collector_channel_size
-        .unwrap_or_else(|| num_cpus::get() / 2)
+        .unwrap_or_else(|| crate::pipeline::claude_fake_num_cpus() / 2)
         .max(1);
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
     let (collector_tx, committer_rx) = mpsc::channel(collector_channel_size);
     //docs::/#buff
-    let committer_channel_size = committer_channel_size.unwrap_or_else(num_cpus::get).max(1);
+    let committer_channel_size = committer_channel_size.unwrap_or_else(|| crate::pipeline::claude_fake_num_cpus()).max(1);
     let (committer_tx, watermark_rx) = mpsc::channel(committer_channel_size);
     let main_reader_lo = Arc::new(SetOnce::new());
 
