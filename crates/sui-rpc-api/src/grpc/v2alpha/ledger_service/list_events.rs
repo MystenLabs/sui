@@ -35,8 +35,8 @@ use crate::RpcService;
 use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::EventScanBounds;
+use crate::ledger_history::query_options::EventScanRange;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::ResolvedEventRange;
 
 use super::query_end::query_end;
 
@@ -239,14 +239,7 @@ fn next_event_chunk(
             }
             let terminal = ChunkTerminal {
                 reason: event_range.end_reason,
-                watermark: terminal_boundary_watermark(
-                    &options,
-                    Position::Events {
-                        checkpoint: event_range.end_checkpoint,
-                        tx_seq: event_range.end_position.tx_seq,
-                        event_index: event_range.end_position.event_index,
-                    },
-                ),
+                watermark: terminal_boundary_watermark(&options, event_range.end_position),
             };
             let bounds = event_range.bounds;
             if event_range.is_empty() {
@@ -590,29 +583,32 @@ fn resolve_event_range(
     start_checkpoint: Option<u64>,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedEventRange, RpcError> {
+) -> Result<EventScanRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
     if cp_range.is_empty() {
         let tx_boundary =
             checkpoint_to_tx_boundary(service, cp_range.terminal_checkpoint(options.ordering))?;
-        return Ok(ResolvedEventRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            EventPosition::start_of_tx(tx_boundary),
+        return Ok(EventScanRange::empty_at(
+            Position::Events {
+                checkpoint: cp_range.terminal_checkpoint(options.ordering),
+                tx_seq: tx_boundary,
+                event_index: 0,
+            },
             cp_range.end_reason,
         ));
     }
 
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved = ResolvedEventRange {
+    let end_tx = match options.ordering {
+        crate::ledger_history::query_options::Ordering::Ascending => tx_range.end,
+        crate::ledger_history::query_options::Ordering::Descending => tx_range.start,
+    };
+    let mut resolved = EventScanRange {
         bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
-        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
-        end_position: match options.ordering {
-            crate::ledger_history::query_options::Ordering::Ascending => {
-                EventPosition::start_of_tx(tx_range.end)
-            }
-            crate::ledger_history::query_options::Ordering::Descending => {
-                EventPosition::start_of_tx(tx_range.start)
-            }
+        end_position: Position::Events {
+            checkpoint: cp_range.terminal_checkpoint(options.ordering),
+            tx_seq: end_tx,
+            event_index: 0,
         },
         end_reason: cp_range.end_reason,
     };
