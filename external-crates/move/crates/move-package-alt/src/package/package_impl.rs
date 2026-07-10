@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use derive_where::derive_where;
 use sha2::{Digest as _, Sha256};
@@ -66,6 +66,25 @@ pub struct Package<F: MoveFlavor> {
     pub dummy_addr: OriginalID,
 }
 
+/// Read the publication recorded for `env` at the package rooted in `dir`, consulting the modern
+/// pubfile and then a legacy lockfile, without loading the dependency graph. Returns `None` if the
+/// package records no publication for `env`.
+///
+/// This resolves the publication the same way [`Package::load`] does, so a caller learns a package's
+/// published address exactly as the package system would resolve it when linking against that
+/// package, without paying for a full graph load.
+pub async fn read_publication<F: MoveFlavor>(
+    dir: &Path,
+    env: &Environment,
+    flavor: &F,
+) -> PackageResult<Option<Publication<F>>> {
+    let path = PackagePath::new(dir.to_path_buf())?;
+    let mtx = path.lock()?;
+    let (_, _, publication) =
+        Package::<F>::read_manifest_and_publication(&path, env, true, &mtx, flavor).await?;
+    Ok(publication)
+}
+
 impl<F: MoveFlavor> Package<F> {
     /// Fetch `dep` (relative to `self`) and load a package from the fetched source.
     /// Makes a best effort to translate old-style packages into the current format.
@@ -79,33 +98,8 @@ impl<F: MoveFlavor> Package<F> {
         let flavor = &*config.flavor;
         let path = fetch::fetch(&dep, config.allow_dirty, &config.chain_id).await?;
 
-        // try to load a legacy manifest (with an `[addresses]` section)
-        //   - if it fails, load a modern manifest (and return any errors)
-        let legacy_manifest = path
-            .read_legacy_manifest::<F>(env, dep.is_root(), mtx, flavor)
-            .await?;
-        let (file_handle, manifest) = if let Some(result) = legacy_manifest {
-            result
-        } else {
-            let manifest = Manifest::read_from_file(&path, mtx)?;
-            check_for_environment(&manifest, &env.name, flavor)?;
-
-            (*manifest.file_handle(), manifest.into_parsed())
-        };
-
-        flavor
-            .validate_manifest(&manifest)
-            .map_err(|msg| ManifestError::flavor_rejected_manifest(file_handle, msg))?;
-
-        // try to load the address from the modern lockfile
-        //   - if it fails, look in the legacy data
-        //   - if that fails, use a dummy address
-        let publication = Self::load_publication(&path, env.name(), mtx)?.or_else(|| {
-            manifest
-                .legacy_data
-                .as_ref()
-                .and_then(|legacy| legacy.publication::<F>(env))
-        });
+        let (file_handle, manifest, publication) =
+            Self::read_manifest_and_publication(&path, env, dep.is_root(), mtx, flavor).await?;
 
         // TODO: try to gather dependencies from the modern lockfile
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
@@ -218,6 +212,47 @@ impl<F: MoveFlavor> Package<F> {
 
     pub fn metadata(&self) -> &PackageMetadata {
         &self.metadata
+    }
+
+    /// Read the manifest for the (already-fetched) package at `path` and the publication recorded
+    /// for `env` — from the modern pubfile, falling back to a legacy lockfile — without resolving
+    /// the dependency graph. Shared by [`Self::load`] and [`read_publication`].
+    async fn read_manifest_and_publication(
+        path: &PackagePath,
+        env: &Environment,
+        is_root: bool,
+        mtx: &PackageSystemLock,
+        flavor: &F,
+    ) -> PackageResult<(FileHandle, ParsedManifest, Option<Publication<F>>)> {
+        // try to load a legacy manifest (with an `[addresses]` section)
+        //   - if it fails, load a modern manifest (and return any errors)
+        let legacy_manifest = path
+            .read_legacy_manifest::<F>(env, is_root, mtx, flavor)
+            .await?;
+        let (file_handle, manifest) = if let Some(result) = legacy_manifest {
+            result
+        } else {
+            let manifest = Manifest::read_from_file(path, mtx)?;
+            check_for_environment(&manifest, &env.name, flavor)?;
+
+            (*manifest.file_handle(), manifest.into_parsed())
+        };
+
+        flavor
+            .validate_manifest(&manifest)
+            .map_err(|msg| ManifestError::flavor_rejected_manifest(file_handle, msg))?;
+
+        // try to load the address from the modern lockfile
+        //   - if it fails, look in the legacy data
+        //   - if that fails, there is no recorded publication
+        let publication = Self::load_publication(path, env.name(), mtx)?.or_else(|| {
+            manifest
+                .legacy_data
+                .as_ref()
+                .and_then(|legacy| legacy.publication::<F>(env))
+        });
+
+        Ok((file_handle, manifest, publication))
     }
 
     /// Read the publication for the given environment from the package pubfile.
@@ -589,6 +624,42 @@ mod tests {
 
     /// Create a basic package and then call cache_package on a local dependency to it; check that
     /// the returned fields are correct
+    /// `read_publication` returns the addresses a package recorded, without building its graph.
+    #[test(tokio::test)]
+    async fn read_publication_returns_recorded_addresses() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_published("a", OriginalID::from(1), PublishedID::from(2))
+            .build();
+
+        let publication = read_publication::<Vanilla>(
+            &scenario.path_for("a"),
+            &Vanilla::default_environment(),
+            &Vanilla::new(),
+        )
+        .await
+        .unwrap()
+        .expect("package records a publication");
+
+        assert_eq!(publication.addresses.original_id, OriginalID::from(1));
+        assert_eq!(publication.addresses.published_at, PublishedID::from(2));
+    }
+
+    /// `read_publication` returns `None` for a package that has not been published.
+    #[test(tokio::test)]
+    async fn read_publication_is_none_when_unpublished() {
+        let scenario = TestPackageGraph::new(["a"]).build();
+
+        let publication = read_publication::<Vanilla>(
+            &scenario.path_for("a"),
+            &Vanilla::default_environment(),
+            &Vanilla::new(),
+        )
+        .await
+        .unwrap();
+
+        assert!(publication.is_none());
+    }
+
     #[test(tokio::test)]
     async fn test_cache_package() {
         let scenario = TestPackageGraph::new(["root"])
