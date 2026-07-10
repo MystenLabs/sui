@@ -9,5 +9,6 @@ pub mod config;
 pub mod metrics;
 pub mod multiaddr;
 pub mod quinn_metrics;
+pub mod request_log;
 
 pub use crate::multiaddr::Multiaddr;

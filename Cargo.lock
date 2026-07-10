@@ -9657,6 +9657,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "anyhow",
+ "base64 0.21.7",
  "bcs",
  "bytes",
  "dashmap 5.5.3",
@@ -9664,12 +9665,16 @@ dependencies = [
  "futures",
  "http 1.3.1",
  "http-body 1.0.1",
+ "http-body-util",
  "hyper-rustls",
  "hyper-util",
  "multiaddr",
  "mysten-metrics",
  "once_cell",
+ "pin-project-lite",
  "prometheus",
+ "prost 0.14.1",
+ "prost-reflect",
  "quinn-proto",
  "rand 0.8.5",
  "rustls",
@@ -9680,9 +9685,11 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tonic 0.14.6",
+ "tonic-health",
  "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -11485,10 +11492,13 @@ version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89a3ac73ec9a9118131a4594c9d336631a07852220a1d0ae03ee36b04503a063"
 dependencies = [
+ "base64 0.22.1",
  "logos 0.15.1",
  "miette",
  "prost 0.14.1",
  "prost-types 0.14.1",
+ "serde",
+ "serde-value",
 ]
 
 [[package]]
@@ -13035,6 +13045,16 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "typeid",
+]
+
+[[package]]
+name = "serde-value"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3a1a3341211875ef120e117ea7fd5228530ae7e7036a779fdc9117be6b3282c"
+dependencies = [
+ "ordered-float 2.10.1",
+ "serde",
 ]
 
 [[package]]
@@ -15256,6 +15276,7 @@ dependencies = [
  "integer-encoding",
  "move-core-types",
  "mysten-common",
+ "mysten-network",
  "object_store 0.13.0",
  "ouroboros 0.17.2",
  "pin-project",
@@ -15866,6 +15887,7 @@ dependencies = [
  "move-core-types",
  "mysten-common",
  "mysten-metrics",
+ "mysten-network",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -16772,6 +16794,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum 0.8.3",
+ "base64 0.21.7",
  "bcs",
  "bytes",
  "fastcrypto",
@@ -16781,6 +16804,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "mysten-common",
+ "mysten-network",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
