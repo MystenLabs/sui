@@ -54,10 +54,8 @@ use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
 use super::query_end::query_end;
-use crate::ledger_history::watermark::advance_boundary_excluding_cp;
 use crate::ledger_history::watermark::advance_checkpoint_boundary;
-use crate::ledger_history::watermark::boundary_cursor_cp;
-use crate::ledger_history::watermark::boundary_watermark;
+use crate::ledger_history::watermark::frontier_boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::reached_range_end;
 use crate::ledger_history::watermark::terminal_boundary_watermark;
@@ -539,19 +537,8 @@ fn scan_checkpoint_watermark(
     let Some(cp) = sequence_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-    // The frontier lands partway through checkpoint `cp`, so `cp` itself is not
-    // yet proven complete — exclude it from the boundary (`cp ∓ 1`). Contrast
-    // the item path, which feeds an emitted (hence complete) cp_seq straight
-    // into `advance_checkpoint_boundary`.
-    let boundary = advance_boundary_excluding_cp(None, cp, options);
     // Checkpoint cursors live in checkpoint space: position == checkpoint.
-    let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
-    let watermark = boundary_watermark(
-        Position::Checkpoints {
-            checkpoint: cursor_cp,
-        },
-        boundary,
-    );
+    let watermark = frontier_boundary_watermark(options, Position::Checkpoints { checkpoint: cp });
     Ok(Some(watermark_response(watermark)))
 }
 

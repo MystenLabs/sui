@@ -41,6 +41,24 @@ impl Position {
             | Position::Events { checkpoint, .. } => checkpoint,
         }
     }
+
+    /// The same position with its `checkpoint` coordinate replaced; the
+    /// scalar coordinates are preserved.
+    pub fn with_checkpoint(self, checkpoint: u64) -> Self {
+        match self {
+            Position::Checkpoints { .. } => Position::Checkpoints { checkpoint },
+            Position::Transactions { tx_seq, .. } => Position::Transactions { checkpoint, tx_seq },
+            Position::Events {
+                tx_seq,
+                event_index,
+                ..
+            } => Position::Events {
+                checkpoint,
+                tx_seq,
+                event_index,
+            },
+        }
+    }
 }
 
 /// Whether a cursor position is a matched row that was returned to the client (`Item`) or a scan
