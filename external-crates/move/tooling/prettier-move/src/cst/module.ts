@@ -129,13 +129,13 @@ function printModuleIdentity(path: AstPath<Node>, options: ParserOptions, print:
 /**
  * Members that must be separated by an empty line if they are next to each other.
  * For example, a function definition followed by a struct definition.
+ * Native declarations are excluded so that consecutive natives and
+ * wrapper-fun / native-impl pairs can stay glued.
  */
 const separatedMembers = [
     FunctionDefinition.FunctionDefinition,
-    FunctionDefinition.NativeFunctionDefinition,
     FunctionDefinition.MacroFunctionDefinition,
     StructDefinition.StructDefinition,
-    StructDefinition.NativeStructDefinition,
     Constant.NODE_TYPE,
     UseDeclaration.UseDeclaration,
     UseDeclaration.FriendDeclaration,
@@ -143,12 +143,12 @@ const separatedMembers = [
 ] as string[];
 
 /**
- * Function-like members are always separated by an empty line, even from each
- * other (unlike e.g. constants, which are allowed to be glued together).
+ * Function-like members with bodies are always separated by an empty line,
+ * even from each other (unlike e.g. constants or native declarations, which
+ * are allowed to be glued together).
  */
 const functionMembers = [
     FunctionDefinition.FunctionDefinition,
-    FunctionDefinition.NativeFunctionDefinition,
     FunctionDefinition.MacroFunctionDefinition,
 ] as string[];
 
