@@ -275,7 +275,7 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
-        highest_round_per_authority: Vec<u64>,
+        highest_round_per_authority: Vec<Round>,
     ) -> ConsensusResult<ObserverBlockStream>;
 
     /// Handles the request to fetch blocks by references from an observer peer.
@@ -307,7 +307,7 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
     async fn stream_blocks(
         &self,
         peer: PeerId,
-        highest_round_per_authority: Vec<u64>,
+        highest_round_per_authority: Vec<Round>,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream>;
 

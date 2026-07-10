@@ -3,6 +3,7 @@
 
 pub mod bitmap_query;
 pub mod dimensions;
+pub mod event_seq;
 
 pub use bitmap_query::BitmapBucketIteratorSource;
 pub use bitmap_query::BitmapBucketSource;

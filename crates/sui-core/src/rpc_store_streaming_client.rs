@@ -94,7 +94,7 @@ impl<R: ReadStore> BroadcastStreamingClient<R> {
 impl<R: ReadStore + Send + Sync + 'static> CheckpointStreamingClient
     for BroadcastStreamingClient<R>
 {
-    async fn connect(&mut self) -> Result<CheckpointStream, Error> {
+    async fn connect(&self) -> Result<CheckpointStream, Error> {
         // Subscribe before reading the tip so no checkpoint published between
         // the two is missed (the broadcast only carries checkpoints published
         // after `subscribe`).
@@ -131,7 +131,7 @@ impl<R: ReadStore + Send + Sync + 'static> CheckpointStreamingClient
         })
     }
 
-    async fn latest_checkpoint_number(&mut self) -> Result<u64, Error> {
+    async fn latest_checkpoint_number(&self) -> Result<u64, Error> {
         // Read the local store directly; the default trait impl peeks the
         // stream, which blocks on an idle chain (see `connect`).
         self.store
@@ -151,7 +151,7 @@ mod tests {
     async fn seeds_tip_then_streams_published_checkpoints_in_order() {
         let (sender, _keep) = broadcast::channel(16);
         // The local store is at checkpoint 5; the broadcast then publishes 6, 7.
-        let mut client =
+        let client =
             BroadcastStreamingClient::new(sender.clone(), test_chain_id(), store_with([5]));
 
         let mut connected = client.connect().await.unwrap();
@@ -172,8 +172,7 @@ mod tests {
     #[tokio::test]
     async fn latest_checkpoint_number_reads_the_local_tip() {
         let (sender, _keep) = broadcast::channel(16);
-        let mut client =
-            BroadcastStreamingClient::new(sender, test_chain_id(), store_with([0, 4, 9]));
+        let client = BroadcastStreamingClient::new(sender, test_chain_id(), store_with([0, 4, 9]));
         assert_eq!(client.latest_checkpoint_number().await.unwrap(), 9);
     }
 
@@ -183,7 +182,7 @@ mod tests {
         // oldest, so the first live read observes `Lagged`.
         let (sender, _keep) = broadcast::channel(2);
         // Tip 9 is distinct from the published 0..4 so we can tell them apart.
-        let mut client =
+        let client =
             BroadcastStreamingClient::new(sender.clone(), test_chain_id(), store_with([9]));
         let mut connected = client.connect().await.unwrap();
 
@@ -206,7 +205,7 @@ mod tests {
     #[tokio::test]
     async fn stream_ends_when_all_senders_dropped() {
         let (sender, _initial_rx) = broadcast::channel(16);
-        let mut client =
+        let client =
             BroadcastStreamingClient::new(sender.clone(), test_chain_id(), store_with([5]));
         let mut connected = client.connect().await.unwrap();
 

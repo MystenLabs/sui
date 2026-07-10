@@ -46,12 +46,10 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionPredicate;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_predicate;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::AuthorityName;
 use sui_types::base_types::SuiAddress;
@@ -255,10 +253,8 @@ async fn sui_balance(rpc_url: &str, owner: SuiAddress) -> u64 {
 fn sender_filter(sender: SuiAddress) -> TransactionFilter {
     let mut sender_filter = SenderFilter::default();
     sender_filter.address = Some(sender.to_string());
-    let mut predicate = TransactionPredicate::default();
-    predicate.predicate = Some(transaction_predicate::Predicate::Sender(sender_filter));
     let mut literal = TransactionLiteral::default();
-    literal.polarity = Some(transaction_literal::Polarity::Include(predicate));
+    literal.predicate = Some(transaction_literal::Predicate::Sender(sender_filter));
     let mut term = TransactionTerm::default();
     term.literals = vec![literal];
     let mut filter = TransactionFilter::default();
@@ -273,7 +269,7 @@ async fn list_transaction_digests_by_sender(rpc_url: &str, sender: SuiAddress) -
         .await
         .unwrap();
     let mut options = QueryOptions::default();
-    options.limit_items = Some(500);
+    options.limit = Some(500);
     let mut request = ListTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest"]));
     request.filter = Some(sender_filter(sender));

@@ -19,11 +19,11 @@ use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::{
-    AffectedObjectFilter, EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter,
-    EventTerm, GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse,
-    ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter,
-    TransactionLiteral, TransactionPredicate, TransactionTerm,
-    get_checkpoint_object_proof_response, list_events_response, list_transactions_response,
+    AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
+    GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse, ListEventsRequest,
+    ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter, TransactionLiteral,
+    TransactionTerm, get_checkpoint_object_proof_response, list_events_response,
+    list_transactions_response,
 };
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk_types::ValidatorCommittee;
@@ -171,17 +171,15 @@ where
 
 fn build_event_stream_head_filter(stream_id: SuiAddress) -> EventFilter {
     let head_filter = EventStreamHeadFilter::default().with_stream_id(stream_id.to_string());
-    let predicate = EventPredicate::default().with_event_stream_head(head_filter);
-    let literal = EventLiteral::default().with_include(predicate);
+    let literal = EventLiteral::default().with_event_stream_head(head_filter);
     let term = EventTerm::default().with_literals(vec![literal]);
     EventFilter::default().with_terms(vec![term])
 }
 
 fn build_affected_object_filter(object_id: ObjectID) -> TransactionFilter {
-    let predicate = TransactionPredicate::default().with_affected_object(
+    let literal = TransactionLiteral::default().with_affected_object(
         AffectedObjectFilter::default().with_object_id(object_id.to_string()),
     );
-    let literal = TransactionLiteral::default().with_include(predicate);
     let term = TransactionTerm::default().with_literals(vec![literal]);
     TransactionFilter::default().with_terms(vec![term])
 }
@@ -201,12 +199,12 @@ async fn fetch_settlements_for_range(
     use futures::StreamExt;
 
     let filter = build_affected_object_filter(stream_head_object_id);
-    let read_mask = FieldMask::from_paths(["checkpoint"]);
+    let read_mask = FieldMask::from_paths(["checkpoint", "transaction_index"]);
     let mut all = Vec::new();
     let mut cursor: Option<Vec<u8>> = None;
 
     loop {
-        let mut options = QueryOptions::default().with_limit_items(1000);
+        let mut options = QueryOptions::default().with_limit(1000);
         if let Some(c) = cursor.clone() {
             options.set_after(c);
         }
@@ -237,9 +235,13 @@ async fn fetch_settlements_for_range(
                         .ok_or_else(|| {
                             tonic::Status::internal("settlement tx missing checkpoint")
                         })?;
-                    let tx_offset = item.transaction_offset.ok_or_else(|| {
-                        tonic::Status::internal("settlement tx missing transaction_offset")
-                    })?;
+                    let tx_offset = item
+                        .transaction
+                        .as_ref()
+                        .and_then(|tx| tx.transaction_index)
+                        .ok_or_else(|| {
+                            tonic::Status::internal("settlement tx missing transaction_index")
+                        })?;
                     all.push((checkpoint, tx_offset));
                 }
                 Some(list_transactions_response::Response::Watermark(w)) => {
@@ -248,7 +250,7 @@ async fn fetch_settlements_for_range(
                     }
                 }
                 Some(list_transactions_response::Response::End(end)) => {
-                    end_reason = QueryEndReason::try_from(end.reason).ok();
+                    end_reason = Some(end.reason());
                 }
                 Some(_) | None => {}
             }
@@ -363,11 +365,21 @@ async fn fetch_list_events_page(
     Ok((events, last_cursor))
 }
 
-/// Read mask covering everything the in-tree `AuthenticatedEvent`
-/// converter needs from a v2alpha `EventItem`. The server's default mask
-/// drops `contents`, so we request the full event explicitly.
+/// Read mask covering everything the in-tree `AuthenticatedEvent` converter
+/// needs from a v2alpha `EventItem`: the event body plus its ledger-position
+/// fields (`checkpoint`, `transaction_index`, `event_index`), which the list
+/// endpoint only populates when requested.
 fn full_event_read_mask() -> FieldMask {
-    FieldMask::from_paths(["package_id", "module", "sender", "event_type", "contents"])
+    FieldMask::from_paths([
+        "package_id",
+        "module",
+        "sender",
+        "event_type",
+        "contents",
+        "checkpoint",
+        "transaction_index",
+        "event_index",
+    ])
 }
 
 /// Issue one `ListEvents` call for the given stream and return the events
@@ -383,7 +395,7 @@ async fn query_authenticated_events(
 
     let mut options = QueryOptions::default();
     if let Some(size) = page_size {
-        options.set_limit_items(size);
+        options.set_limit(size);
     }
     let request = ListEventsRequest::default()
         .with_read_mask(full_event_read_mask())
@@ -415,7 +427,7 @@ async fn list_authenticated_events(
     loop {
         let mut options = QueryOptions::default();
         if let Some(size) = page_size {
-            options.set_limit_items(size);
+            options.set_limit(size);
         }
         if let Some(cursor) = next_cursor.clone() {
             options.set_after(cursor);
@@ -1179,13 +1191,17 @@ async fn test_object_inclusion_proof_returns_non_inclusion() {
     let stream_id = SuiAddress::from(package_id);
     let event_stream_head_id = get_event_stream_head_object_id(stream_id).unwrap();
 
-    let highest_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
-        node.state()
-            .get_checkpoint_store()
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap()
-            .unwrap()
-    });
+    let highest_checkpoint = test_cluster
+        .grpc_client()
+        .get_latest_checkpoint()
+        .await
+        .unwrap()
+        .sequence_number;
+
+    // The proof service serves from the embedded rpc-store, which indexes the
+    // tip asynchronously; wait for it to catch up before requesting a proof at
+    // the highest executed checkpoint.
+    test_cluster.wait_for_rpc_index_ready().await;
 
     let mut proof_client =
         connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;

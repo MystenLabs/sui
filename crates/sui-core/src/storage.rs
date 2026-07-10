@@ -830,6 +830,14 @@ impl RpcStateReader for RpcStoreReadStore {
         Some(self)
     }
 
+    fn get_highest_executed_checkpoint_seq_number(&self) -> Result<CheckpointSequenceNumber> {
+        // The raw executed tip, read straight from the checkpoint store. Unlike
+        // `get_latest_checkpoint`, this is not bounded to the live-object index
+        // frontier -- the health check measures how far that frontier trails
+        // the executed tip, so it must see the unbounded value.
+        Ok(*self.rocks.get_latest_checkpoint()?.sequence_number())
+    }
+
     fn get_struct_layout_with_overlay(
         &self,
         struct_tag: &move_core_types::language_storage::StructTag,
@@ -906,6 +914,12 @@ impl RpcIndexes for RpcStoreReadStore {
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>> {
         self.reader.get_highest_indexed_checkpoint_seq_number()
+    }
+
+    fn get_highest_live_indexed_checkpoint_seq_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>> {
+        self.reader.get_highest_live_indexed_checkpoint_seq_number()
     }
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>> {

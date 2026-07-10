@@ -4,7 +4,7 @@
 // tests that shared objects can be deleted by passing by value
 // in both the defining module and in a module that did not define the type
 
-//# init --addresses t1=0x0 t2=0x0 --shared-object-deletion true
+//# init --addresses t1=0x0 t2=0x0 --enable-feature-flags shared_object_deletion
 
 //# publish
 

@@ -445,18 +445,10 @@ impl RandomnessManager {
             highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
             randomness_receiver_handle,
         };
-        let dkg_output = match tables
+        let dkg_output = tables
             .dkg_output_v2
             .get(&SINGLETON_KEY)
-            .expect("typed_store should not fail")
-        {
-            Some(dkg_output) => Some(dkg_output),
-            None => tables
-                .dkg_output
-                .get(&SINGLETON_KEY)
-                .expect("typed_store should not fail")
-                .map(Some),
-        };
+            .expect("typed_store should not fail");
         match dkg_output {
             Some(Some(dkg_output)) => {
                 info!(
@@ -1619,8 +1611,8 @@ mod tests {
 
         let tables = epoch_store.tables().unwrap();
         tables
-            .dkg_output
-            .insert(&SINGLETON_KEY, &expected_dkg_output)
+            .dkg_output_v2
+            .insert(&SINGLETON_KEY, &Some(expected_dkg_output))
             .unwrap();
         tables
             .randomness_next_round

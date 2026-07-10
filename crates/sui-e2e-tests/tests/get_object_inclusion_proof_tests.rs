@@ -160,6 +160,11 @@ async fn test_object_not_modified_returns_non_inclusion() {
     let state = test_cluster.fullnode_handle.sui_node.state();
     let latest_checkpoint = state.get_latest_checkpoint_sequence_number().unwrap();
 
+    // The proof service serves from the embedded rpc-store, which indexes the
+    // tip asynchronously; wait for it to catch up to the fullnode's executed
+    // checkpoint before requesting a proof at `latest_checkpoint`.
+    test_cluster.wait_for_rpc_index_ready().await;
+
     let non_existent_object_id = ObjectID::random();
 
     let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
@@ -198,6 +203,11 @@ async fn test_valid_request() {
 
     let state = test_cluster.fullnode_handle.sui_node.state();
     let latest_checkpoint = state.get_latest_checkpoint_sequence_number().unwrap();
+
+    // The proof service serves from the embedded rpc-store, which indexes the
+    // tip asynchronously; wait for it to catch up to the fullnode's executed
+    // checkpoint before requesting proofs up to `latest_checkpoint`.
+    test_cluster.wait_for_rpc_index_ready().await;
 
     let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await

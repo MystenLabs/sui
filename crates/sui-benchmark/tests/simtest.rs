@@ -1640,7 +1640,7 @@ mod test {
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::NAME, 0.1)
+        .with_probability(SharedCounterIncrement::NAME, 0.2)
         .with_probability(SharedCounterRead::NAME, 0.1)
         .with_probability(RandomnessRead::NAME, 0.1)
         .with_probability(AddressBalanceDeposit::NAME, 0.1)
@@ -1719,7 +1719,11 @@ mod test {
         // `> 100` bar flake ~3% of the time. A `> 50` bar still asserts that
         // shared-object congestion control actually kicked in, with comfortable
         // margin below the observed floor.
-        assert!(metrics_sum.cancellation_count > 50);
+        assert!(
+            metrics_sum.cancellation_count > 50,
+            "cancellation_count too low: {}",
+            metrics_sum.cancellation_count
+        );
 
         if address_aliases_enabled {
             let alias_add_stats = metrics

@@ -37,7 +37,7 @@ use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::reached_range_end;
 use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc_cursor::QueryType;
+use sui_rpc_cursor::Position;
 use tracing::Instrument;
 use tracing::debug_span;
 use tracing::info;
@@ -94,11 +94,10 @@ pub(crate) async fn list_checkpoints(
         })?;
         FieldMaskTree::from(read_mask)
     };
-    let options = QueryOptions::from_proto(
+    let options = QueryOptions::checkpoints_from_proto(
         request.options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
-        QueryType::Checkpoints,
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -108,7 +107,6 @@ pub(crate) async fn list_checkpoints(
         .instrument(debug_span!("resolve_cp_range"))
         .await?;
     let end_reason = cp_range.end_reason;
-    let end_checkpoint = cp_range.end_checkpoint;
     let end_position = cp_range.end_position;
     let cp_range = cp_range.range;
 
@@ -127,8 +125,9 @@ pub(crate) async fn list_checkpoints(
         let terminal = reached_range_end(end_reason).then(|| {
             watermark_response(terminal_boundary_watermark(
                 &options,
-                end_checkpoint,
-                end_position,
+                Position::Checkpoints {
+                    checkpoint: end_position,
+                },
             ))
         });
         return Ok(stream::iter(
@@ -227,7 +226,7 @@ pub(crate) async fn list_checkpoints(
                 match item {
                     Ok(ResolvedWatermarked::Item((cp_seq, cp_data))) => {
                         checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                        let wm = item_watermark(&options, cp_seq, cp_seq, checkpoint_boundary);
+                        let wm = item_watermark(&options, Position::Checkpoints { checkpoint: cp_seq }, checkpoint_boundary);
                         emitted += 1;
                         let message =
                             crate::render::checkpoint_to_response(cp_data, &read_mask)?;
@@ -249,7 +248,7 @@ pub(crate) async fn list_checkpoints(
                         if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
                             checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
                         }
-                        let wm = boundary_watermark(&options, cp_frontier, cp_frontier, checkpoint_boundary);
+                        let wm = boundary_watermark(&options, Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary);
                         yield watermark_response(wm);
                     }
                     Err(BitmapScanError::ScanLimit) => {
@@ -275,7 +274,7 @@ pub(crate) async fn list_checkpoints(
                 end_reason
             };
             if reached_range_end(reason) {
-                yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+                yield watermark_response(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }));
             }
             yield end_response(reason);
             info!(
@@ -312,9 +311,9 @@ pub(crate) async fn list_checkpoints(
             match item {
                 Ok(ResolvedWatermarked::Item((cp_seq, cp_data, txs, objects))) => {
                     checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                    let wm = item_watermark(&options, cp_seq, cp_seq, checkpoint_boundary);
+                    let wm = item_watermark(&options, Position::Checkpoints { checkpoint: cp_seq }, checkpoint_boundary);
                     let message =
-                        render_full_checkpoint(cp_data, txs, objects.as_ref(), &read_mask)?;
+                        render_full_checkpoint(cp_data, txs, objects, &read_mask)?;
                     emitted += 1;
                     yield response_for(wm, message);
                 }
@@ -331,7 +330,7 @@ pub(crate) async fn list_checkpoints(
                     if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
                         checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
                     }
-                    let wm = boundary_watermark(&options, cp_frontier, cp_frontier, checkpoint_boundary);
+                    let wm = boundary_watermark(&options, Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary);
                     yield watermark_response(wm);
                 }
                 Err(BitmapScanError::ScanLimit) => {
@@ -357,7 +356,7 @@ pub(crate) async fn list_checkpoints(
             end_reason
         };
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+            yield watermark_response(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }));
         }
         yield end_response(reason);
         info!(
@@ -510,7 +509,7 @@ fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsRes
 
 fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListCheckpointsResponse::default();
     response.response = Some(list_checkpoints_response::Response::End(end));

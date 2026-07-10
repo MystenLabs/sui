@@ -179,7 +179,7 @@ use typed_store::rocks::StagedBatch;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
-use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
+use crate::authority::authority_store::ExecutionLockReadGuard;
 use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, EPOCH_DURATION_MS_FOR_TESTING,
 };
@@ -279,7 +279,6 @@ pub struct AuthorityMetrics {
     // TODO: this tracks consensus object tx, not just shared. Consider renaming.
     pub shared_obj_tx: IntCounter,
     sponsored_tx: IntCounter,
-    tx_already_processed: IntCounter,
     num_input_objs: Histogram,
     // TODO: this tracks consensus object count, not just shared. Consider renaming.
     num_shared_objects: Histogram,
@@ -446,12 +445,6 @@ impl AuthorityMetrics {
             )
             .unwrap(),
 
-            tx_already_processed: register_int_counter_with_registry!(
-                "num_tx_already_processed",
-                "Number of transaction orders already processed previously",
-                registry,
-            )
-            .unwrap(),
             num_input_objs: register_histogram_with_registry!(
                 "num_input_objects",
                 "Distribution of number of input TX objects per TX",
@@ -2040,7 +2033,7 @@ impl AuthorityState {
         if let Some(object_funds_checker) = object_funds_checker.as_ref()
             && !object_funds_checker.should_commit_object_funds_withdraws(
                 certificate,
-                effects.status(),
+                &effects,
                 &inner_temp_store.accumulator_running_max_withdraws,
                 &execution_env,
                 self.get_account_funds_read(),
@@ -3376,8 +3369,6 @@ impl AuthorityState {
         &self,
         request: ObjectInfoRequest,
     ) -> SuiResult<ObjectInfoResponse> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-
         let requested_object_seq = match request.request_kind {
             ObjectInfoRequestKind::LatestObjectInfo => {
                 let (_, seq, _) =
@@ -3420,18 +3411,12 @@ impl AuthorityState {
             None
         };
 
-        let lock = if !object.is_address_owned() {
-            // Only address owned objects have locks.
-            None
-        } else {
-            self.get_transaction_lock(&object.compute_object_reference(), &epoch_store)?
-                .map(|s| s.into_inner())
-        };
-
         Ok(ObjectInfoResponse {
             object,
             layout,
-            lock_for_debugging: lock,
+            // Validators no longer store signed transactions, so the locking
+            // transaction cannot be returned.
+            lock_for_debugging: None,
         })
     }
 
@@ -5207,13 +5192,9 @@ impl AuthorityState {
                 debug!(tx_digest=?transaction_digest, "Signed effects exist but no transaction found");
             }
         }
-        if let Some(signed) = epoch_store.get_signed_transaction(transaction_digest)? {
-            self.metrics.tx_already_processed.inc();
-            let (transaction, sig) = signed.into_inner().into_data_and_sig();
-            Ok(Some((transaction, TransactionStatus::Signed(sig))))
-        } else {
-            Ok(None)
-        }
+        // Validators no longer sign transactions before execution, so there is no
+        // TransactionStatus::Signed state to report.
+        Ok(None)
     }
 
     /// Get the signed effects of the given transaction. If the effects was signed in a previous
@@ -5351,39 +5332,6 @@ impl AuthorityState {
         }
 
         Some((input_coin_objects, written_coin_objects))
-    }
-
-    /// Get the TransactionEnvelope that currently locks the given object, if any.
-    /// Since object locks are only valid for one epoch, we also need the epoch_id in the query.
-    /// Returns UserInputError::ObjectNotFound if no lock records for the given object can be found.
-    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if the object record is at a different version.
-    /// Returns Some(VerifiedEnvelope) if the given ObjectRef is locked by a certain transaction.
-    /// Returns None if a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
-    ///     or cannot find the transaction in transaction table, because of data race etc.
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_transaction_lock(
-        &self,
-        object_ref: &ObjectRef,
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
-        let lock_info = self
-            .get_object_cache_reader()
-            .get_lock(*object_ref, epoch_store)?;
-        let lock_info = match lock_info {
-            ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {
-                return Err(UserInputError::ObjectVersionUnavailableForConsumption {
-                    provided_obj_ref: *object_ref,
-                    current_version: locked_ref.1,
-                }
-                .into());
-            }
-            ObjectLockStatus::Initialized => {
-                return Ok(None);
-            }
-            ObjectLockStatus::LockedToTx { locked_by_tx } => locked_by_tx,
-        };
-
-        epoch_store.get_signed_transaction(&lock_info.tx_digest)
     }
 
     pub fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<Object>> {
@@ -5839,7 +5787,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !epoch_store.protocol_config().enable_bridge() {
+        if !epoch_store.protocol_config().bridge() {
             info!("bridge not enabled");
             return None;
         }
@@ -5856,7 +5804,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !epoch_store.protocol_config().enable_bridge() {
+        if !epoch_store.protocol_config().bridge() {
             info!("bridge not enabled");
             return None;
         }
@@ -5890,7 +5838,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !epoch_store.protocol_config().enable_coin_deny_list_v1() {
+        if !epoch_store.protocol_config().enable_coin_deny_list() {
             return None;
         }
 

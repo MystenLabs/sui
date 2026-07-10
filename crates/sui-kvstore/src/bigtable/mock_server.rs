@@ -7,17 +7,19 @@
 //! - `MutateRows`: optional row-key expectations, per-entry injected failures,
 //!   pause gates, and successful `SetCell` persistence with latest-timestamp
 //!   semantics.
-//! - `ReadRows`: explicit row-key lookups with an optional row limit, with no
-//!   filter or `CellsPerColumnLimitFilter(1)`. Row ranges, reverse scans, and
-//!   other filters are intentionally unsupported.
+//! - `ReadRows`: explicit row-key lookups with an optional row limit. Supports
+//!   the column filters this crate builds (`None`, `CellsPerColumnLimitFilter(1)`,
+//!   `ColumnQualifierRegexFilter`, and `Chain`s of those plus an optional
+//!   `FamilyNameRegexFilter`), records each call for assertions, and can emit
+//!   rows in reverse request order. Row ranges and reverse scans are unsupported.
 //! - `CheckAndMutateRow`: `PassAllFilter(true)` and the CAS helper shape used
 //!   by this crate (`Chain` of family regex, column qualifier regex, optional
 //!   value range, and optional cells-per-column limit).
 //!
 //! Anything outside that subset should return `UNIMPLEMENTED` so tests do not
 //! accidentally rely on BigTable behavior this mock does not model.
-
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -74,6 +76,24 @@ pub struct ExpectedCall {
     pub row_keys: Vec<&'static [u8]>,
     /// Map of entry index -> gRPC status code (non-zero = failure).
     pub failures: HashMap<usize, i32>,
+}
+
+/// A single recorded `ReadRows` call: the resolved table name (suffix after
+/// `/tables/`) and the explicit row keys requested, in request order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReadRowsCall {
+    pub table: String,
+    pub row_keys: Vec<Bytes>,
+}
+
+/// Order in which `ReadRows` emits matching rows relative to the request's
+/// `row_keys`. `ReverseRequestOrder` lets tests prove callers reconstruct a
+/// stable order rather than leaning on backend arrival order.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ReadRowsResponseOrder {
+    #[default]
+    RequestOrder,
+    ReverseRequestOrder,
 }
 
 struct Cell {
@@ -179,6 +199,10 @@ struct MockState {
     /// In-memory row storage keyed by (table_name_suffix, row_key).
     /// Table name suffix is the part after the /tables/ prefix.
     rows: HashMap<(String, Bytes), Row>,
+    /// Every `ReadRows` call in arrival order, for test assertions.
+    read_rows_calls: Vec<ReadRowsCall>,
+    /// Order in which `ReadRows` emits matching rows.
+    read_rows_response_order: ReadRowsResponseOrder,
 }
 
 /// Mock BigTable server with injectable failures and call recording.
@@ -282,6 +306,51 @@ impl MockBigtableServer {
             .map(|cell| cell.value.clone())
     }
 
+    /// Insert a row into the in-memory store directly, bypassing the mutation
+    /// proto path. Cells are stored under the shared column family
+    /// [`crate::tables::FAMILY`] with each provided column name as the qualifier.
+    /// Later inserts for the same (table, row, column) overwrite the value.
+    pub async fn insert_row(
+        &self,
+        table: &str,
+        row_key: impl Into<Bytes>,
+        cells: impl IntoIterator<Item = (&'static str, Bytes)>,
+    ) {
+        let mut state = self.state.lock().await;
+        let row = state
+            .rows
+            .entry((table.to_string(), row_key.into()))
+            .or_default();
+        for (column, value) in cells {
+            row.insert(
+                (
+                    crate::tables::FAMILY.to_string(),
+                    Bytes::from_static(column.as_bytes()),
+                ),
+                Cell {
+                    value,
+                    timestamp_micros: 0,
+                },
+            );
+        }
+    }
+
+    /// Snapshot of every recorded `ReadRows` call in arrival order.
+    pub async fn read_rows_calls(&self) -> Vec<ReadRowsCall> {
+        self.state.lock().await.read_rows_calls.clone()
+    }
+
+    /// Clear the recorded `ReadRows` calls (e.g. to isolate a phase of a test).
+    pub async fn clear_read_rows_calls(&self) {
+        self.state.lock().await.read_rows_calls.clear();
+    }
+
+    /// Control the order in which `ReadRows` emits matching rows relative to
+    /// the request's `row_keys`.
+    pub async fn set_read_rows_response_order(&self, order: ReadRowsResponseOrder) {
+        self.state.lock().await.read_rows_response_order = order;
+    }
+
     /// Start the mock server on a random available port.
     /// Returns the socket address the server is listening on.
     pub async fn start(&self) -> Result<(SocketAddr, tokio::task::JoinHandle<()>)> {
@@ -317,6 +386,70 @@ fn strip_regex_anchors(qualifier: &Bytes) -> &[u8] {
     let bytes = qualifier.as_ref();
     let stripped = bytes.strip_prefix(b"^").unwrap_or(bytes);
     stripped.strip_suffix(b"$").unwrap_or(stripped)
+}
+
+/// Extract the alternation of literal qualifiers from a column-qualifier regex
+/// of the exact shape this crate builds: `^col$` or `^(a|b|c)$`. Returns the
+/// literal qualifier bytes, or `None` if the pattern isn't in that shape.
+fn extract_qualifier_alternation(pattern: &[u8]) -> Option<Vec<Vec<u8>>> {
+    let inner = pattern.strip_prefix(b"^")?.strip_suffix(b"$")?;
+    let inner = match inner.strip_prefix(b"(") {
+        Some(rest) => rest.strip_suffix(b")")?,
+        None => inner,
+    };
+    Some(inner.split(|&b| b == b'|').map(|s| s.to_vec()).collect())
+}
+
+/// Parse a `ReadRows` row filter into the set of allowed column qualifiers.
+/// `Ok(None)` means no qualifier restriction (all cells pass); `Ok(Some(set))`
+/// restricts emitted cells to those qualifiers. Only the filter shapes this
+/// crate builds are supported: `None`, `CellsPerColumnLimitFilter(1)`,
+/// `ColumnQualifierRegexFilter`, and a `Chain` of those plus an optional
+/// `FamilyNameRegexFilter` matching [`crate::tables::FAMILY`].
+fn parse_read_filter(filter: Option<Filter>) -> Result<Option<HashSet<Vec<u8>>>, Status> {
+    fn qualifiers_from_regex(pattern: &Bytes) -> Result<HashSet<Vec<u8>>, Status> {
+        extract_qualifier_alternation(pattern.as_ref())
+            .map(|quals| quals.into_iter().collect())
+            .ok_or_else(|| {
+                Status::unimplemented(
+                    "mock ReadRows only supports `^col$` / `^(a|b|c)$` column qualifier regexes",
+                )
+            })
+    }
+    match filter {
+        None | Some(Filter::CellsPerColumnLimitFilter(1)) => Ok(None),
+        Some(Filter::ColumnQualifierRegexFilter(pattern)) => {
+            Ok(Some(qualifiers_from_regex(&pattern)?))
+        }
+        Some(Filter::Chain(chain)) => {
+            let mut allowed: Option<HashSet<Vec<u8>>> = None;
+            for f in chain.filters {
+                match f.filter {
+                    Some(Filter::CellsPerColumnLimitFilter(1)) | None => {}
+                    Some(Filter::ColumnQualifierRegexFilter(pattern)) => {
+                        allowed = Some(qualifiers_from_regex(&pattern)?);
+                    }
+                    Some(Filter::FamilyNameRegexFilter(family)) => {
+                        let family = Bytes::from(family.into_bytes());
+                        if strip_regex_anchors(&family) != crate::tables::FAMILY.as_bytes() {
+                            return Err(Status::unimplemented(
+                                "mock ReadRows only supports the `sui` column family",
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(Status::unimplemented(
+                            "mock ReadRows Chain filter contains an unsupported sub-filter",
+                        ));
+                    }
+                }
+            }
+            Ok(allowed)
+        }
+        Some(_) => Err(Status::unimplemented(
+            "mock ReadRows only supports column-qualifier / cells-per-column / chain filters",
+        )),
+    }
 }
 
 /// Evaluate a ValueRangeFilter against a raw cell value. Unbounded sides are treated
@@ -483,7 +616,7 @@ impl Bigtable for MockBigtableServer {
     ) -> Result<Response<Self::ReadRowsStream>, Status> {
         self.request_count.fetch_add(1, Ordering::Relaxed);
         let req = request.into_inner();
-        let state = self.state.lock().await;
+        let mut state = self.state.lock().await;
 
         // Extract the table name suffix (after /tables/).
         let table = req
@@ -502,14 +635,15 @@ impl Bigtable for MockBigtableServer {
                 "mock ReadRows does not support negative rows_limit",
             ));
         }
-        match req.filter.and_then(|f| f.filter) {
-            None | Some(Filter::CellsPerColumnLimitFilter(1)) => {}
-            Some(_) => {
-                return Err(Status::unimplemented(
-                    "mock ReadRows only supports CellsPerColumnLimitFilter(1)",
-                ));
-            }
-        }
+        // Parse the column filter into an optional set of allowed qualifiers.
+        // `None` means every qualifier passes; `Some(set)` restricts emitted
+        // cells to those qualifiers. Only the filter shapes this crate builds
+        // are supported (see `BigTableClient::column_filter` /
+        // `build_multi_get_request`).
+        let allowed_qualifiers = match parse_read_filter(req.filter.and_then(|f| f.filter)) {
+            Ok(set) => set,
+            Err(status) => return Err(status),
+        };
         let Some(row_set) = req.rows else {
             return Err(Status::unimplemented(
                 "mock ReadRows requires explicit row_keys",
@@ -525,14 +659,29 @@ impl Bigtable for MockBigtableServer {
         } else {
             req.rows_limit as usize
         };
-        let requested_keys = row_set.row_keys.into_iter().take(limit);
+
+        let mut requested_keys: Vec<Bytes> = row_set.row_keys.into_iter().take(limit).collect();
+        state.read_rows_calls.push(ReadRowsCall {
+            table: table.clone(),
+            row_keys: requested_keys.clone(),
+        });
+        if state.read_rows_response_order == ReadRowsResponseOrder::ReverseRequestOrder {
+            requested_keys.reverse();
+        }
 
         let mut chunks = Vec::new();
         for row_key in requested_keys {
             let Some(row) = state.rows.get(&(table.clone(), row_key.clone())) else {
                 continue;
             };
+            let start = chunks.len();
             for ((family, qualifier), cell) in row {
+                if allowed_qualifiers
+                    .as_ref()
+                    .is_some_and(|set| !set.contains(qualifier.as_ref()))
+                {
+                    continue;
+                }
                 chunks.push(CellChunk {
                     row_key: row_key.clone(),
                     family_name: Some(family.clone()),
@@ -544,8 +693,11 @@ impl Bigtable for MockBigtableServer {
                     row_status: None,
                 });
             }
-            // Emit CommitRow on the last chunk (or a standalone marker if row is empty).
-            if let Some(last) = chunks.last_mut() {
+            // Emit CommitRow on this row's last emitted chunk. Skip rows that
+            // produced no matching cells so we don't tag a prior row's chunk.
+            if chunks.len() > start
+                && let Some(last) = chunks.last_mut()
+            {
                 last.row_status = Some(RowStatus::CommitRow(true));
             }
         }

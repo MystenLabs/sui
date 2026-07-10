@@ -1579,7 +1579,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             _peer: crate::network::PeerId,
-            _highest_round_per_authority: Vec<u64>,
+            _highest_round_per_authority: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("stream_blocks not implemented in mock")

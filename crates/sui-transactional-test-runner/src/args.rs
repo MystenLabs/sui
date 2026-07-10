@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use crate::test_adapter::{FakeID, SuiTestAdapter};
 use anyhow::{bail, ensure};
 use clap;
-use clap::{Args, Parser};
+use clap::{ArgAction, Args, Parser};
 use move_compiler::editions::Flavor;
 use move_core_types::parsing::{
     parser::Parser as MoveCLParser,
@@ -68,8 +68,6 @@ pub struct SuiInitArgs {
     pub chain: Option<Chain>,
     #[clap(long = "max-gas")]
     pub max_gas: Option<u64>,
-    #[clap(long = "shared-object-deletion")]
-    pub shared_object_deletion: Option<bool>,
     #[clap(long = "simulator")]
     pub simulator: bool,
     #[clap(long = "num-custom-validator-accounts")]
@@ -89,24 +87,6 @@ pub struct SuiInitArgs {
     /// URL for the Sui REST API. To be passed to the offchain indexer and reader.
     #[clap(long)]
     pub rest_api_url: Option<String>,
-    /// Enable accumulator features for testing (e.g., authenticated event streams)
-    #[clap(long = "enable-accumulators")]
-    pub enable_accumulators: bool,
-    /// Enable authenticated event streams for testing
-    #[clap(long = "enable-authenticated-event-streams")]
-    pub enable_authenticated_event_streams: bool,
-    /// Enable references in PTBs
-    #[clap(long = "allow-references-in-ptbs")]
-    pub allow_references_in_ptbs: bool,
-    /// Enable non-exclusive write objects for testing
-    #[clap(long = "enable-non-exclusive-write-objects")]
-    pub enable_non_exclusive_writes: bool,
-    /// Enable using address balance as gas payments feature for testing
-    #[clap(long = "enable-address-balance-gas-payments")]
-    pub enable_address_balance_gas_payments: bool,
-    /// Enable coin reservations for gas payment
-    #[clap(long = "enable-coin-reservations")]
-    pub enable_coin_reservations: bool,
     /// Override the file format version used when serializing compiled modules
     #[clap(long = "file-format")]
     pub file_format_version: Option<u32>,
@@ -119,6 +99,14 @@ pub struct SuiInitArgs {
     /// Set maximum number of unused Pure inputs in gasless transactions
     #[clap(long = "gasless-max-unused-inputs")]
     pub gasless_max_unused_inputs: Option<u64>,
+    /// Enable a boolean protocol feature flag by name, e.g.
+    /// `--enable-feature-flags zklogin_auth --enable-feature-flags enable_party_transfer`.
+    /// Flag names match the field names of `FeatureFlags` in the sui-protocol-config crate.
+    #[clap(long = "enable-feature-flags", action = ArgAction::Append)]
+    pub enable_feature_flags: Vec<String>,
+    /// Disable a boolean protocol feature flag by name.
+    #[clap(long = "disable-feature-flags", action = ArgAction::Append)]
+    pub disable_feature_flags: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
