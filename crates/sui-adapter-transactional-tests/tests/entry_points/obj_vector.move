@@ -3,7 +3,7 @@
 
 // tests vector of objects
 
-//# init --addresses Test=0x0 --accounts A --shared-object-deletion true
+//# init --addresses Test=0x0 --accounts A --enable-feature-flags shared_object_deletion
 
 //# publish
 module Test::M {

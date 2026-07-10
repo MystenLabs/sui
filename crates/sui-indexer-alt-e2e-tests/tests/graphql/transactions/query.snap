@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 18 tasks
+processed 14 tasks
 
 init:
 A: object(0,0)
@@ -70,14 +70,14 @@ Response: {
   "data": {
     "transactions": {
       "pageInfo": {
-        "startCursor": "MA==",
-        "endCursor": "OQ==",
+        "startCursor": "KAE6BAgAEAA=",
+        "endCursor": "KAE6BAgAEAk=",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "MA==",
+          "cursor": "KAE6BAgAEAA=",
           "node": {
             "digest": "85r5mfnut7T1NNBmbL7RpGMf9caJe5VEnpiCJxkz7eDE",
             "effects": {
@@ -89,7 +89,7 @@ Response: {
           }
         },
         {
-          "cursor": "MQ==",
+          "cursor": "KAE6BAgAEAE=",
           "node": {
             "digest": "Behwp65YPJaMaHg9qgpz5aReNug7U3YEhkLW4ukcZjfc",
             "effects": {
@@ -101,7 +101,7 @@ Response: {
           }
         },
         {
-          "cursor": "Mg==",
+          "cursor": "KAE6BAgAEAI=",
           "node": {
             "digest": "H9Up8TXVvbtdLpCB5QzUGwbQG6kMk3z3n1HZsc4ZMa5o",
             "effects": {
@@ -113,7 +113,7 @@ Response: {
           }
         },
         {
-          "cursor": "Mw==",
+          "cursor": "KAE6BAgAEAM=",
           "node": {
             "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
             "effects": {
@@ -125,7 +125,7 @@ Response: {
           }
         },
         {
-          "cursor": "NA==",
+          "cursor": "KAE6BAgAEAQ=",
           "node": {
             "digest": "4SyyecAZacr3hX5fB5eeTZrUsPjbgf4cFi1E2azPMoQN",
             "effects": {
@@ -137,7 +137,7 @@ Response: {
           }
         },
         {
-          "cursor": "NQ==",
+          "cursor": "KAE6BAgAEAU=",
           "node": {
             "digest": "DJZzBdgo7HSUrtdE8k41y43WPHTw3gDDXUc2V4EdNi1m",
             "effects": {
@@ -149,7 +149,7 @@ Response: {
           }
         },
         {
-          "cursor": "Ng==",
+          "cursor": "KAE6BAgAEAY=",
           "node": {
             "digest": "DKkZzc9QZeYigRNaEofwDKTuuZ5KeSkyWq6gWjyojZSV",
             "effects": {
@@ -161,7 +161,7 @@ Response: {
           }
         },
         {
-          "cursor": "Nw==",
+          "cursor": "KAE6BAgAEAc=",
           "node": {
             "digest": "BLWiR4XPz5tRWXHQRUba5FK15DgseQkPM8ZnvSBZEN3s",
             "effects": {
@@ -173,7 +173,7 @@ Response: {
           }
         },
         {
-          "cursor": "OA==",
+          "cursor": "KAE6BAgAEAg=",
           "node": {
             "digest": "9KqKTy3nFQLpzfJyTks7MrrKi5xXZ3ejctEmjvnisaF9",
             "effects": {
@@ -185,189 +185,13 @@ Response: {
           }
         },
         {
-          "cursor": "OQ==",
+          "cursor": "KAE6BAgAEAk=",
           "node": {
             "digest": "DyvEoKxh9cgtdtNTBRPEUbq8XzDBnEr5PePbZMeVHgun",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 5,
                 "digest": "FGrysEQPCG5ba3CKBkcn1VBgjxmv2idSjndUN9zHxUes"
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 14, lines 74-97:
-//# run-graphql --cursors 0 3
-Response: {
-  "data": {
-    "transactions": {
-      "pageInfo": {
-        "startCursor": "MA==",
-        "endCursor": "Mg==",
-        "hasPreviousPage": false,
-        "hasNextPage": true
-      },
-      "edges": [
-        {
-          "cursor": "MA==",
-          "node": {
-            "digest": "85r5mfnut7T1NNBmbL7RpGMf9caJe5VEnpiCJxkz7eDE",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 0,
-                "digest": "CKjFRsvNLMhfTKYRc67g1tY5KjYkzrTRo9yu4rhW9nr1"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "MQ==",
-          "node": {
-            "digest": "Behwp65YPJaMaHg9qgpz5aReNug7U3YEhkLW4ukcZjfc",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 1,
-                "digest": "DnYcjz2dzzZ8xRQgqqpXk1EVFTKEDqhqWCj5FBQ1kEbK"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "Mg==",
-          "node": {
-            "digest": "H9Up8TXVvbtdLpCB5QzUGwbQG6kMk3z3n1HZsc4ZMa5o",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 1,
-                "digest": "DnYcjz2dzzZ8xRQgqqpXk1EVFTKEDqhqWCj5FBQ1kEbK"
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 15, lines 99-122:
-//# run-graphql --cursors 0 4
-Response: {
-  "data": {
-    "transactions": {
-      "pageInfo": {
-        "startCursor": "MQ==",
-        "endCursor": "Mg==",
-        "hasPreviousPage": true,
-        "hasNextPage": true
-      },
-      "edges": [
-        {
-          "cursor": "MQ==",
-          "node": {
-            "digest": "Behwp65YPJaMaHg9qgpz5aReNug7U3YEhkLW4ukcZjfc",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 1,
-                "digest": "DnYcjz2dzzZ8xRQgqqpXk1EVFTKEDqhqWCj5FBQ1kEbK"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "Mg==",
-          "node": {
-            "digest": "H9Up8TXVvbtdLpCB5QzUGwbQG6kMk3z3n1HZsc4ZMa5o",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 1,
-                "digest": "DnYcjz2dzzZ8xRQgqqpXk1EVFTKEDqhqWCj5FBQ1kEbK"
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 16, lines 124-147:
-//# run-graphql --cursors 0 6
-Response: {
-  "data": {
-    "transactions": {
-      "pageInfo": {
-        "startCursor": "NA==",
-        "endCursor": "NQ==",
-        "hasPreviousPage": true,
-        "hasNextPage": true
-      },
-      "edges": [
-        {
-          "cursor": "NA==",
-          "node": {
-            "digest": "4SyyecAZacr3hX5fB5eeTZrUsPjbgf4cFi1E2azPMoQN",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 2,
-                "digest": "CcMBWvRDk5iBTCJtEguTB6ubzijVNFLYc5VvHLVZM5jg"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "NQ==",
-          "node": {
-            "digest": "DJZzBdgo7HSUrtdE8k41y43WPHTw3gDDXUc2V4EdNi1m",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 3,
-                "digest": "EnBKNDTqfa25okqSxVvDK2H1LoDbAEq3qqzovMPq4gZs"
-              }
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 17, lines 149-172:
-//# run-graphql --cursors 0
-Response: {
-  "data": {
-    "transactions": {
-      "pageInfo": {
-        "startCursor": "MTE=",
-        "endCursor": "MTI=",
-        "hasPreviousPage": true,
-        "hasNextPage": false
-      },
-      "edges": [
-        {
-          "cursor": "MTE=",
-          "node": {
-            "digest": "CJaRZ1VUAU1KEubfVHssT9Xvskp7taCuqQNkx81naqL6",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 7,
-                "digest": "4c75DPbx3kquBFkXwHpAmw4TXwRXm5m124YZULZxcDV9"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "MTI=",
-          "node": {
-            "digest": "BtmWtGWha5V9dXBzw3cpXjkUk8qza37a79Z4s2NEZaQu",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 7,
-                "digest": "4c75DPbx3kquBFkXwHpAmw4TXwRXm5m124YZULZxcDV9"
               }
             }
           }

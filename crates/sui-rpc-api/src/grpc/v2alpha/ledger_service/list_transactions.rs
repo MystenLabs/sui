@@ -19,6 +19,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
+use sui_rpc_cursor::Position;
 use sui_sdk_types::Digest;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
@@ -32,10 +33,13 @@ use crate::grpc::v2::ledger_service::get_transaction::render_executed_transactio
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::QueryType;
 use crate::ledger_history::query_options::ResolvedRange;
-
-use super::query_end::query_end;
+use crate::ledger_history::watermark::advance_boundary_excluding_cp;
+use crate::ledger_history::watermark::boundary_cursor_cp;
+use crate::ledger_history::watermark::boundary_watermark;
+use crate::ledger_history::watermark::item_watermark;
+use crate::ledger_history::watermark::reached_range_end;
+use crate::ledger_history::watermark::terminal_boundary_watermark;
 
 use super::bitmap_scan::LedgerBitmapKind;
 use super::bitmap_scan::PendingBitmapBucket;
@@ -50,19 +54,13 @@ use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
-use super::ledger_read::ensure_ledger_history_enabled;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
-use super::ledger_read::resolve_frontier_checkpoint;
+use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
-use crate::ledger_history::watermark::advance_boundary_excluding_cp;
-use crate::ledger_history::watermark::boundary_cursor_cp;
-use crate::ledger_history::watermark::boundary_watermark;
-use crate::ledger_history::watermark::item_watermark;
-use crate::ledger_history::watermark::reached_range_end;
-use crate::ledger_history::watermark::terminal_boundary_watermark;
+use super::query_end::query_end;
 
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
 
@@ -73,7 +71,6 @@ pub(crate) async fn list_transactions(
     service: RpcService,
     request: ListTransactionsRequest,
 ) -> Result<ListTransactionsStream, RpcError> {
-    ensure_ledger_history_enabled(&service)?;
     let started = Instant::now();
     let start_checkpoint = request.start_checkpoint;
     let end_checkpoint = request.end_checkpoint;
@@ -87,11 +84,10 @@ pub(crate) async fn list_transactions(
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
     let chunk_bucket_scan_budget = ledger_history.chunk_bucket_scan_budget();
     let max_bitmap_filter_literals = ledger_history.max_bitmap_filter_literals();
-    let options = QueryOptions::from_proto(
+    let options = QueryOptions::transactions_from_proto(
         request_options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
-        QueryType::Transactions,
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -140,8 +136,7 @@ pub(crate) async fn list_transactions(
         if reached_range_end(reason) {
             yield watermark_response(terminal_boundary_watermark(
                 &terminal_options,
-                terminal.end_checkpoint,
-                terminal.end_position,
+                terminal.position,
             ));
         }
         yield end_response(reason);
@@ -244,8 +239,10 @@ fn next_transaction_chunk(
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
                 let terminal = ChunkTerminal {
                     reason: tx_range.end_reason,
-                    end_checkpoint: tx_range.end_checkpoint,
-                    end_position: tx_range.end_position,
+                    position: Position::Transactions {
+                        checkpoint: tx_range.end_checkpoint,
+                        tx_seq: tx_range.end_position,
+                    },
                 };
                 let range = tx_range.range;
                 if range.is_empty() {
@@ -263,14 +260,14 @@ fn next_transaction_chunk(
                         range: Some(range),
                         pending_bucket: None,
                         end_reason: terminal.reason,
-                        end_checkpoint: terminal.end_checkpoint,
-                        end_position: terminal.end_position,
+                        end_checkpoint: tx_range.end_checkpoint,
+                        end_position: tx_range.end_position,
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
                         end_reason: terminal.reason,
-                        end_checkpoint: terminal.end_checkpoint,
-                        end_position: terminal.end_position,
+                        end_checkpoint: tx_range.end_checkpoint,
+                        end_position: tx_range.end_position,
                     },
                 };
                 continue;
@@ -294,8 +291,10 @@ fn next_transaction_chunk(
                     });
                 let terminal = ChunkTerminal {
                     reason: end_reason,
-                    end_checkpoint,
-                    end_position,
+                    position: Position::Transactions {
+                        checkpoint: end_checkpoint,
+                        tx_seq: end_position,
+                    },
                 };
                 break (rows, next_state, terminal, None);
             }
@@ -354,8 +353,10 @@ fn next_transaction_chunk(
                 };
                 let terminal = ChunkTerminal {
                     reason,
-                    end_checkpoint,
-                    end_position,
+                    position: Position::Transactions {
+                        checkpoint: end_checkpoint,
+                        tx_seq: end_position,
+                    },
                 };
                 // A transaction member id is its own tx_sequence_number, so the
                 // frontier decodes to itself.
@@ -413,12 +414,18 @@ fn scan_transaction_watermark(
     let Some(frontier) = coalesced_frontier else {
         return Ok(None);
     };
-    let Some(cp) = resolve_frontier_checkpoint(service, frontier, ascending, |p| p)? else {
+    let Some(cp) = sequence_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
     let boundary = advance_boundary_excluding_cp(None, cp, options);
     let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
-    let watermark = boundary_watermark(options, cursor_cp, frontier, boundary);
+    let watermark = boundary_watermark(
+        Position::Transactions {
+            checkpoint: cursor_cp,
+            tx_seq: frontier,
+        },
+        boundary,
+    );
     Ok(Some(watermark_response(watermark)))
 }
 
@@ -457,9 +464,10 @@ fn render_transaction_rows(
         checkpoint_boundary =
             advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
         let watermark = item_watermark(
-            options,
-            row.checkpoint_number,
-            row.tx_sequence_number,
+            Position::Transactions {
+                checkpoint: row.checkpoint_number,
+                tx_seq: row.tx_sequence_number,
+            },
             checkpoint_boundary,
         );
         let response = if render_contents {
@@ -472,7 +480,7 @@ fn render_transaction_rows(
                 row.checkpoint_number,
                 read_mask,
             )?;
-            transaction_item_response(watermark, transaction, row.tx_offset)
+            transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
         } else {
             let mut transaction = ExecutedTransaction::default();
             if read_mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -481,7 +489,7 @@ fn render_transaction_rows(
             if read_mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
                 transaction.checkpoint = Some(row.checkpoint_number);
             }
-            transaction_item_response(watermark, transaction, row.tx_offset)
+            transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
         };
         items.push(response);
     }
@@ -501,12 +509,16 @@ pub(crate) fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMa
 }
 
 fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {
+    // `digest`, `checkpoint`, and `transaction_index` are all available from the
+    // tx_seq_digest index row, so a mask limited to them skips the full
+    // transaction fetch.
     let paths = read_mask.to_field_mask().paths;
     paths.is_empty()
-        || paths.len() > 2
+        || paths.len() > 3
         || paths.iter().any(|path| {
             path != ExecutedTransaction::DIGEST_FIELD.name
                 && path != ExecutedTransaction::CHECKPOINT_FIELD.name
+                && path != ExecutedTransaction::TRANSACTION_INDEX_FIELD.name
         })
 }
 
@@ -535,13 +547,20 @@ fn resolve_tx_range(
 
 fn transaction_item_response(
     watermark: Watermark,
-    transaction: ExecutedTransaction,
+    mut transaction: ExecutedTransaction,
     tx_offset: u32,
+    read_mask: &FieldMaskTree,
 ) -> ListTransactionsResponse {
+    // The within-checkpoint position rides on the `ExecutedTransaction` rather
+    // than the enclosing `TransactionItem`; populate it only when the read mask
+    // requests it.
+    if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
+        transaction.transaction_index = Some(tx_offset as u64);
+    }
+
     let mut item = TransactionItem::default();
     item.watermark = Some(watermark);
     item.transaction = Some(transaction);
-    item.transaction_offset = Some(tx_offset as u64);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::Item(item));
@@ -556,7 +575,7 @@ fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
 
 fn end_response(reason: QueryEndReason) -> ListTransactionsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::End(end));

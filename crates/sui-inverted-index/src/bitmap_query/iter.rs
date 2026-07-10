@@ -25,9 +25,9 @@ use roaring::RoaringBitmap;
 
 use super::BitmapBucketIteratorSource;
 use super::BitmapQuery;
+use super::BitmapScanError;
 use super::DedupedQuery;
 use super::LeafHead;
-use super::MultiError;
 use super::ScanDirection;
 use super::Watermarked;
 use super::WatermarkedBucket;
@@ -144,7 +144,7 @@ where
 
             // Consume any budget-error frame so the error surfaces (after the
             // floor watermark below).
-            let mut errors: Vec<anyhow::Error> = Vec::new();
+            let mut errors: Vec<BitmapScanError> = Vec::new();
             for i in 0..leaf_count {
                 if !unreferenced[i] && matches!(class[i], Some(LeafHead::Error)) {
                     match leaves[i].next() {
@@ -181,7 +181,7 @@ where
             // everything below it was fully evaluated in prior rounds.
             if !errors.is_empty() {
                 done = true;
-                pending.push_back(Err(MultiError::collapse(errors)));
+                pending.push_back(Err(BitmapScanError::collapse(errors)));
                 continue;
             }
 
@@ -601,13 +601,12 @@ mod tests {
         }
     }
 
-    /// Budget exhaustion mid-dense-scan surfaces `BitmapScanLimitExceeded`
+    /// Budget exhaustion mid-dense-scan surfaces `BitmapScanError::ScanLimit`
     /// after a floor watermark, and resuming from that watermark covers the
     /// remaining buckets exactly once.
     #[tokio::test]
     async fn unanchored_budget_exhaustion_resumes_at_watermark() {
-        use crate::bitmap_query::BitmapScanLimitExceeded;
-        use crate::bitmap_query::error_contains;
+        use crate::bitmap_query::BitmapScanError;
 
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::new()),
@@ -639,7 +638,7 @@ mod tests {
                 }
                 Ok(Watermarked::Watermark(p)) => last_watermark = p,
                 Err(e) => {
-                    assert!(error_contains::<BitmapScanLimitExceeded>(&e).is_some());
+                    assert!(matches!(e, BitmapScanError::ScanLimit));
                     limit_hit = true;
                 }
             }

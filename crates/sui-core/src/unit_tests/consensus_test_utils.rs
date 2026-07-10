@@ -43,6 +43,8 @@ pub struct TestConsensusCommit {
     pub round: u64,
     pub timestamp_ms: u64,
     pub sub_dag_index: u64,
+    /// Indices into `transactions` reported as rejected by consensus voting.
+    rejected_indices: HashSet<usize>,
 }
 
 impl TestConsensusCommit {
@@ -57,16 +59,17 @@ impl TestConsensusCommit {
             round,
             timestamp_ms,
             sub_dag_index,
+            rejected_indices: HashSet::new(),
         }
     }
 
     pub fn empty(round: u64, timestamp_ms: u64, sub_dag_index: u64) -> Self {
-        Self {
-            transactions: vec![],
-            round,
-            timestamp_ms,
-            sub_dag_index,
-        }
+        Self::new(vec![], round, timestamp_ms, sub_dag_index)
+    }
+
+    pub fn with_rejected_indices(mut self, indices: impl IntoIterator<Item = usize>) -> Self {
+        self.rejected_indices = indices.into_iter().collect();
+        self
     }
 }
 
@@ -111,9 +114,10 @@ impl ConsensusCommitAPI for TestConsensusCommit {
         let parsed_txs: Vec<ParsedTransaction> = self
             .transactions
             .iter()
-            .map(|tx| ParsedTransaction {
+            .enumerate()
+            .map(|(i, tx)| ParsedTransaction {
                 transaction: tx.clone(),
-                rejected: false,
+                rejected: self.rejected_indices.contains(&i),
                 serialized_len: 0,
             })
             .collect();
@@ -135,14 +139,46 @@ pub struct TestConsensusHandlerSetup<C> {
     pub captured_transactions: CapturedTransactions,
 }
 
+/// Makes a consensus adapter with the standard test wiring (limits, metrics), backed by the
+/// given consensus client.
+pub fn make_consensus_adapter_with_client_for_test(
+    state: &Arc<AuthorityState>,
+    client: Arc<dyn ConsensusClient>,
+    max_pending_local_submissions: usize,
+) -> Arc<ConsensusAdapter> {
+    Arc::new(ConsensusAdapter::new(
+        client,
+        state.checkpoint_store.clone(),
+        state.name,
+        100_000,
+        max_pending_local_submissions,
+        ConsensusAdapterMetrics::new_test(),
+        Arc::new(tokio::sync::Notify::new()),
+    ))
+}
+
 pub fn make_consensus_adapter_for_test(
     state: Arc<AuthorityState>,
     process_via_checkpoint: HashSet<TransactionDigest>,
     execute: bool,
     mock_block_status_receivers: Vec<BlockStatusReceiver>,
 ) -> Arc<ConsensusAdapter> {
-    let metrics = ConsensusAdapterMetrics::new_test();
+    make_consensus_adapter_for_test_with_submit_limit(
+        state,
+        process_via_checkpoint,
+        execute,
+        mock_block_status_receivers,
+        100_000,
+    )
+}
 
+pub fn make_consensus_adapter_for_test_with_submit_limit(
+    state: Arc<AuthorityState>,
+    process_via_checkpoint: HashSet<TransactionDigest>,
+    execute: bool,
+    mock_block_status_receivers: Vec<BlockStatusReceiver>,
+    max_pending_local_submissions: usize,
+) -> Arc<ConsensusAdapter> {
     #[derive(Clone)]
     struct SubmitDirectly {
         state: Arc<AuthorityState>,
@@ -272,20 +308,13 @@ pub fn make_consensus_adapter_for_test(
         }
     }
     // Make a new consensus adapter instance.
-    Arc::new(ConsensusAdapter::new(
-        Arc::new(SubmitDirectly {
-            state: state.clone(),
-            process_via_checkpoint,
-            execute,
-            mock_block_status_receivers: Arc::new(Mutex::new(mock_block_status_receivers)),
-        }),
-        state.checkpoint_store.clone(),
-        state.name,
-        100_000,
-        100_000,
-        metrics,
-        Arc::new(tokio::sync::Notify::new()),
-    ))
+    let client = Arc::new(SubmitDirectly {
+        state: state.clone(),
+        process_via_checkpoint,
+        execute,
+        mock_block_status_receivers: Arc::new(Mutex::new(mock_block_status_receivers)),
+    });
+    make_consensus_adapter_with_client_for_test(&state, client, max_pending_local_submissions)
 }
 
 /// Creates a ConsensusHandler for testing with a mock ExecutionSchedulerSender that captures transactions

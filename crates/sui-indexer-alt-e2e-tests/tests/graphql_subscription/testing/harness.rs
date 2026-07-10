@@ -328,18 +328,18 @@ pub async fn wait_for_matching_item(
 }
 
 /// Extract digests from a checkpoint subscription response.
-/// Path: data.checkpoints.transactions.nodes[].digest
+/// Path: data.checkpoints.node.transactions.nodes[].digest
 pub fn checkpoint_tx_digests(item: &Value) -> Vec<&str> {
-    item["data"]["checkpoints"]["transactions"]["nodes"]
+    item["data"]["checkpoints"]["node"]["transactions"]["nodes"]
         .as_array()
         .map(|nodes| nodes.iter().filter_map(|n| n["digest"].as_str()).collect())
         .unwrap_or_default()
 }
 
 /// Extract `sequenceNumber` from a top-level checkpoint subscription response.
-/// Path: data.checkpoints.sequenceNumber
+/// Path: data.checkpoints.node.sequenceNumber
 pub fn checkpoint_seq(item: &Value) -> u64 {
-    item["data"]["checkpoints"]["sequenceNumber"]
+    item["data"]["checkpoints"]["node"]["sequenceNumber"]
         .as_u64()
         .expect("checkpoint payload missing sequenceNumber")
 }
@@ -406,9 +406,9 @@ pub fn graphql_redactions() -> insta::Settings {
 }
 
 /// Extract digest from a top-level transaction subscription response.
-/// Path: data.transactions.digest
+/// Path: data.transactions.node.digest
 pub fn transaction_digest(item: &Value) -> Vec<&str> {
-    item["data"]["transactions"]["digest"]
+    item["data"]["transactions"]["node"]["digest"]
         .as_str()
         .into_iter()
         .collect()

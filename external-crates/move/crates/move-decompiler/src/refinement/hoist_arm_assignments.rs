@@ -23,7 +23,7 @@ pub fn refine(exp: &mut Exp) -> bool {
 //
 // A later pass can fuse the `let l5;` with the resulting `Assign` to recover the idiomatic
 // `let l5 = if (cond) { ... } else { ... };`. Only fires when every arm ends in `Assign([X], _)`
-// for the same single `X` — multi-target assignments, missing else, and disagreeing targets are
+// for the same single `X` - multi-target assignments, missing else, and disagreeing targets are
 // left alone.
 
 struct HoistArmAssignments;
@@ -72,7 +72,7 @@ fn arms_mut(exp: &mut Exp) -> Vec<&mut Exp> {
     }
 }
 
-/// `Assign([X], _)` directly, or the trailing entry of a `Seq` that is — returns `X`. Peeks
+/// `Assign([X], _)` directly, or the trailing entry of a `Seq` that is - returns `X`. Peeks
 /// through any `Block` wrappers that lowering left around the arm body and its tail.
 fn trailing_assign_target(exp: &Exp) -> Option<&str> {
     match exp {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
+use crate::authority::authority_store::ObjectLockStatus;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, parse_jwks};
@@ -918,14 +919,15 @@ async fn do_zklogin_transaction_test(
 async fn check_locks(authority_state: Arc<AuthorityState>, object_ids: Vec<ObjectID>) {
     for object_id in object_ids {
         let object = authority_state.get_object(&object_id).unwrap();
-        assert!(
+        assert_eq!(
             authority_state
-                .get_transaction_lock(
-                    &object.compute_object_reference(),
+                .get_object_cache_reader()
+                .get_lock(
+                    object.compute_object_reference(),
                     &authority_state.epoch_store_for_testing()
                 )
-                .unwrap()
-                .is_none()
+                .unwrap(),
+            ObjectLockStatus::Initialized
         );
     }
 }

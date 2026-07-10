@@ -22,7 +22,6 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 
 fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
-        ledger_history_indexing: Some(true),
         enable_indexing: Some(true),
         ..Default::default()
     }

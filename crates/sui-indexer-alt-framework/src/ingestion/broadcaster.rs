@@ -21,13 +21,13 @@ use tracing::info;
 use tracing::warn;
 
 use crate::config::ConcurrencyConfig;
-use crate::ingestion::BoxedStreamingClient;
+use crate::ingestion::ArcStreamingClient;
 use crate::ingestion::IngestionConfig;
 use crate::ingestion::error::Error;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::ingestion::ingestion_client::IngestionClient;
 use crate::ingestion::streaming_client::CheckpointStream;
-use crate::metrics::IngestionMetrics;
+use crate::metrics::CohortMetrics;
 
 /// If the network's latest checkpoint (per the streaming client) is more than this many
 /// checkpoints ahead of where ingestion currently is, skip streaming and let the ingestion
@@ -50,17 +50,18 @@ const STREAMING_CATCHUP_THRESHOLD: u64 = 1_000;
 /// ingest concurrency. The task will shut down if the `checkpoints` range completes.
 pub(super) fn broadcaster<R>(
     checkpoints: R,
-    mut streaming_client: Option<BoxedStreamingClient>,
+    streaming_client: Option<ArcStreamingClient>,
     config: IngestionConfig,
     client: IngestionClient,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
-    metrics: Arc<IngestionMetrics>,
 ) -> Service
 where
     R: std::ops::RangeBounds<u64> + Send + 'static,
 {
     Service::new().spawn_aborting(async move {
         info!("Starting broadcaster");
+
+        let cohort_metrics = client.cohort_metrics().clone();
 
         // Extract start and end from the range bounds
         let start_cp = match checkpoints.start_bound() {
@@ -97,13 +98,13 @@ where
             // The ingestion task fill up the gap from checkpoint_hi to ingestion_end (exclusive) while the streaming
             // task covers from ingestion_end to end_cp.
             let (stream_guard, ingestion_end) = setup_streaming_task(
-                &mut streaming_client,
+                &streaming_client,
                 checkpoint_hi,
                 end_cp,
                 &mut streaming_backoff_batch_size,
                 &config,
                 &subscribers,
-                &metrics,
+                &cohort_metrics,
             )
             .await;
 
@@ -116,7 +117,7 @@ where
                 config.ingest_concurrency.clone(),
                 client.clone(),
                 subscribers.clone(),
-                metrics.clone(),
+                cohort_metrics.clone(),
             );
 
             let (streaming_result, ingestion_result) =
@@ -162,10 +163,11 @@ fn ingest_and_broadcast_range(
     ingest_concurrency: ConcurrencyConfig,
     client: IngestionClient,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
-    metrics: Arc<IngestionMetrics>,
+    cohort_metrics: Arc<CohortMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
-        let report_metrics = metrics.clone();
+        let concurrency_limit = cohort_metrics.ingestion_concurrency_limit.clone();
+        let concurrency_inflight = cohort_metrics.ingestion_concurrency_inflight.clone();
         futures::stream::iter(start..end)
             .try_for_each_broadcast_spawned(
                 ingest_concurrency.into(),
@@ -180,12 +182,8 @@ fn ingest_and_broadcast_range(
                 },
                 subscribers,
                 move |stats| {
-                    report_metrics
-                        .ingestion_concurrency_limit
-                        .set(stats.limit as i64);
-                    report_metrics
-                        .ingestion_concurrency_inflight
-                        .set(stats.inflight as i64);
+                    concurrency_limit.set(stats.limit as i64);
+                    concurrency_inflight.set(stats.inflight as i64);
                 },
             )
             .await
@@ -196,13 +194,13 @@ fn ingest_and_broadcast_range(
 /// the current checkpoint_hi, and returns a streaming task handle and the `ingestion_end`
 /// telling the main task that ingestion should be used up to this point.
 async fn setup_streaming_task(
-    streaming_client: &mut Option<BoxedStreamingClient>,
+    streaming_client: &Option<ArcStreamingClient>,
     checkpoint_hi: u64,
     end_cp: u64,
     streaming_backoff_batch_size: &mut u64,
     config: &IngestionConfig,
     subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
-    metrics: &Arc<IngestionMetrics>,
+    cohort_metrics: &Arc<CohortMetrics>,
 ) -> (TaskGuard<u64>, u64) {
     // No streaming client configured so we ingest all the way to end_cp.
     let Some(streaming_client) = streaming_client else {
@@ -211,6 +209,8 @@ async fn setup_streaming_task(
 
     let backoff_batch_size = *streaming_backoff_batch_size;
 
+    let connection_failures = cohort_metrics.total_streaming_connection_failures.clone();
+
     // Convenient closure to handle streaming fallback logic due to connection or peek failure.
     let mut fallback = |reason: &str| {
         let ingestion_end = (checkpoint_hi + backoff_batch_size).min(end_cp);
@@ -218,7 +218,7 @@ async fn setup_streaming_task(
             checkpoint_hi,
             ingestion_end, "{reason}, falling back to ingestion"
         );
-        metrics.total_streaming_connection_failures.inc();
+        connection_failures.inc();
         *streaming_backoff_batch_size =
             (backoff_batch_size * 2).min(config.streaming_backoff_max_batch_size as u64);
         (noop_streaming_task(ingestion_end), ingestion_end)
@@ -276,7 +276,7 @@ async fn setup_streaming_task(
         end_cp,
         envelope_stream,
         subscribers.to_vec(),
-        metrics.clone(),
+        cohort_metrics.clone(),
     )));
 
     (stream_guard, ingestion_end)
@@ -292,8 +292,16 @@ async fn stream_and_broadcast_range(
     hi: u64,
     mut stream: impl Stream<Item = Result<CheckpointEnvelope, Error>> + Unpin,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
-    metrics: Arc<IngestionMetrics>,
+    cohort_metrics: Arc<CohortMetrics>,
 ) -> u64 {
+    let latest_streamed = cohort_metrics.latest_streamed_checkpoint.clone();
+    let latest_skipped = cohort_metrics.latest_skipped_streamed_checkpoint.clone();
+    let skipped_streamed = cohort_metrics.total_skipped_streamed_checkpoints.clone();
+    let out_of_order_streamed = cohort_metrics
+        .total_out_of_order_streamed_checkpoints
+        .clone();
+    let streamed = cohort_metrics.total_streamed_checkpoints.clone();
+    let stream_disconnections = cohort_metrics.total_stream_disconnections.clone();
     while lo < hi {
         let Some(item) = stream.next().await else {
             warn!(lo, "Streaming ended unexpectedly");
@@ -315,16 +323,14 @@ async fn stream_and_broadcast_range(
                 checkpoint = sequence_number,
                 lo, "Skipping already processed checkpoint"
             );
-            metrics.total_skipped_streamed_checkpoints.inc();
-            metrics
-                .latest_skipped_streamed_checkpoint
-                .set(sequence_number as i64);
+            skipped_streamed.inc();
+            latest_skipped.set(sequence_number as i64);
             continue;
         }
 
         if sequence_number > lo {
             warn!(checkpoint = sequence_number, lo, "Out-of-order checkpoint");
-            metrics.total_out_of_order_streamed_checkpoints.inc();
+            out_of_order_streamed.inc();
             // Return to main loop to fill up the gap.
             break;
         }
@@ -339,14 +345,14 @@ async fn stream_and_broadcast_range(
         }
 
         debug!(checkpoint = lo, "Streamed checkpoint");
-        metrics.total_streamed_checkpoints.inc();
-        metrics.latest_streamed_checkpoint.set(lo as i64);
+        streamed.inc();
+        latest_streamed.set(lo as i64);
         lo += 1;
     }
 
     // We exit the loop either due to cancellation, error or completion of the range,
     // in all cases we disconnect the stream and return the current watermark.
-    metrics.total_stream_disconnections.inc();
+    stream_disconnections.inc();
     lo
 }
 
@@ -377,9 +383,11 @@ mod tests {
 
     use tokio::time::timeout;
 
+    use crate::cohort::DEFAULT_MIN_COHORT_BOUNDARY;
     use crate::ingestion::IngestionConfig;
     use crate::ingestion::ingestion_client::tests::MockIngestionClient;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
+    use crate::metrics::IngestionMetrics;
     use crate::metrics::tests::test_ingestion_metrics;
 
     use super::*;
@@ -396,7 +404,9 @@ mod tests {
     ) -> IngestionClient {
         let mock = MockIngestionClient::default();
         mock.insert_checkpoints(checkpoints);
-        IngestionClient::from_trait(Arc::new(mock), metrics)
+        // Bind to cohort 0, matching production where the broadcaster always runs under a cohort's
+        // client rather than the unlabeled base client.
+        IngestionClient::from_trait(Arc::new(mock), metrics).for_cohort(0)
     }
 
     /// Create a test config
@@ -408,6 +418,7 @@ mod tests {
             streaming_backoff_max_batch_size: 16,
             streaming_connection_timeout_ms: 100,
             streaming_statement_timeout_ms: 100,
+            min_cohort_boundary: DEFAULT_MIN_COHORT_BOUNDARY,
         }
     }
 
@@ -486,7 +497,6 @@ mod tests {
             test_config(),
             mock_client_with_range(0..5, metrics.clone()),
             subscriber_dest,
-            metrics,
         );
 
         assert_eq!(
@@ -508,7 +518,6 @@ mod tests {
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
-            metrics,
         );
 
         assert_eq!(
@@ -531,7 +540,6 @@ mod tests {
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
-            metrics,
         );
 
         assert_eq!(
@@ -557,7 +565,6 @@ mod tests {
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
             subscribers,
-            metrics,
         );
 
         // Both subscribers should receive checkpoints
@@ -591,20 +598,37 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..5, // Bounded range
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..5, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should receive all checkpoints from the stream in order
         assert_eq!(recv_vec(&mut subscriber_rx, 5).await, Vec::from_iter(0..5));
 
         // We should get all checkpoints from streaming.
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 5);
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 4);
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            4
+        );
 
         svc.join().await.unwrap();
     }
@@ -620,11 +644,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..60,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..60, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         assert_eq!(
@@ -635,9 +658,27 @@ mod tests {
         // Verify both ingestion and streaming were used. The exact split depends on the
         // peek'd network_latest (49) and STREAMING_CATCHUP_THRESHOLD: streaming begins at
         // the peek'd checkpoint, ingestion fills in below it.
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 49); // [0..49)
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 11); // [49..60)
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 59);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            49
+        ); // [0..49)
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            11
+        ); // [49..60)
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            59
+        );
 
         svc.join().await.unwrap();
     }
@@ -655,11 +696,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..30,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..30, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should use only ingestion since streaming is beyond end_cp
@@ -669,8 +709,20 @@ mod tests {
         );
 
         // Verify no streaming was used (all from ingestion)
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 0);
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 30);
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            30
+        );
 
         svc.join().await.unwrap();
     }
@@ -686,11 +738,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             30..100,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(30..100, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         assert_eq!(
@@ -699,11 +750,41 @@ mod tests {
         );
 
         // Verify only streaming was used (all from streaming)
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 70);
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 99);
-        assert_eq!(metrics.total_skipped_streamed_checkpoints.get(), 30);
-        assert_eq!(metrics.latest_skipped_streamed_checkpoint.get(), 29);
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            70
+        );
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            99
+        );
+        assert_eq!(
+            metrics
+                .total_skipped_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            30
+        );
+        assert_eq!(
+            metrics
+                .latest_skipped_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            29
+        );
 
         svc.join().await.unwrap();
     }
@@ -724,11 +805,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should receive all checkpoints exactly once (no duplicates) from streaming.
@@ -737,11 +817,41 @@ mod tests {
             Vec::from_iter(0..20)
         );
 
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
-        assert_eq!(metrics.total_skipped_streamed_checkpoints.get(), 2);
-        assert_eq!(metrics.latest_skipped_streamed_checkpoint.get(), 4);
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            20
+        );
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            19
+        );
+        assert_eq!(
+            metrics
+                .total_skipped_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            2
+        );
+        assert_eq!(
+            metrics
+                .latest_skipped_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            4
+        );
 
         svc.join().await.unwrap();
     }
@@ -759,11 +869,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..10,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..10, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should receive first three checkpoints from streaming in order
@@ -776,10 +885,34 @@ mod tests {
             BTreeSet::from_iter(3..10)
         );
 
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 6);
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 4);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 9);
-        assert_eq!(metrics.total_out_of_order_streamed_checkpoints.get(), 1);
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            6
+        );
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            4
+        );
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            9
+        );
+        assert_eq!(
+            metrics
+                .total_out_of_order_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
 
         svc.join().await.unwrap();
     }
@@ -798,11 +931,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..15,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..15, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should receive first 5 checkpoints from streaming in order
@@ -815,11 +947,29 @@ mod tests {
         );
 
         // Verify streaming was used initially
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 10);
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            10
+        );
         // Then ingestion was used to recover the missing checkpoints.
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
         // The last checkpoint should come from streaming after recovery.
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 14);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            14
+        );
 
         svc.join().await.unwrap();
     }
@@ -838,11 +988,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should eventually receive all checkpoints despite errors from streaming.
@@ -851,10 +1000,34 @@ mod tests {
             Vec::from_iter(0..20)
         );
 
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(metrics.total_stream_disconnections.get(), 3); // 2 errors + 1 completion
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            20
+        );
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            19
+        );
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .total_stream_disconnections
+                .with_label_values(&["0"])
+                .get(),
+            3
+        ); // 2 errors + 1 completion
 
         svc.join().await.unwrap();
     }
@@ -869,14 +1042,13 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_service) as BoxedStreamingClient),
+            Some(Arc::new(streaming_service)),
             IngestionConfig {
                 streaming_backoff_initial_batch_size: non_zero(5),
                 ..test_config()
             },
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should fallback to ingestion for initial batch size checkpoints
@@ -891,8 +1063,20 @@ mod tests {
             Vec::from_iter(5..20)
         );
 
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 15);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            15
+        );
 
         svc.join().await.unwrap();
     }
@@ -909,14 +1093,13 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             IngestionConfig {
                 streaming_backoff_initial_batch_size: non_zero(5),
                 ..test_config()
             },
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should fallback to ingestion for first 10 checkpoints
@@ -932,8 +1115,20 @@ mod tests {
         );
 
         // Verify both were used
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 15);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            15
+        );
 
         svc.join().await.unwrap();
     }
@@ -949,11 +1144,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..50,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..50, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should fallback to ingestion for all checkpoints
@@ -963,11 +1157,29 @@ mod tests {
         );
 
         // Verify failure counter incremented 6 times with batche sizes 2 -> 4 -> 8 -> 16 -> 16 -> 4 (completing the last 4).
-        assert_eq!(metrics.total_streaming_connection_failures.get(), 6);
+        assert_eq!(
+            metrics
+                .total_streaming_connection_failures
+                .with_label_values(&["0"])
+                .get(),
+            6
+        );
 
         // Verify only ingestion was used (streaming never succeeded)
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 50);
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 0);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            50
+        );
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
 
         svc.join().await.unwrap();
     }
@@ -985,11 +1197,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..50,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..50, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should fallback to ingestion for first 2 + 4 + 8 + 16 = 30 checkpoints
@@ -1017,11 +1228,29 @@ mod tests {
         );
 
         // Verify failure counter incremented 5 times
-        assert_eq!(metrics.total_streaming_connection_failures.get(), 5);
+        assert_eq!(
+            metrics
+                .total_streaming_connection_failures
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
 
         // Ingestion was used for 2 + 4 + 8 + 16 + 2 = 32 checkpoints
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 32);
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 18);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            32
+        );
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            18
+        );
 
         svc.join().await.unwrap();
     }
@@ -1043,11 +1272,10 @@ mod tests {
         };
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_service) as BoxedStreamingClient),
+            Some(Arc::new(streaming_service)),
             config,
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should fallback to ingestion for initial batch size checkpoints
@@ -1062,9 +1290,27 @@ mod tests {
             Vec::from_iter(5..20)
         );
 
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 15);
-        assert_eq!(metrics.total_streaming_connection_failures.get(), 1);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            15
+        );
+        assert_eq!(
+            metrics
+                .total_streaming_connection_failures
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
 
         svc.join().await.unwrap();
     }
@@ -1086,11 +1332,10 @@ mod tests {
         };
         let mut svc = broadcaster(
             0..20,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             config,
             mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should fallback to ingestion for first batch
@@ -1106,8 +1351,20 @@ mod tests {
         );
 
         // Verify both were used
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 15);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            15
+        );
 
         svc.join().await.unwrap();
     }
@@ -1124,11 +1381,10 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..15,
-            Some(Box::new(streaming_client) as BoxedStreamingClient),
+            Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..15, metrics.clone()),
             subscriber_dest,
-            metrics.clone(),
         );
 
         // Should receive first 5 checkpoints from streaming in order
@@ -1141,11 +1397,29 @@ mod tests {
         );
 
         // Verify streaming was used initially and later recovered
-        assert_eq!(metrics.total_streamed_checkpoints.get(), 10);
+        assert_eq!(
+            metrics
+                .total_streamed_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            10
+        );
         // Then ingestion was used to recover the missing checkpoints
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
         // The last checkpoint should come from streaming after recovery
-        assert_eq!(metrics.latest_streamed_checkpoint.get(), 14);
+        assert_eq!(
+            metrics
+                .latest_streamed_checkpoint
+                .with_label_values(&["0"])
+                .get(),
+            14
+        );
 
         svc.join().await.unwrap();
     }

@@ -30,13 +30,13 @@ pub(crate) use sui_inverted_index::Watermarked;
 /// drainer that owns the permit-holding BigTable stream), the drainer's
 /// abort/join handle, and the drainer slot held until the frame is fully
 /// consumed. Watermarks and terminal errors are zero-cost passthroughs.
-enum FrameHandle<O, E> {
+enum FrameHandle<O, P, E> {
     Items {
         rx: mpsc::UnboundedReceiver<Result<O, E>>,
         drain: TaskGuard<()>,
         _slot: OwnedSemaphorePermit,
     },
-    Watermark(u64),
+    Watermark(P),
     Err(E),
 }
 
@@ -82,17 +82,18 @@ fn surface_panic(res: Result<(), JoinError>) {
 /// is bounded by `max_concurrent_chunks`, and a per-stage drainer slot caps
 /// in-flight *item* frames at `max_concurrent_chunks` (held until each frame is
 /// consumed).
-pub(crate) fn pipelined_chunks<I, O, E, F, Fut>(
-    upstream: BoxStream<'static, Result<Watermarked<I>, E>>,
+pub(crate) fn pipelined_chunks<I, O, P, E, F, Fut>(
+    upstream: BoxStream<'static, Result<Watermarked<I, P>, E>>,
     chunk_size: usize,
     max_concurrent_chunks: usize,
     f: F,
-) -> BoxStream<'static, Result<Watermarked<O>, E>>
+) -> BoxStream<'static, Result<Watermarked<O, P>, E>>
 where
     F: Fn(Vec<I>) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<BoxStream<'static, Result<O, E>>, E>> + Send + 'static,
     I: Send + 'static,
     O: Send + 'static,
+    P: Copy + Send + 'static,
     E: Send + 'static,
 {
     assert!(
@@ -110,7 +111,7 @@ where
     let drainer_slots = Arc::new(Semaphore::new(max_concurrent_chunks));
     // Bounded so a sparse stream of watermark/error frames (which take no
     // drainer slot) can't enqueue unboundedly at a stalled consumer.
-    let (frame_tx, frame_rx) = mpsc::channel::<FrameHandle<O, E>>(max_concurrent_chunks);
+    let (frame_tx, frame_rx) = mpsc::channel::<FrameHandle<O, P, E>>(max_concurrent_chunks);
 
     // Dispatcher: pull ordered frames, spawn a permit-owning drainer per item
     // frame, hand ordered frame handles to the consumer. Spawned (not lazy) so
@@ -230,9 +231,9 @@ where
 /// caller-specified chunk size; watermarks are zero-cost passthroughs that
 /// occupy a slot in the input-order sequence so the dispatcher forwards them
 /// in place between item frames.
-enum ChunkInput<I> {
+enum ChunkInput<I, P = u64> {
     Items(Vec<I>),
-    Watermark(u64),
+    Watermark(P),
 }
 
 /// Split a `Watermarked<I>` stream into `ChunkInput`. Drives upstream with a
@@ -267,18 +268,19 @@ enum ChunkInput<I> {
 /// `'outer` loop's `upstream.as_mut().next().await` — a real `.await` —
 /// to register a fresh waker against the upstream. The next upstream
 /// readiness wakes the chunker reliably.
-fn chunks_with_watermarks<I, E>(
-    upstream: BoxStream<'static, Result<Watermarked<I>, E>>,
+fn chunks_with_watermarks<I, P, E>(
+    upstream: BoxStream<'static, Result<Watermarked<I, P>, E>>,
     chunk_size: usize,
-) -> BoxStream<'static, Result<ChunkInput<I>, E>>
+) -> BoxStream<'static, Result<ChunkInput<I, P>, E>>
 where
     I: Send + 'static,
+    P: Copy + Send + 'static,
     E: Send + 'static,
 {
     async_stream::try_stream! {
         futures::pin_mut!(upstream);
         let mut sub: Vec<I> = Vec::with_capacity(chunk_size);
-        let mut held_wm: Option<u64> = None;
+        let mut held_wm: Option<P> = None;
 
         'outer: loop {
             // Block until at least one entry is available.
@@ -371,12 +373,13 @@ where
 /// terminate once `n` items have been emitted. The last watermark
 /// emitted before the cutoff is still useful — it bounds the actual scan
 /// position even if the handler is now stopped on item count.
-pub(crate) fn take_items<T, E>(
-    stream: BoxStream<'static, Result<Watermarked<T>, E>>,
+pub(crate) fn take_items<T, P, E>(
+    stream: BoxStream<'static, Result<Watermarked<T, P>, E>>,
     n: usize,
-) -> BoxStream<'static, Result<Watermarked<T>, E>>
+) -> BoxStream<'static, Result<Watermarked<T, P>, E>>
 where
     T: Send + 'static,
+    P: Copy + Send + 'static,
     E: Send + 'static,
 {
     async_stream::try_stream! {
@@ -387,6 +390,40 @@ where
             match item? {
                 Watermarked::Item(t) => {
                     emitted += 1;
+                    yield Watermarked::Item(t);
+                }
+                Watermarked::Watermark(p) => yield Watermarked::Watermark(p),
+            }
+        }
+    }
+    .boxed()
+}
+
+/// Collapse runs of equal `Watermarked::Item` values into one, forwarding
+/// `Watermarked::Watermark` frames and errors unchanged. Items must already be
+/// in scan order. Used by `ListCheckpoints` to turn the per-transaction
+/// checkpoint ids of a filtered scan (a checkpoint's txs are contiguous in scan
+/// order) into a single id per checkpoint. Unlike a per-chunk mapper this
+/// carries its dedup state across the whole stream, so duplicates split across
+/// chunk boundaries still collapse.
+pub(crate) fn dedup_consecutive<T, P, E>(
+    stream: BoxStream<'static, Result<Watermarked<T, P>, E>>,
+) -> BoxStream<'static, Result<Watermarked<T, P>, E>>
+where
+    T: PartialEq + Clone + Send + 'static,
+    P: Copy + Send + 'static,
+    E: Send + 'static,
+{
+    async_stream::try_stream! {
+        futures::pin_mut!(stream);
+        let mut last: Option<T> = None;
+        while let Some(item) = stream.next().await {
+            match item? {
+                Watermarked::Item(t) => {
+                    if last.as_ref() == Some(&t) {
+                        continue;
+                    }
+                    last = Some(t.clone());
                     yield Watermarked::Item(t);
                 }
                 Watermarked::Watermark(p) => yield Watermarked::Watermark(p),
@@ -479,12 +516,13 @@ pub(crate) type KeyedBatchOutput<I, K, V> = (I, Arc<HashMap<K, V>>);
 /// Convenience aliases for the marker-aware pipeline boundary types. Avoid
 /// repeating the deeply-nested `BoxStream<'static, Result<Watermarked<...>, _>>`
 /// at every signature. `E` is the pipeline's error type — `RpcError` for the
-/// non-eval handler chains, `anyhow::Error` for chains downstream of the
-/// bitmap evaluator (so `ScanLimitExceeded` survives in-band for the handler
-/// to downcast).
-pub(crate) type MarkedUpstream<I, E> = BoxStream<'static, Result<Watermarked<I>, E>>;
-pub(crate) type MarkedKeyedUpstream<I, K, E> = MarkedUpstream<(I, Vec<K>), E>;
-pub(crate) type MarkedKeyedDownstream<I, K, V, E> = MarkedUpstream<KeyedBatchOutput<I, K, V>, E>;
+/// non-eval handler chains, `BitmapScanError` for chains downstream of the
+/// bitmap evaluator (so the typed terminal survives in-band for the handler to
+/// match).
+pub(crate) type MarkedUpstream<I, E, P = u64> = BoxStream<'static, Result<Watermarked<I, P>, E>>;
+pub(crate) type MarkedKeyedUpstream<I, K, E, P = u64> = MarkedUpstream<(I, Vec<K>), E, P>;
+pub(crate) type MarkedKeyedDownstream<I, K, V, E, P = u64> =
+    MarkedUpstream<KeyedBatchOutput<I, K, V>, E, P>;
 
 /// Group `(item, keys)` pairs into batches and fetch each batch's keys.
 /// Each emitted item is paired with a map of just its own keys (the
@@ -503,17 +541,18 @@ pub(crate) type MarkedKeyedDownstream<I, K, V, E> = MarkedUpstream<KeyedBatchOut
 ///
 /// Output is in input order. Partial batches flush at upstream `Pending`
 /// boundaries, not held across them.
-pub(crate) fn pipelined_keyed_batches<I, K, V, E, FetchFut>(
-    upstream: MarkedKeyedUpstream<I, K, E>,
+pub(crate) fn pipelined_keyed_batches<I, K, V, P, E, FetchFut>(
+    upstream: MarkedKeyedUpstream<I, K, E, P>,
     upstream_chunk_size: usize,
     max_keys_per_request: usize,
     max_concurrent_fetches: usize,
     fetch: impl Fn(Vec<K>) -> FetchFut + Send + Sync + 'static,
-) -> MarkedKeyedDownstream<I, K, V, E>
+) -> MarkedKeyedDownstream<I, K, V, E, P>
 where
     I: Send + 'static,
     K: Ord + std::hash::Hash + Clone + std::fmt::Debug + Send + Sync + 'static,
     V: Clone + Send + Sync + 'static,
+    P: Copy + Send + 'static,
     E: From<anyhow::Error> + Send + 'static,
     FetchFut: Future<Output = Result<HashMap<K, V>, E>> + Send + 'static,
 {
@@ -577,7 +616,7 @@ where
 
     async_stream::try_stream! {
         futures::pin_mut!(fetch_results);
-        let mut reassembler = Reassembler::<I, K, V>::new();
+        let mut reassembler = Reassembler::<I, K, V, P>::new();
         while let Some(result) = fetch_results.next().await {
             // `result?` propagates a terminal upstream/fetch error WITHOUT
             // flushing a watermark `reassembler` may be holding. This is
@@ -609,7 +648,7 @@ where
 /// `Watermark` is a zero-cost passthrough that the reassembler emits
 /// between batches so per-source progress markers stay ordered with
 /// items on the wire.
-enum FetchRequest<I, K> {
+enum FetchRequest<I, K, P = u64> {
     /// Opens a new logical group: carries the items that will render
     /// from this group's merged map, plus the first chunk of keys to
     /// fetch and the total number of requests the reassembler should
@@ -627,7 +666,7 @@ enum FetchRequest<I, K> {
     /// into `FetchResult::Watermark(pos)` and threads through the
     /// `.buffered(N)` queue at the same input position as items, so the
     /// reassembler can yield it in order between completed batches.
-    Watermark(u64),
+    Watermark(P),
 }
 
 /// Plan the `FetchRequest`s needed to satisfy a chunk of `(item, keys)`
@@ -641,12 +680,12 @@ enum FetchRequest<I, K> {
 /// Each item's keys are deduped on entry. An item with no new keys still
 /// counts as 1 against the per-request budget, so zero-key items
 /// eventually flush instead of being grouped indefinitely.
-fn plan_fetches<I, K>(items: Vec<(I, Vec<K>)>, max_keys: usize) -> Vec<FetchRequest<I, K>>
+fn plan_fetches<I, K, P>(items: Vec<(I, Vec<K>)>, max_keys: usize) -> Vec<FetchRequest<I, K, P>>
 where
     K: Ord + Clone,
 {
     assert!(max_keys > 0, "plan_fetches: max_keys must be > 0");
-    let mut out: Vec<FetchRequest<I, K>> = Vec::new();
+    let mut out: Vec<FetchRequest<I, K, P>> = Vec::new();
     let mut group = InProgressGroup::<I, K>::new();
 
     for (item, keys) in items {
@@ -703,7 +742,7 @@ impl<I, K: Ord + Clone> InProgressGroup<I, K> {
 
     /// Emit the current group as one `NewGroup` request (if non-empty)
     /// and reset.
-    fn flush_into(&mut self, out: &mut Vec<FetchRequest<I, K>>) {
+    fn flush_into<P>(&mut self, out: &mut Vec<FetchRequest<I, K, P>>) {
         if self.items.is_empty() {
             return;
         }
@@ -718,8 +757,12 @@ impl<I, K: Ord + Clone> InProgressGroup<I, K> {
 /// Emit one fat item as a self-contained run of K requests, where K =
 /// ceil(item.keys / max_keys). One `NewGroup` carries the item itself;
 /// the remaining keys ride on `Continuation` requests.
-fn push_fat_item<I, K>(out: &mut Vec<FetchRequest<I, K>>, item: I, keys: Vec<K>, max_keys: usize)
-where
+fn push_fat_item<I, K, P>(
+    out: &mut Vec<FetchRequest<I, K, P>>,
+    item: I,
+    keys: Vec<K>,
+    max_keys: usize,
+) where
     K: Clone,
 {
     let chunks: Vec<Vec<K>> = keys.chunks(max_keys).map(<[K]>::to_vec).collect();
@@ -738,7 +781,7 @@ where
 
 // --- Stage 2: reassemble fetch results back into rendered items. ---
 
-enum FetchResult<I, K, V> {
+enum FetchResult<I, K, V, P = u64> {
     NewGroup {
         items: Vec<(I, Vec<K>)>,
         requests_total: usize,
@@ -747,16 +790,16 @@ enum FetchResult<I, K, V> {
     Continuation {
         map: HashMap<K, V>,
     },
-    Watermark(u64),
+    Watermark(P),
 }
 
 /// One emission from the reassembler. Items come from completed batches
 /// (a batch can emit multiple items in one push); Watermarks pass straight
 /// through from `FetchResult::Watermark` to preserve their input-order
 /// position relative to items on the wire.
-enum ReassemblerEmission<I, K, V> {
+enum ReassemblerEmission<I, K, V, P = u64> {
     Item(KeyedBatchOutput<I, K, V>),
-    Watermark(u64),
+    Watermark(P),
 }
 
 /// Reassembles a logical batch's `FetchResult`s as they emerge in input
@@ -771,12 +814,12 @@ enum ReassemblerEmission<I, K, V> {
 /// in `pending_watermark` and flushed in input order right after the
 /// in-flight batch completes, collapsing into the latest if more
 /// watermarks pile up before the batch finishes.
-struct Reassembler<I, K, V> {
+struct Reassembler<I, K, V, P = u64> {
     pending: Option<PendingBatch<I, K, V>>,
     /// Watermark to flush as soon as `pending` completes (or
     /// immediately, when `pending` is `None`). Collapses to the latest
     /// position if multiple watermarks arrive mid-batch.
-    pending_watermark: Option<u64>,
+    pending_watermark: Option<P>,
 }
 
 struct PendingBatch<I, K, V> {
@@ -785,7 +828,7 @@ struct PendingBatch<I, K, V> {
     requests_remaining: usize,
 }
 
-impl<I, K, V> Reassembler<I, K, V>
+impl<I, K, V, P> Reassembler<I, K, V, P>
 where
     K: Eq + std::hash::Hash + Clone + std::fmt::Debug,
     V: Clone,
@@ -809,8 +852,8 @@ where
     /// pipeline helper to convert into its caller-typed `E`.
     fn push(
         &mut self,
-        result: FetchResult<I, K, V>,
-    ) -> Result<Vec<ReassemblerEmission<I, K, V>>, anyhow::Error> {
+        result: FetchResult<I, K, V, P>,
+    ) -> Result<Vec<ReassemblerEmission<I, K, V, P>>, anyhow::Error> {
         match result {
             FetchResult::Watermark(pos) => {
                 if self.pending.is_some() {
@@ -860,7 +903,7 @@ where
             // see other items' keys. A key requested by the read stage but
             // absent from the fetch result indicates index/storage
             // divergence — error rather than render a quietly-partial item.
-            let mut emissions: Vec<ReassemblerEmission<I, K, V>> =
+            let mut emissions: Vec<ReassemblerEmission<I, K, V, P>> =
                 Vec::with_capacity(pending.items.len() + 1);
             for (item, keys) in pending.items {
                 let mut item_map: HashMap<K, V> = HashMap::with_capacity(keys.len());
@@ -890,9 +933,9 @@ where
 
 /// Output of [`resolve_watermarks`]: items pass through; watermarks
 /// carry both the original bitmap-domain position and the resolved cp.
-pub(crate) enum ResolvedWatermarked<T> {
+pub(crate) enum ResolvedWatermarked<T, P = u64> {
     Item(T),
-    Watermark { position: u64, cp: u64 },
+    Watermark { position: P, cp: u64 },
 }
 
 /// Final stream stage: pass items through and resolve standalone WMs
@@ -920,22 +963,23 @@ pub(crate) enum ResolvedWatermarked<T> {
 /// Callers construct `resolver` via
 /// [`crate::bigtable_client::BigTableClient::tx_wm_resolver`] or
 /// [`crate::bigtable_client::BigTableClient::event_wm_resolver`].
-pub(crate) fn resolve_watermarks<T, E, F, Fut>(
-    upstream: BoxStream<'static, Result<Watermarked<T>, E>>,
+pub(crate) fn resolve_watermarks<T, P, E, F, Fut>(
+    upstream: BoxStream<'static, Result<Watermarked<T, P>, E>>,
     resolver: F,
-) -> BoxStream<'static, Result<ResolvedWatermarked<T>, E>>
+) -> BoxStream<'static, Result<ResolvedWatermarked<T, P>, E>>
 where
     T: Send + 'static,
+    P: Copy + Send + 'static,
     E: Send + 'static,
-    F: Fn(u64) -> Fut + Send + 'static,
+    F: Fn(P) -> Fut + Send + 'static,
     Fut: Future<Output = Result<Option<u64>, E>> + Send,
 {
     /// Result of racing one in-flight WM lookup against the next upstream
     /// frame. Lifted out of the `tokio::select!` block so the post-select
     /// `match` can take ownership of the lookup future.
-    enum Race<T, E> {
+    enum Race<T, P, E> {
         LookupDone(Result<Option<u64>, E>),
-        Upstream(Option<Result<Watermarked<T>, E>>),
+        Upstream(Option<Result<Watermarked<T, P>, E>>),
     }
 
     // `let_chains` inside the `async_stream::try_stream!` macro body
@@ -948,8 +992,8 @@ where
         // At most one lookup in flight. WMs that arrive while a lookup
         // is in flight coalesce into `pending` (latest wins); items
         // cancel both.
-        let mut lookup: Option<(u64, std::pin::Pin<Box<Fut>>)> = None;
-        let mut pending: Option<u64> = None;
+        let mut lookup: Option<(P, std::pin::Pin<Box<Fut>>)> = None;
+        let mut pending: Option<P> = None;
 
         loop {
             // Promote pending → lookup when nothing is in flight.
@@ -975,7 +1019,7 @@ where
                     // the intermediate Pin temporary drop before
                     // select! polls).
                     let mut upstream_re = upstream.as_mut();
-                    let outcome: Race<T, E> = tokio::select! {
+                    let outcome: Race<T, P, E> = tokio::select! {
                         res = fut.as_mut() => Race::LookupDone(res),
                         next = upstream_re.next() => Race::Upstream(next),
                     };
@@ -1017,7 +1061,7 @@ where
                         }
                         Race::Upstream(Some(Err(e))) => {
                             // A terminal upstream error (e.g.
-                            // `BitmapScanLimitExceeded`) must not swallow the
+                            // `BitmapScanError::ScanLimit`) must not swallow the
                             // last frontier watermark already in flight: the
                             // upstream chunker flushes its held watermark
                             // ahead of the error, so finishing this lookup (and
@@ -2023,7 +2067,7 @@ mod tests {
             (2, vec![6, 7, 8]),
             (3, vec![9, 10, 11]),
         ];
-        let reqs = plan_fetches(items, 6);
+        let reqs = plan_fetches::<_, _, u64>(items, 6);
         // max = 6: items 0+1 fit (3+3=6), close request, items 2+3 fit.
         assert_eq!(reqs.len(), 2);
         let (ids0, keys0, total0) = unwrap_new_group(&reqs[0]);
@@ -2044,7 +2088,7 @@ mod tests {
             (1, vec![2, 3, 4]),
             (2, vec![3, 4, 5]),
         ];
-        let reqs = plan_fetches(items, 5);
+        let reqs = plan_fetches::<_, _, u64>(items, 5);
         // Deltas 3+1+1 = 5 = max. All three share one request.
         assert_eq!(reqs.len(), 1);
         let (ids, keys, _) = unwrap_new_group(&reqs[0]);
@@ -2057,7 +2101,7 @@ mod tests {
         // [A, A, A] must count as 1 against the budget (not 3) so we
         // don't flush prematurely. Items also carry deduped key vecs.
         let items = vec![(0u32, vec![1, 1, 1]), (1, vec![2, 2]), (2, vec![3])];
-        let reqs = plan_fetches(items, 3);
+        let reqs = plan_fetches::<_, _, u64>(items, 3);
         assert_eq!(reqs.len(), 1);
         let FetchRequest::NewGroup {
             items: items_in_req,
@@ -2083,7 +2127,7 @@ mod tests {
         // collapse into a single group with one no-op fetch — preferable
         // to splitting them across N pointless empty requests.
         let items: Vec<_> = (0u32..7).map(|i| (i, Vec::<i32>::new())).collect();
-        let reqs = plan_fetches(items, 3);
+        let reqs = plan_fetches::<_, _, u64>(items, 3);
         assert_eq!(reqs.len(), 1);
         let (ids, keys, _) = unwrap_new_group(&reqs[0]);
         assert_eq!(ids.len(), 7);
@@ -2099,7 +2143,7 @@ mod tests {
             (1, vec![3, 4, 5]),
             (2, (10..30).collect::<Vec<i32>>()), // 20 keys, max 8 → 3 requests
         ];
-        let reqs = plan_fetches(items, 8);
+        let reqs = plan_fetches::<_, _, u64>(items, 8);
         assert_eq!(reqs.len(), 4);
         // Request 0: pre-flush of the small group.
         let (ids0, keys0, total0) = unwrap_new_group(&reqs[0]);
@@ -2127,7 +2171,7 @@ mod tests {
         let upstream = rx.boxed();
         let calls = Arc::new(AtomicUsize::new(0));
         let calls_for_fetch = calls.clone();
-        let helper = pipelined_keyed_batches::<u32, i32, i32, _, _>(
+        let helper = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
             upstream,
             100,
             100,
@@ -2190,7 +2234,7 @@ mod tests {
         let max_keys_seen = Arc::new(AtomicUsize::new(0));
         let calls_for_fetch = calls.clone();
         let max_keys_for_fetch = max_keys_seen.clone();
-        let helper = pipelined_keyed_batches::<u32, i32, i32, _, _>(
+        let helper = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
             upstream,
             10,
             10,
@@ -2228,7 +2272,7 @@ mod tests {
         let upstream = iter_upstream(vec![Ok((42u32, (0i32..25).collect::<Vec<_>>()))]);
         let call_sizes = Arc::new(Mutex::new(Vec::<usize>::new()));
         let call_sizes_for_fetch = call_sizes.clone();
-        let helper = pipelined_keyed_batches::<u32, i32, i32, _, _>(
+        let helper = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
             upstream,
             10,
             10,
@@ -2262,7 +2306,7 @@ mod tests {
         // concurrently — total wall time well under 3 × 100ms.
         let upstream = iter_upstream(vec![Ok((0u32, (0i32..30).collect::<Vec<_>>()))]);
         let started = std::time::Instant::now();
-        let helper = pipelined_keyed_batches::<u32, i32, i32, _, _>(
+        let helper = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
             upstream,
             10,
             10,
@@ -2291,7 +2335,7 @@ mod tests {
         // must still emit items in input order.
         let items: Vec<_> = (0u32..6).map(|i| Ok((i, vec![i as i32]))).collect();
         let upstream = iter_upstream(items);
-        let helper = pipelined_keyed_batches::<u32, i32, i32, _, _>(
+        let helper = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
             upstream,
             1,
             1,
@@ -2315,7 +2359,7 @@ mod tests {
     #[tokio::test]
     async fn helper_propagates_fetch_error() {
         let upstream = iter_upstream(vec![Ok((0u32, vec![1, 2, 3])), Ok((1u32, vec![4, 5, 6]))]);
-        let helper = pipelined_keyed_batches::<u32, i32, i32, _, _>(
+        let helper = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
             upstream,
             10,
             10,
@@ -2341,7 +2385,7 @@ mod tests {
         // ObjectSet builder in list_checkpoints) from contaminating one
         // item's view with another's keys.
         let upstream = iter_upstream(vec![Ok((0u32, vec![10, 11])), Ok((1u32, vec![20, 21]))]);
-        let helper = pipelined_keyed_batches::<u32, i32, i32, _, _>(
+        let helper = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
             upstream,
             10,
             10,
@@ -2376,7 +2420,7 @@ mod tests {
         // as an error rather than rendering an item with a silently
         // truncated key set.
         let upstream = iter_upstream(vec![Ok((0u32, vec![1, 2, 3]))]);
-        let helper = pipelined_keyed_batches::<u32, i32, i32, _, _>(
+        let helper = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
             upstream,
             10,
             10,
@@ -2674,7 +2718,7 @@ mod tests {
     /// must not swallow that watermark: it is finished and emitted before
     /// the error ends the stream. This is the scan-limit resume-cursor
     /// guarantee — the client gets a cursor at the boundary scanned so far
-    /// even though `BitmapScanLimitExceeded` truncated the response.
+    /// even though `BitmapScanError::ScanLimit` truncated the response.
     #[tokio::test]
     async fn terminal_error_finishes_in_flight_lookup() {
         let calls = Arc::new(AtomicUsize::new(0));

@@ -315,6 +315,7 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
         download_concurrency: NonZeroUsize::new(1).unwrap(),
         ingestion_url: Some(format!("file://{}", temp_dir.display())),
         remote_store_options: vec![],
+        remote_store_headers: vec![],
     };
     // Build and connect two nodes where Node 1 will be given access to an archive store
     // Node 2 will prune older checkpoints, so Node 1 is forced to backfill from the archive

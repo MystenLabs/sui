@@ -8,8 +8,9 @@ use crate::{
     },
 };
 use indexmap::IndexSet;
-use move_binary_format::file_format::{
-    AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility,
+use move_binary_format::{
+    CompiledModule,
+    file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility},
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -127,14 +128,32 @@ pub enum Command {
     SplitCoins(Argument, Vec<Argument>),
     MergeCoins(Argument, Vec<Argument>),
     MakeMoveVec(/* T for vector<T> */ Option<Type>, Vec<Argument>),
-    Publish(Vec<Vec<u8>>, Vec<ObjectID>, ResolvedLinkage),
+    Publish(PackagePayload, Vec<ObjectID>, ResolvedLinkage),
     Upgrade(
-        Vec<Vec<u8>>,
+        PackagePayload,
         Vec<ObjectID>,
         ObjectID,
         Argument,
         ResolvedLinkage,
     ),
+}
+
+#[derive(Debug, Clone)]
+pub enum PackagePayload {
+    Serialized(Vec<Vec<u8>>),
+    Deserialized(DeserializedPackage),
+}
+
+// A Deserialized but not yet verified package created as part of loading.
+#[derive(Debug, Clone)]
+pub struct DeserializedPackage {
+    // NB: Modules are deserialized but not yet verified. They _are_ bounds checked though.
+    pub deserialized_modules: Vec<CompiledModule>,
+    // Sum of the sizes of all modules in (serialized) bytes, used for metering
+    pub total_bytes: usize,
+    // The computed digest of the package --
+    // `MovePackage::compute_digest_for_modules_and_deps` with `hash_modules` set to `true`.
+    pub computed_digest: [u8; 32],
 }
 
 #[derive(Debug)]

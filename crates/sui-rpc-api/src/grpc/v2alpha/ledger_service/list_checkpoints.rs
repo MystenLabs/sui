@@ -22,6 +22,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
+use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -33,10 +34,7 @@ use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::QueryType;
 use crate::ledger_history::query_options::ResolvedRange;
-
-use super::query_end::query_end;
 
 use super::bitmap_scan::LedgerBitmapKind;
 use super::bitmap_scan::PendingBitmapBucket;
@@ -50,12 +48,12 @@ use super::chunked_scan::cancelled;
 use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
-use super::ledger_read::ensure_ledger_history_enabled;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
-use super::ledger_read::resolve_frontier_checkpoint;
+use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
+use super::query_end::query_end;
 use crate::ledger_history::watermark::advance_boundary_excluding_cp;
 use crate::ledger_history::watermark::advance_checkpoint_boundary;
 use crate::ledger_history::watermark::boundary_cursor_cp;
@@ -73,7 +71,6 @@ pub(crate) async fn list_checkpoints(
     service: RpcService,
     request: ListCheckpointsRequest,
 ) -> Result<ListCheckpointsStream, RpcError> {
-    ensure_ledger_history_enabled(&service)?;
     let started = Instant::now();
     let start_checkpoint = request.start_checkpoint;
     let end_checkpoint = request.end_checkpoint;
@@ -87,11 +84,10 @@ pub(crate) async fn list_checkpoints(
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
     let chunk_bucket_scan_budget = ledger_history.chunk_bucket_scan_budget();
     let max_bitmap_filter_literals = ledger_history.max_bitmap_filter_literals();
-    let options = QueryOptions::from_proto(
+    let options = QueryOptions::checkpoints_from_proto(
         request_options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
-        QueryType::Checkpoints,
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -138,8 +134,7 @@ pub(crate) async fn list_checkpoints(
         if reached_range_end(reason) {
             yield watermark_response(terminal_boundary_watermark(
                 &terminal_options,
-                terminal.end_checkpoint,
-                terminal.end_position,
+                terminal.position,
             ));
         }
         yield end_response(reason);
@@ -237,8 +232,9 @@ fn next_checkpoint_chunk(
             }
             let terminal = ChunkTerminal {
                 reason: cp_range.end_reason,
-                end_checkpoint: cp_range.end_checkpoint,
-                end_position: cp_range.end_position,
+                position: Position::Checkpoints {
+                    checkpoint: cp_range.end_position,
+                },
             };
             let range = cp_range.range;
             if range.is_empty() {
@@ -273,15 +269,15 @@ fn next_checkpoint_chunk(
                     buffered_cp_seqs: VecDeque::new(),
                     last_cp_seq: None,
                     end_reason: terminal.reason,
-                    end_checkpoint: terminal.end_checkpoint,
-                    end_position: terminal.end_position,
+                    end_checkpoint: cp_range.end_checkpoint,
+                    end_position: cp_range.end_position,
                 }
             } else {
                 CheckpointScanState::Unfiltered {
                     range,
                     end_reason: terminal.reason,
-                    end_checkpoint: terminal.end_checkpoint,
-                    end_position: terminal.end_position,
+                    end_checkpoint: cp_range.end_checkpoint,
+                    end_position: cp_range.end_position,
                 }
             };
             next_checkpoint_chunk(
@@ -377,8 +373,9 @@ fn next_unfiltered_checkpoint_chunk(
         next_state,
         terminal: ChunkTerminal {
             reason: end_reason,
-            end_checkpoint,
-            end_position,
+            position: Position::Checkpoints {
+                checkpoint: end_position,
+            },
         },
         remaining_scan_budget: scan_budget,
     })
@@ -530,8 +527,9 @@ fn next_filtered_checkpoint_chunk(
         next_state,
         terminal: ChunkTerminal {
             reason,
-            end_checkpoint,
-            end_position,
+            position: Position::Checkpoints {
+                checkpoint: end_position,
+            },
         },
         remaining_scan_budget,
     })
@@ -555,7 +553,7 @@ fn scan_checkpoint_watermark(
     let Some(frontier) = frontier else {
         return Ok(None);
     };
-    let Some(cp) = resolve_frontier_checkpoint(service, frontier, ascending, |p| p)? else {
+    let Some(cp) = sequence_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
     // The frontier lands partway through checkpoint `cp`, so `cp` itself is not
@@ -565,7 +563,12 @@ fn scan_checkpoint_watermark(
     let boundary = advance_boundary_excluding_cp(None, cp, options);
     // Checkpoint cursors live in checkpoint space: position == checkpoint.
     let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
-    let watermark = boundary_watermark(options, cursor_cp, cp, boundary);
+    let watermark = boundary_watermark(
+        Position::Checkpoints {
+            checkpoint: cursor_cp,
+        },
+        boundary,
+    );
     Ok(Some(watermark_response(watermark)))
 }
 
@@ -601,7 +604,6 @@ fn render_checkpoint_seqs(
             service,
             cp_seq,
             read_mask,
-            options,
             checkpoint_boundary,
         )?);
     }
@@ -612,7 +614,6 @@ fn render_checkpoint_seq(
     service: &RpcService,
     cp_seq: u64,
     read_mask: &FieldMaskTree,
-    options: &QueryOptions,
     checkpoint_boundary: Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
     let read_mask = read_mask.to_field_mask();
@@ -627,7 +628,10 @@ fn render_checkpoint_seq(
                 format!("get_checkpoint returned no checkpoint for {cp_seq}"),
             )
         })?;
-    let watermark = item_watermark(options, cp_seq, cp_seq, checkpoint_boundary);
+    let watermark = item_watermark(
+        Position::Checkpoints { checkpoint: cp_seq },
+        checkpoint_boundary,
+    );
     Ok(response_for(watermark, checkpoint))
 }
 
@@ -665,7 +669,7 @@ fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
 
 fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut end = QueryEnd::default();
-    end.reason = reason as i32;
+    end.reason = Some(reason as i32);
 
     let mut response = ListCheckpointsResponse::default();
     response.response = Some(list_checkpoints_response::Response::End(end));

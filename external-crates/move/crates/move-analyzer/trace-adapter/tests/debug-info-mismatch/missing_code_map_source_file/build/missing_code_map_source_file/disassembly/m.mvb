@@ -1,0 +1,5 @@
+test:
+  0: Call bad_source_map
+  1: Nop
+bad_source_map:
+  0: Nop

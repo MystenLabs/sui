@@ -43,6 +43,7 @@ tabled.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-stream.workspace = true
 tracing.workspace = true
 url.workspace = true
 
@@ -71,6 +72,7 @@ sui-keys.workspace = true
 sui-source-validation.workspace = true
 sui-move.workspace = true
 sui-move-build.workspace = true
+sui-prompt.workspace = true
 sui-package-alt.workspace = true
 sui-package-management.workspace = true
 sui-protocol-config.workspace = true

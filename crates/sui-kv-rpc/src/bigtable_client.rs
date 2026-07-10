@@ -38,6 +38,8 @@ use prometheus::HistogramVec;
 use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
 use sui_inverted_index::BitmapQuery;
+use sui_inverted_index::BitmapScanError;
+use sui_inverted_index::BitmapScanResult;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
@@ -47,6 +49,7 @@ use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::query_options::EventPosition;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -294,6 +297,23 @@ impl BigTableClient {
             .map_err(RpcError::from)
     }
 
+    /// Streaming variant of `resolve_tx_checkpoints`. The permit is held for the
+    /// stream's lifetime (see `gate_stream`); rows arrive in BigTable order.
+    pub(crate) async fn resolve_tx_checkpoints_stream(
+        &self,
+        tx_sequence_numbers: Vec<u64>,
+    ) -> Result<BoxStream<'static, Result<(u64, CheckpointSequenceNumber), anyhow::Error>>, RpcError>
+    {
+        let permit = self.acquire(stage::CHECKPOINTS).await?;
+        let inner = self
+            .inner
+            .clone()
+            .resolve_tx_checkpoints_stream(tx_sequence_numbers)
+            .await
+            .map_err(RpcError::from)?;
+        Ok(gate_stream(permit, inner.boxed()))
+    }
+
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
     /// semaphore; their concurrency is bounded by `max_bitmap_filter_literals`
     /// during filter validation.
@@ -305,7 +325,10 @@ impl BigTableClient {
         direction: ScanDirection,
         budget: u64,
         on_metrics: F,
-    ) -> BoxStream<'static, Result<sui_inverted_index::Watermarked<u64>, anyhow::Error>>
+    ) -> BoxStream<
+        'static,
+        sui_inverted_index::BitmapScanResult<sui_inverted_index::Watermarked<u64>>,
+    >
     where
         F: FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static,
     {
@@ -327,43 +350,8 @@ impl BigTableClient {
             .map_err(|_| RpcError::new(tonic::Code::Internal, "request concurrency limiter closed"))
     }
 
-    /// Resolve a bitmap-evaluator watermark to its containing cp via one
-    /// `resolve_tx_checkpoints` row read.
-    ///
-    /// `position` is the watermark in its source domain (tx_seq for the
-    /// tx bitmap, event_seq for the event bitmap). `decode` translates
-    /// the in-domain lookup position into a tx_seq for the BigTable
-    /// lookup — identity for tx-bitmap callers, [`decode_event_seq`] for
-    /// event-bitmap callers.
-    ///
-    /// Asc: lookup the cp containing `position - 1` (the last
-    /// fully-scanned position; the cp it falls in may still produce items
-    /// at positions `≥ position`). Desc: lookup the cp containing
-    /// `position` itself (symmetric).
-    ///
-    /// Returns `Ok(None)` (caller drops the watermark) when the boundary
-    /// tx has no cp: ascending `position == 0` (no preceding tx), or a
-    /// frontier sitting just outside indexed history (e.g. a descending
-    /// scan starting at the ledger tip). A watermark is a best-effort
-    /// progress hint, so an unresolvable one is dropped rather than
-    /// failing the query — divergence that affects returned items still
-    /// surfaces loudly at the item-fetch path.
-    pub(crate) async fn resolve_wm_cp(
-        &self,
-        direction: ScanDirection,
-        position: u64,
-        decode: impl FnOnce(u64) -> u64,
-    ) -> Result<Option<u64>, RpcError> {
-        let lookup_position = if direction.is_ascending() {
-            match position.checked_sub(1) {
-                Some(p) => p,
-                None => return Ok(None),
-            }
-        } else {
-            position
-        };
-        let lookup_tx_seq = decode(lookup_position);
-        let pairs = self.resolve_tx_checkpoints(&[lookup_tx_seq]).await?;
+    async fn tx_seq_checkpoint(&self, tx_seq: u64) -> Result<Option<u64>, RpcError> {
+        let pairs = self.resolve_tx_checkpoints(&[tx_seq]).await?;
         Ok(pairs.into_iter().next().map(|(_, cp)| cp))
     }
 
@@ -377,32 +365,48 @@ impl BigTableClient {
         move |position| {
             let client = client.clone();
             Box::pin(async move {
+                let lookup_tx_seq = if direction.is_ascending() {
+                    match position.checked_sub(1) {
+                        Some(tx_seq) => tx_seq,
+                        None => return Ok(None),
+                    }
+                } else {
+                    position
+                };
                 client
-                    .resolve_wm_cp(direction, position, |x| x)
+                    .tx_seq_checkpoint(lookup_tx_seq)
                     .await
-                    .map_err(anyhow::Error::new)
+                    .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))
             })
         }
     }
 
-    /// Build a resolver closure for event-bitmap watermarks. The
-    /// bitmap-domain position is a packed event_seq; decode to its
-    /// tx_seq for the BigTable lookup. Hand directly to
+    /// Build a resolver closure for event-bitmap watermarks. Hand directly to
     /// [`crate::pipeline::resolve_watermarks`].
     pub(crate) fn event_wm_resolver(
         &self,
         direction: ScanDirection,
-    ) -> impl Fn(u64) -> WmResolverFut + Send + 'static {
+    ) -> impl Fn(EventPosition) -> WmResolverFut + Send + 'static {
         let client = self.clone();
         move |position| {
             let client = client.clone();
             Box::pin(async move {
+                let lookup_tx_seq = if direction.is_ascending() {
+                    if position.event_index > 0 {
+                        position.tx_seq
+                    } else {
+                        match position.tx_seq.checked_sub(1) {
+                            Some(tx_seq) => tx_seq,
+                            None => return Ok(None),
+                        }
+                    }
+                } else {
+                    position.tx_seq
+                };
                 client
-                    .resolve_wm_cp(direction, position, |evt| {
-                        sui_kvstore::tables::event_bitmap_index::decode_event_seq(evt).0
-                    })
+                    .tx_seq_checkpoint(lookup_tx_seq)
                     .await
-                    .map_err(anyhow::Error::new)
+                    .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))
             })
         }
     }
@@ -411,7 +415,7 @@ impl BigTableClient {
 /// Future returned by resolver closures from
 /// [`BigTableClient::tx_wm_resolver`] and [`BigTableClient::event_wm_resolver`].
 pub(crate) type WmResolverFut =
-    std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<u64>, anyhow::Error>> + Send>>;
+    std::pin::Pin<Box<dyn Future<Output = BitmapScanResult<Option<u64>>> + Send>>;
 
 struct LimitedPermit {
     _permit: OwnedSemaphorePermit,

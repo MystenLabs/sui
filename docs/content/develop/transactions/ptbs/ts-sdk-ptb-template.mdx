@@ -1,0 +1,137 @@
+---
+title: TypeScript SDK PTB Template
+sidebar_label: PTB Template
+description: A minimal starter template for building a programmable transaction block with the Sui TypeScript SDK, with separate backend keypair and frontend wallet examples.
+keywords: [ typescript sdk, ptb, programmable transaction block, transaction, sui dapp kit ]
+---
+
+A [Programmable Transaction Block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) groups several onchain actions into a single transaction that succeeds or fails as a unit. This page gives you a minimal template to start from, and points you to the full guide. The Sui TypeScript SDK documentation already covers transaction building in depth, so use this page to get moving, then follow the links for the complete reference.
+
+:::tip Starter template
+
+This page is a starting point, not the full guide. For complete coverage of transaction building, including inputs, commands, results, and execution, see [Sui Programmable Transaction Basics](https://sdk.mystenlabs.com/typescript/transaction-building/basics) in the TypeScript SDK documentation.
+
+:::
+
+## Set up your project
+
+The Sui TypeScript SDK ships as an ES module. For a Node.js backend, use a `tsconfig.json` whose `module` and `moduleResolution` settings resolve ES modules, such as `NodeNext`:
+
+```json title='tsconfig.json'
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true
+  }
+}
+```
+
+For a frontend app, scaffold a new project with the dApp Kit starter, which sets up the project structure and configuration for you:
+
+```bash
+$ npm create @mysten/dapp
+```
+
+## Send a transaction from a backend script
+
+A backend script signs with a key pair that you control. Load the secret key from an environment variable, never from a hardcoded string.
+
+Install the core SDK package:
+
+```bash
+$ npm install @mysten/sui
+```
+
+The following script builds a transaction that sends 0.1 SUI to a recipient, signs it, executes it, and checks the result:
+
+```ts title='send.ts'
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Transaction } from '@mysten/sui/transactions';
+import { MIST_PER_SUI } from '@mysten/sui/utils';
+
+const client = new SuiGrpcClient({
+  network: 'devnet',
+  baseUrl: 'https://fullnode.devnet.sui.io:443',
+});
+
+// Load the secret key from the environment, never hardcode it.
+const keypair = Ed25519Keypair.fromSecretKey(process.env.SUI_SECRET_KEY!);
+
+// Build a transaction that sends 0.1 SUI to a recipient.
+const tx = new Transaction();
+tx.transferObjects([tx.coin({ balance: 0.1 * Number(MIST_PER_SUI) })], '0xRecipientAddress');
+
+const result = await keypair.signAndExecuteTransaction({ transaction: tx, client });
+
+if (result.$kind === 'FailedTransaction') {
+  throw new Error(`Transaction failed: ${result.FailedTransaction.status.error?.message}`);
+}
+
+console.log('Transaction digest:', result.Transaction.digest);
+```
+
+The `tx.coin` method sources the requested amount from your address balance when available and falls back to owned coins, so you do not need to pick coins yourself. The `transferObjects` command then sends that coin to the recipient.
+
+Always check the `$kind` field on the result. A transaction can be submitted and still fail onchain, so treat a `FailedTransaction` result as an error rather than assuming success.
+
+## Send a transaction from a frontend wallet
+
+A frontend app does not hold the user's key. The user's wallet signs the transaction through Sui dApp Kit, so your code only builds the transaction and hands it to the wallet.
+
+Install dApp Kit alongside the core SDK:
+
+```bash
+$ npm install @mysten/dapp-kit-react @mysten/sui
+```
+
+This example assumes a `DAppKitProvider` wraps your app, configured with `createDAppKit`. The dApp Kit starter from [Set up your project](#set-up-your-project) sets this up for you. For the provider setup, see [Getting started with dApp Kit for React](https://sdk.mystenlabs.com/dapp-kit/getting-started/react).
+
+The following component builds the transaction in the click handler and asks the connected wallet to sign and execute it:
+
+```tsx title='SendButton.tsx'
+import { ConnectButton } from '@mysten/dapp-kit-react/ui';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
+import { Transaction } from '@mysten/sui/transactions';
+import { MIST_PER_SUI } from '@mysten/sui/utils';
+
+export function SendButton() {
+  const account = useCurrentAccount();
+  const dAppKit = useDAppKit();
+
+  async function handleSend() {
+    if (!account) return;
+
+    // Build a transaction that sends 0.1 SUI to the connected account.
+    const tx = new Transaction();
+    tx.transferObjects([tx.coin({ balance: 0.1 * Number(MIST_PER_SUI) })], account.address);
+
+    const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+
+    if (result.$kind === 'FailedTransaction') {
+      console.error(result.FailedTransaction.status.error?.message);
+      return;
+    }
+
+    console.log('Transaction digest:', result.Transaction.digest);
+  }
+
+  return (
+    <div>
+      <ConnectButton />
+      {account && <button onClick={handleSend}>Send</button>}
+    </div>
+  );
+}
+```
+
+Pass the `Transaction` instance directly to the wallet. The wallet sets the sender, selects gas coins, and signs, so you never call `tx.build()` yourself and never touch the user's key.
+
+:::danger
+
+Never include a secret key or recovery phrase in frontend code. Anything you ship to the browser is public, so a key in frontend code is exposed to everyone who loads the page. In a frontend app, the user's wallet signs the transaction, which means your code never handles their key. Keep secret keys in backend scripts only, and load them from environment variables or a secret manager.
+
+:::

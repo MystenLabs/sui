@@ -5,7 +5,7 @@ remote-write:
   username: foo
   password: fooman
 dynamic-peers:
-  url: http://127.0.0.1:9000
+  url: http://127.0.0.1:9443
   interval: 30
   certificate-file: /opt/joeman/fullchain.pem
   private-key: /opt/joeman/privkey.pem

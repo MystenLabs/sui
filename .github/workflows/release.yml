@@ -173,8 +173,11 @@ jobs:
         if: ${{ env.s3_existing_archive == '' }}
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # macos-latest-large (Intel) is the slowest release runner; its build
+          # exceeds the default 1h OIDC session, expiring sccache's S3 token
+          # mid-build (ExpiredToken). Request a 4h session for that leg only.
+          # Requires sui-sccache-rw-github MaxSessionDuration >= 14400.
+          role-duration-seconds: ${{ matrix.os == 'macos-latest-large' && '14400' || '' }}
           key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher
@@ -297,17 +300,6 @@ jobs:
           for f in ./archives/*.tgz; do
             aws s3 cp "$f" "s3://sui-releases/releases/$(basename "$f")" || true
           done
-
-  update-homebrew-formula:
-    name: Bump sui formula on Homebrew/homebrew-core
-    needs: release-build
-    # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
-    if: ${{ contains( github.event.inputs.sui_tag, 'testnet') || contains( github.ref_name, 'testnet') }}
-    uses: ./.github/workflows/homebrew-bump.yml
-    with:
-      sui_tag: ${{ github.event.inputs.sui_tag || github.ref_name }}
-    secrets:
-      HOMEBREW_GH_FORMULA_BUMP: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
 
   # Tag all sui images with release tag, so that they can be easily found
   tag-docker-hub-images:

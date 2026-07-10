@@ -13,3 +13,4 @@ CODE ACTION: Qualify as `Autofix::another_dep`
 CODE ACTION: Import as `Autofix::another_dep`
 -- test 3 -------------------
 CODE ACTION: Qualify as `Autofix::another_dep::AnotherDepStruct`
+CODE ACTION: Import `Autofix::another_dep` for `another_dep::AnotherDepStruct`

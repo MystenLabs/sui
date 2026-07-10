@@ -8,14 +8,15 @@ use crate::{
     upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use std::{
-    collections::{BTreeMap, BTreeSet, btree_map::Entry},
+    collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use sui_rpc::proto::sui::rpc::v2::{self as proto};
 
@@ -48,7 +49,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BalanceChange as RpcBalanceChange, BcsEvent, Coin, DryRunTransactionBlockResponse,
+    BalanceChange as RpcBalanceChange, BcsEvent, Coin as RpcCoin, DryRunTransactionBlockResponse,
     ObjectChange as RpcObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, SuiTransactionBlockResponse,
 };
@@ -69,7 +70,7 @@ use sui_sdk::{
 use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
-    coin::{COIN_MODULE_NAME, COIN_STRUCT_NAME},
+    coin::{COIN_MODULE_NAME, COIN_STRUCT_NAME, Coin},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
@@ -115,6 +116,11 @@ use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
 use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
+
+/// Concurrency level for fetching coin metadata for balances.
+const NUM_CONCURRENCY_REQS: usize = 8;
+/// Rate limit for RPC calls to avoid being throttled by the server. This is equivalent to 20rps.
+const RATE_LIMIT_MILLIS: u64 = 50;
 
 pub(crate) static USER_AGENT: &str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -866,68 +872,19 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
 
                 let client = context.grpc_client()?;
-                let coin_type = if let Some(ty) = coin_type {
-                    let ty = ty.parse::<TypeTag>()?;
-                    sui_types::coin::Coin::type_(ty)
-                } else {
-                    StructTag {
-                        address: SUI_FRAMEWORK_ADDRESS,
-                        name: COIN_STRUCT_NAME.to_owned(),
-                        module: COIN_MODULE_NAME.to_owned(),
-                        type_params: vec![],
-                    }
-                };
+                let coin_type = coin_type
+                    .map(|coin_type| coin_type.parse::<StructTag>())
+                    .transpose()?;
+                let mut balances =
+                    balance_outputs_for_address(&client, address, coin_type.as_ref()).await?;
 
-                let objects: Vec<Coin> = client
-                    .list_owned_objects(address, Some(coin_type))
-                    .try_filter_map(|o| async move {
-                        let Ok(Some((coin_type, balance))) =
-                            sui_types::coin::Coin::extract_balance_if_coin(&o)
-                        else {
-                            return Ok(None);
-                        };
-                        Ok(Some(Coin {
-                            coin_type: coin_type.to_canonical_string(true),
-                            coin_object_id: o.id(),
-                            version: o.version(),
-                            digest: o.digest(),
-                            balance,
-                            previous_transaction: o.previous_transaction,
-                        }))
-                    })
-                    .try_collect()
-                    .await?;
-
-                fn canonicalize_type(type_: &str) -> Result<String, anyhow::Error> {
-                    Ok(TypeTag::from_str(type_)
-                        .context("Cannot parse coin type")?
-                        .to_canonical_string(/* with_prefix */ true))
+                if with_coins {
+                    attach_owned_coin_objects(&client, address, coin_type.as_ref(), &mut balances)
+                        .await?;
                 }
 
-                let mut coins_by_type = BTreeMap::new();
-                for c in objects {
-                    let coins = match coins_by_type.entry(canonicalize_type(&c.coin_type)?) {
-                        Entry::Vacant(entry) => {
-                            let ty = StructTag::from_str(&c.coin_type)?;
-                            let metadata = client.get_coin_info(&ty).await.ok();
-
-                            &mut entry.insert((metadata, vec![])).1
-                        }
-                        Entry::Occupied(entry) => &mut entry.into_mut().1,
-                    };
-
-                    coins.push(c);
-                }
-                let sui_type_tag = canonicalize_type(SUI_COIN_TYPE)?;
-
-                // show SUI first
-                let ordered_coins_sui_first = coins_by_type
-                    .remove(&sui_type_tag)
-                    .into_iter()
-                    .chain(coins_by_type.into_values())
-                    .collect();
-
-                SuiClientCommandResult::Balance(ordered_coins_sui_first, with_coins)
+                order_balance_outputs_sui_first(&mut balances);
+                SuiClientCommandResult::Balance(balances, with_coins)
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
@@ -2212,14 +2169,14 @@ impl Display for SuiClientCommandResult {
                 table.with(style);
                 write!(f, "{}", table)?
             }
-            SuiClientCommandResult::Balance(coins, with_coins) => {
-                if coins.is_empty() {
-                    return write!(f, "No coins found for this address.");
+            SuiClientCommandResult::Balance(balances, with_coins) => {
+                if balances.is_empty() {
+                    return write!(f, "No balances found for this address.");
                 }
                 let mut builder = TableBuilder::default();
-                pretty_print_balance(coins, &mut builder, *with_coins);
+                pretty_print_balance(balances, &mut builder, *with_coins);
                 let mut table = builder.build();
-                table.with(TablePanel::header("Balance of coins owned by this address"));
+                table.with(TablePanel::header("Balances owned by this address"));
                 table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
                     1,
                     TableStyle::modern().get_horizontal(),
@@ -2820,6 +2777,15 @@ pub struct AddressesOutput {
     pub addresses: Vec<(String, SuiAddress)>,
 }
 
+/// Balance data prepared for both human-readable and JSON CLI output.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceOutput {
+    pub metadata: Option<proto::GetCoinInfoResponse>,
+    pub balance: proto::Balance,
+    pub coins: Vec<RpcCoin>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewAddressOutput {
@@ -2923,7 +2889,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Addresses(AddressesOutput),
-    Balance(Vec<(Option<proto::GetCoinInfoResponse>, Vec<Coin>)>, bool),
+    Balance(Vec<BalanceOutput>, bool),
     ChainIdentifier(String),
     ComputeTransactionDigest(TransactionData),
     DynamicFieldQuery(proto::ListDynamicFieldsResponse),
@@ -3029,18 +2995,126 @@ pub async fn request_tokens_from_faucet(
     Ok(())
 }
 
-fn pretty_print_balance(
-    coins_by_type: &Vec<(Option<proto::GetCoinInfoResponse>, Vec<Coin>)>,
-    builder: &mut TableBuilder,
-    with_coins: bool,
-) {
-    let format_decmials = 2;
+/// Fetch aggregate balances from gRPC and attach coin metadata for display.
+async fn balance_outputs_for_address(
+    client: &Client,
+    address: SuiAddress,
+    coin_type: Option<&StructTag>,
+) -> Result<Vec<BalanceOutput>, anyhow::Error> {
+    let balances = if let Some(coin_type) = coin_type {
+        vec![client.get_balance(address, coin_type).await?]
+    } else {
+        client.list_balances(address).try_collect().await?
+    };
+
+    tokio_stream::StreamExt::throttle(
+        futures::stream::iter(balances),
+        Duration::from_millis(RATE_LIMIT_MILLIS),
+    )
+    .map(|balance| async move {
+        let metadata = coin_metadata_for_balance(client, &balance).await?;
+        Ok(BalanceOutput {
+            metadata,
+            balance,
+            coins: Vec::new(),
+        })
+    })
+    .buffered(NUM_CONCURRENCY_REQS)
+    .try_collect()
+    .await
+}
+
+/// Best-effort metadata lookup for a balance returned by the balance API.
+async fn coin_metadata_for_balance(
+    client: &Client,
+    balance: &proto::Balance,
+) -> Result<Option<proto::GetCoinInfoResponse>, anyhow::Error> {
+    let ty = StructTag::from_str(balance.coin_type()).with_context(|| {
+        format!(
+            "Cannot parse coin type returned by balance API: {}",
+            balance.coin_type()
+        )
+    })?;
+    Ok(client.get_coin_info(&ty).await.ok())
+}
+
+/// Add owned coin object details without changing aggregate balance totals.
+async fn attach_owned_coin_objects(
+    client: &Client,
+    address: SuiAddress,
+    coin_type: Option<&StructTag>,
+    balances: &mut [BalanceOutput],
+) -> Result<(), anyhow::Error> {
+    let coin_object_type = coin_object_type_filter(coin_type);
+    let coins: Vec<RpcCoin> = client
+        .list_owned_objects(address, Some(coin_object_type))
+        .try_filter_map(|o| async move {
+            let Ok(Some((coin_type, balance))) = Coin::extract_balance_if_coin(&o) else {
+                return Ok(None);
+            };
+            Ok(Some(RpcCoin {
+                coin_type: coin_type.to_canonical_string(true),
+                coin_object_id: o.id(),
+                version: o.version(),
+                digest: o.digest(),
+                balance,
+                previous_transaction: o.previous_transaction,
+            }))
+        })
+        .try_collect()
+        .await?;
+
+    let mut coins_by_type: BTreeMap<String, Vec<RpcCoin>> = BTreeMap::new();
+    for coin in coins {
+        coins_by_type
+            .entry(coin.coin_type.clone())
+            .or_default()
+            .push(coin);
+    }
+
+    for balance in balances.iter_mut() {
+        if let Some(coins) = coins_by_type.remove(balance.balance.coin_type()) {
+            balance.coins = coins;
+        }
+    }
+
+    Ok(())
+}
+
+/// Build the object type filter expected by `list_owned_objects`.
+fn coin_object_type_filter(coin_type: Option<&StructTag>) -> StructTag {
+    if let Some(coin_type) = coin_type {
+        Coin::type_(coin_type.clone().into())
+    } else {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: COIN_STRUCT_NAME.to_owned(),
+            module: COIN_MODULE_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+}
+
+/// Keep SUI first while preserving the balance API's order for other coin types.
+fn order_balance_outputs_sui_first(balances: &mut Vec<BalanceOutput>) {
+    let sui_type_tag = GasCoin::type_().to_canonical_string(/* with_prefix */ true);
+    if let Some(index) = balances
+        .iter()
+        .position(|balance| balance.balance.coin_type() == sui_type_tag.as_str())
+    {
+        let sui_balance = balances.remove(index);
+        balances.insert(0, sui_balance);
+    }
+}
+
+fn pretty_print_balance(balances: &[BalanceOutput], builder: &mut TableBuilder, with_coins: bool) {
+    let format_decimals = 2;
     let mut table_builder = TableBuilder::default();
     if !with_coins {
-        table_builder.set_header(vec!["coin", "balance (raw)", "balance", ""]);
+        table_builder.set_header(vec!["coin", "balance (raw)", "balance"]);
     }
-    for (metadata, coins) in coins_by_type {
-        let (name, symbol, coin_decimals) = if let Some(metadata) = metadata {
+    for balance_output in balances {
+        let (name, symbol, coin_decimals) = if let Some(metadata) = &balance_output.metadata {
             (
                 metadata.metadata().name(),
                 metadata.metadata().symbol(),
@@ -3050,32 +3124,50 @@ fn pretty_print_balance(
             ("unknown", "unknown_symbol", 9)
         };
 
-        let balance = coins.iter().map(|x| x.balance as u128).sum::<u128>();
+        let balance = balance_output.balance.balance() as u128;
+        let address_balance = balance_output.balance.address_balance();
         let mut inner_table = TableBuilder::default();
-        inner_table.set_header(vec!["coinId", "balance (raw)", "balance", ""]);
+        inner_table.set_header(vec!["coinId", "balance (raw)", "balance"]);
 
         if with_coins {
-            let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
+            let coin_numbers = if balance_output.coins.len() != 1 {
+                "coins"
+            } else {
+                "coin"
+            };
             let balance_formatted = format!(
                 "({} {})",
-                format_balance(balance, coin_decimals, format_decmials, Some(symbol)),
+                format_balance(balance, coin_decimals, format_decimals, Some(symbol)),
                 symbol
             );
             let summary = format!(
                 "{}: {} {coin_numbers}, Balance: {} {}",
                 name,
-                coins.len(),
+                balance_output.coins.len(),
                 balance,
                 balance_formatted
             );
-            for c in coins {
+            for c in &balance_output.coins {
                 inner_table.push_record(vec![
                     c.coin_object_id.to_string().as_str(),
                     c.balance.to_string().as_str(),
                     format_balance(
                         c.balance as u128,
                         coin_decimals,
-                        format_decmials,
+                        format_decimals,
+                        Some(symbol),
+                    )
+                    .as_str(),
+                ]);
+            }
+            if address_balance != 0 {
+                inner_table.push_record(vec![
+                    "address balance",
+                    address_balance.to_string().as_str(),
+                    format_balance(
+                        address_balance as u128,
+                        coin_decimals,
+                        format_decimals,
                         Some(symbol),
                     )
                     .as_str(),
@@ -3097,7 +3189,7 @@ fn pretty_print_balance(
             table_builder.push_record(vec![
                 name,
                 balance.to_string().as_str(),
-                format_balance(balance, coin_decimals, format_decmials, Some(symbol)).as_str(),
+                format_balance(balance, coin_decimals, format_decimals, Some(symbol)).as_str(),
             ]);
         }
     }

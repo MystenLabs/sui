@@ -12,7 +12,6 @@ use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper, g
 use crate::authority::epoch_marker_key::EpochMarkerKey;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::global_state_hasher::GlobalStateHashStore;
-use crate::rpc_index::RpcIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
@@ -1479,7 +1478,6 @@ impl AuthorityStore {
     pub async fn prune_objects_and_compact_for_testing(
         &self,
         checkpoint_store: &Arc<CheckpointStore>,
-        rpc_index: Option<&RpcIndexStore>,
     ) {
         let pruning_config = AuthorityStorePruningConfig {
             num_epochs_to_retain: 0,
@@ -1488,7 +1486,6 @@ impl AuthorityStore {
         let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
             &self.perpetual_tables,
             checkpoint_store,
-            rpc_index,
             None,
             pruning_config,
             AuthorityStorePruningMetrics::new_for_test(),

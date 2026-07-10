@@ -4,7 +4,7 @@
 // tests that shared objects can have dynamic fields added
 // dynamic fields can be added and removed in the same transaction
 
-//# init --addresses a=0x0 --accounts A --shared-object-deletion true
+//# init --addresses a=0x0 --accounts A --enable-feature-flags shared_object_deletion
 
 //# publish
 module a::m {

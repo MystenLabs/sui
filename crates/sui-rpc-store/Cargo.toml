@@ -12,6 +12,7 @@ async-trait.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 fdlimit.workspace = true
+lru.workspace = true
 move-core-types.workspace = true
 prometheus.workspace = true
 prost.workspace = true
@@ -19,7 +20,6 @@ roaring.workspace = true
 rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 serde.workspace = true
 sui-consistent-store.workspace = true
-sui-default-config.workspace = true
 sui-execution.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }

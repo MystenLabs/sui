@@ -80,12 +80,10 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
 
         wait_for_pipelines_catching_up_at(chunk_hi_inclusive, &mut watermarks_rx).await?;
 
-        let chunk = fetch_chunk(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
-
-        for proto in chunk {
-            let processed = process_checkpoint(proto)?;
+        let processed = fetch_and_process(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
+        for cp in processed {
             // Ignore send errors: no active subscribers is a normal state during recovery.
-            let _ = sender.send(Arc::new(processed));
+            let _ = sender.send(cp);
         }
 
         cursor = chunk_hi_inclusive + 1;
@@ -131,6 +129,20 @@ async fn fetch_chunk<F: CheckpointFetcher>(
     try_join_all(futures).await
 }
 
+/// Fetch every checkpoint in `range` from kv-rpc in parallel and parse each into a
+/// `ProcessedCheckpoint`, returning them in input order.
+pub(super) async fn fetch_and_process<F: CheckpointFetcher>(
+    fetcher: &F,
+    mask: &FieldMask,
+    range: RangeInclusive<u64>,
+) -> anyhow::Result<Vec<Arc<ProcessedCheckpoint>>> {
+    fetch_chunk(fetcher, mask, range)
+        .await?
+        .into_iter()
+        .map(|p| process_checkpoint(p).map(Arc::new))
+        .collect()
+}
+
 /// Fetch one checkpoint via `GetCheckpoint`, retrying every error as transient with exponential
 /// backoff and no overall deadline.
 ///
@@ -143,7 +155,7 @@ async fn fetch_chunk<F: CheckpointFetcher>(
 /// retention bump, etc.).
 ///
 /// TODO: Emit metrics so ops can alert on stuck recovery.
-async fn fetch_one_with_retry<F: CheckpointFetcher>(
+pub(super) async fn fetch_one_with_retry<F: CheckpointFetcher>(
     fetcher: &F,
     mask: &FieldMask,
     seq: u64,
@@ -175,135 +187,16 @@ async fn fetch_one_with_retry<F: CheckpointFetcher>(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::time::Duration;
 
-    use dashmap::DashMap;
-    use sui_rpc::proto::sui::rpc::v2 as grpc;
-    use sui_sdk_types::Bitmap;
-    use sui_sdk_types::Bls12381Signature;
-    use sui_sdk_types::ValidatorAggregatedSignature as SdkValidatorAggregatedSignature;
-    use sui_types::crypto::AggregateAuthoritySignature;
-    use sui_types::gas::GasCostSummary;
-    use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
-    use sui_types::messages_checkpoint::CheckpointSummary as NativeCheckpointSummary;
     use tokio::time::timeout;
 
     use super::*;
-
-    /// Build a fully deserializable test `ProtoCheckpoint` with empty contents and a zero
-    /// signature. `process_checkpoint` parses (but does not verify) the signature, so the
-    /// all-zero bytes are accepted.
-    fn make_test_proto_checkpoint(seq: u64) -> ProtoCheckpoint {
-        let contents = NativeCheckpointContents::new_with_digests_only_for_tests(vec![]);
-        let summary = NativeCheckpointSummary {
-            epoch: 0,
-            sequence_number: seq,
-            network_total_transactions: 0,
-            content_digest: *contents.digest(),
-            previous_digest: None,
-            epoch_rolling_gas_cost_summary: GasCostSummary::default(),
-            timestamp_ms: 0,
-            checkpoint_commitments: vec![],
-            end_of_epoch_data: None,
-            version_specific_data: vec![],
-        };
-        // Use the default `AggregateAuthoritySignature` bytes rather than all-zeros: the
-        // proto → sui_types conversion in `process_checkpoint` calls
-        // `AggregateAuthoritySignature::from_bytes` and expects the BLS encoding to round-trip,
-        // which all-zero bytes do not satisfy.
-        let default_bls_bytes: [u8; 48] = AggregateAuthoritySignature::default()
-            .as_ref()
-            .try_into()
-            .expect("BLS aggregate signature is 48 bytes");
-        let sdk_sig = SdkValidatorAggregatedSignature {
-            epoch: 0,
-            signature: Bls12381Signature::new(default_bls_bytes),
-            bitmap: Bitmap::default(),
-        };
-
-        let mut summary_bcs = grpc::Bcs::default();
-        summary_bcs.value = Some(bcs::to_bytes(&summary).unwrap().into());
-        let mut summary_proto = grpc::CheckpointSummary::default();
-        summary_proto.bcs = Some(summary_bcs);
-
-        let mut contents_bcs = grpc::Bcs::default();
-        contents_bcs.value = Some(bcs::to_bytes(&contents).unwrap().into());
-        let mut contents_proto = grpc::CheckpointContents::default();
-        contents_proto.bcs = Some(contents_bcs);
-
-        let mut cp = ProtoCheckpoint::default();
-        cp.sequence_number = Some(seq);
-        cp.summary = Some(summary_proto);
-        cp.contents = Some(contents_proto);
-        cp.signature = Some(sdk_sig.into());
-        cp
-    }
-
-    /// Per-key behavior of the mock fetcher.
-    #[derive(Debug, Clone)]
-    enum FetcherBehavior {
-        /// Always return `Ok(Some(make_test_proto_checkpoint(seq)))`.
-        Success,
-        /// Return `Err` for the first N calls, then `Ok(Some(...))` afterward.
-        ErrorThenSuccess(usize),
-        /// Return `Ok(None)` for the first N calls, then `Ok(Some(...))` afterward.
-        NoneThenSuccess(usize),
-    }
-
-    struct MockFetcher {
-        state: DashMap<u64, (FetcherBehavior, usize)>,
-    }
-
-    impl MockFetcher {
-        fn new(setup: HashMap<u64, FetcherBehavior>) -> Self {
-            Self {
-                state: setup.into_iter().map(|(k, v)| (k, (v, 0))).collect(),
-            }
-        }
-
-        fn calls_for(&self, seq: u64) -> usize {
-            self.state.get(&seq).map_or(0, |g| g.1)
-        }
-    }
-
-    impl CheckpointFetcher for MockFetcher {
-        async fn fetch_checkpoint(
-            &self,
-            seq: u64,
-            _mask: &FieldMask,
-        ) -> anyhow::Result<Option<ProtoCheckpoint>> {
-            let (behavior, calls) = {
-                let mut entry = self
-                    .state
-                    .get_mut(&seq)
-                    .unwrap_or_else(|| panic!("MockFetcher: unconfigured key {seq}"));
-                entry.1 += 1;
-                (entry.0.clone(), entry.1)
-            };
-
-            match behavior {
-                FetcherBehavior::Success => Ok(Some(make_test_proto_checkpoint(seq))),
-                FetcherBehavior::ErrorThenSuccess(n) => {
-                    if calls <= n {
-                        Err(anyhow!("simulated transient error for cp {seq}"))
-                    } else {
-                        Ok(Some(make_test_proto_checkpoint(seq)))
-                    }
-                }
-                FetcherBehavior::NoneThenSuccess(n) => {
-                    if calls <= n {
-                        Ok(None)
-                    } else {
-                        Ok(Some(make_test_proto_checkpoint(seq)))
-                    }
-                }
-            }
-        }
-    }
+    use crate::task::streaming::test_utils::FetcherBehavior;
+    use crate::task::streaming::test_utils::MockFetcher;
 
     fn fetcher(setup: &[(u64, FetcherBehavior)]) -> MockFetcher {
-        MockFetcher::new(setup.iter().cloned().collect::<HashMap<_, _>>())
+        MockFetcher::from_setup(setup)
     }
 
     fn recovery_watermarks(

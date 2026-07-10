@@ -242,6 +242,8 @@ public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: With
 
 ## Paying for gas from address balances
 
+When you pay gas from an address balance, you do not select or provide coin objects, so there is no gas coin selection or merge workflow. As a result, [gas smashing](/develop/transaction-payment/gas-smashing) does not apply, and the network resolves the gas fee as a withdrawal from your address balance.
+
 With address balance gas payments, pass an empty array to `setGasPayment`. This enables fully offline transaction building because there are no coin object versions to look up:
 
 ```typescript

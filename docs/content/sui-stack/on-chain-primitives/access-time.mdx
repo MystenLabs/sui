@@ -29,7 +29,7 @@ goal:
       label: Has code examples
 ---
 
-If you need a near real-time measurement (within a few seconds) for your application, use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every network checkpoint. If you do not need the current time, use the `epoch_timestamp_ms` function to refer to the timestamp of when the current epoch started.
+If you need a near real-time measurement (within a few seconds) for your application, use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every consensus commit. If you do not need the current time, use the `epoch_timestamp_ms` function to refer to the timestamp of when the current epoch started.
 
 ## The `sui::clock::Clock` module
 
@@ -51,7 +51,7 @@ Call the previous entry function with the following format, passing `0x6` as the
 $ sui client call --package <EXAMPLE> --module 'clock' --function 'access' --args '0x6' --gas-budget <GAS-AMOUNT>
 ```
 
-The `sui::clock::Clock` timestamp changes at the rate the network generates checkpoints, which is approximately every 1/4 second. Find the current network checkpoint rate on the [public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169).
+The `sui::clock::Clock` timestamp advances with each consensus commit, which occurs approximately every 1/4 second.
 
 Successful calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result because transactions take effect instantly, but timestamps from `sui::clock::Clock` are otherwise monotonic across transactions that touch the same shared objects. Successful transactions see a greater or equal timestamp to their predecessors.
 

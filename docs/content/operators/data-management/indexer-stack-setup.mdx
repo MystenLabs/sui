@@ -327,7 +327,7 @@ Once caught up to network tip, you can manually set the max concurrency to a low
 
 ## Consistent store setup
 
-All consistent store pipelines run in the same instance based on a single configuration file. Like the indexer, the pipelines run in parallel and throughput is limited by the slowest pipeline.
+All consistent store pipelines run in the same instance based on a single configuration file. Like the indexer, the pipelines run in parallel and throughput is limited by the slowest pipeline. The consistent store also includes an `address_balances` pipeline for address balance accumulator state.
 
 #### Hardware requirements
 
@@ -370,6 +370,7 @@ $ sui-indexer-alt-consistent-store restore \
     --database-path /path/to/rocksdb \
     --http https://formal-snapshot.mainnet.sui.io \
     --object-file-concurrency 5 \
+    --pipeline address_balances \
     --pipeline balances \
     --pipeline object_by_owner \
     --pipeline object_by_type \
@@ -424,6 +425,7 @@ For full-retention backfill, use `gs://mysten-mainnet-checkpoints-use4` through 
 			<td>Consistent store API configuration and event tables.</td>
 			<td>
 				<ul className="pl-4">
+					<li>`address_balances`</li>
 					<li>`balances`</li>
 					<li>`object-by-owner`</li>
 					<li>`object-by-type`</li>

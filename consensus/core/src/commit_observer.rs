@@ -382,11 +382,12 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let blocks = dag_state
-                    .read()
-                    .get_blocks(&block_refs)
-                    .into_iter()
-                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+                let block_opts = dag_state.read().get_blocks(&block_refs);
+                let blocks = block_opts.iter().map(|block_opt| {
+                    block_opt
+                        .as_ref()
+                        .expect("We should have all blocks in dag state.")
+                });
                 median_timestamp_by_stake(&context, blocks).unwrap()
             };
 

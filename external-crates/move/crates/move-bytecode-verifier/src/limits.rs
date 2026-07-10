@@ -4,13 +4,32 @@
 use move_binary_format::{
     IndexKind,
     errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
-    file_format::{CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
+    file_format::{Bytecode, CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
 };
 use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
 use move_vm_config::verifier::VerifierConfig;
+use std::collections::BTreeMap;
 
 pub struct LimitsVerifier<'a> {
     module: &'a CompiledModule,
+}
+
+const STRUCT_SIZE_WEIGHT: usize = 4;
+const PARAM_SIZE_WEIGHT: usize = 4;
+
+fn weighted_type_size(ty: &SignatureToken) -> usize {
+    let mut size = 0usize;
+    for t in ty.preorder_traversal() {
+        let inc = match t {
+            SignatureToken::Datatype(..) | SignatureToken::DatatypeInstantiation(..) => {
+                STRUCT_SIZE_WEIGHT
+            }
+            SignatureToken::TypeParameter(..) => PARAM_SIZE_WEIGHT,
+            _ => 1,
+        };
+        size = size.saturating_add(inc);
+    }
+    size
 }
 
 impl<'a> LimitsVerifier<'a> {
@@ -29,7 +48,8 @@ impl<'a> LimitsVerifier<'a> {
         limit_check.verify_datatype_handles(config)?;
         limit_check.verify_type_nodes(config)?;
         limit_check.verify_identifiers(config)?;
-        limit_check.verify_definitions(config)
+        limit_check.verify_definitions(config)?;
+        limit_check.verify_generic_instantiations(config)
     }
     fn verify_datatype_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         if let Some(limit) = config.max_generic_instantiation_length {
@@ -95,26 +115,10 @@ impl<'a> LimitsVerifier<'a> {
         config: &VerifierConfig,
         ty: &SignatureToken,
     ) -> PartialVMResult<()> {
-        if let Some(max) = &config.max_type_nodes {
-            // Structs and Parameters can expand to an unknown number of nodes, therefore
-            // we give them a higher size weight here.
-            const STRUCT_SIZE_WEIGHT: usize = 4;
-            const PARAM_SIZE_WEIGHT: usize = 4;
-            let mut size = 0;
-            for t in ty.preorder_traversal() {
-                // Notice that the preorder traversal will iterate all type instantiations, so we
-                // why we can ignore them below.
-                match t {
-                    SignatureToken::Datatype(..) | SignatureToken::DatatypeInstantiation(..) => {
-                        size += STRUCT_SIZE_WEIGHT
-                    }
-                    SignatureToken::TypeParameter(..) => size += PARAM_SIZE_WEIGHT,
-                    _ => size += 1,
-                }
-            }
-            if size > *max {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
-            }
+        if let Some(max) = &config.max_type_nodes
+            && weighted_type_size(ty) > *max
+        {
+            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
         Ok(())
     }
@@ -199,6 +203,156 @@ impl<'a> LimitsVerifier<'a> {
                         IndexKind::ConstantPool,
                         idx as TableIndex,
                     ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn verify_generic_instantiations(&self, config: &VerifierConfig) -> PartialVMResult<()> {
+        let max_fun = config.max_generic_instantiation_type_nodes_per_function;
+        let max_mod = config.max_generic_instantiation_type_nodes_per_module;
+        if max_fun.is_none() && max_mod.is_none() {
+            return Ok(());
+        }
+
+        let mut module_total: usize = 0;
+        let mut size_table = BTreeMap::new();
+        for func_def in self.module.function_defs() {
+            let Some(code) = &func_def.code else { continue };
+            let mut fn_total: usize = 0;
+            for instr in &code.code {
+                let sig_idx = match instr {
+                    Bytecode::CallGeneric(idx) => {
+                        self.module.function_instantiation_at(*idx).type_parameters
+                    }
+                    Bytecode::PackGeneric(idx)
+                    | Bytecode::UnpackGeneric(idx)
+                    | Bytecode::ExistsGenericDeprecated(idx)
+                    | Bytecode::MoveFromGenericDeprecated(idx)
+                    | Bytecode::MoveToGenericDeprecated(idx)
+                    | Bytecode::ImmBorrowGlobalGenericDeprecated(idx)
+                    | Bytecode::MutBorrowGlobalGenericDeprecated(idx) => {
+                        self.module.struct_instantiation_at(*idx).type_parameters
+                    }
+                    Bytecode::ImmBorrowFieldGeneric(idx) | Bytecode::MutBorrowFieldGeneric(idx) => {
+                        self.module.field_instantiation_at(*idx).type_parameters
+                    }
+                    Bytecode::VecPack(idx, _)
+                    | Bytecode::VecLen(idx)
+                    | Bytecode::VecImmBorrow(idx)
+                    | Bytecode::VecMutBorrow(idx)
+                    | Bytecode::VecPushBack(idx)
+                    | Bytecode::VecPopBack(idx)
+                    | Bytecode::VecUnpack(idx, _)
+                    | Bytecode::VecSwap(idx) => *idx,
+                    Bytecode::PackVariantGeneric(vidx)
+                    | Bytecode::UnpackVariantGeneric(vidx)
+                    | Bytecode::UnpackVariantGenericImmRef(vidx)
+                    | Bytecode::UnpackVariantGenericMutRef(vidx) => {
+                        let handle = self.module.variant_instantiation_handle_at(*vidx);
+                        self.module
+                            .enum_instantiation_at(handle.enum_def)
+                            .type_parameters
+                    }
+                    // List out the other options explicitly so there's a compile error if a new
+                    // bytecode gets added.
+                    Bytecode::Pop
+                    | Bytecode::Ret
+                    | Bytecode::BrTrue(_)
+                    | Bytecode::BrFalse(_)
+                    | Bytecode::Branch(_)
+                    | Bytecode::LdU8(_)
+                    | Bytecode::LdU64(_)
+                    | Bytecode::LdU128(_)
+                    | Bytecode::CastU8
+                    | Bytecode::CastU64
+                    | Bytecode::CastU128
+                    | Bytecode::LdConst(_)
+                    | Bytecode::LdTrue
+                    | Bytecode::LdFalse
+                    | Bytecode::CopyLoc(_)
+                    | Bytecode::MoveLoc(_)
+                    | Bytecode::StLoc(_)
+                    | Bytecode::Call(_)
+                    | Bytecode::Pack(_)
+                    | Bytecode::Unpack(_)
+                    | Bytecode::ReadRef
+                    | Bytecode::WriteRef
+                    | Bytecode::FreezeRef
+                    | Bytecode::MutBorrowLoc(_)
+                    | Bytecode::ImmBorrowLoc(_)
+                    | Bytecode::MutBorrowField(_)
+                    | Bytecode::ImmBorrowField(_)
+                    | Bytecode::Add
+                    | Bytecode::Sub
+                    | Bytecode::Mul
+                    | Bytecode::Mod
+                    | Bytecode::Div
+                    | Bytecode::BitOr
+                    | Bytecode::BitAnd
+                    | Bytecode::Xor
+                    | Bytecode::Or
+                    | Bytecode::And
+                    | Bytecode::Not
+                    | Bytecode::Eq
+                    | Bytecode::Neq
+                    | Bytecode::Lt
+                    | Bytecode::Gt
+                    | Bytecode::Le
+                    | Bytecode::Ge
+                    | Bytecode::Abort
+                    | Bytecode::Nop
+                    | Bytecode::Shl
+                    | Bytecode::Shr
+                    | Bytecode::LdU16(_)
+                    | Bytecode::LdU32(_)
+                    | Bytecode::LdU256(_)
+                    | Bytecode::CastU16
+                    | Bytecode::CastU32
+                    | Bytecode::CastU256
+                    | Bytecode::PackVariant(_)
+                    | Bytecode::UnpackVariant(_)
+                    | Bytecode::UnpackVariantImmRef(_)
+                    | Bytecode::UnpackVariantMutRef(_)
+                    | Bytecode::VariantSwitch(_)
+                    | Bytecode::ExistsDeprecated(_)
+                    | Bytecode::MoveFromDeprecated(_)
+                    | Bytecode::MoveToDeprecated(_)
+                    | Bytecode::MutBorrowGlobalDeprecated(_)
+                    | Bytecode::ImmBorrowGlobalDeprecated(_) => continue,
+                };
+
+                let weight = *size_table.entry(sig_idx).or_insert_with(|| {
+                    self.module
+                        .signature_at(sig_idx)
+                        .0
+                        .iter()
+                        .fold(0usize, |acc, ty| acc.saturating_add(weighted_type_size(ty)))
+                });
+                fn_total = fn_total.saturating_add(weight);
+                module_total = module_total.saturating_add(weight);
+
+                if let Some(max) = max_fun
+                    && fn_total > max
+                {
+                    return Err(
+                        PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).with_message(format!(
+                            "function exceeds generic-instantiation budget: {} > {}",
+                            fn_total, max
+                        )),
+                    );
+                }
+
+                if let Some(max) = max_mod
+                    && module_total > max
+                {
+                    return Err(
+                        PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).with_message(format!(
+                            "module exceeds generic-instantiation budget: {} > {}",
+                            module_total, max
+                        )),
+                    );
                 }
             }
         }

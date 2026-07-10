@@ -28,8 +28,6 @@ use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionK
 use sui_types::{SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber, error::SuiResult};
 use tracing::trace;
 
-use super::epoch_start_configuration::EpochStartConfigTrait;
-
 pub struct SharedObjVerManager {}
 
 /// Version assignments for a single transaction
@@ -541,7 +539,6 @@ mod tests {
     use super::*;
 
     use crate::authority::AuthorityState;
-    use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
     use crate::authority::shared_object_version_manager::{
         ConsensusSharedObjVerAssignment, SharedObjVerManager,
     };
@@ -1068,7 +1065,7 @@ mod tests {
             // Create a shared object for testing
             let shared_objects = vec![Object::shared_for_testing()];
             let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-            config.enable_accumulators_for_testing();
+            config.set_enable_accumulators_for_testing(true);
             let authority = TestAuthorityBuilder::new()
                 .with_starting_objects(&shared_objects)
                 .with_protocol_config(config)

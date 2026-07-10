@@ -22,6 +22,15 @@ inputs:
       must grant `permissions: id-token: write`. Empty on fork PRs / untrusted
       contexts (graceful degradation to a local cache). See AWS_OIDC_ROLES.md.
     required: false
+  role-duration-seconds:
+    description: >
+      STS session duration (seconds) for the OIDC role assumption. Empty falls
+      back to configure-aws-credentials' default (3600 = 1h). Raise it for builds
+      that outlive a 1h session and would otherwise fail with an sccache S3
+      `ExpiredToken` mid-build (e.g. the slow macos-latest-large release leg). The
+      assumed role's MaxSessionDuration must be >= this value
+      (sui-sccache-rw-github is set to 14400).
+    required: false
   key-prefix:
     description: S3 key prefix for cache partitioning (e.g., ubuntu-ghcloud, windows-ghcloud)
     required: true
@@ -95,6 +104,9 @@ runs:
         role-to-assume: ${{ inputs.role-to-assume }}
         # Identify the run/attempt in CloudTrail's AssumeRoleWithWebIdentity events.
         role-session-name: sui-sccache-${{ github.run_id }}-${{ github.run_attempt }}
+        # Empty -> action default (3600 = 1h). Set higher for builds that run
+        # past 1h (the role's MaxSessionDuration must allow the requested value).
+        role-duration-seconds: ${{ inputs.role-duration-seconds }}
         # Fail closed if STS ever returns creds for an unexpected account.
         allowed-account-ids: '011083325127'
         aws-region: us-west-2

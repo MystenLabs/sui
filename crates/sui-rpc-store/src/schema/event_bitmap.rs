@@ -28,17 +28,12 @@ use sui_consistent_store::error::DecodeError;
 use sui_consistent_store::error::EncodeError;
 use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
+use sui_inverted_index::event_seq::{EVENT_BITS, encode_event_seq};
 
 use crate::proto::BitmapBlob;
 use crate::schema::pruning_watermark::tx_seq_floor;
 
 pub const NAME: &str = "event_bitmap";
-
-/// Number of low-order bits in a `packed_event_seq` reserved for
-/// the per-transaction `event_idx`. A transaction may emit up to
-/// `1 << EVENT_BITS` events without colliding with the next
-/// transaction's packed range.
-pub const EVENT_BITS: u32 = 16;
 
 /// Number of consecutive `packed_event_seq` values represented by
 /// one bucket. Sized so each bucket covers
@@ -135,12 +130,6 @@ fn packed_pruning_floor(tx_seq_pruned_exclusive: u64) -> u64 {
     }
 }
 
-/// Pack `(tx_seq, event_idx)` into a single 64-bit positional
-/// identifier: `tx_seq << EVENT_BITS | event_idx`.
-pub fn pack(tx_seq: u64, event_idx: u32) -> u64 {
-    (tx_seq << EVENT_BITS) | u64::from(event_idx)
-}
-
 /// The bucket that owns a given packed event sequence.
 pub fn bucket_of(packed: u64) -> u64 {
     packed / EVENT_BUCKET_SIZE
@@ -158,7 +147,7 @@ pub fn bit_of(packed: u64) -> u32 {
 /// bucket. The merge operator unions this single-bit operand
 /// with whatever's already on disk.
 pub fn store_match(dimension_key: Vec<u8>, tx_seq: u64, event_idx: u32) -> (Key, Value) {
-    let packed = pack(tx_seq, event_idx);
+    let packed = encode_event_seq(tx_seq, event_idx);
     let mut bitmap = RoaringBitmap::new();
     bitmap.insert(bit_of(packed));
     store_bitmap(dimension_key, bucket_of(packed), bitmap)
@@ -292,13 +281,13 @@ mod tests {
     #[test]
     fn pack_bucket_and_bit_math() {
         // tx_seq=0, event_idx=0 → packed 0 → bucket 0 / bit 0.
-        let p = pack(0, 0);
+        let p = encode_event_seq(0, 0);
         assert_eq!(p, 0);
         assert_eq!(bucket_of(p), 0);
         assert_eq!(bit_of(p), 0);
 
         // tx_seq=1, event_idx=0 → packed `1 << 16` = 65_536.
-        let p = pack(1, 0);
+        let p = encode_event_seq(1, 0);
         assert_eq!(p, 1 << EVENT_BITS);
         assert_eq!(bucket_of(p), 0);
         assert_eq!(bit_of(p), 1 << EVENT_BITS);
@@ -306,7 +295,7 @@ mod tests {
         // The first packed value of the next bucket sits at the
         // boundary `EVENT_BUCKET_SIZE` — that's
         // `EVENT_BUCKET_SIZE >> EVENT_BITS = 4096` transactions in.
-        let first_in_next_bucket = pack(EVENT_BUCKET_SIZE >> EVENT_BITS, 0);
+        let first_in_next_bucket = encode_event_seq(EVENT_BUCKET_SIZE >> EVENT_BITS, 0);
         assert_eq!(first_in_next_bucket, EVENT_BUCKET_SIZE);
         assert_eq!(bucket_of(first_in_next_bucket), 1);
         assert_eq!(bit_of(first_in_next_bucket), 0);
@@ -332,7 +321,7 @@ mod tests {
         batch.merge(&schema.event_bitmap, &k, &v).unwrap();
         batch.commit().unwrap();
 
-        let packed = pack(42, 3);
+        let packed = encode_event_seq(42, 3);
         let bitmap = schema
             .get_event_bitmap(b"emitting_module:coin".to_vec(), bucket_of(packed))
             .unwrap()
@@ -361,7 +350,7 @@ mod tests {
         let bits: BTreeSet<u32> = bitmap.iter().collect();
         let expected: BTreeSet<u32> = entries
             .iter()
-            .map(|(tx, idx)| bit_of(pack(*tx, *idx)))
+            .map(|(tx, idx)| bit_of(encode_event_seq(*tx, *idx)))
             .collect();
         assert_eq!(bits, expected);
     }
@@ -384,8 +373,14 @@ mod tests {
             .get_event_bitmap(b"emitting_module:nft".to_vec(), 0)
             .unwrap()
             .unwrap();
-        assert_eq!(coin.iter().collect::<Vec<u32>>(), vec![bit_of(pack(42, 1))]);
-        assert_eq!(nft.iter().collect::<Vec<u32>>(), vec![bit_of(pack(100, 2))]);
+        assert_eq!(
+            coin.iter().collect::<Vec<u32>>(),
+            vec![bit_of(encode_event_seq(42, 1))]
+        );
+        assert_eq!(
+            nft.iter().collect::<Vec<u32>>(),
+            vec![bit_of(encode_event_seq(100, 2))]
+        );
     }
 
     #[test]

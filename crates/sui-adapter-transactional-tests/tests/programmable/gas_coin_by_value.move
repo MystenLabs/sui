@@ -3,7 +3,7 @@
 
 // tests valid gas coin usage by value
 
-//# init --addresses test=0x0 --accounts A B --enable-accumulators --enable-address-balance-gas-payments
+//# init --addresses test=0x0 --accounts A B
 
 //# programmable --sender A --inputs @B
 //> TransferObjects([Gas], Input(0))
