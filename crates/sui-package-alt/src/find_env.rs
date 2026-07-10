@@ -10,9 +10,10 @@ use move_package_alt::{
     RootPackage,
     schema::{Environment, EnvironmentID, EnvironmentName},
 };
+use sui_sdk::digests::chain_ids_match;
 use sui_sdk::wallet_context::WalletContext;
 
-use crate::{SuiFlavor, chain_ids_match};
+use crate::SuiFlavor;
 
 /// Binds together the context for `find_environment` for helper functions
 struct EnvFinder<'a> {

@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod chain_id;
 mod environments;
 mod find_env;
 mod sui_flavor;
 
-pub use chain_id::{chain_id_base58, chain_ids_match};
 pub use environments::*;
 pub use find_env::find_environment;
 pub use sui_flavor::BuildParams;

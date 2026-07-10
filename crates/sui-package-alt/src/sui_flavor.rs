@@ -26,7 +26,9 @@ use sui_sdk::wallet_context::WalletContext;
 use tokio::sync::OnceCell;
 use tracing::warn;
 
-use crate::{chain_ids_match, mainnet_environment, testnet_environment};
+use sui_sdk::digests::chain_ids_match;
+
+use crate::{mainnet_environment, testnet_environment};
 
 const EDITION: &str = "2024";
 const FLAVOR: &str = "sui";

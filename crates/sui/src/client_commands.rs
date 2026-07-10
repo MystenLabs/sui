@@ -63,6 +63,7 @@ use sui_rpc_api::{
 };
 use sui_sdk::{
     SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
+    digests::chain_id_base58,
     sui_client_config::{SuiClientConfig, SuiEnv},
     sui_sdk_types::bcs::ToBcs,
     wallet_context::WalletContext,
@@ -112,7 +113,7 @@ use move_package_alt::{
 };
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
-use sui_package_alt::{BuildParams, SuiFlavor, chain_id_base58, find_environment};
+use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
 use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 use tracing::{debug, info};
 

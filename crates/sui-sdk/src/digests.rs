@@ -17,7 +17,7 @@
 
 use std::str::FromStr;
 
-use sui_sdk::types::digests::{ChainIdentifier, CheckpointDigest};
+use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
 /// The full Base58-encoded genesis checkpoint digest for `chain_id` — the canonical chain
 /// identifier format. (`ChainIdentifier`'s `Display` renders the legacy 4-byte hex short form.)
@@ -60,9 +60,9 @@ fn decode_chain_id(s: &str) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use sui_sdk::types::digests::{
-        MAINNET_CHAIN_IDENTIFIER_BASE58, TESTNET_CHAIN_IDENTIFIER_BASE58,
+    use sui_types::digests::{
         get_mainnet_chain_identifier, get_testnet_chain_identifier,
+        MAINNET_CHAIN_IDENTIFIER_BASE58, TESTNET_CHAIN_IDENTIFIER_BASE58,
     };
 
     use super::*;
