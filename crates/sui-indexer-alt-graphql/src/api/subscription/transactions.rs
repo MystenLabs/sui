@@ -83,6 +83,10 @@ use crate::task::streaming::broadcast_error;
 use crate::task::streaming::hydrate_executed_transaction;
 use crate::task::streaming::reconnect_error;
 
+/// Backfill scan batch size: matches are packed into one payload up to this many, so a deep backfill
+/// coalesces its reads. Live ignores it (a whole checkpoint is the natural unit).
+const SCAN_MAX_TRANSACTIONS_PER_BATCH: usize = 100;
+
 /// Where a backfill resumes from.
 pub(super) enum ResumeFrom {
     Cursor(Bytes),
@@ -108,8 +112,9 @@ pub(super) fn transactions_stream(
     resolver_limits: sui_package_resolver::Limits,
     filter: TransactionFilter,
     resume: Option<ResumeFrom>,
-) -> impl Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>> {
+) -> impl Stream<Item = Result<Vec<Edge<String, Transaction, EmptyFields>>, RpcError>> {
     let handoff_threshold = config.broadcast_buffer as u64 / 2;
+    let max_batch = SCAN_MAX_TRANSACTIONS_PER_BATCH;
     let proto_filter = filter.to_bitmap_filter();
 
     stream! {
@@ -117,7 +122,11 @@ pub(super) fn transactions_stream(
         let mut handoff: Option<u64> = None;
         let mut last_checkpoint: Option<u64> = None;
 
-        // Phase 1: backfill toward the tip, pinning the live receiver near it.
+        // Phase 1: backfill toward the tip, pinning the live receiver near it. Matches are batched
+        // by count (not by checkpoint) so a deep backfill coalesces its reads: a batch fills to
+        // `max_batch` edges then flushes, spanning or splitting checkpoints freely. Per-transaction
+        // cursors make mid-checkpoint resumption exact, so splitting is safe. The reactive throttle
+        // then meters one batch at a time.
         if let Some(resume) = resume {
             let scan = scan_transactions(
                 reader,
@@ -126,6 +135,7 @@ pub(super) fn transactions_stream(
                 proto_filter,
                 resume,
             );
+            let mut batch: Vec<Edge<String, Transaction, EmptyFields>> = Vec::new();
             for await scanned in scan {
                 let Scanned { checkpoint, edge } = scanned?;
 
@@ -138,21 +148,32 @@ pub(super) fn transactions_stream(
                 }
 
                 match edge {
-                    // A match at its own `checkpoint`: deliver it; a match past the handoff is live's.
+                    // A match at its own `checkpoint`: buffer it; a match past the handoff is live's.
                     Some(edge) => {
                         if handoff.is_some_and(|h| checkpoint > h) {
                             break;
                         }
-                        yield Ok(edge);
+                        batch.push(edge);
+                        if batch.len() >= max_batch {
+                            yield Ok(std::mem::take(&mut batch));
+                        }
                     }
-                    // A coverage marker (page scanned, nothing to yield here): `checkpoint` is the
-                    // fully-scanned frontier, so `>= handoff` means the handoff itself is covered.
+                    // A coverage marker: one scan page is done. Flush the partial batch so it isn't
+                    // held waiting for the next page's matches. `checkpoint` is the fully-scanned
+                    // frontier, so `>= handoff` means the handoff itself is covered.
                     None => {
+                        if !batch.is_empty() {
+                            yield Ok(std::mem::take(&mut batch));
+                        }
                         if handoff.is_some_and(|h| checkpoint >= h) {
                             break;
                         }
                     }
                 }
+            }
+            // Flush the final partial batch (matches through the handoff).
+            if !batch.is_empty() {
+                yield Ok(batch);
             }
             // Seam: we only break after pinning, so the scan has covered through the handoff.
             last_checkpoint = handoff;
@@ -160,8 +181,8 @@ pub(super) fn transactions_stream(
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
         let receiver = pending_receiver.unwrap_or_else(|| broadcast.broadcaster().resubscribe());
-        for await edge in live_transactions(receiver, last_checkpoint, package_store, resolver_limits, filter) {
-            yield edge;
+        for await page in live_transactions(receiver, last_checkpoint, package_store, resolver_limits, filter) {
+            yield page;
         }
     }
 }
@@ -216,7 +237,7 @@ fn live_transactions(
     package_store: Arc<StreamingPackageStore>,
     resolver_limits: sui_package_resolver::Limits,
     filter: TransactionFilter,
-) -> impl Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>> {
+) -> impl Stream<Item = Result<Vec<Edge<String, Transaction, EmptyFields>>, RpcError>> {
     stream! {
         let mut delivered_live = false;
         loop {
@@ -238,8 +259,13 @@ fn live_transactions(
                             return;
                         }
                     }
-                    for edge in matching_edges(&checkpoint, &package_store, &resolver_limits, &filter)? {
-                        yield Ok(edge);
+                    // Deliver this checkpoint's matches as a single payload. A whole checkpoint is
+                    // the natural, already-safe unit (the checkpoint subscription delivers a full
+                    // checkpoint at once), so live never splits or batches across checkpoints. Empty
+                    // checkpoints yield nothing.
+                    let edges = matching_edges(&checkpoint, &package_store, &resolver_limits, &filter)?;
+                    if !edges.is_empty() {
+                        yield Ok(edges);
                     }
                     last_checkpoint = Some(seq);
                     delivered_live = true;

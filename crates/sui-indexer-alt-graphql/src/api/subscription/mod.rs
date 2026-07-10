@@ -106,9 +106,7 @@ impl Subscription {
     ///
     /// Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number), but not both, to resume from a known point. The subscription first backfills the matching transactions after that point via the scanning API, then continues with the live stream.
     ///
-    /// Each matching transaction is yielded individually as it appears in finalized
-    /// checkpoints. Transactions are ordered by checkpoint, then by position within
-    /// the checkpoint.
+    /// Each payload is a batch of matching transactions — edges ordered by checkpoint, then by position within the checkpoint — and a single batch may span multiple checkpoints. Matches are delivered in batches, rather than one per payload, for efficiency. Each edge carries a cursor for resumption.
     ///
     /// This subscription is not yet available for use.
     async fn transactions(
@@ -118,7 +116,7 @@ impl Subscription {
         after: Option<String>,
         after_checkpoint: Option<UInt53>,
     ) -> Result<
-        impl futures::Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>>,
+        impl futures::Stream<Item = Result<Vec<Edge<String, Transaction, EmptyFields>>, RpcError>>,
         RpcError<Error>,
     > {
         // `after` (resume from a specific transaction) and `afterCheckpoint` (resume from a
