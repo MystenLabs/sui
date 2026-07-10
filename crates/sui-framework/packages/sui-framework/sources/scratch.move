@@ -77,11 +77,7 @@ public fun read_opt<K: copy + drop, V: copy + drop>(
     permit: Permit<K>,
     key: K,
 ): Option<V> {
-    if (exists(ctx, permit, key))
-        option::some(read(ctx, permit, key))
-    else
-        option::none()
-
+    if (exists(ctx, permit, key)) option::some(read(ctx, permit, key)) else option::none()
 }
 
 /// Removes the entry bound to `key` if it exists, returning `some(value)`, or `none` otherwise.
@@ -91,11 +87,7 @@ public fun remove_opt<K: copy + drop, V: drop>(
     permit: Permit<K>,
     key: K,
 ): Option<V> {
-    if (exists(ctx, permit, key))
-        option::some(remove(ctx, permit, key))
-     else
-        option::none()
-
+    if (exists(ctx, permit, key)) option::some(remove(ctx, permit, key)) else option::none()
 }
 
 /// Removes the existing value at `key` (if any) and adds `value` in its place.

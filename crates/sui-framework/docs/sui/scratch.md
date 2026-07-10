@@ -306,10 +306,7 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEn
     <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
     key: K,
 ): Option&lt;V&gt; {
-    <b>if</b> (<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key))
-        option::some(<a href="../sui/scratch.md#sui_scratch_read">read</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key))
-    <b>else</b>
-        option::none()
+    <b>if</b> (<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) option::some(<a href="../sui/scratch.md#sui_scratch_read">read</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <b>else</b> option::none()
 }
 </code></pre>
 
@@ -339,10 +336,7 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEn
     <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
     key: K,
 ): Option&lt;V&gt; {
-    <b>if</b> (<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key))
-        option::some(<a href="../sui/scratch.md#sui_scratch_remove">remove</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key))
-     <b>else</b>
-        option::none()
+    <b>if</b> (<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) option::some(<a href="../sui/scratch.md#sui_scratch_remove">remove</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <b>else</b> option::none()
 }
 </code></pre>
 
