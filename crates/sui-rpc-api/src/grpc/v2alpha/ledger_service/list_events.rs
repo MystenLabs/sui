@@ -417,9 +417,11 @@ fn next_event_chunk(
     })
 }
 
-/// Build the scan watermark frame for a chunk that matched nothing while its scan budget (bitmap
-/// buckets when filtered, tx rows when unfiltered) ran out mid-gap. Resolves the coalesced frontier
-/// to its checkpoint; yields nothing at genesis (asc) where no progress can be claimed.
+/// Watermark lane of a chunk's output: builds the chunk's single standalone `Watermark` frame,
+/// produced only when there are no item frames to carry progress — the scan budget (bitmap buckets
+/// when filtered, tx rows when unfiltered) ran out mid-gap with zero matches. Costs one index read
+/// to resolve the coalesced frontier to its checkpoint; yields nothing at genesis (asc) where no
+/// progress can be claimed.
 fn scan_event_watermark(
     service: &RpcService,
     scan_limited: bool,
@@ -445,6 +447,9 @@ fn scan_event_watermark(
     Ok(Some(watermark_response(watermark)))
 }
 
+/// Item lane of a chunk's output: renders the matched refs into one `Item` frame each —
+/// batch-fetching digest rows and event bodies — and stamps every frame with an item watermark
+/// taken from its row's checkpoint, so progress rides on the items with no extra lookups.
 fn render_event_chunk(
     service: &RpcService,
     refs: Vec<EventRef>,

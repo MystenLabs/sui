@@ -492,6 +492,7 @@ fn next_filtered_checkpoint_chunk(
         scan_limited,
         cp_seqs.is_empty(),
         frontier,
+        last_cp_seq,
         ascending,
     )?;
 
@@ -521,12 +522,16 @@ fn next_filtered_checkpoint_chunk(
 /// Scan watermark for a filtered checkpoint chunk that surfaced no new
 /// checkpoints before the scan budget ran out. The filter scans the transaction
 /// bitmap, so the frontier is a `tx_sequence_number`; resolve it to its
-/// checkpoint and emit a checkpoint-space watermark there.
+/// checkpoint and emit a checkpoint-space watermark there. The boundary is
+/// seeded with the request's dedup state (`last_cp_seq` carries across chunks),
+/// so the emitted resume cursor clamps past checkpoints already delivered as
+/// items by earlier chunks and the completion claim never regresses below them.
 fn scan_checkpoint_watermark(
     service: &RpcService,
     scan_limited: bool,
     no_items: bool,
     frontier: Option<u64>,
+    last_cp_seq: Option<u64>,
     ascending: bool,
 ) -> Result<Option<ListCheckpointsResponse>, RpcError> {
     if !(scan_limited && no_items) {
@@ -538,11 +543,11 @@ fn scan_checkpoint_watermark(
     let Some(cp) = sequence_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-
     let mut boundary = CheckpointBoundary::new(ascending);
-    // Checkpoint cursors live in checkpoint space: position == checkpoint.
-    let watermark = boundary.frontier_watermark(Position::Checkpoints { checkpoint: cp });
-    Ok(Some(watermark_response(watermark)))
+    if let Some(last) = last_cp_seq {
+        boundary.checkpoint_covered(last);
+    }
+    Ok(boundary.cp_frontier_watermark(cp).map(watermark_response))
 }
 
 fn checkpoint_seqs_for_range(

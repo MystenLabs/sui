@@ -17,12 +17,12 @@
 //!   see [`CheckpointBoundary::checkpoint_entered`].
 //! - `list_checkpoints` dedupes cp_seq, so "cp `C` emitted" ≡ "cp `C`
 //!   COVERED." It feeds `C` straight into
-//!   [`CheckpointBoundary::checkpoint_covered`] for items, and translates
-//!   its scan frontier into a cp-space candidate itself before doing the
-//!   same.
+//!   [`CheckpointBoundary::checkpoint_covered`] for items, and its scan
+//!   frontiers go through [`CheckpointBoundary::cp_frontier_watermark`],
+//!   which additionally clamps the resume cursor past delivered items.
 //!
 //! This module owns the shared pieces; each handler keeps only its
-//! API-specific frontier-to-candidate adapter.
+//! API-specific frontier-to-checkpoint resolution.
 
 use sui_rpc_cursor::{CursorToken, Position};
 
@@ -89,10 +89,46 @@ impl CheckpointBoundary {
     pub fn frontier_watermark(&mut self, position: Position) -> Watermark {
         let cp = position.checkpoint();
         self.checkpoint_entered(cp);
-        boundary_watermark(
+        boundary_frame(
             position.with_checkpoint(boundary_cursor_cp(cp, self.ascending)),
             self.bound,
         )
+    }
+
+    /// Record a scan frontier and build the standalone frontier `Watermark`
+    /// for the checkpoints endpoint, where the cursor coordinate lives in cp
+    /// space and items are deduped per cp ("cp emitted" ≡ "cp covered").
+    /// Dedup means an already-delivered cp can never yield another item, so
+    /// the emitted `Boundary` cursor is clamped past the accumulated bound —
+    /// otherwise a client resuming from this frame would re-request a
+    /// checkpoint it already received:
+    ///
+    /// - Ascending: `Item(C)` resumes at cp ≥ `C + 1`, so the cursor must be
+    ///   ≥ `C + 1` even when the frontier lands inside `C`.
+    /// - Descending: `Item(C)` resumes at cp ≤ `C`; clamping to `C` is
+    ///   equivalent to the item's own resume (harmless but redundant).
+    ///
+    /// Returns `None` at the descending `u64::MAX` edge, where no resume
+    /// coordinate exists.
+    pub fn cp_frontier_watermark(&mut self, raw_cp: u64) -> Option<Watermark> {
+        if !self.ascending && raw_cp == u64::MAX {
+            return None;
+        }
+        self.checkpoint_entered(raw_cp);
+        let mut cursor_cp = boundary_cursor_cp(raw_cp, self.ascending);
+        if let Some(bound) = self.bound {
+            cursor_cp = if self.ascending {
+                cursor_cp.max(bound.saturating_add(1))
+            } else {
+                cursor_cp.min(bound)
+            };
+        }
+        Some(boundary_frame(
+            Position::Checkpoints {
+                checkpoint: cursor_cp,
+            },
+            self.bound,
+        ))
     }
 
     /// Record that the scan has wholly covered `candidate` (or fold an
@@ -125,19 +161,16 @@ impl CheckpointBoundary {
         }
     }
 
-    /// The accumulated boundary, for the `checkpoint` field of emitted
-    /// watermark frames.
-    pub fn bound(&self) -> Option<u64> {
+    /// The accumulated boundary (test observability; frame construction
+    /// reads `self.bound` directly).
+    #[cfg(test)]
+    fn bound(&self) -> Option<u64> {
         self.bound
     }
 }
 
-/// Build a standalone scan-frontier `Watermark` from already-resolved
-/// boundary-cursor coordinates. Most frontier frames go through
-/// [`CheckpointBoundary::frontier_watermark`]; this remains for
-/// `list_checkpoints`' kv frontier adapter, which clamps its emitted cursor
-/// coordinate against the last emitted checkpoint itself.
-pub fn boundary_watermark(position: Position, boundary: Option<u64>) -> Watermark {
+/// Build a `Boundary`-cursor frame from already-adjusted resume coordinates.
+fn boundary_frame(position: Position, boundary: Option<u64>) -> Watermark {
     let mut wm = Watermark::default();
     wm.cursor = Some(CursorToken::boundary(position).encode());
     set_checkpoint_bound(&mut wm, boundary);
@@ -176,6 +209,11 @@ pub fn frontier_boundary_watermark(options: &QueryOptions, position: Position) -
 /// lower) — because no further items exist in it within the requested range.
 /// The `(end_checkpoint, end_position)` cursor resumes exactly past the
 /// scanned range.
+///
+/// In the fold vocabulary this is `checkpoint_entered(end_checkpoint)`
+/// ascending / `checkpoint_covered(end_checkpoint)` descending — the same
+/// semantics as the scan-side accumulator, fed by the resolved range instead
+/// of the scan, before any accumulator exists.
 pub fn terminal_boundary_watermark(end_position: Position, ascending: bool) -> Watermark {
     let end_checkpoint = end_position.checkpoint();
     let boundary = if ascending {
@@ -183,7 +221,7 @@ pub fn terminal_boundary_watermark(end_position: Position, ascending: bool) -> W
     } else {
         Some(end_checkpoint)
     };
-    boundary_watermark(end_position, boundary)
+    boundary_frame(end_position, boundary)
 }
 
 /// Whether the scan reached the natural end of the requested range (the
@@ -385,6 +423,55 @@ mod tests {
             wm.cursor.as_ref(),
             Some(&CursorToken::boundary(pos).encode())
         );
+    }
+
+    /// `list_checkpoints` standalone frontier: with the boundary carrying the
+    /// dedup state (checkpoints already delivered as items), a frontier
+    /// landing inside the last delivered cp clamps the resume cursor past it
+    /// and holds the completion claim at the delivered cp. Pre-fix, this
+    /// frame was built from a fresh boundary with no item memory: the same
+    /// scenario emitted cursor cp 100 — re-delivering cp 100 as a duplicate
+    /// item to a client resuming from its latest watermark — with the claim
+    /// regressed from the item frame's 100 to 99.
+    #[test]
+    fn cp_frontier_watermark_clamps_past_delivered_cp() {
+        // Chunk 1 delivered cp 100 as an item (covered, dedup semantics).
+        let mut boundary = CheckpointBoundary::new(true);
+        let item = boundary.item_watermark_covered(Position::Checkpoints { checkpoint: 100 });
+        assert_eq!(item.checkpoint, Some(100));
+
+        // Chunk 2's budget dies among further matching txs inside cp 100.
+        let wm = boundary.cp_frontier_watermark(100).unwrap();
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&CursorToken::boundary(Position::Checkpoints { checkpoint: 101 }).encode())
+        );
+        assert_eq!(wm.checkpoint, Some(100));
+
+        // Without prior deliveries the frontier claims the previous cp and
+        // resumes at its own coordinate.
+        let mut boundary = CheckpointBoundary::new(true);
+        let wm = boundary.cp_frontier_watermark(100).unwrap();
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&CursorToken::boundary(Position::Checkpoints { checkpoint: 100 }).encode())
+        );
+        assert_eq!(wm.checkpoint, Some(99));
+
+        // Descending: the clamp pulls the cursor down to the delivered cp
+        // (equivalent to the item's own resume).
+        let mut boundary = CheckpointBoundary::new(false);
+        boundary.checkpoint_covered(10);
+        let wm = boundary.cp_frontier_watermark(10).unwrap();
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&CursorToken::boundary(Position::Checkpoints { checkpoint: 10 }).encode())
+        );
+        assert_eq!(wm.checkpoint, Some(10));
+
+        // Descending overflow edge: no resume coordinate exists.
+        let mut boundary = CheckpointBoundary::new(false);
+        assert!(boundary.cp_frontier_watermark(u64::MAX).is_none());
     }
 
     #[test]
