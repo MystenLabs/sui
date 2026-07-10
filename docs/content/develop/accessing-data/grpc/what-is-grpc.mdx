@@ -111,7 +111,7 @@ You can reuse the same gRPC `LedgerService` methods for this lookup, but you mus
 
 1. Generate client code from the official `.proto` definitions in [`sui-apis`](https://github.com/MystenLabs/sui-apis/tree/main/proto) to ensure compatibility and type safety.
 
-1. [Paginate](#pagination) carefully. Always check `next_page_token` and do not assume all data is returned at once.
+1. Paginate carefully. Always check `next_page_token` and do not assume all data is returned at once.
 
 1. Retry transient failures with [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff), especially for streaming APIs or busy public nodes.
 
