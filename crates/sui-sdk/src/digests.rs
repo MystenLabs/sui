@@ -61,8 +61,8 @@ fn decode_chain_id(s: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use sui_types::digests::{
-        get_mainnet_chain_identifier, get_testnet_chain_identifier,
         MAINNET_CHAIN_IDENTIFIER_BASE58, TESTNET_CHAIN_IDENTIFIER_BASE58,
+        get_mainnet_chain_identifier, get_testnet_chain_identifier,
     };
 
     use super::*;
