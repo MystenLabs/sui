@@ -1577,6 +1577,44 @@ async fn wait_for_transfer_action_status(
     }
 }
 
+/// Polls the fullnode's owned-object index until `address` owns an ETH coin, and returns it.
+/// The index is only updated after the claiming transaction's checkpoint is indexed, so the coin
+/// may not be visible immediately after the transfer's onchain status becomes `Claimed` (which is
+/// read from live object state). `exclude` filters out a coin from an earlier transfer that has
+/// since been bridged away, in case the index still shows it.
+pub async fn wait_for_eth_coin_owned_by(
+    bridge_test_cluster: &BridgeTestCluster,
+    address: SuiAddress,
+    exclude: Option<ObjectID>,
+) -> Object {
+    let now = std::time::Instant::now();
+    loop {
+        let eth_coin = bridge_test_cluster
+            .grpc_client()
+            .get_owned_objects(address, None, None, None)
+            .await
+            .unwrap()
+            .items
+            .iter()
+            .find(|o| {
+                Some(o.id()) != exclude
+                    && o.struct_tag()
+                        .unwrap()
+                        .to_canonical_string(true)
+                        .contains("ETH")
+            })
+            .cloned();
+        if let Some(eth_coin) = eth_coin {
+            return eth_coin;
+        }
+        assert!(
+            now.elapsed().as_secs() <= 60,
+            "Timeout waiting for {address} to own an ETH coin"
+        );
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
+}
+
 async fn deposit_eth_to_sui_package(
     sui_client: Client,
     sui_address: SuiAddress,
