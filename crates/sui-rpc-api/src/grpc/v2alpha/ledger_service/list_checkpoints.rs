@@ -15,13 +15,11 @@ use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
-use sui_rpc::proto::sui::rpc::v2alpha::CheckpointItem;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -124,20 +122,26 @@ pub(crate) async fn list_checkpoints(
             },
         );
 
+        let mut last_watermark: Option<Watermark> = None;
         while let Some(response) = scan.next_item().await? {
+            if response.watermark.is_some() {
+                last_watermark = response.watermark.clone();
+            }
             yield response;
         }
 
         let emitted = scan.produced();
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
-        if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(
+        let final_watermark = if reached_range_end(reason) {
+            Some(terminal_boundary_watermark(
                 &terminal_options,
                 terminal.position,
-            ));
-        }
-        yield end_response(reason);
+            ))
+        } else {
+            last_watermark
+        };
+        yield end_response(final_watermark, reason);
         info!(
             filtered,
             limit_items,
@@ -652,26 +656,24 @@ fn resolve_cp_range(checkpoint_range: CheckpointRange, options: &QueryOptions) -
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
-    let mut item = CheckpointItem::default();
-    item.watermark = Some(watermark);
-    item.checkpoint = Some(message);
-
     let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::Item(item));
+    response.checkpoint = Some(message);
+    response.watermark = Some(watermark);
     response
 }
 
 fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
     let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::Watermark(watermark));
+    response.watermark = Some(watermark);
     response
 }
 
-fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
+fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::End(end));
+    response.watermark = watermark;
+    response.end = Some(end);
     response
 }

@@ -5,8 +5,8 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 
 /// Final reason for a successful query stream. Hitting the requested item limit
 /// takes precedence over the range's natural end reason: when `emitted` reaches
-/// the limit the stream stopped early and more data may exist. The resume cursor
-/// rides on the last watermark, so `QueryEnd` carries only the reason.
+/// the limit the stream stopped early and more data may exist. The final frame
+/// carries the resume watermark alongside the `QueryEnd`; `QueryEnd` itself carries only the reason.
 pub(super) fn query_end(
     emitted: usize,
     limit_items: usize,

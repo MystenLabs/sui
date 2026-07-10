@@ -16,9 +16,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc_cursor::Position;
 use sui_sdk_types::Digest;
 use sui_types::storage::LedgerTxSeqDigest;
@@ -126,20 +124,26 @@ pub(crate) async fn list_transactions(
             },
         );
 
+        let mut last_watermark: Option<Watermark> = None;
         while let Some(response) = scan.next_item().await? {
+            if response.watermark.is_some() {
+                last_watermark = response.watermark.clone();
+            }
             yield response;
         }
 
         let emitted = scan.produced();
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
-        if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(
+        let final_watermark = if reached_range_end(reason) {
+            Some(terminal_boundary_watermark(
                 &terminal_options,
                 terminal.position,
-            ));
-        }
-        yield end_response(reason);
+            ))
+        } else {
+            last_watermark
+        };
+        yield end_response(final_watermark, reason);
         info!(
             filtered,
             limit_items,
@@ -552,32 +556,29 @@ fn transaction_item_response(
     read_mask: &FieldMaskTree,
 ) -> ListTransactionsResponse {
     // The within-checkpoint position rides on the `ExecutedTransaction` rather
-    // than the enclosing `TransactionItem`; populate it only when the read mask
-    // requests it.
+    // than the response frame; populate it only when the read mask requests it.
     if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
         transaction.transaction_index = Some(tx_offset as u64);
     }
 
-    let mut item = TransactionItem::default();
-    item.watermark = Some(watermark);
-    item.transaction = Some(transaction);
-
     let mut response = ListTransactionsResponse::default();
-    response.response = Some(list_transactions_response::Response::Item(item));
+    response.transaction = Some(transaction);
+    response.watermark = Some(watermark);
     response
 }
 
 fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
     let mut response = ListTransactionsResponse::default();
-    response.response = Some(list_transactions_response::Response::Watermark(watermark));
+    response.watermark = Some(watermark);
     response
 }
 
-fn end_response(reason: QueryEndReason) -> ListTransactionsResponse {
+fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListTransactionsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListTransactionsResponse::default();
-    response.response = Some(list_transactions_response::Response::End(end));
+    response.watermark = watermark;
+    response.end = Some(end);
     response
 }

@@ -19,13 +19,11 @@ use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
-use sui_rpc::proto::sui::rpc::v2alpha::CheckpointItem;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
@@ -122,21 +120,15 @@ pub(crate) async fn list_checkpoints(
         // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
         // range; still surface the terminal boundary so the client learns the
         // final checkpoint is complete without waiting for the next item.
-        let terminal = reached_range_end(end_reason).then(|| {
-            watermark_response(terminal_boundary_watermark(
+        let final_watermark = reached_range_end(end_reason).then(|| {
+            terminal_boundary_watermark(
                 &options,
                 Position::Checkpoints {
                     checkpoint: end_position,
                 },
-            ))
+            )
         });
-        return Ok(stream::iter(
-            terminal
-                .into_iter()
-                .chain([end_response(end_reason)])
-                .map(Ok),
-        )
-        .boxed());
+        return Ok(stream::iter([Ok(end_response(final_watermark, end_reason))]).boxed());
     }
 
     let needs_full = needs_transactions_or_objects(&read_mask);
@@ -221,12 +213,14 @@ pub(crate) async fn list_checkpoints(
             futures::pin_mut!(cp_data_stream);
             let mut emitted = 0usize;
             let mut checkpoint_boundary: Option<u64> = None;
+            let mut last_watermark: Option<Watermark> = None;
             let mut scan_limit_hit = false;
             while let Some(item) = cp_data_stream.next().await {
                 match item {
                     Ok(ResolvedWatermarked::Item((cp_seq, cp_data))) => {
                         checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
                         let wm = item_watermark(Position::Checkpoints { checkpoint: cp_seq }, checkpoint_boundary);
+                        last_watermark = Some(wm.clone());
                         emitted += 1;
                         let message =
                             crate::render::checkpoint_to_response(cp_data, &read_mask)?;
@@ -249,6 +243,7 @@ pub(crate) async fn list_checkpoints(
                             checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
                         }
                         let wm = boundary_watermark(Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary);
+                        last_watermark = Some(wm.clone());
                         yield watermark_response(wm);
                     }
                     Err(BitmapScanError::ScanLimit) => {
@@ -273,10 +268,12 @@ pub(crate) async fn list_checkpoints(
             } else {
                 end_reason
             };
-            if reached_range_end(reason) {
-                yield watermark_response(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }));
-            }
-            yield end_response(reason);
+            let final_watermark = if reached_range_end(reason) {
+                Some(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }))
+            } else {
+                last_watermark
+            };
+            yield end_response(final_watermark, reason);
             info!(
                 filtered,
                 limit_items,
@@ -306,12 +303,14 @@ pub(crate) async fn list_checkpoints(
         futures::pin_mut!(cp_full_stream);
         let mut emitted = 0usize;
         let mut checkpoint_boundary: Option<u64> = None;
+        let mut last_watermark: Option<Watermark> = None;
         let mut scan_limit_hit = false;
         while let Some(item) = cp_full_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item((cp_seq, cp_data, txs, objects))) => {
                     checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
                     let wm = item_watermark(Position::Checkpoints { checkpoint: cp_seq }, checkpoint_boundary);
+                    last_watermark = Some(wm.clone());
                     let message =
                         render_full_checkpoint(cp_data, txs, objects, &read_mask)?;
                     emitted += 1;
@@ -331,6 +330,7 @@ pub(crate) async fn list_checkpoints(
                         checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
                     }
                     let wm = boundary_watermark(Position::Checkpoints { checkpoint: cp_frontier }, checkpoint_boundary);
+                    last_watermark = Some(wm.clone());
                     yield watermark_response(wm);
                 }
                 Err(BitmapScanError::ScanLimit) => {
@@ -355,10 +355,12 @@ pub(crate) async fn list_checkpoints(
         } else {
             end_reason
         };
-        if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }));
-        }
-        yield end_response(reason);
+        let final_watermark = if reached_range_end(reason) {
+            Some(terminal_boundary_watermark(&options, Position::Checkpoints { checkpoint: end_position }))
+        } else {
+            last_watermark
+        };
+        yield end_response(final_watermark, reason);
         info!(
             filtered,
             limit_items,
@@ -396,7 +398,7 @@ fn frontier_to_boundary_candidate(frontier: u64, options: &QueryOptions) -> Opti
 
 fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
     let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::Watermark(watermark));
+    response.watermark = Some(watermark);
     response
 }
 
@@ -498,21 +500,19 @@ async fn resolve_checkpoint_seqs(
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
-    let mut item = CheckpointItem::default();
-    item.checkpoint = Some(message);
-    item.watermark = Some(watermark);
-
     let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::Item(item));
+    response.checkpoint = Some(message);
+    response.watermark = Some(watermark);
     response
 }
 
-fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
+fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::End(end));
+    response.watermark = watermark;
+    response.end = Some(end);
     response
 }
 

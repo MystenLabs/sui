@@ -19,9 +19,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
@@ -108,22 +106,16 @@ pub(crate) async fn list_transactions(
         // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
         // range; still surface the terminal boundary so the client learns the
         // final checkpoint is complete without waiting for the next item.
-        let terminal = reached_range_end(end_reason).then(|| {
-            watermark_response(terminal_boundary_watermark(
+        let final_watermark = reached_range_end(end_reason).then(|| {
+            terminal_boundary_watermark(
                 &options,
                 Position::Transactions {
                     checkpoint: end_checkpoint,
                     tx_seq: end_position,
                 },
-            ))
+            )
         });
-        return Ok(futures::stream::iter(
-            terminal
-                .into_iter()
-                .chain([end_response(end_reason)])
-                .map(Ok),
-        )
-        .boxed());
+        return Ok(futures::stream::iter([Ok(end_response(final_watermark, end_reason))]).boxed());
     }
 
     // Stage 1: discover tx_seq_digest rows for the requested response.
@@ -171,12 +163,14 @@ pub(crate) async fn list_transactions(
             futures::pin_mut!(digest_stream);
             let mut emitted = 0usize;
             let mut checkpoint_boundary: Option<u64> = None;
+            let mut last_watermark: Option<Watermark> = None;
             let mut scan_limit_hit = false;
             while let Some(item) = digest_stream.next().await {
                 match item {
                     Ok(ResolvedWatermarked::Item(row)) => {
                         checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, &options);
                         let wm = item_watermark(Position::Transactions { checkpoint: row.checkpoint_number, tx_seq: row.tx_sequence_number }, checkpoint_boundary);
+                        last_watermark = Some(wm.clone());
                         emitted += 1;
                         let yield_started = Instant::now();
                         yield transaction_response_from_tx_seq_digest(row, &read_mask, wm);
@@ -185,6 +179,7 @@ pub(crate) async fn list_transactions(
                     Ok(ResolvedWatermarked::Watermark { position, cp }) => {
                         checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
                         let wm = boundary_watermark(Position::Transactions { checkpoint: boundary_cursor_cp(cp, direction), tx_seq: position }, checkpoint_boundary);
+                        last_watermark = Some(wm.clone());
                         yield watermark_response(wm);
                     }
                     Err(BitmapScanError::ScanLimit) => {
@@ -209,10 +204,12 @@ pub(crate) async fn list_transactions(
             } else {
                 end_reason
             };
-            if reached_range_end(reason) {
-                yield watermark_response(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }));
-            }
-            yield end_response(reason);
+            let final_watermark = if reached_range_end(reason) {
+                Some(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }))
+            } else {
+                last_watermark
+            };
+            yield end_response(final_watermark, reason);
             info!(
                 filtered,
                 limit_items,
@@ -273,12 +270,14 @@ pub(crate) async fn list_transactions(
 
         let mut emitted = 0usize;
         let mut checkpoint_boundary: Option<u64> = None;
+        let mut last_watermark: Option<Watermark> = None;
         let mut scan_limit_hit = false;
         while let Some(item) = txn_with_objects_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item((tx_seq, tx_offset, tx_data, objects))) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, tx_data.checkpoint_number, &options);
                     let wm = item_watermark(Position::Transactions { checkpoint: tx_data.checkpoint_number, tx_seq }, checkpoint_boundary);
+                    last_watermark = Some(wm.clone());
                     let render_started = Instant::now();
                     let executed = transaction_to_response(tx_data, &read_mask, &objects, &resolver).await?;
                     ctx.observe_response_render(render_started.elapsed());
@@ -290,6 +289,7 @@ pub(crate) async fn list_transactions(
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
                     let wm = boundary_watermark(Position::Transactions { checkpoint: boundary_cursor_cp(cp, direction), tx_seq: position }, checkpoint_boundary);
+                    last_watermark = Some(wm.clone());
                     yield watermark_response(wm);
                 }
                 Err(BitmapScanError::ScanLimit) => {
@@ -314,10 +314,12 @@ pub(crate) async fn list_transactions(
         } else {
             end_reason
         };
-        if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }));
-        }
-        yield end_response(reason);
+        let final_watermark = if reached_range_end(reason) {
+            Some(terminal_boundary_watermark(&options, Position::Transactions { checkpoint: end_checkpoint, tx_seq: end_position }))
+        } else {
+            last_watermark
+        };
+        yield end_response(final_watermark, reason);
 
         info!(
             filtered,
@@ -332,10 +334,10 @@ pub(crate) async fn list_transactions(
     .boxed())
 }
 
-/// Wrap a constructed `Watermark` as a standalone wire frame.
+/// Wrap a constructed `Watermark` as a progress-only wire frame.
 fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
     let mut response = ListTransactionsResponse::default();
-    response.response = Some(list_transactions_response::Response::Watermark(watermark));
+    response.watermark = Some(watermark);
     response
 }
 
@@ -519,27 +521,24 @@ fn transaction_item_response(
     read_mask: &FieldMaskTree,
 ) -> ListTransactionsResponse {
     // The within-checkpoint position rides on the `ExecutedTransaction` rather
-    // than the enclosing `TransactionItem`; populate it only when the read mask
-    // requests it.
+    // than the response frame; populate it only when the read mask requests it.
     if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
         transaction.transaction_index = Some(tx_offset as u64);
     }
 
-    let mut item = TransactionItem::default();
-    item.transaction = Some(transaction);
-    item.watermark = Some(watermark);
-
     let mut response = ListTransactionsResponse::default();
-    response.response = Some(list_transactions_response::Response::Item(item));
+    response.transaction = Some(transaction);
+    response.watermark = Some(watermark);
     response
 }
 
-fn end_response(reason: QueryEndReason) -> ListTransactionsResponse {
+fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListTransactionsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListTransactionsResponse::default();
-    response.response = Some(list_transactions_response::Response::End(end));
+    response.watermark = watermark;
+    response.end = Some(end);
     response
 }
 
@@ -555,12 +554,10 @@ mod tests {
         validate_read_mask(Some(FieldMask::from_paths(paths.iter().copied()))).unwrap()
     }
 
-    fn unwrap_item(response: ListTransactionsResponse) -> TransactionItem {
-        match response.response.expect("response frame") {
-            list_transactions_response::Response::Item(item) => item,
-            list_transactions_response::Response::End(_) => panic!("expected item frame"),
-            _ => panic!("expected item frame"),
-        }
+    fn unwrap_item(response: ListTransactionsResponse) -> ListTransactionsResponse {
+        assert!(response.end.is_none(), "expected item frame");
+        assert!(response.transaction.is_some(), "expected item frame");
+        response
     }
 
     #[test]

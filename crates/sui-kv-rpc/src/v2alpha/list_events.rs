@@ -20,13 +20,11 @@ use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::Event as ProtoEvent;
-use sui_rpc::proto::sui::rpc::v2alpha::EventItem;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
@@ -114,23 +112,17 @@ pub(crate) async fn list_events(
         // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
         // range; still surface the terminal boundary so the client learns the
         // final checkpoint is complete without waiting for the next item.
-        let terminal = reached_range_end(end_reason).then(|| {
-            watermark_response(terminal_boundary_watermark(
+        let final_watermark = reached_range_end(end_reason).then(|| {
+            terminal_boundary_watermark(
                 &options,
                 Position::Events {
                     checkpoint: end_checkpoint,
                     tx_seq: end_position.tx_seq,
                     event_index: end_position.event_index,
                 },
-            ))
+            )
         });
-        return Ok(futures::stream::iter(
-            terminal
-                .into_iter()
-                .chain([end_response(end_reason)])
-                .map(Ok),
-        )
-        .boxed());
+        return Ok(futures::stream::iter([Ok(end_response(final_watermark, end_reason))]).boxed());
     }
 
     let scan_budget = ctx.scan_budget(BitmapIndexSpec::event());
@@ -265,6 +257,7 @@ pub(crate) async fn list_events(
         futures::pin_mut!(event_stream);
         let mut emitted = 0usize;
         let mut checkpoint_boundary: Option<u64> = None;
+        let mut last_watermark: Option<Watermark> = None;
         let mut scan_limit_hit = false;
         while let Some(item) = event_stream.next().await {
             match item {
@@ -274,8 +267,9 @@ pub(crate) async fn list_events(
                         Position::Events { checkpoint: rendered.checkpoint_number, tx_seq: rendered.position.tx_seq, event_index: rendered.position.event_index },
                         checkpoint_boundary,
                     );
+                    last_watermark = Some(wm.clone());
                     emitted += 1;
-                    yield event_item_response(rendered.item, wm);
+                    yield event_item_response(rendered.event, wm);
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
@@ -287,6 +281,7 @@ pub(crate) async fn list_events(
                         },
                         checkpoint_boundary,
                     );
+                    last_watermark = Some(wm.clone());
                     yield watermark_response(wm);
                 }
                 Err(BitmapScanError::ScanLimit) => {
@@ -311,10 +306,12 @@ pub(crate) async fn list_events(
         } else {
             end_reason
         };
-        if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, Position::Events { checkpoint: end_checkpoint, tx_seq: end_position.tx_seq, event_index: end_position.event_index }));
-        }
-        yield end_response(reason);
+        let final_watermark = if reached_range_end(reason) {
+            Some(terminal_boundary_watermark(&options, Position::Events { checkpoint: end_checkpoint, tx_seq: end_position.tx_seq, event_index: end_position.event_index }))
+        } else {
+            last_watermark
+        };
+        yield end_response(final_watermark, reason);
         info!(
             filtered,
             wants_json,
@@ -331,14 +328,14 @@ pub(crate) async fn list_events(
 
 fn watermark_response(watermark: Watermark) -> ListEventsResponse {
     let mut response = ListEventsResponse::default();
-    response.response = Some(list_events_response::Response::Watermark(watermark));
+    response.watermark = Some(watermark);
     response
 }
 
-fn event_item_response(mut item: EventItem, watermark: Watermark) -> ListEventsResponse {
-    item.watermark = Some(watermark);
+fn event_item_response(event: ProtoEvent, watermark: Watermark) -> ListEventsResponse {
     let mut response = ListEventsResponse::default();
-    response.response = Some(list_events_response::Response::Item(item));
+    response.event = Some(event);
+    response.watermark = Some(watermark);
     response
 }
 
@@ -464,12 +461,10 @@ async fn fetch_txs_for_refs(
     .boxed())
 }
 
-/// Carries the rendered `EventItem` (without its `watermark` field — the
-/// main loop fills that in with the current checkpoint boundary) plus
-/// the checkpoint and event position the main loop needs to update the
-/// watermark.
+/// Carries the rendered `Event` plus the checkpoint and event position the main
+/// loop needs to update the watermark.
 struct RenderedEvent {
-    item: EventItem,
+    event: ProtoEvent,
     checkpoint_number: u64,
     position: EventPosition,
 }
@@ -511,9 +506,9 @@ async fn render_event(
     }
 
     // The event's ledger position rides on the `Event` message itself rather
-    // than the enclosing `EventItem`; populate each position field only when the
-    // read mask requests it. Authenticated-stream clients that need to
-    // reconstruct the `EventCommitment` leaf ask for these paths.
+    // than the response frame; populate each position field only when the read
+    // mask requests it. Authenticated-stream clients that need to reconstruct
+    // the `EventCommitment` leaf ask for these paths.
     if read_mask.contains(ProtoEvent::CHECKPOINT_FIELD.name) {
         proto_event.checkpoint = Some(tx.checkpoint_number);
     }
@@ -527,22 +522,20 @@ async fn render_event(
         proto_event.event_index = Some(event_ref.position.event_index);
     }
 
-    let mut item = EventItem::default();
-    item.event = Some(proto_event);
-
     Ok(RenderedEvent {
-        item,
+        event: proto_event,
         checkpoint_number: tx.checkpoint_number,
         position: event_ref.position,
     })
 }
 
-fn end_response(reason: QueryEndReason) -> ListEventsResponse {
+fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListEventsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListEventsResponse::default();
-    response.response = Some(list_events_response::Response::End(end));
+    response.watermark = watermark;
+    response.end = Some(end);
     response
 }
 

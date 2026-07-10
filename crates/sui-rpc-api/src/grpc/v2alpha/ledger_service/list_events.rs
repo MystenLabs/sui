@@ -16,13 +16,11 @@ use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::Event as ProtoEvent;
-use sui_rpc::proto::sui::rpc::v2alpha::EventItem;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
 use sui_rpc_cursor::Position;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
@@ -127,22 +125,26 @@ pub(crate) async fn list_events(
             },
         );
 
+        let mut last_watermark: Option<Watermark> = None;
         while let Some(response) = scan.next_item().await? {
+            if response.watermark.is_some() {
+                last_watermark = response.watermark.clone();
+            }
             yield response;
         }
 
         let emitted = scan.produced();
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
-        // Natural completion proves the range's final checkpoint complete; emit a
-        // terminal watermark carrying that bound and the resume cursor.
-        if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(
+        let final_watermark = if reached_range_end(reason) {
+            Some(terminal_boundary_watermark(
                 &terminal_options,
                 terminal.position,
-            ));
-        }
-        yield end_response(reason);
+            ))
+        } else {
+            last_watermark
+        };
+        yield end_response(final_watermark, reason);
         info!(
             filtered,
             limit_items,
@@ -537,9 +539,9 @@ fn render_event_chunk(
             }
         });
         // The event's ledger position rides on the `Event` message itself
-        // rather than the enclosing `EventItem`; populate each position field
-        // only when the read mask requests it. Authenticated-stream clients that
-        // need to reconstruct the `EventCommitment` leaf ask for these paths.
+        // rather than the response frame; populate each position field only when
+        // the read mask requests it. Authenticated-stream clients that need to
+        // reconstruct the `EventCommitment` leaf ask for these paths.
         if read_mask.contains(ProtoEvent::CHECKPOINT_FIELD.name) {
             proto_event.checkpoint = Some(row.checkpoint_number);
         }
@@ -563,12 +565,9 @@ fn render_event_chunk(
             checkpoint_boundary,
         );
 
-        let mut item = EventItem::default();
-        item.watermark = Some(watermark);
-        item.event = Some(proto_event);
-
         let mut response = ListEventsResponse::default();
-        response.response = Some(list_events_response::Response::Item(item));
+        response.event = Some(proto_event);
+        response.watermark = Some(watermark);
         items.push(response);
     }
     Ok(items)
@@ -657,15 +656,16 @@ fn resolve_event_range(
 
 fn watermark_response(watermark: Watermark) -> ListEventsResponse {
     let mut response = ListEventsResponse::default();
-    response.response = Some(list_events_response::Response::Watermark(watermark));
+    response.watermark = Some(watermark);
     response
 }
 
-fn end_response(reason: QueryEndReason) -> ListEventsResponse {
+fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListEventsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListEventsResponse::default();
-    response.response = Some(list_events_response::Response::End(end));
+    response.watermark = watermark;
+    response.end = Some(end);
     response
 }

@@ -15,17 +15,18 @@ use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient as V2LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::AffectedObjectFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::CheckpointItem;
 use sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventItem;
 use sui_rpc::proto::sui::rpc::v2alpha::EventLiteral;
 use sui_rpc::proto::sui::rpc::v2alpha::EventStreamHeadFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
 use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
@@ -33,15 +34,11 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as AlphaLedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
-use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
-use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -56,22 +53,22 @@ const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 const DEFAULT_CHECKPOINT_RANGE_END: u64 = 3_000_000;
 
 struct TransactionsResult {
-    transactions: Vec<TransactionItem>,
+    transactions: Vec<ListTransactionsResponse>,
     end: bool,
     end_cursor: Option<Bytes>,
     end_reason: Option<QueryEndReason>,
 }
 
 struct EventsResult {
-    events: Vec<EventItem>,
+    events: Vec<ListEventsResponse>,
     end: bool,
     end_cursor: Option<Bytes>,
     end_reason: Option<QueryEndReason>,
 }
 
 struct CheckpointsResult {
-    checkpoints: Vec<CheckpointItem>,
-    // Standalone `Response::Watermark` frames (scan/terminal), in stream order.
+    checkpoints: Vec<ListCheckpointsResponse>,
+    // Watermarks from payload-less frames (scan/terminal), in stream order.
     watermarks: Vec<Watermark>,
     end: bool,
     end_cursor: Option<Bytes>,
@@ -223,7 +220,7 @@ fn assert_checkpoint_cursors(result: &CheckpointsResult) {
     }
 }
 
-fn checkpoint_sequence(response: &CheckpointItem) -> u64 {
+fn checkpoint_sequence(response: &ListCheckpointsResponse) -> u64 {
     response
         .checkpoint
         .as_ref()
@@ -240,18 +237,18 @@ fn transaction_digest_set(result: &TransactionsResult) -> HashSet<String> {
 }
 
 /// The event's ledger position now lives on the embedded `Event`, not the
-/// enclosing `EventItem`; these accessors read it back for assertions.
-fn event_transaction_digest(item: &EventItem) -> Option<String> {
+/// response frame; these accessors read it back for assertions.
+fn event_transaction_digest(item: &ListEventsResponse) -> Option<String> {
     item.event
         .as_ref()
         .and_then(|event| event.transaction_digest.clone())
 }
 
-fn event_checkpoint(item: &EventItem) -> Option<u64> {
+fn event_checkpoint(item: &ListEventsResponse) -> Option<u64> {
     item.event.as_ref().and_then(|event| event.checkpoint)
 }
 
-fn event_index_of(item: &EventItem) -> Option<u32> {
+fn event_index_of(item: &ListEventsResponse) -> Option<u32> {
     item.event.as_ref().and_then(|event| event.event_index)
 }
 
@@ -292,26 +289,16 @@ async fn list_transactions_result(
     let mut end_cursor = None;
     let mut end_reason = None;
     while let Some(response) = stream.message().await.unwrap() {
-        match response.response.expect("list_transactions response frame") {
-            list_transactions_response::Response::Item(item) => {
-                assert!(!end, "item frame after end");
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.clone()) {
-                    end_cursor = Some(cursor);
-                }
-                transactions.push(item);
-            }
-            list_transactions_response::Response::Watermark(watermark) => {
-                assert!(!end, "watermark frame after end");
-                if let Some(cursor) = watermark.cursor {
-                    end_cursor = Some(cursor);
-                }
-            }
-            list_transactions_response::Response::End(end_frame) => {
-                assert!(!end, "duplicate end frame");
-                end = true;
-                end_reason = Some(end_frame.reason());
-            }
-            other => panic!("unexpected list_transactions response frame: {other:?}"),
+        assert!(!end, "frame after end");
+        if let Some(cursor) = response.watermark.as_ref().and_then(|w| w.cursor.clone()) {
+            end_cursor = Some(cursor);
+        }
+        if let Some(end_frame) = &response.end {
+            end = true;
+            end_reason = Some(end_frame.reason());
+        }
+        if response.transaction.is_some() {
+            transactions.push(response);
         }
     }
     TransactionsResult {
@@ -334,26 +321,16 @@ async fn list_events_result(
     let mut end_cursor = None;
     let mut end_reason = None;
     while let Some(response) = stream.message().await.unwrap() {
-        match response.response.expect("list_events response frame") {
-            list_events_response::Response::Item(item) => {
-                assert!(!end, "item frame after end");
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.clone()) {
-                    end_cursor = Some(cursor);
-                }
-                events.push(item);
-            }
-            list_events_response::Response::Watermark(watermark) => {
-                assert!(!end, "watermark frame after end");
-                if let Some(cursor) = watermark.cursor {
-                    end_cursor = Some(cursor);
-                }
-            }
-            list_events_response::Response::End(end_frame) => {
-                assert!(!end, "duplicate end frame");
-                end = true;
-                end_reason = Some(end_frame.reason());
-            }
-            other => panic!("unexpected list_events response frame: {other:?}"),
+        assert!(!end, "frame after end");
+        if let Some(cursor) = response.watermark.as_ref().and_then(|w| w.cursor.clone()) {
+            end_cursor = Some(cursor);
+        }
+        if let Some(end_frame) = &response.end {
+            end = true;
+            end_reason = Some(end_frame.reason());
+        }
+        if response.event.is_some() {
+            events.push(response);
         }
     }
     EventsResult {
@@ -377,27 +354,18 @@ async fn list_checkpoints_result(
     let mut end_cursor = None;
     let mut end_reason = None;
     while let Some(response) = stream.message().await.unwrap() {
-        match response.response.expect("list_checkpoints response frame") {
-            list_checkpoints_response::Response::Item(item) => {
-                assert!(!end, "item frame after end");
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.clone()) {
-                    end_cursor = Some(cursor);
-                }
-                checkpoints.push(item);
-            }
-            list_checkpoints_response::Response::Watermark(watermark) => {
-                assert!(!end, "watermark frame after end");
-                if let Some(cursor) = watermark.cursor.clone() {
-                    end_cursor = Some(cursor);
-                }
-                watermarks.push(watermark);
-            }
-            list_checkpoints_response::Response::End(end_frame) => {
-                assert!(!end, "duplicate end frame");
-                end = true;
-                end_reason = Some(end_frame.reason());
-            }
-            other => panic!("unexpected list_checkpoints response frame: {other:?}"),
+        assert!(!end, "frame after end");
+        if let Some(cursor) = response.watermark.as_ref().and_then(|w| w.cursor.clone()) {
+            end_cursor = Some(cursor);
+        }
+        if let Some(end_frame) = &response.end {
+            end = true;
+            end_reason = Some(end_frame.reason());
+        }
+        if response.checkpoint.is_some() {
+            checkpoints.push(response);
+        } else if let Some(watermark) = response.watermark {
+            watermarks.push(watermark);
         }
     }
     CheckpointsResult {
@@ -2544,10 +2512,10 @@ async fn test_list_events_item_watermark_boundary() {
 }
 
 // Natural completion (the scan drains the whole range without hitting the item
-// limit) emits a single standalone terminal `Watermark` frame before `QueryEnd`,
+// limit) folds the terminal `Watermark` onto the final `QueryEnd` frame,
 // claiming the range's final checkpoint complete. An item-limited query stops
-// early with `ItemLimit` and emits NO standalone frame — the last item's
-// embedded watermark already carries the resume cursor. (The mid-stream
+// early with `ItemLimit` and repeats the last item watermark on that end frame,
+// so the resume cursor is still visible at stream termination. (The mid-stream
 // sparse-gap scan watermark is not reachable in e2e: it needs the scan to cross
 // ~16M empty tx_seqs to exhaust the per-chunk bucket budget.)
 #[sim_test]
@@ -2572,7 +2540,7 @@ async fn test_list_checkpoints_terminal_watermark() {
     assert_eq!(
         resp.watermarks.len(),
         1,
-        "natural completion emits exactly one standalone terminal watermark"
+        "natural completion carries exactly one terminal watermark on the end frame"
     );
     let terminal = &resp.watermarks[0];
     let last_item_hi = resp
@@ -2600,7 +2568,7 @@ async fn test_list_checkpoints_terminal_watermark() {
         "resuming past the terminal watermark should yield no more items"
     );
 
-    // Item-limited query: stops early, no standalone watermark frame.
+    // Item-limited query: the end frame repeats the last item's watermark.
     let mut req = ListCheckpointsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     req.start_checkpoint = Some(start);
@@ -2609,10 +2577,19 @@ async fn test_list_checkpoints_terminal_watermark() {
     req.options = Some(query_options(2));
     let limited = list_checkpoints_result(&mut client, req).await;
     assert_item_limit_end(limited.end, limited.end_reason);
-    assert!(
-        limited.watermarks.is_empty(),
-        "item-limited query must not emit a standalone terminal watermark"
+    let last_item_watermark = limited
+        .checkpoints
+        .last()
+        .and_then(|item| item.watermark.as_ref())
+        .expect("last item watermark");
+    assert_eq!(
+        limited.watermarks.len(),
+        1,
+        "item-limited query repeats the last item watermark on the end frame"
     );
+    let end_watermark = &limited.watermarks[0];
+    assert_eq!(end_watermark.cursor, last_item_watermark.cursor);
+    assert_eq!(end_watermark.checkpoint, last_item_watermark.checkpoint);
 }
 
 #[sim_test]
