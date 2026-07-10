@@ -4,7 +4,7 @@
 import { Node } from '..';
 import { MoveOptions, printFn, treeFn } from '../printer';
 import { AstPath, Doc, doc } from 'prettier';
-import { printIdentifier, printTrailingComment } from '../utilities';
+import { inlineTrailingComment, printIdentifier } from '../utilities';
 import * as VectorExpression from './expression/vector_expression';
 import { printBreakableBlock } from './expression/block';
 const { line, group, join, fill, ifBreak, softline, indent, lineSuffix } = doc.builders;
@@ -34,7 +34,7 @@ export default function (path: AstPath<Node>): treeFn | null {
  */
 function printConstant(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
     const expression = path.node.nonFormattingChildren[2];
-    const trailing = lineSuffix(printTrailingComment(path));
+    const trailing = lineSuffix(inlineTrailingComment(path));
     path.node.disableTrailingComment();
 
     const printCb = (path: AstPath<Node>) => printConstExpression(path, options, print);

@@ -115,9 +115,31 @@ export function printTrailingComment(path: AstPath<Node>, shouldBreak: boolean =
     if (!path.node.enableTrailingComment) return '';
     const comment = path.node.trailingComment;
     if (!comment) return '';
-    if (comment.type == 'line_comment' && shouldBreak) {
-        return [' ', comment.text, hardline];
+    if (comment.type == 'line_comment') {
+        if (shouldBreak) {
+            return [' ', comment.text, hardline];
+        }
+
+        // a line comment printed inline would swallow any tokens the parent
+        // prints after it on the same line; defer it to the end of the line
+        // and break the enclosing group so the comment stays near its node
+        return [lineSuffix([' ', comment.text]), breakParent];
     }
+
+    return [' ', comment.text];
+}
+
+/**
+ * The raw inline form of the trailing comment (`' ' + text`), with no line
+ * break protection. Callers own the placement and must guarantee that a line
+ * break follows before any sibling token is printed on the same line —
+ * typically by wrapping the result in `lineSuffix` themselves.
+ */
+export function inlineTrailingComment(path: AstPath<Node>): Doc {
+    if (path.node.isEmptyLine) return '';
+    if (!path.node.enableTrailingComment) return '';
+    const comment = path.node.trailingComment;
+    if (!comment) return '';
 
     return [' ', comment.text];
 }
@@ -360,20 +382,13 @@ export function list({
                             breakExpr,
                             print(path),
                             ifBreak(','),
-                            shouldBreak ? lineSuffix(comment) : comment,
+                            comment,
                             shouldDedent ? dedent(endingExpr) : endingExpr,
                         ];
                     }
 
                     // if we are not at the last child, add a comma
-                    return [
-                        leading,
-                        breakExpr,
-                        print(path),
-                        ',',
-                        shouldBreak ? lineSuffix(comment) : comment,
-                        line,
-                    ];
+                    return [leading, breakExpr, print(path), ',', comment, line];
                 }, 'nonFormattingChildren')
                 .slice(skipChildren)
                 .concat(

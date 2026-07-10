@@ -4,7 +4,7 @@
 import { AstPath, Doc, doc } from 'prettier';
 import { Node } from '..';
 import { MoveOptions, printFn, treeFn } from '../printer';
-import { list, printIdentifier, printTrailingComment } from '../utilities';
+import { inlineTrailingComment, list, printIdentifier } from '../utilities';
 const { lineSuffix, group } = doc.builders;
 
 export default function (path: AstPath<Node>): treeFn | null {
@@ -63,7 +63,7 @@ export function printEnumVariants(path: AstPath<Node>, options: MoveOptions, pri
  * - `datatype_fields` (optional)
  */
 export function printVariant(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
-    const trailing = lineSuffix(printTrailingComment(path, false));
+    const trailing = lineSuffix(inlineTrailingComment(path));
     path.node.disableTrailingComment();
     return [path.map(print, 'nonFormattingChildren'), trailing];
 }
