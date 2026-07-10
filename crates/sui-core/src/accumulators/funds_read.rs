@@ -7,7 +7,7 @@ use move_core_types::language_storage::TypeTag;
 use sui_types::{
     accumulator_root::AccumulatorObjId,
     balance::Balance,
-    base_types::SequenceNumber,
+    base_types::{SequenceNumber, SuiAddress},
     error::{SuiErrorKind, SuiResult, UserInputError},
 };
 
@@ -40,9 +40,9 @@ pub trait AccountFundsRead: Send + Sync {
     /// where deterministic results are not required.
     fn check_amounts_available(
         &self,
-        requested_amounts: &BTreeMap<AccumulatorObjId, (u64, TypeTag)>,
+        requested_amounts: &BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>,
     ) -> SuiResult {
-        for (object_id, (requested_amount, type_tag)) in requested_amounts {
+        for (object_id, (requested_amount, type_tag, owner)) in requested_amounts {
             let actual_amount = self.get_latest_account_amount(object_id);
 
             if actual_amount < *requested_amount as u128 {
@@ -51,12 +51,12 @@ pub trait AccountFundsRead: Send + Sync {
                 return Err(SuiErrorKind::UserInputError {
                     error: UserInputError::InvalidWithdrawReservation {
                         error: format!(
-                            "Insufficient address balance of coin type {coin_type}: \
-                             the transaction requires {requested_amount} but only \
-                             {actual_amount} is available. Note that the address balance \
-                             does not include funds held in Coin objects owned by the \
-                             address; to spend those funds, use the Coin objects directly \
-                             as transaction inputs.",
+                            "Insufficient address balance of coin type {coin_type} \
+                             for address {owner}: the transaction requires \
+                             {requested_amount} but only {actual_amount} is available. \
+                             Note that the address balance does not include funds held \
+                             in Coin objects owned by the address; to spend those funds, \
+                             use the Coin objects directly as transaction inputs.",
                         ),
                     },
                 }
@@ -73,10 +73,10 @@ pub trait AccountFundsRead: Send + Sync {
     /// token type.
     fn check_remaining_amounts_after_withdrawal(
         &self,
-        requested_amounts: &BTreeMap<AccumulatorObjId, (u64, TypeTag)>,
+        requested_amounts: &BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>,
         min_amounts: &BTreeMap<TypeTag, u64>,
     ) -> SuiResult {
-        for (object_id, (requested_amount, type_tag)) in requested_amounts {
+        for (object_id, (requested_amount, type_tag, owner)) in requested_amounts {
             let actual_amount = self.get_latest_account_amount(object_id);
             let remaining = actual_amount.saturating_sub(*requested_amount as u128);
             if remaining == 0 {
@@ -91,7 +91,8 @@ pub trait AccountFundsRead: Send + Sync {
                 return Err(SuiErrorKind::UserInputError {
                     error: UserInputError::InvalidWithdrawReservation {
                         error: format!(
-                            "Invalid gasless withdrawal of coin type {coin_type}. \
+                            "Invalid gasless withdrawal of coin type {coin_type} \
+                             from address {owner}. \
                              Gasless transactions must either use the entire address \
                              balance, or leave at least {min_amount}. \
                              Remaining amount would be {remaining}",
