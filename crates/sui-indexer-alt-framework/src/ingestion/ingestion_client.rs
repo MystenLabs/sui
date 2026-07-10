@@ -118,6 +118,16 @@ pub struct IngestionClientArgs {
     /// Set to 0 to disable the timeout.
     #[arg(long, default_value_t = Self::default().checkpoint_connection_timeout_ms)]
     pub checkpoint_connection_timeout_ms: u64,
+
+    /// Path to a PEM-encoded certificate to trust as an additional root when connecting to the
+    /// remote store over HTTPS (e.g. a private CA). Added on top of the system roots.
+    #[arg(long)]
+    pub remote_store_ca_certificate: Option<PathBuf>,
+
+    /// Force the remote checkpoint store's HTTP client to use HTTP/1.1 only, disabling HTTP/2
+    /// negotiation (which the metered connector otherwise enables for the remote-store URL path).
+    #[arg(long)]
+    pub remote_store_http1_only: bool,
 }
 
 impl Default for IngestionClientArgs {
@@ -134,6 +144,8 @@ impl Default for IngestionClientArgs {
             rpc_password: None,
             checkpoint_timeout_ms: 120_000,
             checkpoint_connection_timeout_ms: 120_000,
+            remote_store_ca_certificate: None,
+            remote_store_http1_only: false,
         }
     }
 }
@@ -207,9 +219,40 @@ impl IngestionClient {
         // TODO: Support stacking multiple ingestion clients for redundancy/failover.
         let retry = super::store_client::retry_config();
         let client = if let Some(url) = args.remote_store_url.as_ref() {
+            // Route the HTTP store through our own connector so DNS lookups are metered. `client_options`
+            // still carries the default headers / http-allowed flag (the connector reads the headers
+            // back); the timeouts are passed to the connector directly because `ClientOptions` does not
+            // expose them.
+            let request_timeout = (args.checkpoint_timeout_ms != 0)
+                .then(|| Duration::from_millis(args.checkpoint_timeout_ms));
+            let connect_timeout = (args.checkpoint_connection_timeout_ms != 0)
+                .then(|| Duration::from_millis(args.checkpoint_connection_timeout_ms));
+            let ca_certificate = args
+                .remote_store_ca_certificate
+                .as_ref()
+                .map(|path| {
+                    let pem = std::fs::read(path).map_err(|e| object_store::Error::Generic {
+                        store: "ingestion-client",
+                        source: Box::new(e),
+                    })?;
+                    reqwest::tls::Certificate::from_pem(&pem).map_err(|e| {
+                        object_store::Error::Generic {
+                            store: "ingestion-client",
+                            source: Box::new(e),
+                        }
+                    })
+                })
+                .transpose()?;
             let store = HttpBuilder::new()
                 .with_url(url.to_string())
                 .with_client_options(args.client_options().with_allow_http(true))
+                .with_http_connector(super::dns::MeteredHttpConnector::new(
+                    metrics.total_dns_resolutions.clone(),
+                    request_timeout,
+                    connect_timeout,
+                    ca_certificate,
+                    args.remote_store_http1_only,
+                ))
                 .with_retry(retry)
                 .build()
                 .map(Arc::new)?;

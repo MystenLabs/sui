@@ -39,13 +39,13 @@ pub type ArcStreamingClient = Arc<dyn CheckpointStreamingClient + Send + Sync>;
 mod broadcaster;
 mod byte_count;
 pub(crate) mod decode;
+mod dns;
 pub mod error;
 pub mod ingestion_client;
 mod rpc_client;
 pub mod store_client;
 pub mod streaming_client;
-#[cfg(test)]
-mod test_utils;
+pub mod test_utils;
 
 pub(crate) const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
 

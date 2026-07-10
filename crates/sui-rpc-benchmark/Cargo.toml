@@ -15,7 +15,7 @@ futures.workspace = true
 parking_lot.workspace = true
 phf = { version = "0.11", features = ["macros"] }
 rand.workspace = true
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["query"] }
 serde.workspace = true
 serde_json.workspace = true
 sui-futures.workspace = true

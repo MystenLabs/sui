@@ -208,7 +208,7 @@ impl DBCheckpointHandler {
                             continue;
                         }
                         let bytes = Bytes::from_static(b"success");
-                        let upload_completed_marker = db_path.child(UPLOAD_COMPLETED_MARKER);
+                        let upload_completed_marker = db_path.clone().join(UPLOAD_COMPLETED_MARKER);
                         put(&self.input_object_store,
                             &upload_completed_marker,
                             bytes.clone(),
@@ -326,11 +326,11 @@ impl DBCheckpointHandler {
                     .await?;
                 // Drop marker in the output directory that upload completed successfully
                 let bytes = Bytes::from_static(b"success");
-                let success_marker = db_path.child(SUCCESS_MARKER);
+                let success_marker = db_path.clone().join(SUCCESS_MARKER);
                 put(&object_store, &success_marker, bytes.clone()).await?;
             }
             let bytes = Bytes::from_static(b"success");
-            let upload_completed_marker = db_path.child(UPLOAD_COMPLETED_MARKER);
+            let upload_completed_marker = db_path.clone().join(UPLOAD_COMPLETED_MARKER);
             put(
                 &self.input_object_store,
                 &upload_completed_marker,
@@ -349,7 +349,7 @@ impl DBCheckpointHandler {
             let marker_paths: Vec<Path> = self
                 .gc_markers
                 .iter()
-                .map(|marker| path.child(marker.clone()))
+                .map(|marker| path.clone().join(marker.clone()))
                 .collect();
             let all_markers_present = try_join_all(
                 marker_paths

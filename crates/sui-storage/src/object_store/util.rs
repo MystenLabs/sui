@@ -276,7 +276,7 @@ pub async fn list_all_epochs(object_store: Arc<DynObjectStore>) -> Result<Vec<u6
     let mut out = vec![];
     let mut success_marker_found = false;
     for (epoch, path) in remote_epoch_dirs.iter().sorted() {
-        let success_marker = path.child("_SUCCESS");
+        let success_marker = path.clone().join("_SUCCESS");
         let get_result = object_store.get(&success_marker).await;
         match get_result {
             Err(_) => {
@@ -297,7 +297,7 @@ pub async fn list_all_epochs(object_store: Arc<DynObjectStore>) -> Result<Vec<u6
         find_all_dirs_with_epoch_prefix(&object_store, Some(&archive_prefix)).await
     {
         for (epoch, path) in archive_epoch_dirs.iter().sorted() {
-            let success_marker = path.child("_SUCCESS");
+            let success_marker = path.clone().join("_SUCCESS");
             let get_result = object_store.get(&success_marker).await;
             if get_result.is_ok() && !out.contains(epoch) {
                 out.push(*epoch);
@@ -378,7 +378,7 @@ pub async fn find_missing_epochs_dirs(
             candidate_epoch += 1;
             continue;
         }
-        let success_marker = path.child(success_marker);
+        let success_marker = path.clone().join(success_marker);
         let get_result = store.get(&success_marker).await;
         match get_result {
             Err(Error::NotFound { .. }) => {

@@ -28,7 +28,7 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
-use reqwest::StatusCode;
+use reqwest012::StatusCode;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -3021,7 +3021,7 @@ pub async fn request_tokens_from_faucet(
     }];
 
     // make the request to the faucet JSON RPC API for coin
-    let client = reqwest::Client::new();
+    let client = reqwest012::Client::new();
     let resp = client
         .post(&url)
         .header(http::header::CONTENT_TYPE, "application/json")

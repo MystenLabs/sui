@@ -3,19 +3,19 @@
 
 use anyhow::{Context, Result, anyhow};
 use cynic::{Operation, QueryBuilder, http::ReqwestExt};
-use reqwest::IntoUrl;
+use reqwest012::IntoUrl;
 use serde::{Serialize, de::DeserializeOwned};
 
 pub(crate) struct Client {
-    inner: reqwest::Client,
-    url: reqwest::Url,
+    inner: reqwest012::Client,
+    url: reqwest012::Url,
 }
 
 impl Client {
     /// Create a new GraphQL client, talking to a Sui GraphQL service at `url`.
     pub(crate) fn new(url: impl IntoUrl) -> Result<Self> {
         Ok(Self {
-            inner: reqwest::Client::builder()
+            inner: reqwest012::Client::builder()
                 .user_agent(concat!("sui-package-dump/", env!("CARGO_PKG_VERSION")))
                 .build()
                 .context("Failed to create GraphQL client")?,

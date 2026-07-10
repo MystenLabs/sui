@@ -288,7 +288,7 @@ impl StateSnapshotWriterV1 {
     ) -> Result<()> {
         self.setup_epoch_dir(epoch).await?;
 
-        let manifest_file_path = self.epoch_dir(epoch).child("MANIFEST");
+        let manifest_file_path = self.epoch_dir(epoch).join("MANIFEST");
         let local_staging_dir = self.local_staging_dir.clone();
         let local_object_store = self.local_staging_store.clone();
         let remote_object_store = self.remote_object_store.clone();
@@ -434,11 +434,11 @@ impl StateSnapshotWriterV1 {
     fn manifest_file(&mut self, epoch: u64) -> Result<(File, PathBuf)> {
         let manifest_file_path = path_to_filesystem(
             self.local_staging_dir.clone(),
-            &self.epoch_dir(epoch).child("MANIFEST"),
+            &self.epoch_dir(epoch).join("MANIFEST"),
         )?;
         let manifest_file_tmp_path = path_to_filesystem(
             self.local_staging_dir.clone(),
-            &self.epoch_dir(epoch).child("MANIFEST.tmp"),
+            &self.epoch_dir(epoch).join("MANIFEST.tmp"),
         )?;
         let mut f = File::create(manifest_file_tmp_path.clone())?;
         let mut metab = vec![0u8; MAGIC_BYTES];

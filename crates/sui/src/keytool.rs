@@ -973,7 +973,7 @@ impl KeyToolCommand {
                 let nonce = get_nonce(&eph_pk_bytes, max_epoch, &jwt_randomness).unwrap();
 
                 // call test issuer to get jwt token.
-                let client = reqwest::Client::new();
+                let client = reqwest012::Client::new();
                 let parsed_token = get_test_issuer_jwt_token(
                     &client,
                     &nonce,
@@ -1297,7 +1297,7 @@ impl KeyToolCommand {
                             }));
                         }
 
-                        let client = reqwest::Client::new();
+                        let client = reqwest012::Client::new();
                         let provider = OIDCProvider::from_iss(zk.get_iss())
                             .map_err(|_| anyhow!("Invalid iss"))?;
                         let jwks = fetch_jwks(&provider, &client, true).await?;
