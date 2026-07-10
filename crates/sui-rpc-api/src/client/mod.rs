@@ -236,19 +236,42 @@ impl Client {
         transaction: &Transaction,
     ) -> Result<ExecutedTransaction> {
         const WAIT_FOR_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(30);
+        // A checkpoint-wait timeout does not mean the transaction failed: it has already executed,
+        // and its checkpoint may just be slow to land (e.g. an overloaded node). Retry the wait a
+        // few times before giving up; each attempt subscribes to a fresh checkpoint stream and
+        // returns immediately if the transaction has been checkpointed in the meantime.
+        const MAX_ATTEMPTS: usize = 3;
 
         let request = Self::create_executed_transaction_request(transaction)?;
 
-        let (metadata, response, _extentions) = self
-            .0
-            .clone()
-            .execute_transaction_and_wait_for_checkpoint(request, WAIT_FOR_CHECKPOINT_TIMEOUT)
-            .await
-            .map_err(|e| Status::from_error(e.into()))?
-            .into_parts();
-
-        execute_transaction_response_try_from_proto(&response)
-            .map_err(|e| status_from_error_with_metadata(e, metadata))
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            match self
+                .0
+                .clone()
+                .execute_transaction_and_wait_for_checkpoint(
+                    request.clone(),
+                    WAIT_FOR_CHECKPOINT_TIMEOUT,
+                )
+                .await
+            {
+                Ok(response) => {
+                    let (metadata, response, _extentions) = response.into_parts();
+                    return execute_transaction_response_try_from_proto(&response)
+                        .map_err(|e| status_from_error_with_metadata(e, metadata));
+                }
+                Err(sui_rpc::client::ExecuteAndWaitError::CheckpointTimeout(_))
+                    if attempt < MAX_ATTEMPTS =>
+                {
+                    tracing::warn!(
+                        "transaction executed but checkpoint wait timed out; retrying \
+                         (attempt {attempt}/{MAX_ATTEMPTS})"
+                    );
+                }
+                Err(e) => return Err(Status::from_error(e.into())),
+            }
+        }
     }
 
     fn create_executed_transaction_request(
