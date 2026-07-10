@@ -32,7 +32,6 @@ async fn get_protocol_config(cluster: &FullCluster, params: Value) -> Value {
 
 #[tokio::test]
 async fn test_latest_version() {
-    telemetry_subscribers::init_for_testing();
     let mut cluster = FullCluster::new().await.unwrap();
 
     // Make sure the genesis epoch start has been indexed.
@@ -74,7 +73,6 @@ async fn test_latest_version() {
 
 #[tokio::test]
 async fn test_specific_version() {
-    telemetry_subscribers::init_for_testing();
     let mut cluster = FullCluster::new().await.unwrap();
     cluster.create_checkpoint().await;
 
@@ -96,7 +94,6 @@ async fn test_specific_version() {
 
 #[tokio::test]
 async fn test_unknown_version() {
-    telemetry_subscribers::init_for_testing();
     let mut cluster = FullCluster::new().await.unwrap();
     cluster.create_checkpoint().await;
 

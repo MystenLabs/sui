@@ -30,9 +30,6 @@ use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
-use sui_rpc::field::FieldMask;
-use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::TypeTag;
@@ -135,7 +132,9 @@ impl WriteTestCluster {
         // checkpoint, so wait for it before handing the cluster to a test.
         tokio::time::timeout(Duration::from_secs(60), async {
             loop {
-                let response = cluster.execute_jsonrpc("sui_getProtocolConfig", json!([])).await;
+                let response = cluster
+                    .execute_jsonrpc("sui_getProtocolConfig", json!([]))
+                    .await;
                 if matches!(&response, Ok(r) if r["error"].is_null()) {
                     break;
                 }
@@ -185,6 +184,23 @@ impl WriteTestCluster {
     }
 
     async fn execute_jsonrpc(&self, method: &str, params: Value) -> anyhow::Result<Value> {
+        self.execute_jsonrpc_at(self.rpc_url.clone(), method, params)
+            .await
+    }
+
+    /// Send a JSON-RPC request to the fullnode's legacy JSON-RPC server (rather than the
+    /// indexer's JSON-RPC server), to compare implementations of the same method.
+    async fn execute_fullnode_jsonrpc(&self, method: &str, params: Value) -> anyhow::Result<Value> {
+        let url = Url::parse(self.onchain_cluster.rpc_url()).context("Invalid fullnode URL")?;
+        self.execute_jsonrpc_at(url, method, params).await
+    }
+
+    async fn execute_jsonrpc_at(
+        &self,
+        url: Url,
+        method: &str,
+        params: Value,
+    ) -> anyhow::Result<Value> {
         let query = json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -194,7 +210,7 @@ impl WriteTestCluster {
 
         let response = self
             .client
-            .post(self.rpc_url.clone())
+            .post(url)
             .json(&query)
             .send()
             .await
@@ -715,7 +731,6 @@ async fn test_execute_and_dry_run_gas_costs_agree() {
 
 #[tokio::test]
 async fn test_dev_inspect_returns_values() {
-    telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
 
@@ -764,7 +779,6 @@ async fn test_dev_inspect_returns_values() {
 
 #[tokio::test]
 async fn test_dev_inspect_synthesized_transaction_defaults() {
-    telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
     let reference_gas_price = cluster.onchain_cluster.get_reference_gas_price().await;
@@ -801,7 +815,6 @@ async fn test_dev_inspect_synthesized_transaction_defaults() {
 
 #[tokio::test]
 async fn test_dev_inspect_with_checks_enabled() {
-    telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
 
@@ -830,7 +843,6 @@ async fn test_dev_inspect_with_checks_enabled() {
 
 #[tokio::test]
 async fn test_dev_inspect_execution_failure() {
-    telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
 
@@ -852,88 +864,71 @@ async fn test_dev_inspect_execution_failure() {
 }
 
 #[tokio::test]
-async fn test_dev_inspect_matches_grpc_simulation() {
-    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
-
+async fn test_dev_inspect_matches_fullnode_jsonrpc() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
 
-    let response = cluster
-        .execute_jsonrpc(
-            "sui_devInspectTransactionBlock",
-            json!({
-                "sender_address": sender.to_string(),
-                "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
-                "additional_args": { "showRawTxnDataAndEffects": true },
-            }),
-        )
+    // Successful execution: the responses must match in full, including the raw transaction
+    // bytes (proving the synthesized TransactionData is identical) and effects.
+    let params = json!({
+        "sender_address": sender.to_string(),
+        "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+        "additional_args": { "showRawTxnDataAndEffects": true },
+    });
+
+    let indexer = cluster
+        .execute_jsonrpc("sui_devInspectTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let fullnode = cluster
+        .execute_fullnode_jsonrpc("sui_devInspectTransactionBlock", params)
         .await
         .unwrap();
 
-    let result = &response["result"];
-    assert_eq!(result["effects"]["status"]["status"], "success");
+    assert!(
+        indexer["error"].is_null(),
+        "indexer RPC error: {}",
+        indexer["error"]
+    );
+    assert!(
+        fullnode["error"].is_null(),
+        "fullnode RPC error: {}",
+        fullnode["error"]
+    );
+    assert_eq!(indexer["result"], fullnode["result"]);
 
-    // Re-run the exact transaction the RPC synthesized (from its raw bytes) against the
-    // fullnode's gRPC simulation endpoint with checks disabled -- the primitive dev-inspect is
-    // built on -- and check that the RPC response is a faithful rendering of the gRPC response.
-    let mut proto_tx = proto::Transaction::default();
-    proto_tx.bcs = Some(json_bytes(&result["rawTxnData"]).into());
+    // Failed execution: the responses must match except for the `error` message -- the fullnode
+    // stringifies the executor's error, which is not part of the gRPC simulate response that the
+    // indexer's implementation is built on, so the indexer recovers a differently-formatted
+    // message from the effects' execution status.
+    let params = json!({
+        "sender_address": sender.to_string(),
+        "tx_bytes": encode_transaction_kind(&divide_by_zero_transaction_kind()),
+    });
 
-    let request = proto::SimulateTransactionRequest::new(proto_tx)
-        .with_read_mask(FieldMask::from_paths([
-            "transaction.effects.bcs",
-            "command_outputs",
-        ]))
-        .with_checks(proto::simulate_transaction_request::TransactionChecks::Disabled)
-        .with_do_gas_selection(false);
-
-    let mut grpc =
-        TransactionExecutionServiceClient::connect(cluster.onchain_cluster.rpc_url().to_string())
-            .await
-            .unwrap();
-
-    let simulated = grpc
-        .simulate_transaction(request)
+    let indexer = cluster
+        .execute_jsonrpc("sui_devInspectTransactionBlock", params.clone())
         .await
-        .unwrap()
-        .into_inner();
+        .unwrap();
+    let fullnode = cluster
+        .execute_fullnode_jsonrpc("sui_devInspectTransactionBlock", params)
+        .await
+        .unwrap();
 
-    // The effects must be byte-identical.
-    let grpc_effects = simulated
-        .transaction
-        .as_ref()
-        .unwrap()
-        .effects
-        .as_ref()
-        .unwrap()
-        .bcs
-        .as_ref()
-        .unwrap()
-        .value()
-        .to_vec();
-    assert_eq!(json_bytes(&result["rawEffects"]), grpc_effects);
+    let mut indexer_result = indexer["result"].clone();
+    let mut fullnode_result = fullnode["result"].clone();
 
-    // Return values must match, value for value and type for type.
-    let results = result["results"].as_array().unwrap();
-    assert_eq!(results.len(), simulated.command_outputs.len());
-    for (json_result, grpc_result) in results.iter().zip(&simulated.command_outputs) {
-        let json_returns = json_result["returnValues"].as_array().unwrap();
-        assert_eq!(json_returns.len(), grpc_result.return_values.len());
-        for (json_return, grpc_return) in json_returns.iter().zip(&grpc_result.return_values) {
-            let grpc_bcs = grpc_return.value.as_ref().unwrap();
-            assert_eq!(json_bytes(&json_return[0]), grpc_bcs.value().to_vec());
+    let indexer_error = indexer_result.as_object_mut().unwrap().remove("error");
+    let fullnode_error = fullnode_result.as_object_mut().unwrap().remove("error");
+    assert!(indexer_error.is_some_and(|e| !e.is_null()));
+    assert!(fullnode_error.is_some_and(|e| !e.is_null()));
 
-            let json_type: TypeTag = json_return[1].as_str().unwrap().parse().unwrap();
-            let grpc_type: TypeTag = grpc_bcs.name().parse().unwrap();
-            assert_eq!(json_type, grpc_type);
-        }
-    }
+    assert_eq!(indexer_result, fullnode_result);
 }
 
 #[tokio::test]
 async fn test_dev_inspect_invalid_tx_bytes() {
-    telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
 
