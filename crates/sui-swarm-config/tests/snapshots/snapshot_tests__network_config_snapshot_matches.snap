@@ -131,6 +131,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -309,6 +310,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -487,6 +489,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -665,6 +668,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -843,6 +847,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -1021,6 +1026,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -1199,6 +1205,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
