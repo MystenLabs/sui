@@ -24,13 +24,15 @@ pub type ExternalPrefix = Option<&'static str>;
 /// within a category.
 pub const DIAGNOSTIC_FILTER_WILDCARD: u8 = u8::MAX;
 
-/// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.
-/// Also used as a filter key with [`ANY`] wildcards for category/code.
+/// The ID for a diagnostic, consisting of an optional prefix, an optional code tag (a letter
+/// rendered between the severity and the category, e.g. the `S` in `Lint WS02001`), a category,
+/// and a code. Also used as a filter key with [`ANY`] wildcards for category/code.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct DiagnosticsID {
     pub prefix: ExternalPrefix,
     pub category: u8,
     pub code: u8,
+    pub tag: &'static str,
 }
 
 impl DiagnosticsID {
@@ -39,6 +41,7 @@ impl DiagnosticsID {
             prefix,
             category,
             code,
+            tag: "",
         }
     }
 
@@ -47,6 +50,7 @@ impl DiagnosticsID {
             prefix,
             category,
             code: DIAGNOSTIC_FILTER_WILDCARD,
+            tag: "",
         }
     }
 
@@ -55,7 +59,13 @@ impl DiagnosticsID {
             prefix,
             category: DIAGNOSTIC_FILTER_WILDCARD,
             code: DIAGNOSTIC_FILTER_WILDCARD,
+            tag: "",
         }
+    }
+
+    pub const fn with_code_tag(mut self, tag: &'static str) -> Self {
+        self.tag = tag;
+        self
     }
 }
 
@@ -65,6 +75,7 @@ pub struct DiagnosticInfo {
     category: u8,
     code: u8,
     external_prefix: ExternalPrefix,
+    code_tag: &'static str,
     message: &'static str,
 }
 
@@ -84,6 +95,7 @@ pub(crate) trait DiagnosticCode: Copy {
             category,
             code,
             external_prefix: None,
+            code_tag: "",
             message,
         }
     }
@@ -95,7 +107,7 @@ pub(crate) trait DiagnosticCode: Copy {
 
 /// A custom DiagnosticInfo.
 /// The diagnostic will get rendered as
-/// `"[{external_prefix}{severity}{category}{code}] {message}"`.
+/// `"[{external_prefix}{severity}{code_tag}{category}{code}] {message}"`.
 /// Note, this will panic if `category > 99`
 pub const fn custom(
     external_prefix: &'static str,
@@ -110,6 +122,7 @@ pub const fn custom(
         category,
         code,
         external_prefix: Some(external_prefix),
+        code_tag: "",
         message,
     }
 }
@@ -419,6 +432,7 @@ impl DiagnosticInfo {
             category,
             code,
             external_prefix,
+            code_tag,
             message,
         } = self;
         let sev_prefix = match severity {
@@ -429,11 +443,16 @@ impl DiagnosticInfo {
         };
         debug_assert!(category <= 99);
         let string_code = if let Some(ext) = external_prefix {
-            format!("{ext}{sev_prefix}{category:02}{code:03}")
+            format!("{ext}{sev_prefix}{code_tag}{category:02}{code:03}")
         } else {
-            format!("{sev_prefix}{category:02}{code:03}")
+            format!("{sev_prefix}{code_tag}{category:02}{code:03}")
         };
         (string_code, message)
+    }
+
+    pub const fn with_code_tag(mut self, tag: &'static str) -> Self {
+        self.code_tag = tag;
+        self
     }
 
     pub(crate) fn set_severity(mut self, severity: Severity) -> Self {
@@ -458,6 +477,7 @@ impl DiagnosticInfo {
             prefix: self.external_prefix,
             category: self.category,
             code: self.code,
+            tag: self.code_tag,
         }
     }
 

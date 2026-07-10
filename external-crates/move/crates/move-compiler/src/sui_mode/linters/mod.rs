@@ -8,7 +8,7 @@ use crate::{
     editions::Flavor,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{ALLOW_ATTR_CATEGORY, LintLevel, filters_from_table, lints},
+    linters::{ALLOW_ATTR_CATEGORY, LintLevel, filters_from_table, lint_code_tag, lints},
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
@@ -71,15 +71,10 @@ pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
-// Sui is a lint source, not a category: Sui lints share the categories in
-// `LinterDiagnosticCategory` within the flavor's tens block (`Flavor::lint_category_marker`) and
-// render as `Lint W9XNNN`, where 9 marks the Sui flavor and X is the shared category.
-//
-// Append-only: a lint's code is its index in this table, and rendered codes are a published
-// compatibility surface (see `lints!`).
+// Append-only: codes are positional and published (see `lints!`).
 lints!(
     SuiLintCode,
-    Flavor::Sui.lint_category_marker(),
+    lint_code_tag(Flavor::Sui),
     SUI_LINT_WARNING_FILTERS,
     (
         ShareOwned,
@@ -162,12 +157,9 @@ lints!(
 );
 
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
-    // `lint(all)` is registered by the core linter (`linters::known_filters`) as a wildcard over
-    // the whole `LINT_WARNING_PREFIX`, which covers the Sui lints too; don't register it again
-    // here or `filter_from_str` returns duplicate ids.
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
-        filters_from_table(SUI_LINT_WARNING_FILTERS),
+        filters_from_table(lint_code_tag(Flavor::Sui), SUI_LINT_WARNING_FILTERS),
     )
 }
 
@@ -216,25 +208,24 @@ pub fn type_abilities(sp!(_, st_): &SingleType) -> Option<E::AbilitySet> {
 mod tests {
     use super::*;
 
-    // Rendered lint codes are a published compatibility surface. If this test fails, an edit to
-    // the `lints!` table renumbered existing lints — append new entries at the end instead of
-    // reordering or inserting, and never change an existing entry's category.
+    // A failure means a table edit renumbered existing lints — append instead.
     #[test]
     fn sui_lint_code_assignments_are_stable() {
+        assert_eq!(lint_code_tag(Flavor::Sui), "S");
         let expected: &[(u8, u8, &str)] = &[
-            (92, 1, "share_owned"),
-            (94, 2, "self_transfer"),
-            (92, 3, "custom_state_change"),
-            (94, 4, "coin_field"),
-            (92, 5, "freeze_wrapped"),
-            (92, 6, "collection_equality"),
-            (92, 7, "public_random"),
-            (92, 8, "missing_key"),
-            (92, 9, "freezing_capability"),
-            (94, 10, "prefer_mut_tx_context"),
-            (91, 11, "public_entry"),
-            (90, 12, "uncallable_function"),
-            (92, 13, "unused_object_with_fields"),
+            (2, 1, "share_owned"),
+            (4, 2, "self_transfer"),
+            (2, 3, "custom_state_change"),
+            (4, 4, "coin_field"),
+            (2, 5, "freeze_wrapped"),
+            (2, 6, "collection_equality"),
+            (2, 7, "public_random"),
+            (2, 8, "missing_key"),
+            (2, 9, "freezing_capability"),
+            (4, 10, "prefer_mut_tx_context"),
+            (1, 11, "public_entry"),
+            (0, 12, "uncallable_function"),
+            (2, 13, "unused_object_with_fields"),
         ];
         assert_eq!(SUI_LINT_WARNING_FILTERS, expected);
     }

@@ -35,9 +35,7 @@ pub enum LintLevel {
     All,
 }
 
-/// Categories shared by every lint source (the core Move lints here and flavor-specific ones such
-/// as the Sui lints in `sui_mode::linters`). A lint's source is encoded in the tens digit of its
-/// diagnostic category (see `Flavor::lint_category_marker`), not in a category of its own.
+/// Categories shared by every lint source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LinterDiagnosticCategory {
@@ -48,36 +46,20 @@ pub enum LinterDiagnosticCategory {
     Style,
 }
 
-impl Flavor {
-    /// Each flavor owns one tens block of the lint diagnostic category space: a lint's category
-    /// is `marker + LinterDiagnosticCategory`, so the tens digit of a rendered code identifies
-    /// the lint's source (e.g. `Lint W94002` is a Sui-flavor Style lint) while the shared
-    /// categories stay comparable across sources. `Core` marks the flavor-independent lints,
-    /// which run for every flavor and sit at the base of the space. Disjoint blocks under the
-    /// common `Lint` prefix let filters (and, eventually, configuration such as
-    /// `lints.sui.suspicious` vs `lints.suspicious`) target one source's category without the
-    /// other's.
-    pub(crate) const fn lint_category_marker(self) -> u8 {
-        match self {
-            Flavor::Core => 0,
-            Flavor::Sui => 90,
-        }
+/// Each flavor's lints carry the flavor's letter in their rendered code, e.g. Sui's `Lint WS02001`.
+pub(crate) const fn lint_code_tag(flavor: Flavor) -> &'static str {
+    match flavor {
+        Flavor::Core => "",
+        Flavor::Sui => "S",
     }
 }
 
-/// Declares a lint table for one lint source: the lint code enum (`$enum_name`) and a
-/// `(category, code, filter_name)` table (`$filters_const`), plus `diag_info()` constructors.
-/// `$category_marker` is the source's offset into the diagnostic category space (its flavor's
-/// `lint_category_marker`) and is added to every entry's shared category (a bare
-/// `LinterDiagnosticCategory` variant name).
-///
-/// A lint's code is its declaration index in the table (starting at 1). Rendered codes (e.g.
-/// `Lint W04001`) are a published compatibility surface, so tables are append-only: never
-/// reorder entries or insert in the middle.
+/// Declares a lint code enum and its `(category, code, filter_name)` table for one lint source.
+/// Codes are positional and published — append-only, never reorder or insert.
 macro_rules! lints {
     (
         $enum_name:ident,
-        $category_marker:expr,
+        $code_tag:expr,
         $filters_const:ident,
         $(
             ($lint_name:ident, $category:ident, $filter_name:expr, $code_msg:expr)
@@ -92,13 +74,6 @@ macro_rules! lints {
             )*
         }
 
-        // The tens digit of a lint's diagnostic category identifies its source: markers sit on
-        // multiples of 10 and every shared category must fit within one tens block.
-        const _: () = {
-            assert!($category_marker % 10 == 0);
-            $(assert!(($crate::linters::LinterDiagnosticCategory::$category as u8) < 10);)*
-        };
-
         impl $enum_name {
             const fn category_code_and_message(&self) -> (u8, u8, &'static str) {
                 let code = *self as u8;
@@ -106,8 +81,7 @@ macro_rules! lints {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
                     $(Self::$lint_name => (
-                        $category_marker
-                            + $crate::linters::LinterDiagnosticCategory::$category as u8,
+                        $crate::linters::LinterDiagnosticCategory::$category as u8,
                         code,
                         $code_msg,
                     ),)*
@@ -120,8 +94,7 @@ macro_rules! lints {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
                     $(Self::$lint_name => (
-                        $category_marker
-                            + $crate::linters::LinterDiagnosticCategory::$category as u8,
+                        $crate::linters::LinterDiagnosticCategory::$category as u8,
                         code,
                         $filter_name,
                     ),)*
@@ -137,6 +110,7 @@ macro_rules! lints {
                     code,
                     msg,
                 )
+                .with_code_tag($code_tag)
             }
         }
 
@@ -151,7 +125,7 @@ pub(crate) use lints;
 
 lints!(
     CoreLintCode,
-    Flavor::Core.lint_category_marker(),
+    lint_code_tag(Flavor::Core),
     CORE_LINT_WARNING_FILTERS,
     (
         ConstantNaming,
@@ -232,30 +206,32 @@ pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub(crate) fn filters_from_table(
+    code_tag: &'static str,
     table: &[(u8, u8, &'static str)],
 ) -> Vec<(FilterName, Vec<DiagnosticsID>)> {
-    table
-        .iter()
-        .map(|(category, code, filter_name)| {
-            (
-                Symbol::from(*filter_name),
-                vec![DiagnosticsID::exact(
-                    Some(LINT_WARNING_PREFIX),
-                    *category,
-                    *code,
-                )],
-            )
-        })
-        .collect()
-}
-
-pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
-    let mut filters: Vec<(FilterName, Vec<DiagnosticsID>)> = vec![(
+    // The `all` wildcard spans code tags, so both lint sources register the same id for it;
+    // `add_custom_known_filters` dedups the second registration.
+    let mut filters = vec![(
         Symbol::from(crate::diagnostics::filter::FILTER_ALL),
         vec![DiagnosticsID::all(Some(LINT_WARNING_PREFIX))],
     )];
-    filters.extend(filters_from_table(CORE_LINT_WARNING_FILTERS));
-    (Some(ALLOW_ATTR_CATEGORY.into()), filters)
+    filters.extend(table.iter().map(|(category, code, filter_name)| {
+        (
+            Symbol::from(*filter_name),
+            vec![
+                DiagnosticsID::exact(Some(LINT_WARNING_PREFIX), *category, *code)
+                    .with_code_tag(code_tag),
+            ],
+        )
+    }));
+    filters
+}
+
+pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
+    (
+        Some(ALLOW_ATTR_CATEGORY.into()),
+        filters_from_table(lint_code_tag(Flavor::Core), CORE_LINT_WARNING_FILTERS),
+    )
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
@@ -285,11 +261,10 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
 mod tests {
     use super::*;
 
-    // Rendered lint codes are a published compatibility surface. If this test fails, an edit to
-    // the `lints!` table renumbered existing lints — append new entries at the end instead of
-    // reordering or inserting, and never change an existing entry's category.
+    // A failure means a table edit renumbered existing lints — append instead.
     #[test]
     fn core_lint_code_assignments_are_stable() {
+        assert_eq!(lint_code_tag(Flavor::Core), "");
         let expected: &[(u8, u8, &str)] = &[
             (4, 1, "constant_naming"),
             (4, 2, "while_true"),

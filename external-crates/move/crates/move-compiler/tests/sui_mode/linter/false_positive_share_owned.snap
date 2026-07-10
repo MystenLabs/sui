@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W92001]: possible owned object share
+warning[Lint WS02001]: possible owned object share
    ┌─ tests/sui_mode/linter/false_positive_share_owned.move:12:9
    │
  6 │     struct Obj has key, store {
@@ -22,7 +22,7 @@ warning[Lint W92001]: possible owned object share
    │
    = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W92001]: possible owned object share
+warning[Lint WS02001]: possible owned object share
    ┌─ tests/sui_mode/linter/false_positive_share_owned.move:42:9
    │
 30 │     fun make_obj(o: Obj2, ctx: &mut sui::tx_context::TxContext): Obj {

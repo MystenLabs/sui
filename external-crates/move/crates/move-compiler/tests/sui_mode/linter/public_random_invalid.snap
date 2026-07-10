@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W92007]: Risky use of 'sui::random'
+warning[Lint WS02007]: Risky use of 'sui::random'
   ┌─ tests/sui_mode/linter/public_random_invalid.move:8:42
   │
 8 │     public fun not_allowed1(_x: u64, _r: &Random) {}
@@ -15,7 +15,7 @@ warning[Lint W92007]: Risky use of 'sui::random'
   = Non-public functions are preferred
   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W92007]: Risky use of 'sui::random'
+warning[Lint WS02007]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:10:34
    │
 10 │     public fun not_allowed2(_rg: &RandomGenerator, _x: u64) {}
@@ -25,7 +25,7 @@ warning[Lint W92007]: Risky use of 'sui::random'
    = Non-public functions are preferred
    = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W92007]: Risky use of 'sui::random'
+warning[Lint WS02007]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:12:33
    │
 12 │     public fun not_allowed3(_r: &Random, _rg: &RandomGenerator, _x: u64) {}
@@ -35,7 +35,7 @@ warning[Lint W92007]: Risky use of 'sui::random'
    = Non-public functions are preferred
    = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W92007]: Risky use of 'sui::random'
+warning[Lint WS02007]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:12:47
    │
 12 │     public fun not_allowed3(_r: &Random, _rg: &RandomGenerator, _x: u64) {}
@@ -45,7 +45,7 @@ warning[Lint W92007]: Risky use of 'sui::random'
    = Non-public functions are preferred
    = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W92007]: Risky use of 'sui::random'
+warning[Lint WS02007]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:14:48
    │
 14 │     public entry fun not_allowed4(_x: u64, _r: &Random, _y: u64) {}
