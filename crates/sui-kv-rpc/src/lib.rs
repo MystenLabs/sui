@@ -390,6 +390,11 @@ impl KvRpcServer {
                     grpc_method_allowlist,
                 ),
             ))
+            .layer(
+                mysten_network::request_log::GrpcRequestLogLayer::from_encoded_file_descriptor_sets(
+                    file_descriptor_sets.iter().copied(),
+                )?,
+            )
             .add_service(LedgerServiceServer::new(self));
 
         if config.enable_reflection {
