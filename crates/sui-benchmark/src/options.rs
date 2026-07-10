@@ -254,8 +254,10 @@ pub enum RunSpec {
         // Number of workers
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [12])]
         num_workers: Vec<u64>,
-        // Max in-flight ratio
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
+        // Max in-flight ratio: bounds concurrency (and the payload/gas pool created at
+        // init) at target_qps * ratio, so it is the number of seconds of end-to-end
+        // latency a worker can absorb before its submission rate drops below target_qps.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [10])]
         in_flight_ratio: Vec<u64>,
 
         // Setting the duration of each benchmark. Benchmarks will run in sequence.
