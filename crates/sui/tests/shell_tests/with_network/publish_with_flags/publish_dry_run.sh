@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # use the Base58 form to check that Move.toml environments accept it as a chain ID
-chain_id=$(sui client --client.config $CONFIG chain-identifier | awk '/^Base58:/ {print $2}')
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=base58)
 echo "[environments]" >> test_pkg/Move.toml
 echo "localnet = \"$chain_id\"" >> test_pkg/Move.toml
 

@@ -1,7 +1,7 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-chain_id=$(sui client --client.config $CONFIG chain-identifier | awk '/^Hex:/ {print $2}')
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=hex)
 echo "[environments]" >> test_pkg/Move.toml
 echo "localnet = \"$chain_id\"" >> test_pkg/Move.toml
 

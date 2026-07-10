@@ -15,7 +15,7 @@
 #
 # We publish A, B, C, D, E in order
 
-chain_id=$(sui client --client.config $CONFIG chain-identifier | awk '/^Hex:/ {print $2}')
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=hex)
 
 add_env_to_toml() {
   echo "[environments]" >> $1/Move.toml

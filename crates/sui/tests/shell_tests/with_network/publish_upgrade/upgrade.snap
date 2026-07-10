@@ -9,7 +9,7 @@ source: crates/sui/tests/shell_tests.rs
 # Test an ephemeral upgrade workflow. We have
 # B --> A
 
-chain_id=$(sui client --client.config $CONFIG chain-identifier | awk '/^Hex:/ {print $2}')
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=hex)
 
 extract_published() {
   awk '

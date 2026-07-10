@@ -196,8 +196,14 @@ pub enum SuiClientCommands {
     /// Base58-encoded genesis checkpoint digest (as returned by the gRPC and GraphQL APIs) and
     /// the legacy hex short form. Either can be used as a chain ID in the `[environments]`
     /// section of `Move.toml`.
+    ///
+    /// Use --format=[base58|hex] to print only the specified format.
     #[clap(name = "chain-identifier")]
-    ChainIdentifier,
+    ChainIdentifier {
+        /// The format for chain identifier output, either base58 or hex.
+        #[clap(long, required = false)]
+        format: Option<ChainIdentifierFormat>,
+    },
 
     /// Query a dynamic field by its address.
     #[clap(name = "dynamic-field")]
@@ -801,6 +807,14 @@ pub struct UpgradeArgs {
 
     #[clap(flatten)]
     pub processing: TxProcessingArgs,
+}
+
+/// The format for chain identifier output, either base58 or hex.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChainIdentifierFormat {
+    Base58,
+    Hex,
 }
 
 /// Returns the pubfile path, or a default based on the environment alias if not specified
@@ -1541,11 +1555,33 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 SuiClientCommandResult::NoOutput
             }
-            SuiClientCommands::ChainIdentifier => {
+            SuiClientCommands::ChainIdentifier { format } => {
                 // Keep populating the client.yaml chain-id cache, as other commands rely on it.
                 let hex = context.cache_chain_id().await?;
                 let base58 = chain_id_base58(&context.get_chain_identifier().await?);
-                SuiClientCommandResult::ChainIdentifier(ChainIdentifierOutput { base58, hex })
+
+                match format {
+                    Some(ChainIdentifierFormat::Hex) => {
+                        return Ok(SuiClientCommandResult::ChainIdentifier(
+                            ChainIdentifierOutput {
+                                base58: "".to_string(),
+                                hex,
+                            },
+                        ));
+                    }
+                    Some(ChainIdentifierFormat::Base58) => {
+                        return Ok(SuiClientCommandResult::ChainIdentifier(
+                            ChainIdentifierOutput {
+                                base58,
+                                hex: "".to_string(),
+                            },
+                        ));
+                    }
+                    None => SuiClientCommandResult::ChainIdentifier(ChainIdentifierOutput {
+                        base58,
+                        hex,
+                    }),
+                }
             }
             SuiClientCommands::SplitCoin {
                 coin_id,
@@ -2331,10 +2367,6 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            SuiClientCommandResult::ChainIdentifier(ci) => {
-                writeln!(writer, "Base58: {}", ci.base58)?;
-                writeln!(writer, "Hex: {}", ci.hex)?;
-            }
             SuiClientCommandResult::Switch(response) => {
                 write!(writer, "{}", response)?;
             }
@@ -2467,6 +2499,9 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::DevInspect(response) => {
                 writeln!(f, "{}", Pretty(response))?;
+            }
+            SuiClientCommandResult::ChainIdentifier(ci) => {
+                write!(f, "{}", ci)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
@@ -2951,6 +2986,23 @@ impl Display for SwitchResponse {
         if let Some(env) = &self.env {
             writeln!(writer, "Active environment switched to [{env}]")?;
         }
+        write!(f, "{}", writer)
+    }
+}
+
+impl Display for ChainIdentifierOutput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+
+        if self.base58.is_empty() {
+            writeln!(writer, "{}", self.hex)?;
+        } else if self.hex.is_empty() {
+            writeln!(writer, "{}", self.base58)?;
+        } else {
+            writeln!(writer, "Base58: {}", self.base58)?;
+            writeln!(writer, "Hex: {}", self.hex)?;
+        }
+
         write!(f, "{}", writer)
     }
 }
