@@ -25,7 +25,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::query_options::ScanRange;
 use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -93,13 +93,7 @@ pub(crate) async fn list_transactions(
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
     let end_reason = tx_range.end_reason;
-    let terminal_watermark = terminal_boundary_watermark(
-        &options,
-        Position::Transactions {
-            checkpoint: tx_range.end_checkpoint,
-            tx_seq: tx_range.end_position,
-        },
-    );
+    let terminal_watermark = terminal_boundary_watermark(&options, tx_range.end_position);
     let tx_range = tx_range.range;
 
     if tx_range.is_empty() {
@@ -467,13 +461,13 @@ async fn resolve_tx_range(
     client: &BigTableClient,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedRange, RpcError> {
+) -> Result<ScanRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
     if cp_range.is_empty() {
         let tx_boundary =
             checkpoint_to_tx_boundary(client, cp_range.terminal_checkpoint(options.ordering))
                 .await?;
-        return Ok(cp_range.with_range(tx_boundary..tx_boundary, options.ordering));
+        return Ok(cp_range.with_tx_range(tx_boundary..tx_boundary, options.ordering));
     }
 
     let start_fut = {
@@ -497,7 +491,7 @@ async fn resolve_tx_range(
     };
 
     let (start_tx, end_tx) = tokio::try_join!(start_fut, end_fut)?;
-    Ok(options.apply_cursor_bounds(cp_range.with_range(start_tx..end_tx, options.ordering)))
+    Ok(options.apply_cursor_bounds(cp_range.with_tx_range(start_tx..end_tx, options.ordering)))
 }
 
 async fn checkpoint_to_tx_boundary(

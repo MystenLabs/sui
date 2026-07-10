@@ -33,7 +33,7 @@ use crate::grpc::v2::ledger_service::get_transaction::render_executed_transactio
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::query_options::ScanRange;
 use crate::ledger_history::watermark::advance_boundary_excluding_cp;
 use crate::ledger_history::watermark::frontier_boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
@@ -232,13 +232,7 @@ fn next_transaction_chunk(
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
                 let terminal = ChunkTerminal {
                     reason: tx_range.end_reason,
-                    watermark: terminal_boundary_watermark(
-                        &options,
-                        Position::Transactions {
-                            checkpoint: tx_range.end_checkpoint,
-                            tx_seq: tx_range.end_position,
-                        },
-                    ),
+                    watermark: terminal_boundary_watermark(&options, tx_range.end_position),
                 };
                 let range = tx_range.range;
                 if range.is_empty() {
@@ -508,16 +502,17 @@ fn resolve_tx_range(
     start_checkpoint: Option<u64>,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedRange, RpcError> {
+) -> Result<ScanRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
     if cp_range.is_empty() {
         let tx_boundary =
             checkpoint_to_tx_boundary(service, cp_range.terminal_checkpoint(options.ordering))?;
-        return Ok(cp_range.with_range(tx_boundary..tx_boundary, options.ordering));
+        return Ok(cp_range.with_tx_range(tx_boundary..tx_boundary, options.ordering));
     }
 
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved = options.apply_cursor_bounds(cp_range.with_range(tx_range, options.ordering));
+    let mut resolved =
+        options.apply_cursor_bounds(cp_range.with_tx_range(tx_range, options.ordering));
     if !resolved.range.is_empty() {
         let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
         let floor = lowest_available_tx_seq(service)?;

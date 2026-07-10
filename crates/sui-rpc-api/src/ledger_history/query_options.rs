@@ -72,11 +72,21 @@ pub struct ResolvedCheckpointRange {
     pub end_reason: QueryEndReason,
 }
 
+/// Scan window + terminal bookkeeping in the endpoint's scan space (checkpoint
+/// seq for `list_checkpoints`, tx seq for `list_transactions`): the resolved
+/// checkpoint window projected through the endpoint's coordinate translation,
+/// then clamped by the cursors' positions.
+///
+/// `end_position` is the terminal-watermark position — where the scan ends and
+/// where the natural-completion resume cursor points. When a cursor bounds the
+/// end of the window the stamp records the cursor's own position and
+/// `end_reason` becomes `CursorBound`, which is never emitted
+/// (`reached_range_end` excludes it), so cursor-derived stamps are
+/// bookkeeping-only.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ResolvedRange {
+pub struct ScanRange {
     pub range: Range<u64>,
-    pub end_checkpoint: u64,
-    pub end_position: u64,
+    pub end_position: Position,
     pub end_reason: QueryEndReason,
 }
 
@@ -87,11 +97,13 @@ pub struct EventScanBounds {
     pub hi: Bound<EventPosition>,
 }
 
+/// [`ScanRange`]'s event-space counterpart (`list_events`): the scan window is
+/// a pair of `Bound<EventPosition>`s instead of a half-open `Range<u64>`, so
+/// cursor clamping needs no ±1 arithmetic on the composite coordinate.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ResolvedEventRange {
+pub struct EventScanRange {
     pub bounds: EventScanBounds,
-    pub end_checkpoint: u64,
-    pub end_position: EventPosition,
+    pub end_position: Position,
     pub end_reason: QueryEndReason,
 }
 
@@ -196,90 +208,84 @@ impl QueryOptions {
         self.after.is_some()
     }
 
-    pub fn apply_cursor_bounds(&self, resolved: ResolvedRange) -> ResolvedRange {
+    pub fn apply_cursor_bounds(&self, resolved: ScanRange) -> ScanRange {
         if resolved.is_empty() {
             return resolved;
         }
 
         let mut start = resolved.range.start;
         let mut end = resolved.range.end;
-        let mut end_checkpoint = resolved.end_checkpoint;
         let mut end_position = resolved.end_position;
         let mut end_reason = resolved.end_reason;
         let mut cursor_terminal = None;
 
+        // CursorBound bookkeeping stamps record the cursor's own position (raw
+        // coordinate, not the ±1-adjusted scan bound). Terminal watermarks are
+        // only emitted on natural range completion, so the stamped coordinate
+        // is wire-invisible — same convention as the event lane.
         if let Some(cursor) = &self.after {
-            let position = u64_cursor_position(cursor);
+            let position = u64_position_coordinate(&cursor.position);
             let Some(after) = (match cursor.kind {
                 sui_rpc_cursor::CursorKind::Item => position.checked_add(1),
                 sui_rpc_cursor::CursorKind::Boundary => Some(position),
             }) else {
-                return ResolvedRange::empty_at(
-                    cursor.position.checkpoint(),
-                    position,
-                    QueryEndReason::CursorBound,
-                );
+                return ScanRange::empty_at(cursor.position, QueryEndReason::CursorBound);
             };
             if after >= start {
                 start = after;
                 if matches!(self.ordering, Ordering::Descending) || after >= end {
-                    cursor_terminal = Some((cursor.position.checkpoint(), after));
+                    cursor_terminal = Some(cursor.position);
                 }
                 if matches!(self.ordering, Ordering::Descending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = after;
+                    end_position = cursor.position;
                     end_reason = QueryEndReason::CursorBound;
                 }
             }
         }
 
         if let Some(cursor) = &self.before {
-            let position = u64_cursor_position(cursor);
+            let position = u64_position_coordinate(&cursor.position);
             if position <= end {
                 end = position;
                 if matches!(self.ordering, Ordering::Ascending) || position <= start {
-                    cursor_terminal = Some((cursor.position.checkpoint(), position));
+                    cursor_terminal = Some(cursor.position);
                 }
                 if matches!(self.ordering, Ordering::Ascending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = position;
+                    end_position = cursor.position;
                     end_reason = QueryEndReason::CursorBound;
                 }
             }
         }
 
         if start >= end {
-            if let Some((checkpoint, position)) = cursor_terminal {
-                end_checkpoint = checkpoint;
+            if let Some(position) = cursor_terminal {
                 end_position = position;
             }
             if self.after.is_some() || self.before.is_some() {
                 end_reason = QueryEndReason::CursorBound;
             }
-            ResolvedRange::empty_at(end_checkpoint, end_position, end_reason)
+            ScanRange::empty_at(end_position, end_reason)
         } else {
-            ResolvedRange {
+            ScanRange {
                 range: start..end,
-                end_checkpoint,
                 end_position,
                 end_reason,
             }
         }
     }
 
-    pub fn apply_event_cursor_bounds(&self, resolved: ResolvedEventRange) -> ResolvedEventRange {
+    pub fn apply_event_cursor_bounds(&self, resolved: EventScanRange) -> EventScanRange {
         if resolved.is_empty() {
             return resolved;
         }
 
         let mut bounds = resolved.bounds;
-        let mut end_checkpoint = resolved.end_checkpoint;
         let mut end_position = resolved.end_position;
         let mut end_reason = resolved.end_reason;
         let mut cursor_terminal = None;
 
         if let Some(cursor) = &self.after {
-            let position = event_cursor_position(cursor);
+            let position = event_position_coordinate(&cursor.position);
             let candidate = match cursor.kind {
                 sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
                 sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
@@ -291,18 +297,17 @@ impl QueryOptions {
                 };
                 bounds.lo = candidate;
                 if matches!(self.ordering, Ordering::Descending) || candidate_bounds.is_empty() {
-                    cursor_terminal = Some((cursor.position.checkpoint(), position));
+                    cursor_terminal = Some(cursor.position);
                 }
                 if matches!(self.ordering, Ordering::Descending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = position;
+                    end_position = cursor.position;
                     end_reason = QueryEndReason::CursorBound;
                 }
             }
         }
 
         if let Some(cursor) = &self.before {
-            let position = event_cursor_position(cursor);
+            let position = event_position_coordinate(&cursor.position);
             if hi_admits_upper_bound(bounds.hi, position) {
                 let candidate = Bound::Excluded(position);
                 let candidate_bounds = EventScanBounds {
@@ -311,33 +316,31 @@ impl QueryOptions {
                 };
                 bounds.hi = candidate;
                 if matches!(self.ordering, Ordering::Ascending) || candidate_bounds.is_empty() {
-                    cursor_terminal = Some((cursor.position.checkpoint(), position));
+                    cursor_terminal = Some(cursor.position);
                 }
                 if matches!(self.ordering, Ordering::Ascending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = position;
+                    end_position = cursor.position;
                     end_reason = QueryEndReason::CursorBound;
                 }
             }
         }
 
-        // CursorBound bookkeeping records the raw event coordinate rather than a
-        // packed successor. Terminal watermarks are only emitted for natural range
-        // completion, so this is wire-invisible; coordinate-adjacent event cursor
-        // pairs are left for the scan adapter to collapse to an empty packed range.
+        // CursorBound bookkeeping records the cursor's raw position rather than
+        // a packed successor. Terminal watermarks are only emitted for natural
+        // range completion, so this is wire-invisible; coordinate-adjacent event
+        // cursor pairs are left for the scan adapter to collapse to an empty
+        // packed range.
         if bounds.is_empty() {
-            if let Some((checkpoint, position)) = cursor_terminal {
-                end_checkpoint = checkpoint;
+            if let Some(position) = cursor_terminal {
                 end_position = position;
             }
             if self.after.is_some() || self.before.is_some() {
                 end_reason = QueryEndReason::CursorBound;
             }
-            ResolvedEventRange::empty_at(end_checkpoint, end_position, end_reason)
+            EventScanRange::empty_at(end_position, end_reason)
         } else {
-            ResolvedEventRange {
+            EventScanRange {
                 bounds,
-                end_checkpoint,
                 end_position,
                 end_reason,
             }
@@ -345,16 +348,19 @@ impl QueryOptions {
     }
 }
 
-fn u64_cursor_position(cursor: &CursorToken) -> u64 {
-    match cursor.position {
+/// The scan-space coordinate of a scalar-lane position (`list_checkpoints` /
+/// `list_transactions`).
+fn u64_position_coordinate(position: &Position) -> u64 {
+    match *position {
         Position::Checkpoints { checkpoint } => checkpoint,
         Position::Transactions { tx_seq, .. } => tx_seq,
         Position::Events { .. } => panic!("event queries must use apply_event_cursor_bounds"),
     }
 }
 
-fn event_cursor_position(cursor: &CursorToken) -> EventPosition {
-    match cursor.position {
+/// The scan-space coordinate of an event-lane position.
+fn event_position_coordinate(position: &Position) -> EventPosition {
+    match *position {
         Position::Events {
             tx_seq,
             event_index,
@@ -386,25 +392,42 @@ impl ResolvedCheckpointRange {
         }
     }
 
-    pub fn with_range(self, range: Range<u64>, ordering: Ordering) -> ResolvedRange {
-        let end_position = match ordering {
+    /// Project into `list_checkpoints` scan space, where the scan coordinate
+    /// IS the checkpoint: the terminal position is the window's terminal edge.
+    pub fn with_checkpoint_range(self, range: Range<u64>, ordering: Ordering) -> ScanRange {
+        let checkpoint = match ordering {
             Ordering::Ascending => range.end,
             Ordering::Descending => range.start,
         };
-        ResolvedRange {
+        ScanRange {
             range,
-            end_checkpoint: self.terminal_checkpoint(ordering),
-            end_position,
+            end_position: Position::Checkpoints { checkpoint },
+            end_reason: self.end_reason,
+        }
+    }
+
+    /// Project into `list_transactions` scan space: `range` is the tx window
+    /// the checkpoint window translated to; the terminal position pairs its
+    /// edge with the checkpoint window's terminal edge.
+    pub fn with_tx_range(self, range: Range<u64>, ordering: Ordering) -> ScanRange {
+        let checkpoint = self.terminal_checkpoint(ordering);
+        let tx_seq = match ordering {
+            Ordering::Ascending => range.end,
+            Ordering::Descending => range.start,
+        };
+        ScanRange {
+            range,
+            end_position: Position::Transactions { checkpoint, tx_seq },
             end_reason: self.end_reason,
         }
     }
 }
 
-impl ResolvedRange {
-    pub fn empty_at(end_checkpoint: u64, end_position: u64, end_reason: QueryEndReason) -> Self {
+impl ScanRange {
+    pub fn empty_at(end_position: Position, end_reason: QueryEndReason) -> Self {
+        let coordinate = u64_position_coordinate(&end_position);
         Self {
-            range: end_position..end_position,
-            end_checkpoint,
+            range: coordinate..coordinate,
             end_position,
             end_reason,
         }
@@ -474,15 +497,10 @@ impl EventScanBounds {
     }
 }
 
-impl ResolvedEventRange {
-    pub fn empty_at(
-        end_checkpoint: u64,
-        end_position: EventPosition,
-        end_reason: QueryEndReason,
-    ) -> Self {
+impl EventScanRange {
+    pub fn empty_at(end_position: Position, end_reason: QueryEndReason) -> Self {
         Self {
-            bounds: EventScanBounds::empty_at(end_position),
-            end_checkpoint,
+            bounds: EventScanBounds::empty_at(event_position_coordinate(&end_position)),
             end_position,
             end_reason,
         }
@@ -651,11 +669,13 @@ mod tests {
         QueryOptions::transactions_from_proto(request, 100, 1_000)
     }
 
-    fn resolved_range(range: Range<u64>) -> ResolvedRange {
-        ResolvedRange {
+    fn resolved_range(range: Range<u64>) -> ScanRange {
+        ScanRange {
             range,
-            end_checkpoint: 20,
-            end_position: 20,
+            end_position: Position::Transactions {
+                checkpoint: 20,
+                tx_seq: 20,
+            },
             end_reason: QueryEndReason::CheckpointBound,
         }
     }
@@ -825,7 +845,13 @@ mod tests {
         };
         assert_eq!(
             options.apply_cursor_bounds(resolved_range(10..20)),
-            ResolvedRange::empty_at(1, u64::MAX, QueryEndReason::CursorBound)
+            ScanRange::empty_at(
+                Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: u64::MAX,
+                },
+                QueryEndReason::CursorBound
+            )
         );
 
         let options = QueryOptions {
@@ -837,7 +863,15 @@ mod tests {
         let bounded = options.apply_cursor_bounds(resolved_range(10..20));
         assert_eq!(bounded.range, 12..19);
         assert_eq!(bounded.end_reason, QueryEndReason::CursorBound);
-        assert_eq!(bounded.end_position, 12);
+        // The stamp records the cursor's own position (raw coordinate, not the
+        // +1-adjusted scan bound) — wire-invisible under CursorBound.
+        assert_eq!(
+            bounded.end_position,
+            Position::Transactions {
+                checkpoint: 1,
+                tx_seq: 11,
+            }
+        );
 
         let options = QueryOptions {
             before: Some(tx_item(1, 12)),
@@ -845,7 +879,13 @@ mod tests {
         };
         assert_eq!(
             options.apply_cursor_bounds(resolved_range(10..20)),
-            ResolvedRange::empty_at(1, 12, QueryEndReason::CursorBound)
+            ScanRange::empty_at(
+                Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 12,
+                },
+                QueryEndReason::CursorBound
+            )
         );
     }
 

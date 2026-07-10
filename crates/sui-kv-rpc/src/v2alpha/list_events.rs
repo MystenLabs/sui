@@ -33,7 +33,7 @@ use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::EventPosition;
 use sui_rpc_api::ledger_history::query_options::EventScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::ResolvedEventRange;
+use sui_rpc_api::ledger_history::query_options::EventScanRange;
 use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -97,14 +97,7 @@ pub(crate) async fn list_events(
         .instrument(debug_span!("resolve_event_range"))
         .await?;
     let end_reason = event_range.end_reason;
-    let terminal_watermark = terminal_boundary_watermark(
-        &options,
-        Position::Events {
-            checkpoint: event_range.end_checkpoint,
-            tx_seq: event_range.end_position.tx_seq,
-            event_index: event_range.end_position.event_index,
-        },
-    );
+    let terminal_watermark = terminal_boundary_watermark(&options, event_range.end_position);
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -669,15 +662,18 @@ async fn resolve_event_range(
     client: &BigTableClient,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedEventRange, RpcError> {
+) -> Result<EventScanRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
     if cp_range.is_empty() {
         let tx_boundary =
             checkpoint_to_tx_boundary(client, cp_range.terminal_checkpoint(options.ordering))
                 .await?;
-        return Ok(ResolvedEventRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            EventPosition::start_of_tx(tx_boundary),
+        return Ok(EventScanRange::empty_at(
+            Position::Events {
+                checkpoint: cp_range.terminal_checkpoint(options.ordering),
+                tx_seq: tx_boundary,
+                event_index: 0,
+            },
             cp_range.end_reason,
         ));
     }
@@ -685,16 +681,16 @@ async fn resolve_event_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(options.apply_event_cursor_bounds(ResolvedEventRange {
+    let end_tx = match options.ordering {
+        sui_rpc_api::ledger_history::query_options::Ordering::Ascending => tx_range.end,
+        sui_rpc_api::ledger_history::query_options::Ordering::Descending => tx_range.start,
+    };
+    Ok(options.apply_event_cursor_bounds(EventScanRange {
         bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
-        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
-        end_position: match options.ordering {
-            sui_rpc_api::ledger_history::query_options::Ordering::Ascending => {
-                EventPosition::start_of_tx(tx_range.end)
-            }
-            sui_rpc_api::ledger_history::query_options::Ordering::Descending => {
-                EventPosition::start_of_tx(tx_range.start)
-            }
+        end_position: Position::Events {
+            checkpoint: cp_range.terminal_checkpoint(options.ordering),
+            tx_seq: end_tx,
+            event_index: 0,
         },
         end_reason: cp_range.end_reason,
     }))

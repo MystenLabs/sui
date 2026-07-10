@@ -34,7 +34,7 @@ use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::query_options::ScanRange;
 
 use super::bitmap_scan::LedgerBitmapKind;
 use super::bitmap_scan::PendingBitmapBucket;
@@ -224,12 +224,7 @@ fn next_checkpoint_chunk(
             }
             let terminal = ChunkTerminal {
                 reason: cp_range.end_reason,
-                watermark: terminal_boundary_watermark(
-                    &options,
-                    Position::Checkpoints {
-                        checkpoint: cp_range.end_position,
-                    },
-                ),
+                watermark: terminal_boundary_watermark(&options, cp_range.end_position),
             };
             let range = cp_range.range;
             if range.is_empty() {
@@ -615,10 +610,10 @@ fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, Rpc
     Ok(FieldMaskTree::from(read_mask))
 }
 
-fn resolve_cp_range(checkpoint_range: CheckpointRange, options: &QueryOptions) -> ResolvedRange {
+fn resolve_cp_range(checkpoint_range: CheckpointRange, options: &QueryOptions) -> ScanRange {
     let cp_range = checkpoint_range.resolve(options);
     let range = cp_range.range.clone();
-    options.apply_cursor_bounds(cp_range.with_range(range, options.ordering))
+    options.apply_cursor_bounds(cp_range.with_checkpoint_range(range, options.ordering))
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {

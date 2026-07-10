@@ -141,7 +141,7 @@ pub fn frontier_boundary_watermark(options: &QueryOptions, position: Position) -
 /// completion. Unlike per-item watermarks it can claim the range's final checkpoint complete —
 /// `end_checkpoint - 1` ascending (the exclusive cp upper) or `end_checkpoint` descending (the
 /// inclusive cp lower) — because no further items exist in it within the requested range. The
-/// `(end_checkpoint, end_position)` cursor resumes exactly past the scanned range.
+/// `end_position` cursor resumes exactly past the scanned range.
 pub fn terminal_boundary_watermark(options: &QueryOptions, end_position: Position) -> Watermark {
     let end_checkpoint = end_position.checkpoint();
     let boundary = if options.is_ascending() {
