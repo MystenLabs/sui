@@ -15,6 +15,12 @@ export class Tree {
     public type: string;
     public text: string;
     public isNamed: boolean;
+    /**
+     * Whether tree-sitter inserted this node to recover from a syntax error.
+     * Missing nodes carry the type of the expected token (e.g. `)`), so this
+     * flag is the only way to detect them.
+     */
+    public isMissing: boolean;
     public children: Tree[];
     public leadingComment: Comment[];
     public trailingComment: Comment | null;
@@ -54,6 +60,7 @@ export class Tree {
         this.type = node.type;
         this.text = node.text;
         this.isNamed = node.isNamed();
+        this.isMissing = node.isMissing();
         this.leadingComment = [];
         this.trailingComment = null;
         this.getParent = () => parent;
@@ -138,11 +145,14 @@ export class Tree {
      * A flag to skip formatting for a specific node. A manual instruction from
      * the user is `prettier-ignore`. When placed above (leading comment) a node,
      * it will skip formatting for that node.
+     *
+     * Only a comment that is exactly `// prettier-ignore` or
+     * `/* prettier-ignore *​/` counts — a comment merely mentioning
+     * `prettier-ignore` must not disable formatting.
      */
     get skipFormattingNode(): boolean {
-        return (
-            !!this.leadingComment.find((comment) => comment.text.includes('prettier-ignore')) ||
-            false
+        return this.leadingComment.some((comment) =>
+            /^(\/\/|\/\*)\s*prettier-ignore\s*(\*\/)?$/.test(comment.text.trim()),
         );
     }
 

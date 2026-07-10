@@ -15,10 +15,11 @@
 
 import * as path from 'path';
 import Parser = require('web-tree-sitter');
-import { print } from './printer';
+import { MoveOptions, print } from './printer';
 import { Tree } from './tree';
 import {
     Parser as PrettierParser,
+    ParserOptions,
     Printer,
     Plugin,
     SupportOption,
@@ -40,7 +41,7 @@ export const languages: SupportLanguage[] = [
 
 export const parsers: { [key: string]: PrettierParser } = {
     move: {
-        parse: (text: string): Promise<Node> => {
+        parse: (text: string, options: ParserOptions): Promise<Node> => {
             return (async (): Promise<Node> => {
                 await Parser.init();
                 const parser = new Parser();
@@ -48,7 +49,24 @@ export const parsers: { [key: string]: PrettierParser } = {
                     path.join(__dirname, '..', 'tree-sitter-move.wasm'),
                 );
                 parser.setLanguage(Lang);
-                return new Tree(parser.parse(text).rootNode);
+                const rootNode = parser.parse(text).rootNode;
+
+                // refuse to format sources that do not parse: printing a
+                // broken tree can silently drop or rewrite code, and printers
+                // that bypass recursion (raw-text passthrough, import
+                // grouping) cannot detect errors during printing. With
+                // `enableErrorDebug` the broken nodes are marked in the
+                // output instead.
+                if (!(options as MoveOptions).enableErrorDebug && rootNode.hasError()) {
+                    const context = findSyntaxError(rootNode) || rootNode;
+                    throw new Error(
+                        'tree-sitter failure on \n```\n' +
+                            (context.text || context.parent?.text || text) +
+                            '\n```',
+                    );
+                }
+
+                return new Tree(rootNode);
             })();
         },
 
@@ -57,6 +75,20 @@ export const parsers: { [key: string]: PrettierParser } = {
         locEnd: () => -1,
     },
 };
+
+/**
+ * Find the innermost node responsible for a parse failure — an `ERROR` node
+ * or a token tree-sitter inserted to recover (`isMissing`).
+ */
+function findSyntaxError(node: Parser.SyntaxNode): Parser.SyntaxNode | null {
+    if (node.type === 'ERROR' || node.isMissing()) return node;
+    for (const child of node.children) {
+        if (child.type === 'ERROR' || child.isMissing() || child.hasError()) {
+            return findSyntaxError(child) || child;
+        }
+    }
+    return null;
+}
 
 export const printers: { [key: string]: Printer } = {
     move: { print },
@@ -106,12 +138,12 @@ export const options: Record<string, SupportOption> = {
     },
 };
 
+// core prettier option defaults; plugin-specific options carry their
+// defaults in the `options` declarations above
 export const defaultOptions = {
     tabWidth: 4,
     useTabs: false,
     printWidth: 100,
-    useModuleLabel: false,
-    groupImports: 'module',
 };
 
 export default {

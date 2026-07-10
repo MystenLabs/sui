@@ -27,8 +27,6 @@ import Annotation from './cst/annotation';
 
 export type MoveOptions = ParserOptions & {
     wrapComments: boolean;
-    alwaysBreakConditionals: boolean;
-    alwaysBreakStructDefinition: boolean;
     useModuleLabel: boolean;
     enableErrorDebug: boolean;
     autoGroupImports: 'package' | 'module' | 'none';
@@ -51,7 +49,9 @@ export function print(path: AstPath<Node>, options: MoveOptions, print: printFn)
             }
         }
 
-        if (path.node.children.some((n) => n.type === 'MISSING')) {
+        // missing nodes carry the type of the token tree-sitter expected
+        // (e.g. `)`), so they are only detectable via the `isMissing` flag
+        if (path.node.children.some((n) => n.isMissing)) {
             if (options.enableErrorDebug) {
                 return ((path, options, print) => ['/* MISSING: */', path.node.text]) as treeFn;
             } else {
@@ -62,9 +62,14 @@ export function print(path: AstPath<Node>, options: MoveOptions, print: printFn)
         return null;
     };
 
-    // for unimplemented / not yet implemented nodes, we just return the node type
+    // nodes without a printer (e.g. spec blocks) are expected and are
+    // preserved verbatim; `enableErrorDebug` marks them in the output
     const defautCb: treeFn = (path, options, print) => {
-        return path.node.type;
+        if (options.enableErrorDebug && path.node.isNamed) {
+            return ['/* UNHANDLED: ' + path.node.type + ' */ ', path.node.text];
+        }
+
+        return path.node.text;
     };
 
     const fn =
