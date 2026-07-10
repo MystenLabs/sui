@@ -261,7 +261,7 @@ async fn list_transaction_digests_by_sender(rpc_url: &str, sender: SuiAddress) -
         .await
         .unwrap();
     let mut options = QueryOptions::default();
-    options.limit_items = Some(500);
+    options.limit = Some(500);
     let mut request = ListTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest"]));
     request.filter = Some(sender_filter(sender));

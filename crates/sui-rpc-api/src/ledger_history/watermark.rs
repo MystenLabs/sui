@@ -6,10 +6,10 @@
 //! Both ledger-history backends — the fullnode (`sui-rpc-api`) and bigtable
 //! (`sui-kv-rpc`) — and all three list handlers (`list_transactions`,
 //! `list_events`, `list_checkpoints`) emit the same wire `Watermark`: a resume
-//! cursor plus a direction-matching completion boundary (`checkpoint_hi`
-//! ascending / `checkpoint_lo` descending). The cursor encoding and the
-//! boundary bookkeeping are identical; what differs per API is how a scan
-//! position resolves into a completion-boundary candidate:
+//! cursor plus a completion boundary (`checkpoint`, the inclusive boundary
+//! checkpoint the scan has fully covered in the request's ordering direction).
+//! The cursor encoding and the boundary bookkeeping are identical; what differs
+//! per API is how a scan position resolves into a completion-boundary candidate:
 //!
 //! - `list_transactions` / `list_events` scan within a checkpoint, so an
 //!   item at cp `C` does NOT prove `C` complete (more matches may sit at
@@ -30,15 +30,12 @@ use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 
 use crate::ledger_history::query_options::QueryOptions;
 
-/// Populate the direction-matching field of a `Watermark` from the
-/// per-scan boundary value. Exactly one of `checkpoint_hi` /
-/// `checkpoint_lo` is set, never both.
-fn set_checkpoint_bound(wm: &mut Watermark, options: &QueryOptions, boundary: Option<u64>) {
-    if options.is_ascending() {
-        wm.checkpoint_hi = boundary;
-    } else {
-        wm.checkpoint_lo = boundary;
-    }
+/// Populate the completion-boundary `checkpoint` field of a `Watermark` from
+/// the per-scan boundary value. The value already carries the direction-correct
+/// meaning (inclusive upper bound ascending, inclusive lower bound descending);
+/// the single wire field records it regardless of ordering.
+fn set_checkpoint_bound(wm: &mut Watermark, boundary: Option<u64>) {
+    wm.checkpoint = boundary;
 }
 
 /// Fold an already-resolved completion-boundary `candidate` into the
@@ -98,7 +95,7 @@ pub fn item_watermark(
 ) -> Watermark {
     let mut wm = Watermark::default();
     wm.cursor = Some(options.cursor_for_item(cp, position));
-    set_checkpoint_bound(&mut wm, options, boundary);
+    set_checkpoint_bound(&mut wm, boundary);
     wm
 }
 
@@ -115,7 +112,7 @@ pub fn boundary_watermark(
 ) -> Watermark {
     let mut wm = Watermark::default();
     wm.cursor = Some(options.cursor_for_boundary(cursor_cp, position));
-    set_checkpoint_bound(&mut wm, options, boundary);
+    set_checkpoint_bound(&mut wm, boundary);
     wm
 }
 
@@ -152,7 +149,7 @@ pub fn terminal_boundary_watermark(
     };
     let mut wm = Watermark::default();
     wm.cursor = Some(options.cursor_for_boundary(end_checkpoint, end_position));
-    set_checkpoint_bound(&mut wm, options, boundary);
+    set_checkpoint_bound(&mut wm, boundary);
     wm
 }
 
@@ -174,11 +171,11 @@ mod tests {
 
     fn options(ascending: bool) -> QueryOptions {
         let mut request = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();
-        request.ordering = if ascending {
+        request.ordering = Some(if ascending {
             sui_rpc::proto::sui::rpc::v2alpha::Ordering::Ascending as i32
         } else {
             sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32
-        };
+        });
         QueryOptions::from_proto(Some(&request), 100, 100, QueryType::Transactions).unwrap()
     }
 
@@ -234,39 +231,36 @@ mod tests {
         );
     }
 
-    /// Ascending stores the boundary in `checkpoint_hi`; descending in
-    /// `checkpoint_lo`. A client reads the direction-correct bound off the
-    /// wire frame without knowing the request's ordering.
+    /// The direction-correct boundary is recorded in the single `checkpoint`
+    /// field regardless of ordering. A client reads the bound off the wire
+    /// frame and interprets it per the request's ordering.
     #[test]
     fn item_watermark_sets_direction_matching_bound() {
         let asc = options(true);
         let wm = item_watermark(&asc, 9, 42, Some(8));
-        assert_eq!(wm.checkpoint_hi, Some(8));
-        assert_eq!(wm.checkpoint_lo, None);
+        assert_eq!(wm.checkpoint, Some(8));
         assert_eq!(wm.cursor.as_ref(), Some(&asc.cursor_for_item(9, 42)));
 
         let desc = options(false);
         let wm = item_watermark(&desc, 9, 42, Some(10));
-        assert_eq!(wm.checkpoint_hi, None);
-        assert_eq!(wm.checkpoint_lo, Some(10));
+        assert_eq!(wm.checkpoint, Some(10));
     }
 
     /// On natural completion the terminal frame claims the range's final
     /// checkpoint complete: ascending uses `end_checkpoint - 1` and resumes
     /// from `(end_checkpoint, end_position)`; descending stores the range's
-    /// lowest checkpoint (inclusive) in `checkpoint_lo`.
+    /// lowest checkpoint (inclusive). Both land in the single `checkpoint`
+    /// field.
     #[test]
     fn terminal_boundary_watermark_claims_final_checkpoint() {
         let asc = options(true);
         let wm = terminal_boundary_watermark(&asc, 10, 100);
-        assert_eq!(wm.checkpoint_hi, Some(9));
-        assert_eq!(wm.checkpoint_lo, None);
+        assert_eq!(wm.checkpoint, Some(9));
         assert_eq!(wm.cursor.as_ref(), Some(&asc.cursor_for_boundary(10, 100)));
 
         let desc = options(false);
         let wm = terminal_boundary_watermark(&desc, 10, 100);
-        assert_eq!(wm.checkpoint_lo, Some(10));
-        assert_eq!(wm.checkpoint_hi, None);
+        assert_eq!(wm.checkpoint, Some(10));
         assert_eq!(wm.cursor.as_ref(), Some(&desc.cursor_for_boundary(10, 100)));
     }
 
