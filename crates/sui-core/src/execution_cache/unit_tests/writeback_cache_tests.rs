@@ -164,8 +164,6 @@ impl Scenario {
             markers: Default::default(),
             wrapped: Default::default(),
             deleted: Default::default(),
-            locks_to_delete: Default::default(),
-            new_locks_to_init: Default::default(),
             written: Default::default(),
         }
     }
@@ -220,9 +218,6 @@ impl Scenario {
     pub fn with_child(&mut self, short_id: u32, owner: u32) {
         let owner_id = self.id_map.get(&owner).expect("no such object");
         let object = Self::new_child(*owner_id);
-        self.outputs
-            .new_locks_to_init
-            .push(object.compute_object_reference());
         let id = object.id();
         assert!(self.id_map.insert(short_id, id).is_none());
         self.outputs.written.insert(id, object.clone());
@@ -233,9 +228,6 @@ impl Scenario {
         // for every id in short_ids, create an object with that id if it doesn't exist
         for short_id in short_ids {
             let object = Self::new_object();
-            self.outputs
-                .new_locks_to_init
-                .push(object.compute_object_reference());
             let id = object.id();
             assert!(self.id_map.insert(*short_id, id).is_none());
             self.outputs.written.insert(id, object.clone());
@@ -274,14 +266,8 @@ impl Scenario {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
-            self.outputs
-                .locks_to_delete
-                .push(object.compute_object_reference());
             let object = Self::inc_version_by(object, delta);
             self.objects.insert(*id, object.clone());
-            self.outputs
-                .new_locks_to_init
-                .push(object.compute_object_reference());
             self.outputs.written.insert(object.id(), object);
         }
     }
@@ -293,7 +279,6 @@ impl Scenario {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.remove(id).expect("object not found");
             let mut object_ref = object.compute_object_reference();
-            self.outputs.locks_to_delete.push(object_ref);
             // in the authority this would be set to the lamport version of the tx
             object_ref.1.increment();
             self.outputs.deleted.push(object_ref.into());
@@ -307,7 +292,6 @@ impl Scenario {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
             let mut object_ref = object.compute_object_reference();
-            self.outputs.locks_to_delete.push(object_ref);
             // in the authority this would be set to the lamport version of the tx
             object_ref.1.increment();
             self.outputs.wrapped.push(object_ref.into());
@@ -316,16 +300,16 @@ impl Scenario {
 
     pub fn with_received(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, that
-        // it has a new lock (which proves it was mutated) and then write a received
-        // marker for it
+        // it has been written at its current version (which proves it was mutated) and
+        // then write a received marker for it
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
-            self.outputs
-                .new_locks_to_init
-                .iter()
-                .find(|o| **o == object.compute_object_reference())
-                .expect("received object must have new lock");
+            assert_eq!(
+                self.outputs.written.get(id),
+                Some(&object),
+                "received object must have been mutated"
+            );
             self.outputs.markers.push((
                 object.compute_full_object_reference().into(),
                 MarkerValue::Received,
