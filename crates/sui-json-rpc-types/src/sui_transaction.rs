@@ -1933,6 +1933,7 @@ impl SuiProgrammableTransactionBlock {
             Ok(layouts) => layouts,
             Err(_) => vec![None; value.inputs.len()],
         };
+
         let ProgrammableTransaction { inputs, commands } = value;
         Ok(SuiProgrammableTransactionBlock {
             inputs: inputs
