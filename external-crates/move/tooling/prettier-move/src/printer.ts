@@ -31,7 +31,7 @@ export type MoveOptions = ParserOptions & {
     alwaysBreakStructDefinition: boolean;
     useModuleLabel: boolean;
     enableErrorDebug: boolean;
-    autoGroupImports: 'package' | 'module';
+    autoGroupImports: 'package' | 'module' | 'none';
 };
 
 export type printFn = (path: AstPath) => Doc;

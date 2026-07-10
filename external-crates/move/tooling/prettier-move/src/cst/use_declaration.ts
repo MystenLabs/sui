@@ -156,15 +156,31 @@ export function printUseMember(path: AstPath<Node>, options: MoveOptions, print:
 
     const children = path.map(print, 'nonFormattingChildren');
 
-    return group([
-        children[0]!,
-        '::{',
-        indent(softline),
-        indent(join([',', line], children.slice(1))),
-        ifBreak(','), // trailing comma
-        softline,
-        '}',
-    ]);
+    return group(
+        [
+            children[0]!,
+            '::{',
+            indent(softline),
+            indent(join([',', line], children.slice(1))),
+            ifBreak(','), // trailing comma
+            softline,
+            '}',
+        ],
+        // comments inside the braces only render correctly on separate lines
+        { shouldBreak: membersContainComments(path.node) },
+    );
+}
+
+/**
+ * Whether any member inside the braces (or a stray comment child) carries a
+ * comment. The first non-formatting child (the module identifier) is printed
+ * before the braces and is excluded.
+ */
+function membersContainComments(node: Node): boolean {
+    return (
+        node.nonFormattingChildren.slice(1).some((child) => child.containsComments) ||
+        node.namedChildren.some((child) => child.isComment)
+    );
 }
 
 /**
@@ -199,15 +215,19 @@ export function printUseModuleMembers(
     print: printFn,
 ): Doc {
     const children = path.map(print, 'nonFormattingChildren');
-    return group([
-        children[0]!,
-        '::{',
-        indent(softline),
-        indent(join([',', line], children.slice(1))),
-        ifBreak(','), // trailing comma
-        softline,
-        '}',
-    ]);
+    return group(
+        [
+            children[0]!,
+            '::{',
+            indent(softline),
+            indent(join([',', line], children.slice(1))),
+            ifBreak(','), // trailing comma
+            softline,
+            '}',
+        ],
+        // comments inside the braces only render correctly on separate lines
+        { shouldBreak: membersContainComments(path.node) },
+    );
 }
 
 /**

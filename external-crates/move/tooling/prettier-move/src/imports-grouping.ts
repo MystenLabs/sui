@@ -88,7 +88,7 @@ function printModule(mod: string, members: Member[]): Doc {
 
     // perform deduplication of imports
     members = members.filter((m) => {
-        const key = [mod, m.name, m.alias || '-'].join('');
+        const key = [mod, m.name, m.alias || '-'].join('\0');
         if (printedKeys.includes(key)) return false;
         printedKeys.push(key);
         return true;
@@ -193,7 +193,12 @@ export function collectImports(node: Node): GroupedImports {
             // to detect which version it is and then dance off of that.
             case UseDeclaration.UseModuleMembers: {
                 const children = import_.nonFormattingChildren;
-                const isGroupedByPackage = children[0]!.type === 'module_identifier';
+                // the package is a `module_identifier` for named addresses
+                // (`use sui::{...}`) and a `num_literal` for numeric ones
+                // (`use 0x2::{...}`)
+                const isGroupedByPackage = ['module_identifier', 'num_literal'].includes(
+                    children[0]!.type,
+                );
 
                 if (!isGroupedByPackage && children[0]!.type !== UseDeclaration.ModuleIdentity) {
                     throw new Error('Expected `module_identity` or `module_identifier`');

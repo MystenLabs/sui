@@ -70,7 +70,7 @@ function runSpec(filepath: string, content: string) {
 				let line = lines.shift();
 				if (line?.startsWith('// ')) {
 					let value =
-						/(printWidth|wrapComments|tabWidth|useModuleLabel|autoGroupImports)\:\ (true|module|package|[0-9]+)/.exec(
+						/(printWidth|wrapComments|tabWidth|useModuleLabel|autoGroupImports)\:\ (true|false|module|package|none|[0-9]+)/.exec(
 							line,
 						);
 					if (value) {

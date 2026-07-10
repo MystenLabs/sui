@@ -79,6 +79,10 @@ export const options: Record<string, SupportOption> = {
                 description:
                     'Group imports by module eg\n`use sui::balance::Balance;\nuse sui::coin::Coin`',
             },
+            {
+                value: 'none',
+                description: 'Do not group imports, keep them as written.',
+            },
         ],
     },
     wrapComments: {

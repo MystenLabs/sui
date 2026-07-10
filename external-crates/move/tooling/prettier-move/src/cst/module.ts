@@ -145,23 +145,37 @@ const separatedMembers = [
  * print them at the top of the module.
  */
 function printModuleBody(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
+    const groupImports = options.autoGroupImports !== 'none';
     const nodes = path.node.namedAndEmptyLineChildren;
     const importsDoc = [] as Doc[];
-    const imports = collectImports(path.node);
-    if (imports.size > 0) {
-        importsDoc.push(
-            ...(printImports(imports, options.autoGroupImports as 'package' | 'module') as Doc[]),
-        );
+
+    if (groupImports) {
+        const imports = collectImports(path.node);
+        if (imports.size > 0) {
+            importsDoc.push(
+                ...(printImports(
+                    imports,
+                    options.autoGroupImports as 'package' | 'module',
+                ) as Doc[]),
+            );
+        }
     }
 
     const bodyDoc = [] as Doc[];
 
-    path.each((path, i) => {
-        const next = nodes[i + 1];
+    // grouped imports are printed separately at the top of the module, so
+    // they are skipped in the body, along with their adjacent empty lines
+    const isSkipped = (node: Node) =>
+        groupImports &&
+        (node.isGroupedImport ||
+            (node.isEmptyLine && (node.previousNamedSibling?.isGroupedImport || false)));
 
-        // empty lines should be removed if they are next to grouped imports
-        if (path.node.isEmptyLine && path.node.previousNamedSibling?.isGroupedImport) return;
-        if (path.node.isGroupedImport) return;
+    path.each((path, i) => {
+        // the empty-line separation rules must look at the next node that is
+        // actually printed, not at a skipped (hoisted) import
+        const next = nodes.slice(i + 1).find((n) => !isSkipped(n));
+
+        if (isSkipped(path.node)) return;
         if (path.node.isEmptyLine && !path.node.previousNamedSibling) return;
 
         if (

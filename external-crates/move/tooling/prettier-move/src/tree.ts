@@ -208,12 +208,27 @@ export class Tree {
     }
 
     /**
+     * Whether this node or any of its descendants carries a comment (assigned
+     * as leading/trailing, or still present as a comment child).
+     */
+    get containsComments(): boolean {
+        return (
+            this.leadingComment.length > 0 ||
+            this.trailingComment !== null ||
+            this.children.some((child) => child.isComment || child.containsComments)
+        );
+    }
+
+    /**
      * Important part of the `imports-grouping` functionality. This flag is used to
      * determine whether a node is an `use_module`, `use_module_members` or
      * `use_module_member` node to skip their printing if they're printed as grouped.
+     *
+     * Imports with annotations or comments are excluded from grouping: grouping
+     * rebuilds imports from names only and cannot reproduce them.
      */
     get isGroupedImport(): boolean {
-        return isUseImport(this) && !this.hasAnnotation;
+        return isUseImport(this) && !this.hasAnnotation && !this.containsComments;
     }
 
     /**
