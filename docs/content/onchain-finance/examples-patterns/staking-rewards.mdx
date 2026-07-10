@@ -21,7 +21,7 @@ The same contract works for yield farming, liquidity mining, fee and revenue sha
 
 :::info
 
-"Staking" in this context refers to the DeFi yield-farming pattern (deposit tokens, earn rewards), not proof-of-stake consensus staking.
+`Staking` in this context refers to the DeFi yield-farming pattern (deposit tokens, earn rewards), not proof-of-stake consensus staking.
 
 :::
 
@@ -53,11 +53,11 @@ This example teaches:
 
 - **Capability-gated administration:** An `AdminCap` object authorizes pool operations like funding rewards and pausing. The cap can be transferred to a multisig or burned to make the pool permanently immutable.
 
-- **Composable function signatures:** Every public function returns its results (capabilities, receipts, coins) instead of transferring internally, making the contract fully composable in [programmable transaction blocks](/develop/transaction-building/ptb).
+- **Composable function signatures:** Every public function returns its results (capabilities, receipts, coins) instead of transferring internally, making the contract fully composable in [programmable transaction blocks](/develop/transactions/ptbs/prog-txn-blocks).
 
 ## Architecture
 
-The contract creates three on-chain object types with distinct ownership models.
+The contract creates three onchain object types with distinct ownership models.
 
 | Object | Abilities | Ownership | Created by | Destroyed by |
 |--------|-----------|-----------|------------|--------------|
@@ -228,7 +228,7 @@ $ sui client ptb \
 
 ### Unstake
 
-Fully exit your position. The receipt is consumed, and you receive your principal and any accrued rewards.
+Fully exit your position. The function consumes the receipt, and you receive your principal and any accrued rewards.
 
 ```bash
 $ sui client ptb \
@@ -285,7 +285,7 @@ The following security properties are important when deploying or extending this
 
 - **Receipt transfer footgun:** Receipts are transferable by design, but a transfer carries accounting state with it. Any rewards accrued but not yet checkpointed go to the new owner. Senders should call `claim_rewards` immediately before transferring.
 
-- **Admin cap lifecycle:** Burning the `AdminCap` via `destroy_admin_cap` makes the pool permanently immutable. Verify the pool is unpaused and holds no surplus you need to recover before burning.
+- **Admin cap lifecycle:** Burning the `AdminCap` through `destroy_admin_cap` makes the pool permanently immutable. Verify the pool is unpaused and holds no surplus you need to recover before burning.
 
 - **Rounding behavior:** Accumulator increments floor at each update. With an extremely low reward rate against a very large total stake, per-update increments can floor to zero. Keep the reward rate (per-ms, in base units) comfortably above `total_staked / 10^18`.
 
@@ -310,17 +310,17 @@ For a hands-on exercise exploring what happens when a staking contract gets the 
 | Function | Parameters | Returns | Description |
 |----------|-----------|---------|-------------|
 | `create_pool<S, R>` | `ctx` | `AdminCap<S, R>` | Create and share a new pool. Returns the `AdminCap`. Permissionless. |
-| `notify_reward_amount` | `cap`, `pool`, `reward_coin`, `duration_ms`, `clock` | — | Fund the pool and start or restart the emission window. Derives the rate from amount and duration. Solvency-checked. |
+| `notify_reward_amount` | `cap`, `pool`, `reward_coin`, `duration_ms`, `clock` | (none) | Fund the pool and start or restart the emission window. Derives the rate from amount and duration. Solvency-checked. |
 | `admin_withdraw_unused_rewards` | `cap`, `pool`, `clock`, `ctx` | `Coin<R>` | Recover leftover reward tokens after the emission window ends and all stakers unstake. |
-| `set_paused` | `cap`, `pool`, `paused` | — | Pause or unpause the pool. Pausing blocks `stake` and `stake_more` but keeps `unstake`, `unstake_partial`, and `claim_rewards` open. |
-| `destroy_admin_cap` | `cap` | — | Burn the cap permanently. The pool becomes immutable. |
+| `set_paused` | `cap`, `pool`, `paused` | (none) | Pause or unpause the pool. Pausing blocks `stake` and `stake_more` but keeps `unstake`, `unstake_partial`, and `claim_rewards` open. |
+| `destroy_admin_cap` | `cap` | (none) | Burn the cap permanently. The pool becomes immutable. |
 
 ### User functions
 
 | Function | Parameters | Returns | Description |
 |----------|-----------|---------|-------------|
 | `stake` | `pool`, `coin`, `clock`, `ctx` | `StakeReceipt<S, R>` | Deposit tokens. Returns the receipt. |
-| `stake_more` | `pool`, `receipt`, `coin`, `clock` | — | Add tokens to an existing position. Checkpoints rewards first. |
+| `stake_more` | `pool`, `receipt`, `coin`, `clock` | (none) | Add tokens to an existing position. Checkpoints rewards first. |
 | `claim_rewards` | `pool`, `receipt`, `clock`, `ctx` | `Coin<R>` | Withdraw earned rewards. Receipt stays active. |
 | `unstake` | `pool`, `receipt`, `clock`, `ctx` | `(Coin<S>, Coin<R>)` | Full withdrawal. Consumes the receipt. |
 | `unstake_partial` | `pool`, `receipt`, `amount`, `clock`, `ctx` | `(Coin<S>, Coin<R>)` | Partial withdrawal. Returns freed principal and accrued rewards. Receipt stays active. |
@@ -378,7 +378,7 @@ The following sections address common issues with this example.
 
 **Symptom:** A user function aborts with error code 7.
 
-**Cause:** The `StakeReceipt` was minted by a different pool than the one being called. This can happen when multiple pools share the same `<S, R>` type pair.
+**Cause:** A different pool minted the `StakeReceipt` than the one being called. This can happen when multiple pools share the same `<S, R>` type pair.
 
 **Fix:** Verify the receipt's pool ID matches the pool you are interacting with. Use `receipt_pool_id` to check.
 
