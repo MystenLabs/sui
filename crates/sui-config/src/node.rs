@@ -1446,12 +1446,6 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_admission_queue_capacity_fraction")]
     pub admission_queue_capacity_fraction: f64,
 
-    // Fraction of max_pending_transactions below which the admission queue is
-    // bypassed (transactions are submitted directly to consensus). Above this
-    // threshold, transactions go through the priority queue.
-    #[serde(default = "default_admission_queue_bypass_fraction")]
-    pub admission_queue_bypass_fraction: f64,
-
     // Enables use of a gas-price-based priority queue for load shedding of
     // transactions at admission time. If false, when consensus is saturated, transactions
     // are rejected with TooManyTransactionsPendingConsensus.
@@ -1510,10 +1504,6 @@ fn default_admission_queue_capacity_fraction() -> f64 {
     0.5
 }
 
-fn default_admission_queue_bypass_fraction() -> f64 {
-    0.9
-}
-
 fn default_admission_queue_enabled() -> bool {
     true
 }
@@ -1538,7 +1528,6 @@ impl Default for AuthorityOverloadConfig {
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),
             admission_queue_capacity_fraction: default_admission_queue_capacity_fraction(),
-            admission_queue_bypass_fraction: default_admission_queue_bypass_fraction(),
             admission_queue_enabled: default_admission_queue_enabled(),
             admission_queue_failover_timeout: default_admission_queue_failover_timeout(),
         }
