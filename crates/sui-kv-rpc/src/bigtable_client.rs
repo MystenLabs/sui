@@ -347,9 +347,18 @@ impl BigTableClient {
             .map_err(|_| RpcError::new(tonic::Code::Internal, "request concurrency limiter closed"))
     }
 
-    async fn tx_seq_checkpoint(&self, tx_seq: u64) -> Result<Option<u64>, RpcError> {
-        let pairs = self.resolve_tx_checkpoints(&[tx_seq]).await?;
-        Ok(pairs.into_iter().next().map(|(_, cp)| cp))
+    async fn tx_seq_checkpoint(&self, tx_seq: u64) -> Result<u64, RpcError> {
+        self.resolve_tx_checkpoints(&[tx_seq])
+            .await?
+            .into_iter()
+            .next()
+            .map(|(_, cp)| cp)
+            .ok_or_else(|| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("missing checkpoint mapping for transaction sequence number {tx_seq}"),
+                )
+            })
     }
 
     /// Build a resolver closure for tx-bitmap watermarks (identity
@@ -373,6 +382,7 @@ impl BigTableClient {
                 client
                     .tx_seq_checkpoint(lookup_tx_seq)
                     .await
+                    .map(Some)
                     .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
@@ -403,6 +413,7 @@ impl BigTableClient {
                 client
                     .tx_seq_checkpoint(lookup_tx_seq)
                     .await
+                    .map(Some)
                     .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }

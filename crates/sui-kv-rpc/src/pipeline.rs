@@ -942,15 +942,11 @@ pub(crate) enum ResolvedWatermarked<T, P = u64> {
 /// Terminal outcome from [`resolve_scan_watermarks`].
 ///
 /// A scan limit carries the authoritative terminal position in the same
-/// domain as ordinary watermark frames and the checkpoint resolution for
-/// that exact position. `None` is a completed resolver result, not an
-/// unresolved position.
+/// domain as ordinary watermark frames and the checkpoint covered by that
+/// frontier. A terminal frontier without a checkpoint is a storage fault.
 #[derive(Debug)]
 pub(crate) enum ResolvedScanStop<P> {
-    ScanLimit {
-        position: P,
-        checkpoint: Option<u64>,
-    },
+    ScanLimit { position: P, checkpoint: u64 },
     Cancelled,
     Fault(anyhow::Error),
 }
@@ -960,9 +956,9 @@ pub(crate) enum ResolvedScanStop<P> {
 ///
 /// While the source is running, the scheduler lets items cancel in-flight and
 /// pending watermark lookups and coalesces newer watermarks in one pending slot.
-/// clean EOF, scan limit, cancellation, fault — funnel through one epilogue
-/// that drains the in-flight and pending lookups in source order before
-/// emitting the terminal.
+/// All four terminations — clean EOF, scan limit, cancellation, and fault —
+/// funnel through one epilogue that drains the in-flight and pending lookups in
+/// source order before emitting the terminal.
 ///
 /// The adapter retains the most recent completed resolution, including
 /// `None`. When the terminal frontier matches that result, or a lookup being
@@ -1132,7 +1128,12 @@ where
                     // Never resolved: the terminal position was coalesced
                     // away, item-cancelled, or simply new. One fresh lookup.
                     None => resolver(position).await.map_err(resolver_error)?,
-                };
+                }
+                .ok_or_else(|| {
+                    ResolvedScanStop::Fault(anyhow::anyhow!(
+                        "scan-limit frontier did not resolve to a checkpoint"
+                    ))
+                })?;
                 Err(ResolvedScanStop::ScanLimit {
                     position,
                     checkpoint,
@@ -2816,11 +2817,7 @@ mod tests {
         }
     }
 
-    fn assert_scan_limit(
-        frame: ResolvedWmFrame,
-        expected_position: u64,
-        expected_checkpoint: Option<u64>,
-    ) {
+    fn assert_scan_limit(frame: ResolvedWmFrame, expected_position: u64, expected_checkpoint: u64) {
         match frame {
             Err(ResolvedScanStop::ScanLimit {
                 position,
@@ -2834,7 +2831,10 @@ mod tests {
         }
     }
 
-    async fn assert_completed_lookup_reused(position: u64, checkpoint: Option<u64>) {
+    /// Once a watermark position has been resolved during normal stream
+    /// processing, a scan limit at that position must reuse the result.
+    #[tokio::test]
+    async fn resolve_scan_watermarks_reuses_completed_position_at_scan_limit() {
         let calls = Arc::new(AtomicUsize::new(0));
         let resolver_calls = calls.clone();
         let completed = Arc::new(Semaphore::new(0));
@@ -2844,43 +2844,49 @@ mod tests {
             let completed = resolver_completed.clone();
             Box::pin(async move {
                 completed.add_permits(1);
-                Ok(checkpoint)
+                Ok(Some(70))
             })
         });
 
-        fixture.watermark(position).await;
+        fixture.watermark(7).await;
         timeout(Duration::from_secs(1), completed.acquire())
             .await
             .expect("resolver lookup should complete")
             .expect("completion semaphore should stay open")
             .forget();
-        if let Some(checkpoint) = checkpoint {
-            assert_resolved_wm(fixture.next().await, position, checkpoint);
-        }
+        assert_resolved_wm(fixture.next().await, 7, 70);
 
-        fixture.scan_limit(position).await;
-        assert_scan_limit(fixture.next().await, position, checkpoint);
+        fixture.scan_limit(7).await;
+        assert_scan_limit(fixture.next().await, 7, 70);
 
         fixture.finish().await;
         assert_eq!(
             calls.load(Ordering::SeqCst),
             1,
-            "the terminal must reuse the completed resolver result, including None"
+            "the scan limit must reuse the completed watermark lookup"
         );
     }
 
-    /// Once a watermark position has been resolved during normal stream
-    /// processing, a scan limit at that position must reuse the result.
+    /// A resolver may return `None` for an ordinary watermark at the start of
+    /// an ascending scan, where no preceding transaction exists. A scan limit
+    /// must always have advanced to a transaction with a checkpoint, so `None`
+    /// at its terminal frontier is a fault rather than a valid terminal result.
     #[tokio::test]
-    async fn resolve_scan_watermarks_reuses_completed_position_at_scan_limit() {
-        assert_completed_lookup_reused(7, Some(70)).await;
-    }
+    async fn resolve_scan_watermarks_rejects_missing_terminal_checkpoint() {
+        let mut fixture = WmResolverFixture::new(move |_position| Box::pin(async { Ok(None) }));
 
-    /// `None` is a completed resolver result, not a cache miss. A scan limit at
-    /// the same position must reuse it even though no watermark frame was emitted.
-    #[tokio::test]
-    async fn resolve_scan_watermarks_reuses_completed_none_at_scan_limit() {
-        assert_completed_lookup_reused(11, None).await;
+        fixture.scan_limit(11).await;
+        match fixture.next().await {
+            Err(ResolvedScanStop::Fault(error)) => assert!(
+                error
+                    .to_string()
+                    .contains("scan-limit frontier did not resolve to a checkpoint"),
+                "unexpected fault: {error}"
+            ),
+            Err(_) => panic!("expected a missing-checkpoint fault"),
+            Ok(_) => panic!("expected a missing-checkpoint fault, got a success frame"),
+        }
+        fixture.finish().await;
     }
 
     /// A scan-limit position newer than the last resolved watermark position is
@@ -2898,7 +2904,7 @@ mod tests {
         assert_resolved_wm(fixture.next().await, 5, 50);
 
         fixture.scan_limit(8).await;
-        assert_scan_limit(fixture.next().await, 8, Some(80));
+        assert_scan_limit(fixture.next().await, 8, 80);
 
         fixture.finish().await;
         assert_eq!(
@@ -2950,7 +2956,7 @@ mod tests {
         // it or manufacture a reusable result.
         gate.release();
         fixture.scan_limit(5).await;
-        assert_scan_limit(fixture.next().await, 5, Some(50));
+        assert_scan_limit(fixture.next().await, 5, 50);
 
         fixture.finish().await;
         assert_eq!(
@@ -2994,7 +3000,7 @@ mod tests {
 
         gate.release();
         assert_resolved_wm(fixture.next().await, 5, 50);
-        assert_scan_limit(fixture.next().await, 5, Some(50));
+        assert_scan_limit(fixture.next().await, 5, 50);
 
         fixture.finish().await;
         assert_eq!(
@@ -3002,129 +3008,6 @@ mod tests {
             2,
             "the in-flight lookup must supply the terminal checkpoint"
         );
-    }
-
-    /// A matching completed terminal result must survive draining newer
-    /// in-flight and pending progress. The drain reuses the one-entry cache's
-    /// slot, so the terminal result has to be retained before that work begins.
-    #[tokio::test]
-    async fn resolve_scan_watermarks_retains_completed_terminal_through_drain() {
-        let calls_at_3 = Arc::new(AtomicUsize::new(0));
-        let calls_at_5 = Arc::new(AtomicUsize::new(0));
-        let calls_at_7 = Arc::new(AtomicUsize::new(0));
-        let gate = ResolverGate::new();
-        let resolver_calls_at_3 = calls_at_3.clone();
-        let resolver_calls_at_5 = calls_at_5.clone();
-        let resolver_calls_at_7 = calls_at_7.clone();
-        let resolver_gate = gate.clone();
-        let mut fixture = WmResolverFixture::new(move |position| {
-            match position {
-                3 => {
-                    resolver_calls_at_3.fetch_add(1, Ordering::SeqCst);
-                }
-                5 => {
-                    resolver_calls_at_5.fetch_add(1, Ordering::SeqCst);
-                }
-                7 => {
-                    resolver_calls_at_7.fetch_add(1, Ordering::SeqCst);
-                }
-                other => panic!("unexpected resolver position {other}"),
-            }
-            let gate = resolver_gate.clone();
-            Box::pin(async move {
-                if position == 5 {
-                    gate.block().await;
-                }
-                Ok(Some(position * 10))
-            })
-        });
-
-        fixture.watermark(3).await;
-        assert_resolved_wm(fixture.next().await, 3, 30);
-
-        fixture.watermark(5).await;
-        gate.wait_until_blocked().await;
-        fixture.watermark(7).await;
-        fixture.scan_limit(3).await;
-        assert_eq!(
-            calls_at_3.load(Ordering::SeqCst),
-            1,
-            "terminal arrival must retain the previously completed result"
-        );
-
-        gate.release();
-        assert_resolved_wm(fixture.next().await, 5, 50);
-        assert_resolved_wm(fixture.next().await, 7, 70);
-        assert_scan_limit(fixture.next().await, 3, Some(30));
-
-        fixture.finish().await;
-        assert_eq!(
-            calls_at_3.load(Ordering::SeqCst),
-            1,
-            "drain must not evict the retained terminal checkpoint"
-        );
-        assert_eq!(calls_at_5.load(Ordering::SeqCst), 1);
-        assert_eq!(calls_at_7.load(Ordering::SeqCst), 1);
-    }
-
-    /// A coalesced-away position never completed. If it later becomes the
-    /// authoritative terminal frontier, it must get its own resolution.
-    #[tokio::test]
-    async fn resolve_scan_watermarks_resolves_coalesced_position_when_terminal() {
-        let calls_at_5 = Arc::new(AtomicUsize::new(0));
-        let calls_at_7 = Arc::new(AtomicUsize::new(0));
-        let calls_at_9 = Arc::new(AtomicUsize::new(0));
-        let gate = ResolverGate::new();
-        let resolver_calls_at_5 = calls_at_5.clone();
-        let resolver_calls_at_7 = calls_at_7.clone();
-        let resolver_calls_at_9 = calls_at_9.clone();
-        let resolver_gate = gate.clone();
-        let mut fixture = WmResolverFixture::new(move |position| {
-            match position {
-                5 => {
-                    resolver_calls_at_5.fetch_add(1, Ordering::SeqCst);
-                }
-                7 => {
-                    resolver_calls_at_7.fetch_add(1, Ordering::SeqCst);
-                }
-                9 => {
-                    resolver_calls_at_9.fetch_add(1, Ordering::SeqCst);
-                }
-                other => panic!("unexpected resolver position {other}"),
-            }
-            let gate = resolver_gate.clone();
-            Box::pin(async move {
-                if position == 5 {
-                    gate.block().await;
-                }
-                Ok(Some(position * 10))
-            })
-        });
-
-        fixture.watermark(5).await;
-        gate.wait_until_blocked().await;
-        fixture.watermark(7).await;
-        fixture.watermark(9).await;
-        fixture.scan_limit(7).await;
-        assert_eq!(
-            calls_at_7.load(Ordering::SeqCst),
-            0,
-            "the coalesced position has not completed or even started"
-        );
-
-        gate.release();
-        assert_resolved_wm(fixture.next().await, 5, 50);
-        assert_resolved_wm(fixture.next().await, 9, 90);
-        assert_scan_limit(fixture.next().await, 7, Some(70));
-
-        fixture.finish().await;
-        assert_eq!(calls_at_5.load(Ordering::SeqCst), 1);
-        assert_eq!(
-            calls_at_7.load(Ordering::SeqCst),
-            1,
-            "the later-authoritative coalesced position needs one lookup"
-        );
-        assert_eq!(calls_at_9.load(Ordering::SeqCst), 1);
     }
 
     /// Item arriving during a WM lookup cancels it (the lookup future

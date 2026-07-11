@@ -315,16 +315,13 @@ pub(crate) async fn list_transactions(
                     position,
                     checkpoint: checkpoint_at_frontier,
                 }) => {
-                    let terminal_watermark_candidate =
-                        checkpoint_at_frontier.map(|checkpoint_at_frontier| {
-                            transaction_frontier_watermark(
-                                &options,
-                                direction,
-                                &mut covered_checkpoint_bound,
-                                position,
-                                checkpoint_at_frontier,
-                            )
-                        });
+                    let terminal_watermark_candidate = Some(transaction_frontier_watermark(
+                        &options,
+                        direction,
+                        &mut covered_checkpoint_bound,
+                        position,
+                        checkpoint_at_frontier,
+                    ));
                     let terminal_watermark = terminal_watermark_candidate
                         .filter(|candidate| latest_emitted_watermark.as_ref() != Some(candidate));
                     yield end_response(terminal_watermark, QueryEndReason::ScanLimit);
