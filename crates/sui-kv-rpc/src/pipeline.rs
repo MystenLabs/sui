@@ -517,9 +517,9 @@ pub(crate) type KeyedBatchOutput<I, K, V> = (I, Arc<HashMap<K, V>>);
 /// Convenience aliases for the marker-aware pipeline boundary types. Avoid
 /// repeating the deeply-nested `BoxStream<'static, Result<Watermarked<...>, _>>`
 /// at every signature. `E` is the pipeline's error type — `RpcError` for the
-/// non-eval handler chains, `ScanStop` for chains downstream of the
-/// bitmap evaluator (so the typed terminal survives in-band for the handler to
-/// match).
+/// non-eval handler chains, `ScanStop` for chains downstream of the bitmap
+/// evaluator (so the handler can receive and match the typed terminal as the
+/// stream's final error).
 pub(crate) type MarkedUpstream<I, E, P = u64> = BoxStream<'static, Result<Watermarked<I, P>, E>>;
 pub(crate) type MarkedKeyedUpstream<I, K, E, P = u64> = MarkedUpstream<(I, Vec<K>), E, P>;
 pub(crate) type MarkedKeyedDownstream<I, K, V, E, P = u64> =
@@ -942,9 +942,9 @@ pub(crate) enum ResolvedWatermarked<T, P = u64> {
 /// Terminal outcome from [`resolve_scan_watermarks`].
 ///
 /// A scan limit carries the authoritative terminal position in the same
-/// domain as in-band watermarks and the checkpoint resolution for that exact
-/// position. `None` is a completed resolver result, not an unresolved
-/// position.
+/// domain as ordinary watermark frames and the checkpoint resolution for
+/// that exact position. `None` is a completed resolver result, not an
+/// unresolved position.
 #[derive(Debug)]
 pub(crate) enum ResolvedScanStop<P> {
     ScanLimit {
@@ -955,11 +955,11 @@ pub(crate) enum ResolvedScanStop<P> {
     Fault(anyhow::Error),
 }
 
-/// Resolve in-band watermarks and the authoritative frontier carried by a
-/// terminal [`ScanStop::ScanLimit`].
+/// Resolve ordinary watermark frames and the authoritative frontier carried
+/// separately by a terminal [`ScanStop::ScanLimit`].
 ///
-/// Its in-band scheduler lets items cancel in-flight and pending lookups and
-/// coalesces newer watermarks in one pending slot. All four terminations —
+/// While the source is running, the scheduler lets items cancel in-flight and
+/// pending watermark lookups and coalesces newer watermarks in one pending slot.
 /// clean EOF, scan limit, cancellation, fault — funnel through one epilogue
 /// that drains the in-flight and pending lookups in source order before
 /// emitting the terminal.
@@ -1008,9 +1008,9 @@ where
         let mut lookup: Option<(P, std::pin::Pin<Box<Fut>>)> = None;
         let mut pending: Option<P> = None;
         // Latest completed lookup, including a completed `None`. One entry is
-        // enough: the stopping round commonly repeats the latest in-band
-        // frontier. Written only when an in-band lookup completes; read only
-        // by the terminal epilogue's snapshot.
+        // enough: the terminal scan limit commonly repeats the latest watermark
+        // position. Written only when a watermark-frame lookup completes; read
+        // only by the terminal epilogue's snapshot.
         let mut completed: Option<(P, Option<u64>)> = None;
         // Why upstream stopped; `None` after the loop means clean EOF.
         let mut stop: Option<ScanStop> = None;
@@ -2869,22 +2869,22 @@ mod tests {
         );
     }
 
-    /// Once an in-band resolution completes, a stopping round at that exact
-    /// position must reuse both the lookup and its checkpoint.
+    /// Once a watermark position has been resolved during normal stream
+    /// processing, a scan limit at that position must reuse the result.
     #[tokio::test]
     async fn resolve_scan_watermarks_reuses_completed_position_at_scan_limit() {
         assert_completed_lookup_reused(7, Some(70)).await;
     }
 
-    /// `None` is a completed resolver result, not a cache miss. The terminal
-    /// must reuse it even though the in-band lookup emitted no frame.
+    /// `None` is a completed resolver result, not a cache miss. A scan limit at
+    /// the same position must reuse it even though no watermark frame was emitted.
     #[tokio::test]
     async fn resolve_scan_watermarks_reuses_completed_none_at_scan_limit() {
         assert_completed_lookup_reused(11, None).await;
     }
 
-    /// A terminal frontier newer than the last completed in-band position is
-    /// genuinely fresh work and must be resolved exactly once.
+    /// A scan-limit position newer than the last resolved watermark position is
+    /// genuinely new work and must be resolved exactly once.
     #[tokio::test]
     async fn resolve_scan_watermarks_resolves_newer_scan_limit_once() {
         let calls = Arc::new(AtomicUsize::new(0));
@@ -2904,13 +2904,13 @@ mod tests {
         assert_eq!(
             calls.load(Ordering::SeqCst),
             2,
-            "one completed in-band lookup plus one fresh terminal lookup"
+            "one completed watermark lookup plus one fresh scan-limit lookup"
         );
     }
 
-    /// An Item outranks an in-band lookup. It must be dispatched while that
-    /// lookup is blocked, and the cancelled position remains unresolved if it
-    /// later becomes the authoritative terminal frontier.
+    /// An item takes priority over an in-progress watermark lookup. It must be
+    /// dispatched while that lookup is blocked, and the cancelled position
+    /// remains unresolved if a later scan limit names it as the terminal frontier.
     #[tokio::test]
     async fn resolve_scan_watermarks_item_cancels_lookup_and_terminal_retries() {
         let calls = Arc::new(AtomicUsize::new(0));
