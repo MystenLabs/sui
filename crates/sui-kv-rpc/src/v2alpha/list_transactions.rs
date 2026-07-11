@@ -310,28 +310,14 @@ pub(crate) async fn list_transactions(
                     )?;
                     yield watermark_response(watermark);
                 }
-                Err(ResolvedScanStop::ScanLimit {
-                    position,
-                    checkpoint: checkpoint_at_frontier,
-                }) => {
-                    let scan_frontier_watermark = transaction_frontier_watermark(
+                Err(stop) => {
+                    yield terminal_response_from_scan_stop(
+                        stop,
                         &options,
                         direction,
                         &mut covered_checkpoint_bound,
-                        position,
-                        checkpoint_at_frontier,
                     )?;
-                    yield end_response(scan_frontier_watermark, QueryEndReason::ScanLimit);
                     break QueryEndReason::ScanLimit;
-                }
-                Err(ResolvedScanStop::Cancelled) => {
-                    Err(RpcError::new(
-                        tonic::Code::Cancelled,
-                        ScanStop::Cancelled.to_string(),
-                    ))?;
-                }
-                Err(ResolvedScanStop::Fault(inner)) => {
-                    Err(RpcError::from(inner))?;
                 }
             }
         };
@@ -381,6 +367,34 @@ fn transaction_frontier_watermark(
         },
         *covered_checkpoint_bound,
     ))
+}
+
+fn terminal_response_from_scan_stop(
+    stop: ResolvedScanStop<u64>,
+    options: &QueryOptions,
+    direction: ScanDirection,
+    covered_checkpoint_bound: &mut Option<u64>,
+) -> Result<ListTransactionsResponse, RpcError> {
+    match stop {
+        ResolvedScanStop::ScanLimit {
+            position,
+            checkpoint,
+        } => Ok(end_response(
+            transaction_frontier_watermark(
+                options,
+                direction,
+                covered_checkpoint_bound,
+                position,
+                checkpoint,
+            )?,
+            QueryEndReason::ScanLimit,
+        )),
+        ResolvedScanStop::Cancelled => Err(RpcError::new(
+            tonic::Code::Cancelled,
+            ScanStop::Cancelled.to_string(),
+        )),
+        ResolvedScanStop::Fault(inner) => Err(RpcError::from(inner)),
+    }
 }
 
 async fn scan_tx_seq_digests(
@@ -632,6 +646,103 @@ mod tests {
         .encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
+    }
+
+    #[test]
+    fn scan_limit_terminal_frames_use_transaction_domain_in_both_directions() {
+        for (direction, position, checkpoint, initial_proof, expected_checkpoint, expected_proof) in [
+            (ScanDirection::Ascending, 0, None, None, 0, None),
+            (
+                ScanDirection::Descending,
+                u64::MAX,
+                None,
+                None,
+                u64::MAX,
+                None,
+            ),
+            (ScanDirection::Ascending, 50, Some(10), None, 10, Some(9)),
+            (ScanDirection::Descending, 50, Some(10), None, 11, Some(11)),
+            (
+                ScanDirection::Ascending,
+                50,
+                Some(10),
+                Some(15),
+                10,
+                Some(15),
+            ),
+            (
+                ScanDirection::Descending,
+                50,
+                Some(10),
+                Some(5),
+                11,
+                Some(5),
+            ),
+        ] {
+            let mut proto_options = ascending_options();
+            if !direction.is_ascending() {
+                proto_options.ordering =
+                    Some(sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32);
+            }
+            let options =
+                QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
+            let mut covered = initial_proof;
+            let response = terminal_response_from_scan_stop(
+                ResolvedScanStop::ScanLimit {
+                    position,
+                    checkpoint,
+                },
+                &options,
+                direction,
+                &mut covered,
+            )
+            .expect("representable transaction frontier");
+
+            assert!(response.transaction.is_none(), "terminal has no payload");
+            assert_eq!(
+                response.end.as_ref().map(|end| end.reason()),
+                Some(QueryEndReason::ScanLimit)
+            );
+            let watermark = response.watermark.expect("terminal watermark");
+            assert_eq!(
+                CursorToken::decode(watermark.cursor.as_deref().expect("cursor")).unwrap(),
+                CursorToken::boundary(Position::Transactions {
+                    checkpoint: expected_checkpoint,
+                    tx_seq: position,
+                })
+            );
+            assert_eq!(
+                watermark.checkpoint, expected_proof,
+                "terminal checkpoint proof must exactly preserve or advance coverage"
+            );
+            assert_eq!(
+                covered, expected_proof,
+                "accumulated checkpoint proof must match the emitted watermark"
+            );
+        }
+    }
+
+    #[test]
+    fn backend_fault_and_cancellation_return_status_without_query_end() {
+        let options =
+            QueryOptions::transactions_from_proto(Some(&ascending_options()), 10, 100).unwrap();
+        for (stop, expected_code) in [
+            (ResolvedScanStop::Cancelled, tonic::Code::Cancelled),
+            (
+                ResolvedScanStop::Fault(anyhow::anyhow!("injected backend fault")),
+                tonic::Code::Internal,
+            ),
+        ] {
+            let mut covered = None;
+            let error = terminal_response_from_scan_stop(
+                stop,
+                &options,
+                ScanDirection::Ascending,
+                &mut covered,
+            )
+            .expect_err("fault/cancellation must not produce a QueryEnd response");
+            assert_eq!(error.into_status_proto().code, expected_code as i32);
+        }
     }
 
     fn read_mask(paths: &[&str]) -> FieldMaskTree {

@@ -522,7 +522,18 @@ fn scan_event_watermark(
     frontier: EventPosition,
     ascending: bool,
 ) -> Result<Watermark, RpcError> {
-    let checkpoint = event_frontier_checkpoint(service, frontier, ascending)?;
+    event_frontier_watermark(
+        options,
+        frontier,
+        event_frontier_checkpoint(service, frontier, ascending)?,
+    )
+}
+
+fn event_frontier_watermark(
+    options: &QueryOptions,
+    frontier: EventPosition,
+    checkpoint: Option<u64>,
+) -> Result<Watermark, RpcError> {
     let boundary =
         checkpoint.and_then(|cp| advance_covered_bound_before_checkpoint(None, cp, options));
     let cursor_cp = scan_frontier_cursor_cp(checkpoint, frontier.tx_seq, options.scan_direction())
@@ -745,4 +756,115 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsRespo
     response.watermark = Some(watermark);
     response.end = Some(end);
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
+    use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
+    use sui_rpc_cursor::CursorToken;
+
+    fn options(ascending: bool) -> QueryOptions {
+        let mut proto = ProtoQueryOptions::default();
+        if !ascending {
+            proto.ordering = Some(Ordering::Descending as i32);
+        }
+        QueryOptions::events_from_proto(Some(&proto), 100, 100).unwrap()
+    }
+
+    #[test]
+    fn scan_limit_terminal_frames_are_directional_event_cursors() {
+        for (ascending, frontier, checkpoint, expected_position, expected_proof) in [
+            (
+                true,
+                EventPosition::from((0, 0)),
+                None,
+                Position::Events {
+                    checkpoint: 0,
+                    tx_seq: 0,
+                    event_index: 0,
+                },
+                None,
+            ),
+            (
+                true,
+                EventPosition::from((41, 3)),
+                Some(7),
+                Position::Events {
+                    checkpoint: 7,
+                    tx_seq: 41,
+                    event_index: 3,
+                },
+                Some(6),
+            ),
+            (
+                true,
+                EventPosition::from((42, 1)),
+                Some(9),
+                Position::Events {
+                    checkpoint: 9,
+                    tx_seq: 42,
+                    event_index: 1,
+                },
+                Some(8),
+            ),
+            (
+                false,
+                EventPosition::from((u64::MAX, u32::MAX)),
+                None,
+                Position::Events {
+                    checkpoint: u64::MAX,
+                    tx_seq: u64::MAX,
+                    event_index: u32::MAX,
+                },
+                None,
+            ),
+            (
+                false,
+                EventPosition::from((19, 4)),
+                Some(7),
+                Position::Events {
+                    checkpoint: 8,
+                    tx_seq: 19,
+                    event_index: 4,
+                },
+                Some(8),
+            ),
+            (
+                false,
+                EventPosition::from((18, 2)),
+                Some(5),
+                Position::Events {
+                    checkpoint: 6,
+                    tx_seq: 18,
+                    event_index: 2,
+                },
+                Some(6),
+            ),
+        ] {
+            let options = options(ascending);
+            let watermark = event_frontier_watermark(&options, frontier, checkpoint).unwrap();
+            assert_eq!(
+                CursorToken::decode(watermark.cursor.as_ref().expect("event frontier cursor"))
+                    .unwrap(),
+                CursorToken::boundary(expected_position)
+            );
+            assert_eq!(watermark.checkpoint, expected_proof);
+            let terminal = ChunkTerminal::scan_limit(expected_position, watermark);
+            let response = end_response(
+                terminal.into_watermark(&options, Some(123)),
+                QueryEndReason::ScanLimit,
+            );
+            assert!(response.event.is_none());
+            assert_eq!(
+                response.watermark.as_ref().and_then(|wm| wm.checkpoint),
+                expected_proof
+            );
+            assert_eq!(
+                response.end.as_ref().map(|end| end.reason()),
+                Some(QueryEndReason::ScanLimit)
+            );
+        }
+    }
 }

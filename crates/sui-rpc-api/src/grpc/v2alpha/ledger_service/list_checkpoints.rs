@@ -583,7 +583,18 @@ fn scan_checkpoint_watermark(
     frontier: u64,
     ascending: bool,
 ) -> Result<Watermark, RpcError> {
-    let checkpoint = sequence_frontier_checkpoint(service, frontier, ascending)?;
+    checkpoint_frontier_watermark(
+        options,
+        frontier,
+        sequence_frontier_checkpoint(service, frontier, ascending)?,
+    )
+}
+
+fn checkpoint_frontier_watermark(
+    options: &QueryOptions,
+    frontier: u64,
+    checkpoint: Option<u64>,
+) -> Result<Watermark, RpcError> {
     // The frontier lands partway through its checkpoint, so that checkpoint is
     // not proven complete. At genesis there is no preceding checkpoint at all.
     let boundary =
@@ -705,4 +716,92 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpoints
     response.watermark = Some(watermark);
     response.end = Some(end);
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
+    use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
+    use sui_rpc_cursor::CursorToken;
+
+    fn options(ascending: bool) -> QueryOptions {
+        let mut proto = ProtoQueryOptions::default();
+        if !ascending {
+            proto.ordering = Some(Ordering::Descending as i32);
+        }
+        QueryOptions::checkpoints_from_proto(Some(&proto), 100, 100).unwrap()
+    }
+
+    #[test]
+    fn scan_limit_terminal_frames_are_directional_checkpoint_cursors() {
+        for (ascending, frontier, checkpoint, expected_position, expected_proof) in [
+            (true, 0, None, Position::Checkpoints { checkpoint: 0 }, None),
+            (
+                true,
+                41,
+                Some(7),
+                Position::Checkpoints { checkpoint: 7 },
+                Some(6),
+            ),
+            (
+                true,
+                42,
+                Some(9),
+                Position::Checkpoints { checkpoint: 9 },
+                Some(8),
+            ),
+            (
+                false,
+                u64::MAX,
+                None,
+                Position::Checkpoints {
+                    checkpoint: u64::MAX,
+                },
+                None,
+            ),
+            (
+                false,
+                19,
+                Some(7),
+                Position::Checkpoints { checkpoint: 8 },
+                Some(8),
+            ),
+            (
+                false,
+                18,
+                Some(5),
+                Position::Checkpoints { checkpoint: 6 },
+                Some(6),
+            ),
+        ] {
+            let options = options(ascending);
+            let watermark = checkpoint_frontier_watermark(&options, frontier, checkpoint).unwrap();
+            assert_eq!(
+                CursorToken::decode(
+                    watermark
+                        .cursor
+                        .as_ref()
+                        .expect("checkpoint frontier cursor")
+                )
+                .unwrap(),
+                CursorToken::boundary(expected_position)
+            );
+            assert_eq!(watermark.checkpoint, expected_proof);
+            let terminal = ChunkTerminal::scan_limit(expected_position, watermark);
+            let response = end_response(
+                terminal.into_watermark(&options, Some(123)),
+                QueryEndReason::ScanLimit,
+            );
+            assert!(response.checkpoint.is_none());
+            assert_eq!(
+                response.watermark.as_ref().and_then(|wm| wm.checkpoint),
+                expected_proof
+            );
+            assert_eq!(
+                response.end.as_ref().map(|end| end.reason()),
+                Some(QueryEndReason::ScanLimit)
+            );
+        }
+    }
 }

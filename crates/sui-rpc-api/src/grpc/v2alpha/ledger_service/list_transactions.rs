@@ -101,7 +101,7 @@ pub(crate) async fn list_transactions(
     let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
         let render_contents = should_render_transaction_contents(&read_mask);
-        let mut scan = ChunkedScan::new(
+        let scan = ChunkedScan::new(
             initial_state,
             limit_items,
             endpoint.chunk_max,
@@ -122,6 +122,40 @@ pub(crate) async fn list_transactions(
             },
         );
 
+        let mut responses = transaction_response_stream(
+            scan,
+            terminal_options,
+            limit_items,
+            started,
+            filtered,
+            ordering,
+        );
+        while let Some(response) = responses.next().await {
+            yield response?;
+        }
+    }
+    .boxed())
+}
+
+fn transaction_response_stream<State, Spawn>(
+    mut scan: ChunkedScan<State, ListTransactionsResponse, Spawn>,
+    terminal_options: QueryOptions,
+    limit_items: usize,
+    started: Instant,
+    filtered: bool,
+    ordering: crate::ledger_history::query_options::Ordering,
+) -> ListTransactionsStream
+where
+    State: Send + 'static,
+    Spawn: FnMut(
+            State,
+            ChunkArgs,
+        )
+            -> JoinHandle<Result<ScanChunkDone<State, ListTransactionsResponse>, RpcError>>
+        + Send
+        + 'static,
+{
+    async_stream::try_stream! {
         let mut covered_checkpoint_bound = None;
         while let Some(mut response) = scan.next_item().await? {
             if let Some(checkpoint) = response
@@ -161,7 +195,7 @@ pub(crate) async fn list_transactions(
             "list_transactions: done"
         );
     }
-    .boxed())
+    .boxed()
 }
 
 fn spawn_transaction_chunk(
@@ -444,7 +478,18 @@ fn scan_transaction_watermark(
     frontier: u64,
     ascending: bool,
 ) -> Result<Watermark, RpcError> {
-    let checkpoint = sequence_frontier_checkpoint(service, frontier, ascending)?;
+    transaction_frontier_watermark(
+        options,
+        frontier,
+        sequence_frontier_checkpoint(service, frontier, ascending)?,
+    )
+}
+
+fn transaction_frontier_watermark(
+    options: &QueryOptions,
+    frontier: u64,
+    checkpoint: Option<u64>,
+) -> Result<Watermark, RpcError> {
     let boundary =
         checkpoint.and_then(|cp| advance_covered_bound_before_checkpoint(None, cp, options));
     let cursor_cp = scan_frontier_cursor_cp(checkpoint, frontier, options.scan_direction())
@@ -614,4 +659,201 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransaction
     response.watermark = Some(watermark);
     response.end = Some(end);
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
+    use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
+    use sui_rpc_cursor::CursorToken;
+
+    fn options(ascending: bool) -> QueryOptions {
+        let mut proto = ProtoQueryOptions::default();
+        if !ascending {
+            proto.ordering = Some(Ordering::Descending as i32);
+        }
+        QueryOptions::transactions_from_proto(Some(&proto), 100, 100).unwrap()
+    }
+
+    #[test]
+    fn scan_limit_terminal_frames_are_directional_transaction_cursors() {
+        for (ascending, frontier, checkpoint, expected_position, expected_proof) in [
+            (
+                true,
+                0,
+                None,
+                Position::Transactions {
+                    checkpoint: 0,
+                    tx_seq: 0,
+                },
+                None,
+            ),
+            (
+                true,
+                41,
+                Some(7),
+                Position::Transactions {
+                    checkpoint: 7,
+                    tx_seq: 41,
+                },
+                Some(6),
+            ),
+            (
+                true,
+                42,
+                Some(9),
+                Position::Transactions {
+                    checkpoint: 9,
+                    tx_seq: 42,
+                },
+                Some(8),
+            ),
+            (
+                false,
+                u64::MAX,
+                None,
+                Position::Transactions {
+                    checkpoint: u64::MAX,
+                    tx_seq: u64::MAX,
+                },
+                None,
+            ),
+            (
+                false,
+                19,
+                Some(7),
+                Position::Transactions {
+                    checkpoint: 8,
+                    tx_seq: 19,
+                },
+                Some(8),
+            ),
+            (
+                false,
+                18,
+                Some(5),
+                Position::Transactions {
+                    checkpoint: 6,
+                    tx_seq: 18,
+                },
+                Some(6),
+            ),
+        ] {
+            let options = options(ascending);
+            let watermark = transaction_frontier_watermark(&options, frontier, checkpoint).unwrap();
+            assert_eq!(
+                CursorToken::decode(
+                    watermark
+                        .cursor
+                        .as_ref()
+                        .expect("transaction frontier cursor")
+                )
+                .unwrap(),
+                CursorToken::boundary(expected_position)
+            );
+            assert_eq!(watermark.checkpoint, expected_proof);
+            let terminal = ChunkTerminal::scan_limit(expected_position, watermark);
+            let response = end_response(
+                terminal.into_watermark(&options, Some(123)),
+                QueryEndReason::ScanLimit,
+            );
+            assert!(response.transaction.is_none());
+            assert_eq!(
+                response.watermark.as_ref().and_then(|wm| wm.checkpoint),
+                expected_proof
+            );
+            assert_eq!(
+                response.end.as_ref().map(|end| end.reason()),
+                Some(QueryEndReason::ScanLimit)
+            );
+        }
+    }
+
+    async fn assert_error_terminates_response_driver(
+        expected_code: tonic::Code,
+        expected_message: &'static str,
+    ) {
+        let scan = ChunkedScan::new(0usize, 5, 1, 10, move |state, args: ChunkArgs| {
+            tokio::task::spawn(async move {
+                if state == 0 {
+                    let mut transaction = ExecutedTransaction::default();
+                    transaction.digest = Some("successful-transaction".into());
+                    let mut watermark = Watermark::default();
+                    watermark.checkpoint = Some(7);
+                    let mut response = ListTransactionsResponse::default();
+                    response.transaction = Some(transaction);
+                    response.watermark = Some(watermark);
+                    Ok(ScanChunkDone {
+                        items: vec![response],
+                        produced: 1,
+                        next_state: Some(1),
+                        terminal: ChunkTerminal::RangeEnd {
+                            reason: QueryEndReason::CheckpointBound,
+                            position: Position::Transactions {
+                                checkpoint: 8,
+                                tx_seq: 42,
+                            },
+                        },
+                        remaining_scan_budget: args.scan_budget,
+                    })
+                } else if expected_code == tonic::Code::Cancelled {
+                    Err(cancelled())
+                } else {
+                    Err(RpcError::new(expected_code, expected_message))
+                }
+            })
+        });
+        let options = options(true);
+        let ordering = options.ordering;
+        let mut responses =
+            transaction_response_stream(scan, options, 5, Instant::now(), false, ordering);
+
+        let response = responses
+            .next()
+            .await
+            .expect("successful response precedes worker error")
+            .expect("first response is successful");
+        assert_eq!(
+            response
+                .transaction
+                .as_ref()
+                .and_then(|transaction| transaction.digest.as_deref()),
+            Some("successful-transaction")
+        );
+        assert_eq!(
+            response
+                .watermark
+                .as_ref()
+                .and_then(|watermark| watermark.checkpoint),
+            Some(7)
+        );
+        assert!(
+            response.end.is_none(),
+            "the endpoint driver must not attach a clean end before a worker error"
+        );
+
+        let error = responses
+            .next()
+            .await
+            .expect("worker error is the next stream result")
+            .expect_err("worker error must not become a QueryEnd response");
+        let status = tonic::Status::from(error);
+        assert_eq!(status.code(), expected_code);
+        assert_eq!(status.message(), expected_message);
+        assert!(
+            responses.next().await.is_none(),
+            "endpoint terminal construction must be unreachable after the error"
+        );
+    }
+
+    #[tokio::test]
+    async fn response_driver_ends_with_internal_status_after_successful_frame() {
+        assert_error_terminates_response_driver(tonic::Code::Internal, "injected scan fault").await;
+    }
+
+    #[tokio::test]
+    async fn response_driver_ends_with_cancelled_status_after_successful_frame() {
+        assert_error_terminates_response_driver(tonic::Code::Cancelled, "request cancelled").await;
+    }
 }
