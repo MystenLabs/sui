@@ -4,6 +4,7 @@
 
 use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
+use crate::allowance::{ResolvedAllowance, parse_allowance_object};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
     BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
@@ -13,7 +14,6 @@ use crate::coin::{
     COIN_MODULE_NAME, INTO_BALANCE_FUNC_NAME, PUT_FUNC_NAME, REDEEM_FUNDS_FUNC_NAME,
     SEND_FUNDS_FUNC_NAME,
 };
-use crate::allowance::{ResolvedAllowance, parse_allowance_object};
 use crate::coin_reservation::{
     CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
 };
@@ -61,6 +61,7 @@ use mysten_common::{ZipDebugEqIteratorExt, assert_reachable, debug_fatal};
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
+use std::collections::btree_map::Entry;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -3169,15 +3170,17 @@ impl TransactionDataAPI for TransactionDataV1 {
             let WithdrawFrom::Allowance { funder, allowance } = &withdraw.withdraw_from else {
                 continue;
             };
-            if !resolved_allowances.contains_key(allowance) {
-                let object = objects_by_id.get(allowance).ok_or_else(|| {
-                    UserInputError::InvalidWithdrawReservation {
-                        error: format!("allowance object {allowance} not found"),
-                    }
-                })?;
-                resolved_allowances.insert(*allowance, parse_allowance_object(object)?);
-            }
-            let resolved = &resolved_allowances[allowance];
+            let resolved = match resolved_allowances.entry(*allowance) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => {
+                    let object = objects_by_id.get(allowance).ok_or_else(|| {
+                        UserInputError::InvalidWithdrawReservation {
+                            error: format!("allowance object {allowance} not found"),
+                        }
+                    })?;
+                    entry.insert(parse_allowance_object(object)?)
+                }
+            };
             // Execution trusts the declared funder, so this match is what makes
             // `owner_for_withdrawal` sound for allowance sources.
             if &resolved.funder != funder {
@@ -3208,7 +3211,9 @@ impl TransactionDataAPI for TransactionDataV1 {
             let Reservation::MaxAmountU64(amount) = withdraw.reservation;
             let total = reserved.entry(*allowance).or_insert_with(U256::zero);
             // u64 amounts can't overflow a u256 sum; saturate anyway, never panic.
-            *total = total.checked_add(U256::from(amount)).unwrap_or(U256::max_value());
+            *total = total
+                .checked_add(U256::from(amount))
+                .unwrap_or(U256::max_value());
             // Over the spend limit can never clear; reject
             if *total > resolved.spend_limit {
                 return Err(UserInputError::InvalidWithdrawReservation {
