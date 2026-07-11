@@ -12,17 +12,95 @@ use tokio_util::sync::DropGuard;
 
 use crate::RpcError;
 
-/// Underlying chunk scan result, plus the typed exclusive range boundary the
-/// scan reached. The outer handler may override `scan_end_reason` with
-/// `ItemLimit`. The boundary lets it build a terminal progress watermark when
-/// the scan completed naturally.
+/// Typed successful chunk terminal. A scan-limited terminal owns its mandatory
+/// authoritative frontier watermark, so the pipeline cannot represent
+/// `ScanLimit` without a resume cursor.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ChunkTerminal {
-    pub(crate) scan_end_reason: QueryEndReason,
-    pub(crate) position: Position,
-    /// Fresh boundary watermark at the scan frontier; `Some` only on chunks
-    /// where the request scan limit was reached with a resolvable frontier.
-    pub(crate) scan_frontier_watermark: Option<Watermark>,
+pub(crate) enum ChunkTerminal {
+    ScanLimit {
+        position: Position,
+        frontier_watermark: Watermark,
+    },
+    RangeEnd {
+        reason: QueryEndReason,
+        position: Position,
+    },
+    CursorBound {
+        position: Position,
+        watermark: Watermark,
+    },
+}
+
+impl ChunkTerminal {
+    pub(crate) fn boundary(
+        reason: QueryEndReason,
+        position: Position,
+        cursor_watermark: Option<Watermark>,
+    ) -> Self {
+        if reason == QueryEndReason::CursorBound {
+            Self::CursorBound {
+                position,
+                watermark: cursor_watermark.unwrap_or_else(|| {
+                    crate::ledger_history::watermark::boundary_watermark(position, None)
+                }),
+            }
+        } else {
+            debug_assert!(
+                crate::ledger_history::watermark::reached_range_end(reason),
+                "non-boundary terminal reason {reason:?}"
+            );
+            Self::RangeEnd { reason, position }
+        }
+    }
+
+    pub(crate) fn scan_limit(position: Position, frontier_watermark: Watermark) -> Self {
+        debug_assert!(frontier_watermark.cursor.is_some());
+        Self::ScanLimit {
+            position,
+            frontier_watermark,
+        }
+    }
+
+    pub(crate) fn reason(&self) -> QueryEndReason {
+        match self {
+            Self::ScanLimit { .. } => QueryEndReason::ScanLimit,
+            Self::RangeEnd { reason, .. } => *reason,
+            Self::CursorBound { .. } => QueryEndReason::CursorBound,
+        }
+    }
+
+    pub(crate) fn into_watermark(
+        self,
+        options: &crate::ledger_history::query_options::QueryOptions,
+        covered_checkpoint_bound: Option<u64>,
+    ) -> Watermark {
+        match self {
+            Self::ScanLimit {
+                frontier_watermark, ..
+            } => frontier_watermark,
+            Self::RangeEnd { reason, position } => {
+                crate::ledger_history::watermark::terminal_watermark(
+                    options,
+                    crate::ledger_history::watermark::BoundaryTerminal::RangeEnd {
+                        reason,
+                        position,
+                    },
+                    covered_checkpoint_bound,
+                )
+            }
+            Self::CursorBound {
+                position,
+                watermark,
+            } => crate::ledger_history::watermark::terminal_watermark(
+                options,
+                crate::ledger_history::watermark::BoundaryTerminal::CursorBound {
+                    position,
+                    watermark,
+                },
+                covered_checkpoint_bound,
+            ),
+        }
+    }
 }
 
 pub(crate) struct ScanChunkDone<State, Item> {
@@ -210,13 +288,12 @@ mod tests {
                     produced: items.len(),
                     items,
                     next_state: (state < 2).then_some(state + 1),
-                    terminal: ChunkTerminal {
-                        scan_end_reason: QueryEndReason::CheckpointBound,
+                    terminal: ChunkTerminal::RangeEnd {
+                        reason: QueryEndReason::CheckpointBound,
                         position: Position::Transactions {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                        scan_frontier_watermark: None,
                     },
                     remaining_scan_budget: scan_budget - 1,
                 })
@@ -231,13 +308,12 @@ mod tests {
         assert_eq!(items, vec![0, 1, 10, 11, 20]);
         assert_eq!(
             scan.into_terminal(),
-            Some(ChunkTerminal {
-                scan_end_reason: QueryEndReason::CheckpointBound,
+            Some(ChunkTerminal::RangeEnd {
+                reason: QueryEndReason::CheckpointBound,
                 position: Position::Transactions {
                     checkpoint: 0,
                     tx_seq: 0
                 },
-                scan_frontier_watermark: None,
             })
         );
         assert_eq!(
@@ -257,13 +333,12 @@ mod tests {
                     items: Vec::new(),
                     produced: 0,
                     next_state: None,
-                    terminal: ChunkTerminal {
-                        scan_end_reason: QueryEndReason::CheckpointBound,
+                    terminal: ChunkTerminal::RangeEnd {
+                        reason: QueryEndReason::CheckpointBound,
                         position: Position::Transactions {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                        scan_frontier_watermark: None,
                     },
                     remaining_scan_budget: args.scan_budget,
                 })
@@ -310,14 +385,17 @@ mod tests {
                     items: vec!["first", "final"],
                     produced: 2,
                     next_state: Some(1),
-                    terminal: ChunkTerminal {
-                        scan_end_reason: QueryEndReason::CheckpointBound,
-                        position: Position::Transactions {
+                    terminal: ChunkTerminal::scan_limit(
+                        Position::Transactions {
                             checkpoint: 3,
                             tx_seq: 0,
                         },
-                        scan_frontier_watermark: None,
-                    },
+                        {
+                            let mut watermark = Watermark::default();
+                            watermark.cursor = Some(b"scan-frontier".to_vec().into());
+                            watermark
+                        },
+                    ),
                     remaining_scan_budget: args.scan_budget - 1,
                 })
             })
@@ -334,6 +412,17 @@ mod tests {
             "the item limit leaves no trailing frame or chunk in flight"
         );
         assert_eq!(scan.next_item().await.unwrap(), None);
+        let terminal = scan.into_terminal().expect("worker terminal is retained");
+        let ChunkTerminal::ScanLimit {
+            frontier_watermark, ..
+        } = terminal
+        else {
+            panic!("expected scan-limit terminal");
+        };
+        assert!(
+            frontier_watermark.cursor.is_some(),
+            "scan-limit terminal must own a resume cursor"
+        );
         assert_eq!(
             spawn_count.load(Ordering::SeqCst),
             1,

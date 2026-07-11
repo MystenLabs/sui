@@ -28,6 +28,8 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::BoundaryTerminal;
+use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::merge_covered_checkpoint_bound;
@@ -125,11 +127,13 @@ pub(crate) async fn list_checkpoints(
         // completion may claim the final checkpoint; a cursor bound may not.
         let terminal_watermark = terminal_watermark(
             &options,
-            Position::Checkpoints {
-                checkpoint: range_end_position,
-            },
-            None,
-            range_exhaustion_reason,
+            BoundaryTerminal::new(
+                range_exhaustion_reason,
+                Position::Checkpoints {
+                    checkpoint: range_end_position,
+                },
+                None,
+            ),
             None,
         );
         return Ok(stream::iter([Ok(end_response(
@@ -250,11 +254,13 @@ pub(crate) async fn list_checkpoints(
             let Some(item) = checkpoint_stream.next().await else {
                 let terminal_watermark = terminal_watermark(
                     &options,
-                    Position::Checkpoints {
-                        checkpoint: range_end_position,
-                    },
-                    None,
-                    range_exhaustion_reason,
+                    BoundaryTerminal::new(
+                        range_exhaustion_reason,
+                        Position::Checkpoints {
+                            checkpoint: range_end_position,
+                        },
+                        None,
+                    ),
                     covered_checkpoint_bound,
                 );
                 yield end_response(terminal_watermark, range_exhaustion_reason);
@@ -298,36 +304,39 @@ pub(crate) async fn list_checkpoints(
                     position: _,
                     cp: checkpoint_at_frontier,
                 }) => {
-                    let Some(watermark) = checkpoint_frontier_watermark(
+                    let watermark = checkpoint_frontier_watermark(
                         checkpoint_at_frontier,
                         direction,
                         &options,
                         &mut covered_checkpoint_bound,
-                    ) else {
-                        continue;
-                    };
+                    );
                     yield watermark_response(watermark);
                 }
                 Err(ResolvedScanStop::ScanLimit {
-                    position: _,
+                    position,
                     checkpoint: checkpoint_at_frontier,
                 }) => {
+                    let checkpoint_at_frontier = checkpoint_at_frontier
+                        .or_else(|| {
+                            ((direction.is_ascending() && position == 0)
+                                || (!direction.is_ascending() && position == u64::MAX))
+                            .then_some(position)
+                        })
+                        .ok_or_else(|| {
+                            RpcError::new(
+                                tonic::Code::Internal,
+                                format!(
+                                    "checkpoint scan frontier transaction {position} has no checkpoint mapping"
+                                ),
+                            )
+                        })?;
                     let scan_frontier_watermark = checkpoint_frontier_watermark(
                         checkpoint_at_frontier,
                         direction,
                         &options,
                         &mut covered_checkpoint_bound,
                     );
-                    let terminal_watermark = terminal_watermark(
-                        &options,
-                        Position::Checkpoints {
-                            checkpoint: range_end_position,
-                        },
-                        scan_frontier_watermark,
-                        QueryEndReason::ScanLimit,
-                        covered_checkpoint_bound,
-                    );
-                    yield end_response(terminal_watermark, QueryEndReason::ScanLimit);
+                    yield end_response(scan_frontier_watermark, QueryEndReason::ScanLimit);
                     break QueryEndReason::ScanLimit;
                 }
                 Err(ResolvedScanStop::Cancelled) => {
@@ -354,60 +363,41 @@ pub(crate) async fn list_checkpoints(
     .boxed())
 }
 
-/// Convert a cp-space scan frontier from `filtered_checkpoint_seq_stream`
-/// into a fully covered checkpoint candidate for
-/// `merge_covered_checkpoint_bound`.
-///
-/// ListCheckpoints item handling directly assigns its ordered, deduped
-/// checkpoint number. The independently resolved frontier path needs this
-/// adjustment instead:
-///
-/// - Ascending: frontier means "all matching cps strictly less than `p`
-///   have been emitted." The last fully-scanned cp is `p - 1`.
-/// - Descending: frontier means "all matching cps at least `p` have
-///   been emitted." The candidate is `p` directly.
-///
-/// Returns `None` only when `p == 0` ascending (no preceding cp), in
-/// which case the boundary stays at whatever the items have built up.
-fn frontier_to_boundary_candidate(frontier: u64, options: &QueryOptions) -> Option<u64> {
-    if options.is_ascending() {
-        frontier.checked_sub(1)
-    } else {
-        Some(frontier)
-    }
-}
-
+/// Convert the checkpoint containing a transaction-space scan frontier into a
+/// safe checkpoint-space resume cursor. The containing checkpoint is not fully
+/// covered: ascending coverage stops at `cp - 1`, descending at `cp + 1`.
+/// Numeric overflow suppresses only that coverage claim, never the cursor.
 fn checkpoint_frontier_watermark(
     checkpoint_at_frontier: u64,
     direction: ScanDirection,
     options: &QueryOptions,
     covered_checkpoint_bound: &mut Option<u64>,
-) -> Option<Watermark> {
-    // Tx-space → cp-space translation is already done by the resolver; here we
-    // clamp past anything we've already emitted and convert to a boundary
-    // cursor.
-    let resume_checkpoint = if direction.is_ascending() {
-        Some(checkpoint_at_frontier)
+) -> Watermark {
+    let resume_checkpoint = boundary_cursor_cp(checkpoint_at_frontier, direction);
+    let resume_checkpoint = clamp_cp_frontier_past_last(
+        Some(resume_checkpoint),
+        *covered_checkpoint_bound,
+        direction,
+    )
+    .expect("checkpoint scan frontier is always representable");
+    let covered_bound_candidate = if direction.is_ascending() {
+        checkpoint_at_frontier.checked_sub(1)
     } else {
         checkpoint_at_frontier.checked_add(1)
     };
-    let resume_checkpoint =
-        clamp_cp_frontier_past_last(resume_checkpoint, *covered_checkpoint_bound, direction)?;
-    if let Some(covered_bound_candidate) =
-        frontier_to_boundary_candidate(resume_checkpoint, options)
-    {
+    if let Some(covered_bound_candidate) = covered_bound_candidate {
         *covered_checkpoint_bound = merge_covered_checkpoint_bound(
             *covered_checkpoint_bound,
             covered_bound_candidate,
             options,
         );
     }
-    Some(boundary_watermark(
+    boundary_watermark(
         Position::Checkpoints {
             checkpoint: resume_checkpoint,
         },
         *covered_checkpoint_bound,
-    ))
+    )
 }
 
 fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
@@ -520,12 +510,12 @@ fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsRes
     response
 }
 
-fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListCheckpointsResponse {
+fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListCheckpointsResponse::default();
-    response.watermark = watermark;
+    response.watermark = Some(watermark);
     response.end = Some(end);
     response
 }

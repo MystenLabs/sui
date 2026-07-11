@@ -32,11 +32,12 @@ use sui_rpc_api::ledger_history::query_options::EventPosition;
 use sui_rpc_api::ledger_history::query_options::EventScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedEventRange;
+use sui_rpc_api::ledger_history::watermark::BoundaryTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
-use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::cursor_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::terminal_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_cursor::Position;
@@ -122,9 +123,11 @@ pub(crate) async fn list_events(
             .then(|| cursor_watermark(terminal_position, None, range_end_cursor_kind));
         let terminal_watermark = terminal_watermark(
             &options,
-            terminal_position,
-            cursor_bound_watermark,
-            range_exhaustion_reason,
+            BoundaryTerminal::new(
+                range_exhaustion_reason,
+                terminal_position,
+                cursor_bound_watermark,
+            ),
             None,
         );
         return Ok(futures::stream::iter([Ok(end_response(
@@ -292,9 +295,11 @@ pub(crate) async fn list_events(
                     });
                 let terminal_watermark = terminal_watermark(
                     &options,
-                    terminal_position,
-                    cursor_bound_watermark,
-                    range_exhaustion_reason,
+                    BoundaryTerminal::new(
+                        range_exhaustion_reason,
+                        terminal_position,
+                        cursor_bound_watermark,
+                    ),
                     covered_checkpoint_bound,
                 );
                 yield end_response(terminal_watermark, range_exhaustion_reason);
@@ -336,8 +341,8 @@ pub(crate) async fn list_events(
                         direction,
                         &mut covered_checkpoint_bound,
                         position,
-                        checkpoint_at_frontier,
-                    );
+                        Some(checkpoint_at_frontier),
+                    )?;
                     yield watermark_response(watermark);
                 }
                 Err(ResolvedScanStop::ScanLimit {
@@ -350,19 +355,8 @@ pub(crate) async fn list_events(
                         &mut covered_checkpoint_bound,
                         position,
                         checkpoint_at_frontier,
-                    );
-                    let terminal_watermark = terminal_watermark(
-                        &options,
-                        Position::Events {
-                            checkpoint: range_end_checkpoint,
-                            tx_seq: range_end_position.tx_seq,
-                            event_index: range_end_position.event_index,
-                        },
-                        Some(scan_frontier_watermark),
-                        QueryEndReason::ScanLimit,
-                        covered_checkpoint_bound,
-                    );
-                    yield end_response(terminal_watermark, QueryEndReason::ScanLimit);
+                    )?;
+                    yield end_response(scan_frontier_watermark, QueryEndReason::ScanLimit);
                     break QueryEndReason::ScanLimit;
                 }
                 Err(ResolvedScanStop::Cancelled) => {
@@ -593,12 +587,12 @@ async fn render_event(
     })
 }
 
-fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListEventsResponse {
+fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListEventsResponse::default();
-    response.watermark = watermark;
+    response.watermark = Some(watermark);
     response.end = Some(end);
     response
 }
@@ -608,21 +602,32 @@ fn event_frontier_watermark(
     direction: ScanDirection,
     covered_checkpoint_bound: &mut Option<u64>,
     position: EventPosition,
-    checkpoint_at_frontier: u64,
-) -> Watermark {
-    *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
-        *covered_checkpoint_bound,
-        checkpoint_at_frontier,
-        options,
-    );
-    boundary_watermark(
+    checkpoint_at_frontier: Option<u64>,
+) -> Result<Watermark, RpcError> {
+    if let Some(checkpoint) = checkpoint_at_frontier {
+        *covered_checkpoint_bound =
+            advance_covered_bound_before_checkpoint(*covered_checkpoint_bound, checkpoint, options);
+    }
+    let cursor_checkpoint =
+        scan_frontier_cursor_cp(checkpoint_at_frontier, position.tx_seq, direction).ok_or_else(
+            || {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!(
+                        "event scan frontier {}/{} has no checkpoint mapping",
+                        position.tx_seq, position.event_index
+                    ),
+                )
+            },
+        )?;
+    Ok(boundary_watermark(
         Position::Events {
-            checkpoint: boundary_cursor_cp(checkpoint_at_frontier, direction),
+            checkpoint: cursor_checkpoint,
             tx_seq: position.tx_seq,
             event_index: position.event_index,
         },
         *covered_checkpoint_bound,
-    )
+    ))
 }
 
 /// A reference to a single event from the bitmap scan or tx_seq_digest lookup,

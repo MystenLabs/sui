@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub(super) use crate::ledger_history::watermark::terminal_watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 
 /// Effective terminal reason for a successful query stream.
@@ -24,7 +23,8 @@ pub(super) fn effective_terminal_reason(
 #[cfg(test)]
 mod tests {
     use crate::ledger_history::query_options::QueryOptions;
-    use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+    use crate::ledger_history::watermark::BoundaryTerminal;
+    use crate::ledger_history::watermark::terminal_watermark;
     use sui_rpc_cursor::{CursorToken, Position};
 
     use super::*;
@@ -50,7 +50,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_watermark_selects_natural_scan_and_cursor_candidates_without_deduplication() {
+    fn terminal_watermark_handles_only_range_and_cursor_boundaries() {
         let options = options();
         let position = Position::Transactions {
             checkpoint: 9,
@@ -58,54 +58,46 @@ mod tests {
         };
         let natural = terminal_watermark(
             &options,
-            position,
+            BoundaryTerminal::RangeEnd {
+                reason: QueryEndReason::CheckpointBound,
+                position,
+            },
             None,
-            QueryEndReason::CheckpointBound,
-            None,
-        )
-        .expect("natural completion has a boundary watermark");
+        );
         assert_eq!(natural.checkpoint, Some(8));
         assert_eq!(
             natural.cursor,
             Some(CursorToken::boundary(position).encode())
         );
 
-        let mut frontier = Watermark::default();
-        frontier.checkpoint = Some(7);
-        frontier.cursor = Some("scan-frontier".into());
-        assert_eq!(
-            terminal_watermark(
-                &options,
-                position,
-                Some(frontier.clone()),
-                QueryEndReason::ScanLimit,
-                None,
-            ),
-            Some(frontier.clone())
-        );
-        assert_eq!(
-            terminal_watermark(
-                &options,
-                position,
-                Some(frontier.clone()),
-                QueryEndReason::ScanLimit,
-                Some(999),
-            ),
-            Some(frontier)
-        );
-
+        let mut cursor_candidate = sui_rpc::proto::sui::rpc::v2alpha::Watermark::default();
+        cursor_candidate.checkpoint = Some(7);
+        cursor_candidate.cursor = Some(b"cursor-bound".to_vec().into());
         let cursor_bound = terminal_watermark(
             &options,
-            position,
-            None,
-            QueryEndReason::CursorBound,
+            BoundaryTerminal::CursorBound {
+                position,
+                watermark: cursor_candidate,
+            },
             Some(6),
-        )
-        .expect("cursor completion has a boundary watermark");
+        );
         assert_eq!(cursor_bound.checkpoint, Some(6));
         assert_eq!(
-            cursor_bound.cursor,
-            Some(CursorToken::boundary(position).encode())
+            cursor_bound.cursor.as_deref(),
+            Some(b"cursor-bound".as_slice())
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid boundary terminal reason ScanLimit")]
+    fn scan_limit_is_not_a_boundary_terminal() {
+        BoundaryTerminal::new(
+            QueryEndReason::ScanLimit,
+            Position::Transactions {
+                checkpoint: 9,
+                tx_seq: 4,
+            },
+            None,
         );
     }
 }

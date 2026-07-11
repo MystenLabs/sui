@@ -941,12 +941,16 @@ pub(crate) enum ResolvedWatermarked<T, P = u64> {
 
 /// Terminal outcome from [`resolve_scan_watermarks`].
 ///
-/// A scan limit carries the authoritative terminal position in the same
-/// domain as ordinary watermark frames and the checkpoint covered by that
-/// frontier. A terminal frontier without a checkpoint is a storage fault.
+/// A scan limit always carries the authoritative terminal position in the same
+/// domain as ordinary watermark frames. Its checkpoint is optional because a
+/// frontier at a numeric edge can be a safe resume position without proving
+/// any checkpoint fully covered.
 #[derive(Debug)]
 pub(crate) enum ResolvedScanStop<P> {
-    ScanLimit { position: P, checkpoint: u64 },
+    ScanLimit {
+        position: P,
+        checkpoint: Option<u64>,
+    },
     Cancelled,
     Fault(anyhow::Error),
 }
@@ -1128,12 +1132,7 @@ where
                     // Never resolved: the terminal position was coalesced
                     // away, item-cancelled, or simply new. One fresh lookup.
                     None => resolver(position).await.map_err(resolver_error)?,
-                }
-                .ok_or_else(|| {
-                    ResolvedScanStop::Fault(anyhow::anyhow!(
-                        "scan-limit frontier did not resolve to a checkpoint"
-                    ))
-                })?;
+                };
                 Err(ResolvedScanStop::ScanLimit {
                     position,
                     checkpoint,
@@ -2817,7 +2816,11 @@ mod tests {
         }
     }
 
-    fn assert_scan_limit(frame: ResolvedWmFrame, expected_position: u64, expected_checkpoint: u64) {
+    fn assert_scan_limit(
+        frame: ResolvedWmFrame,
+        expected_position: u64,
+        expected_checkpoint: Option<u64>,
+    ) {
         match frame {
             Err(ResolvedScanStop::ScanLimit {
                 position,
@@ -2857,7 +2860,7 @@ mod tests {
         assert_resolved_wm(fixture.next().await, 7, 70);
 
         fixture.scan_limit(7).await;
-        assert_scan_limit(fixture.next().await, 7, 70);
+        assert_scan_limit(fixture.next().await, 7, Some(70));
 
         fixture.finish().await;
         assert_eq!(
@@ -2867,25 +2870,15 @@ mod tests {
         );
     }
 
-    /// A resolver may return `None` for an ordinary watermark at the start of
-    /// an ascending scan, where no preceding transaction exists. A scan limit
-    /// must always have advanced to a transaction with a checkpoint, so `None`
-    /// at its terminal frontier is a fault rather than a valid terminal result.
+    /// The resolver preserves a missing terminal checkpoint so consumers can
+    /// accept a numeric-edge genesis frontier while rejecting `None` at any
+    /// non-edge position as a domain-specific mapping fault.
     #[tokio::test]
-    async fn resolve_scan_watermarks_rejects_missing_terminal_checkpoint() {
+    async fn resolve_scan_watermarks_preserves_missing_terminal_checkpoint() {
         let mut fixture = WmResolverFixture::new(move |_position| Box::pin(async { Ok(None) }));
 
         fixture.scan_limit(11).await;
-        match fixture.next().await {
-            Err(ResolvedScanStop::Fault(error)) => assert!(
-                error
-                    .to_string()
-                    .contains("scan-limit frontier did not resolve to a checkpoint"),
-                "unexpected fault: {error}"
-            ),
-            Err(_) => panic!("expected a missing-checkpoint fault"),
-            Ok(_) => panic!("expected a missing-checkpoint fault, got a success frame"),
-        }
+        assert_scan_limit(fixture.next().await, 11, None);
         fixture.finish().await;
     }
 
@@ -2904,7 +2897,7 @@ mod tests {
         assert_resolved_wm(fixture.next().await, 5, 50);
 
         fixture.scan_limit(8).await;
-        assert_scan_limit(fixture.next().await, 8, 80);
+        assert_scan_limit(fixture.next().await, 8, Some(80));
 
         fixture.finish().await;
         assert_eq!(
@@ -2956,7 +2949,7 @@ mod tests {
         // it or manufacture a reusable result.
         gate.release();
         fixture.scan_limit(5).await;
-        assert_scan_limit(fixture.next().await, 5, 50);
+        assert_scan_limit(fixture.next().await, 5, Some(50));
 
         fixture.finish().await;
         assert_eq!(
@@ -3000,7 +2993,7 @@ mod tests {
 
         gate.release();
         assert_resolved_wm(fixture.next().await, 5, 50);
-        assert_scan_limit(fixture.next().await, 5, 50);
+        assert_scan_limit(fixture.next().await, 5, Some(50));
 
         fixture.finish().await;
         assert_eq!(

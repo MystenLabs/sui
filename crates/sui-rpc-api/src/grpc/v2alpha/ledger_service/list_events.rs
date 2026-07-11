@@ -37,7 +37,6 @@ use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedEventRange;
 
 use super::query_end::effective_terminal_reason;
-use super::query_end::terminal_watermark;
 
 use super::bitmap_scan::PendingBitmapBucket;
 use super::chunked_scan::ChunkArgs;
@@ -57,10 +56,10 @@ use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
-use crate::ledger_history::watermark::boundary_cursor_cp;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::cursor_watermark;
 use crate::ledger_history::watermark::item_watermark;
+use crate::ledger_history::watermark::scan_frontier_cursor_cp;
 
 const EVENT_READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EVENT;
 
@@ -145,15 +144,10 @@ pub(crate) async fn list_events(
         let produced = scan.produced();
         let chunk_terminal = scan.into_terminal().expect("query emits terminal state");
         let terminal_reason =
-            effective_terminal_reason(produced, limit_items, chunk_terminal.scan_end_reason);
+            effective_terminal_reason(produced, limit_items, chunk_terminal.reason());
         if terminal_reason != QueryEndReason::ItemLimit {
-            let terminal_watermark = terminal_watermark(
-                &terminal_options,
-                chunk_terminal.position,
-                chunk_terminal.scan_frontier_watermark,
-                terminal_reason,
-                covered_checkpoint_bound,
-            );
+            let terminal_watermark =
+                chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
             yield end_response(terminal_watermark, terminal_reason);
         }
         info!(
@@ -266,11 +260,11 @@ fn next_event_chunk(
             };
             let cursor_bound_watermark = (event_range.end_reason == QueryEndReason::CursorBound)
                 .then(|| cursor_watermark(terminal_position, None, event_range.end_cursor_kind));
-            let terminal = ChunkTerminal {
-                scan_end_reason: event_range.end_reason,
-                position: terminal_position,
-                scan_frontier_watermark: cursor_bound_watermark,
-            };
+            let terminal = ChunkTerminal::boundary(
+                event_range.end_reason,
+                terminal_position,
+                cursor_bound_watermark,
+            );
             let bounds = event_range.bounds;
             if event_range.is_empty() {
                 return Ok(EventChunkDone {
@@ -286,7 +280,7 @@ fn next_event_chunk(
                     query,
                     bounds: Some(bounds),
                     pending_bucket: None,
-                    range_exhaustion_reason: terminal.scan_end_reason,
+                    range_exhaustion_reason: event_range.end_reason,
                     end_checkpoint: event_range.end_checkpoint,
                     end_position: event_range.end_position,
                     end_cursor_kind: event_range.end_cursor_kind,
@@ -294,7 +288,7 @@ fn next_event_chunk(
                 None => EventScanState::Unfiltered {
                     bounds,
                     row_scan_budget: unfiltered_row_scan_budget,
-                    range_exhaustion_reason: terminal.scan_end_reason,
+                    range_exhaustion_reason: event_range.end_reason,
                     end_checkpoint: event_range.end_checkpoint,
                     end_position: event_range.end_position,
                     end_cursor_kind: event_range.end_cursor_kind,
@@ -356,17 +350,27 @@ fn next_event_chunk(
             } else {
                 range_exhaustion_reason
             };
-            let frontier_watermark = if request_scan_limit_reached || scan.refs.is_empty() {
-                scan_event_watermark(
-                    &service,
-                    &options,
-                    scan.row_limit_reached,
-                    scan.frontier,
-                    ascending,
-                )?
+            let frontier = if scan.row_limit_reached {
+                Some(scan.frontier.ok_or_else(|| {
+                    RpcError::new(
+                        tonic::Code::Internal,
+                        "event row scan limit missing authoritative frontier",
+                    )
+                })?)
             } else {
                 None
             };
+            let frontier_watermark =
+                if request_scan_limit_reached || (scan.row_limit_reached && scan.refs.is_empty()) {
+                    Some(scan_event_watermark(
+                        &service,
+                        &options,
+                        frontier.expect("checked for scan-limit chunk"),
+                        ascending,
+                    )?)
+                } else {
+                    None
+                };
             let scan_watermark = if !request_scan_limit_reached && scan.refs.is_empty() {
                 frontier_watermark.clone().map(watermark_response)
             } else {
@@ -377,17 +381,15 @@ fn next_event_chunk(
                 tx_seq: end_position.tx_seq,
                 event_index: end_position.event_index,
             };
-            let terminal_watermark_candidate = if request_scan_limit_reached {
-                frontier_watermark
-            } else if scan_end_reason == QueryEndReason::CursorBound {
-                Some(cursor_watermark(terminal_position, None, end_cursor_kind))
+            let terminal = if request_scan_limit_reached {
+                ChunkTerminal::scan_limit(
+                    terminal_position,
+                    frontier_watermark.expect("request scan limit constructs frontier watermark"),
+                )
             } else {
-                None
-            };
-            let terminal = ChunkTerminal {
-                scan_end_reason,
-                position: terminal_position,
-                scan_frontier_watermark: terminal_watermark_candidate,
+                let cursor_bound_watermark = (scan_end_reason == QueryEndReason::CursorBound)
+                    .then(|| cursor_watermark(terminal_position, None, end_cursor_kind));
+                ChunkTerminal::boundary(scan_end_reason, terminal_position, cursor_bound_watermark)
             };
             (scan.refs, next_state, terminal, scan_watermark)
         }
@@ -448,17 +450,27 @@ fn next_event_chunk(
             } else {
                 range_exhaustion_reason
             };
-            let frontier_watermark = if request_scan_limit_reached || refs.is_empty() {
-                scan_event_watermark(
-                    &service,
-                    &options,
-                    chunk_scan_limit_reached,
-                    frontier,
-                    ascending,
-                )?
+            let frontier = if chunk_scan_limit_reached {
+                Some(frontier.ok_or_else(|| {
+                    RpcError::new(
+                        tonic::Code::Internal,
+                        "event bitmap scan limit missing authoritative frontier",
+                    )
+                })?)
             } else {
                 None
             };
+            let frontier_watermark =
+                if request_scan_limit_reached || (chunk_scan_limit_reached && refs.is_empty()) {
+                    Some(scan_event_watermark(
+                        &service,
+                        &options,
+                        frontier.expect("checked for scan-limit chunk"),
+                        ascending,
+                    )?)
+                } else {
+                    None
+                };
             let scan_watermark = if !request_scan_limit_reached && refs.is_empty() {
                 frontier_watermark.clone().map(watermark_response)
             } else {
@@ -469,17 +481,15 @@ fn next_event_chunk(
                 tx_seq: end_position.tx_seq,
                 event_index: end_position.event_index,
             };
-            let terminal_watermark_candidate = if request_scan_limit_reached {
-                frontier_watermark
-            } else if scan_end_reason == QueryEndReason::CursorBound {
-                Some(cursor_watermark(terminal_position, None, end_cursor_kind))
+            let terminal = if request_scan_limit_reached {
+                ChunkTerminal::scan_limit(
+                    terminal_position,
+                    frontier_watermark.expect("request scan limit constructs frontier watermark"),
+                )
             } else {
-                None
-            };
-            let terminal = ChunkTerminal {
-                scan_end_reason,
-                position: terminal_position,
-                scan_frontier_watermark: terminal_watermark_candidate,
+                let cursor_bound_watermark = (scan_end_reason == QueryEndReason::CursorBound)
+                    .then(|| cursor_watermark(terminal_position, None, end_cursor_kind));
+                ChunkTerminal::boundary(scan_end_reason, terminal_position, cursor_bound_watermark)
             };
             (refs, next_state, terminal, scan_watermark)
         }
@@ -503,35 +513,36 @@ fn next_event_chunk(
 }
 
 /// Build the scan watermark for a chunk whose scan budget ran out mid-gap.
-/// Resolves the coalesced frontier to its checkpoint; yields nothing at genesis
-/// (asc) where no progress can be claimed.
+/// The frontier cursor is mandatory. Checkpoint resolution only determines the
+/// optional completed-checkpoint claim: at ascending genesis `(0, 0)` remains
+/// a safe event frontier even though no checkpoint is yet fully covered.
 fn scan_event_watermark(
     service: &RpcService,
     options: &QueryOptions,
-    chunk_scan_limit_reached: bool,
-    frontier: Option<EventPosition>,
+    frontier: EventPosition,
     ascending: bool,
-) -> Result<Option<Watermark>, RpcError> {
-    if !chunk_scan_limit_reached {
-        return Ok(None);
-    }
-    let Some(frontier) = frontier else {
-        return Ok(None);
-    };
-    let Some(cp) = event_frontier_checkpoint(service, frontier, ascending)? else {
-        return Ok(None);
-    };
-    let boundary = advance_covered_bound_before_checkpoint(None, cp, options);
-    let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
-    let watermark = boundary_watermark(
+) -> Result<Watermark, RpcError> {
+    let checkpoint = event_frontier_checkpoint(service, frontier, ascending)?;
+    let boundary =
+        checkpoint.and_then(|cp| advance_covered_bound_before_checkpoint(None, cp, options));
+    let cursor_cp = scan_frontier_cursor_cp(checkpoint, frontier.tx_seq, options.scan_direction())
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!(
+                    "event scan frontier {}/{} has no checkpoint mapping",
+                    frontier.tx_seq, frontier.event_index
+                ),
+            )
+        })?;
+    Ok(boundary_watermark(
         Position::Events {
             checkpoint: cursor_cp,
             tx_seq: frontier.tx_seq,
             event_index: frontier.event_index,
         },
         boundary,
-    );
-    Ok(Some(watermark))
+    ))
 }
 
 fn render_event_chunk(
@@ -726,12 +737,12 @@ fn watermark_response(watermark: Watermark) -> ListEventsResponse {
     response
 }
 
-fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListEventsResponse {
+fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListEventsResponse::default();
-    response.watermark = watermark;
+    response.watermark = Some(watermark);
     response.end = Some(end);
     response
 }

@@ -24,10 +24,11 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::BoundaryTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
-use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::terminal_watermark;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
@@ -111,12 +112,14 @@ pub(crate) async fn list_transactions(
         // completion may claim the final checkpoint; a cursor bound may not.
         let terminal_watermark = terminal_watermark(
             &options,
-            Position::Transactions {
-                checkpoint: range_end_checkpoint,
-                tx_seq: range_end_position,
-            },
-            None,
-            range_exhaustion_reason,
+            BoundaryTerminal::new(
+                range_exhaustion_reason,
+                Position::Transactions {
+                    checkpoint: range_end_checkpoint,
+                    tx_seq: range_end_position,
+                },
+                None,
+            ),
             None,
         );
         return Ok(futures::stream::iter([Ok(end_response(
@@ -228,12 +231,14 @@ pub(crate) async fn list_transactions(
             let Some(item) = transaction_stream.next().await else {
                 let terminal_watermark = terminal_watermark(
                     &options,
-                    Position::Transactions {
-                        checkpoint: range_end_checkpoint,
-                        tx_seq: range_end_position,
-                    },
-                    None,
-                    range_exhaustion_reason,
+                    BoundaryTerminal::new(
+                        range_exhaustion_reason,
+                        Position::Transactions {
+                            checkpoint: range_end_checkpoint,
+                            tx_seq: range_end_position,
+                        },
+                        None,
+                    ),
                     covered_checkpoint_bound,
                 );
                 yield end_response(terminal_watermark, range_exhaustion_reason);
@@ -301,8 +306,8 @@ pub(crate) async fn list_transactions(
                         direction,
                         &mut covered_checkpoint_bound,
                         position,
-                        checkpoint_at_frontier,
-                    );
+                        Some(checkpoint_at_frontier),
+                    )?;
                     yield watermark_response(watermark);
                 }
                 Err(ResolvedScanStop::ScanLimit {
@@ -315,18 +320,8 @@ pub(crate) async fn list_transactions(
                         &mut covered_checkpoint_bound,
                         position,
                         checkpoint_at_frontier,
-                    );
-                    let terminal_watermark = terminal_watermark(
-                        &options,
-                        Position::Transactions {
-                            checkpoint: range_end_checkpoint,
-                            tx_seq: range_end_position,
-                        },
-                        Some(scan_frontier_watermark),
-                        QueryEndReason::ScanLimit,
-                        covered_checkpoint_bound,
-                    );
-                    yield end_response(terminal_watermark, QueryEndReason::ScanLimit);
+                    )?;
+                    yield end_response(scan_frontier_watermark, QueryEndReason::ScanLimit);
                     break QueryEndReason::ScanLimit;
                 }
                 Err(ResolvedScanStop::Cancelled) => {
@@ -366,20 +361,26 @@ fn transaction_frontier_watermark(
     direction: ScanDirection,
     covered_checkpoint_bound: &mut Option<u64>,
     position: u64,
-    checkpoint_at_frontier: u64,
-) -> Watermark {
-    *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
-        *covered_checkpoint_bound,
-        checkpoint_at_frontier,
-        options,
-    );
-    boundary_watermark(
+    checkpoint_at_frontier: Option<u64>,
+) -> Result<Watermark, RpcError> {
+    if let Some(checkpoint) = checkpoint_at_frontier {
+        *covered_checkpoint_bound =
+            advance_covered_bound_before_checkpoint(*covered_checkpoint_bound, checkpoint, options);
+    }
+    let cursor_checkpoint = scan_frontier_cursor_cp(checkpoint_at_frontier, position, direction)
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!("transaction scan frontier {position} has no checkpoint mapping"),
+            )
+        })?;
+    Ok(boundary_watermark(
         Position::Transactions {
-            checkpoint: boundary_cursor_cp(checkpoint_at_frontier, direction),
+            checkpoint: cursor_checkpoint,
             tx_seq: position,
         },
         *covered_checkpoint_bound,
-    )
+    ))
 }
 
 async fn scan_tx_seq_digests(
@@ -573,12 +574,12 @@ fn transaction_item_response(
     response
 }
 
-fn end_response(watermark: Option<Watermark>, reason: QueryEndReason) -> ListTransactionsResponse {
+fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransactionsResponse {
     let mut end = QueryEnd::default();
     end.reason = Some(reason as i32);
 
     let mut response = ListTransactionsResponse::default();
-    response.watermark = watermark;
+    response.watermark = Some(watermark);
     response.end = Some(end);
     response
 }
