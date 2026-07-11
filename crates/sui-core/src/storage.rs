@@ -689,12 +689,13 @@ impl ReadStore for RpcStoreReadStore {
     }
 
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber> {
-        // A consistent read needs both the raw chain data (perpetual
-        // store) and the index rows (rpc-store), so the available range
-        // starts at the higher of the two lower bounds.
-        let perpetual = self.rocks.get_lowest_available_checkpoint()?;
-        let rpc_store = self.reader.get_lowest_available_checkpoint()?;
-        Ok(perpetual.max(rpc_store))
+        // Every transaction and checkpoint read on this store is served from the raw chain
+        // stores, so only their retention bounds it. The rpc-store's index floor is pruned in
+        // lockstep with objects and is carried by `get_lowest_available_checkpoint_objects`;
+        // folding it in here would floor transaction lookups at the object-pruning watermark,
+        // which under aggressive object pruning (`num_epochs_to_retain: 0`) rides within a
+        // couple of checkpoints of the executed tip.
+        self.rocks.get_lowest_available_checkpoint()
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {

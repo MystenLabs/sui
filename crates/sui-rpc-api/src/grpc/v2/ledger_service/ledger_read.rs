@@ -90,7 +90,7 @@ pub(super) fn checkpoint_to_tx_range(
 /// from `certified_checkpoints`, which is retained across pruning, so this resolves
 /// even at the floor.
 fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
-    let lowest_checkpoint = service.reader.get_lowest_available_checkpoint()?;
+    let lowest_checkpoint = service.reader.get_lowest_available_checkpoint_combined()?;
     checkpoint_to_tx_boundary(service, lowest_checkpoint)
 }
 

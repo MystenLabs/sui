@@ -73,7 +73,7 @@ pub fn get_transaction(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
-    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
+    let lowest_available_checkpoint = service.reader.inner().get_lowest_available_checkpoint()?;
 
     if !(lowest_available_checkpoint..=latest_checkpoint).contains(&transaction_checkpoint) {
         return Err(TransactionNotFoundError(transaction_digest).into());
@@ -122,7 +122,7 @@ pub fn batch_get_transactions(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
-    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
+    let lowest_available_checkpoint = service.reader.inner().get_lowest_available_checkpoint()?;
 
     let transactions = digests
         .into_iter()
@@ -202,6 +202,17 @@ pub(crate) fn render_executed_transaction(
     let objects: ObjectSet = if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
         || mask.contains(ExecutedTransaction::EFFECTS_FIELD)
     {
+        // These fields render the transaction's input and output objects, which object pruning
+        // removes independently of transaction data.
+        if checkpoint
+            < service
+                .reader
+                .inner()
+                .get_lowest_available_checkpoint_objects()?
+        {
+            return Err(TransactionNotFoundError(digest).into());
+        }
+
         let mut objects = ObjectSet::default();
 
         let object_keys = sui_types::storage::get_transaction_object_set(

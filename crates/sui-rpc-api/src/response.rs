@@ -49,7 +49,8 @@ pub async fn append_info_headers(
         );
     }
 
-    if let Ok(lowest_available_checkpoint) = state.reader.get_lowest_available_checkpoint() {
+    if let Ok(lowest_available_checkpoint) = state.reader.get_lowest_available_checkpoint_combined()
+    {
         headers.insert(
             X_SUI_LOWEST_AVAILABLE_CHECKPOINT,
             lowest_available_checkpoint.into(),

@@ -75,7 +75,7 @@ pub fn get_checkpoint(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
-    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
+    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint_combined()?;
 
     if !(lowest_available_checkpoint..=latest_checkpoint).contains(&sequence_number) {
         return Err(CheckpointNotFoundError::sequence_number(sequence_number).into());
