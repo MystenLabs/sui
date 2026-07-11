@@ -958,14 +958,15 @@ pub(crate) enum ResolvedScanStop<P> {
 /// Resolve in-band watermarks and the authoritative frontier carried by a
 /// terminal [`ScanStop::ScanLimit`].
 ///
-/// Its in-band scheduler lets items cancel in-flight and pending lookups,
-/// coalesces newer watermarks in one pending slot, drains earned progress at
-/// clean EOF, and salvages earlier in-flight and pending progress before
-/// terminal errors reach the caller.
+/// Its in-band scheduler lets items cancel in-flight and pending lookups and
+/// coalesces newer watermarks in one pending slot. All four terminations —
+/// clean EOF, scan limit, cancellation, fault — funnel through one epilogue
+/// that drains the in-flight and pending lookups in source order before
+/// emitting the terminal.
 ///
 /// The adapter retains the most recent completed resolution, including
 /// `None`. When the terminal frontier matches that result, or a lookup being
-/// salvaged, it reuses the result instead of dispatching another resolver
+/// drained, it reuses the result instead of dispatching another resolver
 /// call. A merely coalesced or item-cancelled position has no completed result
 /// and is resolved if it later becomes the authoritative terminal frontier.
 /// `scan_frontier_to_position` converts the scanned index's raw member domain
@@ -1001,11 +1002,18 @@ where
     #[allow(clippy::collapsible_if)]
     async_stream::try_stream! {
         let mut upstream = std::pin::pin!(upstream);
+        // At most one lookup in flight; a newer watermark waits in `pending`
+        // (latest wins). Invariant: `pending` is only Some while `lookup` is
+        // Some — the promotion below drains it first otherwise.
         let mut lookup: Option<(P, std::pin::Pin<Box<Fut>>)> = None;
         let mut pending: Option<P> = None;
-        // One completed resolver result is enough to cover the common case:
-        // the stopping round repeats the latest in-band frontier.
+        // Latest completed lookup, including a completed `None`. One entry is
+        // enough: the stopping round commonly repeats the latest in-band
+        // frontier. Written only when an in-band lookup completes; read only
+        // by the terminal epilogue's snapshot.
         let mut completed: Option<(P, Option<u64>)> = None;
+        // Why upstream stopped; `None` after the loop means clean EOF.
+        let mut stop: Option<ScanStop> = None;
 
         loop {
             if lookup.is_none() {
@@ -1023,29 +1031,9 @@ where
                     Some(Ok(Watermarked::Watermark(position))) => {
                         lookup = Some((position, Box::pin(resolver(position))));
                     }
-                    Some(Err(ScanStop::ScanLimit { scan_frontier })) => {
-                        let position = scan_frontier_to_position(scan_frontier);
-                        let checkpoint = match completed {
-                            Some((completed_position, checkpoint))
-                                if completed_position == position =>
-                            {
-                                checkpoint
-                            }
-                            _ => {
-                                let checkpoint =
-                                    resolver(position).await.map_err(resolver_error)?;
-                                completed = Some((position, checkpoint));
-                                checkpoint
-                            }
-                        };
-                        Err(ResolvedScanStop::ScanLimit {
-                            position,
-                            checkpoint,
-                        })?;
-                    }
-                    Some(Err(ScanStop::Cancelled)) => Err(ResolvedScanStop::Cancelled)?,
-                    Some(Err(ScanStop::Fault(inner))) => {
-                        Err(ResolvedScanStop::Fault(inner))?;
+                    Some(Err(error)) => {
+                        stop = Some(error);
+                        break;
                     }
                 },
                 Some((position, mut future)) => {
@@ -1076,139 +1064,79 @@ where
                             pending = Some(new_position);
                         }
                         Race::Upstream(None) => {
-                            let checkpoint = future.as_mut().await.map_err(resolver_error)?;
-                            if let Some(checkpoint) = checkpoint {
-                                yield ResolvedWatermarked::Watermark {
-                                    position,
-                                    cp: checkpoint,
-                                };
-                            }
-                            if let Some(pending_position) = pending.take() {
-                                let checkpoint =
-                                    resolver(pending_position).await.map_err(resolver_error)?;
-                                if let Some(checkpoint) = checkpoint {
-                                    yield ResolvedWatermarked::Watermark {
-                                        position: pending_position,
-                                        cp: checkpoint,
-                                    };
-                                }
-                            }
-                            return;
-                        }
-                        Race::Upstream(Some(Err(ScanStop::ScanLimit { scan_frontier }))) => {
-                            let terminal_position =
-                                scan_frontier_to_position(scan_frontier);
-                            // Snapshot an exact cached terminal result before
-                            // salvage updates the one-entry cache with earlier
-                            // in-flight or pending positions.
-                            let mut terminal_checkpoint = match completed {
-                                Some((completed_position, checkpoint))
-                                    if completed_position == terminal_position =>
-                                {
-                                    Some(checkpoint)
-                                }
-                                _ => None,
-                            };
-
-                            // Salvage progress in source order. A failed lookup
-                            // that is not the terminal lookup remains
-                            // subordinate to the authoritative ScanLimit.
-                            match future.as_mut().await {
-                                Ok(checkpoint) => {
-                                    completed = Some((position, checkpoint));
-                                    if position == terminal_position {
-                                        terminal_checkpoint = Some(checkpoint);
-                                    }
-                                    if let Some(checkpoint) = checkpoint {
-                                        yield ResolvedWatermarked::Watermark {
-                                            position,
-                                            cp: checkpoint,
-                                        };
-                                    }
-                                }
-                                Err(error) if position == terminal_position => {
-                                    Err(resolver_error(error))?;
-                                }
-                                Err(_) => {}
-                            }
-
-                            if let Some(pending_position) = pending.take() {
-                                match resolver(pending_position).await {
-                                    Ok(checkpoint) => {
-                                        completed = Some((pending_position, checkpoint));
-                                        if pending_position == terminal_position {
-                                            terminal_checkpoint = Some(checkpoint);
-                                        }
-                                        if let Some(checkpoint) = checkpoint {
-                                            yield ResolvedWatermarked::Watermark {
-                                                position: pending_position,
-                                                cp: checkpoint,
-                                            };
-                                        }
-                                    }
-                                    Err(error) if pending_position == terminal_position => {
-                                        Err(resolver_error(error))?;
-                                    }
-                                    Err(_) => {}
-                                }
-                            }
-
-                            let checkpoint = match terminal_checkpoint {
-                                Some(checkpoint) => checkpoint,
-                                None => match completed {
-                                    Some((completed_position, checkpoint))
-                                        if completed_position == terminal_position =>
-                                    {
-                                        checkpoint
-                                    }
-                                    _ => {
-                                        let checkpoint = resolver(terminal_position)
-                                            .await
-                                            .map_err(resolver_error)?;
-                                        completed = Some((terminal_position, checkpoint));
-                                        checkpoint
-                                    }
-                                },
-                            };
-                            Err(ResolvedScanStop::ScanLimit {
-                                position: terminal_position,
-                                checkpoint,
-                            })?;
+                            lookup = Some((position, future));
+                            break;
                         }
                         Race::Upstream(Some(Err(error))) => {
-                            // Preserve already-earned progress before
-                            // propagating Cancelled or Fault. The original
-                            // terminal error wins over salvage failures.
-                            if let Ok(checkpoint) = future.as_mut().await {
-                                completed = Some((position, checkpoint));
-                                if let Some(checkpoint) = checkpoint {
-                                    yield ResolvedWatermarked::Watermark {
-                                        position,
-                                        cp: checkpoint,
-                                    };
-                                }
-                            }
-                            if let Some(pending_position) = pending.take() {
-                                if let Ok(checkpoint) = resolver(pending_position).await {
-                                    completed = Some((pending_position, checkpoint));
-                                    if let Some(checkpoint) = checkpoint {
-                                        yield ResolvedWatermarked::Watermark {
-                                            position: pending_position,
-                                            cp: checkpoint,
-                                        };
-                                    }
-                                }
-                            }
-                            match error {
-                                ScanStop::Cancelled => Err(ResolvedScanStop::Cancelled)?,
-                                ScanStop::Fault(inner) => {
-                                    Err(ResolvedScanStop::Fault(inner))?;
-                                }
-                                ScanStop::ScanLimit { .. } => unreachable!(),
-                            }
+                            lookup = Some((position, future));
+                            stop = Some(error);
+                            break;
                         }
                     }
                 }
+            }
+        }
+
+        // Terminal epilogue — the single exit for clean EOF, ScanLimit,
+        // Cancelled, and Fault. A ScanLimit's frontier is the authoritative
+        // terminal position; snapshot its cached checkpoint (if any) before
+        // the drain below, which is the cache's only read.
+        let terminal_position = match &stop {
+            Some(ScanStop::ScanLimit { scan_frontier }) => {
+                Some(scan_frontier_to_position(*scan_frontier))
+            }
+            _ => None,
+        };
+        // A later round can exhaust its budget without advancing past the last
+        // beacon, so reuse that beacon's completed resolution.
+        let mut terminal_checkpoint = completed
+            .filter(|(position, _)| Some(*position) == terminal_position)
+            .map(|(_, checkpoint)| checkpoint);
+
+        // Drain earned progress in source order: the in-flight lookup, then
+        // the pending (coalesced) position — dispatched only after the
+        // in-flight one finishes, same discipline as the main loop. A drain
+        // failure stays subordinate to an authoritative terminal error unless
+        // it IS the terminal position (its checkpoint is the terminal
+        // payload) or the stream ended cleanly (nothing outranks it then).
+        let mut draining = lookup.take();
+        while let Some((position, mut future)) = draining.take() {
+            match future.as_mut().await {
+                Ok(checkpoint) => {
+                    if terminal_position == Some(position) {
+                        terminal_checkpoint = Some(checkpoint);
+                    }
+                    if let Some(cp) = checkpoint {
+                        yield ResolvedWatermarked::Watermark { position, cp };
+                    }
+                }
+                Err(error) if stop.is_none() || terminal_position == Some(position) => {
+                    Err(resolver_error(error))?;
+                }
+                Err(_) => {}
+            }
+            draining = pending
+                .take()
+                .map(|position| (position, Box::pin(resolver(position))));
+        }
+
+        match stop {
+            // Clean EOF: everything already drained.
+            None => {}
+            Some(ScanStop::Cancelled) => Err(ResolvedScanStop::Cancelled)?,
+            Some(ScanStop::Fault(inner)) => Err(ResolvedScanStop::Fault(inner))?,
+            Some(ScanStop::ScanLimit { scan_frontier }) => {
+                let position = scan_frontier_to_position(scan_frontier);
+                let checkpoint = match terminal_checkpoint {
+                    Some(checkpoint) => checkpoint,
+                    // Never resolved: the terminal position was coalesced
+                    // away, item-cancelled, or simply new. One fresh lookup.
+                    None => resolver(position).await.map_err(resolver_error)?,
+                };
+                Err(ResolvedScanStop::ScanLimit {
+                    position,
+                    checkpoint,
+                })?;
             }
         }
     }
@@ -3076,11 +3004,11 @@ mod tests {
         );
     }
 
-    /// A matching completed terminal result must survive salvage of newer
-    /// in-flight and pending progress. Salvage overwrites the one-entry cache,
-    /// so the terminal result has to be retained before that work begins.
+    /// A matching completed terminal result must survive draining newer
+    /// in-flight and pending progress. The drain reuses the one-entry cache's
+    /// slot, so the terminal result has to be retained before that work begins.
     #[tokio::test]
-    async fn resolve_scan_watermarks_retains_completed_terminal_through_salvage() {
+    async fn resolve_scan_watermarks_retains_completed_terminal_through_drain() {
         let calls_at_3 = Arc::new(AtomicUsize::new(0));
         let calls_at_5 = Arc::new(AtomicUsize::new(0));
         let calls_at_7 = Arc::new(AtomicUsize::new(0));
@@ -3133,7 +3061,7 @@ mod tests {
         assert_eq!(
             calls_at_3.load(Ordering::SeqCst),
             1,
-            "salvage must not evict the retained terminal checkpoint"
+            "drain must not evict the retained terminal checkpoint"
         );
         assert_eq!(calls_at_5.load(Ordering::SeqCst), 1);
         assert_eq!(calls_at_7.load(Ordering::SeqCst), 1);
