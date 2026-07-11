@@ -374,6 +374,9 @@ fn event_position_coordinate(position: &Position) -> EventPosition {
 }
 
 impl ResolvedCheckpointRange {
+    /// A checkpoint window that resolved to nothing, ending at `checkpoint`
+    /// for `reason`; the endpoint projections carry both into the scan-space
+    /// [`ScanRange::empty_at`] / [`EventScanRange::empty_at`].
     pub fn empty_at(checkpoint: u64, reason: QueryEndReason) -> Self {
         Self {
             range: checkpoint..checkpoint,
@@ -424,6 +427,13 @@ impl ResolvedCheckpointRange {
 }
 
 impl ScanRange {
+    /// A scan that resolved to nothing but still owes the client an answer:
+    /// the window is structurally empty — handlers short-circuit on
+    /// `is_empty()` without spawning a scan — while `end_position` /
+    /// `end_reason` still feed the `QueryEnd` and, on natural completion
+    /// (e.g. a caught-up tail polling at the ledger tip), the emitted
+    /// terminal watermark. The coordinate the collapsed window sits at is
+    /// symbolic; nothing iterates it.
     pub fn empty_at(end_position: Position, end_reason: QueryEndReason) -> Self {
         let coordinate = u64_position_coordinate(&end_position);
         Self {
@@ -498,6 +508,8 @@ impl EventScanBounds {
 }
 
 impl EventScanRange {
+    /// Event-space counterpart of [`ScanRange::empty_at`]: structurally
+    /// empty bounds, terminal bookkeeping intact.
     pub fn empty_at(end_position: Position, end_reason: QueryEndReason) -> Self {
         Self {
             bounds: EventScanBounds::empty_at(event_position_coordinate(&end_position)),
