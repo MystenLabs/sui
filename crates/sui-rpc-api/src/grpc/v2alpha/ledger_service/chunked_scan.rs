@@ -12,15 +12,16 @@ use tokio_util::sync::DropGuard;
 
 use crate::RpcError;
 
-/// How a query stream ended, plus the typed exclusive range boundary the scan
-/// reached. The boundary lets the caller build the terminal progress watermark
-/// when the scan completed naturally.
+/// Underlying chunk scan result, plus the typed exclusive range boundary the
+/// scan reached. The outer handler may override `scan_end_reason` with
+/// `ItemLimit`. The boundary lets it build a terminal progress watermark when
+/// the scan completed naturally.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ChunkTerminal {
-    pub(crate) reason: QueryEndReason,
+    pub(crate) scan_end_reason: QueryEndReason,
     pub(crate) position: Position,
-    /// Fresh boundary watermark at the scan frontier; Some only on
-    /// request-exhausted ScanLimit chunks with a resolvable frontier.
+    /// Fresh boundary watermark at the scan frontier; `Some` only on chunks
+    /// where the request scan limit was reached with a resolvable frontier.
     pub(crate) scan_frontier_watermark: Option<Watermark>,
 }
 
@@ -210,7 +211,7 @@ mod tests {
                     items,
                     next_state: (state < 2).then_some(state + 1),
                     terminal: ChunkTerminal {
-                        reason: QueryEndReason::CheckpointBound,
+                        scan_end_reason: QueryEndReason::CheckpointBound,
                         position: Position::Transactions {
                             checkpoint: 0,
                             tx_seq: 0,
@@ -231,7 +232,7 @@ mod tests {
         assert_eq!(
             scan.into_terminal(),
             Some(ChunkTerminal {
-                reason: QueryEndReason::CheckpointBound,
+                scan_end_reason: QueryEndReason::CheckpointBound,
                 position: Position::Transactions {
                     checkpoint: 0,
                     tx_seq: 0
@@ -257,7 +258,7 @@ mod tests {
                     produced: 0,
                     next_state: None,
                     terminal: ChunkTerminal {
-                        reason: QueryEndReason::CheckpointBound,
+                        scan_end_reason: QueryEndReason::CheckpointBound,
                         position: Position::Transactions {
                             checkpoint: 0,
                             tx_seq: 0,
@@ -293,5 +294,50 @@ mod tests {
             .expect_err("expected cancelled error");
         let status = tonic::Status::from(err);
         assert_eq!(status.code(), tonic::Code::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn limit_reaching_final_item_exhausts_without_scheduling_another_chunk() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+
+        let spawn_count = Arc::new(AtomicUsize::new(0));
+        let spawn_count_for_worker = spawn_count.clone();
+        let mut scan = ChunkedScan::new(0usize, 2, 2, 10, move |_state, args: ChunkArgs| {
+            spawn_count_for_worker.fetch_add(1, Ordering::SeqCst);
+            tokio::task::spawn_blocking(move || {
+                Ok(ScanChunkDone {
+                    items: vec!["first", "final"],
+                    produced: 2,
+                    next_state: Some(1),
+                    terminal: ChunkTerminal {
+                        scan_end_reason: QueryEndReason::CheckpointBound,
+                        position: Position::Transactions {
+                            checkpoint: 3,
+                            tx_seq: 0,
+                        },
+                        scan_frontier_watermark: None,
+                    },
+                    remaining_scan_budget: args.scan_budget - 1,
+                })
+            })
+        });
+
+        assert_eq!(scan.next_item().await.unwrap(), Some("first"));
+        assert_eq!(scan.produced(), 2);
+        assert!(!scan.exhausted(), "the final item is still buffered");
+
+        assert_eq!(scan.next_item().await.unwrap(), Some("final"));
+        assert_eq!(scan.produced(), 2);
+        assert!(
+            scan.exhausted(),
+            "the item limit leaves no trailing frame or chunk in flight"
+        );
+        assert_eq!(scan.next_item().await.unwrap(), None);
+        assert_eq!(
+            spawn_count.load(Ordering::SeqCst),
+            1,
+            "next_state must not schedule another chunk at the item limit"
+        );
     }
 }
