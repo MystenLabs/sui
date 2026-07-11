@@ -55,7 +55,7 @@ use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::validate_checkpoint_bounds;
-use crate::ledger_history::watermark::advance_boundary_excluding_cp;
+use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_cursor_cp;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
@@ -482,7 +482,7 @@ fn scan_event_watermark(
     let Some(cp) = event_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-    let boundary = advance_boundary_excluding_cp(None, cp, options);
+    let boundary = advance_covered_bound_before_checkpoint(None, cp, options);
     let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
     let watermark = boundary_watermark(
         Position::Events {
@@ -577,8 +577,11 @@ fn render_event_chunk(
         if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
             proto_event.event_index = Some(event_ref.position.event_index);
         }
-        checkpoint_boundary =
-            advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
+        checkpoint_boundary = advance_covered_bound_before_checkpoint(
+            checkpoint_boundary,
+            row.checkpoint_number,
+            options,
+        );
         let watermark = item_watermark(
             Position::Events {
                 checkpoint: row.checkpoint_number,

@@ -353,7 +353,7 @@ impl BigTableClient {
     }
 
     /// Build a resolver closure for tx-bitmap watermarks (identity
-    /// decode). Hand directly to [`crate::pipeline::resolve_watermarks`].
+    /// decode). Hand directly to [`crate::pipeline::resolve_scan_watermarks`].
     pub(crate) fn tx_wm_resolver(
         &self,
         direction: ScanDirection,
@@ -379,7 +379,7 @@ impl BigTableClient {
     }
 
     /// Build a resolver closure for event-bitmap watermarks. Hand directly to
-    /// [`crate::pipeline::resolve_watermarks`].
+    /// [`crate::pipeline::resolve_scan_watermarks`].
     pub(crate) fn event_wm_resolver(
         &self,
         direction: ScanDirection,

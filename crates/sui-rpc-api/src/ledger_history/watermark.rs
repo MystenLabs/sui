@@ -12,13 +12,13 @@
 //! per API is how a scan position resolves into a completion-boundary candidate:
 //!
 //! - `list_transactions` / `list_events` scan within a checkpoint, so an
-//!   item at cp `C` does NOT prove `C` complete (more matches may sit at
-//!   higher/lower tx_seqs / event_seqs). Their boundary candidate is
-//!   `C ∓ 1` — see [`advance_boundary_excluding_cp`].
-//! - `list_checkpoints` dedupes cp_seq, so "cp `C` emitted" ≡ "cp `C`
-//!   complete." It feeds `C` straight into [`advance_checkpoint_boundary`]
-//!   for items, and translates its scan frontier into a cp-space candidate
-//!   itself before doing the same.
+//!   item at checkpoint `C` does NOT prove `C` complete (more matches may sit
+//!   at higher/lower transaction or event positions). Their covered bound is
+//!   advanced before `C` — see [`advance_covered_bound_before_checkpoint`].
+//! - `list_checkpoints` dedupes checkpoint numbers, so "checkpoint `C`
+//!   emitted" means "checkpoint `C` complete." Its item path directly records
+//!   `C`; independently resolved frontier candidates are folded with
+//!   [`merge_covered_checkpoint_bound`].
 //!
 //! This module owns the shared pieces; each handler keeps only its
 //! API-specific frontier-to-candidate adapter.
@@ -39,47 +39,44 @@ fn set_checkpoint_bound(wm: &mut Watermark, boundary: Option<u64>) {
     wm.checkpoint = boundary;
 }
 
-/// Fold an already-resolved completion-boundary `candidate` into the
-/// accumulated boundary, keeping the most-advanced value in scan direction:
-/// the max ascending, the min descending.
-///
-/// Callers resolve `candidate` for their scan domain first — `list_checkpoints`
-/// passes the item's cp directly (dedup makes it complete), while the
-/// per-checkpoint scanners use [`advance_boundary_excluding_cp`].
-pub fn advance_checkpoint_boundary(
-    prev: Option<u64>,
-    candidate: u64,
+/// Merge a fully covered checkpoint candidate into the accumulated inclusive
+/// bound. The bound advances by max in ascending scans and min in descending
+/// scans.
+pub fn merge_covered_checkpoint_bound(
+    covered_checkpoint_bound: Option<u64>,
+    candidate_bound: u64,
     options: &QueryOptions,
 ) -> Option<u64> {
-    Some(match prev {
-        None => candidate,
-        Some(p) if options.is_ascending() => p.max(candidate),
-        Some(p) => p.min(candidate),
+    Some(match covered_checkpoint_bound {
+        None => candidate_bound,
+        Some(bound) if options.is_ascending() => bound.max(candidate_bound),
+        Some(bound) => bound.min(candidate_bound),
     })
 }
 
-/// Fold a cp whose own checkpoint is NOT proven complete into the
-/// accumulated boundary (`list_transactions` / `list_events`: cp `C` may
-/// still hold further matches at other tx_seqs / event_seqs; and any scan
-/// frontier, which lands partway through the checkpoint it resolves to). The
-/// boundary excludes `C` itself: `C - 1` ascending / `C + 1` descending.
+/// Advance the inclusive covered bound using a checkpoint that is not itself
+/// proven complete. Transactions, events, and scan frontiers can leave more
+/// matches within checkpoint `C`, so the candidate excludes `C`: `C - 1`
+/// ascending and `C + 1` descending. The adjusted candidate is then merged by
+/// max ascending or min descending.
 ///
-/// When that adjusted candidate would overflow (`C == 0` ascending or
-/// `u64::MAX` descending) the previously accumulated boundary is preserved
-/// rather than collapsed back to `None`.
-pub fn advance_boundary_excluding_cp(
-    prev: Option<u64>,
-    cp: u64,
+/// When that adjustment would overflow (`C == 0` ascending or `u64::MAX`
+/// descending), the previously covered bound is preserved.
+pub fn advance_covered_bound_before_checkpoint(
+    covered_checkpoint_bound: Option<u64>,
+    incomplete_checkpoint: u64,
     options: &QueryOptions,
 ) -> Option<u64> {
-    let candidate = if options.is_ascending() {
-        cp.checked_sub(1)
+    let candidate_bound = if options.is_ascending() {
+        incomplete_checkpoint.checked_sub(1)
     } else {
-        cp.checked_add(1)
+        incomplete_checkpoint.checked_add(1)
     };
-    match candidate {
-        Some(c) => advance_checkpoint_boundary(prev, c, options),
-        None => prev,
+    match candidate_bound {
+        Some(candidate_bound) => {
+            merge_covered_checkpoint_bound(covered_checkpoint_bound, candidate_bound, options)
+        }
+        None => covered_checkpoint_bound,
     }
 }
 
@@ -168,45 +165,63 @@ mod tests {
     }
 
     #[test]
-    fn advance_checkpoint_boundary_keeps_most_advanced_in_direction() {
+    fn merge_covered_checkpoint_bound_keeps_most_advanced_in_direction() {
         let asc = options(true);
-        assert_eq!(advance_checkpoint_boundary(None, 5, &asc), Some(5));
-        assert_eq!(advance_checkpoint_boundary(Some(5), 9, &asc), Some(9));
-        assert_eq!(advance_checkpoint_boundary(Some(9), 5, &asc), Some(9));
+        assert_eq!(merge_covered_checkpoint_bound(None, 5, &asc), Some(5));
+        assert_eq!(merge_covered_checkpoint_bound(Some(5), 9, &asc), Some(9));
+        assert_eq!(merge_covered_checkpoint_bound(Some(9), 5, &asc), Some(9));
 
         let desc = options(false);
-        assert_eq!(advance_checkpoint_boundary(None, 9, &desc), Some(9));
-        assert_eq!(advance_checkpoint_boundary(Some(9), 5, &desc), Some(5));
-        assert_eq!(advance_checkpoint_boundary(Some(5), 9, &desc), Some(5));
+        assert_eq!(merge_covered_checkpoint_bound(None, 9, &desc), Some(9));
+        assert_eq!(merge_covered_checkpoint_bound(Some(9), 5, &desc), Some(5));
+        assert_eq!(merge_covered_checkpoint_bound(Some(5), 9, &desc), Some(5));
     }
 
     /// The per-checkpoint scanners exclude the item's own cp: `C - 1`
     /// ascending, `C + 1` descending.
     #[test]
-    fn advance_boundary_excluding_cp_adjusts_by_one() {
+    fn advance_covered_bound_before_checkpoint_adjusts_by_one() {
         let asc = options(true);
-        assert_eq!(advance_boundary_excluding_cp(None, 10, &asc), Some(9));
-        assert_eq!(advance_boundary_excluding_cp(Some(9), 12, &asc), Some(11));
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(None, 10, &asc),
+            Some(9)
+        );
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(Some(9), 12, &asc),
+            Some(11)
+        );
 
         let desc = options(false);
-        assert_eq!(advance_boundary_excluding_cp(None, 10, &desc), Some(11));
-        assert_eq!(advance_boundary_excluding_cp(Some(11), 8, &desc), Some(9));
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(None, 10, &desc),
+            Some(11)
+        );
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(Some(11), 8, &desc),
+            Some(9)
+        );
     }
 
     /// Overflow at the range edge (`cp 0` ascending, `u64::MAX` descending)
     /// preserves the previously accumulated boundary instead of dropping it.
     #[test]
-    fn advance_boundary_excluding_cp_preserves_prev_on_overflow() {
+    fn advance_covered_bound_before_checkpoint_preserves_prev_on_overflow() {
         let asc = options(true);
-        assert_eq!(advance_boundary_excluding_cp(Some(4), 0, &asc), Some(4));
-        assert_eq!(advance_boundary_excluding_cp(None, 0, &asc), None);
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(Some(4), 0, &asc),
+            Some(4)
+        );
+        assert_eq!(advance_covered_bound_before_checkpoint(None, 0, &asc), None);
 
         let desc = options(false);
         assert_eq!(
-            advance_boundary_excluding_cp(Some(4), u64::MAX, &desc),
+            advance_covered_bound_before_checkpoint(Some(4), u64::MAX, &desc),
             Some(4)
         );
-        assert_eq!(advance_boundary_excluding_cp(None, u64::MAX, &desc), None);
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(None, u64::MAX, &desc),
+            None
+        );
     }
 
     #[test]

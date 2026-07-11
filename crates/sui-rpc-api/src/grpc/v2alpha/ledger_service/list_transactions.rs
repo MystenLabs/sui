@@ -32,7 +32,7 @@ use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedRange;
-use crate::ledger_history::watermark::advance_boundary_excluding_cp;
+use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_cursor_cp;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
@@ -448,7 +448,7 @@ fn scan_transaction_watermark(
     let Some(cp) = sequence_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-    let boundary = advance_boundary_excluding_cp(None, cp, options);
+    let boundary = advance_covered_bound_before_checkpoint(None, cp, options);
     let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
     let watermark = boundary_watermark(
         Position::Transactions {
@@ -492,8 +492,11 @@ fn render_transaction_rows(
         if cancel.is_cancelled() {
             return Err(cancelled());
         }
-        checkpoint_boundary =
-            advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
+        checkpoint_boundary = advance_covered_bound_before_checkpoint(
+            checkpoint_boundary,
+            row.checkpoint_number,
+            options,
+        );
         let watermark = item_watermark(
             Position::Transactions {
                 checkpoint: row.checkpoint_number,

@@ -13,6 +13,7 @@ use futures::TryStreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
 use sui_futures::task::TaskGuard;
+use sui_inverted_index::ScanStop;
 use sui_rpc_api::RpcError;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -620,7 +621,7 @@ where
         while let Some(result) = fetch_results.next().await {
             // `result?` propagates a terminal upstream/fetch error WITHOUT
             // flushing a watermark `reassembler` may be holding. This is
-            // deliberate and is the opposite of `resolve_watermarks`'
+            // deliberate and is the opposite of `resolve_scan_watermarks`'
             // flush-on-error: there the in-flight watermark dominates
             // already-emitted items, so flushing it is safe; here a held
             // `pending_watermark` is set only mid-batch, so it dominates the
@@ -931,153 +932,270 @@ where
     }
 }
 
-/// Output of [`resolve_watermarks`]: items pass through; watermarks
-/// carry both the original bitmap-domain position and the resolved cp.
+/// Resolved pipeline frame: items pass through; watermarks carry both the
+/// original scan-domain position and its checkpoint.
 pub(crate) enum ResolvedWatermarked<T, P = u64> {
     Item(T),
     Watermark { position: P, cp: u64 },
 }
 
-/// Final stream stage: pass items through and resolve standalone WMs
-/// to cp via one row read per WM. O(1) memory.
+/// Terminal outcome from [`resolve_scan_watermarks`].
 ///
-/// While a WM lookup is in flight, `tokio::select!` polls upstream
-/// concurrently — `.buffered(N)` chunk fetchers keep dispatching instead
-/// of stalling on the slowest single call in the pipeline.
+/// A scan limit carries the authoritative terminal position in the same
+/// domain as in-band watermarks and the checkpoint resolution for that exact
+/// position. `None` is a completed resolver result, not an unresolved
+/// position.
+#[derive(Debug)]
+pub(crate) enum ResolvedScanStop<P> {
+    ScanLimit {
+        position: P,
+        checkpoint: Option<u64>,
+    },
+    Cancelled,
+    Fault(anyhow::Error),
+}
+
+/// Resolve in-band watermarks and the authoritative frontier carried by a
+/// terminal [`ScanStop::ScanLimit`].
 ///
-/// Cancellation rules:
-/// - **Item arrives during a lookup**: cancel the lookup (drop the
-///   future). The item's cursor carries equivalent progress info, so
-///   suppressing the WM does not lose progress.
-/// - **Newer WM arrives during a lookup**: do NOT cancel. The new WM
-///   stashes in a single-slot `pending`; the in-flight lookup keeps
-///   running with upstream still being polled. WMs arriving later
-///   overwrite `pending` (latest wins — synchronous-burst coalesce).
-///   When the lookup completes, `pending` (if any) starts the next
-///   lookup; intermediate WMs were coalesced out.
+/// Its in-band scheduler lets items cancel in-flight and pending lookups,
+/// coalesces newer watermarks in one pending slot, drains earned progress at
+/// clean EOF, and salvages earlier in-flight and pending progress before
+/// terminal errors reach the caller.
 ///
-/// Backpressure: no internal buffer. A slow downstream blocks `yield`,
-/// which stops the loop, which stops polling upstream — the chain
-/// stalls cleanly without growing memory.
-///
-/// Callers construct `resolver` via
-/// [`crate::bigtable_client::BigTableClient::tx_wm_resolver`] or
-/// [`crate::bigtable_client::BigTableClient::event_wm_resolver`].
-pub(crate) fn resolve_watermarks<T, P, E, F, Fut>(
-    upstream: BoxStream<'static, Result<Watermarked<T, P>, E>>,
+/// The adapter retains the most recent completed resolution, including
+/// `None`. When the terminal frontier matches that result, or a lookup being
+/// salvaged, it reuses the result instead of dispatching another resolver
+/// call. A merely coalesced or item-cancelled position has no completed result
+/// and is resolved if it later becomes the authoritative terminal frontier.
+/// `scan_frontier_to_position` converts the scanned index's raw member domain
+/// into the endpoint position domain.
+pub(crate) fn resolve_scan_watermarks<T, P, F, Fut, C>(
+    upstream: BoxStream<'static, Result<Watermarked<T, P>, ScanStop>>,
     resolver: F,
-) -> BoxStream<'static, Result<ResolvedWatermarked<T, P>, E>>
+    scan_frontier_to_position: C,
+) -> BoxStream<'static, Result<ResolvedWatermarked<T, P>, ResolvedScanStop<P>>>
 where
     T: Send + 'static,
-    P: Copy + Send + 'static,
-    E: Send + 'static,
+    P: Copy + Eq + Send + 'static,
     F: Fn(P) -> Fut + Send + 'static,
-    Fut: Future<Output = Result<Option<u64>, E>> + Send,
+    Fut: Future<Output = Result<Option<u64>, ScanStop>> + Send,
+    C: Fn(u64) -> P + Send + 'static,
 {
-    /// Result of racing one in-flight WM lookup against the next upstream
-    /// frame. Lifted out of the `tokio::select!` block so the post-select
-    /// `match` can take ownership of the lookup future.
-    enum Race<T, P, E> {
-        LookupDone(Result<Option<u64>, E>),
-        Upstream(Option<Result<Watermarked<T, P>, E>>),
+    enum Race<T, P> {
+        LookupDone(Result<Option<u64>, ScanStop>),
+        Upstream(Option<Result<Watermarked<T, P>, ScanStop>>),
     }
 
-    // `let_chains` inside the `async_stream::try_stream!` macro body
-    // doesn't compile cleanly (the macro's expansion context isn't
-    // edition-2024), so the nested-`if let` collapses clippy suggests
-    // can't be applied here. The pattern reads fine as nested ifs.
+    fn resolver_error<P>(error: ScanStop) -> ResolvedScanStop<P> {
+        match error {
+            ScanStop::Cancelled => ResolvedScanStop::Cancelled,
+            ScanStop::Fault(inner) => ResolvedScanStop::Fault(inner),
+            ScanStop::ScanLimit { scan_frontier } => ResolvedScanStop::Fault(anyhow::anyhow!(
+                "unexpected nested scan limit while resolving watermark at frontier \
+                 {scan_frontier}"
+            )),
+        }
+    }
+
     #[allow(clippy::collapsible_if)]
     async_stream::try_stream! {
         let mut upstream = std::pin::pin!(upstream);
-        // At most one lookup in flight. WMs that arrive while a lookup
-        // is in flight coalesce into `pending` (latest wins); items
-        // cancel both.
         let mut lookup: Option<(P, std::pin::Pin<Box<Fut>>)> = None;
         let mut pending: Option<P> = None;
+        // One completed resolver result is enough to cover the common case:
+        // the stopping round repeats the latest in-band frontier.
+        let mut completed: Option<(P, Option<u64>)> = None;
 
         loop {
-            // Promote pending → lookup when nothing is in flight.
             if lookup.is_none() {
-                if let Some(p) = pending.take() {
-                    lookup = Some((p, Box::pin(resolver(p))));
+                if let Some(position) = pending.take() {
+                    lookup = Some((position, Box::pin(resolver(position))));
                 }
             }
 
             match lookup.take() {
                 None => match upstream.as_mut().next().await {
                     None => break,
-                    Some(Err(e)) => Err(e)?,
-                    Some(Ok(Watermarked::Item(t))) => yield ResolvedWatermarked::Item(t),
-                    Some(Ok(Watermarked::Watermark(p))) => {
-                        lookup = Some((p, Box::pin(resolver(p))));
+                    Some(Ok(Watermarked::Item(item))) => {
+                        yield ResolvedWatermarked::Item(item);
+                    }
+                    Some(Ok(Watermarked::Watermark(position))) => {
+                        lookup = Some((position, Box::pin(resolver(position))));
+                    }
+                    Some(Err(ScanStop::ScanLimit { scan_frontier })) => {
+                        let position = scan_frontier_to_position(scan_frontier);
+                        let checkpoint = match completed {
+                            Some((completed_position, checkpoint))
+                                if completed_position == position =>
+                            {
+                                checkpoint
+                            }
+                            _ => {
+                                let checkpoint =
+                                    resolver(position).await.map_err(resolver_error)?;
+                                completed = Some((position, checkpoint));
+                                checkpoint
+                            }
+                        };
+                        Err(ResolvedScanStop::ScanLimit {
+                            position,
+                            checkpoint,
+                        })?;
+                    }
+                    Some(Err(ScanStop::Cancelled)) => Err(ResolvedScanStop::Cancelled)?,
+                    Some(Err(ScanStop::Fault(inner))) => {
+                        Err(ResolvedScanStop::Fault(inner))?;
                     }
                 },
-                Some((position, mut fut)) => {
-                    // Bind the upstream re-borrow to a local so the
-                    // `Next` future has a place to anchor its borrow
-                    // (an inline `upstream.as_mut().next()` would let
-                    // the intermediate Pin temporary drop before
-                    // select! polls).
+                Some((position, mut future)) => {
                     let mut upstream_re = upstream.as_mut();
-                    let outcome: Race<T, P, E> = tokio::select! {
-                        res = fut.as_mut() => Race::LookupDone(res),
+                    let outcome: Race<T, P> = tokio::select! {
+                        result = future.as_mut() => Race::LookupDone(result),
                         next = upstream_re.next() => Race::Upstream(next),
                     };
                     match outcome {
-                        Race::LookupDone(res) => {
-                            // `fut` drops here; `lookup` stays None
-                            // so the next iteration promotes pending
-                            // (if any) into the next lookup.
-                            if let Some(cp) = res? {
-                                yield ResolvedWatermarked::Watermark { position, cp };
+                        Race::LookupDone(result) => {
+                            let checkpoint = result.map_err(resolver_error)?;
+                            completed = Some((position, checkpoint));
+                            if let Some(checkpoint) = checkpoint {
+                                yield ResolvedWatermarked::Watermark {
+                                    position,
+                                    cp: checkpoint,
+                                };
                             }
                         }
-                        Race::Upstream(Some(Ok(Watermarked::Item(t)))) => {
-                            // Item supersedes both in-flight and
-                            // pending. `fut` drops here (cancels the
-                            // RPC); progress is carried by the item.
+                        Race::Upstream(Some(Ok(Watermarked::Item(item)))) => {
+                            // The dropped future and pending slot have no
+                            // completed result. The item carries their progress.
                             pending = None;
-                            yield ResolvedWatermarked::Item(t);
+                            yield ResolvedWatermarked::Item(item);
                         }
-                        Race::Upstream(Some(Ok(Watermarked::Watermark(new_p)))) => {
-                            // Don't cancel the in-flight lookup. Stash
-                            // the new WM as pending (overwriting any
-                            // earlier pending — latest wins).
-                            lookup = Some((position, fut));
-                            pending = Some(new_p);
+                        Race::Upstream(Some(Ok(Watermarked::Watermark(new_position)))) => {
+                            lookup = Some((position, future));
+                            pending = Some(new_position);
                         }
                         Race::Upstream(None) => {
-                            // Upstream done. Finish the in-flight
-                            // lookup, then drain any pending WM.
-                            if let Some(cp) = fut.as_mut().await? {
-                                yield ResolvedWatermarked::Watermark { position, cp };
+                            let checkpoint = future.as_mut().await.map_err(resolver_error)?;
+                            if let Some(checkpoint) = checkpoint {
+                                yield ResolvedWatermarked::Watermark {
+                                    position,
+                                    cp: checkpoint,
+                                };
                             }
-                            if let Some(pp) = pending.take() {
-                                if let Some(cp) = resolver(pp).await? {
-                                    yield ResolvedWatermarked::Watermark { position: pp, cp };
+                            if let Some(pending_position) = pending.take() {
+                                let checkpoint =
+                                    resolver(pending_position).await.map_err(resolver_error)?;
+                                if let Some(checkpoint) = checkpoint {
+                                    yield ResolvedWatermarked::Watermark {
+                                        position: pending_position,
+                                        cp: checkpoint,
+                                    };
                                 }
                             }
                             return;
                         }
-                        Race::Upstream(Some(Err(e))) => {
-                            // A terminal upstream error (e.g.
-                            // `ScanStop::ScanLimit`) must not swallow progress
-                            // whose lookup is already in flight. Finishing this
-                            // lookup (and draining any coalesced `pending`)
-                            // preserves progress already earned before the
-                            // terminal. For a scan limit, the terminal itself
-                            // carries the stopping round's authoritative
-                            // frontier. The original error wins over any error
-                            // from these salvage lookups.
-                            if let Ok(Some(cp)) = fut.as_mut().await {
-                                yield ResolvedWatermarked::Watermark { position, cp };
+                        Race::Upstream(Some(Err(ScanStop::ScanLimit { scan_frontier }))) => {
+                            let terminal_position =
+                                scan_frontier_to_position(scan_frontier);
+                            let mut terminal_checkpoint = None;
+
+                            // Salvage progress in source order. A failed lookup
+                            // that is not the terminal lookup remains
+                            // subordinate to the authoritative ScanLimit.
+                            match future.as_mut().await {
+                                Ok(checkpoint) => {
+                                    completed = Some((position, checkpoint));
+                                    if position == terminal_position {
+                                        terminal_checkpoint = Some(checkpoint);
+                                    }
+                                    if let Some(checkpoint) = checkpoint {
+                                        yield ResolvedWatermarked::Watermark {
+                                            position,
+                                            cp: checkpoint,
+                                        };
+                                    }
+                                }
+                                Err(error) if position == terminal_position => {
+                                    Err(resolver_error(error))?;
+                                }
+                                Err(_) => {}
                             }
-                            if let Some(pp) = pending.take() {
-                                if let Ok(Some(cp)) = resolver(pp).await {
-                                    yield ResolvedWatermarked::Watermark { position: pp, cp };
+
+                            if let Some(pending_position) = pending.take() {
+                                match resolver(pending_position).await {
+                                    Ok(checkpoint) => {
+                                        completed = Some((pending_position, checkpoint));
+                                        if pending_position == terminal_position {
+                                            terminal_checkpoint = Some(checkpoint);
+                                        }
+                                        if let Some(checkpoint) = checkpoint {
+                                            yield ResolvedWatermarked::Watermark {
+                                                position: pending_position,
+                                                cp: checkpoint,
+                                            };
+                                        }
+                                    }
+                                    Err(error) if pending_position == terminal_position => {
+                                        Err(resolver_error(error))?;
+                                    }
+                                    Err(_) => {}
                                 }
                             }
-                            Err(e)?;
+
+                            let checkpoint = match terminal_checkpoint {
+                                Some(checkpoint) => checkpoint,
+                                None => match completed {
+                                    Some((completed_position, checkpoint))
+                                        if completed_position == terminal_position =>
+                                    {
+                                        checkpoint
+                                    }
+                                    _ => {
+                                        let checkpoint = resolver(terminal_position)
+                                            .await
+                                            .map_err(resolver_error)?;
+                                        completed = Some((terminal_position, checkpoint));
+                                        checkpoint
+                                    }
+                                },
+                            };
+                            Err(ResolvedScanStop::ScanLimit {
+                                position: terminal_position,
+                                checkpoint,
+                            })?;
+                        }
+                        Race::Upstream(Some(Err(error))) => {
+                            // Preserve already-earned progress before
+                            // propagating Cancelled or Fault. The original
+                            // terminal error wins over salvage failures.
+                            if let Ok(checkpoint) = future.as_mut().await {
+                                completed = Some((position, checkpoint));
+                                if let Some(checkpoint) = checkpoint {
+                                    yield ResolvedWatermarked::Watermark {
+                                        position,
+                                        cp: checkpoint,
+                                    };
+                                }
+                            }
+                            if let Some(pending_position) = pending.take() {
+                                if let Ok(checkpoint) = resolver(pending_position).await {
+                                    completed = Some((pending_position, checkpoint));
+                                    if let Some(checkpoint) = checkpoint {
+                                        yield ResolvedWatermarked::Watermark {
+                                            position: pending_position,
+                                            cp: checkpoint,
+                                        };
+                                    }
+                                }
+                            }
+                            match error {
+                                ScanStop::Cancelled => Err(ResolvedScanStop::Cancelled)?,
+                                ScanStop::Fault(inner) => {
+                                    Err(ResolvedScanStop::Fault(inner))?;
+                                }
+                                ScanStop::ScanLimit { .. } => unreachable!(),
+                            }
                         }
                     }
                 }
@@ -2538,15 +2656,14 @@ mod tests {
         );
     }
 
-    // ---- resolve_watermarks ----
+    // ---- resolve_scan_watermarks ----
 
     use futures::TryStreamExt;
-    use sui_rpc_api::RpcError;
 
     /// Future type emitted by the test resolver. Aliased to keep
     /// `slow_resolver`'s signature readable.
     type TestResolverFut =
-        std::pin::Pin<Box<dyn Future<Output = Result<Option<u64>, RpcError>> + Send>>;
+        std::pin::Pin<Box<dyn Future<Output = Result<Option<u64>, ScanStop>> + Send>>;
 
     #[derive(Clone, Copy)]
     enum WmTestFrame {
@@ -2561,20 +2678,20 @@ mod tests {
     /// controlled points relative to the resolver's progress.
     fn wm_upstream_from(
         frames: Vec<WmTestFrame>,
-    ) -> BoxStream<'static, Result<Watermarked<u64>, RpcError>> {
+    ) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>> {
         stream::unfold(frames.into_iter(), |mut it| async move {
             let frame = it.next()?;
             match frame {
                 WmTestFrame::Item(t) => Some((Ok(Watermarked::Item(t)), it)),
                 WmTestFrame::Wm(p) => Some((Ok(Watermarked::Watermark(p)), it)),
-                WmTestFrame::Err(m) => Some((Err(RpcError::new(tonic::Code::Internal, m)), it)),
+                WmTestFrame::Err(m) => Some((Err(ScanStop::Fault(anyhow::anyhow!(m))), it)),
                 WmTestFrame::Sleep(ms) => {
                     tokio::time::sleep(Duration::from_millis(ms)).await;
                     let frame = it.next()?;
                     let out = match frame {
                         WmTestFrame::Item(t) => Ok(Watermarked::Item(t)),
                         WmTestFrame::Wm(p) => Ok(Watermarked::Watermark(p)),
-                        WmTestFrame::Err(m) => Err(RpcError::new(tonic::Code::Internal, m)),
+                        WmTestFrame::Err(m) => Err(ScanStop::Fault(anyhow::anyhow!(m))),
                         WmTestFrame::Sleep(_) => panic!("consecutive sleeps in test stream"),
                     };
                     Some((out, it))
@@ -2609,7 +2726,7 @@ mod tests {
     }
 
     async fn collect_emits(
-        stream: BoxStream<'static, Result<ResolvedWatermarked<u64>, RpcError>>,
+        stream: BoxStream<'static, Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>>,
     ) -> Vec<WmEmit> {
         stream
             .map_ok(|w| match w {
@@ -2619,6 +2736,419 @@ mod tests {
             .try_collect()
             .await
             .expect("stream completed without error")
+    }
+
+    type ControlledWmFrame = (Result<Watermarked<u64>, ScanStop>, oneshot::Sender<()>);
+    type ResolvedWmFrame = Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>;
+    type DrivenWmOutput = (
+        tokio::sync::mpsc::Receiver<ResolvedWmFrame>,
+        tokio::task::JoinHandle<()>,
+    );
+
+    /// A synthetic upstream whose sender can wait until each frame has been
+    /// polled by the pipeline. This makes lookup/upstream races deterministic
+    /// without sleeps.
+    fn controlled_wm_upstream() -> (
+        tokio::sync::mpsc::Sender<ControlledWmFrame>,
+        BoxStream<'static, Result<Watermarked<u64>, ScanStop>>,
+    ) {
+        let (tx, rx) = tokio::sync::mpsc::channel::<ControlledWmFrame>(1);
+        let upstream = stream::unfold(rx, |mut rx| async move {
+            let (frame, pulled) = rx.recv().await?;
+            let _ = pulled.send(());
+            Some((frame, rx))
+        })
+        .boxed();
+        (tx, upstream)
+    }
+
+    async fn push_wm_frame(
+        tx: &tokio::sync::mpsc::Sender<ControlledWmFrame>,
+        frame: Result<Watermarked<u64>, ScanStop>,
+    ) {
+        let (pulled_tx, pulled_rx) = oneshot::channel();
+        timeout(Duration::from_secs(1), tx.send((frame, pulled_tx)))
+            .await
+            .expect("resolver pipeline should accept the upstream frame")
+            .expect("resolver pipeline should still be reading upstream");
+        timeout(Duration::from_secs(1), pulled_rx)
+            .await
+            .expect("resolver pipeline should poll the upstream frame")
+            .expect("resolver pipeline should acknowledge the upstream frame");
+    }
+
+    fn drive_wm_stream(
+        mut stream: BoxStream<'static, Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>>,
+    ) -> DrivenWmOutput {
+        // The widest scenario below emits two progress frames and one
+        // terminal frame before its assertions begin draining output.
+        let (tx, rx) = tokio::sync::mpsc::channel::<ResolvedWmFrame>(3);
+        let task = tokio::spawn(async move {
+            while let Some(frame) = stream.next().await {
+                let terminal = frame.is_err();
+                if tx.send(frame).await.is_err() || terminal {
+                    break;
+                }
+            }
+        });
+        (rx, task)
+    }
+
+    async fn next_driven_wm_frame(
+        rx: &mut tokio::sync::mpsc::Receiver<ResolvedWmFrame>,
+    ) -> ResolvedWmFrame {
+        timeout(Duration::from_secs(1), rx.recv())
+            .await
+            .expect("resolver pipeline should produce its next frame")
+            .expect("resolver pipeline ended before producing the expected frame")
+    }
+
+    fn assert_resolved_wm(
+        frame: Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>,
+        expected_position: u64,
+        expected_checkpoint: u64,
+    ) {
+        match frame {
+            Ok(ResolvedWatermarked::Watermark { position, cp }) => {
+                assert_eq!(position, expected_position);
+                assert_eq!(cp, expected_checkpoint);
+            }
+            Ok(ResolvedWatermarked::Item(_)) => {
+                panic!("expected a resolved watermark, got an item")
+            }
+            Err(_) => panic!("expected a resolved watermark, got a terminal error"),
+        }
+    }
+
+    fn assert_scan_limit(
+        frame: Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>,
+        expected_position: u64,
+        expected_checkpoint: Option<u64>,
+    ) {
+        match frame {
+            Err(ResolvedScanStop::ScanLimit {
+                position,
+                checkpoint,
+            }) => {
+                assert_eq!(position, expected_position);
+                assert_eq!(checkpoint, expected_checkpoint);
+            }
+            Err(_) => panic!("expected a scan-limit terminal error"),
+            Ok(_) => panic!("expected a scan-limit terminal error, got a success frame"),
+        }
+    }
+
+    /// Once an in-band resolution completes, a stopping round at that exact
+    /// position must reuse both the lookup and its checkpoint.
+    #[tokio::test]
+    async fn resolve_scan_watermarks_reuses_completed_position_at_scan_limit() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_resolver = calls.clone();
+        let (tx, upstream) = controlled_wm_upstream();
+        let stream = resolve_scan_watermarks(
+            upstream,
+            move |position| {
+                calls_for_resolver.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move { Ok(Some(position * 10)) }) as TestResolverFut
+            },
+            std::convert::identity,
+        );
+        let (mut output, driver) = drive_wm_stream(stream);
+
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(7))).await;
+        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 7, 70);
+
+        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 7 })).await;
+        assert_scan_limit(next_driven_wm_frame(&mut output).await, 7, Some(70));
+
+        driver
+            .await
+            .expect("resolver pipeline driver should finish");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "the terminal must reuse the completed in-band lookup"
+        );
+    }
+
+    /// `None` is a completed resolver result, not a cache miss. The terminal
+    /// must reuse it even though the in-band lookup emitted no frame.
+    #[tokio::test]
+    async fn resolve_scan_watermarks_reuses_completed_none_at_scan_limit() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let completed = Arc::new(Semaphore::new(0));
+        let calls_for_resolver = calls.clone();
+        let completed_for_resolver = completed.clone();
+        let (tx, upstream) = controlled_wm_upstream();
+        let stream = resolve_scan_watermarks(
+            upstream,
+            move |_position| {
+                calls_for_resolver.fetch_add(1, Ordering::SeqCst);
+                let completed = completed_for_resolver.clone();
+                Box::pin(async move {
+                    completed.add_permits(1);
+                    Ok(None)
+                }) as TestResolverFut
+            },
+            std::convert::identity,
+        );
+        let (mut output, driver) = drive_wm_stream(stream);
+
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(11))).await;
+        completed
+            .acquire()
+            .await
+            .expect("completion semaphore should stay open")
+            .forget();
+
+        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 11 })).await;
+        assert_scan_limit(next_driven_wm_frame(&mut output).await, 11, None);
+
+        driver
+            .await
+            .expect("resolver pipeline driver should finish");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "a completed None must not trigger a terminal retry"
+        );
+    }
+
+    /// A terminal frontier newer than the last completed in-band position is
+    /// genuinely fresh work and must be resolved exactly once.
+    #[tokio::test]
+    async fn resolve_scan_watermarks_resolves_newer_scan_limit_once() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_resolver = calls.clone();
+        let (tx, upstream) = controlled_wm_upstream();
+        let stream = resolve_scan_watermarks(
+            upstream,
+            move |position| {
+                calls_for_resolver.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move { Ok(Some(position * 10)) }) as TestResolverFut
+            },
+            std::convert::identity,
+        );
+        let (mut output, driver) = drive_wm_stream(stream);
+
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(5))).await;
+        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 5, 50);
+
+        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 8 })).await;
+        assert_scan_limit(next_driven_wm_frame(&mut output).await, 8, Some(80));
+
+        driver
+            .await
+            .expect("resolver pipeline driver should finish");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "one completed in-band lookup plus one fresh terminal lookup"
+        );
+    }
+
+    /// An Item outranks an in-band lookup. It must be dispatched while that
+    /// lookup is blocked, and the cancelled position remains unresolved if it
+    /// later becomes the authoritative terminal frontier.
+    #[tokio::test]
+    async fn resolve_scan_watermarks_item_cancels_lookup_and_terminal_retries() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(Semaphore::new(0));
+        let gate = Arc::new(Semaphore::new(0));
+        let calls_for_resolver = calls.clone();
+        let started_for_resolver = started.clone();
+        let gate_for_resolver = gate.clone();
+        let (tx, upstream) = controlled_wm_upstream();
+        let stream = resolve_scan_watermarks(
+            upstream,
+            move |position| {
+                let invocation = calls_for_resolver.fetch_add(1, Ordering::SeqCst);
+                let started = started_for_resolver.clone();
+                let gate = gate_for_resolver.clone();
+                Box::pin(async move {
+                    if invocation == 0 {
+                        started.add_permits(1);
+                        let _permit = gate.acquire().await.expect("lookup gate should stay open");
+                    }
+                    Ok(Some(position * 10))
+                }) as TestResolverFut
+            },
+            std::convert::identity,
+        );
+        let (mut output, driver) = drive_wm_stream(stream);
+
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(5))).await;
+        started
+            .acquire()
+            .await
+            .expect("start semaphore should stay open")
+            .forget();
+
+        push_wm_frame(&tx, Ok(Watermarked::Item(99))).await;
+        match next_driven_wm_frame(&mut output).await {
+            Ok(ResolvedWatermarked::Item(item)) => assert_eq!(item, 99),
+            Ok(ResolvedWatermarked::Watermark { .. }) => {
+                panic!("the item must win the blocked lookup race")
+            }
+            Err(_) => panic!("expected the racing item, got a terminal error"),
+        }
+        assert_eq!(
+            gate.available_permits(),
+            0,
+            "the item must be yielded before the lookup gate opens"
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        // The first future has been dropped. Opening its gate cannot complete
+        // it or manufacture a reusable result.
+        gate.add_permits(1);
+        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 5 })).await;
+        assert_scan_limit(next_driven_wm_frame(&mut output).await, 5, Some(50));
+
+        driver
+            .await
+            .expect("resolver pipeline driver should finish");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "the cancelled position must be resolved once when terminal"
+        );
+    }
+
+    /// ScanLimit arriving during a same-position lookup must await that one
+    /// lookup, emit already-earned progress in source order, and reuse its
+    /// result in the terminal payload.
+    #[tokio::test]
+    async fn resolve_scan_watermarks_reuses_same_position_in_flight() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(Semaphore::new(0));
+        let gate = Arc::new(Semaphore::new(0));
+        let calls_for_resolver = calls.clone();
+        let started_for_resolver = started.clone();
+        let gate_for_resolver = gate.clone();
+        let (tx, upstream) = controlled_wm_upstream();
+        let stream = resolve_scan_watermarks(
+            upstream,
+            move |position| {
+                calls_for_resolver.fetch_add(1, Ordering::SeqCst);
+                let started = started_for_resolver.clone();
+                let gate = gate_for_resolver.clone();
+                Box::pin(async move {
+                    if position == 5 {
+                        started.add_permits(1);
+                        let _permit = gate.acquire().await.expect("lookup gate should stay open");
+                    }
+                    Ok(Some(position * 10))
+                }) as TestResolverFut
+            },
+            std::convert::identity,
+        );
+        let (mut output, driver) = drive_wm_stream(stream);
+
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(3))).await;
+        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 3, 30);
+
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(5))).await;
+        started
+            .acquire()
+            .await
+            .expect("start semaphore should stay open")
+            .forget();
+        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 5 })).await;
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "terminal arrival must not dispatch a duplicate lookup"
+        );
+
+        gate.add_permits(1);
+        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 5, 50);
+        assert_scan_limit(next_driven_wm_frame(&mut output).await, 5, Some(50));
+
+        driver
+            .await
+            .expect("resolver pipeline driver should finish");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "the in-flight lookup must supply the terminal checkpoint"
+        );
+    }
+
+    /// A coalesced-away position never completed. If it later becomes the
+    /// authoritative terminal frontier, it must get its own resolution.
+    #[tokio::test]
+    async fn resolve_scan_watermarks_resolves_coalesced_position_when_terminal() {
+        let calls_at_5 = Arc::new(AtomicUsize::new(0));
+        let calls_at_7 = Arc::new(AtomicUsize::new(0));
+        let calls_at_9 = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(Semaphore::new(0));
+        let gate = Arc::new(Semaphore::new(0));
+        let calls_at_5_for_resolver = calls_at_5.clone();
+        let calls_at_7_for_resolver = calls_at_7.clone();
+        let calls_at_9_for_resolver = calls_at_9.clone();
+        let started_for_resolver = started.clone();
+        let gate_for_resolver = gate.clone();
+        let (tx, upstream) = controlled_wm_upstream();
+        let stream = resolve_scan_watermarks(
+            upstream,
+            move |position| {
+                match position {
+                    5 => {
+                        calls_at_5_for_resolver.fetch_add(1, Ordering::SeqCst);
+                    }
+                    7 => {
+                        calls_at_7_for_resolver.fetch_add(1, Ordering::SeqCst);
+                    }
+                    9 => {
+                        calls_at_9_for_resolver.fetch_add(1, Ordering::SeqCst);
+                    }
+                    other => panic!("unexpected resolver position {other}"),
+                }
+                let started = started_for_resolver.clone();
+                let gate = gate_for_resolver.clone();
+                Box::pin(async move {
+                    if position == 5 {
+                        started.add_permits(1);
+                        let _permit = gate.acquire().await.expect("lookup gate should stay open");
+                    }
+                    Ok(Some(position * 10))
+                }) as TestResolverFut
+            },
+            std::convert::identity,
+        );
+        let (mut output, driver) = drive_wm_stream(stream);
+
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(5))).await;
+        started
+            .acquire()
+            .await
+            .expect("start semaphore should stay open")
+            .forget();
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(7))).await;
+        push_wm_frame(&tx, Ok(Watermarked::Watermark(9))).await;
+        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 7 })).await;
+        assert_eq!(
+            calls_at_7.load(Ordering::SeqCst),
+            0,
+            "the coalesced position has not completed or even started"
+        );
+
+        gate.add_permits(1);
+        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 5, 50);
+        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 9, 90);
+        assert_scan_limit(next_driven_wm_frame(&mut output).await, 7, Some(70));
+
+        driver
+            .await
+            .expect("resolver pipeline driver should finish");
+        assert_eq!(calls_at_5.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            calls_at_7.load(Ordering::SeqCst),
+            1,
+            "the later-authoritative coalesced position needs one lookup"
+        );
+        assert_eq!(calls_at_9.load(Ordering::SeqCst), 1);
     }
 
     /// Item arriving during a WM lookup cancels it (the lookup future
@@ -2633,7 +3163,11 @@ mod tests {
             WmTestFrame::Item(10),
         ]);
         // Lookup much slower than the upstream delay → upstream wins the race.
-        let stream = resolve_watermarks(upstream, slow_resolver(200, calls.clone()));
+        let stream = resolve_scan_watermarks(
+            upstream,
+            slow_resolver(200, calls.clone()),
+            std::convert::identity,
+        );
         let emits = collect_emits(stream).await;
         assert_eq!(emits, vec![WmEmit::Item(10)]);
     }
@@ -2647,7 +3181,11 @@ mod tests {
             WmTestFrame::Sleep(20),
             WmTestFrame::Wm(7),
         ]);
-        let stream = resolve_watermarks(upstream, slow_resolver(50, calls.clone()));
+        let stream = resolve_scan_watermarks(
+            upstream,
+            slow_resolver(50, calls.clone()),
+            std::convert::identity,
+        );
         let emits = collect_emits(stream).await;
         assert_eq!(
             emits,
@@ -2677,7 +3215,11 @@ mod tests {
             WmTestFrame::Wm(7),
             WmTestFrame::Wm(9),
         ]);
-        let stream = resolve_watermarks(upstream, slow_resolver(50, calls.clone()));
+        let stream = resolve_scan_watermarks(
+            upstream,
+            slow_resolver(50, calls.clone()),
+            std::convert::identity,
+        );
         let emits = collect_emits(stream).await;
         // WM(7) coalesced out; WM(5) and WM(9) emit.
         assert_eq!(
@@ -2702,7 +3244,11 @@ mod tests {
     async fn upstream_done_finishes_in_flight_lookup() {
         let calls = Arc::new(AtomicUsize::new(0));
         let upstream = wm_upstream_from(vec![WmTestFrame::Wm(5)]);
-        let stream = resolve_watermarks(upstream, slow_resolver(20, calls.clone()));
+        let stream = resolve_scan_watermarks(
+            upstream,
+            slow_resolver(20, calls.clone()),
+            std::convert::identity,
+        );
         let emits = collect_emits(stream).await;
         assert_eq!(
             emits,
@@ -2727,7 +3273,11 @@ mod tests {
             WmTestFrame::Sleep(20),
             WmTestFrame::Err("scan limit"),
         ]);
-        let stream = resolve_watermarks(upstream, slow_resolver(50, calls.clone()));
+        let stream = resolve_scan_watermarks(
+            upstream,
+            slow_resolver(50, calls.clone()),
+            std::convert::identity,
+        );
         futures::pin_mut!(stream);
 
         let mut emits = Vec::new();
@@ -2750,8 +3300,10 @@ mod tests {
             }],
             "the already-earned in-flight watermark must reach the client before the error"
         );
-        let status: tonic::Status = err.into();
-        assert_eq!(status.message(), "scan limit");
+        match err {
+            ResolvedScanStop::Fault(inner) => assert_eq!(inner.to_string(), "scan limit"),
+            other => panic!("expected fault, got {other:?}"),
+        }
     }
 
     /// Items not racing any lookup are pure passthrough.
@@ -2763,7 +3315,11 @@ mod tests {
             WmTestFrame::Item(2),
             WmTestFrame::Item(3),
         ]);
-        let stream = resolve_watermarks(upstream, slow_resolver(0, calls.clone()));
+        let stream = resolve_scan_watermarks(
+            upstream,
+            slow_resolver(0, calls.clone()),
+            std::convert::identity,
+        );
         let emits = collect_emits(stream).await;
         assert_eq!(
             emits,

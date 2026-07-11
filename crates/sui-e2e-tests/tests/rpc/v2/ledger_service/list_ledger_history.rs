@@ -2367,9 +2367,9 @@ async fn test_list_checkpoints_read_masks_and_empty_range() {
 // list_checkpoints dedupes cp_seq, so an emitted checkpoint is proven complete:
 // its item watermark must claim its OWN sequence number as the covered boundary
 // (`checkpoint` == sequence_number, in either ordering), not sequence_number ∓ 1.
-// This pins the item path onto `advance_checkpoint_boundary`; the previous
-// (buggy) `advance_boundary_excluding_cp` path under-claimed by one. Also asserts
-// the wire-documented monotonicity.
+// This pins the item path onto `merge_covered_checkpoint_bound`; the previous
+// (buggy) `advance_covered_bound_before_checkpoint` path under-claimed by one.
+// It also asserts the wire-documented monotonicity.
 #[sim_test]
 async fn test_list_checkpoints_item_watermark_boundary() {
     let cluster = new_cluster().await;
