@@ -208,6 +208,17 @@ impl QueryOptions {
         self.after.is_some()
     }
 
+    /// The cursor positions, mutably — for checkpoint-hint hydration at
+    /// ingress. Each backend loops in its native style (sync with `?` /
+    /// async with `.await`) using [`Position::checkpoint_to_hydrate`] and
+    /// [`Position::hydrate_checkpoint`].
+    pub fn cursor_positions_mut(&mut self) -> impl Iterator<Item = &mut Position> {
+        self.after
+            .iter_mut()
+            .chain(self.before.iter_mut())
+            .map(|cursor| &mut cursor.position)
+    }
+
     pub fn apply_cursor_bounds(&self, resolved: ScanRange) -> ScanRange {
         if resolved.is_empty() {
             return resolved;
@@ -420,7 +431,10 @@ impl ResolvedCheckpointRange {
         };
         ScanRange {
             range,
-            end_position: Position::Transactions { checkpoint, tx_seq },
+            end_position: Position::Transactions {
+                checkpoint: Some(checkpoint),
+                tx_seq,
+            },
             end_reason: self.end_reason,
         }
     }
@@ -589,10 +603,15 @@ impl CheckpointRange {
         let mut high_reason = self.high_reason;
         let mut cursor_bound = false;
 
+        // The cursors' checkpoint hints only narrow the checkpoint window; a
+        // hint-free cursor (unhydratable position: pruned or beyond the tip)
+        // simply skips the narrowing — the position-precise clamp in
+        // `apply_*_cursor_bounds` subsumes it.
         if let Some(cursor) = &options.after
-            && cursor.position.checkpoint() >= start
+            && let Some(checkpoint) = cursor.position.checkpoint()
+            && checkpoint >= start
         {
-            start = cursor.position.checkpoint();
+            start = checkpoint;
             cursor_bound = true;
             if matches!(options.ordering, Ordering::Descending) {
                 low_reason = QueryEndReason::CursorBound;
@@ -600,9 +619,10 @@ impl CheckpointRange {
         }
 
         if let Some(cursor) = &options.before
+            && let Some(checkpoint) = cursor.position.checkpoint()
             && let Some(upper) = match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => cursor.position.checkpoint().checked_add(1),
-                sui_rpc_cursor::CursorKind::Boundary => Some(cursor.position.checkpoint()),
+                sui_rpc_cursor::CursorKind::Item => checkpoint.checked_add(1),
+                sui_rpc_cursor::CursorKind::Boundary => Some(checkpoint),
             }
             && upper <= end
         {
@@ -685,7 +705,7 @@ mod tests {
         ScanRange {
             range,
             end_position: Position::Transactions {
-                checkpoint: 20,
+                checkpoint: Some(20),
                 tx_seq: 20,
             },
             end_reason: QueryEndReason::CheckpointBound,
@@ -693,11 +713,17 @@ mod tests {
     }
 
     fn tx_item(checkpoint: u64, tx_seq: u64) -> CursorToken {
-        CursorToken::item(Position::Transactions { checkpoint, tx_seq })
+        CursorToken::item(Position::Transactions {
+            checkpoint: Some(checkpoint),
+            tx_seq,
+        })
     }
 
     fn tx_boundary(checkpoint: u64, tx_seq: u64) -> CursorToken {
-        CursorToken::boundary(Position::Transactions { checkpoint, tx_seq })
+        CursorToken::boundary(Position::Transactions {
+            checkpoint: Some(checkpoint),
+            tx_seq,
+        })
     }
 
     fn cp_item(checkpoint: u64) -> CursorToken {
@@ -859,7 +885,7 @@ mod tests {
             options.apply_cursor_bounds(resolved_range(10..20)),
             ScanRange::empty_at(
                 Position::Transactions {
-                    checkpoint: 1,
+                    checkpoint: Some(1),
                     tx_seq: u64::MAX,
                 },
                 QueryEndReason::CursorBound
@@ -880,7 +906,7 @@ mod tests {
         assert_eq!(
             bounded.end_position,
             Position::Transactions {
-                checkpoint: 1,
+                checkpoint: Some(1),
                 tx_seq: 11,
             }
         );
@@ -893,7 +919,7 @@ mod tests {
             options.apply_cursor_bounds(resolved_range(10..20)),
             ScanRange::empty_at(
                 Position::Transactions {
-                    checkpoint: 1,
+                    checkpoint: Some(1),
                     tx_seq: 12,
                 },
                 QueryEndReason::CursorBound
@@ -964,7 +990,7 @@ mod tests {
     #[test]
     fn item_cursor_can_be_used_as_after_or_before() {
         let token = CursorToken::item(Position::Transactions {
-            checkpoint: 1,
+            checkpoint: Some(1),
             tx_seq: 11,
         })
         .encode();

@@ -17,28 +17,39 @@ pub struct CursorToken {
 }
 
 /// Endpoint-specific cursor position.
+///
+/// On the positional variants (`Transactions` / `Events`) the `checkpoint`
+/// is a containing-checkpoint HINT, not a coordinate: the scan window is
+/// driven by the scalar coordinates, and the hint only lets resolution
+/// narrow the checkpoint window cheaply. Clients may omit it; servers
+/// hydrate an absent hint at ingress when the position resolves, and
+/// degrade to no-hint otherwise. On `Checkpoints` the checkpoint IS the
+/// coordinate and is always present.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Position {
     Checkpoints {
         checkpoint: u64,
     },
     Transactions {
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         tx_seq: u64,
     },
     Events {
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         tx_seq: u64,
         event_index: u32,
     },
 }
 
 impl Position {
-    pub fn checkpoint(&self) -> u64 {
+    /// The containing-checkpoint hint. Always present for `Checkpoints`;
+    /// optional on the positional variants.
+    pub fn checkpoint(&self) -> Option<u64> {
         match *self {
-            Position::Checkpoints { checkpoint }
-            | Position::Transactions { checkpoint, .. }
-            | Position::Events { checkpoint, .. } => checkpoint,
+            Position::Checkpoints { checkpoint } => Some(checkpoint),
+            Position::Transactions { checkpoint, .. } | Position::Events { checkpoint, .. } => {
+                checkpoint
+            }
         }
     }
 
@@ -47,16 +58,44 @@ impl Position {
     pub fn with_checkpoint(self, checkpoint: u64) -> Self {
         match self {
             Position::Checkpoints { .. } => Position::Checkpoints { checkpoint },
-            Position::Transactions { tx_seq, .. } => Position::Transactions { checkpoint, tx_seq },
+            Position::Transactions { tx_seq, .. } => Position::Transactions {
+                checkpoint: Some(checkpoint),
+                tx_seq,
+            },
             Position::Events {
                 tx_seq,
                 event_index,
                 ..
             } => Position::Events {
-                checkpoint,
+                checkpoint: Some(checkpoint),
                 tx_seq,
                 event_index,
             },
+        }
+    }
+
+    /// The transaction to resolve when this position's checkpoint hint needs
+    /// hydration: `Some(tx_seq)` when the hint is absent, `None` when it is
+    /// present or the variant has no hint to hydrate.
+    pub fn checkpoint_to_hydrate(&self) -> Option<u64> {
+        match *self {
+            Position::Checkpoints { .. } => None,
+            Position::Transactions {
+                checkpoint, tx_seq, ..
+            }
+            | Position::Events {
+                checkpoint, tx_seq, ..
+            } => checkpoint.is_none().then_some(tx_seq),
+        }
+    }
+
+    /// Fill an absent checkpoint hint; a present hint is left untouched.
+    pub fn hydrate_checkpoint(&mut self, hydrated: u64) {
+        match self {
+            Position::Checkpoints { .. } => {}
+            Position::Transactions { checkpoint, .. } | Position::Events { checkpoint, .. } => {
+                checkpoint.get_or_insert(hydrated);
+            }
         }
     }
 }
@@ -124,7 +163,7 @@ impl CursorToken {
                 checkpoint: position,
             },
             2 => Position::Transactions {
-                checkpoint,
+                checkpoint: Some(checkpoint),
                 tx_seq: position,
             },
             // Legacy event cursors packed the coordinate into one u64:
@@ -132,7 +171,7 @@ impl CursorToken {
             // historical wire format, deliberately not shared with the live
             // storage encoding, which is free to diverge.
             3 => Position::Events {
-                checkpoint,
+                checkpoint: Some(checkpoint),
                 tx_seq: position >> 16,
                 event_index: (position & 0xFFFF) as u32,
             },
@@ -169,7 +208,7 @@ impl From<Position> for grpc::cursor_token::Position {
             }
             Position::Transactions { checkpoint, tx_seq } => {
                 grpc::cursor_token::Position::Transactions(grpc::TransactionsPosition {
-                    checkpoint: Some(checkpoint),
+                    checkpoint,
                     tx_seq: Some(tx_seq),
                 })
             }
@@ -178,7 +217,7 @@ impl From<Position> for grpc::cursor_token::Position {
                 tx_seq,
                 event_index,
             } => grpc::cursor_token::Position::Events(grpc::EventsPosition {
-                checkpoint: Some(checkpoint),
+                checkpoint,
                 tx_seq: Some(tx_seq),
                 event_index: Some(event_index),
             }),
@@ -195,11 +234,14 @@ impl TryFrom<grpc::cursor_token::Position> for Position {
                 checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
             }),
             grpc::cursor_token::Position::Transactions(position) => Ok(Position::Transactions {
-                checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
+                // The checkpoint hint is optional: clients (e.g. graphql's
+                // position-only legacy cursors) may omit it; servers hydrate
+                // at ingress.
+                checkpoint: position.checkpoint,
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
             }),
             grpc::cursor_token::Position::Events(position) => Ok(Position::Events {
-                checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
+                checkpoint: position.checkpoint,
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
                 event_index: position.event_index.context("cursor missing event_index")?,
             }),
@@ -260,11 +302,21 @@ mod tests {
         for token in [
             CursorToken::item(Position::Checkpoints { checkpoint: 7 }),
             CursorToken::boundary(Position::Transactions {
-                checkpoint: 9,
+                checkpoint: Some(9),
                 tx_seq: 10,
             }),
             CursorToken::item(Position::Events {
-                checkpoint: 11,
+                checkpoint: Some(11),
+                tx_seq: 12,
+                event_index: 13,
+            }),
+            // The checkpoint hint is optional on the positional variants.
+            CursorToken::item(Position::Transactions {
+                checkpoint: None,
+                tx_seq: 10,
+            }),
+            CursorToken::boundary(Position::Events {
+                checkpoint: None,
                 tx_seq: 12,
                 event_index: 13,
             }),
@@ -328,7 +380,7 @@ mod tests {
         assert_eq!(
             CursorToken::decode(&bytes).unwrap(),
             CursorToken::item(Position::Transactions {
-                checkpoint: 42,
+                checkpoint: Some(42),
                 tx_seq: 7,
             })
         );
@@ -357,7 +409,7 @@ mod tests {
         assert_eq!(
             CursorToken::decode(&bytes).unwrap(),
             CursorToken::item(Position::Events {
-                checkpoint: 9,
+                checkpoint: Some(9),
                 tx_seq: 42,
                 event_index: 7,
             })
@@ -376,7 +428,7 @@ mod tests {
         assert_eq!(
             CursorToken::decode(&bytes).unwrap(),
             CursorToken::boundary(Position::Events {
-                checkpoint: 6,
+                checkpoint: Some(6),
                 tx_seq: 5,
                 event_index: 65535,
             })
