@@ -1098,7 +1098,17 @@ where
                         Race::Upstream(Some(Err(ScanStop::ScanLimit { scan_frontier }))) => {
                             let terminal_position =
                                 scan_frontier_to_position(scan_frontier);
-                            let mut terminal_checkpoint = None;
+                            // Snapshot an exact cached terminal result before
+                            // salvage updates the one-entry cache with earlier
+                            // in-flight or pending positions.
+                            let mut terminal_checkpoint = match completed {
+                                Some((completed_position, checkpoint))
+                                    if completed_position == terminal_position =>
+                                {
+                                    Some(checkpoint)
+                                }
+                                _ => None,
+                            };
 
                             // Salvage progress in source order. A failed lookup
                             // that is not the terminal lookup remains
@@ -2740,71 +2750,129 @@ mod tests {
 
     type ControlledWmFrame = (Result<Watermarked<u64>, ScanStop>, oneshot::Sender<()>);
     type ResolvedWmFrame = Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>;
-    type DrivenWmOutput = (
-        tokio::sync::mpsc::Receiver<ResolvedWmFrame>,
-        tokio::task::JoinHandle<()>,
-    );
 
-    /// A synthetic upstream whose sender can wait until each frame has been
-    /// polled by the pipeline. This makes lookup/upstream races deterministic
-    /// without sleeps.
-    fn controlled_wm_upstream() -> (
-        tokio::sync::mpsc::Sender<ControlledWmFrame>,
-        BoxStream<'static, Result<Watermarked<u64>, ScanStop>>,
-    ) {
-        let (tx, rx) = tokio::sync::mpsc::channel::<ControlledWmFrame>(1);
-        let upstream = stream::unfold(rx, |mut rx| async move {
-            let (frame, pulled) = rx.recv().await?;
-            let _ = pulled.send(());
-            Some((frame, rx))
-        })
-        .boxed();
-        (tx, upstream)
+    #[derive(Clone)]
+    struct ResolverGate {
+        started: Arc<Semaphore>,
+        release: Arc<Semaphore>,
     }
 
-    async fn push_wm_frame(
-        tx: &tokio::sync::mpsc::Sender<ControlledWmFrame>,
-        frame: Result<Watermarked<u64>, ScanStop>,
-    ) {
-        let (pulled_tx, pulled_rx) = oneshot::channel();
-        timeout(Duration::from_secs(1), tx.send((frame, pulled_tx)))
-            .await
-            .expect("resolver pipeline should accept the upstream frame")
-            .expect("resolver pipeline should still be reading upstream");
-        timeout(Duration::from_secs(1), pulled_rx)
-            .await
-            .expect("resolver pipeline should poll the upstream frame")
-            .expect("resolver pipeline should acknowledge the upstream frame");
-    }
-
-    fn drive_wm_stream(
-        mut stream: BoxStream<'static, Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>>,
-    ) -> DrivenWmOutput {
-        // The widest scenario below emits two progress frames and one
-        // terminal frame before its assertions begin draining output.
-        let (tx, rx) = tokio::sync::mpsc::channel::<ResolvedWmFrame>(3);
-        let task = tokio::spawn(async move {
-            while let Some(frame) = stream.next().await {
-                let terminal = frame.is_err();
-                if tx.send(frame).await.is_err() || terminal {
-                    break;
-                }
+    impl ResolverGate {
+        fn new() -> Self {
+            Self {
+                started: Arc::new(Semaphore::new(0)),
+                release: Arc::new(Semaphore::new(0)),
             }
-        });
-        (rx, task)
+        }
+
+        async fn block(&self) {
+            self.started.add_permits(1);
+            let _permit = self
+                .release
+                .acquire()
+                .await
+                .expect("lookup gate should stay open");
+        }
+
+        async fn wait_until_blocked(&self) {
+            timeout(Duration::from_secs(1), self.started.acquire())
+                .await
+                .expect("resolver lookup should reach its gate")
+                .expect("start semaphore should stay open")
+                .forget();
+        }
+
+        fn release(&self) {
+            self.release.add_permits(1);
+        }
+
+        fn available_releases(&self) -> usize {
+            self.release.available_permits()
+        }
     }
 
-    async fn next_driven_wm_frame(
-        rx: &mut tokio::sync::mpsc::Receiver<ResolvedWmFrame>,
-    ) -> ResolvedWmFrame {
-        timeout(Duration::from_secs(1), rx.recv())
-            .await
-            .expect("resolver pipeline should produce its next frame")
-            .expect("resolver pipeline ended before producing the expected frame")
+    /// Drives a synthetic upstream one acknowledged frame at a time and
+    /// captures resolver output. The acknowledgement proves that the pipeline
+    /// polled each input, so race tests never depend on sleeps.
+    struct WmResolverFixture {
+        input: tokio::sync::mpsc::Sender<ControlledWmFrame>,
+        output: tokio::sync::mpsc::Receiver<ResolvedWmFrame>,
+        driver: tokio::task::JoinHandle<()>,
+    }
+
+    impl WmResolverFixture {
+        fn new<F>(resolver: F) -> Self
+        where
+            F: Fn(u64) -> TestResolverFut + Send + 'static,
+        {
+            let (input, input_rx) = tokio::sync::mpsc::channel::<ControlledWmFrame>(1);
+            let upstream = stream::unfold(input_rx, |mut rx| async move {
+                let (frame, pulled) = rx.recv().await?;
+                let _ = pulled.send(());
+                Some((frame, rx))
+            })
+            .boxed();
+            let mut stream = resolve_scan_watermarks(upstream, resolver, std::convert::identity);
+
+            // The widest scenario emits two progress frames and one terminal
+            // frame before its assertions begin draining output.
+            let (output_tx, output) = tokio::sync::mpsc::channel::<ResolvedWmFrame>(3);
+            let driver = tokio::spawn(async move {
+                while let Some(frame) = stream.next().await {
+                    let terminal = frame.is_err();
+                    if output_tx.send(frame).await.is_err() || terminal {
+                        break;
+                    }
+                }
+            });
+
+            Self {
+                input,
+                output,
+                driver,
+            }
+        }
+
+        async fn send(&self, frame: Result<Watermarked<u64>, ScanStop>) {
+            let (pulled_tx, pulled_rx) = oneshot::channel();
+            timeout(Duration::from_secs(1), self.input.send((frame, pulled_tx)))
+                .await
+                .expect("resolver pipeline should accept the upstream frame")
+                .expect("resolver pipeline should still be reading upstream");
+            timeout(Duration::from_secs(1), pulled_rx)
+                .await
+                .expect("resolver pipeline should poll the upstream frame")
+                .expect("resolver pipeline should acknowledge the upstream frame");
+        }
+
+        async fn watermark(&self, position: u64) {
+            self.send(Ok(Watermarked::Watermark(position))).await;
+        }
+
+        async fn item(&self, item: u64) {
+            self.send(Ok(Watermarked::Item(item))).await;
+        }
+
+        async fn scan_limit(&self, scan_frontier: u64) {
+            self.send(Err(ScanStop::ScanLimit { scan_frontier })).await;
+        }
+
+        async fn next(&mut self) -> ResolvedWmFrame {
+            timeout(Duration::from_secs(1), self.output.recv())
+                .await
+                .expect("resolver pipeline should produce its next frame")
+                .expect("resolver pipeline ended before producing the expected frame")
+        }
+
+        async fn finish(self) {
+            self.driver
+                .await
+                .expect("resolver pipeline driver should finish");
+        }
     }
 
     fn assert_resolved_wm(
-        frame: Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>,
+        frame: ResolvedWmFrame,
         expected_position: u64,
         expected_checkpoint: u64,
     ) {
@@ -2821,7 +2889,7 @@ mod tests {
     }
 
     fn assert_scan_limit(
-        frame: Result<ResolvedWatermarked<u64>, ResolvedScanStop<u64>>,
+        frame: ResolvedWmFrame,
         expected_position: u64,
         expected_checkpoint: Option<u64>,
     ) {
@@ -2838,80 +2906,53 @@ mod tests {
         }
     }
 
+    async fn assert_completed_lookup_reused(position: u64, checkpoint: Option<u64>) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let resolver_calls = calls.clone();
+        let completed = Arc::new(Semaphore::new(0));
+        let resolver_completed = completed.clone();
+        let mut fixture = WmResolverFixture::new(move |_position| {
+            resolver_calls.fetch_add(1, Ordering::SeqCst);
+            let completed = resolver_completed.clone();
+            Box::pin(async move {
+                completed.add_permits(1);
+                Ok(checkpoint)
+            })
+        });
+
+        fixture.watermark(position).await;
+        timeout(Duration::from_secs(1), completed.acquire())
+            .await
+            .expect("resolver lookup should complete")
+            .expect("completion semaphore should stay open")
+            .forget();
+        if let Some(checkpoint) = checkpoint {
+            assert_resolved_wm(fixture.next().await, position, checkpoint);
+        }
+
+        fixture.scan_limit(position).await;
+        assert_scan_limit(fixture.next().await, position, checkpoint);
+
+        fixture.finish().await;
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "the terminal must reuse the completed resolver result, including None"
+        );
+    }
+
     /// Once an in-band resolution completes, a stopping round at that exact
     /// position must reuse both the lookup and its checkpoint.
     #[tokio::test]
     async fn resolve_scan_watermarks_reuses_completed_position_at_scan_limit() {
-        let calls = Arc::new(AtomicUsize::new(0));
-        let calls_for_resolver = calls.clone();
-        let (tx, upstream) = controlled_wm_upstream();
-        let stream = resolve_scan_watermarks(
-            upstream,
-            move |position| {
-                calls_for_resolver.fetch_add(1, Ordering::SeqCst);
-                Box::pin(async move { Ok(Some(position * 10)) }) as TestResolverFut
-            },
-            std::convert::identity,
-        );
-        let (mut output, driver) = drive_wm_stream(stream);
-
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(7))).await;
-        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 7, 70);
-
-        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 7 })).await;
-        assert_scan_limit(next_driven_wm_frame(&mut output).await, 7, Some(70));
-
-        driver
-            .await
-            .expect("resolver pipeline driver should finish");
-        assert_eq!(
-            calls.load(Ordering::SeqCst),
-            1,
-            "the terminal must reuse the completed in-band lookup"
-        );
+        assert_completed_lookup_reused(7, Some(70)).await;
     }
 
     /// `None` is a completed resolver result, not a cache miss. The terminal
     /// must reuse it even though the in-band lookup emitted no frame.
     #[tokio::test]
     async fn resolve_scan_watermarks_reuses_completed_none_at_scan_limit() {
-        let calls = Arc::new(AtomicUsize::new(0));
-        let completed = Arc::new(Semaphore::new(0));
-        let calls_for_resolver = calls.clone();
-        let completed_for_resolver = completed.clone();
-        let (tx, upstream) = controlled_wm_upstream();
-        let stream = resolve_scan_watermarks(
-            upstream,
-            move |_position| {
-                calls_for_resolver.fetch_add(1, Ordering::SeqCst);
-                let completed = completed_for_resolver.clone();
-                Box::pin(async move {
-                    completed.add_permits(1);
-                    Ok(None)
-                }) as TestResolverFut
-            },
-            std::convert::identity,
-        );
-        let (mut output, driver) = drive_wm_stream(stream);
-
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(11))).await;
-        completed
-            .acquire()
-            .await
-            .expect("completion semaphore should stay open")
-            .forget();
-
-        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 11 })).await;
-        assert_scan_limit(next_driven_wm_frame(&mut output).await, 11, None);
-
-        driver
-            .await
-            .expect("resolver pipeline driver should finish");
-        assert_eq!(
-            calls.load(Ordering::SeqCst),
-            1,
-            "a completed None must not trigger a terminal retry"
-        );
+        assert_completed_lookup_reused(11, None).await;
     }
 
     /// A terminal frontier newer than the last completed in-band position is
@@ -2919,27 +2960,19 @@ mod tests {
     #[tokio::test]
     async fn resolve_scan_watermarks_resolves_newer_scan_limit_once() {
         let calls = Arc::new(AtomicUsize::new(0));
-        let calls_for_resolver = calls.clone();
-        let (tx, upstream) = controlled_wm_upstream();
-        let stream = resolve_scan_watermarks(
-            upstream,
-            move |position| {
-                calls_for_resolver.fetch_add(1, Ordering::SeqCst);
-                Box::pin(async move { Ok(Some(position * 10)) }) as TestResolverFut
-            },
-            std::convert::identity,
-        );
-        let (mut output, driver) = drive_wm_stream(stream);
+        let resolver_calls = calls.clone();
+        let mut fixture = WmResolverFixture::new(move |position| {
+            resolver_calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async move { Ok(Some(position * 10)) })
+        });
 
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(5))).await;
-        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 5, 50);
+        fixture.watermark(5).await;
+        assert_resolved_wm(fixture.next().await, 5, 50);
 
-        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 8 })).await;
-        assert_scan_limit(next_driven_wm_frame(&mut output).await, 8, Some(80));
+        fixture.scan_limit(8).await;
+        assert_scan_limit(fixture.next().await, 8, Some(80));
 
-        driver
-            .await
-            .expect("resolver pipeline driver should finish");
+        fixture.finish().await;
         assert_eq!(
             calls.load(Ordering::SeqCst),
             2,
@@ -2953,39 +2986,25 @@ mod tests {
     #[tokio::test]
     async fn resolve_scan_watermarks_item_cancels_lookup_and_terminal_retries() {
         let calls = Arc::new(AtomicUsize::new(0));
-        let started = Arc::new(Semaphore::new(0));
-        let gate = Arc::new(Semaphore::new(0));
-        let calls_for_resolver = calls.clone();
-        let started_for_resolver = started.clone();
-        let gate_for_resolver = gate.clone();
-        let (tx, upstream) = controlled_wm_upstream();
-        let stream = resolve_scan_watermarks(
-            upstream,
-            move |position| {
-                let invocation = calls_for_resolver.fetch_add(1, Ordering::SeqCst);
-                let started = started_for_resolver.clone();
-                let gate = gate_for_resolver.clone();
-                Box::pin(async move {
-                    if invocation == 0 {
-                        started.add_permits(1);
-                        let _permit = gate.acquire().await.expect("lookup gate should stay open");
-                    }
-                    Ok(Some(position * 10))
-                }) as TestResolverFut
-            },
-            std::convert::identity,
-        );
-        let (mut output, driver) = drive_wm_stream(stream);
+        let gate = ResolverGate::new();
+        let resolver_calls = calls.clone();
+        let resolver_gate = gate.clone();
+        let mut fixture = WmResolverFixture::new(move |position| {
+            let invocation = resolver_calls.fetch_add(1, Ordering::SeqCst);
+            let gate = resolver_gate.clone();
+            Box::pin(async move {
+                if invocation == 0 {
+                    gate.block().await;
+                }
+                Ok(Some(position * 10))
+            })
+        });
 
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(5))).await;
-        started
-            .acquire()
-            .await
-            .expect("start semaphore should stay open")
-            .forget();
+        fixture.watermark(5).await;
+        gate.wait_until_blocked().await;
 
-        push_wm_frame(&tx, Ok(Watermarked::Item(99))).await;
-        match next_driven_wm_frame(&mut output).await {
+        fixture.item(99).await;
+        match fixture.next().await {
             Ok(ResolvedWatermarked::Item(item)) => assert_eq!(item, 99),
             Ok(ResolvedWatermarked::Watermark { .. }) => {
                 panic!("the item must win the blocked lookup race")
@@ -2993,7 +3012,7 @@ mod tests {
             Err(_) => panic!("expected the racing item, got a terminal error"),
         }
         assert_eq!(
-            gate.available_permits(),
+            gate.available_releases(),
             0,
             "the item must be yielded before the lookup gate opens"
         );
@@ -3001,13 +3020,11 @@ mod tests {
 
         // The first future has been dropped. Opening its gate cannot complete
         // it or manufacture a reusable result.
-        gate.add_permits(1);
-        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 5 })).await;
-        assert_scan_limit(next_driven_wm_frame(&mut output).await, 5, Some(50));
+        gate.release();
+        fixture.scan_limit(5).await;
+        assert_scan_limit(fixture.next().await, 5, Some(50));
 
-        driver
-            .await
-            .expect("resolver pipeline driver should finish");
+        fixture.finish().await;
         assert_eq!(
             calls.load(Ordering::SeqCst),
             2,
@@ -3021,58 +3038,105 @@ mod tests {
     #[tokio::test]
     async fn resolve_scan_watermarks_reuses_same_position_in_flight() {
         let calls = Arc::new(AtomicUsize::new(0));
-        let started = Arc::new(Semaphore::new(0));
-        let gate = Arc::new(Semaphore::new(0));
-        let calls_for_resolver = calls.clone();
-        let started_for_resolver = started.clone();
-        let gate_for_resolver = gate.clone();
-        let (tx, upstream) = controlled_wm_upstream();
-        let stream = resolve_scan_watermarks(
-            upstream,
-            move |position| {
-                calls_for_resolver.fetch_add(1, Ordering::SeqCst);
-                let started = started_for_resolver.clone();
-                let gate = gate_for_resolver.clone();
-                Box::pin(async move {
-                    if position == 5 {
-                        started.add_permits(1);
-                        let _permit = gate.acquire().await.expect("lookup gate should stay open");
-                    }
-                    Ok(Some(position * 10))
-                }) as TestResolverFut
-            },
-            std::convert::identity,
-        );
-        let (mut output, driver) = drive_wm_stream(stream);
+        let gate = ResolverGate::new();
+        let resolver_calls = calls.clone();
+        let resolver_gate = gate.clone();
+        let mut fixture = WmResolverFixture::new(move |position| {
+            resolver_calls.fetch_add(1, Ordering::SeqCst);
+            let gate = resolver_gate.clone();
+            Box::pin(async move {
+                if position == 5 {
+                    gate.block().await;
+                }
+                Ok(Some(position * 10))
+            })
+        });
 
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(3))).await;
-        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 3, 30);
+        fixture.watermark(3).await;
+        assert_resolved_wm(fixture.next().await, 3, 30);
 
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(5))).await;
-        started
-            .acquire()
-            .await
-            .expect("start semaphore should stay open")
-            .forget();
-        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 5 })).await;
+        fixture.watermark(5).await;
+        gate.wait_until_blocked().await;
+        fixture.scan_limit(5).await;
         assert_eq!(
             calls.load(Ordering::SeqCst),
             2,
             "terminal arrival must not dispatch a duplicate lookup"
         );
 
-        gate.add_permits(1);
-        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 5, 50);
-        assert_scan_limit(next_driven_wm_frame(&mut output).await, 5, Some(50));
+        gate.release();
+        assert_resolved_wm(fixture.next().await, 5, 50);
+        assert_scan_limit(fixture.next().await, 5, Some(50));
 
-        driver
-            .await
-            .expect("resolver pipeline driver should finish");
+        fixture.finish().await;
         assert_eq!(
             calls.load(Ordering::SeqCst),
             2,
             "the in-flight lookup must supply the terminal checkpoint"
         );
+    }
+
+    /// A matching completed terminal result must survive salvage of newer
+    /// in-flight and pending progress. Salvage overwrites the one-entry cache,
+    /// so the terminal result has to be retained before that work begins.
+    #[tokio::test]
+    async fn resolve_scan_watermarks_retains_completed_terminal_through_salvage() {
+        let calls_at_3 = Arc::new(AtomicUsize::new(0));
+        let calls_at_5 = Arc::new(AtomicUsize::new(0));
+        let calls_at_7 = Arc::new(AtomicUsize::new(0));
+        let gate = ResolverGate::new();
+        let resolver_calls_at_3 = calls_at_3.clone();
+        let resolver_calls_at_5 = calls_at_5.clone();
+        let resolver_calls_at_7 = calls_at_7.clone();
+        let resolver_gate = gate.clone();
+        let mut fixture = WmResolverFixture::new(move |position| {
+            match position {
+                3 => {
+                    resolver_calls_at_3.fetch_add(1, Ordering::SeqCst);
+                }
+                5 => {
+                    resolver_calls_at_5.fetch_add(1, Ordering::SeqCst);
+                }
+                7 => {
+                    resolver_calls_at_7.fetch_add(1, Ordering::SeqCst);
+                }
+                other => panic!("unexpected resolver position {other}"),
+            }
+            let gate = resolver_gate.clone();
+            Box::pin(async move {
+                if position == 5 {
+                    gate.block().await;
+                }
+                Ok(Some(position * 10))
+            })
+        });
+
+        fixture.watermark(3).await;
+        assert_resolved_wm(fixture.next().await, 3, 30);
+
+        fixture.watermark(5).await;
+        gate.wait_until_blocked().await;
+        fixture.watermark(7).await;
+        fixture.scan_limit(3).await;
+        assert_eq!(
+            calls_at_3.load(Ordering::SeqCst),
+            1,
+            "terminal arrival must retain the previously completed result"
+        );
+
+        gate.release();
+        assert_resolved_wm(fixture.next().await, 5, 50);
+        assert_resolved_wm(fixture.next().await, 7, 70);
+        assert_scan_limit(fixture.next().await, 3, Some(30));
+
+        fixture.finish().await;
+        assert_eq!(
+            calls_at_3.load(Ordering::SeqCst),
+            1,
+            "salvage must not evict the retained terminal checkpoint"
+        );
+        assert_eq!(calls_at_5.load(Ordering::SeqCst), 1);
+        assert_eq!(calls_at_7.load(Ordering::SeqCst), 1);
     }
 
     /// A coalesced-away position never completed. If it later becomes the
@@ -3082,66 +3146,50 @@ mod tests {
         let calls_at_5 = Arc::new(AtomicUsize::new(0));
         let calls_at_7 = Arc::new(AtomicUsize::new(0));
         let calls_at_9 = Arc::new(AtomicUsize::new(0));
-        let started = Arc::new(Semaphore::new(0));
-        let gate = Arc::new(Semaphore::new(0));
-        let calls_at_5_for_resolver = calls_at_5.clone();
-        let calls_at_7_for_resolver = calls_at_7.clone();
-        let calls_at_9_for_resolver = calls_at_9.clone();
-        let started_for_resolver = started.clone();
-        let gate_for_resolver = gate.clone();
-        let (tx, upstream) = controlled_wm_upstream();
-        let stream = resolve_scan_watermarks(
-            upstream,
-            move |position| {
-                match position {
-                    5 => {
-                        calls_at_5_for_resolver.fetch_add(1, Ordering::SeqCst);
-                    }
-                    7 => {
-                        calls_at_7_for_resolver.fetch_add(1, Ordering::SeqCst);
-                    }
-                    9 => {
-                        calls_at_9_for_resolver.fetch_add(1, Ordering::SeqCst);
-                    }
-                    other => panic!("unexpected resolver position {other}"),
+        let gate = ResolverGate::new();
+        let resolver_calls_at_5 = calls_at_5.clone();
+        let resolver_calls_at_7 = calls_at_7.clone();
+        let resolver_calls_at_9 = calls_at_9.clone();
+        let resolver_gate = gate.clone();
+        let mut fixture = WmResolverFixture::new(move |position| {
+            match position {
+                5 => {
+                    resolver_calls_at_5.fetch_add(1, Ordering::SeqCst);
                 }
-                let started = started_for_resolver.clone();
-                let gate = gate_for_resolver.clone();
-                Box::pin(async move {
-                    if position == 5 {
-                        started.add_permits(1);
-                        let _permit = gate.acquire().await.expect("lookup gate should stay open");
-                    }
-                    Ok(Some(position * 10))
-                }) as TestResolverFut
-            },
-            std::convert::identity,
-        );
-        let (mut output, driver) = drive_wm_stream(stream);
+                7 => {
+                    resolver_calls_at_7.fetch_add(1, Ordering::SeqCst);
+                }
+                9 => {
+                    resolver_calls_at_9.fetch_add(1, Ordering::SeqCst);
+                }
+                other => panic!("unexpected resolver position {other}"),
+            }
+            let gate = resolver_gate.clone();
+            Box::pin(async move {
+                if position == 5 {
+                    gate.block().await;
+                }
+                Ok(Some(position * 10))
+            })
+        });
 
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(5))).await;
-        started
-            .acquire()
-            .await
-            .expect("start semaphore should stay open")
-            .forget();
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(7))).await;
-        push_wm_frame(&tx, Ok(Watermarked::Watermark(9))).await;
-        push_wm_frame(&tx, Err(ScanStop::ScanLimit { scan_frontier: 7 })).await;
+        fixture.watermark(5).await;
+        gate.wait_until_blocked().await;
+        fixture.watermark(7).await;
+        fixture.watermark(9).await;
+        fixture.scan_limit(7).await;
         assert_eq!(
             calls_at_7.load(Ordering::SeqCst),
             0,
             "the coalesced position has not completed or even started"
         );
 
-        gate.add_permits(1);
-        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 5, 50);
-        assert_resolved_wm(next_driven_wm_frame(&mut output).await, 9, 90);
-        assert_scan_limit(next_driven_wm_frame(&mut output).await, 7, Some(70));
+        gate.release();
+        assert_resolved_wm(fixture.next().await, 5, 50);
+        assert_resolved_wm(fixture.next().await, 9, 90);
+        assert_scan_limit(fixture.next().await, 7, Some(70));
 
-        driver
-            .await
-            .expect("resolver pipeline driver should finish");
+        fixture.finish().await;
         assert_eq!(calls_at_5.load(Ordering::SeqCst), 1);
         assert_eq!(
             calls_at_7.load(Ordering::SeqCst),
