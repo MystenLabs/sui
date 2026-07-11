@@ -129,7 +129,9 @@ pub fn boundary_cursor_cp(cp: u64, direction: ScanDirection) -> u64 {
 /// keeps it included looking forward ([`boundary_cursor_cp`] rewrites the
 /// position's cp coordinate; the scalar coordinates pass through).
 pub fn frontier_boundary_watermark(options: &QueryOptions, position: Position) -> Watermark {
-    let cp = position.checkpoint();
+    let cp = position
+        .checkpoint()
+        .expect("server-minted positions carry their checkpoint");
     let boundary = advance_boundary_excluding_cp(None, cp, options);
     boundary_watermark(
         position.with_checkpoint(boundary_cursor_cp(cp, options.scan_direction())),
@@ -143,11 +145,17 @@ pub fn frontier_boundary_watermark(options: &QueryOptions, position: Position) -
 /// inclusive cp lower) — because no further items exist in it within the requested range. The
 /// `end_position` cursor resumes exactly past the scanned range.
 pub fn terminal_boundary_watermark(options: &QueryOptions, end_position: Position) -> Watermark {
-    let end_checkpoint = end_position.checkpoint();
+    // A hint-free `end_position` (a cursor that survived hydration without a
+    // checkpoint) yields a frame with no completion claim. That frame is
+    // never emitted: every cursor-derived end stamp forces `CursorBound`,
+    // which `reached_range_end` excludes, and chunked scans only ever
+    // DOWNGRADE the reason (ScanLimit/ItemLimit) — a future change upgrading
+    // the reason on natural drain would silently start emitting this
+    // claim-free placeholder.
     let boundary = if options.is_ascending() {
-        end_checkpoint.checked_sub(1)
+        end_position.checkpoint().and_then(|cp| cp.checked_sub(1))
     } else {
-        Some(end_checkpoint)
+        end_position.checkpoint()
     };
     boundary_watermark(end_position, boundary)
 }
