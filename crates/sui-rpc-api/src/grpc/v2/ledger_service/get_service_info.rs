@@ -10,7 +10,7 @@ use sui_sdk_types::Digest;
 #[tracing::instrument(skip(service))]
 pub fn get_service_info(service: &RpcService) -> Result<GetServiceInfoResponse, RpcError> {
     let latest_checkpoint = service.reader.inner().get_latest_checkpoint()?;
-    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
+    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint_combined()?;
 
     let mut message = GetServiceInfoResponse::default();
     message.chain_id = Some(Digest::new(service.chain_id().as_bytes().to_owned()).to_string());
