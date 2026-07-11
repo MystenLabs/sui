@@ -420,7 +420,7 @@ fn next_filtered_checkpoint_chunk(
     let mut cp_seqs = buffered_cp_seqs
         .drain(..item_limit.min(buffered_cp_seqs.len()))
         .collect::<Vec<_>>();
-    let mut scan_limited = false;
+    let mut chunk_scan_limit_reached = false;
     let mut frontier: Option<u64> = None;
     // Per-chunk bucket cap, bounding this chunk's total scan across all drain
     // iterations so a sparse scan yields incremental scan watermarks instead of
@@ -456,8 +456,8 @@ fn next_filtered_checkpoint_chunk(
         chunk_scan_budget -= hits.buckets_scanned;
         pending_bucket = hits.pending_bucket;
         tx_range = hits.next_range;
-        if hits.scan_limit_hit {
-            scan_limited = true;
+        if hits.chunk_scan_limit_reached {
+            chunk_scan_limit_reached = true;
             frontier = hits.coalesced_frontier;
             break;
         }
@@ -492,10 +492,10 @@ fn next_filtered_checkpoint_chunk(
         tx_range = None;
     }
 
-    // Only the per-request budget (or a scan-limit with no resume point) ends
-    // the query; a per-chunk cap resumes in the next chunk. The scan watermark
-    // below carries the resume point when this chunk surfaced no new checkpoints.
-    let request_scan_limit_reached = scan_limited
+    // A chunk scan-limit only ends the request when the request budget is also
+    // exhausted, or when there is no continuation state. Otherwise the next
+    // chunk resumes from the frontier carried below.
+    let request_scan_limit_reached = chunk_scan_limit_reached
         && (remaining_scan_budget == 0
             || (tx_range.is_none() && pending_bucket.is_none() && buffered_cp_seqs.is_empty()));
     let next_state = if request_scan_limit_reached {
@@ -520,7 +520,13 @@ fn next_filtered_checkpoint_chunk(
         range_exhaustion_reason
     };
     let frontier_watermark = if request_scan_limit_reached || cp_seqs.is_empty() {
-        scan_checkpoint_watermark(&service, &options, scan_limited, frontier, ascending)?
+        scan_checkpoint_watermark(
+            &service,
+            &options,
+            chunk_scan_limit_reached,
+            frontier,
+            ascending,
+        )?
     } else {
         None
     };
@@ -562,11 +568,11 @@ fn next_filtered_checkpoint_chunk(
 fn scan_checkpoint_watermark(
     service: &RpcService,
     options: &QueryOptions,
-    scan_limited: bool,
+    chunk_scan_limit_reached: bool,
     frontier: Option<u64>,
     ascending: bool,
 ) -> Result<Option<Watermark>, RpcError> {
-    if !scan_limited {
+    if !chunk_scan_limit_reached {
         return Ok(None);
     }
     let Some(frontier) = frontier else {

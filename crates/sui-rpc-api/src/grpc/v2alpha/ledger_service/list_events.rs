@@ -319,14 +319,19 @@ fn next_event_chunk(
                 chunk_item_limit,
                 row_scan_limit,
             )?;
-            let row_scan_budget = row_scan_budget - scan.rows_scanned;
-            let request_scan_limit_reached = scan.scan_limit_hit && row_scan_budget == 0;
+            let remaining_row_scan_budget = row_scan_budget - scan.rows_scanned;
+            // `row_limit_reached` only says this chunk stopped at its local
+            // `row_scan_limit`; more request budget may remain for another chunk.
+            // Conversely, a range can end naturally on the request's last
+            // budgeted row. Only both conditions make this a request ScanLimit.
+            let request_scan_limit_reached =
+                scan.row_limit_reached && remaining_row_scan_budget == 0;
             let next_state = if request_scan_limit_reached {
                 None
             } else {
                 scan.next_bounds.map(|bounds| EventScanState::Unfiltered {
                     bounds,
-                    row_scan_budget,
+                    row_scan_budget: remaining_row_scan_budget,
                     range_exhaustion_reason,
                     end_checkpoint,
                     end_position,
@@ -341,7 +346,7 @@ fn next_event_chunk(
                 scan_event_watermark(
                     &service,
                     &options,
-                    scan.scan_limit_hit,
+                    scan.row_limit_reached,
                     scan.frontier,
                     ascending,
                 )?
@@ -387,9 +392,11 @@ fn next_event_chunk(
                 cancel,
             )?;
             remaining_scan_budget -= hits.buckets_scanned;
-            let scan_limited = hits.scan_limit_hit;
+            let chunk_scan_limit_reached = hits.chunk_scan_limit_reached;
             let frontier = hits.frontier;
-            let request_scan_limit_reached = scan_limited
+            // A chunk scan-limit only ends the request when the request budget
+            // is also exhausted, or when there is no continuation.
+            let request_scan_limit_reached = chunk_scan_limit_reached
                 && (remaining_scan_budget == 0
                     || (hits.next_bounds.is_none() && hits.pending_bucket.is_none()));
             let refs = hits
@@ -420,7 +427,13 @@ fn next_event_chunk(
                 range_exhaustion_reason
             };
             let frontier_watermark = if request_scan_limit_reached || refs.is_empty() {
-                scan_event_watermark(&service, &options, scan_limited, frontier, ascending)?
+                scan_event_watermark(
+                    &service,
+                    &options,
+                    chunk_scan_limit_reached,
+                    frontier,
+                    ascending,
+                )?
             } else {
                 None
             };
@@ -467,11 +480,11 @@ fn next_event_chunk(
 fn scan_event_watermark(
     service: &RpcService,
     options: &QueryOptions,
-    scan_limited: bool,
+    chunk_scan_limit_reached: bool,
     frontier: Option<EventPosition>,
     ascending: bool,
 ) -> Result<Option<Watermark>, RpcError> {
-    if !scan_limited {
+    if !chunk_scan_limit_reached {
         return Ok(None);
     }
     let Some(frontier) = frontier else {

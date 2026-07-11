@@ -339,11 +339,11 @@ fn next_transaction_chunk(
                 if cancel.is_cancelled() {
                     return Err(cancelled());
                 }
-                let scan_limited = hits.scan_limit_hit;
+                let chunk_scan_limit_reached = hits.chunk_scan_limit_reached;
                 let coalesced_frontier = hits.coalesced_frontier;
-                // The drain stops at the per-chunk cap or the per-request budget;
-                // only the latter (or a cap-hit with no resume point) ends the query.
-                let request_scan_limit_reached = scan_limited
+                // A chunk scan-limit only ends the request when the request
+                // budget is also exhausted, or when there is no continuation.
+                let request_scan_limit_reached = chunk_scan_limit_reached
                     && (remaining_scan_budget == 0
                         || (hits.next_range.is_none() && hits.pending_bucket.is_none()));
                 let rows = get_tx_seq_digest_multi(&service, &hits.items)?;
@@ -372,7 +372,7 @@ fn next_transaction_chunk(
                     scan_transaction_watermark(
                         &service,
                         &options,
-                        scan_limited,
+                        chunk_scan_limit_reached,
                         coalesced_frontier,
                         ascending,
                     )?
@@ -429,11 +429,11 @@ fn next_transaction_chunk(
 fn scan_transaction_watermark(
     service: &RpcService,
     options: &QueryOptions,
-    scan_limited: bool,
+    chunk_scan_limit_reached: bool,
     coalesced_frontier: Option<u64>,
     ascending: bool,
 ) -> Result<Option<Watermark>, RpcError> {
-    if !scan_limited {
+    if !chunk_scan_limit_reached {
         return Ok(None);
     }
     let Some(frontier) = coalesced_frontier else {

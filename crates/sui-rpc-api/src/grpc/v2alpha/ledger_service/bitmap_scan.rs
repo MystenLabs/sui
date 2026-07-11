@@ -46,9 +46,10 @@ pub(super) struct DrainedBitmapHits {
     /// caller resolves it to a checkpoint and emits a scan watermark only
     /// when the chunk produced no items — item chunks carry their own watermark.
     pub(super) coalesced_frontier: Option<u64>,
-    /// The per-request bucket-scan budget was exhausted: the query stops with
-    /// `ScanLimit` rather than continuing.
-    pub(super) scan_limit_hit: bool,
+    /// The evaluator exhausted the scan budget supplied for this chunk. The
+    /// caller decides whether the request budget is also exhausted or another
+    /// chunk should continue scanning.
+    pub(super) chunk_scan_limit_reached: bool,
 }
 
 /// Evaluated bitmap state carried between blocking chunks.
@@ -170,7 +171,7 @@ pub(super) fn drain_bitmap_hits_with_budget(
             next_range: range,
             buckets_scanned: 0,
             coalesced_frontier: None,
-            scan_limit_hit: false,
+            chunk_scan_limit_reached: false,
         });
     }
 
@@ -204,7 +205,7 @@ pub(super) fn drain_bitmap_hits_with_budget(
         next_range: state.next_range,
         buckets_scanned: scan_budget_start - scan_budget.remaining(),
         coalesced_frontier: state.coalesced_frontier,
-        scan_limit_hit: state.scan_limit_hit,
+        chunk_scan_limit_reached: state.chunk_scan_limit_reached,
     })
 }
 
@@ -219,7 +220,7 @@ struct DrainLoopState {
     pending_bucket: Option<PendingBitmapBucket>,
     next_range: Option<Range<u64>>,
     coalesced_frontier: Option<u64>,
-    scan_limit_hit: bool,
+    chunk_scan_limit_reached: bool,
 }
 
 /// Drain matching member ids until `hit_limit` items, the iterator ends, or it
@@ -249,7 +250,7 @@ where
     // Furthest progress watermark seen this chunk. The evaluator emits watermarks
     // monotonically in scan direction, so last-seen is furthest.
     let mut coalesced_frontier: Option<u64> = None;
-    let mut scan_limit_hit = false;
+    let mut chunk_scan_limit_reached = false;
     while out.len() < hit_limit {
         if cancel.is_cancelled() {
             return Err(cancelled());
@@ -300,7 +301,7 @@ where
                 // Fold it into the chunk frontier and anchor the resume range
                 // strictly past it; the caller decides whether this is the
                 // per-request cap (terminal `ScanLimit`) or a per-chunk cap.
-                scan_limit_hit = true;
+                chunk_scan_limit_reached = true;
                 coalesced_frontier = Some(scan_frontier);
                 next_range = remaining_range_after(
                     iter_range.clone(),
@@ -331,7 +332,7 @@ where
         pending_bucket,
         next_range,
         coalesced_frontier,
-        scan_limit_hit,
+        chunk_scan_limit_reached,
     })
 }
 
@@ -688,8 +689,8 @@ mod tests {
         )
     }
 
-    /// A `ScanLimit` terminal is a graceful stop: `scan_limit_hit` is set and
-    /// the continuation range is anchored strictly past its bundled frontier.
+    /// A `ScanLimit` terminal is a graceful chunk stop: the chunk-limit signal
+    /// is set and the continuation range is anchored past its bundled frontier.
     #[test]
     fn scan_limit_terminal_sets_continuation_range() {
         let state = drain(
@@ -700,7 +701,7 @@ mod tests {
             ScanDirection::Ascending,
             10,
         );
-        assert!(state.scan_limit_hit);
+        assert!(state.chunk_scan_limit_reached);
         assert_eq!(state.coalesced_frontier, Some(25));
         assert_eq!(state.next_range, Some(26..100));
     }
@@ -750,7 +751,7 @@ mod tests {
             ScanDirection::Ascending,
             10,
         );
-        assert!(state.scan_limit_hit);
+        assert!(state.chunk_scan_limit_reached);
         assert!(state.items.is_empty());
         assert_eq!(state.coalesced_frontier, Some(25));
         // Resume strictly past the frontier, still within the scan range.
@@ -768,7 +769,7 @@ mod tests {
             ScanDirection::Descending,
             10,
         );
-        assert!(state.scan_limit_hit);
+        assert!(state.chunk_scan_limit_reached);
         assert_eq!(state.coalesced_frontier, Some(40));
         // Descending resume is the range below the frontier (exclusive).
         assert_eq!(state.next_range, Some(0..40));
@@ -784,7 +785,7 @@ mod tests {
             ScanDirection::Ascending,
             10,
         );
-        assert!(state.scan_limit_hit);
+        assert!(state.chunk_scan_limit_reached);
         assert_eq!(state.coalesced_frontier, Some(40));
         assert_eq!(state.next_range, Some(41..100));
     }
@@ -799,7 +800,7 @@ mod tests {
             ScanDirection::Ascending,
             10,
         );
-        assert!(!state.scan_limit_hit);
+        assert!(!state.chunk_scan_limit_reached);
         assert_eq!(state.items, vec![1, 3, 5]);
         assert_eq!(state.next_range, None);
         assert!(state.pending_bucket.is_none());
@@ -817,7 +818,7 @@ mod tests {
             ScanDirection::Ascending,
             2,
         );
-        assert!(!state.scan_limit_hit);
+        assert!(!state.chunk_scan_limit_reached);
         assert_eq!(state.items, vec![1, 3]);
         assert!(state.pending_bucket.is_some());
     }
