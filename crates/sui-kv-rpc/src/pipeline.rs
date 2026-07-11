@@ -1061,15 +1061,14 @@ where
                         }
                         Race::Upstream(Some(Err(e))) => {
                             // A terminal upstream error (e.g.
-                            // `ScanStop::ScanLimit`) must not swallow the
-                            // last frontier watermark already in flight: the
-                            // upstream chunker flushes its held watermark
-                            // ahead of the error, so finishing this lookup (and
-                            // draining any coalesced `pending`) hands the client
-                            // a resume cursor at the boundary scanned so far
-                            // before the error ends the stream. The original
-                            // error wins over any error from these salvage
-                            // lookups.
+                            // `ScanStop::ScanLimit`) must not swallow progress
+                            // whose lookup is already in flight. Finishing this
+                            // lookup (and draining any coalesced `pending`)
+                            // preserves progress already earned before the
+                            // terminal. For a scan limit, the terminal itself
+                            // carries the stopping round's authoritative
+                            // frontier. The original error wins over any error
+                            // from these salvage lookups.
                             if let Ok(Some(cp)) = fut.as_mut().await {
                                 yield ResolvedWatermarked::Watermark { position, cp };
                             }
@@ -2715,10 +2714,10 @@ mod tests {
     }
 
     /// A terminal upstream error arriving while a WM lookup is in flight
-    /// must not swallow that watermark: it is finished and emitted before
-    /// the error ends the stream. This is the scan-limit resume-cursor
-    /// guarantee — the client gets a cursor at the boundary scanned so far
-    /// even though `ScanStop::ScanLimit` truncated the response.
+    /// must not swallow already-earned progress: the lookup is finished and
+    /// emitted before the error ends the stream. For a scan limit, this
+    /// preserved watermark precedes the terminal carrying the stopping round's
+    /// authoritative frontier.
     #[tokio::test]
     async fn terminal_error_finishes_in_flight_lookup() {
         let calls = Arc::new(AtomicUsize::new(0));
@@ -2749,7 +2748,7 @@ mod tests {
                 position: 5,
                 cp: 50
             }],
-            "the in-flight frontier watermark must reach the client before the error"
+            "the already-earned in-flight watermark must reach the client before the error"
         );
         let status: tonic::Status = err.into();
         assert_eq!(status.message(), "scan limit");

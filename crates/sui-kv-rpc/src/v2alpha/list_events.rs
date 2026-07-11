@@ -57,6 +57,8 @@ use crate::pipeline::resolve_watermarks;
 use crate::pipeline::take_items;
 use crate::render::render_json;
 
+use super::ListStreamOutcome;
+
 const EVENT_READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EVENT;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
@@ -263,10 +265,10 @@ pub(crate) async fn list_events(
         let mut emitted = 0usize;
         let mut checkpoint_boundary: Option<u64> = None;
         let mut last_watermark: Option<Watermark> = None;
-        let mut scan_limit_hit = false;
-        let mut scan_limit_frontier: Option<u64> = None;
-        let mut fused = false;
-        while let Some(item) = event_stream.next().await {
+        let outcome = loop {
+            let Some(item) = event_stream.next().await else {
+                break ListStreamOutcome::SourceExhausted;
+            };
             match item {
                 Ok(ResolvedWatermarked::Item(rendered)) => {
                     checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, rendered.checkpoint_number, &options);
@@ -282,8 +284,7 @@ pub(crate) async fn list_events(
                         end.reason = Some(QueryEndReason::ItemLimit as i32);
                         response.end = Some(end);
                         yield response;
-                        fused = true;
-                        break;
+                        break ListStreamOutcome::ItemLimit;
                     }
                     yield response;
                 }
@@ -299,9 +300,7 @@ pub(crate) async fn list_events(
                     yield watermark_response(wm);
                 }
                 Err(ScanStop::ScanLimit { scan_frontier }) => {
-                    scan_limit_frontier = Some(scan_frontier);
-                    scan_limit_hit = true;
-                    break;
+                    break ListStreamOutcome::ScanLimit { scan_frontier };
                 }
                 Err(ScanStop::Cancelled) => {
                     Err(RpcError::new(
@@ -313,31 +312,42 @@ pub(crate) async fn list_events(
                     Err(RpcError::from(inner))?;
                 }
             }
-        }
-        let reason = if fused {
-            QueryEndReason::ItemLimit
-        } else if scan_limit_hit {
-            QueryEndReason::ScanLimit
-        } else {
-            end_reason
         };
-        if !fused {
-            let candidate = if reached_range_end(reason) {
-                Some(terminal_boundary_watermark(&options, Position::Events { checkpoint: end_checkpoint, tx_seq: end_position.tx_seq, event_index: end_position.event_index }))
-            } else if scan_limit_hit {
-                mint_scan_limit_watermark(
+        let reason = match outcome {
+            ListStreamOutcome::SourceExhausted => end_reason,
+            ListStreamOutcome::ItemLimit => QueryEndReason::ItemLimit,
+            ListStreamOutcome::ScanLimit { .. } => QueryEndReason::ScanLimit,
+        };
+        match outcome {
+            ListStreamOutcome::ItemLimit => {}
+            ListStreamOutcome::SourceExhausted => {
+                let candidate = reached_range_end(end_reason).then(|| {
+                    terminal_boundary_watermark(
+                        &options,
+                        Position::Events {
+                            checkpoint: end_checkpoint,
+                            tx_seq: end_position.tx_seq,
+                            event_index: end_position.event_index,
+                        },
+                    )
+                });
+                let final_watermark =
+                    candidate.filter(|candidate| last_watermark.as_ref() != Some(candidate));
+                yield end_response(final_watermark, end_reason);
+            }
+            ListStreamOutcome::ScanLimit { scan_frontier } => {
+                let candidate = watermark_from_scan_limit_frontier(
                     &client,
                     direction,
                     &options,
-                    scan_limit_frontier,
+                    scan_frontier,
                     frontier_to_position,
                     &mut checkpoint_boundary,
-                ).await?
-            } else {
-                None
-            };
-            let final_watermark = candidate.filter(|c| last_watermark.as_ref() != Some(c));
-            yield end_response(final_watermark, reason);
+                ).await?;
+                let final_watermark =
+                    candidate.filter(|candidate| last_watermark.as_ref() != Some(candidate));
+                yield end_response(final_watermark, QueryEndReason::ScanLimit);
+            }
         }
         info!(
             filtered,
@@ -585,18 +595,14 @@ fn event_boundary_watermark(
     )
 }
 
-async fn mint_scan_limit_watermark(
+async fn watermark_from_scan_limit_frontier(
     client: &BigTableClient,
     direction: ScanDirection,
     options: &QueryOptions,
-    frontier: Option<u64>,
+    frontier: u64,
     frontier_to_position: fn(u64) -> EventPosition,
     checkpoint_boundary: &mut Option<u64>,
 ) -> Result<Option<Watermark>, RpcError> {
-    let Some(frontier) = frontier else {
-        return Ok(None);
-    };
-
     let position = frontier_to_position(frontier);
     let resolver = client.event_wm_resolver(direction);
     let cp = match resolver(position).await {

@@ -16,6 +16,13 @@ mod list_checkpoints;
 mod list_events;
 mod list_transactions;
 
+#[derive(Clone, Copy, Debug)]
+enum ListStreamOutcome {
+    SourceExhausted,
+    ItemLimit,
+    ScanLimit { scan_frontier: u64 },
+}
+
 // Per-RPC hard request timeout (from `LedgerHistoryConfig`). The outer
 // `operation::with_deadline` wrapper drops the response stream with
 // `DeadlineExceeded` when this fires; debounced intermediate `Watermark` frames
