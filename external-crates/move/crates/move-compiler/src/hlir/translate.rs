@@ -596,7 +596,7 @@ fn struct_fields(context: &mut Context, tfields: N::StructFields) -> H::StructFi
         .into_iter()
         .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(&context.reporter, &t))))
         .collect::<Vec<_>>();
-    indexed_fields.sort_by_key(|(idx1, _)| *idx1);
+    indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
     H::StructFields::Defined(indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect())
 }
 
@@ -645,7 +645,7 @@ fn variant_fields(context: &mut Context, tfields: N::VariantFields) -> Vec<(Fiel
         .into_iter()
         .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(&context.reporter, &t))))
         .collect::<Vec<_>>();
-    indexed_fields.sort_by_key(|(idx1, _)| *idx1);
+    indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
     indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect()
 }
 
@@ -1560,7 +1560,7 @@ fn value_fields(
                 .map(|(ndx, (f, (exp_idx, (bt, tf))))| (ndx, f, exp_idx, bt, tf))
                 .collect()
         };
-    texp_fields.sort_by_key(|(_, _, eidx1, _, _)| *eidx1);
+    texp_fields.sort_by(|(_, _, eidx1, _, _), (_, _, eidx2, _, _)| eidx1.cmp(eidx2));
 
     let reorder_fields = texp_fields
         .iter()

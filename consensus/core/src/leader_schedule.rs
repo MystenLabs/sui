@@ -270,7 +270,7 @@ impl LeaderSwapTable {
         assert_eq!(authorities_by_score.len(), context.committee.size());
         authorities_by_score.shuffle(&mut rng);
         // Stable sort the authorities by score descending. Order of authorities with the same score is preserved.
-        authorities_by_score.sort_by_key(|a| std::cmp::Reverse(a.1));
+        authorities_by_score.sort_by(|a1, a2| a2.1.cmp(&a1.1));
 
         // Calculating the good nodes
         let good_nodes = Self::retrieve_first_nodes(

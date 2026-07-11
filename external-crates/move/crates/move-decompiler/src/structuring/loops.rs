@@ -368,7 +368,7 @@ fn try_structure_loop_without_dispatch(
     let succ_set: HashSet<NodeIndex> = succ_nodes.iter().copied().collect();
     let succ_rpo = reverse_post_order_within(&graph.cfg, primary, &succ_set);
     let mut placed: HashSet<NodeIndex> = HashSet::new();
-    for n in std::iter::once(primary).chain(succ_rpo) {
+    for n in std::iter::once(primary).chain(succ_rpo.into_iter()) {
         if !owned_succs.contains(&n) || !placed.insert(n) {
             continue;
         }

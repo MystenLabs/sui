@@ -218,7 +218,7 @@ impl LeaderScheduleV3 {
         by_score.shuffle(&mut rng);
 
         // Use stable sort to produce deterministic order of authorities with the same score.
-        by_score.sort_by_key(|a| std::cmp::Reverse(a.1));
+        by_score.sort_by(|a, b| b.1.cmp(&a.1));
 
         let mut accumulated_bad_stake = 0u64;
         let cutoff = (self.context.protocol_config.bad_nodes_stake_threshold()

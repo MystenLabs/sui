@@ -67,7 +67,7 @@ impl Subst {
                     return false;
                 }
                 assert!(params1.len() == params2.len());
-                for (s1, s2) in params1.into_iter().zip(params2) {
+                for (s1, s2) in params1.into_iter().zip(params2.into_iter()) {
                     if !self.check_and_add(s1, s2) {
                         return false;
                     }
@@ -81,7 +81,7 @@ impl Subst {
     /// Return the instantiation from the substitution that has been built.
     pub fn instantiation(self) -> Vec<SignatureToken> {
         let mut vec = self.subst.into_iter().collect::<Vec<_>>();
-        vec.sort_by_key(|a| a.0);
+        vec.sort_by(|a, b| a.0.cmp(&b.0));
         vec.into_iter().map(|x| x.1).collect()
     }
 }

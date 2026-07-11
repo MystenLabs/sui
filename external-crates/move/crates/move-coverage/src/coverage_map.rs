@@ -323,8 +323,8 @@ impl ExecCoverageMap {
             .collect();
 
         let compiled_modules = modules
-            .into_values()
-            .flat_map(|module_map| {
+            .into_iter()
+            .flat_map(|(_, module_map)| {
                 module_map
                     .into_iter()
                     .map(|(_, (module_path, compiled_module))| (module_path, compiled_module))

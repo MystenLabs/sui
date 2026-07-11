@@ -309,11 +309,11 @@ impl Processor for RpcCommandProcessor {
                 .with_repeat_n_times(*repeat_n_times)
         });
 
-        let coins_and_keys = if let Some(signer_info) = &config.signer_info {
+        let coins_and_keys = if config.signer_info.is_some() {
             Some(
                 prepare_new_signer_and_coins(
                     clients.first().unwrap(),
-                    signer_info,
+                    config.signer_info.as_ref().unwrap(),
                     config.num_threads * config.num_chunks_per_thread,
                     config.max_repeat as u64 + 1,
                 )

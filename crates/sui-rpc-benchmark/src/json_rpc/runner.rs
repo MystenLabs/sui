@@ -229,7 +229,7 @@ pub async fn run_queries(
             }
         }
 
-        let result = futures::stream::iter(requests)
+        let result = futures::stream::iter(requests.into_iter())
             .try_for_each_spawned(concurrency, |mut request_line| {
                 let client = client.clone();
                 let endpoint = endpoint.clone();

@@ -217,7 +217,7 @@ pub(crate) fn render_executed_transaction(
             .inner()
             .multi_get_objects_by_key(&object_keys)
             .into_iter()
-            .zip_debug_eq(object_keys)
+            .zip_debug_eq(object_keys.into_iter())
         {
             if let Some(o) = o {
                 objects.insert(o);

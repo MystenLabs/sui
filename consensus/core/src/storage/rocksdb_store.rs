@@ -278,7 +278,7 @@ impl Store for RocksDBStore {
         }
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = Vec::with_capacity(refs.len());
-        for (r, block) in refs.into_iter().zip_debug_eq(results) {
+        for (r, block) in refs.into_iter().zip_debug_eq(results.into_iter()) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );
@@ -311,7 +311,7 @@ impl Store for RocksDBStore {
         let refs_slice = refs.make_contiguous();
         let results = self.read_blocks(refs_slice)?;
         let mut blocks = vec![];
-        for (r, block) in refs.into_iter().zip_debug_eq(results) {
+        for (r, block) in refs.into_iter().zip_debug_eq(results.into_iter()) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );

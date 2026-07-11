@@ -284,7 +284,9 @@ impl CommitObserver {
                 .observe(commit.blocks.len() as f64);
 
             for block in &commit.blocks {
-                let latency_ms = utc_now.saturating_sub(block.timestamp_ms());
+                let latency_ms = utc_now
+                    .checked_sub(block.timestamp_ms())
+                    .unwrap_or_default();
                 metrics
                     .block_commit_latency
                     .observe(Duration::from_millis(latency_ms).as_secs_f64());

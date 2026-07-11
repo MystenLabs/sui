@@ -164,7 +164,7 @@ pub enum ReplayEngineError {
     InvalidEpochChangeTx { epoch: u64 },
 
     #[error("Unexpected event format {:#?}", event)]
-    UnexpectedEventFormat { event: Box<SuiEvent> },
+    UnexpectedEventFormat { event: SuiEvent },
 
     #[error("Unable to find event for epoch {epoch}")]
     EventNotFound { epoch: u64 },

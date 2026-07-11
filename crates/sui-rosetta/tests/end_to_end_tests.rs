@@ -3348,13 +3348,18 @@ async fn test_merge_and_redeem_fungible_staked_sui() {
     if let Some(Err(e)) = &flow_result.combine {
         panic!("Redeem combine step failed: {:?}", e);
     }
-    let Some(submit) = flow_result.submit else {
-        panic!(
-            "Submit was None. preprocess: {:?}, metadata: {:?}, payloads: {:?}, combine: {:?}",
-            flow_result.preprocess, flow_result.metadata, flow_result.payloads, flow_result.combine
-        );
-    };
-    let response: TransactionIdentifierResponse = submit.expect("Submit should succeed");
+    let response: TransactionIdentifierResponse = flow_result
+        .submit
+        .unwrap_or_else(|| {
+            panic!(
+                "Submit was None. preprocess: {:?}, metadata: {:?}, payloads: {:?}, combine: {:?}",
+                flow_result.preprocess,
+                flow_result.metadata,
+                flow_result.payloads,
+                flow_result.combine
+            )
+        })
+        .expect("Submit should succeed");
 
     wait_for_transaction(
         &mut client,
@@ -3555,13 +3560,18 @@ async fn run_redeem_flow(
     if let Some(Err(e)) = &flow_result.combine {
         panic!("Redeem combine failed: {:?}", e);
     }
-    let Some(submit) = flow_result.submit else {
-        panic!(
-            "Submit was None. preprocess: {:?}, metadata: {:?}, payloads: {:?}, combine: {:?}",
-            flow_result.preprocess, flow_result.metadata, flow_result.payloads, flow_result.combine
-        );
-    };
-    let response: TransactionIdentifierResponse = submit.expect("Submit should succeed");
+    let response: TransactionIdentifierResponse = flow_result
+        .submit
+        .unwrap_or_else(|| {
+            panic!(
+                "Submit was None. preprocess: {:?}, metadata: {:?}, payloads: {:?}, combine: {:?}",
+                flow_result.preprocess,
+                flow_result.metadata,
+                flow_result.payloads,
+                flow_result.combine
+            )
+        })
+        .expect("Submit should succeed");
 
     wait_for_transaction(client, &response.transaction_identifier.hash.to_string())
         .await

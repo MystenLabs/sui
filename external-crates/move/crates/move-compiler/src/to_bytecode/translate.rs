@@ -611,7 +611,7 @@ fn enum_variants(
     gvariants: UniqueMap<VariantName, H::VariantDefinition>,
 ) -> IR::VariantDefinitions {
     let mut variants = gvariants.into_iter().collect::<Vec<_>>();
-    variants.sort_by_key(|(_, v0)| v0.index);
+    variants.sort_by(|(_, v0), (_, v1)| v0.index.cmp(&v1.index));
     variants
         .into_iter()
         .map(|(name, v)| {

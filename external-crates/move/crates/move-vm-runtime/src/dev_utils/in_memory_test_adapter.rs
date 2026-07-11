@@ -199,7 +199,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
                     continue;
                 }
                 let new_dependencies = self.transitive_dependencies(dep)?;
-                all_dependencies.extend(new_dependencies);
+                all_dependencies.extend(new_dependencies.into_iter());
             }
         }
         // Consider making tehse into VM errors on failure instead.
