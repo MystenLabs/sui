@@ -59,6 +59,7 @@ use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_cursor_cp;
 use crate::ledger_history::watermark::boundary_watermark;
+use crate::ledger_history::watermark::cursor_watermark;
 use crate::ledger_history::watermark::item_watermark;
 
 const EVENT_READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EVENT;
@@ -124,10 +125,14 @@ pub(crate) async fn list_events(
             },
         );
 
-        let mut latest_emitted_watermark: Option<Watermark> = None;
+        let mut covered_checkpoint_bound = None;
         while let Some(mut response) = scan.next_item().await? {
-            if response.watermark.is_some() {
-                latest_emitted_watermark = response.watermark.clone();
+            if let Some(checkpoint) = response
+                .watermark
+                .as_ref()
+                .and_then(|watermark| watermark.checkpoint)
+            {
+                covered_checkpoint_bound = Some(checkpoint);
             }
             if response.event.is_some() && scan.produced() == limit_items && scan.exhausted() {
                 let mut end = QueryEnd::default();
@@ -147,7 +152,7 @@ pub(crate) async fn list_events(
                 chunk_terminal.position,
                 chunk_terminal.scan_frontier_watermark,
                 terminal_reason,
-                latest_emitted_watermark.as_ref(),
+                covered_checkpoint_bound,
             );
             yield end_response(terminal_watermark, terminal_reason);
         }
@@ -209,6 +214,7 @@ enum EventScanState {
         range_exhaustion_reason: QueryEndReason,
         end_checkpoint: u64,
         end_position: EventPosition,
+        end_cursor_kind: sui_rpc_cursor::CursorKind,
     },
     Filtered {
         query: BitmapQuery,
@@ -217,6 +223,7 @@ enum EventScanState {
         range_exhaustion_reason: QueryEndReason,
         end_checkpoint: u64,
         end_position: EventPosition,
+        end_cursor_kind: sui_rpc_cursor::CursorKind,
     },
 }
 
@@ -252,14 +259,17 @@ fn next_event_chunk(
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
+            let terminal_position = Position::Events {
+                checkpoint: event_range.end_checkpoint,
+                tx_seq: event_range.end_position.tx_seq,
+                event_index: event_range.end_position.event_index,
+            };
+            let cursor_bound_watermark = (event_range.end_reason == QueryEndReason::CursorBound)
+                .then(|| cursor_watermark(terminal_position, None, event_range.end_cursor_kind));
             let terminal = ChunkTerminal {
                 scan_end_reason: event_range.end_reason,
-                position: Position::Events {
-                    checkpoint: event_range.end_checkpoint,
-                    tx_seq: event_range.end_position.tx_seq,
-                    event_index: event_range.end_position.event_index,
-                },
-                scan_frontier_watermark: None,
+                position: terminal_position,
+                scan_frontier_watermark: cursor_bound_watermark,
             };
             let bounds = event_range.bounds;
             if event_range.is_empty() {
@@ -279,6 +289,7 @@ fn next_event_chunk(
                     range_exhaustion_reason: terminal.scan_end_reason,
                     end_checkpoint: event_range.end_checkpoint,
                     end_position: event_range.end_position,
+                    end_cursor_kind: event_range.end_cursor_kind,
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
@@ -286,6 +297,7 @@ fn next_event_chunk(
                     range_exhaustion_reason: terminal.scan_end_reason,
                     end_checkpoint: event_range.end_checkpoint,
                     end_position: event_range.end_position,
+                    end_cursor_kind: event_range.end_cursor_kind,
                 },
             };
             return next_event_chunk(
@@ -307,6 +319,7 @@ fn next_event_chunk(
             range_exhaustion_reason,
             end_checkpoint,
             end_position,
+            end_cursor_kind,
         } => {
             if cancel.is_cancelled() {
                 return Err(cancelled());
@@ -335,6 +348,7 @@ fn next_event_chunk(
                     range_exhaustion_reason,
                     end_checkpoint,
                     end_position,
+                    end_cursor_kind,
                 })
             };
             let scan_end_reason = if request_scan_limit_reached {
@@ -358,16 +372,22 @@ fn next_event_chunk(
             } else {
                 None
             };
+            let terminal_position = Position::Events {
+                checkpoint: end_checkpoint,
+                tx_seq: end_position.tx_seq,
+                event_index: end_position.event_index,
+            };
+            let terminal_watermark_candidate = if request_scan_limit_reached {
+                frontier_watermark
+            } else if scan_end_reason == QueryEndReason::CursorBound {
+                Some(cursor_watermark(terminal_position, None, end_cursor_kind))
+            } else {
+                None
+            };
             let terminal = ChunkTerminal {
                 scan_end_reason,
-                position: Position::Events {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position.tx_seq,
-                    event_index: end_position.event_index,
-                },
-                scan_frontier_watermark: request_scan_limit_reached
-                    .then_some(frontier_watermark)
-                    .flatten(),
+                position: terminal_position,
+                scan_frontier_watermark: terminal_watermark_candidate,
             };
             (scan.refs, next_state, terminal, scan_watermark)
         }
@@ -378,6 +398,7 @@ fn next_event_chunk(
             range_exhaustion_reason,
             end_checkpoint,
             end_position,
+            end_cursor_kind,
         } => {
             let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
             let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -418,6 +439,7 @@ fn next_event_chunk(
                         range_exhaustion_reason,
                         end_checkpoint,
                         end_position,
+                        end_cursor_kind,
                     },
                 )
             };
@@ -442,16 +464,22 @@ fn next_event_chunk(
             } else {
                 None
             };
+            let terminal_position = Position::Events {
+                checkpoint: end_checkpoint,
+                tx_seq: end_position.tx_seq,
+                event_index: end_position.event_index,
+            };
+            let terminal_watermark_candidate = if request_scan_limit_reached {
+                frontier_watermark
+            } else if scan_end_reason == QueryEndReason::CursorBound {
+                Some(cursor_watermark(terminal_position, None, end_cursor_kind))
+            } else {
+                None
+            };
             let terminal = ChunkTerminal {
                 scan_end_reason,
-                position: Position::Events {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position.tx_seq,
-                    event_index: end_position.event_index,
-                },
-                scan_frontier_watermark: request_scan_limit_reached
-                    .then_some(frontier_watermark)
-                    .flatten(),
+                position: terminal_position,
+                scan_frontier_watermark: terminal_watermark_candidate,
             };
             (refs, next_state, terminal, scan_watermark)
         }
@@ -674,6 +702,7 @@ fn resolve_event_range(
             }
         },
         end_reason: cp_range.end_reason,
+        end_cursor_kind: sui_rpc_cursor::CursorKind::Boundary,
     };
     resolved = options.apply_event_cursor_bounds(resolved);
     if !resolved.is_empty() {

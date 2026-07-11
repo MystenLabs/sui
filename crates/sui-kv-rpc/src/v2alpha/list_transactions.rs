@@ -28,8 +28,7 @@ use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpo
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::reached_range_end;
-use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::terminal_watermark;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
@@ -108,18 +107,18 @@ pub(crate) async fn list_transactions(
             elapsed_ms = started.elapsed().as_millis(),
             "list_transactions: empty range"
         );
-        // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
-        // range; still surface the terminal boundary so the client learns the
-        // final checkpoint is complete without waiting for the next item.
-        let terminal_watermark = reached_range_end(range_exhaustion_reason).then(|| {
-            terminal_boundary_watermark(
-                &options,
-                Position::Transactions {
-                    checkpoint: range_end_checkpoint,
-                    tx_seq: range_end_position,
-                },
-            )
-        });
+        // Empty resolved ranges still surface their terminal cursor. Natural
+        // completion may claim the final checkpoint; a cursor bound may not.
+        let terminal_watermark = terminal_watermark(
+            &options,
+            Position::Transactions {
+                checkpoint: range_end_checkpoint,
+                tx_seq: range_end_position,
+            },
+            None,
+            range_exhaustion_reason,
+            None,
+        );
         return Ok(futures::stream::iter([Ok(end_response(
             terminal_watermark,
             range_exhaustion_reason,
@@ -225,21 +224,18 @@ pub(crate) async fn list_transactions(
         futures::pin_mut!(transaction_stream);
         let mut emitted = 0usize;
         let mut covered_checkpoint_bound: Option<u64> = None;
-        let mut latest_emitted_watermark: Option<Watermark> = None;
         let terminal_reason = loop {
             let Some(item) = transaction_stream.next().await else {
-                let terminal_watermark_candidate =
-                    reached_range_end(range_exhaustion_reason).then(|| {
-                        terminal_boundary_watermark(
-                            &options,
-                            Position::Transactions {
-                                checkpoint: range_end_checkpoint,
-                                tx_seq: range_end_position,
-                            },
-                        )
-                    });
-                let terminal_watermark = terminal_watermark_candidate
-                    .filter(|candidate| latest_emitted_watermark.as_ref() != Some(candidate));
+                let terminal_watermark = terminal_watermark(
+                    &options,
+                    Position::Transactions {
+                        checkpoint: range_end_checkpoint,
+                        tx_seq: range_end_position,
+                    },
+                    None,
+                    range_exhaustion_reason,
+                    covered_checkpoint_bound,
+                );
                 yield end_response(terminal_watermark, range_exhaustion_reason);
                 break range_exhaustion_reason;
             };
@@ -265,7 +261,6 @@ pub(crate) async fn list_transactions(
                         },
                         covered_checkpoint_bound,
                     );
-                    latest_emitted_watermark = Some(watermark.clone());
                     let mut response = match item {
                         TransactionListItem::Digest(row) => {
                             transaction_response_from_tx_seq_digest(row, &read_mask, watermark)
@@ -308,22 +303,29 @@ pub(crate) async fn list_transactions(
                         position,
                         checkpoint_at_frontier,
                     );
-                    latest_emitted_watermark = Some(watermark.clone());
                     yield watermark_response(watermark);
                 }
                 Err(ResolvedScanStop::ScanLimit {
                     position,
                     checkpoint: checkpoint_at_frontier,
                 }) => {
-                    let terminal_watermark_candidate = Some(transaction_frontier_watermark(
+                    let scan_frontier_watermark = transaction_frontier_watermark(
                         &options,
                         direction,
                         &mut covered_checkpoint_bound,
                         position,
                         checkpoint_at_frontier,
-                    ));
-                    let terminal_watermark = terminal_watermark_candidate
-                        .filter(|candidate| latest_emitted_watermark.as_ref() != Some(candidate));
+                    );
+                    let terminal_watermark = terminal_watermark(
+                        &options,
+                        Position::Transactions {
+                            checkpoint: range_end_checkpoint,
+                            tx_seq: range_end_position,
+                        },
+                        Some(scan_frontier_watermark),
+                        QueryEndReason::ScanLimit,
+                        covered_checkpoint_bound,
+                    );
                     yield end_response(terminal_watermark, QueryEndReason::ScanLimit);
                     break QueryEndReason::ScanLimit;
                 }

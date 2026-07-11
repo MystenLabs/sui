@@ -31,8 +31,7 @@ use sui_rpc_api::ledger_history::query_options::ResolvedRange;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::merge_covered_checkpoint_bound;
-use sui_rpc_api::ledger_history::watermark::reached_range_end;
-use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::terminal_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_cursor::Position;
 use tracing::Instrument;
@@ -122,17 +121,17 @@ pub(crate) async fn list_checkpoints(
             elapsed_ms = started.elapsed().as_millis(),
             "list_checkpoints: empty range"
         );
-        // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
-        // range; still surface the terminal boundary so the client learns the
-        // final checkpoint is complete without waiting for the next item.
-        let terminal_watermark = reached_range_end(range_exhaustion_reason).then(|| {
-            terminal_boundary_watermark(
-                &options,
-                Position::Checkpoints {
-                    checkpoint: range_end_position,
-                },
-            )
-        });
+        // Empty resolved ranges still surface their terminal cursor. Natural
+        // completion may claim the final checkpoint; a cursor bound may not.
+        let terminal_watermark = terminal_watermark(
+            &options,
+            Position::Checkpoints {
+                checkpoint: range_end_position,
+            },
+            None,
+            range_exhaustion_reason,
+            None,
+        );
         return Ok(stream::iter([Ok(end_response(
             terminal_watermark,
             range_exhaustion_reason,
@@ -247,20 +246,17 @@ pub(crate) async fn list_checkpoints(
         futures::pin_mut!(checkpoint_stream);
         let mut emitted = 0usize;
         let mut covered_checkpoint_bound: Option<u64> = None;
-        let mut latest_emitted_watermark: Option<Watermark> = None;
         let terminal_reason = loop {
             let Some(item) = checkpoint_stream.next().await else {
-                let terminal_watermark_candidate =
-                    reached_range_end(range_exhaustion_reason).then(|| {
-                        terminal_boundary_watermark(
-                            &options,
-                            Position::Checkpoints {
-                                checkpoint: range_end_position,
-                            },
-                        )
-                    });
-                let terminal_watermark = terminal_watermark_candidate
-                    .filter(|candidate| latest_emitted_watermark.as_ref() != Some(candidate));
+                let terminal_watermark = terminal_watermark(
+                    &options,
+                    Position::Checkpoints {
+                        checkpoint: range_end_position,
+                    },
+                    None,
+                    range_exhaustion_reason,
+                    covered_checkpoint_bound,
+                );
                 yield end_response(terminal_watermark, range_exhaustion_reason);
                 break range_exhaustion_reason;
             };
@@ -279,7 +275,6 @@ pub(crate) async fn list_checkpoints(
                         },
                         covered_checkpoint_bound,
                     );
-                    latest_emitted_watermark = Some(watermark.clone());
                     let message = match item {
                         CheckpointListItem::Summary(_, cp_data) => {
                             crate::render::checkpoint_to_response(cp_data, &read_mask)?
@@ -311,21 +306,27 @@ pub(crate) async fn list_checkpoints(
                     ) else {
                         continue;
                     };
-                    latest_emitted_watermark = Some(watermark.clone());
                     yield watermark_response(watermark);
                 }
                 Err(ResolvedScanStop::ScanLimit {
                     position: _,
                     checkpoint: checkpoint_at_frontier,
                 }) => {
-                    let terminal_watermark_candidate = checkpoint_frontier_watermark(
+                    let scan_frontier_watermark = checkpoint_frontier_watermark(
                         checkpoint_at_frontier,
                         direction,
                         &options,
                         &mut covered_checkpoint_bound,
                     );
-                    let terminal_watermark = terminal_watermark_candidate
-                        .filter(|candidate| latest_emitted_watermark.as_ref() != Some(candidate));
+                    let terminal_watermark = terminal_watermark(
+                        &options,
+                        Position::Checkpoints {
+                            checkpoint: range_end_position,
+                        },
+                        scan_frontier_watermark,
+                        QueryEndReason::ScanLimit,
+                        covered_checkpoint_bound,
+                    );
                     yield end_response(terminal_watermark, QueryEndReason::ScanLimit);
                     break QueryEndReason::ScanLimit;
                 }
@@ -620,11 +621,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cursor_bounded_empty_range_emits_end_without_false_boundary() {
+    async fn cursor_bounded_empty_range_emits_terminal_cursor_without_false_checkpoint_bound() {
         let (ctx, server) = query_context("test_list_checkpoints_cursor_end", 10).await;
         let mut options = ascending_options();
         options.before =
             Some(CursorToken::boundary(Position::Checkpoints { checkpoint: 0 }).encode());
+        let expected_cursor = options.before.clone();
         let mut request = ListCheckpointsRequest::default();
         request.start_checkpoint = Some(0);
         request.end_checkpoint = Some(10);
@@ -645,9 +647,18 @@ mod tests {
             response.checkpoint.is_none(),
             "terminal frame has no payload"
         );
-        assert!(
-            response.watermark.is_none(),
-            "cursor truncation must not claim natural range completion"
+        let watermark = response
+            .watermark
+            .as_ref()
+            .expect("cursor truncation carries its resolved boundary cursor");
+        assert_eq!(
+            watermark.cursor.as_ref(),
+            expected_cursor.as_ref(),
+            "terminal cursor is the exclusive client boundary"
+        );
+        assert_eq!(
+            watermark.checkpoint, None,
+            "cursor truncation must not claim natural checkpoint completion"
         );
         assert_eq!(
             response.end.as_ref().and_then(|end| end.reason),

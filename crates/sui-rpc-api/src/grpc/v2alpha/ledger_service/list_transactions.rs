@@ -123,10 +123,14 @@ pub(crate) async fn list_transactions(
             },
         );
 
-        let mut latest_emitted_watermark: Option<Watermark> = None;
+        let mut covered_checkpoint_bound = None;
         while let Some(mut response) = scan.next_item().await? {
-            if response.watermark.is_some() {
-                latest_emitted_watermark = response.watermark.clone();
+            if let Some(checkpoint) = response
+                .watermark
+                .as_ref()
+                .and_then(|watermark| watermark.checkpoint)
+            {
+                covered_checkpoint_bound = Some(checkpoint);
             }
             if response.transaction.is_some()
                 && scan.produced() == limit_items
@@ -149,7 +153,7 @@ pub(crate) async fn list_transactions(
                 chunk_terminal.position,
                 chunk_terminal.scan_frontier_watermark,
                 terminal_reason,
-                latest_emitted_watermark.as_ref(),
+                covered_checkpoint_bound,
             );
             yield end_response(terminal_watermark, terminal_reason);
         }

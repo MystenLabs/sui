@@ -1,13 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub(super) use crate::ledger_history::watermark::terminal_watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc_cursor::Position;
-
-use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::watermark::reached_range_end;
-use crate::ledger_history::watermark::terminal_boundary_watermark;
 
 /// Effective terminal reason for a successful query stream.
 ///
@@ -26,28 +21,11 @@ pub(super) fn effective_terminal_reason(
     }
 }
 
-/// Select and deduplicate the watermark for a standalone terminal frame.
-pub(super) fn terminal_watermark(
-    options: &QueryOptions,
-    terminal_position: Position,
-    scan_frontier_watermark: Option<Watermark>,
-    terminal_reason: QueryEndReason,
-    latest_emitted_watermark: Option<&Watermark>,
-) -> Option<Watermark> {
-    let terminal_watermark_candidate = if reached_range_end(terminal_reason) {
-        Some(terminal_boundary_watermark(options, terminal_position))
-    } else if terminal_reason == QueryEndReason::ScanLimit {
-        scan_frontier_watermark
-    } else {
-        None
-    };
-
-    terminal_watermark_candidate.filter(|candidate| latest_emitted_watermark != Some(candidate))
-}
-
 #[cfg(test)]
 mod tests {
-    use sui_rpc_cursor::CursorToken;
+    use crate::ledger_history::query_options::QueryOptions;
+    use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+    use sui_rpc_cursor::{CursorToken, Position};
 
     use super::*;
 
@@ -72,7 +50,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_watermark_selects_natural_or_scan_frontier_and_deduplicates() {
+    fn terminal_watermark_selects_natural_scan_and_cursor_candidates_without_deduplication() {
         let options = options();
         let position = Position::Transactions {
             checkpoint: 9,
@@ -111,19 +89,23 @@ mod tests {
                 position,
                 Some(frontier.clone()),
                 QueryEndReason::ScanLimit,
-                Some(&frontier),
+                Some(999),
             ),
-            None
+            Some(frontier)
         );
+
+        let cursor_bound = terminal_watermark(
+            &options,
+            position,
+            None,
+            QueryEndReason::CursorBound,
+            Some(6),
+        )
+        .expect("cursor completion has a boundary watermark");
+        assert_eq!(cursor_bound.checkpoint, Some(6));
         assert_eq!(
-            terminal_watermark(
-                &options,
-                position,
-                Some(frontier),
-                QueryEndReason::CursorBound,
-                None,
-            ),
-            None
+            cursor_bound.cursor,
+            Some(CursorToken::boundary(position).encode())
         );
     }
 }

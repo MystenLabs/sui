@@ -98,8 +98,24 @@ pub fn item_watermark(position: Position, boundary: Option<u64>) -> Watermark {
 /// scanners' direction adjustment); `boundary` is the accumulated
 /// completion boundary.
 pub fn boundary_watermark(position: Position, boundary: Option<u64>) -> Watermark {
+    cursor_watermark(position, boundary, sui_rpc_cursor::CursorKind::Boundary)
+}
+
+/// Build a watermark whose cursor kind has been resolved by query-range
+/// bookkeeping. This is needed for an ascending event interval made empty by
+/// an `after` Item cursor, where changing the raw coordinate to Boundary would
+/// re-include the item on resume.
+pub fn cursor_watermark(
+    position: Position,
+    boundary: Option<u64>,
+    cursor_kind: sui_rpc_cursor::CursorKind,
+) -> Watermark {
+    let cursor = match cursor_kind {
+        sui_rpc_cursor::CursorKind::Item => CursorToken::item(position),
+        sui_rpc_cursor::CursorKind::Boundary => CursorToken::boundary(position),
+    };
     let mut wm = Watermark::default();
-    wm.cursor = Some(CursorToken::boundary(position).encode());
+    wm.cursor = Some(cursor.encode());
     set_checkpoint_bound(&mut wm, boundary);
     wm
 }
@@ -136,6 +152,34 @@ pub fn terminal_boundary_watermark(options: &QueryOptions, end_position: Positio
     wm.cursor = Some(CursorToken::boundary(end_position).encode());
     set_checkpoint_bound(&mut wm, boundary);
     wm
+}
+/// Select the watermark for a successful standalone terminal frame.
+///
+/// Natural completion can claim the final checkpoint covered. A scan limit
+/// already supplies its independently resolved frontier. A cursor bound only
+/// proves that the scan reached the resolved cursor coordinate, so it carries
+/// the range resolver's safe resume cursor while preserving only checkpoint
+/// coverage established by earlier frames. Most cursor bounds use Boundary;
+/// an ascending event interval made empty by an `after` Item retains Item kind.
+pub fn terminal_watermark(
+    options: &QueryOptions,
+    terminal_position: Position,
+    terminal_watermark_candidate: Option<Watermark>,
+    terminal_reason: QueryEndReason,
+    covered_checkpoint_bound: Option<u64>,
+) -> Option<Watermark> {
+    if reached_range_end(terminal_reason) {
+        Some(terminal_boundary_watermark(options, terminal_position))
+    } else if terminal_reason == QueryEndReason::ScanLimit {
+        terminal_watermark_candidate
+    } else if terminal_reason == QueryEndReason::CursorBound {
+        let mut watermark = terminal_watermark_candidate
+            .unwrap_or_else(|| boundary_watermark(terminal_position, None));
+        set_checkpoint_bound(&mut watermark, covered_checkpoint_bound);
+        Some(watermark)
+    } else {
+        None
+    }
 }
 
 /// Whether the scan reached the natural end of the requested range (the

@@ -93,6 +93,9 @@ pub struct ResolvedEventRange {
     pub end_checkpoint: u64,
     pub end_position: EventPosition,
     pub end_reason: QueryEndReason,
+    /// Cursor kind required to resume safely from a cursor-bounded empty
+    /// interval. Nonempty cursor bounds use a boundary cursor.
+    pub end_cursor_kind: sui_rpc_cursor::CursorKind,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -214,6 +217,11 @@ impl QueryOptions {
                 sui_rpc_cursor::CursorKind::Item => position.checked_add(1),
                 sui_rpc_cursor::CursorKind::Boundary => Some(position),
             }) else {
+                // `u64::MAX` is the unoccupiable exclusive sentinel of these
+                // packed ranges (a real item at MAX could not be represented by
+                // the required exclusive end). A Boundary cursor at MAX is
+                // therefore equivalent to the overflowing Item successor and
+                // cannot re-deliver an item.
                 return ResolvedRange::empty_at(
                     cursor.position.checkpoint(),
                     position,
@@ -277,6 +285,7 @@ impl QueryOptions {
         let mut end_position = resolved.end_position;
         let mut end_reason = resolved.end_reason;
         let mut cursor_terminal = None;
+        let mut end_cursor_kind = sui_rpc_cursor::CursorKind::Boundary;
 
         if let Some(cursor) = &self.after {
             let position = event_cursor_position(cursor);
@@ -291,7 +300,12 @@ impl QueryOptions {
                 };
                 bounds.lo = candidate;
                 if matches!(self.ordering, Ordering::Descending) || candidate_bounds.is_empty() {
-                    cursor_terminal = Some((cursor.position.checkpoint(), position));
+                    let kind = if matches!(self.ordering, Ordering::Ascending) {
+                        cursor.kind
+                    } else {
+                        sui_rpc_cursor::CursorKind::Boundary
+                    };
+                    cursor_terminal = Some((cursor.position.checkpoint(), position, kind));
                 }
                 if matches!(self.ordering, Ordering::Descending) {
                     end_checkpoint = cursor.position.checkpoint();
@@ -311,7 +325,11 @@ impl QueryOptions {
                 };
                 bounds.hi = candidate;
                 if matches!(self.ordering, Ordering::Ascending) || candidate_bounds.is_empty() {
-                    cursor_terminal = Some((cursor.position.checkpoint(), position));
+                    cursor_terminal = Some((
+                        cursor.position.checkpoint(),
+                        position,
+                        sui_rpc_cursor::CursorKind::Boundary,
+                    ));
                 }
                 if matches!(self.ordering, Ordering::Ascending) {
                     end_checkpoint = cursor.position.checkpoint();
@@ -321,25 +339,36 @@ impl QueryOptions {
             }
         }
 
-        // CursorBound bookkeeping records the raw event coordinate rather than a
-        // packed successor. Terminal watermarks are only emitted for natural range
-        // completion, so this is wire-invisible; coordinate-adjacent event cursor
-        // pairs are left for the scan adapter to collapse to an empty packed range.
+        // CursorBound bookkeeping records the exact event coordinate at which
+        // the resolved interval terminates. Nonempty intervals terminate at the
+        // ordering-side cursor boundary. An ascending interval made empty by an
+        // `after` Item cursor must retain Item kind: converting that raw
+        // coordinate to Boundary would re-include the item on resume. This also
+        // avoids inventing a lexicographic successor when the event coordinate
+        // is already maximal.
         if bounds.is_empty() {
-            if let Some((checkpoint, position)) = cursor_terminal {
+            if let Some((checkpoint, position, cursor_kind)) = cursor_terminal {
                 end_checkpoint = checkpoint;
                 end_position = position;
+                end_cursor_kind = cursor_kind;
             }
             if self.after.is_some() || self.before.is_some() {
                 end_reason = QueryEndReason::CursorBound;
             }
-            ResolvedEventRange::empty_at(end_checkpoint, end_position, end_reason)
+            ResolvedEventRange {
+                bounds: EventScanBounds::empty_at(end_position),
+                end_checkpoint,
+                end_position,
+                end_reason,
+                end_cursor_kind,
+            }
         } else {
             ResolvedEventRange {
                 bounds,
                 end_checkpoint,
                 end_position,
                 end_reason,
+                end_cursor_kind,
             }
         }
     }
@@ -485,6 +514,7 @@ impl ResolvedEventRange {
             end_checkpoint,
             end_position,
             end_reason,
+            end_cursor_kind: sui_rpc_cursor::CursorKind::Boundary,
         }
     }
 

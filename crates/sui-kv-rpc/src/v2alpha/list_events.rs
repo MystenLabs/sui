@@ -35,9 +35,9 @@ use sui_rpc_api::ledger_history::query_options::ResolvedEventRange;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::cursor_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::reached_range_end;
-use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::terminal_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
@@ -98,6 +98,7 @@ pub(crate) async fn list_events(
     let range_exhaustion_reason = event_range.end_reason;
     let range_end_checkpoint = event_range.end_checkpoint;
     let range_end_position = event_range.end_position;
+    let range_end_cursor_kind = event_range.end_cursor_kind;
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -110,19 +111,22 @@ pub(crate) async fn list_events(
             elapsed_ms = started.elapsed().as_millis(),
             "list_events: empty range"
         );
-        // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
-        // range; still surface the terminal boundary so the client learns the
-        // final checkpoint is complete without waiting for the next item.
-        let terminal_watermark = reached_range_end(range_exhaustion_reason).then(|| {
-            terminal_boundary_watermark(
-                &options,
-                Position::Events {
-                    checkpoint: range_end_checkpoint,
-                    tx_seq: range_end_position.tx_seq,
-                    event_index: range_end_position.event_index,
-                },
-            )
-        });
+        // Empty resolved ranges still surface their terminal cursor. Natural
+        // completion may claim the final checkpoint; a cursor bound may not.
+        let terminal_position = Position::Events {
+            checkpoint: range_end_checkpoint,
+            tx_seq: range_end_position.tx_seq,
+            event_index: range_end_position.event_index,
+        };
+        let cursor_bound_watermark = (range_exhaustion_reason == QueryEndReason::CursorBound)
+            .then(|| cursor_watermark(terminal_position, None, range_end_cursor_kind));
+        let terminal_watermark = terminal_watermark(
+            &options,
+            terminal_position,
+            cursor_bound_watermark,
+            range_exhaustion_reason,
+            None,
+        );
         return Ok(futures::stream::iter([Ok(end_response(
             terminal_watermark,
             range_exhaustion_reason,
@@ -271,22 +275,28 @@ pub(crate) async fn list_events(
         futures::pin_mut!(event_stream);
         let mut emitted = 0usize;
         let mut covered_checkpoint_bound: Option<u64> = None;
-        let mut latest_emitted_watermark: Option<Watermark> = None;
         let terminal_reason = loop {
             let Some(item) = event_stream.next().await else {
-                let terminal_watermark_candidate =
-                    reached_range_end(range_exhaustion_reason).then(|| {
-                        terminal_boundary_watermark(
-                            &options,
-                            Position::Events {
-                                checkpoint: range_end_checkpoint,
-                                tx_seq: range_end_position.tx_seq,
-                                event_index: range_end_position.event_index,
-                            },
+                let terminal_position = Position::Events {
+                    checkpoint: range_end_checkpoint,
+                    tx_seq: range_end_position.tx_seq,
+                    event_index: range_end_position.event_index,
+                };
+                let cursor_bound_watermark =
+                    (range_exhaustion_reason == QueryEndReason::CursorBound).then(|| {
+                        cursor_watermark(
+                            terminal_position,
+                            None,
+                            range_end_cursor_kind,
                         )
                     });
-                let terminal_watermark = terminal_watermark_candidate
-                    .filter(|candidate| latest_emitted_watermark.as_ref() != Some(candidate));
+                let terminal_watermark = terminal_watermark(
+                    &options,
+                    terminal_position,
+                    cursor_bound_watermark,
+                    range_exhaustion_reason,
+                    covered_checkpoint_bound,
+                );
                 yield end_response(terminal_watermark, range_exhaustion_reason);
                 break range_exhaustion_reason;
             };
@@ -306,7 +316,6 @@ pub(crate) async fn list_events(
                         },
                         covered_checkpoint_bound,
                     );
-                    latest_emitted_watermark = Some(watermark.clone());
                     emitted += 1;
                     let mut response = event_item_response(rendered.event, watermark);
                     if emitted == limit_items {
@@ -329,22 +338,30 @@ pub(crate) async fn list_events(
                         position,
                         checkpoint_at_frontier,
                     );
-                    latest_emitted_watermark = Some(watermark.clone());
                     yield watermark_response(watermark);
                 }
                 Err(ResolvedScanStop::ScanLimit {
                     position,
                     checkpoint: checkpoint_at_frontier,
                 }) => {
-                    let terminal_watermark_candidate = Some(event_frontier_watermark(
+                    let scan_frontier_watermark = event_frontier_watermark(
                         &options,
                         direction,
                         &mut covered_checkpoint_bound,
                         position,
                         checkpoint_at_frontier,
-                    ));
-                    let terminal_watermark = terminal_watermark_candidate
-                        .filter(|candidate| latest_emitted_watermark.as_ref() != Some(candidate));
+                    );
+                    let terminal_watermark = terminal_watermark(
+                        &options,
+                        Position::Events {
+                            checkpoint: range_end_checkpoint,
+                            tx_seq: range_end_position.tx_seq,
+                            event_index: range_end_position.event_index,
+                        },
+                        Some(scan_frontier_watermark),
+                        QueryEndReason::ScanLimit,
+                        covered_checkpoint_bound,
+                    );
                     yield end_response(terminal_watermark, QueryEndReason::ScanLimit);
                     break QueryEndReason::ScanLimit;
                 }
@@ -763,6 +780,7 @@ async fn resolve_event_range(
             }
         },
         end_reason: cp_range.end_reason,
+        end_cursor_kind: sui_rpc_cursor::CursorKind::Boundary,
     }))
 }
 
