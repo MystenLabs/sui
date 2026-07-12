@@ -51,7 +51,6 @@ use crate::pipeline::Watermarked;
 use crate::pipeline::dedup_consecutive;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::resolve_scan_watermarks;
-use crate::pipeline::resolved_scan_limit;
 use crate::pipeline::take_items;
 use crate::render::render_full_checkpoint;
 use crate::resolve;
@@ -380,7 +379,7 @@ fn terminal_response_from_scan_stop(
     direction: ScanDirection,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
-    let (position, checkpoint) = resolved_scan_limit(stop)?;
+    let (position, checkpoint) = stop.into_scan_limit()?;
     let checkpoint_at_frontier = checkpoint
         .or_else(|| {
             ((direction.is_ascending() && position == 0)

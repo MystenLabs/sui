@@ -954,19 +954,19 @@ pub(crate) enum ResolvedScanStop<P> {
     Cancelled,
     Fault(anyhow::Error),
 }
-pub(crate) fn resolved_scan_limit<P>(
-    stop: ResolvedScanStop<P>,
-) -> Result<(P, Option<u64>), RpcError> {
-    match stop {
-        ResolvedScanStop::ScanLimit {
-            position,
-            checkpoint,
-        } => Ok((position, checkpoint)),
-        ResolvedScanStop::Cancelled => Err(RpcError::new(
-            tonic::Code::Cancelled,
-            ScanStop::Cancelled.to_string(),
-        )),
-        ResolvedScanStop::Fault(inner) => Err(RpcError::from(inner)),
+impl<P> ResolvedScanStop<P> {
+    pub(crate) fn into_scan_limit(self) -> Result<(P, Option<u64>), RpcError> {
+        match self {
+            Self::ScanLimit {
+                position,
+                checkpoint,
+            } => Ok((position, checkpoint)),
+            Self::Cancelled => Err(RpcError::new(
+                tonic::Code::Cancelled,
+                ScanStop::Cancelled.to_string(),
+            )),
+            Self::Fault(inner) => Err(RpcError::from(inner)),
+        }
     }
 }
 

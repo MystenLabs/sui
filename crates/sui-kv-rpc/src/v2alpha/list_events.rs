@@ -56,7 +56,6 @@ use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::resolve_scan_watermarks;
-use crate::pipeline::resolved_scan_limit;
 use crate::pipeline::take_items;
 use crate::render::render_json;
 
@@ -623,7 +622,7 @@ fn terminal_response_from_scan_stop(
     direction: ScanDirection,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListEventsResponse, RpcError> {
-    let (position, checkpoint) = resolved_scan_limit(stop)?;
+    let (position, checkpoint) = stop.into_scan_limit()?;
     Ok(end_response(
         event_frontier_watermark(
             options,
