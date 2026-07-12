@@ -283,23 +283,36 @@ fn next_checkpoint_chunk(
                         &options,
                     )?
                 {
-                    tx_range.start = fence.tx_seq;
-                    if options.is_ascending() {
-                        entry_checkpoint = entry_checkpoint.max(fence.checkpoint);
+                    if fence.tx_seq >= tx_range.end {
+                        // The fence consumes the whole filtered span: nothing
+                        // was actually scanned, so natural completion must
+                        // not claim coverage, and the terminal stays at the
+                        // requested boundary rather than moving to a fence
+                        // outside the requested interval.
+                        tx_range = tx_range.end..tx_range.end;
+                        terminal = ScanTerminal::Range {
+                            exhaustion: cp_range.exhaustion,
+                            position: Position::Checkpoints {
+                                checkpoint: end_position,
+                            },
+                            interval_empty: true,
+                        };
                     } else {
-                        end_checkpoint = fence.checkpoint;
-                        end_position = fence.checkpoint;
+                        tx_range.start = fence.tx_seq;
+                        if options.is_ascending() {
+                            entry_checkpoint = entry_checkpoint.max(fence.checkpoint);
+                        } else {
+                            end_checkpoint = fence.checkpoint;
+                            end_position = fence.checkpoint;
+                            terminal = ScanTerminal::Range {
+                                exhaustion: cp_range.exhaustion,
+                                position: Position::Checkpoints {
+                                    checkpoint: end_position,
+                                },
+                                interval_empty: false,
+                            };
+                        }
                     }
-                    // The clamp can consume the whole filtered span; then
-                    // nothing was actually scanned and natural completion
-                    // must not claim coverage.
-                    terminal = ScanTerminal::Range {
-                        exhaustion: cp_range.exhaustion,
-                        position: Position::Checkpoints {
-                            checkpoint: end_position,
-                        },
-                        interval_empty: tx_range.is_empty(),
-                    };
                 }
                 if tx_range.is_empty() {
                     return Ok(CheckpointChunkDone {
