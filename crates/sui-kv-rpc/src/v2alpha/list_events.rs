@@ -31,14 +31,13 @@ use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::EventPosition;
 use sui_rpc_api::ledger_history::query_options::EventScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedEventRange;
-use sui_rpc_api::ledger_history::watermark::BoundaryTerminal;
+use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
-use sui_rpc_api::ledger_history::watermark::cursor_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
-use sui_rpc_api::ledger_history::watermark::terminal_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
@@ -96,10 +95,9 @@ pub(crate) async fn list_events(
     let event_range = resolve_event_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_event_range"))
         .await?;
-    let range_exhaustion_reason = event_range.end_reason;
+    let exhaustion = event_range.exhaustion;
     let range_end_checkpoint = event_range.end_checkpoint;
     let range_end_position = event_range.end_position;
-    let range_end_cursor_kind = event_range.end_cursor_kind;
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -119,21 +117,13 @@ pub(crate) async fn list_events(
             tx_seq: range_end_position.tx_seq,
             event_index: range_end_position.event_index,
         };
-        let cursor_bound_watermark = (range_exhaustion_reason == QueryEndReason::CursorBound)
-            .then(|| cursor_watermark(terminal_position, None, range_end_cursor_kind));
-        let terminal_watermark = terminal_watermark(
+        return Ok(futures::stream::iter([Ok(range_end_response(
             &options,
-            BoundaryTerminal::new(
-                range_exhaustion_reason,
-                terminal_position,
-                cursor_bound_watermark,
-            ),
+            exhaustion,
+            terminal_position,
             None,
-        );
-        return Ok(futures::stream::iter([Ok(end_response(
-            terminal_watermark,
-            range_exhaustion_reason,
-        ))])
+        )
+        .0)])
         .boxed());
     }
 
@@ -285,25 +275,14 @@ pub(crate) async fn list_events(
                     tx_seq: range_end_position.tx_seq,
                     event_index: range_end_position.event_index,
                 };
-                let cursor_bound_watermark =
-                    (range_exhaustion_reason == QueryEndReason::CursorBound).then(|| {
-                        cursor_watermark(
-                            terminal_position,
-                            None,
-                            range_end_cursor_kind,
-                        )
-                    });
-                let terminal_watermark = terminal_watermark(
+                let (response, reason) = range_end_response(
                     &options,
-                    BoundaryTerminal::new(
-                        range_exhaustion_reason,
-                        terminal_position,
-                        cursor_bound_watermark,
-                    ),
+                    exhaustion,
+                    terminal_position,
                     covered_checkpoint_bound,
                 );
-                yield end_response(terminal_watermark, range_exhaustion_reason);
-                break range_exhaustion_reason;
+                yield response;
+                break reason;
             };
             match item {
                 Ok(ResolvedWatermarked::Item(rendered)) => {
@@ -583,6 +562,28 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsRespo
     response
 }
 
+/// Trailing terminal frame for range exhaustion. Reason and watermark derive
+/// from one `ScanTerminal`, so they cannot disagree.
+fn range_end_response(
+    options: &QueryOptions,
+    exhaustion: RangeExhaustion,
+    position: Position,
+    covered_checkpoint_bound: Option<u64>,
+) -> (ListEventsResponse, QueryEndReason) {
+    let terminal = ScanTerminal::Range {
+        exhaustion,
+        position,
+    };
+    let reason = terminal.reason();
+    (
+        end_response(
+            terminal.into_watermark(options, covered_checkpoint_bound),
+            reason,
+        ),
+        reason,
+    )
+}
+
 fn event_frontier_watermark(
     options: &QueryOptions,
     direction: ScanDirection,
@@ -623,15 +624,19 @@ fn terminal_response_from_scan_stop(
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListEventsResponse, RpcError> {
     let (position, checkpoint) = stop.into_scan_limit()?;
-    Ok(end_response(
-        event_frontier_watermark(
+    let terminal = ScanTerminal::ScanLimit {
+        watermark: event_frontier_watermark(
             options,
             direction,
             covered_checkpoint_bound,
             position,
             checkpoint,
         )?,
-        QueryEndReason::ScanLimit,
+    };
+    let reason = terminal.reason();
+    Ok(end_response(
+        terminal.into_watermark(options, *covered_checkpoint_bound),
+        reason,
     ))
 }
 
@@ -771,7 +776,7 @@ async fn resolve_event_range(
         return Ok(ResolvedEventRange::empty_at(
             cp_range.terminal_checkpoint(options.ordering),
             EventPosition::start_of_tx(tx_boundary),
-            cp_range.end_reason,
+            cp_range.exhaustion,
         ));
     }
 
@@ -789,8 +794,7 @@ async fn resolve_event_range(
                 EventPosition::start_of_tx(tx_range.start)
             }
         },
-        end_reason: cp_range.end_reason,
-        end_cursor_kind: sui_rpc_cursor::CursorKind::Boundary,
+        exhaustion: cp_range.exhaustion,
     }))
 }
 

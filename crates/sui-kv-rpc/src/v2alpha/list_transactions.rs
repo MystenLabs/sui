@@ -23,13 +23,13 @@ use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
-use sui_rpc_api::ledger_history::watermark::BoundaryTerminal;
+use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
-use sui_rpc_api::ledger_history::watermark::terminal_watermark;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
@@ -95,7 +95,7 @@ pub(crate) async fn list_transactions(
     let tx_range = resolve_tx_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
-    let range_exhaustion_reason = tx_range.end_reason;
+    let exhaustion = tx_range.exhaustion;
     let range_end_checkpoint = tx_range.end_checkpoint;
     let range_end_position = tx_range.end_position;
     let tx_range = tx_range.range;
@@ -110,22 +110,16 @@ pub(crate) async fn list_transactions(
         );
         // Empty resolved ranges still surface their terminal cursor. Natural
         // completion may claim the final checkpoint; a cursor bound may not.
-        let terminal_watermark = terminal_watermark(
+        return Ok(futures::stream::iter([Ok(range_end_response(
             &options,
-            BoundaryTerminal::new(
-                range_exhaustion_reason,
-                Position::Transactions {
-                    checkpoint: range_end_checkpoint,
-                    tx_seq: range_end_position,
-                },
-                None,
-            ),
+            exhaustion,
+            Position::Transactions {
+                checkpoint: range_end_checkpoint,
+                tx_seq: range_end_position,
+            },
             None,
-        );
-        return Ok(futures::stream::iter([Ok(end_response(
-            terminal_watermark,
-            range_exhaustion_reason,
-        ))])
+        )
+        .0)])
         .boxed());
     }
 
@@ -229,20 +223,17 @@ pub(crate) async fn list_transactions(
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
             let Some(item) = transaction_stream.next().await else {
-                let terminal_watermark = terminal_watermark(
+                let (response, reason) = range_end_response(
                     &options,
-                    BoundaryTerminal::new(
-                        range_exhaustion_reason,
-                        Position::Transactions {
-                            checkpoint: range_end_checkpoint,
-                            tx_seq: range_end_position,
-                        },
-                        None,
-                    ),
+                    exhaustion,
+                    Position::Transactions {
+                        checkpoint: range_end_checkpoint,
+                        tx_seq: range_end_position,
+                    },
                     covered_checkpoint_bound,
                 );
-                yield end_response(terminal_watermark, range_exhaustion_reason);
-                break range_exhaustion_reason;
+                yield response;
+                break reason;
             };
             match item {
                 Ok(ResolvedWatermarked::Item(item)) => {
@@ -376,15 +367,19 @@ fn terminal_response_from_scan_stop(
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListTransactionsResponse, RpcError> {
     let (position, checkpoint) = stop.into_scan_limit()?;
-    Ok(end_response(
-        transaction_frontier_watermark(
+    let terminal = ScanTerminal::ScanLimit {
+        watermark: transaction_frontier_watermark(
             options,
             direction,
             covered_checkpoint_bound,
             position,
             checkpoint,
         )?,
-        QueryEndReason::ScanLimit,
+    };
+    let reason = terminal.reason();
+    Ok(end_response(
+        terminal.into_watermark(options, *covered_checkpoint_bound),
+        reason,
     ))
 }
 
@@ -587,6 +582,28 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransaction
     response.watermark = Some(watermark);
     response.end = Some(end);
     response
+}
+
+/// Trailing terminal frame for range exhaustion. Reason and watermark derive
+/// from one `ScanTerminal`, so they cannot disagree.
+fn range_end_response(
+    options: &QueryOptions,
+    exhaustion: RangeExhaustion,
+    position: Position,
+    covered_checkpoint_bound: Option<u64>,
+) -> (ListTransactionsResponse, QueryEndReason) {
+    let terminal = ScanTerminal::Range {
+        exhaustion,
+        position,
+    };
+    let reason = terminal.reason();
+    (
+        end_response(
+            terminal.into_watermark(options, covered_checkpoint_bound),
+            reason,
+        ),
+        reason,
+    )
 }
 
 #[cfg(test)]

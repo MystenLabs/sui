@@ -7,6 +7,7 @@ use std::ops::Bound;
 use std::time::Instant;
 
 use crate::ledger_history::query_options::EventPosition;
+use crate::ledger_history::query_options::RangeExhaustion;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use mysten_common::ZipDebugEqIteratorExt;
@@ -38,10 +39,10 @@ use crate::ledger_history::query_options::ResolvedEventRange;
 
 use super::bitmap_scan::PendingBitmapBucket;
 use super::chunked_scan::ChunkArgs;
-use super::chunked_scan::ChunkTerminal;
 use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
+use super::chunked_scan::scan_limit_or_range;
 use super::event_scan::EventRef;
 use super::event_scan::drain_event_bitmap_hits;
 use super::event_scan::event_frontier_checkpoint;
@@ -53,9 +54,9 @@ use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::validate_checkpoint_bounds;
+use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
-use crate::ledger_history::watermark::cursor_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
 
@@ -209,19 +210,17 @@ enum EventScanState {
         // tx may carry zero events) to the endpoint's configured `max_limit_items`
         // rows per request.
         row_scan_budget: usize,
-        range_exhaustion_reason: QueryEndReason,
+        exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: EventPosition,
-        end_cursor_kind: sui_rpc_cursor::CursorKind,
     },
     Filtered {
         query: BitmapQuery,
         bounds: Option<EventScanBounds>,
         pending_bucket: Option<PendingBitmapBucket>,
-        range_exhaustion_reason: QueryEndReason,
+        exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: EventPosition,
-        end_cursor_kind: sui_rpc_cursor::CursorKind,
     },
 }
 
@@ -262,13 +261,10 @@ fn next_event_chunk(
                 tx_seq: event_range.end_position.tx_seq,
                 event_index: event_range.end_position.event_index,
             };
-            let cursor_bound_watermark = (event_range.end_reason == QueryEndReason::CursorBound)
-                .then(|| cursor_watermark(terminal_position, None, event_range.end_cursor_kind));
-            let terminal = ChunkTerminal::boundary(
-                event_range.end_reason,
-                terminal_position,
-                cursor_bound_watermark,
-            );
+            let terminal = ScanTerminal::Range {
+                exhaustion: event_range.exhaustion,
+                position: terminal_position,
+            };
             let bounds = event_range.bounds;
             if event_range.is_empty() {
                 return Ok(EventChunkDone {
@@ -284,18 +280,16 @@ fn next_event_chunk(
                     query,
                     bounds: Some(bounds),
                     pending_bucket: None,
-                    range_exhaustion_reason: event_range.end_reason,
+                    exhaustion: event_range.exhaustion,
                     end_checkpoint: event_range.end_checkpoint,
                     end_position: event_range.end_position,
-                    end_cursor_kind: event_range.end_cursor_kind,
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
                     row_scan_budget: unfiltered_row_scan_budget,
-                    range_exhaustion_reason: event_range.end_reason,
+                    exhaustion: event_range.exhaustion,
                     end_checkpoint: event_range.end_checkpoint,
                     end_position: event_range.end_position,
-                    end_cursor_kind: event_range.end_cursor_kind,
                 },
             };
             return next_event_chunk(
@@ -314,10 +308,9 @@ fn next_event_chunk(
         EventScanState::Unfiltered {
             bounds,
             row_scan_budget,
-            range_exhaustion_reason,
+            exhaustion,
             end_checkpoint,
             end_position,
-            end_cursor_kind,
         } => {
             if cancel.is_cancelled() {
                 return Err(cancelled());
@@ -343,10 +336,9 @@ fn next_event_chunk(
                 scan.next_bounds.map(|bounds| EventScanState::Unfiltered {
                     bounds,
                     row_scan_budget: remaining_row_scan_budget,
-                    range_exhaustion_reason,
+                    exhaustion,
                     end_checkpoint,
                     end_position,
-                    end_cursor_kind,
                 })
             };
             let frontier = if scan.row_limit_reached {
@@ -380,14 +372,10 @@ fn next_event_chunk(
                 tx_seq: end_position.tx_seq,
                 event_index: end_position.event_index,
             };
-            let terminal = ChunkTerminal::scan_limit_or_boundary(
+            let terminal = scan_limit_or_range(
                 request_scan_limit_reached,
+                exhaustion,
                 terminal_position,
-                range_exhaustion_reason,
-                || {
-                    (range_exhaustion_reason == QueryEndReason::CursorBound)
-                        .then(|| cursor_watermark(terminal_position, None, end_cursor_kind))
-                },
                 || {
                     frontier_watermark.ok_or_else(|| {
                         RpcError::new(
@@ -403,10 +391,9 @@ fn next_event_chunk(
             query,
             bounds,
             pending_bucket,
-            range_exhaustion_reason,
+            exhaustion,
             end_checkpoint,
             end_position,
-            end_cursor_kind,
         } => {
             let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
             let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -444,10 +431,9 @@ fn next_event_chunk(
                         query,
                         bounds: hits.next_bounds,
                         pending_bucket: hits.pending_bucket,
-                        range_exhaustion_reason,
+                        exhaustion,
                         end_checkpoint,
                         end_position,
-                        end_cursor_kind,
                     },
                 )
             };
@@ -482,14 +468,10 @@ fn next_event_chunk(
                 tx_seq: end_position.tx_seq,
                 event_index: end_position.event_index,
             };
-            let terminal = ChunkTerminal::scan_limit_or_boundary(
+            let terminal = scan_limit_or_range(
                 request_scan_limit_reached,
+                exhaustion,
                 terminal_position,
-                range_exhaustion_reason,
-                || {
-                    (range_exhaustion_reason == QueryEndReason::CursorBound)
-                        .then(|| cursor_watermark(terminal_position, None, end_cursor_kind))
-                },
                 || {
                     frontier_watermark.ok_or_else(|| {
                         RpcError::new(
@@ -715,7 +697,7 @@ fn resolve_event_range(
         return Ok(ResolvedEventRange::empty_at(
             cp_range.terminal_checkpoint(options.ordering),
             EventPosition::start_of_tx(tx_boundary),
-            cp_range.end_reason,
+            cp_range.exhaustion,
         ));
     }
 
@@ -731,8 +713,7 @@ fn resolve_event_range(
                 EventPosition::start_of_tx(tx_range.start)
             }
         },
-        end_reason: cp_range.end_reason,
-        end_cursor_kind: sui_rpc_cursor::CursorKind::Boundary,
+        exhaustion: cp_range.exhaustion,
     };
     resolved = options.apply_event_cursor_bounds(resolved);
     if !resolved.is_empty() {
@@ -859,7 +840,7 @@ mod tests {
                 CursorToken::boundary(expected_position)
             );
             assert_eq!(watermark.checkpoint, expected_proof);
-            let terminal = ChunkTerminal::scan_limit(expected_position, watermark);
+            let terminal = ScanTerminal::ScanLimit { watermark };
             let response = end_response(
                 terminal.into_watermark(&options, Some(123)),
                 QueryEndReason::ScanLimit,

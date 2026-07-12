@@ -57,6 +57,33 @@ impl From<(u64, u32)> for EventPosition {
     }
 }
 
+/// Why a resolved scan interval is exhausted. Fixed at range-resolution time,
+/// carried through scan state, and rendered by [`ScanTerminal`].
+///
+/// [`ScanTerminal`]: crate::ledger_history::watermark::ScanTerminal
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RangeExhaustion {
+    /// Reached the currently indexed ledger tip.
+    LedgerTip,
+    /// Reached the requested (or implicit-genesis) checkpoint range bound.
+    CheckpointBound,
+    /// Truncated by a client `after`/`before` cursor. `kind` is the cursor
+    /// kind the terminal cursor must carry so resume neither repeats nor
+    /// skips an item (Item is preserved only for an ascending event interval
+    /// made empty by an `after` Item cursor; every other site uses Boundary).
+    CursorBound { kind: sui_rpc_cursor::CursorKind },
+}
+
+impl RangeExhaustion {
+    pub fn reason(self) -> QueryEndReason {
+        match self {
+            Self::LedgerTip => QueryEndReason::LedgerTip,
+            Self::CheckpointBound => QueryEndReason::CheckpointBound,
+            Self::CursorBound { .. } => QueryEndReason::CursorBound,
+        }
+    }
+}
+
 /// Validated, normalized form of `QueryOptions` (the proto wire type).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QueryOptions {
@@ -69,7 +96,7 @@ pub struct QueryOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolvedCheckpointRange {
     pub range: Range<u64>,
-    pub end_reason: QueryEndReason,
+    pub exhaustion: RangeExhaustion,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,7 +104,7 @@ pub struct ResolvedRange {
     pub range: Range<u64>,
     pub end_checkpoint: u64,
     pub end_position: u64,
-    pub end_reason: QueryEndReason,
+    pub exhaustion: RangeExhaustion,
 }
 
 /// Semantic scan bounds over explicit event coordinates.
@@ -92,17 +119,14 @@ pub struct ResolvedEventRange {
     pub bounds: EventScanBounds,
     pub end_checkpoint: u64,
     pub end_position: EventPosition,
-    pub end_reason: QueryEndReason,
-    /// Cursor kind required to resume safely from a cursor-bounded empty
-    /// interval. Nonempty cursor bounds use a boundary cursor.
-    pub end_cursor_kind: sui_rpc_cursor::CursorKind,
+    pub exhaustion: RangeExhaustion,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CheckpointRange {
     start: u64,
     end: u64,
-    high_reason: QueryEndReason,
+    high_exhaustion: RangeExhaustion,
     indexed_tip: u64,
 }
 
@@ -208,7 +232,7 @@ impl QueryOptions {
         let mut end = resolved.range.end;
         let mut end_checkpoint = resolved.end_checkpoint;
         let mut end_position = resolved.end_position;
-        let mut end_reason = resolved.end_reason;
+        let mut exhaustion = resolved.exhaustion;
         let mut cursor_terminal = None;
 
         if let Some(cursor) = &self.after {
@@ -225,7 +249,9 @@ impl QueryOptions {
                 return ResolvedRange::empty_at(
                     cursor.position.checkpoint(),
                     position,
-                    QueryEndReason::CursorBound,
+                    RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    },
                 );
             };
             if after >= start {
@@ -236,7 +262,9 @@ impl QueryOptions {
                 if matches!(self.ordering, Ordering::Descending) {
                     end_checkpoint = cursor.position.checkpoint();
                     end_position = after;
-                    end_reason = QueryEndReason::CursorBound;
+                    exhaustion = RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    };
                 }
             }
         }
@@ -251,7 +279,9 @@ impl QueryOptions {
                 if matches!(self.ordering, Ordering::Ascending) {
                     end_checkpoint = cursor.position.checkpoint();
                     end_position = position;
-                    end_reason = QueryEndReason::CursorBound;
+                    exhaustion = RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    };
                 }
             }
         }
@@ -262,15 +292,17 @@ impl QueryOptions {
                 end_position = position;
             }
             if self.after.is_some() || self.before.is_some() {
-                end_reason = QueryEndReason::CursorBound;
+                exhaustion = RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                };
             }
-            ResolvedRange::empty_at(end_checkpoint, end_position, end_reason)
+            ResolvedRange::empty_at(end_checkpoint, end_position, exhaustion)
         } else {
             ResolvedRange {
                 range: start..end,
                 end_checkpoint,
                 end_position,
-                end_reason,
+                exhaustion,
             }
         }
     }
@@ -283,9 +315,8 @@ impl QueryOptions {
         let mut bounds = resolved.bounds;
         let mut end_checkpoint = resolved.end_checkpoint;
         let mut end_position = resolved.end_position;
-        let mut end_reason = resolved.end_reason;
+        let mut exhaustion = resolved.exhaustion;
         let mut cursor_terminal = None;
-        let mut end_cursor_kind = sui_rpc_cursor::CursorKind::Boundary;
 
         if let Some(cursor) = &self.after {
             let position = event_cursor_position(cursor);
@@ -310,7 +341,9 @@ impl QueryOptions {
                 if matches!(self.ordering, Ordering::Descending) {
                     end_checkpoint = cursor.position.checkpoint();
                     end_position = position;
-                    end_reason = QueryEndReason::CursorBound;
+                    exhaustion = RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    };
                 }
             }
         }
@@ -334,7 +367,9 @@ impl QueryOptions {
                 if matches!(self.ordering, Ordering::Ascending) {
                     end_checkpoint = cursor.position.checkpoint();
                     end_position = position;
-                    end_reason = QueryEndReason::CursorBound;
+                    exhaustion = RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    };
                 }
             }
         }
@@ -347,28 +382,27 @@ impl QueryOptions {
         // avoids inventing a lexicographic successor when the event coordinate
         // is already maximal.
         if bounds.is_empty() {
-            if let Some((checkpoint, position, cursor_kind)) = cursor_terminal {
+            if let Some((checkpoint, position, kind)) = cursor_terminal {
                 end_checkpoint = checkpoint;
                 end_position = position;
-                end_cursor_kind = cursor_kind;
-            }
-            if self.after.is_some() || self.before.is_some() {
-                end_reason = QueryEndReason::CursorBound;
+                exhaustion = RangeExhaustion::CursorBound { kind };
+            } else if self.after.is_some() || self.before.is_some() {
+                exhaustion = RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                };
             }
             ResolvedEventRange {
                 bounds: EventScanBounds::empty_at(end_position),
                 end_checkpoint,
                 end_position,
-                end_reason,
-                end_cursor_kind,
+                exhaustion,
             }
         } else {
             ResolvedEventRange {
                 bounds,
                 end_checkpoint,
                 end_position,
-                end_reason,
-                end_cursor_kind,
+                exhaustion,
             }
         }
     }
@@ -397,10 +431,10 @@ fn event_cursor_position(cursor: &CursorToken) -> EventPosition {
 }
 
 impl ResolvedCheckpointRange {
-    pub fn empty_at(checkpoint: u64, reason: QueryEndReason) -> Self {
+    pub fn empty_at(checkpoint: u64, exhaustion: RangeExhaustion) -> Self {
         Self {
             range: checkpoint..checkpoint,
-            end_reason: reason,
+            exhaustion,
         }
     }
 
@@ -424,18 +458,18 @@ impl ResolvedCheckpointRange {
             range,
             end_checkpoint: self.terminal_checkpoint(ordering),
             end_position,
-            end_reason: self.end_reason,
+            exhaustion: self.exhaustion,
         }
     }
 }
 
 impl ResolvedRange {
-    pub fn empty_at(end_checkpoint: u64, end_position: u64, end_reason: QueryEndReason) -> Self {
+    pub fn empty_at(end_checkpoint: u64, end_position: u64, exhaustion: RangeExhaustion) -> Self {
         Self {
             range: end_position..end_position,
             end_checkpoint,
             end_position,
-            end_reason,
+            exhaustion,
         }
     }
 
@@ -507,14 +541,13 @@ impl ResolvedEventRange {
     pub fn empty_at(
         end_checkpoint: u64,
         end_position: EventPosition,
-        end_reason: QueryEndReason,
+        exhaustion: RangeExhaustion,
     ) -> Self {
         Self {
             bounds: EventScanBounds::empty_at(end_position),
             end_checkpoint,
             end_position,
-            end_reason,
-            end_cursor_kind: sui_rpc_cursor::CursorKind::Boundary,
+            exhaustion,
         }
     }
 
@@ -567,17 +600,18 @@ impl CheckpointRange {
         }
 
         let requested_end = end_checkpoint.unwrap_or(checkpoint_hi_exclusive);
-        let high_reason = if end_checkpoint.is_none() || requested_end > checkpoint_hi_exclusive {
-            QueryEndReason::LedgerTip
+        let high_exhaustion = if end_checkpoint.is_none() || requested_end > checkpoint_hi_exclusive
+        {
+            RangeExhaustion::LedgerTip
         } else {
-            QueryEndReason::CheckpointBound
+            RangeExhaustion::CheckpointBound
         };
         let end = requested_end.min(checkpoint_hi_exclusive);
 
         Ok(Self {
             start,
             end,
-            high_reason,
+            high_exhaustion,
             indexed_tip: checkpoint_hi_exclusive,
         })
     }
@@ -585,8 +619,8 @@ impl CheckpointRange {
     pub fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
         let mut start = self.start;
         let mut end = self.end;
-        let mut low_reason = QueryEndReason::CheckpointBound;
-        let mut high_reason = self.high_reason;
+        let mut low_exhaustion = RangeExhaustion::CheckpointBound;
+        let mut high_exhaustion = self.high_exhaustion;
         let mut cursor_bound = false;
 
         if let Some(cursor) = &options.after
@@ -595,7 +629,9 @@ impl CheckpointRange {
             start = cursor.position.checkpoint();
             cursor_bound = true;
             if matches!(options.ordering, Ordering::Descending) {
-                low_reason = QueryEndReason::CursorBound;
+                low_exhaustion = RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                };
             }
         }
 
@@ -609,37 +645,41 @@ impl CheckpointRange {
             end = upper;
             cursor_bound = true;
             if matches!(options.ordering, Ordering::Ascending) {
-                high_reason = QueryEndReason::CursorBound;
+                high_exhaustion = RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                };
             }
         }
 
         if start >= self.indexed_tip {
-            return ResolvedCheckpointRange::empty_at(self.indexed_tip, QueryEndReason::LedgerTip);
+            return ResolvedCheckpointRange::empty_at(self.indexed_tip, RangeExhaustion::LedgerTip);
         }
 
         if start >= end {
-            let reason = if cursor_bound {
-                QueryEndReason::CursorBound
+            let exhaustion = if cursor_bound {
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                }
             } else {
                 match options.ordering {
-                    Ordering::Ascending => high_reason,
-                    Ordering::Descending => low_reason,
+                    Ordering::Ascending => high_exhaustion,
+                    Ordering::Descending => low_exhaustion,
                 }
             };
             let checkpoint = match options.ordering {
                 Ordering::Ascending => end,
                 Ordering::Descending => start,
             };
-            return ResolvedCheckpointRange::empty_at(checkpoint, reason);
+            return ResolvedCheckpointRange::empty_at(checkpoint, exhaustion);
         }
 
-        let end_reason = match options.ordering {
-            Ordering::Ascending => high_reason,
-            Ordering::Descending => low_reason,
+        let exhaustion = match options.ordering {
+            Ordering::Ascending => high_exhaustion,
+            Ordering::Descending => low_exhaustion,
         };
         ResolvedCheckpointRange {
             range: start..end,
-            end_reason,
+            exhaustion,
         }
     }
 }
@@ -686,7 +726,7 @@ mod tests {
             range,
             end_checkpoint: 20,
             end_position: 20,
-            end_reason: QueryEndReason::CheckpointBound,
+            exhaustion: RangeExhaustion::CheckpointBound,
         }
     }
 
@@ -855,7 +895,13 @@ mod tests {
         };
         assert_eq!(
             options.apply_cursor_bounds(resolved_range(10..20)),
-            ResolvedRange::empty_at(1, u64::MAX, QueryEndReason::CursorBound)
+            ResolvedRange::empty_at(
+                1,
+                u64::MAX,
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            )
         );
 
         let options = QueryOptions {
@@ -866,7 +912,12 @@ mod tests {
         };
         let bounded = options.apply_cursor_bounds(resolved_range(10..20));
         assert_eq!(bounded.range, 12..19);
-        assert_eq!(bounded.end_reason, QueryEndReason::CursorBound);
+        assert_eq!(
+            bounded.exhaustion,
+            RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            }
+        );
         assert_eq!(bounded.end_position, 12);
 
         let options = QueryOptions {
@@ -875,7 +926,13 @@ mod tests {
         };
         assert_eq!(
             options.apply_cursor_bounds(resolved_range(10..20)),
-            ResolvedRange::empty_at(1, 12, QueryEndReason::CursorBound)
+            ResolvedRange::empty_at(
+                1,
+                12,
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            )
         );
     }
 
@@ -910,20 +967,20 @@ mod tests {
             CheckpointRange::from_request(None, None, 20)
                 .unwrap()
                 .resolve(&query_options_from_proto(None).unwrap())
-                .end_reason,
-            QueryEndReason::LedgerTip
+                .exhaustion,
+            RangeExhaustion::LedgerTip
         );
         assert!(CheckpointRange::from_request(Some(10), Some(9), 20).is_err());
 
         let range = CheckpointRange::from_request(Some(10), None, 20).unwrap();
         let resolved = range.resolve(&query_options_from_proto(None).unwrap());
         assert_eq!(resolved.range, 10..20);
-        assert_eq!(resolved.end_reason, QueryEndReason::LedgerTip);
+        assert_eq!(resolved.exhaustion, RangeExhaustion::LedgerTip);
 
         let range = CheckpointRange::from_request(Some(30), None, 20).unwrap();
         assert_eq!(
             range.resolve(&query_options_from_proto(None).unwrap()),
-            ResolvedCheckpointRange::empty_at(20, QueryEndReason::LedgerTip)
+            ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
         );
     }
 
@@ -936,7 +993,61 @@ mod tests {
         let range = CheckpointRange::from_request(Some(10), Some(10_000_000), 10_000_000).unwrap();
         let resolved = range.resolve(&options);
         assert_eq!(resolved.range, 10..10_000_000);
-        assert_eq!(resolved.end_reason, QueryEndReason::CheckpointBound);
+        assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
+    }
+
+    #[test]
+    fn event_after_item_empty_interval_retains_item_kind() {
+        let position = Position::Events {
+            checkpoint: 1,
+            tx_seq: 3,
+            event_index: 0,
+        };
+        let resolved = ResolvedEventRange {
+            bounds: EventScanBounds::tx_span(0, 3),
+            end_checkpoint: 1,
+            end_position: EventPosition::start_of_tx(3),
+            exhaustion: RangeExhaustion::CheckpointBound,
+        };
+
+        let mut request = ProtoQueryOptions::default();
+        request.after = Some(CursorToken::item(position).encode());
+        let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+        let item_bounded = options.apply_event_cursor_bounds(resolved.clone());
+
+        assert!(item_bounded.is_empty());
+        assert_eq!(
+            item_bounded.end_position,
+            EventPosition {
+                tx_seq: 3,
+                event_index: 0,
+            }
+        );
+        assert_eq!(
+            item_bounded.exhaustion,
+            RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Item,
+            }
+        );
+
+        request.after = Some(CursorToken::boundary(position).encode());
+        let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+        let boundary_bounded = options.apply_event_cursor_bounds(resolved);
+
+        assert!(boundary_bounded.is_empty());
+        assert_eq!(
+            boundary_bounded.end_position,
+            EventPosition {
+                tx_seq: 3,
+                event_index: 0,
+            }
+        );
+        assert_eq!(
+            boundary_bounded.exhaustion,
+            RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            }
+        );
     }
 
     #[test]

@@ -31,7 +31,9 @@ use crate::grpc::v2::ledger_service::get_transaction::render_executed_transactio
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
+use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
@@ -42,10 +44,10 @@ use super::bitmap_scan::PendingBitmapBucket;
 use super::bitmap_scan::TX_BITMAP_BUCKET_SIZE;
 use super::bitmap_scan::drain_bitmap_hits_with_budget;
 use super::chunked_scan::ChunkArgs;
-use super::chunked_scan::ChunkTerminal;
 use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
+use super::chunked_scan::scan_limit_or_range;
 use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_boundary;
@@ -203,7 +205,7 @@ enum TransactionScanState {
     },
     Unfiltered {
         range: Range<u64>,
-        range_exhaustion_reason: QueryEndReason,
+        exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: u64,
     },
@@ -211,7 +213,7 @@ enum TransactionScanState {
         query: BitmapQuery,
         range: Option<Range<u64>>,
         pending_bucket: Option<PendingBitmapBucket>,
-        range_exhaustion_reason: QueryEndReason,
+        exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: u64,
     },
@@ -250,14 +252,13 @@ fn next_transaction_chunk(
                 )?;
                 let tx_range =
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
-                let terminal = ChunkTerminal::boundary(
-                    tx_range.end_reason,
-                    Position::Transactions {
+                let terminal = ScanTerminal::Range {
+                    exhaustion: tx_range.exhaustion,
+                    position: Position::Transactions {
                         checkpoint: tx_range.end_checkpoint,
                         tx_seq: tx_range.end_position,
                     },
-                    None,
-                );
+                };
                 let range = tx_range.range;
                 if range.is_empty() {
                     return Ok(TransactionChunkDone {
@@ -273,13 +274,13 @@ fn next_transaction_chunk(
                         query,
                         range: Some(range),
                         pending_bucket: None,
-                        range_exhaustion_reason: tx_range.end_reason,
+                        exhaustion: tx_range.exhaustion,
                         end_checkpoint: tx_range.end_checkpoint,
                         end_position: tx_range.end_position,
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
-                        range_exhaustion_reason: tx_range.end_reason,
+                        exhaustion: tx_range.exhaustion,
                         end_checkpoint: tx_range.end_checkpoint,
                         end_position: tx_range.end_position,
                     },
@@ -288,7 +289,7 @@ fn next_transaction_chunk(
             }
             TransactionScanState::Unfiltered {
                 range,
-                range_exhaustion_reason,
+                exhaustion,
                 end_checkpoint,
                 end_position,
             } => {
@@ -299,25 +300,24 @@ fn next_transaction_chunk(
                     .and_then(|row| remaining_range_after(range, row.tx_sequence_number, ascending))
                     .map(|range| TransactionScanState::Unfiltered {
                         range,
-                        range_exhaustion_reason,
+                        exhaustion,
                         end_checkpoint,
                         end_position,
                     });
-                let terminal = ChunkTerminal::boundary(
-                    range_exhaustion_reason,
-                    Position::Transactions {
+                let terminal = ScanTerminal::Range {
+                    exhaustion,
+                    position: Position::Transactions {
                         checkpoint: end_checkpoint,
                         tx_seq: end_position,
                     },
-                    None,
-                );
+                };
                 break (rows, next_state, terminal, None);
             }
             TransactionScanState::Filtered {
                 query,
                 range,
                 pending_bucket,
-                range_exhaustion_reason,
+                exhaustion,
                 end_checkpoint,
                 end_position,
             } => {
@@ -355,7 +355,7 @@ fn next_transaction_chunk(
                             query,
                             range: hits.next_range,
                             pending_bucket: hits.pending_bucket,
-                            range_exhaustion_reason,
+                            exhaustion,
                             end_checkpoint,
                             end_position,
                         },
@@ -392,11 +392,10 @@ fn next_transaction_chunk(
                     checkpoint: end_checkpoint,
                     tx_seq: end_position,
                 };
-                let terminal = ChunkTerminal::scan_limit_or_boundary(
+                let terminal = scan_limit_or_range(
                     request_scan_limit_reached,
+                    exhaustion,
                     terminal_position,
-                    range_exhaustion_reason,
-                    || None,
                     || {
                         frontier_watermark.ok_or_else(|| {
                             RpcError::new(
@@ -721,7 +720,7 @@ mod tests {
                 CursorToken::boundary(expected_position)
             );
             assert_eq!(watermark.checkpoint, expected_proof);
-            let terminal = ChunkTerminal::scan_limit(expected_position, watermark);
+            let terminal = ScanTerminal::ScanLimit { watermark };
             let response = end_response(
                 terminal.into_watermark(&options, Some(123)),
                 QueryEndReason::ScanLimit,
@@ -756,8 +755,8 @@ mod tests {
                         items: vec![response],
                         produced: 1,
                         next_state: Some(1),
-                        terminal: ChunkTerminal::RangeEnd {
-                            reason: QueryEndReason::CheckpointBound,
+                        terminal: ScanTerminal::Range {
+                            exhaustion: RangeExhaustion::CheckpointBound,
                             position: Position::Transactions {
                                 checkpoint: 8,
                                 tx_seq: 42,
