@@ -47,7 +47,7 @@ move-core-types.workspace = true
 mysten-common.workspace = true
 
 bin-version.workspace = true
-mysten-network.workspace = true
+sui-http.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt-consistent-api.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
