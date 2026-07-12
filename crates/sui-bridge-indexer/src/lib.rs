@@ -304,7 +304,7 @@ impl Tasks {
 
     pub fn backfill_tasks_ordered_desc(&self) -> Vec<Task> {
         let mut tasks = self.backfill_tasks.clone();
-        tasks.sort_by_key(|t2| std::cmp::Reverse(t2.start_checkpoint));
+        tasks.sort_by(|t1, t2| t2.start_checkpoint.cmp(&t1.start_checkpoint));
         tasks
     }
 }

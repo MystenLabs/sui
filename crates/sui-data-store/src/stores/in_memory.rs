@@ -268,12 +268,12 @@ impl ObjectStore for InMemoryStore {
                         .get(&(key.object_id, *max_version))
                         .copied();
                     let res = actual_version.and_then(|actual_version| {
-                        let obj = inner
+                        inner
                             .object_cache
                             .get(&key.object_id)
                             .and_then(|versions_map| versions_map.get(&actual_version))
-                            .cloned()?;
-                        Some((obj, actual_version))
+                            .cloned()
+                            .map(|obj| (obj, actual_version))
                     });
                     (
                         res,
@@ -287,12 +287,12 @@ impl ObjectStore for InMemoryStore {
                         .get(&(key.object_id, *checkpoint))
                         .copied();
                     let res = actual_version.and_then(|actual_version| {
-                        let obj = inner
+                        inner
                             .object_cache
                             .get(&key.object_id)
                             .and_then(|versions_map| versions_map.get(&actual_version))
-                            .cloned()?;
-                        Some((obj, actual_version))
+                            .cloned()
+                            .map(|obj| (obj, actual_version))
                     });
                     (
                         res,

@@ -647,8 +647,8 @@ mod tests {
         // Take only the blocks of round 2 and try to accept them
         let round_2_blocks = dag_builder
             .blocks
-            .into_values()
-            .filter_map(|block| (block.round() == 2).then_some(block))
+            .into_iter()
+            .filter_map(|(_, block)| (block.round() == 2).then_some(block))
             .collect::<Vec<VerifiedBlock>>();
 
         // WHEN
@@ -1085,8 +1085,8 @@ mod tests {
         // Take only the blocks of round 2 and try to accept them
         let round_2_blocks = dag_builder
             .blocks
-            .values()
-            .filter_map(|block| (block.round() == 2).then_some(block.clone()))
+            .iter()
+            .filter_map(|(_, block)| (block.round() == 2).then_some(block.clone()))
             .collect::<Vec<VerifiedBlock>>();
 
         // All blocks should be missing
@@ -1121,8 +1121,8 @@ mod tests {
 
         let round_3_blocks = dag_builder
             .blocks
-            .values()
-            .filter_map(|block| (block.round() == 3).then_some(block.reference()))
+            .iter()
+            .filter_map(|(_, block)| (block.round() == 3).then_some(block.reference()))
             .collect::<Vec<BlockRef>>();
 
         let missing_block_refs_from_find = block_manager.try_find_blocks(

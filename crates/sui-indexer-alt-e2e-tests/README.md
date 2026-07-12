@@ -6,32 +6,16 @@
 2. Run the test with the `--nocapture` (goes after `--`) command line flag (see https://doc.rust-lang.org/cargo/commands/cargo-test.html#display-options).
 3. Optionally set the `RUST_LOG` (example `RUST_LOG=debug`) environment variable (defaults to `info`).
 
-### Running tests
-
-**Prerequisites**
-
-```
-gcloud-cli (as new as possible)
-gcloud components install bigtable cbt
-```
-
-**Running transactional tests**
-
-```
-cargo nextest run -p sui-indexer-alt-e2e-tests --test transactional_tests
-```
-
 ### Debugging transactional tests in RustRover
-
 
 1. Add new `Cargo` run configuration
 2. 1. Command to run all tests 
       ```
-      test run -p sui-indexer-alt-e2e-tests --test transactional_tests
+      test -p sui-indexer-alt-e2e-tests --test transactional_tests
       ```
    2. Command to run single test (replace `graphql/epochs/query.move` with the test you want to run)
       ```
-      test run -p sui-indexer-alt-e2e-tests --test transactional_tests graphql/epochs/query.move
+      test -p sui-indexer-alt-e2e-tests --test transactional_tests graphql/epochs/query.move
       ```
    3. Note: debugging is not supported for nextest (https://youtrack.jetbrains.com/issue/RUST-12459)
 3. To prevent `error: invalid value 'json' for '--format <pretty|terse|json>'` or `error: unexpected argument '-Z' found`, uncheck 

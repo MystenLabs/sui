@@ -852,11 +852,12 @@ impl<'a> LayerBuilder<'a> {
         round: Round,
         num_block: u32,
     ) -> BlockTimestampMs {
-        if let Some(specified_authorities) = self.specified_authorities.as_ref()
-            && !self.timestamps.is_empty()
-            && let Some(position) = specified_authorities.iter().position(|&x| x == authority)
-        {
-            return self.timestamps[position] + (round + num_block) as u64;
+        if self.specified_authorities.is_some() && !self.timestamps.is_empty() {
+            let specified_authorities = self.specified_authorities.as_ref().unwrap();
+
+            if let Some(position) = specified_authorities.iter().position(|&x| x == authority) {
+                return self.timestamps[position] + (round + num_block) as u64;
+            }
         }
         let author = authority.value() as u32;
         let base_ts = round as BlockTimestampMs * 1000;

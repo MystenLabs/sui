@@ -235,7 +235,7 @@ fn exp(e: Exp, summary: Summary, already_bound: &HashSet<String>) -> Exp {
             }
 
             let mut out: Vec<Exp> = Vec::with_capacity(items.len() + decl.len());
-            for (i, (item, sub)) in items.into_iter().zip(subs).enumerate() {
+            for (i, (item, sub)) in items.into_iter().zip(subs.into_iter()).enumerate() {
                 if let Some(mut names) = by_first_touch.remove(&i) {
                     names.sort();
                     out.push(Exp::Declare(names));

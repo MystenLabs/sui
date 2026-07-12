@@ -159,7 +159,7 @@ where
     for attempt in 0..MAX_RETRIES {
         match tokio::time::timeout(CONNECT_TIMEOUT, connect_fn()).await {
             Ok(Ok(client)) => return client,
-            Ok(Err(_e)) if attempt + 1 < MAX_RETRIES => {
+            Ok(Err(e)) if attempt + 1 < MAX_RETRIES => {
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
             Ok(Err(e)) => panic!("failed to connect after {MAX_RETRIES} attempts: {e}"),

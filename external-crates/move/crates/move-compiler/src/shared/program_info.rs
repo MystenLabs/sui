@@ -504,7 +504,7 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
             .clone()
             .into_iter()
             .collect::<Vec<_>>();
-        names.sort_by_key(|(_, ndx0)| *ndx0);
+        names.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
         names.into_iter().map(|(name, _ndx)| name).collect()
     }
 

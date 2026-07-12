@@ -502,7 +502,7 @@ impl LocalExec {
             .multi_download_latest(&non_system_package_objs)
             .await?
             .into_iter()
-            .chain(syst_packages_objs);
+            .chain(syst_packages_objs.into_iter());
 
         for obj in objs.clone() {
             let o_ref = obj.compute_object_reference();

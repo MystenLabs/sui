@@ -3,7 +3,7 @@
 # Single-stage builder + minimal runtime. Layer cache short-circuits when the
 # COPY inputs are byte-identical to a previous build.
 #
-FROM rust:1.96.1-bullseye AS builder
+FROM rust:1.92-bullseye AS builder
 RUN apt-get update \
  && apt-get install -y --no-install-recommends cmake clang \
  && rm -rf /var/lib/apt/lists/*

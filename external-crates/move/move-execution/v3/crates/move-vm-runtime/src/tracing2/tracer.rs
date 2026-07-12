@@ -731,7 +731,7 @@ impl VMTracer<'_> {
         let current_frame_return_tys = self.current_frame()?.return_types.clone();
         let return_values: Vec<_> = return_values
             .iter()
-            .zip(current_frame_return_tys)
+            .zip(current_frame_return_tys.into_iter())
             .map(|(value, tag_with_layout_info_opt)| {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
                 let layout = layout?;
