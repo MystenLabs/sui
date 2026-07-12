@@ -315,7 +315,7 @@ impl KvRpcServer {
         listen_address: SocketAddr,
         config: ServerConfig,
     ) -> anyhow::Result<sui_futures::service::Service> {
-        use mysten_network::callback::CallbackLayer;
+        use sui_http::middleware::callback::CallbackLayer;
         use sui_rpc_api::{
             RpcMetrics, RpcMetricsMakeCallbackHandler, grpc_method_paths_from_file_descriptor_sets,
         };

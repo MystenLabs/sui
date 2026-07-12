@@ -4,13 +4,13 @@
 use axum::http;
 use std::{borrow::Cow, collections::HashSet, sync::Arc, time::Instant};
 
-use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
     HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use prost::Message;
+use sui_http::middleware::callback::{MakeCallbackHandler, ResponseHandler};
 
 #[derive(Clone)]
 pub struct RpcMetrics {
@@ -127,9 +127,13 @@ impl RpcMetricsMakeCallbackHandler {
 }
 
 impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
-    type Handler = RpcMetricsCallbackHandler;
+    type RequestHandler = ();
+    type ResponseHandler = RpcMetricsCallbackHandler;
 
-    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
+    fn make_handler(
+        &self,
+        request: &http::request::Parts,
+    ) -> (Self::RequestHandler, Self::ResponseHandler) {
         let start = Instant::now();
         let metrics = self.metrics.clone();
 
@@ -154,12 +158,15 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
             .with_label_values(&[path.as_ref()])
             .inc();
 
-        RpcMetricsCallbackHandler {
-            metrics,
-            path,
-            start,
-            counted_response: false,
-        }
+        (
+            (),
+            RpcMetricsCallbackHandler {
+                metrics,
+                path,
+                start,
+                counted_response: false,
+            },
+        )
     }
 }
 
@@ -228,7 +235,10 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
         self.counted_response = true;
     }
 
-    fn on_error<E>(&mut self, _error: &E) {
+    fn on_service_error<E>(&mut self, _error: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
         // Do nothing if the whole service errored
         //
         // in Axum this isn't possible since all services are required to have an error type of
