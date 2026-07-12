@@ -96,6 +96,7 @@ pub(crate) async fn list_events(
         .instrument(debug_span!("resolve_event_range"))
         .await?;
     let exhaustion = event_range.exhaustion;
+    let entry_checkpoint = event_range.entry_checkpoint;
     let range_end_checkpoint = event_range.end_checkpoint;
     let range_end_position = event_range.end_position;
     let event_bounds = event_range.bounds;
@@ -290,6 +291,7 @@ pub(crate) async fn list_events(
                     covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
                         covered_checkpoint_bound,
                         item_checkpoint,
+                        entry_checkpoint,
                         &options,
                     );
                     let watermark = item_watermark(
@@ -318,6 +320,7 @@ pub(crate) async fn list_events(
                     let watermark = event_frontier_watermark(
                         &options,
                         direction,
+                        entry_checkpoint,
                         &mut covered_checkpoint_bound,
                         position,
                         Some(checkpoint_at_frontier),
@@ -329,6 +332,7 @@ pub(crate) async fn list_events(
                         stop,
                         &options,
                         direction,
+                        entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
                     break QueryEndReason::ScanLimit;
@@ -587,13 +591,18 @@ fn range_end_response(
 fn event_frontier_watermark(
     options: &QueryOptions,
     direction: ScanDirection,
+    entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: EventPosition,
     checkpoint_at_frontier: Option<u64>,
 ) -> Result<Watermark, RpcError> {
     if let Some(checkpoint) = checkpoint_at_frontier {
-        *covered_checkpoint_bound =
-            advance_covered_bound_before_checkpoint(*covered_checkpoint_bound, checkpoint, options);
+        *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
+            *covered_checkpoint_bound,
+            checkpoint,
+            entry_checkpoint,
+            options,
+        );
     }
     let cursor_checkpoint =
         scan_frontier_cursor_cp(checkpoint_at_frontier, position.tx_seq, direction).ok_or_else(
@@ -621,6 +630,7 @@ fn terminal_response_from_scan_stop(
     stop: ResolvedScanStop<EventPosition>,
     options: &QueryOptions,
     direction: ScanDirection,
+    entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListEventsResponse, RpcError> {
     let (position, checkpoint) = stop.into_scan_limit()?;
@@ -628,6 +638,7 @@ fn terminal_response_from_scan_stop(
         watermark: event_frontier_watermark(
             options,
             direction,
+            entry_checkpoint,
             covered_checkpoint_bound,
             position,
             checkpoint,
@@ -785,6 +796,11 @@ async fn resolve_event_range(
         .await?;
     Ok(options.apply_event_cursor_bounds(ResolvedEventRange {
         bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
+        entry_checkpoint: if options.is_ascending() {
+            cp_range.range.start
+        } else {
+            cp_range.range.end.saturating_sub(1)
+        },
         end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
         end_position: match options.ordering {
             sui_rpc_api::ledger_history::query_options::Ordering::Ascending => {

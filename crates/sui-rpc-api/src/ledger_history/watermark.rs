@@ -59,17 +59,29 @@ pub fn merge_covered_checkpoint_bound(
 /// ascending and `C + 1` descending. The adjusted candidate is then merged by
 /// max ascending or min descending.
 ///
-/// When that adjustment would overflow (`C == 0` ascending or `u64::MAX`
-/// descending), the previously covered bound is preserved.
+/// `entry_checkpoint` is the checkpoint containing the effective interval's
+/// first position in scan direction (fixed at range-resolution time). A
+/// candidate strictly before it proves nothing — the scan is still inside its
+/// first checkpoint — and is discarded, keeping the wire `checkpoint` field
+/// unset until the scan's first checkpoint is fully covered, as the proto
+/// contract requires.
+///
+/// When the `C ∓ 1` adjustment would overflow (`C == 0` ascending or
+/// `u64::MAX` descending), the previously covered bound is preserved.
 pub fn advance_covered_bound_before_checkpoint(
     covered_checkpoint_bound: Option<u64>,
     incomplete_checkpoint: u64,
+    entry_checkpoint: u64,
     options: &QueryOptions,
 ) -> Option<u64> {
     let candidate_bound = if options.is_ascending() {
-        incomplete_checkpoint.checked_sub(1)
+        incomplete_checkpoint
+            .checked_sub(1)
+            .filter(|candidate| *candidate >= entry_checkpoint)
     } else {
-        incomplete_checkpoint.checked_add(1)
+        incomplete_checkpoint
+            .checked_add(1)
+            .filter(|candidate| *candidate <= entry_checkpoint)
     };
     match candidate_bound {
         Some(candidate_bound) => {
@@ -255,22 +267,51 @@ mod tests {
     fn advance_covered_bound_before_checkpoint_adjusts_by_one() {
         let asc = options(true);
         assert_eq!(
-            advance_covered_bound_before_checkpoint(None, 10, &asc),
+            advance_covered_bound_before_checkpoint(None, 10, 5, &asc),
             Some(9)
         );
         assert_eq!(
-            advance_covered_bound_before_checkpoint(Some(9), 12, &asc),
+            advance_covered_bound_before_checkpoint(Some(9), 12, 5, &asc),
             Some(11)
         );
 
         let desc = options(false);
         assert_eq!(
-            advance_covered_bound_before_checkpoint(None, 10, &desc),
+            advance_covered_bound_before_checkpoint(None, 10, 15, &desc),
             Some(11)
         );
         assert_eq!(
-            advance_covered_bound_before_checkpoint(Some(11), 8, &desc),
+            advance_covered_bound_before_checkpoint(Some(11), 8, 15, &desc),
             Some(9)
+        );
+    }
+
+    /// While the scan is still inside its first checkpoint of the effective
+    /// interval, the fencepost candidate falls before the entry checkpoint and
+    /// must be discarded: the wire `checkpoint` field stays unset until the
+    /// scan's first checkpoint is fully covered (proto contract). The claim at
+    /// exactly the entry checkpoint (candidate == entry) is the first legal
+    /// one.
+    #[test]
+    fn advance_covered_bound_before_checkpoint_stays_unset_within_entry_checkpoint() {
+        let asc = options(true);
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(None, 10, 10, &asc),
+            None
+        );
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(None, 11, 10, &asc),
+            Some(10)
+        );
+
+        let desc = options(false);
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(None, 10, 10, &desc),
+            None
+        );
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(None, 9, 10, &desc),
+            Some(10)
         );
     }
 
@@ -280,18 +321,21 @@ mod tests {
     fn advance_covered_bound_before_checkpoint_preserves_prev_on_overflow() {
         let asc = options(true);
         assert_eq!(
-            advance_covered_bound_before_checkpoint(Some(4), 0, &asc),
+            advance_covered_bound_before_checkpoint(Some(4), 0, 0, &asc),
             Some(4)
         );
-        assert_eq!(advance_covered_bound_before_checkpoint(None, 0, &asc), None);
+        assert_eq!(
+            advance_covered_bound_before_checkpoint(None, 0, 0, &asc),
+            None
+        );
 
         let desc = options(false);
         assert_eq!(
-            advance_covered_bound_before_checkpoint(Some(4), u64::MAX, &desc),
+            advance_covered_bound_before_checkpoint(Some(4), u64::MAX, u64::MAX, &desc),
             Some(4)
         );
         assert_eq!(
-            advance_covered_bound_before_checkpoint(None, u64::MAX, &desc),
+            advance_covered_bound_before_checkpoint(None, u64::MAX, u64::MAX, &desc),
             None
         );
     }

@@ -30,10 +30,10 @@ use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
+use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::merge_covered_checkpoint_bound;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_cursor::Position;
 use tracing::Instrument;
@@ -112,6 +112,11 @@ pub(crate) async fn list_checkpoints(
         .await?;
     let exhaustion = cp_range.exhaustion;
     let range_end_position = cp_range.end_position;
+    let entry_checkpoint = if direction.is_ascending() {
+        cp_range.range.start
+    } else {
+        cp_range.range.end.saturating_sub(1)
+    };
     let cp_range = cp_range.range;
 
     if cp_range.is_empty() {
@@ -297,6 +302,7 @@ pub(crate) async fn list_checkpoints(
                 }) => {
                     let watermark = checkpoint_frontier_watermark(
                         checkpoint_at_frontier,
+                        entry_checkpoint,
                         direction,
                         &options,
                         &mut covered_checkpoint_bound,
@@ -308,6 +314,7 @@ pub(crate) async fn list_checkpoints(
                         stop,
                         &options,
                         direction,
+                        entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
                     break QueryEndReason::ScanLimit;
@@ -329,10 +336,12 @@ pub(crate) async fn list_checkpoints(
 
 /// Convert the checkpoint containing a transaction-space scan frontier into a
 /// safe checkpoint-space resume cursor. The containing checkpoint is not fully
-/// covered: ascending coverage stops at `cp - 1`, descending at `cp + 1`.
-/// Numeric overflow suppresses only that coverage claim, never the cursor.
+/// covered. A coverage candidate before the interval's entry checkpoint proves
+/// nothing and is suppressed, so the wire checkpoint stays unset until the
+/// scan's first checkpoint is fully covered.
 fn checkpoint_frontier_watermark(
     checkpoint_at_frontier: u64,
+    entry_checkpoint: u64,
     direction: ScanDirection,
     options: &QueryOptions,
     covered_checkpoint_bound: &mut Option<u64>,
@@ -344,18 +353,12 @@ fn checkpoint_frontier_watermark(
         direction,
     )
     .expect("checkpoint scan frontier is always representable");
-    let covered_bound_candidate = if direction.is_ascending() {
-        checkpoint_at_frontier.checked_sub(1)
-    } else {
-        checkpoint_at_frontier.checked_add(1)
-    };
-    if let Some(covered_bound_candidate) = covered_bound_candidate {
-        *covered_checkpoint_bound = merge_covered_checkpoint_bound(
-            *covered_checkpoint_bound,
-            covered_bound_candidate,
-            options,
-        );
-    }
+    *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
+        *covered_checkpoint_bound,
+        checkpoint_at_frontier,
+        entry_checkpoint,
+        options,
+    );
     boundary_watermark(
         Position::Checkpoints {
             checkpoint: resume_checkpoint,
@@ -368,6 +371,7 @@ fn terminal_response_from_scan_stop(
     stop: ResolvedScanStop<u64>,
     options: &QueryOptions,
     direction: ScanDirection,
+    entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
     let (position, checkpoint) = stop.into_scan_limit()?;
@@ -388,6 +392,7 @@ fn terminal_response_from_scan_stop(
     let terminal = ScanTerminal::ScanLimit {
         watermark: checkpoint_frontier_watermark(
             checkpoint_at_frontier,
+            entry_checkpoint,
             direction,
             options,
             covered_checkpoint_bound,
@@ -680,19 +685,39 @@ mod tests {
 
     #[test]
     fn scan_limit_terminal_frames_use_checkpoint_domain_in_both_directions() {
-        for (direction, position, checkpoint, initial_proof, expected_cursor, expected_proof) in [
-            (ScanDirection::Ascending, 0, None, None, 0, None),
+        for (
+            direction,
+            entry_checkpoint,
+            position,
+            checkpoint,
+            initial_proof,
+            expected_cursor,
+            expected_proof,
+        ) in [
+            (ScanDirection::Ascending, 0, 0, None, None, 0, None),
             (
                 ScanDirection::Descending,
+                u64::MAX,
                 u64::MAX,
                 None,
                 None,
                 u64::MAX,
                 None,
             ),
-            (ScanDirection::Ascending, 50, Some(10), Some(5), 10, Some(9)),
+            (ScanDirection::Ascending, 10, 50, Some(10), None, 10, None),
+            (ScanDirection::Descending, 10, 50, Some(10), None, 11, None),
+            (
+                ScanDirection::Ascending,
+                0,
+                50,
+                Some(10),
+                Some(5),
+                10,
+                Some(9),
+            ),
             (
                 ScanDirection::Descending,
+                u64::MAX,
                 50,
                 Some(10),
                 Some(20),
@@ -701,13 +726,22 @@ mod tests {
             ),
             (
                 ScanDirection::Ascending,
+                0,
                 50,
                 Some(10),
                 Some(15),
                 16,
                 Some(15),
             ),
-            (ScanDirection::Descending, 50, Some(10), Some(5), 5, Some(5)),
+            (
+                ScanDirection::Descending,
+                u64::MAX,
+                50,
+                Some(10),
+                Some(5),
+                5,
+                Some(5),
+            ),
         ] {
             let mut proto_options = ascending_options();
             if !direction.is_ascending() {
@@ -724,6 +758,7 @@ mod tests {
                 },
                 &options,
                 direction,
+                entry_checkpoint,
                 &mut covered,
             )
             .expect("representable checkpoint frontier");
@@ -765,6 +800,11 @@ mod tests {
             let options =
                 QueryOptions::checkpoints_from_proto(Some(&proto_options), 10, 100).unwrap();
             let mut covered = None;
+            let entry_checkpoint = if direction.is_ascending() {
+                0
+            } else {
+                u64::MAX
+            };
             let error = terminal_response_from_scan_stop(
                 ResolvedScanStop::ScanLimit {
                     position,
@@ -772,6 +812,7 @@ mod tests {
                 },
                 &options,
                 direction,
+                entry_checkpoint,
                 &mut covered,
             )
             .expect_err("only numeric-edge frontiers may omit a checkpoint mapping");
@@ -792,10 +833,12 @@ mod tests {
             ),
         ] {
             let mut covered = None;
+            let entry_checkpoint = 0;
             let error = terminal_response_from_scan_stop(
                 stop,
                 &options,
                 ScanDirection::Ascending,
+                entry_checkpoint,
                 &mut covered,
             )
             .expect_err("fault/cancellation must not produce a QueryEnd response");

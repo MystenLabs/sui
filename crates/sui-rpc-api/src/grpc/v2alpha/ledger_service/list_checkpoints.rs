@@ -213,6 +213,8 @@ enum CheckpointScanState {
         buffered_cp_seqs: VecDeque<u64>,
         last_cp_seq: Option<u64>,
         covered_checkpoint_bound: Option<u64>,
+        /// Checkpoint containing the cursor-trimmed interval's first scan position.
+        entry_checkpoint: u64,
         exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: u64,
@@ -253,6 +255,11 @@ fn next_checkpoint_chunk(
                     checkpoint: cp_range.end_position,
                 },
             };
+            let entry_checkpoint = if options.is_ascending() {
+                cp_range.range.start
+            } else {
+                cp_range.range.end.saturating_sub(1)
+            };
             let range = cp_range.range;
             if range.is_empty() {
                 return Ok(CheckpointChunkDone {
@@ -286,6 +293,7 @@ fn next_checkpoint_chunk(
                     buffered_cp_seqs: VecDeque::new(),
                     last_cp_seq: None,
                     covered_checkpoint_bound: None,
+                    entry_checkpoint,
                     exhaustion: cp_range.exhaustion,
                     end_checkpoint: cp_range.end_checkpoint,
                     end_position: cp_range.end_position,
@@ -334,6 +342,7 @@ fn next_checkpoint_chunk(
             buffered_cp_seqs,
             last_cp_seq,
             covered_checkpoint_bound,
+            entry_checkpoint,
             exhaustion,
             end_checkpoint,
             end_position,
@@ -345,6 +354,7 @@ fn next_checkpoint_chunk(
             buffered_cp_seqs,
             last_cp_seq,
             covered_checkpoint_bound,
+            entry_checkpoint,
             exhaustion,
             end_checkpoint,
             end_position,
@@ -409,6 +419,7 @@ fn next_filtered_checkpoint_chunk(
     mut buffered_cp_seqs: VecDeque<u64>,
     mut last_cp_seq: Option<u64>,
     mut covered_checkpoint_bound: Option<u64>,
+    entry_checkpoint: u64,
     exhaustion: RangeExhaustion,
     end_checkpoint: u64,
     end_position: u64,
@@ -522,6 +533,7 @@ fn next_filtered_checkpoint_chunk(
                 &options,
                 frontier.expect("checked for scan-limit chunk"),
                 covered_checkpoint_bound,
+                entry_checkpoint,
                 ascending,
             )?)
         } else {
@@ -545,6 +557,7 @@ fn next_filtered_checkpoint_chunk(
                 buffered_cp_seqs,
                 last_cp_seq,
                 covered_checkpoint_bound,
+                entry_checkpoint,
                 exhaustion,
                 end_checkpoint,
                 end_position,
@@ -660,6 +673,7 @@ fn scan_checkpoint_watermark(
     options: &QueryOptions,
     frontier: u64,
     covered_checkpoint_bound: Option<u64>,
+    entry_checkpoint: u64,
     ascending: bool,
 ) -> Result<Watermark, RpcError> {
     checkpoint_frontier_watermark(
@@ -667,6 +681,7 @@ fn scan_checkpoint_watermark(
         frontier,
         sequence_frontier_checkpoint(service, frontier, ascending)?,
         covered_checkpoint_bound,
+        entry_checkpoint,
     )
 }
 
@@ -675,12 +690,18 @@ fn checkpoint_frontier_watermark(
     frontier: u64,
     checkpoint: Option<u64>,
     covered_checkpoint_bound: Option<u64>,
+    entry_checkpoint: u64,
 ) -> Result<Watermark, RpcError> {
     // The frontier lands partway through its checkpoint, so that checkpoint is
     // not proven complete. Preserve any stronger proof already established by
     // emitted checkpoints.
     let boundary = match checkpoint {
-        Some(cp) => advance_covered_bound_before_checkpoint(covered_checkpoint_bound, cp, options),
+        Some(cp) => advance_covered_bound_before_checkpoint(
+            covered_checkpoint_bound,
+            cp,
+            entry_checkpoint,
+            options,
+        ),
         None => covered_checkpoint_bound,
     };
     let cursor_cp = scan_frontier_cursor_cp(checkpoint, frontier, options.scan_direction())
@@ -914,6 +935,7 @@ mod tests {
                 first.coalesced_frontier.unwrap(),
                 Some(if ascending { 6 } else { 5 }),
                 emitted.last().copied(),
+                if ascending { 4 } else { 7 },
             )
             .unwrap();
             let terminal = end_response(terminal_watermark, QueryEndReason::ScanLimit);
@@ -1082,8 +1104,15 @@ mod tests {
             ),
         ] {
             let options = options(ascending);
-            let watermark =
-                checkpoint_frontier_watermark(&options, frontier, checkpoint, covered).unwrap();
+            let entry_checkpoint = if ascending { 0 } else { u64::MAX - 1 };
+            let watermark = checkpoint_frontier_watermark(
+                &options,
+                frontier,
+                checkpoint,
+                covered,
+                entry_checkpoint,
+            )
+            .unwrap();
             let expected_position = Position::Checkpoints {
                 checkpoint: expected_cursor,
             };

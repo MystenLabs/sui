@@ -2485,6 +2485,9 @@ async fn test_list_checkpoints_item_watermark_boundary() {
 // complete (more matches may sit at higher event_seqs). The covered boundary
 // must therefore EXCLUDE C itself — `checkpoint` == C - 1 ascending, C + 1
 // descending — i.e. the under-claim is correct here and a bug for checkpoints.
+// Items still inside the interval's first checkpoint have covered nothing, so
+// their watermark leaves `checkpoint` unset ("unset until the scan's first
+// checkpoint is fully covered").
 #[sim_test]
 async fn test_list_events_item_watermark_boundary() {
     let cluster = new_cluster().await;
@@ -2509,8 +2512,15 @@ async fn test_list_events_item_watermark_boundary() {
     for item in &resp.events {
         let cp = event_checkpoint(item).expect("event item checkpoint");
         assert!(cp >= 1, "user events are never in the genesis checkpoint");
-        let expected_hi = cp - 1;
         let wm = item.watermark.as_ref().expect("event item watermark");
+        if cp == start {
+            assert_eq!(
+                wm.checkpoint, None,
+                "item inside the interval's first checkpoint covers nothing yet"
+            );
+            continue;
+        }
+        let expected_hi = cp - 1;
         assert_eq!(
             wm.checkpoint,
             Some(expected_hi),
@@ -2536,8 +2546,16 @@ async fn test_list_events_item_watermark_boundary() {
     let mut prev_lo: Option<u64> = None;
     for item in &resp.events {
         let cp = event_checkpoint(item).expect("event item checkpoint");
-        let expected_lo = cp + 1;
         let wm = item.watermark.as_ref().expect("event item watermark");
+        // `end_checkpoint` is exclusive: the descending scan enters at `end - 1`.
+        if cp == end - 1 {
+            assert_eq!(
+                wm.checkpoint, None,
+                "item inside the interval's first checkpoint covers nothing yet"
+            );
+            continue;
+        }
+        let expected_lo = cp + 1;
         assert_eq!(
             wm.checkpoint,
             Some(expected_lo),
@@ -2991,23 +3009,39 @@ async fn test_list_events_unfiltered_scan_limit_frames_and_resume() {
             terminal,
             first.frames.last().expect("ScanLimit is final frame")
         ));
-        let scan_checkpoint = watermark.checkpoint.expect("ScanLimit terminal checkpoint");
-        if descending {
-            assert!(
-                scan_checkpoint >= start,
-                "descending ScanLimit watermark must not pass the requested start checkpoint"
-            );
-        } else {
-            assert!(
-                scan_checkpoint <= end,
-                "ascending ScanLimit watermark must not pass the requested end checkpoint"
-            );
-        }
-        if let Some(last_event_checkpoint) = first.events.last().and_then(event_checkpoint) {
+        // The claim is unset while the frontier is still inside the interval's
+        // first checkpoint ("unset until the scan's first checkpoint is fully
+        // covered"); once set it must stay inside the requested range and
+        // track emitted items.
+        if let Some(scan_checkpoint) = watermark.checkpoint {
             if descending {
-                assert!(scan_checkpoint <= last_event_checkpoint + 1);
+                assert!(
+                    scan_checkpoint >= start,
+                    "descending ScanLimit watermark must not pass the requested start checkpoint"
+                );
             } else {
-                assert!(scan_checkpoint >= last_event_checkpoint.saturating_sub(1));
+                assert!(
+                    scan_checkpoint <= end,
+                    "ascending ScanLimit watermark must not pass the requested end checkpoint"
+                );
+            }
+            if let Some(last_event_checkpoint) = first.events.last().and_then(event_checkpoint) {
+                if descending {
+                    assert!(scan_checkpoint <= last_event_checkpoint + 1);
+                } else {
+                    assert!(scan_checkpoint >= last_event_checkpoint.saturating_sub(1));
+                }
+            }
+        } else {
+            // Nothing covered yet: no event outside the entry checkpoint may
+            // have been emitted.
+            for event in &first.events {
+                let cp = event_checkpoint(event).expect("event item checkpoint");
+                assert_eq!(
+                    cp,
+                    if descending { end - 1 } else { start },
+                    "unset ScanLimit claim requires the scan still inside its first checkpoint"
+                );
             }
         }
 

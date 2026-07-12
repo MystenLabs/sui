@@ -205,6 +205,8 @@ enum EventScanState {
     },
     Unfiltered {
         bounds: EventScanBounds,
+        /// Checkpoint containing the effective interval's first event.
+        entry_checkpoint: u64,
         // Remaining tx rows this scan may read before stopping with `ScanLimit`.
         // Bounds an unfiltered scan that walks event-less history (each scanned
         // tx may carry zero events) to the endpoint's configured `max_limit_items`
@@ -217,6 +219,8 @@ enum EventScanState {
     Filtered {
         query: BitmapQuery,
         bounds: Option<EventScanBounds>,
+        /// Checkpoint containing the effective interval's first event.
+        entry_checkpoint: u64,
         pending_bucket: Option<PendingBitmapBucket>,
         exhaustion: RangeExhaustion,
         end_checkpoint: u64,
@@ -240,7 +244,7 @@ fn next_event_chunk(
 ) -> Result<EventChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
-    let (refs, next_state, terminal, scan_watermark) = match state {
+    let (refs, next_state, terminal, scan_watermark, entry_checkpoint) = match state {
         EventScanState::Init {
             start_checkpoint,
             end_checkpoint,
@@ -279,6 +283,7 @@ fn next_event_chunk(
                 Some(query) => EventScanState::Filtered {
                     query,
                     bounds: Some(bounds),
+                    entry_checkpoint: event_range.entry_checkpoint,
                     pending_bucket: None,
                     exhaustion: event_range.exhaustion,
                     end_checkpoint: event_range.end_checkpoint,
@@ -286,6 +291,7 @@ fn next_event_chunk(
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
+                    entry_checkpoint: event_range.entry_checkpoint,
                     row_scan_budget: unfiltered_row_scan_budget,
                     exhaustion: event_range.exhaustion,
                     end_checkpoint: event_range.end_checkpoint,
@@ -307,6 +313,7 @@ fn next_event_chunk(
         }
         EventScanState::Unfiltered {
             bounds,
+            entry_checkpoint,
             row_scan_budget,
             exhaustion,
             end_checkpoint,
@@ -335,6 +342,7 @@ fn next_event_chunk(
             } else {
                 scan.next_bounds.map(|bounds| EventScanState::Unfiltered {
                     bounds,
+                    entry_checkpoint,
                     row_scan_budget: remaining_row_scan_budget,
                     exhaustion,
                     end_checkpoint,
@@ -357,6 +365,7 @@ fn next_event_chunk(
                         &service,
                         &options,
                         frontier.expect("checked for scan-limit chunk"),
+                        entry_checkpoint,
                         ascending,
                     )?)
                 } else {
@@ -385,11 +394,18 @@ fn next_event_chunk(
                     })
                 },
             )?;
-            (scan.refs, next_state, terminal, scan_watermark)
+            (
+                scan.refs,
+                next_state,
+                terminal,
+                scan_watermark,
+                entry_checkpoint,
+            )
         }
         EventScanState::Filtered {
             query,
             bounds,
+            entry_checkpoint,
             pending_bucket,
             exhaustion,
             end_checkpoint,
@@ -429,6 +445,7 @@ fn next_event_chunk(
                 (hits.pending_bucket.is_some() || hits.next_bounds.is_some()).then_some(
                     EventScanState::Filtered {
                         query,
+                        entry_checkpoint,
                         bounds: hits.next_bounds,
                         pending_bucket: hits.pending_bucket,
                         exhaustion,
@@ -453,6 +470,7 @@ fn next_event_chunk(
                         &service,
                         &options,
                         frontier.expect("checked for scan-limit chunk"),
+                        entry_checkpoint,
                         ascending,
                     )?)
                 } else {
@@ -481,14 +499,21 @@ fn next_event_chunk(
                     })
                 },
             )?;
-            (refs, next_state, terminal, scan_watermark)
+            (refs, next_state, terminal, scan_watermark, entry_checkpoint)
         }
     };
 
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
-    let mut items = render_event_chunk(&service, refs, &read_mask, &options, cancel)?;
+    let mut items = render_event_chunk(
+        &service,
+        refs,
+        &read_mask,
+        &options,
+        entry_checkpoint,
+        cancel,
+    )?;
     let produced = items.len();
     if let Some(watermark) = scan_watermark {
         items.push(watermark);
@@ -510,11 +535,13 @@ fn scan_event_watermark(
     service: &RpcService,
     options: &QueryOptions,
     frontier: EventPosition,
+    entry_checkpoint: u64,
     ascending: bool,
 ) -> Result<Watermark, RpcError> {
     event_frontier_watermark(
         options,
         frontier,
+        entry_checkpoint,
         event_frontier_checkpoint(service, frontier, ascending)?,
     )
 }
@@ -522,10 +549,12 @@ fn scan_event_watermark(
 fn event_frontier_watermark(
     options: &QueryOptions,
     frontier: EventPosition,
+    entry_checkpoint: u64,
     checkpoint: Option<u64>,
 ) -> Result<Watermark, RpcError> {
-    let boundary =
-        checkpoint.and_then(|cp| advance_covered_bound_before_checkpoint(None, cp, options));
+    let boundary = checkpoint.and_then(|cp| {
+        advance_covered_bound_before_checkpoint(None, cp, entry_checkpoint, options)
+    });
     let cursor_cp = scan_frontier_cursor_cp(checkpoint, frontier.tx_seq, options.scan_direction())
         .ok_or_else(|| {
             RpcError::new(
@@ -551,6 +580,7 @@ fn render_event_chunk(
     refs: Vec<EventRef>,
     read_mask: &FieldMaskTree,
     options: &QueryOptions,
+    entry_checkpoint: u64,
     cancel: &CancellationToken,
 ) -> Result<Vec<ListEventsResponse>, RpcError> {
     let rows = tx_seq_digest_rows_for_event_refs(service, &refs)?;
@@ -631,6 +661,7 @@ fn render_event_chunk(
         checkpoint_boundary = advance_covered_bound_before_checkpoint(
             checkpoint_boundary,
             row.checkpoint_number,
+            entry_checkpoint,
             options,
         );
         let watermark = item_watermark(
@@ -704,6 +735,11 @@ fn resolve_event_range(
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     let mut resolved = ResolvedEventRange {
         bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
+        entry_checkpoint: if options.is_ascending() {
+            cp_range.range.start
+        } else {
+            cp_range.range.end.saturating_sub(1)
+        },
         end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
         end_position: match options.ordering {
             crate::ledger_history::query_options::Ordering::Ascending => {
@@ -764,11 +800,19 @@ mod tests {
 
     #[test]
     fn scan_limit_terminal_frames_are_directional_event_cursors() {
-        for (ascending, frontier, checkpoint, expected_position, expected_proof) in [
+        for (
+            ascending,
+            frontier,
+            checkpoint,
+            entry_checkpoint,
+            expected_position,
+            expected_proof,
+        ) in [
             (
                 true,
                 EventPosition::from((0, 0)),
                 None,
+                0,
                 Position::Events {
                     checkpoint: 0,
                     tx_seq: 0,
@@ -780,17 +824,19 @@ mod tests {
                 true,
                 EventPosition::from((41, 3)),
                 Some(7),
+                7,
                 Position::Events {
                     checkpoint: 7,
                     tx_seq: 41,
                     event_index: 3,
                 },
-                Some(6),
+                None,
             ),
             (
                 true,
                 EventPosition::from((42, 1)),
                 Some(9),
+                7,
                 Position::Events {
                     checkpoint: 9,
                     tx_seq: 42,
@@ -802,6 +848,7 @@ mod tests {
                 false,
                 EventPosition::from((u64::MAX, u32::MAX)),
                 None,
+                u64::MAX,
                 Position::Events {
                     checkpoint: u64::MAX,
                     tx_seq: u64::MAX,
@@ -813,17 +860,19 @@ mod tests {
                 false,
                 EventPosition::from((19, 4)),
                 Some(7),
+                7,
                 Position::Events {
                     checkpoint: 8,
                     tx_seq: 19,
                     event_index: 4,
                 },
-                Some(8),
+                None,
             ),
             (
                 false,
                 EventPosition::from((18, 2)),
                 Some(5),
+                7,
                 Position::Events {
                     checkpoint: 6,
                     tx_seq: 18,
@@ -833,7 +882,8 @@ mod tests {
             ),
         ] {
             let options = options(ascending);
-            let watermark = event_frontier_watermark(&options, frontier, checkpoint).unwrap();
+            let watermark =
+                event_frontier_watermark(&options, frontier, entry_checkpoint, checkpoint).unwrap();
             assert_eq!(
                 CursorToken::decode(watermark.cursor.as_ref().expect("event frontier cursor"))
                     .unwrap(),

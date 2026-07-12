@@ -98,6 +98,7 @@ pub(crate) async fn list_transactions(
     let exhaustion = tx_range.exhaustion;
     let range_end_checkpoint = tx_range.end_checkpoint;
     let range_end_position = tx_range.end_position;
+    let entry_checkpoint = tx_range.entry_checkpoint;
     let tx_range = tx_range.range;
 
     if tx_range.is_empty() {
@@ -248,6 +249,7 @@ pub(crate) async fn list_transactions(
                     covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
                         covered_checkpoint_bound,
                         item_checkpoint,
+                        entry_checkpoint,
                         &options,
                     );
                     let watermark = item_watermark(
@@ -295,6 +297,7 @@ pub(crate) async fn list_transactions(
                     let watermark = transaction_frontier_watermark(
                         &options,
                         direction,
+                        entry_checkpoint,
                         &mut covered_checkpoint_bound,
                         position,
                         Some(checkpoint_at_frontier),
@@ -306,6 +309,7 @@ pub(crate) async fn list_transactions(
                         stop,
                         &options,
                         direction,
+                        entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
                     break QueryEndReason::ScanLimit;
@@ -336,13 +340,18 @@ fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
 fn transaction_frontier_watermark(
     options: &QueryOptions,
     direction: ScanDirection,
+    entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: u64,
     checkpoint_at_frontier: Option<u64>,
 ) -> Result<Watermark, RpcError> {
     if let Some(checkpoint) = checkpoint_at_frontier {
-        *covered_checkpoint_bound =
-            advance_covered_bound_before_checkpoint(*covered_checkpoint_bound, checkpoint, options);
+        *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
+            *covered_checkpoint_bound,
+            checkpoint,
+            entry_checkpoint,
+            options,
+        );
     }
     let cursor_checkpoint = scan_frontier_cursor_cp(checkpoint_at_frontier, position, direction)
         .ok_or_else(|| {
@@ -364,6 +373,7 @@ fn terminal_response_from_scan_stop(
     stop: ResolvedScanStop<u64>,
     options: &QueryOptions,
     direction: ScanDirection,
+    entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListTransactionsResponse, RpcError> {
     let (position, checkpoint) = stop.into_scan_limit()?;
@@ -371,6 +381,7 @@ fn terminal_response_from_scan_stop(
         watermark: transaction_frontier_watermark(
             options,
             direction,
+            entry_checkpoint,
             covered_checkpoint_bound,
             position,
             checkpoint,
@@ -658,22 +669,32 @@ mod tests {
 
     #[test]
     fn scan_limit_terminal_frames_use_transaction_domain_in_both_directions() {
-        for (direction, position, checkpoint, initial_proof, expected_checkpoint, expected_proof) in [
-            (ScanDirection::Ascending, 0, None, None, 0, None),
+        for (
+            direction,
+            position,
+            checkpoint,
+            entry_checkpoint,
+            initial_proof,
+            expected_checkpoint,
+            expected_proof,
+        ) in [
+            (ScanDirection::Ascending, 0, None, 0, None, 0, None),
             (
                 ScanDirection::Descending,
                 u64::MAX,
                 None,
+                u64::MAX,
                 None,
                 u64::MAX,
                 None,
             ),
-            (ScanDirection::Ascending, 50, Some(10), None, 10, Some(9)),
-            (ScanDirection::Descending, 50, Some(10), None, 11, Some(11)),
+            (ScanDirection::Ascending, 50, Some(10), 10, None, 10, None),
+            (ScanDirection::Descending, 50, Some(10), 10, None, 11, None),
             (
                 ScanDirection::Ascending,
                 50,
                 Some(10),
+                10,
                 Some(15),
                 10,
                 Some(15),
@@ -682,6 +703,7 @@ mod tests {
                 ScanDirection::Descending,
                 50,
                 Some(10),
+                10,
                 Some(5),
                 11,
                 Some(5),
@@ -702,6 +724,7 @@ mod tests {
                 },
                 &options,
                 direction,
+                entry_checkpoint,
                 &mut covered,
             )
             .expect("representable transaction frontier");
@@ -743,6 +766,11 @@ mod tests {
             }
             let options =
                 QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
+            let entry_checkpoint = if direction.is_ascending() {
+                0
+            } else {
+                u64::MAX
+            };
             let mut covered = None;
             let error = terminal_response_from_scan_stop(
                 ResolvedScanStop::ScanLimit {
@@ -751,6 +779,7 @@ mod tests {
                 },
                 &options,
                 direction,
+                entry_checkpoint,
                 &mut covered,
             )
             .expect_err("only numeric-edge frontiers may omit a checkpoint mapping");

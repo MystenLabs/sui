@@ -205,6 +205,7 @@ enum TransactionScanState {
     },
     Unfiltered {
         range: Range<u64>,
+        entry_checkpoint: u64,
         exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: u64,
@@ -213,6 +214,7 @@ enum TransactionScanState {
         query: BitmapQuery,
         range: Option<Range<u64>>,
         pending_bucket: Option<PendingBitmapBucket>,
+        entry_checkpoint: u64,
         exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: u64,
@@ -235,7 +237,7 @@ fn next_transaction_chunk(
 ) -> Result<TransactionChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
-    let (rows, next_state, terminal, scan_watermark) = loop {
+    let (rows, next_state, terminal, scan_watermark, entry_checkpoint) = loop {
         if cancel.is_cancelled() {
             return Err(cancelled());
         }
@@ -252,6 +254,7 @@ fn next_transaction_chunk(
                 )?;
                 let tx_range =
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
+                let entry_checkpoint = tx_range.entry_checkpoint;
                 let terminal = ScanTerminal::Range {
                     exhaustion: tx_range.exhaustion,
                     position: Position::Transactions {
@@ -273,6 +276,7 @@ fn next_transaction_chunk(
                     Some(query) => TransactionScanState::Filtered {
                         query,
                         range: Some(range),
+                        entry_checkpoint,
                         pending_bucket: None,
                         exhaustion: tx_range.exhaustion,
                         end_checkpoint: tx_range.end_checkpoint,
@@ -280,6 +284,7 @@ fn next_transaction_chunk(
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
+                        entry_checkpoint,
                         exhaustion: tx_range.exhaustion,
                         end_checkpoint: tx_range.end_checkpoint,
                         end_position: tx_range.end_position,
@@ -289,6 +294,7 @@ fn next_transaction_chunk(
             }
             TransactionScanState::Unfiltered {
                 range,
+                entry_checkpoint,
                 exhaustion,
                 end_checkpoint,
                 end_position,
@@ -300,6 +306,7 @@ fn next_transaction_chunk(
                     .and_then(|row| remaining_range_after(range, row.tx_sequence_number, ascending))
                     .map(|range| TransactionScanState::Unfiltered {
                         range,
+                        entry_checkpoint,
                         exhaustion,
                         end_checkpoint,
                         end_position,
@@ -311,11 +318,12 @@ fn next_transaction_chunk(
                         tx_seq: end_position,
                     },
                 };
-                break (rows, next_state, terminal, None);
+                break (rows, next_state, terminal, None, entry_checkpoint);
             }
             TransactionScanState::Filtered {
                 query,
                 range,
+                entry_checkpoint,
                 pending_bucket,
                 exhaustion,
                 end_checkpoint,
@@ -353,6 +361,7 @@ fn next_transaction_chunk(
                     (hits.pending_bucket.is_some() || hits.next_range.is_some()).then_some(
                         TransactionScanState::Filtered {
                             query,
+                            entry_checkpoint,
                             range: hits.next_range,
                             pending_bucket: hits.pending_bucket,
                             exhaustion,
@@ -378,6 +387,7 @@ fn next_transaction_chunk(
                         &service,
                         &options,
                         coalesced_frontier.expect("checked for scan-limit chunk"),
+                        entry_checkpoint,
                         ascending,
                     )?)
                 } else {
@@ -405,7 +415,7 @@ fn next_transaction_chunk(
                         })
                     },
                 )?;
-                break (rows, next_state, terminal, scan_watermark);
+                break (rows, next_state, terminal, scan_watermark, entry_checkpoint);
             }
         }
     };
@@ -418,6 +428,7 @@ fn next_transaction_chunk(
         rows,
         &read_mask,
         &options,
+        entry_checkpoint,
         render_contents,
         cancel,
     )?;
@@ -443,11 +454,13 @@ fn scan_transaction_watermark(
     service: &RpcService,
     options: &QueryOptions,
     frontier: u64,
+    entry_checkpoint: u64,
     ascending: bool,
 ) -> Result<Watermark, RpcError> {
     transaction_frontier_watermark(
         options,
         frontier,
+        entry_checkpoint,
         sequence_frontier_checkpoint(service, frontier, ascending)?,
     )
 }
@@ -455,10 +468,12 @@ fn scan_transaction_watermark(
 fn transaction_frontier_watermark(
     options: &QueryOptions,
     frontier: u64,
+    entry_checkpoint: u64,
     checkpoint: Option<u64>,
 ) -> Result<Watermark, RpcError> {
-    let boundary =
-        checkpoint.and_then(|cp| advance_covered_bound_before_checkpoint(None, cp, options));
+    let boundary = checkpoint.and_then(|cp| {
+        advance_covered_bound_before_checkpoint(None, cp, entry_checkpoint, options)
+    });
     let cursor_cp = scan_frontier_cursor_cp(checkpoint, frontier, options.scan_direction())
         .ok_or_else(|| {
             RpcError::new(
@@ -480,6 +495,7 @@ fn render_transaction_rows(
     rows: Vec<LedgerTxSeqDigest>,
     read_mask: &FieldMaskTree,
     options: &QueryOptions,
+    entry_checkpoint: u64,
     render_contents: bool,
     cancel: &CancellationToken,
 ) -> Result<Vec<ListTransactionsResponse>, RpcError> {
@@ -510,6 +526,7 @@ fn render_transaction_rows(
         checkpoint_boundary = advance_covered_bound_before_checkpoint(
             checkpoint_boundary,
             row.checkpoint_number,
+            entry_checkpoint,
             options,
         );
         let watermark = item_watermark(
@@ -585,7 +602,8 @@ fn resolve_tx_range(
     }
 
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved = options.apply_cursor_bounds(cp_range.with_range(tx_range, options.ordering));
+    let resolved = cp_range.with_range(tx_range, options.ordering);
+    let mut resolved = options.apply_cursor_bounds(resolved);
     if !resolved.range.is_empty() {
         let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
         let floor = lowest_available_tx_seq(service)?;
@@ -664,7 +682,7 @@ mod tests {
                     checkpoint: 7,
                     tx_seq: 41,
                 },
-                Some(6),
+                None,
             ),
             (
                 true,
@@ -674,7 +692,7 @@ mod tests {
                     checkpoint: 9,
                     tx_seq: 42,
                 },
-                Some(8),
+                None,
             ),
             (
                 false,
@@ -694,7 +712,7 @@ mod tests {
                     checkpoint: 8,
                     tx_seq: 19,
                 },
-                Some(8),
+                None,
             ),
             (
                 false,
@@ -704,11 +722,14 @@ mod tests {
                     checkpoint: 6,
                     tx_seq: 18,
                 },
-                Some(6),
+                None,
             ),
         ] {
             let options = options(ascending);
-            let watermark = transaction_frontier_watermark(&options, frontier, checkpoint).unwrap();
+            let entry_checkpoint = checkpoint.unwrap_or(if ascending { 0 } else { u64::MAX });
+            let watermark =
+                transaction_frontier_watermark(&options, frontier, entry_checkpoint, checkpoint)
+                    .unwrap();
             assert_eq!(
                 CursorToken::decode(
                     watermark
