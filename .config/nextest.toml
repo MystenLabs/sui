@@ -1,27 +1,3 @@
-# Setup scripts (experimental) require a recent nextest. CI installs the latest
-# via taiki-e/install-action@nextest; local runs need an upgrade from older ones.
-nextest-version = { required = "0.9.98" }
-
-# Opt in to setup scripts, used below to raise the worker-thread stack size for
-# the graphql transactional_tests (Rust 1.96 async-frame bloat overflows the
-# default 2 MiB tokio worker stack). Setup scripts run at test time only, so this
-# does not affect builds — unlike a global `.cargo/config.toml [env]`.
-experimental = ["setup-scripts"]
-
-[scripts.setup.big-worker-stack]
-command = 'scripts/nextest/big-worker-stack.sh'
-
-# Apply the 8 MiB worker stack only to the binary that overflows. Listed under
-# both `default` (local runs) and `ci` (CI uses `--profile ci`); a named setup
-# script runs once per test run regardless of how many rules reference it.
-[[profile.default.scripts]]
-filter = 'package(sui-indexer-alt-e2e-tests) and binary(transactional_tests)'
-setup = 'big-worker-stack'
-
-[[profile.ci.scripts]]
-filter = 'package(sui-indexer-alt-e2e-tests) and binary(transactional_tests)'
-setup = 'big-worker-stack'
-
 [profile.ci]
 # Print output for failing tests only when they fail.
 failure-output = "immediate"
