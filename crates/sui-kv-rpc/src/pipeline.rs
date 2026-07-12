@@ -2885,15 +2885,15 @@ mod tests {
         );
     }
 
-    /// The resolver preserves a missing terminal checkpoint so consumers can
-    /// accept a numeric-edge genesis frontier while rejecting `None` at any
-    /// non-edge position as a domain-specific mapping fault.
+    /// A missing checkpoint can be a successful resolution at an absolute
+    /// numeric edge. Preserve `Ok(None)` so the endpoint can either construct
+    /// an edge cursor or reject a non-edge position.
     #[tokio::test]
-    async fn resolve_scan_watermarks_preserves_missing_terminal_checkpoint() {
+    async fn resolve_scan_watermarks_preserves_successful_none_resolution() {
         let mut fixture = WmResolverFixture::new(move |_position| Box::pin(async { Ok(None) }));
 
-        fixture.scan_limit(11).await;
-        assert_scan_limit(fixture.next().await, 11, None);
+        fixture.scan_limit(0).await;
+        assert_scan_limit(fixture.next().await, 0, None);
         fixture.finish().await;
     }
 

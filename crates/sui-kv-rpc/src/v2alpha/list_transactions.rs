@@ -713,6 +713,35 @@ mod tests {
         }
     }
 
+    #[test]
+    fn scan_limit_terminal_rejects_missing_non_edge_checkpoint_mapping() {
+        for (direction, position) in [
+            (ScanDirection::Ascending, 1),
+            (ScanDirection::Descending, u64::MAX - 1),
+        ] {
+            let mut proto_options = ascending_options();
+            if !direction.is_ascending() {
+                proto_options.ordering =
+                    Some(sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32);
+            }
+            let options =
+                QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
+            let mut covered = None;
+            let error = terminal_response_from_scan_stop(
+                ResolvedScanStop::ScanLimit {
+                    position,
+                    checkpoint: None,
+                },
+                &options,
+                direction,
+                &mut covered,
+            )
+            .expect_err("only numeric-edge frontiers may omit a checkpoint mapping");
+
+            assert_eq!(error.into_status_proto().code, tonic::Code::Internal as i32);
+        }
+    }
+
     fn read_mask(paths: &[&str]) -> FieldMaskTree {
         validate_read_mask(Some(FieldMask::from_paths(paths.iter().copied()))).unwrap()
     }
