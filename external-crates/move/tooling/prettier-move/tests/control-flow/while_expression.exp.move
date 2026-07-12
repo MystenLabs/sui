@@ -14,10 +14,10 @@ fun test_while() {
     }; // trailing
     // hahaha
     'a: /* a */  while (/* b */
-        very_very_long_condition ||
-        very_very_long_condition ||
-        very_very_long_condition ||
-        very_very_long_condition) // trailing
+        very_very_long_condition
+            || very_very_long_condition
+            || very_very_long_condition
+            || very_very_long_condition) // trailing
     {
         break;
     };

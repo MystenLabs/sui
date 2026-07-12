@@ -14,7 +14,8 @@ module prettier::expression {
         (a, b) = (1, 2);
 
         strategy.underlying_nominal_value_usdc =
-            strategy.underlying_nominal_value_usdc - to_withdraw;
+            strategy.underlying_nominal_value_usdc
+                - to_withdraw;
     }
 
     fun identified_expression() {
@@ -97,27 +98,47 @@ module prettier::expression {
 
     fun binary_expression_folding() {
         // binary_expression
-        say_something_really_long && say_something_really_long || say_something_really_long;
+        say_something_really_long
+            && say_something_really_long
+            || say_something_really_long;
 
-        say_something_really_long && say_something_really_long ||
-        say_something_really_long;
+        say_something_really_long
+            && say_something_really_long
+            || say_something_really_long;
 
-        say_something_really_long && // trailing comment
-        say_something_really_long ||
-        // leading comment
-        say_something_really_long;
+        say_something_really_long // trailing comment
+            && say_something_really_long
+            // leading comment
+            || say_something_really_long;
 
-        say_something_really_long + say_something_really_long + say_something_really_long &&
-        say_something_really_long + say_something_really_long + say_something_really_long;
+        say_something_really_long
+            + say_something_really_long
+            + say_something_really_long
+            && say_something_really_long
+            + say_something_really_long
+            + say_something_really_long;
 
-        say_something_really_long > less_than_or_equal_to &&
-        say_something_really_long < greater_than_or_equal_to;
-
-        (say_something_really_long + say_something_really_long + say_something_really_long) &&
-        (say_something_really_long + say_something_really_long + say_something_really_long);
+        say_something_really_long
+            > less_than_or_equal_to
+            && say_something_really_long
+            < greater_than_or_equal_to;
 
         (
-            say_something + say_something + say_something + say_something + say_something,
+            say_something_really_long
+                + say_something_really_long
+                + say_something_really_long
+        ) && (
+            say_something_really_long
+                + say_something_really_long
+                + say_something_really_long
+        );
+
+        (
+            say_something
+                + say_something
+                + say_something
+                + say_something
+                + say_something
         );
     }
 

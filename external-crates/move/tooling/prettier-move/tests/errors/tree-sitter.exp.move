@@ -26,7 +26,8 @@ module prettier::tree_sitter {
     fun clamm() {
         // Empties the pool
         state.d =
-            state.d - state.d * lp_coin_amount.to_u256() / total_supply.to_u256();
+            state.d
+                - state.d * lp_coin_amount.to_u256() / total_supply.to_u256();
 
         let (coin_a, coin_b, coin_c) = (
             withdraw_coin<CoinA, LpCoin>(

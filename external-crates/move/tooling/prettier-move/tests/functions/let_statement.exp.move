@@ -133,24 +133,39 @@ fun break_long_value() {
         very_very_very_long_value_very_long_value_very_long_value;
 
     let to_remain_locked = (
-        self.final_unlock_ts_sec -
-            math::min(self.final_unlock_ts_sec, now),
+        self.final_unlock_ts_sec
+            - math::min(
+            self.final_unlock_ts_sec,
+            now,
+        )
     );
 
     let to_remain_locked =
         (
-            self.final_unlock_ts_sec - math::min(self.final_unlock_ts_sec, now)
-        ) * self.unlock_per_second;
+            self.final_unlock_ts_sec
+                - math::min(
+                self.final_unlock_ts_sec,
+                now,
+            )
+        )
+            * self.unlock_per_second;
 
     let locked_amount_round =
-        balance::value(&self.locked_balance) / self.unlock_per_second * self.unlock_per_second;
+        balance::value(
+            &self.locked_balance,
+        )
+            / self.unlock_per_second
+            * self.unlock_per_second;
 }
 
 fun misc() {
     let a =
-        very_very_long_if_condition > very_very_long_if_condition &&
-    very_very_long_if_condition > very_very_long_if_condition &&
-    very_very_long_if_condition > very_very_long_if_condition;
+        very_very_long_if_condition
+            > very_very_long_if_condition
+            && very_very_long_if_condition
+            > very_very_long_if_condition
+            && very_very_long_if_condition
+            > very_very_long_if_condition;
 }
 
 fun let_match() {

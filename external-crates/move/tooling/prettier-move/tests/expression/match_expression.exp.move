@@ -118,7 +118,9 @@ fun match_arms() {
         match (self.beep) {
             A::B(c) => {
                 let c =
-                    c + (elements.length() as u16);
+                    c + (
+                        elements.length() as u16
+                    );
                 if (is_hey(c, self.hey)) {
                     self.beep =
                         A::C(clock.timestamp_ms());

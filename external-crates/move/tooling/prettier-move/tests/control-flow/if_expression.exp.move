@@ -175,7 +175,8 @@ fun folding() {
     if (
         very_very_long_if_condition
     )
-        very_very_long_if_condition > very_very_long_if_condition;
+        very_very_long_if_condition
+            > very_very_long_if_condition;
 
     let a = if (true) {
         call_something_else();
@@ -184,37 +185,58 @@ fun folding() {
     };
 
     if (
-        very_very_long_if_condition > very_very_long_if_condition ||
-        very_very_long_if_condition + very_very_long_if_condition > 100 &&
         very_very_long_if_condition
+            > very_very_long_if_condition
+            || very_very_long_if_condition
+            + very_very_long_if_condition
+            > 100
+            && very_very_long_if_condition
     )
-        very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition;
+        very_very_long_if_condition
+            > very_very_long_if_condition
+            && very_very_long_if_condition
+            > very_very_long_if_condition
+            && very_very_long_if_condition
+            > very_very_long_if_condition;
     // should break list of expressions inside parens, with indent;
     if (
-        very_very_long_if_condition > very_very_long_if_condition ||
-        very_very_long_if_condition + very_very_long_if_condition > 100 &&
         very_very_long_if_condition
+            > very_very_long_if_condition
+            || very_very_long_if_condition
+            + very_very_long_if_condition
+            > 100
+            && very_very_long_if_condition
     ) {
-        very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition;
+        very_very_long_if_condition
+            > very_very_long_if_condition
+            && very_very_long_if_condition
+            > very_very_long_if_condition
+            && very_very_long_if_condition
+            > very_very_long_if_condition;
     };
 
     if (
-        very_very_long_if_condition > very_very_long_if_condition
+        very_very_long_if_condition
+            > very_very_long_if_condition
     )
-        return very_very > very_very_long_if_condition + 100;
+        return very_very
+                > very_very_long_if_condition
+                + 100;
 
     if (
-        very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition
+        very_very_long_if_condition
+            > very_very_long_if_condition
+            && very_very_long_if_condition
+            > very_very_long_if_condition
+            && very_very_long_if_condition
+            > very_very_long_if_condition
     )
-        return very_very_long_if_condition > very_very_long_if_condition &&
-            very_very_long_if_condition > very_very_long_if_condition ||
-            very_very_long_if_condition > very_very_long_if_condition
+        return very_very_long_if_condition
+                > very_very_long_if_condition
+                && very_very_long_if_condition
+                > very_very_long_if_condition
+                || very_very_long_if_condition
+                > very_very_long_if_condition
 }
 
 fun if_expression() {

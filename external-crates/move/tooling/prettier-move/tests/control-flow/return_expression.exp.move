@@ -7,9 +7,9 @@ module test::return_expression;
 fun folding() {
     // this is a return expression
     return very_very > very_very_long_if_condition + 100;
-    return very_very_long_if_condition > very_very_long_if_condition &&
-            very_very_long_if_condition > very_very_long_if_condition ||
-            very_very_long_if_condition > very_very_long_if_condition; // this is a trailing comment for return
+    return very_very_long_if_condition > very_very_long_if_condition
+            && very_very_long_if_condition > very_very_long_if_condition
+            || very_very_long_if_condition > very_very_long_if_condition; // this is a trailing comment for return
     return very_very_long_if_condition_very_very_long_if_condition_very_very_long_if_condition_very_very_long_if_condition;
     return {
         if (block_expression()) 1 else 2

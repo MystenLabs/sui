@@ -76,7 +76,11 @@ fun vector_lists() {
 
     vector[
         (
-            alice + bob + carl + dave + smith,
+            alice
+                + bob
+                + carl
+                + dave
+                + smith
         ),
     ];
 
