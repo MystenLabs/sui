@@ -73,12 +73,13 @@ pub struct AuthorityPerpetualTables {
     /// objects are still accessible!
     pub(crate) objects: DBMap<ObjectKey, StoreObjectWrapper>,
 
-    /// This is a map between object references of currently active objects that can be mutated.
-    ///
-    /// For old epochs, it may also contain the transaction that they are lock on for use by this
-    /// specific validator. The transaction locks themselves are now in AuthorityPerEpochStore.
+    /// DEPRECATED: markers of live address-owned object refs. Nothing reads this table
+    /// anymore; writes are still maintained so that rolling back to a previous binary
+    /// finds a correctly maintained table. The table (and its writes) will be removed
+    /// entirely in a follow-up once this version is deployed everywhere.
     #[rename = "owned_object_transaction_locks"]
-    pub(crate) live_owned_object_markers: DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
+    pub(crate) deprecated_live_owned_object_markers:
+        DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
