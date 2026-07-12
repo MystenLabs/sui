@@ -19,7 +19,6 @@ pub use bitmap_query::ScanDirection;
 pub use bitmap_query::ScanStop;
 pub use bitmap_query::Watermarked;
 pub use bitmap_query::WatermarkedBucketStream;
-pub use bitmap_query::buckets_with_watermarks;
 pub use bitmap_query::dense_universe_buckets;
 pub use bitmap_query::eval_bitmap_query_bucket_iter;
 pub use bitmap_query::eval_bitmap_query_stream;

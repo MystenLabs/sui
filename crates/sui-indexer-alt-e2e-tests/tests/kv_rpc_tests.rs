@@ -1231,12 +1231,9 @@ async fn test_list_transactions_query_options() {
     let tx_checkpoint = cluster.create_checkpoint().await;
     let tx_start = tx_checkpoint.sequence_number;
     let tx_end = tx_start + 1;
-    // The bitmap scan can emit a frontier at the exclusive transaction
-    // boundary. Resolving that frontier requires the first transaction row in
-    // `tx_end`, so materialize it as fixture data. Polling below, rather than
-    // the extra checkpoint, establishes readiness.
-    let _ = transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
-    wait_for_kv_checkpoint(&cluster, tx_end).await;
+    // `tx_end` is exclusive and intentionally has no transaction row. Wait for
+    // the last in-range checkpoint while preserving that missing-boundary shape.
+    wait_for_kv_checkpoint(&cluster, tx_start).await;
 
     let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
@@ -1329,6 +1326,10 @@ async fn test_list_transactions_query_options() {
     let reverse1 = list_transactions_result(&mut client, reverse_req).await;
     assert_eq!(reverse1.transactions.len(), 2, "reverse response size");
     assert_item_limit_end(reverse1.end, reverse1.end_reason);
+    assert!(
+        reverse1.end,
+        "descending transaction request must complete without Internal when the exclusive tx_end row is absent"
+    );
     assert_transaction_cursors(&reverse1);
     let cursor = transaction_end_cursor(
         &reverse1,
@@ -1813,12 +1814,9 @@ async fn test_list_events_query_options() {
     let event_checkpoint = cluster.create_checkpoint().await;
     let event_start = event_checkpoint.sequence_number;
     let event_end = event_start + 1;
-    // The bitmap scan can emit a frontier at the exclusive transaction
-    // boundary. Resolving that frontier requires the first transaction row in
-    // `event_end`, so materialize it as fixture data. Polling below, rather
-    // than the extra checkpoint, establishes readiness.
-    let _ = transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
-    wait_for_kv_checkpoint(&cluster, event_end).await;
+    // `event_end` is exclusive and intentionally has no transaction row. Wait for
+    // the last in-range checkpoint while preserving that missing-boundary shape.
+    wait_for_kv_checkpoint(&cluster, event_start).await;
 
     let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
@@ -1888,6 +1886,10 @@ async fn test_list_events_query_options() {
     let reverse1 = list_events_result(&mut client, reverse_req).await;
     assert_eq!(reverse1.events.len(), 1, "first reverse response size");
     assert_item_limit_end(reverse1.end, reverse1.end_reason);
+    assert!(
+        reverse1.end,
+        "descending event request must complete without Internal when the exclusive event_end row is absent"
+    );
     assert_event_cursors(&reverse1);
     let cursor = event_end_cursor(
         &reverse1,

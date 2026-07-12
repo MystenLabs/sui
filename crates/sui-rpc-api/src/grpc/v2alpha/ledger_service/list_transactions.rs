@@ -56,7 +56,6 @@ use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
-use super::query_end::effective_terminal_reason;
 
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
 
@@ -101,7 +100,7 @@ pub(crate) async fn list_transactions(
     let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
         let render_contents = should_render_transaction_contents(&read_mask);
-        let scan = ChunkedScan::new(
+        let mut scan = ChunkedScan::new(
             initial_state,
             limit_items,
             endpoint.chunk_max,
@@ -122,40 +121,6 @@ pub(crate) async fn list_transactions(
             },
         );
 
-        let mut responses = transaction_response_stream(
-            scan,
-            terminal_options,
-            limit_items,
-            started,
-            filtered,
-            ordering,
-        );
-        while let Some(response) = responses.next().await {
-            yield response?;
-        }
-    }
-    .boxed())
-}
-
-fn transaction_response_stream<State, Spawn>(
-    mut scan: ChunkedScan<State, ListTransactionsResponse, Spawn>,
-    terminal_options: QueryOptions,
-    limit_items: usize,
-    started: Instant,
-    filtered: bool,
-    ordering: crate::ledger_history::query_options::Ordering,
-) -> ListTransactionsStream
-where
-    State: Send + 'static,
-    Spawn: FnMut(
-            State,
-            ChunkArgs,
-        )
-            -> JoinHandle<Result<ScanChunkDone<State, ListTransactionsResponse>, RpcError>>
-        + Send
-        + 'static,
-{
-    async_stream::try_stream! {
         let mut covered_checkpoint_bound = None;
         while let Some(mut response) = scan.next_item().await? {
             if let Some(checkpoint) = response
@@ -178,8 +143,11 @@ where
 
         let produced = scan.produced();
         let chunk_terminal = scan.into_terminal().expect("query emits terminal state");
-        let terminal_reason =
-            effective_terminal_reason(produced, limit_items, chunk_terminal.reason());
+        let terminal_reason = super::query_end::effective_terminal_reason(
+            produced,
+            limit_items,
+            chunk_terminal.reason(),
+        );
         if terminal_reason != QueryEndReason::ItemLimit {
             let terminal_watermark =
                 chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
@@ -195,7 +163,7 @@ where
             "list_transactions: done"
         );
     }
-    .boxed()
+    .boxed())
 }
 
 fn spawn_transaction_chunk(
@@ -393,11 +361,6 @@ fn next_transaction_chunk(
                         },
                     )
                 };
-                let scan_end_reason = if request_scan_limit_reached {
-                    QueryEndReason::ScanLimit
-                } else {
-                    range_exhaustion_reason
-                };
                 let coalesced_frontier = if chunk_scan_limit_reached {
                     Some(coalesced_frontier.ok_or_else(|| {
                         RpcError::new(
@@ -429,15 +392,20 @@ fn next_transaction_chunk(
                     checkpoint: end_checkpoint,
                     tx_seq: end_position,
                 };
-                let terminal = if request_scan_limit_reached {
-                    ChunkTerminal::scan_limit(
-                        terminal_position,
-                        frontier_watermark
-                            .expect("request scan limit constructs frontier watermark"),
-                    )
-                } else {
-                    ChunkTerminal::boundary(scan_end_reason, terminal_position, None)
-                };
+                let terminal = ChunkTerminal::scan_limit_or_boundary(
+                    request_scan_limit_reached,
+                    terminal_position,
+                    range_exhaustion_reason,
+                    || None,
+                    || {
+                        frontier_watermark.ok_or_else(|| {
+                            RpcError::new(
+                                tonic::Code::Internal,
+                                "request scan limit missing transaction frontier watermark",
+                            )
+                        })
+                    },
+                )?;
                 break (rows, next_state, terminal, scan_watermark);
             }
         }
@@ -804,10 +772,46 @@ mod tests {
                 }
             })
         });
-        let options = options(true);
-        let ordering = options.ordering;
-        let mut responses =
-            transaction_response_stream(scan, options, 5, Instant::now(), false, ordering);
+        let terminal_options = options(true);
+        let limit_items = 5;
+        // Mirrors the endpoint response loop above; keep terminal ordering in sync.
+        let mut responses: BoxStream<'_, Result<ListTransactionsResponse, RpcError>> =
+            async_stream::try_stream! {
+                let mut scan = scan;
+                let mut covered_checkpoint_bound = None;
+                while let Some(mut response) = scan.next_item().await? {
+                    if let Some(checkpoint) = response
+                        .watermark
+                        .as_ref()
+                        .and_then(|watermark| watermark.checkpoint)
+                    {
+                        covered_checkpoint_bound = Some(checkpoint);
+                    }
+                    if response.transaction.is_some()
+                        && scan.produced() == limit_items
+                        && scan.exhausted()
+                    {
+                        let mut end = QueryEnd::default();
+                        end.reason = Some(QueryEndReason::ItemLimit as i32);
+                        response.end = Some(end);
+                    }
+                    yield response;
+                }
+
+                let produced = scan.produced();
+                let chunk_terminal = scan.into_terminal().expect("query emits terminal state");
+                let terminal_reason = super::super::query_end::effective_terminal_reason(
+                    produced,
+                    limit_items,
+                    chunk_terminal.reason(),
+                );
+                if terminal_reason != QueryEndReason::ItemLimit {
+                    let terminal_watermark =
+                        chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
+                    yield end_response(terminal_watermark, terminal_reason);
+                }
+            }
+            .boxed();
 
         let response = responses
             .next()

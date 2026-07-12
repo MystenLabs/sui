@@ -271,7 +271,8 @@ where
         // `front[i]`: clamped position each leaf has provably scanned to. Bounds
         // the resume cursor when a leaf errors before it can advance.
         let mut front = vec![request_floor; leaf_count];
-        let mut last_emitted: Option<u64> = None;
+        // The request floor is the baseline, not progress earned by scanning.
+        let mut progress_frontier = Some(request_floor);
 
         loop {
             // Peek every active leaf concurrently (preserves cross-scan
@@ -332,11 +333,8 @@ where
 
             let active: Vec<usize> = (0..leaf_count).filter(|&i| !unreferenced[i]).collect();
             if active.is_empty() {
-                // Every term retired naturally: cap at the range terminus so the
-                // client learns the scan covered the whole range.
-                if frontier_advanced(last_emitted, terminus, direction) {
-                    yield Watermarked::Watermark(terminus);
-                }
+                // Natural completion is represented by the caller's terminal
+                // boundary; only progress earned while scanning is emitted here.
                 return;
             }
 
@@ -349,9 +347,9 @@ where
                 .expect("active non-empty");
             let collapsed = (!errors.is_empty()).then(|| collapse(errors, floor_pos));
             let scan_limited = matches!(collapsed, Some(ScanStop::ScanLimit { .. }));
-            if !scan_limited && frontier_advanced(last_emitted, floor_pos, direction) {
+            if !scan_limited && frontier_advanced(progress_frontier, floor_pos, direction) {
                 yield Watermarked::Watermark(floor_pos);
-                last_emitted = Some(floor_pos);
+                progress_frontier = Some(floor_pos);
             }
             if let Some(stop) = collapsed {
                 Err(stop)?;
@@ -425,9 +423,9 @@ where
             if let Some(bitmap) = result {
                 yield Watermarked::Item((floor_bucket, bitmap));
             }
-            if frontier_advanced(last_emitted, post, direction) {
+            if frontier_advanced(progress_frontier, post, direction) {
                 yield Watermarked::Watermark(post);
-                last_emitted = Some(post);
+                progress_frontier = Some(post);
             }
         }
     }
@@ -457,64 +455,6 @@ where
                 Err(LeafStop::BudgetExhausted)?;
             }
             yield item;
-        }
-    }
-}
-
-/// Convenience adapter for a single leaf-typed raw `BucketStream`: add one
-/// `Watermark(post_bucket)` after each bucket plus one final watermark at the
-/// range terminus on EOF. This adapter never merges dimensions, so it preserves
-/// [`LeafStop`] and never mints a driver-facing [`ScanStop`].
-pub fn buckets_with_watermarks<S>(
-    stream: S,
-    range: Range<u64>,
-    bucket_size: u64,
-    direction: ScanDirection,
-) -> impl Stream<Item = Result<Watermarked<(u64, RoaringBitmap)>, LeafStop>> + Send + 'static
-where
-    S: Stream<Item = BucketItem> + Send + 'static,
-{
-    async_stream::try_stream! {
-        if range.is_empty() {
-            return;
-        }
-        futures::pin_mut!(stream);
-        let mut last_emitted: Option<u64> = None;
-        while let Some(item) = stream.next().await {
-            let (bucket_id, bitmap) = item?;
-            yield Watermarked::Item((bucket_id, bitmap));
-            // Ascending = just past this bucket. Descending = this
-            // bucket's low edge. Clamp to the request bounds — cursors
-            // round-trip into subsequent requests with different ranges.
-            let bucket_start = bucket_id.saturating_mul(bucket_size);
-            let watermark = if direction.is_ascending() {
-                bucket_start.saturating_add(bucket_size).min(range.end)
-            } else {
-                bucket_start.max(range.start)
-            };
-            last_emitted = Some(watermark);
-            yield Watermarked::Watermark(watermark);
-        }
-        // Natural EOF: cap with a watermark at the range boundary so
-        // handlers get an explicit "scan covered the range" signal.
-        // Skip if a per-bucket watermark already exceeded it.
-        let range_end = if direction.is_ascending() {
-            range.end
-        } else {
-            range.start
-        };
-        let should_emit = match last_emitted {
-            None => true,
-            Some(prev) => {
-                if direction.is_ascending() {
-                    range_end > prev
-                } else {
-                    range_end < prev
-                }
-            }
-        };
-        if should_emit {
-            yield Watermarked::Watermark(range_end);
         }
     }
 }
@@ -715,7 +655,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(watermarks, vec![0, BUCKET_SIZE]);
+        assert_eq!(watermarks, vec![BUCKET_SIZE]);
         assert_eq!(
             all.len(),
             watermarks.len() + 1,
@@ -799,7 +739,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(watermarks, vec![0, BUCKET_SIZE]);
+        assert_eq!(watermarks, vec![BUCKET_SIZE]);
         assert_eq!(
             all.len(),
             items.len() + watermarks.len() + 1,
@@ -968,39 +908,25 @@ mod tests {
         assert_eq!(items, vec![BUCKET_SIZE + 5, 2]);
     }
 
-    /// End-to-end: `buckets_with_watermarks` injects watermarks, then
-    /// `flatten_watermarked_buckets` flattens items and passes watermarks through.
-    /// Verifies edge trimming + marker interleaving in one composed test.
+    /// Flattening trims edge buckets while preserving already-clamped
+    /// evaluator watermarks and their ordering among items.
     #[tokio::test]
-    async fn buckets_with_watermarks_then_flatten_watermarked_buckets_ascending() {
+    async fn flatten_watermarked_buckets_ascending() {
         let range = 50u64..(2 * BUCKET_SIZE + 50_001);
-        let items = stream::iter(vec![
-            // bucket 0: bit 10 trimmed (< 50); 50 and bucket_size-1 kept.
-            Ok((0u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(10);
-                bm.insert(50);
-                bm.insert((BUCKET_SIZE - 1) as u32);
-                bm
-            })),
-            // bucket 1: middle, full pass-through.
-            Ok((1u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(0);
-                bm.insert((BUCKET_SIZE - 1) as u32);
-                bm
-            })),
-            // bucket 2: bit 50_001 trimmed (>= hi=50_001 relative).
-            Ok((2u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(0);
-                bm.insert(50_000);
-                bm.insert(50_001);
-                bm
-            })),
+        let marked_buckets = stream::iter(vec![
+            Ok::<_, LeafStop>(Watermarked::Item((
+                0,
+                make_bitmap(&[10, 50, (BUCKET_SIZE - 1) as u32]),
+            ))),
+            Ok(Watermarked::Watermark(BUCKET_SIZE)),
+            Ok(Watermarked::Item((
+                1,
+                make_bitmap(&[0, (BUCKET_SIZE - 1) as u32]),
+            ))),
+            Ok(Watermarked::Watermark(2 * BUCKET_SIZE)),
+            Ok(Watermarked::Item((2, make_bitmap(&[0, 50_000, 50_001])))),
+            Ok(Watermarked::Watermark(2 * BUCKET_SIZE + 50_001)),
         ]);
-        let marked_buckets =
-            buckets_with_watermarks(items, range.clone(), BUCKET_SIZE, ScanDirection::Ascending);
         let out: Vec<Watermarked<u64>> = flatten_watermarked_buckets(
             marked_buckets,
             range,
@@ -1010,9 +936,7 @@ mod tests {
         .try_collect()
         .await
         .unwrap();
-        // Items are interleaved with watermarks at each bucket boundary.
-        // Watermark(p) is emitted AFTER the bucket's items so its arrival proves
-        // those items also passed.
+
         assert_eq!(
             out,
             vec![
@@ -1024,53 +948,7 @@ mod tests {
                 Watermarked::Watermark(2 * BUCKET_SIZE),
                 Watermarked::Item(2 * BUCKET_SIZE),
                 Watermarked::Item(2 * BUCKET_SIZE + 50_000),
-                // Edge bucket watermark is clamped to range.end so cursors
-                // don't claim progress past the requested upper bound.
                 Watermarked::Watermark(2 * BUCKET_SIZE + 50_001),
-            ],
-        );
-    }
-
-    /// `buckets_with_watermarks` standalone: verify each bucket gets its own
-    /// `Watermarked::Watermark` immediately after, with no flattening / trimming.
-    /// This is the variant the rocksdb branch consumes directly.
-    #[tokio::test]
-    async fn buckets_with_watermarks_one_per_bucket_no_flatten() {
-        let items = stream::iter(vec![
-            Ok((0u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(1);
-                bm.insert(2);
-                bm
-            })),
-            Ok((3u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(5);
-                bm
-            })),
-        ]);
-        // Range extends past the last populated bucket (bucket 3 = positions
-        // [3*BUCKET_SIZE, 4*BUCKET_SIZE)); the final natural-EOF watermark
-        // caps at the request range boundary so resume cursors don't leave
-        // the empty tail (4*BUCKET_SIZE..5*BUCKET_SIZE) un-acknowledged.
-        let out: Vec<Watermarked<(u64, Vec<u32>)>> = buckets_with_watermarks(
-            items,
-            0..(5 * BUCKET_SIZE),
-            BUCKET_SIZE,
-            ScanDirection::Ascending,
-        )
-        .map_ok(|m| m.map_item(|(bid, bm)| (bid, bm.iter().collect::<Vec<_>>())))
-        .try_collect()
-        .await
-        .unwrap();
-        assert_eq!(
-            out,
-            vec![
-                Watermarked::Item((0, vec![1, 2])),
-                Watermarked::Watermark(BUCKET_SIZE),
-                Watermarked::Item((3, vec![5])),
-                Watermarked::Watermark(4 * BUCKET_SIZE),
-                Watermarked::Watermark(5 * BUCKET_SIZE),
             ],
         );
     }
@@ -1283,7 +1161,7 @@ mod tests {
             .collect();
         assert_eq!(
             watermarks,
-            vec![0, BUCKET_SIZE, 2 * BUCKET_SIZE, 3 * BUCKET_SIZE],
+            vec![BUCKET_SIZE, 2 * BUCKET_SIZE, 3 * BUCKET_SIZE],
             "the stopping round must not append another frontier beacon"
         );
         assert_eq!(all.len(), watermarks.len() + 1);
@@ -1312,14 +1190,12 @@ mod tests {
 
         // Items at the bits within each of the three populated buckets.
         assert_eq!(items, vec![1, 3 * BUCKET_SIZE + 2, 7 * BUCKET_SIZE + 3]);
-        // The flat driver emits the floor bucket's leading edge (pre) and
-        // trailing edge (post) each round, so each populated bucket [0, 3, 7]
-        // contributes both: pre/post = (0, bs), (3bs, 4bs), (7bs, 8bs). The
-        // final post(7)=8bs is the range terminus.
+        // The request floor is suppressed; sparse leading edges and every
+        // post-bucket edge are emitted eagerly. The last bucket itself earns
+        // the range terminus.
         assert_eq!(
             watermarks,
             vec![
-                0,
                 BUCKET_SIZE,
                 3 * BUCKET_SIZE,
                 4 * BUCKET_SIZE,
@@ -1330,7 +1206,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn eval_emits_watermarks_at_bucket_boundaries_descending() {
+    async fn descending_exclusive_upper_bound_is_not_progress() {
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([(
                 test_key(b"a"),
@@ -1351,13 +1227,11 @@ mod tests {
         let (items, watermarks) = drain_marked(stream).await.unwrap();
 
         assert_eq!(items, vec![7 * BUCKET_SIZE + 3, 3 * BUCKET_SIZE + 2, 1]);
-        // Descending pre/post per matched bucket [7, 3, 0]: pre is the high
-        // edge, post the low edge — (8bs, 7bs), (4bs, 3bs), (1bs, 0). pre(7)=8bs
-        // is range.end; post(0)=0 is the range terminus.
+        // The exclusive upper request position is not earned progress: the
+        // first beacon follows the highest bucket's items at its low edge.
         assert_eq!(
             watermarks,
             vec![
-                8 * BUCKET_SIZE,
                 7 * BUCKET_SIZE,
                 4 * BUCKET_SIZE,
                 3 * BUCKET_SIZE,
@@ -1368,12 +1242,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn eval_emits_per_source_watermarks_and_final_eof_when_no_bucket_yielded() {
-        // Two include dimensions whose buckets never align -> the term
-        // yields no Items. The floor watermark (pre+post per bucket) still
-        // propagates the actual scan progress, and the driver caps the stream
-        // with a final range_end watermark on natural EOF so clients see "scan
-        // covered the range with no matches."
+    async fn natural_completion_omits_terminus_but_retains_earned_progress() {
+        // The include dimensions never align, so the evaluator emits no items.
+        // Retiring the term is a natural terminal boundary, not additional scan
+        // progress; the last eager beacon is the final position both live leaves
+        // actually established before one reached EOF.
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
                 (
@@ -1403,28 +1276,15 @@ mod tests {
         let (items, watermarks) = drain_marked(stream).await.unwrap();
 
         assert!(items.is_empty(), "disjoint intersect must not emit items");
-        // Watermarks reflect real per-source progress as intersect drops
-        // misaligned buckets, then the eval root adds the final range_end.
-        assert!(
-            !watermarks.is_empty(),
-            "expected per-source watermarks to propagate, got none"
-        );
-        let mut prev = 0u64;
-        for w in &watermarks {
-            assert!(
-                *w >= prev,
-                "ascending watermarks must be monotonic, got {watermarks:?}"
-            );
-            assert!(
-                *w <= 6 * BUCKET_SIZE,
-                "watermark exceeds range.end ({watermarks:?})"
-            );
-            prev = *w;
-        }
         assert_eq!(
-            *watermarks.last().unwrap(),
-            6 * BUCKET_SIZE,
-            "final watermark must be range.end on natural EOF"
+            watermarks,
+            vec![
+                BUCKET_SIZE,
+                2 * BUCKET_SIZE,
+                3 * BUCKET_SIZE,
+                4 * BUCKET_SIZE,
+                5 * BUCKET_SIZE,
+            ],
         );
     }
 
@@ -1453,14 +1313,12 @@ mod tests {
         );
         let all: Vec<Watermarked<u64>> = stream.try_collect().await.unwrap();
 
-        // Per-source pre+post watermarks: each bucket emits Watermark(pre),
-        // Item(s)…, Watermark(post). pre(0)=0, post(0)=BUCKET_SIZE,
-        // pre(1)=BUCKET_SIZE (dup of post(0), filtered), post(1)=2*BUCKET_SIZE,
-        // EOF=2*BUCKET_SIZE (dup, filtered).
+        // The request floor is not scan progress. Each bucket's Items precede
+        // its post-bucket watermark, and the shared edge between adjacent
+        // buckets is emitted only once.
         assert_eq!(
             all,
             vec![
-                Watermarked::Watermark(0),
                 Watermarked::Item(10),
                 Watermarked::Item(20),
                 Watermarked::Item(30),
@@ -1473,32 +1331,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn buckets_with_watermarks_then_flatten_watermarked_buckets_descending() {
+    async fn flatten_watermarked_buckets_descending() {
         let range = 50u64..(2 * BUCKET_SIZE + 50_001);
-        let items = stream::iter(vec![
-            Ok((2u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(0);
-                bm.insert(50_000);
-                bm.insert(50_001);
-                bm
-            })),
-            Ok((1u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(0);
-                bm.insert((BUCKET_SIZE - 1) as u32);
-                bm
-            })),
-            Ok((0u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(10);
-                bm.insert(50);
-                bm.insert((BUCKET_SIZE - 1) as u32);
-                bm
-            })),
+        let marked_buckets = stream::iter(vec![
+            Ok::<_, LeafStop>(Watermarked::Item((2, make_bitmap(&[0, 50_000, 50_001])))),
+            Ok(Watermarked::Watermark(2 * BUCKET_SIZE)),
+            Ok(Watermarked::Item((
+                1,
+                make_bitmap(&[0, (BUCKET_SIZE - 1) as u32]),
+            ))),
+            Ok(Watermarked::Watermark(BUCKET_SIZE)),
+            Ok(Watermarked::Item((
+                0,
+                make_bitmap(&[10, 50, (BUCKET_SIZE - 1) as u32]),
+            ))),
+            Ok(Watermarked::Watermark(50)),
         ]);
-        let marked_buckets =
-            buckets_with_watermarks(items, range.clone(), BUCKET_SIZE, ScanDirection::Descending);
         let out: Vec<Watermarked<u64>> = flatten_watermarked_buckets(
             marked_buckets,
             range,
@@ -1508,8 +1356,7 @@ mod tests {
         .try_collect()
         .await
         .unwrap();
-        // Descending: watermark(p) = "all items >= p have been emitted." After
-        // bucket 2 yields, frontier = 2 * BUCKET_SIZE (bucket 2's low edge).
+
         assert_eq!(
             out,
             vec![
@@ -1521,9 +1368,6 @@ mod tests {
                 Watermarked::Watermark(BUCKET_SIZE),
                 Watermarked::Item(BUCKET_SIZE - 1),
                 Watermarked::Item(50),
-                // Edge bucket watermark is clamped to range.start so cursors
-                // don't claim progress past the requested lower bound (in
-                // descending: lower position is "further past").
                 Watermarked::Watermark(50),
             ],
         );

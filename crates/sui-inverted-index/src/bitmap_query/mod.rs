@@ -42,7 +42,6 @@ mod stream;
 
 pub use iter::eval_bitmap_query_bucket_iter;
 pub use stream::BitmapScanMetrics;
-pub use stream::buckets_with_watermarks;
 pub use stream::eval_bitmap_query_stream;
 pub use stream::flatten_watermarked_buckets;
 

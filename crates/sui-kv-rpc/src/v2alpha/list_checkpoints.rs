@@ -51,6 +51,7 @@ use crate::pipeline::Watermarked;
 use crate::pipeline::dedup_consecutive;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::resolve_scan_watermarks;
+use crate::pipeline::resolved_scan_limit;
 use crate::pipeline::take_items;
 use crate::render::render_full_checkpoint;
 use crate::resolve;
@@ -379,41 +380,30 @@ fn terminal_response_from_scan_stop(
     direction: ScanDirection,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
-    match stop {
-        ResolvedScanStop::ScanLimit {
-            position,
-            checkpoint,
-        } => {
-            let checkpoint_at_frontier = checkpoint
-                .or_else(|| {
-                    ((direction.is_ascending() && position == 0)
-                        || (!direction.is_ascending() && position == u64::MAX))
-                    .then_some(position)
-                })
-                .ok_or_else(|| {
-                    RpcError::new(
-                        tonic::Code::Internal,
-                        format!(
-                            "checkpoint scan frontier transaction {position} has no checkpoint mapping"
-                        ),
-                    )
-                })?;
-            Ok(end_response(
-                checkpoint_frontier_watermark(
-                    checkpoint_at_frontier,
-                    direction,
-                    options,
-                    covered_checkpoint_bound,
+    let (position, checkpoint) = resolved_scan_limit(stop)?;
+    let checkpoint_at_frontier = checkpoint
+        .or_else(|| {
+            ((direction.is_ascending() && position == 0)
+                || (!direction.is_ascending() && position == u64::MAX))
+                .then_some(position)
+        })
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!(
+                    "checkpoint scan frontier transaction {position} has no checkpoint mapping"
                 ),
-                QueryEndReason::ScanLimit,
-            ))
-        }
-        ResolvedScanStop::Cancelled => Err(RpcError::new(
-            tonic::Code::Cancelled,
-            ScanStop::Cancelled.to_string(),
-        )),
-        ResolvedScanStop::Fault(inner) => Err(RpcError::from(inner)),
-    }
+            )
+        })?;
+    Ok(end_response(
+        checkpoint_frontier_watermark(
+            checkpoint_at_frontier,
+            direction,
+            options,
+            covered_checkpoint_bound,
+        ),
+        QueryEndReason::ScanLimit,
+    ))
 }
 
 fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {

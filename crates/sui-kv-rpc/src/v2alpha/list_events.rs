@@ -56,6 +56,7 @@ use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::resolve_scan_watermarks;
+use crate::pipeline::resolved_scan_limit;
 use crate::pipeline::take_items;
 use crate::render::render_json;
 
@@ -345,28 +346,14 @@ pub(crate) async fn list_events(
                     )?;
                     yield watermark_response(watermark);
                 }
-                Err(ResolvedScanStop::ScanLimit {
-                    position,
-                    checkpoint: checkpoint_at_frontier,
-                }) => {
-                    let scan_frontier_watermark = event_frontier_watermark(
+                Err(stop) => {
+                    yield terminal_response_from_scan_stop(
+                        stop,
                         &options,
                         direction,
                         &mut covered_checkpoint_bound,
-                        position,
-                        checkpoint_at_frontier,
                     )?;
-                    yield end_response(scan_frontier_watermark, QueryEndReason::ScanLimit);
                     break QueryEndReason::ScanLimit;
-                }
-                Err(ResolvedScanStop::Cancelled) => {
-                    Err(RpcError::new(
-                        tonic::Code::Cancelled,
-                        ScanStop::Cancelled.to_string(),
-                    ))?;
-                }
-                Err(ResolvedScanStop::Fault(inner)) => {
-                    Err(RpcError::from(inner))?;
                 }
             }
         };
@@ -627,6 +614,25 @@ fn event_frontier_watermark(
             event_index: position.event_index,
         },
         *covered_checkpoint_bound,
+    ))
+}
+
+fn terminal_response_from_scan_stop(
+    stop: ResolvedScanStop<EventPosition>,
+    options: &QueryOptions,
+    direction: ScanDirection,
+    covered_checkpoint_bound: &mut Option<u64>,
+) -> Result<ListEventsResponse, RpcError> {
+    let (position, checkpoint) = resolved_scan_limit(stop)?;
+    Ok(end_response(
+        event_frontier_watermark(
+            options,
+            direction,
+            covered_checkpoint_bound,
+            position,
+            checkpoint,
+        )?,
+        QueryEndReason::ScanLimit,
     ))
 }
 

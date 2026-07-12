@@ -61,6 +61,28 @@ impl ChunkTerminal {
         }
     }
 
+    pub(crate) fn scan_limit_or_boundary<CursorBound, Frontier>(
+        request_scan_limit_reached: bool,
+        position: Position,
+        boundary_reason: QueryEndReason,
+        cursor_bound_watermark: CursorBound,
+        frontier_watermark: Frontier,
+    ) -> Result<Self, RpcError>
+    where
+        CursorBound: FnOnce() -> Option<Watermark>,
+        Frontier: FnOnce() -> Result<Watermark, RpcError>,
+    {
+        if request_scan_limit_reached {
+            Ok(Self::scan_limit(position, frontier_watermark()?))
+        } else {
+            Ok(Self::boundary(
+                boundary_reason,
+                position,
+                cursor_bound_watermark(),
+            ))
+        }
+    }
+
     pub(crate) fn reason(&self) -> QueryEndReason {
         match self {
             Self::ScanLimit { .. } => QueryEndReason::ScanLimit,

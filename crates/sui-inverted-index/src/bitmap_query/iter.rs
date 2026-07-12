@@ -90,7 +90,8 @@ where
     // `front[i]`: clamped position each leaf has provably scanned to. Bounds the
     // resume cursor when a leaf errors before it can advance.
     let mut front = vec![request_floor; leaf_count];
-    let mut last_emitted: Option<u64> = None;
+    // The request floor is the baseline, not progress earned by scanning.
+    let mut progress_frontier = Some(request_floor);
     let mut done = false;
     let mut pending: VecDeque<WatermarkedBucket> = VecDeque::new();
 
@@ -159,12 +160,9 @@ where
 
             let active: Vec<usize> = (0..leaf_count).filter(|&i| !unreferenced[i]).collect();
             if active.is_empty() {
-                // Every term retired naturally: cap the scan at the range
-                // terminus so the client learns it covered the whole range.
+                // Natural completion is represented by the caller's terminal
+                // boundary; only progress earned while scanning is emitted here.
                 done = true;
-                if frontier_advanced(last_emitted, terminus, direction) {
-                    return Some(Ok(Watermarked::Watermark(terminus)));
-                }
                 return None;
             }
 
@@ -177,9 +175,9 @@ where
                 .expect("active non-empty");
             let collapsed = (!errors.is_empty()).then(|| collapse(errors, floor_pos));
             let scan_limited = matches!(collapsed, Some(ScanStop::ScanLimit { .. }));
-            if !scan_limited && frontier_advanced(last_emitted, floor_pos, direction) {
+            if !scan_limited && frontier_advanced(progress_frontier, floor_pos, direction) {
                 pending.push_back(Ok(Watermarked::Watermark(floor_pos)));
-                last_emitted = Some(floor_pos);
+                progress_frontier = Some(floor_pos);
             }
             if let Some(stop) = collapsed {
                 done = true;
@@ -252,9 +250,9 @@ where
             if let Some(bitmap) = result {
                 pending.push_back(Ok(Watermarked::Item((floor_bucket, bitmap))));
             }
-            if frontier_advanced(last_emitted, post, direction) {
+            if frontier_advanced(progress_frontier, post, direction) {
                 pending.push_back(Ok(Watermarked::Watermark(post)));
-                last_emitted = Some(post);
+                progress_frontier = Some(post);
             }
         }
     })
@@ -465,8 +463,8 @@ mod tests {
         }
     }
 
-    /// A sparse intersection that matches nothing in a gap must still emit
-    /// watermarks that advance the frontier, and cap with the range terminus.
+    /// A sparse intersection that matches nothing in a gap still emits earned
+    /// progress, including the last bucket's post edge at the range terminus.
     #[test]
     fn intersect_emits_coalesced_watermarks_over_sparse_gap() {
         let source = TestBucketSource {
@@ -494,7 +492,7 @@ mod tests {
         // Only bucket 0 intersects (member 1); bucket 2 disjoint -> dropped.
         assert_eq!(items_only(&marked), vec![(0, vec![1])]);
 
-        // Watermarks must be non-decreasing and reach the range terminus.
+        // Watermarks must be non-decreasing; the last bucket earns the terminus.
         let watermarks: Vec<u64> = marked
             .iter()
             .filter_map(|w| match w {
@@ -509,7 +507,65 @@ mod tests {
         assert_eq!(
             watermarks.last().copied(),
             Some(300_000),
-            "final watermark must reach the range terminus"
+            "last bucket's post edge must reach the range terminus"
+        );
+    }
+
+    #[test]
+    fn descending_request_floor_is_not_emitted_as_progress() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(
+                test_key(b"a"),
+                vec![(2, vec![0, 50_000])],
+            )])),
+        };
+        let query = BitmapQuery::new(vec![BitmapTerm::new(vec![include(b"a")]).unwrap()]).unwrap();
+
+        let marked = collect_marked(
+            eval_bitmap_query_bucket_iter(
+                source,
+                query,
+                50..(2 * BUCKET_SIZE + 50_001),
+                BUCKET_SIZE,
+                ScanDirection::Descending,
+            )
+            .collect(),
+        );
+
+        assert_eq!(
+            marked,
+            vec![
+                Watermarked::Item((2, vec![0, 50_000])),
+                Watermarked::Watermark(2 * BUCKET_SIZE),
+            ],
+        );
+    }
+
+    #[test]
+    fn natural_completion_omits_terminus_but_retains_earned_progress() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(3, vec![5])])])),
+        };
+        let query = BitmapQuery::new(vec![BitmapTerm::new(vec![include(b"a")]).unwrap()]).unwrap();
+
+        let marked = collect_marked(
+            eval_bitmap_query_bucket_iter(
+                source,
+                query,
+                0..(5 * BUCKET_SIZE),
+                BUCKET_SIZE,
+                ScanDirection::Ascending,
+            )
+            .collect(),
+        );
+
+        assert_eq!(
+            marked,
+            vec![
+                Watermarked::Watermark(3 * BUCKET_SIZE),
+                Watermarked::Item((3, vec![5])),
+                Watermarked::Watermark(4 * BUCKET_SIZE),
+            ],
         );
     }
 

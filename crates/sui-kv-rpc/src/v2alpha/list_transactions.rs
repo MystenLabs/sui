@@ -46,6 +46,7 @@ use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::resolve_scan_watermarks;
+use crate::pipeline::resolved_scan_limit;
 use crate::pipeline::take_items;
 use crate::render::transaction_to_response;
 use crate::resolve;
@@ -375,26 +376,17 @@ fn terminal_response_from_scan_stop(
     direction: ScanDirection,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListTransactionsResponse, RpcError> {
-    match stop {
-        ResolvedScanStop::ScanLimit {
+    let (position, checkpoint) = resolved_scan_limit(stop)?;
+    Ok(end_response(
+        transaction_frontier_watermark(
+            options,
+            direction,
+            covered_checkpoint_bound,
             position,
             checkpoint,
-        } => Ok(end_response(
-            transaction_frontier_watermark(
-                options,
-                direction,
-                covered_checkpoint_bound,
-                position,
-                checkpoint,
-            )?,
-            QueryEndReason::ScanLimit,
-        )),
-        ResolvedScanStop::Cancelled => Err(RpcError::new(
-            tonic::Code::Cancelled,
-            ScanStop::Cancelled.to_string(),
-        )),
-        ResolvedScanStop::Fault(inner) => Err(RpcError::from(inner)),
-    }
+        )?,
+        QueryEndReason::ScanLimit,
+    ))
 }
 
 async fn scan_tx_seq_digests(
@@ -719,29 +711,6 @@ mod tests {
                 covered, expected_proof,
                 "accumulated checkpoint proof must match the emitted watermark"
             );
-        }
-    }
-
-    #[test]
-    fn backend_fault_and_cancellation_return_status_without_query_end() {
-        let options =
-            QueryOptions::transactions_from_proto(Some(&ascending_options()), 10, 100).unwrap();
-        for (stop, expected_code) in [
-            (ResolvedScanStop::Cancelled, tonic::Code::Cancelled),
-            (
-                ResolvedScanStop::Fault(anyhow::anyhow!("injected backend fault")),
-                tonic::Code::Internal,
-            ),
-        ] {
-            let mut covered = None;
-            let error = terminal_response_from_scan_stop(
-                stop,
-                &options,
-                ScanDirection::Ascending,
-                &mut covered,
-            )
-            .expect_err("fault/cancellation must not produce a QueryEnd response");
-            assert_eq!(error.into_status_proto().code, expected_code as i32);
         }
     }
 

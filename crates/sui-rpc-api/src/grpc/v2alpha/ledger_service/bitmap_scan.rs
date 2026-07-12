@@ -227,10 +227,10 @@ struct DrainLoopState {
 /// signals [`ScanStop::ScanLimit`]. `open_iter` builds the iterator over a scan
 /// range and is invoked at most once, lazily — only when a fresh scan beyond
 /// `pending_bucket` is needed — so resuming a dense pending bucket never opens
-/// a RocksDB iterator. On scan-limit exhaustion the resume range is anchored
-/// past the terminal's bundled frontier; the caller decides whether that is the
-/// per-request cap (terminal `ScanLimit`) or a per-chunk cap (resume in the next
-/// chunk).
+/// a RocksDB iterator. Ascending evaluator frontiers are the first unscanned
+/// position and remain inclusive; descending frontiers retain their existing
+/// exclusive upper-bound semantics. The caller decides whether a scan-limit
+/// stop is the per-request cap or a per-chunk cap.
 fn drain_watermarked_buckets<I>(
     open_iter: impl FnOnce(Range<u64>) -> I,
     mut pending_bucket: Option<PendingBitmapBucket>,
@@ -298,16 +298,18 @@ where
             Some(Err(ScanStop::ScanLimit { scan_frontier })) => {
                 // Budget stop: the terminal carries the merged resume frontier
                 // (the exact value the stopping round's beacon would have held).
-                // Fold it into the chunk frontier and anchor the resume range
-                // strictly past it; the caller decides whether this is the
-                // per-request cap (terminal `ScanLimit`) or a per-chunk cap.
+                // Fold it into the chunk frontier. In ascending scans this is
+                // the first unscanned position, so resume inclusively without
+                // item-consumption's `+ 1`. Descending continuation remains
+                // strictly below the frontier.
                 chunk_scan_limit_reached = true;
                 coalesced_frontier = Some(scan_frontier);
-                next_range = remaining_range_after(
-                    iter_range.clone(),
-                    scan_frontier,
-                    direction.is_ascending(),
-                );
+                next_range = if direction.is_ascending() {
+                    let remaining = scan_frontier.max(iter_range.start)..iter_range.end;
+                    (!remaining.is_empty()).then_some(remaining)
+                } else {
+                    remaining_range_after(iter_range.clone(), scan_frontier, false)
+                };
                 break;
             }
             // Cancelled stream → gRPC Cancelled status.
@@ -690,7 +692,7 @@ mod tests {
     }
 
     /// A `ScanLimit` terminal is a graceful chunk stop: the chunk-limit signal
-    /// is set and the continuation range is anchored past its bundled frontier.
+    /// is set and the continuation range is anchored at its bundled frontier.
     #[test]
     fn scan_limit_terminal_sets_continuation_range() {
         let state = drain(
@@ -703,7 +705,7 @@ mod tests {
         );
         assert!(state.chunk_scan_limit_reached);
         assert_eq!(state.coalesced_frontier, Some(25));
-        assert_eq!(state.next_range, Some(26..100));
+        assert_eq!(state.next_range, Some(25..100));
     }
 
     /// A `Fault` terminal (what a collapsed budget+fault aggregate becomes)
@@ -742,7 +744,7 @@ mod tests {
     }
 
     #[test]
-    fn budget_exceeded_anchors_resume_past_frontier_ascending() {
+    fn budget_exceeded_resumes_at_frontier_ascending() {
         let state = drain(
             vec![wm(10), wm(25), budget_exceeded(25)],
             None,
@@ -754,8 +756,8 @@ mod tests {
         assert!(state.chunk_scan_limit_reached);
         assert!(state.items.is_empty());
         assert_eq!(state.coalesced_frontier, Some(25));
-        // Resume strictly past the frontier, still within the scan range.
-        assert_eq!(state.next_range, Some(26..100));
+        // The evaluator frontier is the first unscanned position.
+        assert_eq!(state.next_range, Some(25..100));
         assert!(state.pending_bucket.is_none());
     }
 
@@ -776,6 +778,44 @@ mod tests {
     }
 
     #[test]
+    fn ascending_scan_limit_continuation_emits_frontier_bucket_edge_once() {
+        let stopped = drain(
+            vec![budget_exceeded(100)],
+            None,
+            Some(0..300),
+            100,
+            ScanDirection::Ascending,
+            10,
+        );
+        assert_eq!(stopped.next_range, Some(100..300));
+
+        let resumed = drain(
+            vec![hit(1, &[0])],
+            stopped.pending_bucket,
+            stopped.next_range,
+            100,
+            ScanDirection::Ascending,
+            10,
+        );
+        assert_eq!(resumed.items, vec![100]);
+        assert_eq!(resumed.items.iter().filter(|&&item| item == 100).count(), 1);
+    }
+
+    #[test]
+    fn ascending_scan_limit_frontier_at_numeric_end_is_safe() {
+        let state = drain(
+            vec![budget_exceeded(u64::MAX)],
+            None,
+            Some((u64::MAX - 1)..u64::MAX),
+            1,
+            ScanDirection::Ascending,
+            10,
+        );
+        assert_eq!(state.coalesced_frontier, Some(u64::MAX));
+        assert_eq!(state.next_range, None);
+    }
+
+    #[test]
     fn terminal_frontier_overrides_stale_beacon() {
         let state = drain(
             vec![wm(10), budget_exceeded(40)],
@@ -787,7 +827,7 @@ mod tests {
         );
         assert!(state.chunk_scan_limit_reached);
         assert_eq!(state.coalesced_frontier, Some(40));
-        assert_eq!(state.next_range, Some(41..100));
+        assert_eq!(state.next_range, Some(40..100));
     }
 
     #[test]
