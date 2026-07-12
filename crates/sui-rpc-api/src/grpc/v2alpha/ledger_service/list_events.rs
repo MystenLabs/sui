@@ -47,13 +47,11 @@ use super::event_scan::EventRef;
 use super::event_scan::drain_event_bitmap_hits;
 use super::event_scan::event_frontier_checkpoint;
 use super::event_scan::next_unfiltered_event_refs;
-use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
+use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
-use super::ledger_read::lowest_available_tx_seq;
-use super::ledger_read::tx_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -755,23 +753,12 @@ fn resolve_event_range(
     };
     resolved = options.apply_event_cursor_bounds(resolved);
     if !resolved.is_empty() {
-        let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
-        let floor = lowest_available_tx_seq(service)?;
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
             Bound::Unbounded => 0,
         };
-        let clamped_tx = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
-        if clamped_tx != start_tx {
-            resolved.bounds.lo = Bound::Included(EventPosition::start_of_tx(clamped_tx));
-            if options.is_ascending() {
-                resolved.entry_checkpoint = resolved
-                    .entry_checkpoint
-                    .max(tx_checkpoint(service, clamped_tx)?);
-            } else {
-                resolved.end_checkpoint = tx_checkpoint(service, clamped_tx)?;
-                resolved.end_position = EventPosition::start_of_tx(clamped_tx);
-            }
+        if let Some(fence) = clamp_to_serving_floor(service, start_tx, start_checkpoint, options)? {
+            resolved.apply_low_fence(fence.tx_seq, fence.checkpoint, options);
         }
     }
     Ok(resolved)

@@ -45,14 +45,12 @@ use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
 use super::chunked_scan::scan_limit_or_range;
-use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
+use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
-use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
-use super::ledger_read::tx_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -277,31 +275,31 @@ fn next_checkpoint_chunk(
             }
             let state = if let Some(query) = filter_query {
                 let mut tx_range = checkpoint_to_tx_range(&service, range)?;
-                if !tx_range.is_empty() {
-                    let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
-                    let floor = lowest_available_tx_seq(&service)?;
-                    let original_start = tx_range.start;
-                    let clamped = apply_tx_seq_floor(original_start, explicit_lower, floor)?;
-                    tx_range.start = clamped;
-                    if clamped != original_start {
-                        let floor_checkpoint = tx_checkpoint(&service, clamped)?;
-                        if options.is_ascending() {
-                            entry_checkpoint = entry_checkpoint.max(floor_checkpoint);
-                        } else {
-                            end_checkpoint = floor_checkpoint;
-                            end_position = floor_checkpoint;
-                        }
-                        // The clamp can consume the whole filtered span; then
-                        // nothing was actually scanned and natural completion
-                        // must not claim coverage.
-                        terminal = ScanTerminal::Range {
-                            exhaustion: cp_range.exhaustion,
-                            position: Position::Checkpoints {
-                                checkpoint: end_position,
-                            },
-                            interval_empty: tx_range.is_empty(),
-                        };
+                if !tx_range.is_empty()
+                    && let Some(fence) = clamp_to_serving_floor(
+                        &service,
+                        tx_range.start,
+                        start_checkpoint,
+                        &options,
+                    )?
+                {
+                    tx_range.start = fence.tx_seq;
+                    if options.is_ascending() {
+                        entry_checkpoint = entry_checkpoint.max(fence.checkpoint);
+                    } else {
+                        end_checkpoint = fence.checkpoint;
+                        end_position = fence.checkpoint;
                     }
+                    // The clamp can consume the whole filtered span; then
+                    // nothing was actually scanned and natural completion
+                    // must not claim coverage.
+                    terminal = ScanTerminal::Range {
+                        exhaustion: cp_range.exhaustion,
+                        position: Position::Checkpoints {
+                            checkpoint: end_position,
+                        },
+                        interval_empty: tx_range.is_empty(),
+                    };
                 }
                 if tx_range.is_empty() {
                     return Ok(CheckpointChunkDone {

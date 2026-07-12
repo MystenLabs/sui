@@ -565,6 +565,28 @@ impl ResolvedRange {
     pub fn is_empty(&self) -> bool {
         self.range.is_empty()
     }
+
+    /// Reconcile the interval and its watermark metadata after the backend
+    /// clamped the interval's low end to a serving fence (`fence_tx` = the
+    /// effective first scannable transaction, `fence_checkpoint` = its
+    /// containing checkpoint): the scan starts at the fence; an ascending
+    /// scan must not claim coverage below it (entry rises), and a descending
+    /// scan terminates at it (terminal pinned), so no watermark ever claims
+    /// unscanned history.
+    pub fn apply_low_fence(
+        &mut self,
+        fence_tx: u64,
+        fence_checkpoint: u64,
+        options: &QueryOptions,
+    ) {
+        self.range.start = fence_tx;
+        if options.is_ascending() {
+            self.entry_checkpoint = self.entry_checkpoint.max(fence_checkpoint);
+        } else {
+            self.end_checkpoint = fence_checkpoint;
+            self.end_position = fence_tx;
+        }
+    }
 }
 
 impl EventScanBounds {
@@ -643,6 +665,25 @@ impl ResolvedEventRange {
 
     pub fn is_empty(&self) -> bool {
         self.bounds.is_empty()
+    }
+
+    /// [`ResolvedRange::apply_low_fence`]'s analogue for event scans: the low
+    /// bound moves to the start of the fence transaction, ascending entry
+    /// rises to the fence checkpoint, and a descending terminal is pinned to
+    /// the fence.
+    pub fn apply_low_fence(
+        &mut self,
+        fence_tx: u64,
+        fence_checkpoint: u64,
+        options: &QueryOptions,
+    ) {
+        self.bounds.lo = Bound::Included(EventPosition::start_of_tx(fence_tx));
+        if options.is_ascending() {
+            self.entry_checkpoint = self.entry_checkpoint.max(fence_checkpoint);
+        } else {
+            self.end_checkpoint = fence_checkpoint;
+            self.end_position = EventPosition::start_of_tx(fence_tx);
+        }
     }
 }
 
