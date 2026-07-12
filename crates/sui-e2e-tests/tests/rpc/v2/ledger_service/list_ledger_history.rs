@@ -2321,6 +2321,15 @@ async fn test_list_checkpoints_read_masks_and_empty_range() {
     assert!(resp.checkpoints.is_empty());
     assert!(resp.end);
     assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
+    // Natural completion of an empty interval keeps its resume cursor but
+    // claims no checkpoint coverage ("unset until the scan's first checkpoint
+    // is fully covered").
+    let terminal_watermark = resp
+        .watermarks
+        .last()
+        .expect("empty-range terminal watermark");
+    assert!(terminal_watermark.cursor.is_some());
+    assert_eq!(terminal_watermark.checkpoint, None);
 
     let tx1 = transfer_self(&cluster, sender).await;
     let tx2 = transfer_self(&cluster, sender).await;

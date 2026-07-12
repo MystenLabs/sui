@@ -15,7 +15,8 @@ use crate::ledger_history::watermark::ScanTerminal;
 
 /// Chunk terminal for a scan that either exhausted its request scan budget
 /// (authoritative frontier watermark, built lazily) or ended at the resolved
-/// range boundary.
+/// range boundary. Chunks only run over nonempty intervals, so the range
+/// terminal is never `interval_empty`.
 pub(crate) fn scan_limit_or_range<Frontier>(
     request_scan_limit_reached: bool,
     exhaustion: RangeExhaustion,
@@ -33,6 +34,7 @@ where
         Ok(ScanTerminal::Range {
             exhaustion,
             position,
+            interval_empty: false,
         })
     }
 }
@@ -228,6 +230,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
+                        interval_empty: false,
                     },
                     remaining_scan_budget: scan_budget - 1,
                 })
@@ -248,6 +251,7 @@ mod tests {
                     checkpoint: 0,
                     tx_seq: 0
                 },
+                interval_empty: false,
             })
         );
         assert_eq!(
@@ -273,6 +277,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
+                        interval_empty: false,
                     },
                     remaining_scan_budget: args.scan_budget,
                 })

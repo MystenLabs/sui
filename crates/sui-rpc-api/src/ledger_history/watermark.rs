@@ -197,6 +197,12 @@ pub enum ScanTerminal {
     Range {
         exhaustion: RangeExhaustion,
         position: Position,
+        /// The resolved interval contained no scannable positions. Natural
+        /// completion of an empty interval covered nothing, so its terminal
+        /// claim stays unset (the proto contract keeps `checkpoint` unset
+        /// until the scan's first checkpoint is fully covered); the resume
+        /// cursor is unaffected.
+        interval_empty: bool,
     },
 }
 
@@ -209,11 +215,12 @@ impl ScanTerminal {
     }
 
     /// Render the trailing terminal frame's watermark. Natural completion
-    /// (LedgerTip/CheckpointBound) claims the range's final checkpoint via
-    /// `terminal_boundary_watermark` and ignores `covered_checkpoint_bound`
-    /// (the range claim is always at least as strong). A cursor bound never
-    /// claims its own checkpoint: its claim is exactly the accumulated
-    /// item coverage.
+    /// (LedgerTip/CheckpointBound) of a scanned interval claims the range's
+    /// final checkpoint via `terminal_boundary_watermark` and ignores
+    /// `covered_checkpoint_bound` (the range claim is always at least as
+    /// strong); an empty interval covered nothing and claims nothing. A
+    /// cursor bound never claims its own checkpoint: its claim is exactly
+    /// the accumulated item coverage.
     pub fn into_watermark(
         self,
         options: &QueryOptions,
@@ -224,10 +231,18 @@ impl ScanTerminal {
             Self::Range {
                 exhaustion: RangeExhaustion::LedgerTip | RangeExhaustion::CheckpointBound,
                 position,
-            } => terminal_boundary_watermark(options, position),
+                interval_empty,
+            } => {
+                if interval_empty {
+                    boundary_watermark(position, None)
+                } else {
+                    terminal_boundary_watermark(options, position)
+                }
+            }
             Self::Range {
                 exhaustion: RangeExhaustion::CursorBound { kind },
                 position,
+                interval_empty: _,
             } => cursor_watermark(position, covered_checkpoint_bound, kind),
         }
     }
@@ -407,6 +422,7 @@ mod tests {
         let checkpoint_bound = ScanTerminal::Range {
             exhaustion: RangeExhaustion::CheckpointBound,
             position,
+            interval_empty: false,
         };
         assert_eq!(checkpoint_bound.reason(), QueryEndReason::CheckpointBound);
         let watermark = checkpoint_bound.clone().into_watermark(&ascending, None);
@@ -425,6 +441,7 @@ mod tests {
         let ledger_tip = ScanTerminal::Range {
             exhaustion: RangeExhaustion::LedgerTip,
             position,
+            interval_empty: false,
         };
         assert_eq!(ledger_tip.reason(), QueryEndReason::LedgerTip);
         let watermark = ledger_tip.clone().into_watermark(&ascending, Some(6));
@@ -441,6 +458,40 @@ mod tests {
         assert_eq!(watermark.checkpoint, Some(9));
     }
 
+    /// Natural completion of an interval that resolved empty covered nothing:
+    /// the terminal cursor is unchanged but the checkpoint claim stays unset,
+    /// in both directions and for both natural reasons.
+    #[test]
+    fn scan_terminal_empty_natural_range_claims_nothing() {
+        let ascending = options(true);
+        let descending = options(false);
+        let position = Position::Transactions {
+            checkpoint: 9,
+            tx_seq: 4,
+        };
+
+        for exhaustion in [RangeExhaustion::CheckpointBound, RangeExhaustion::LedgerTip] {
+            let terminal = ScanTerminal::Range {
+                exhaustion,
+                position,
+                interval_empty: true,
+            };
+            assert_eq!(terminal.reason(), exhaustion.reason());
+            let watermark = terminal.clone().into_watermark(&ascending, None);
+            assert_eq!(
+                watermark.cursor,
+                Some(CursorToken::boundary(position).encode())
+            );
+            assert_eq!(watermark.checkpoint, None);
+            let watermark = terminal.into_watermark(&descending, None);
+            assert_eq!(
+                watermark.cursor,
+                Some(CursorToken::boundary(position).encode())
+            );
+            assert_eq!(watermark.checkpoint, None);
+        }
+    }
+
     #[test]
     fn scan_terminal_cursor_bound_preserves_coverage() {
         let ascending = options(true);
@@ -453,6 +504,7 @@ mod tests {
                 kind: CursorKind::Boundary,
             },
             position,
+            interval_empty: false,
         };
         assert_eq!(terminal.reason(), QueryEndReason::CursorBound);
 
@@ -484,6 +536,7 @@ mod tests {
                 kind: CursorKind::Item,
             },
             position,
+            interval_empty: false,
         };
         assert_eq!(terminal.reason(), QueryEndReason::CursorBound);
 

@@ -52,6 +52,7 @@ use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
+use super::ledger_read::tx_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -249,13 +250,17 @@ fn next_checkpoint_chunk(
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
-            let terminal = ScanTerminal::Range {
+            let interval_empty = cp_range.is_empty();
+            let mut end_checkpoint = cp_range.end_checkpoint;
+            let mut end_position = cp_range.end_position;
+            let mut terminal = ScanTerminal::Range {
                 exhaustion: cp_range.exhaustion,
                 position: Position::Checkpoints {
-                    checkpoint: cp_range.end_position,
+                    checkpoint: end_position,
                 },
+                interval_empty,
             };
-            let entry_checkpoint = if options.is_ascending() {
+            let mut entry_checkpoint = if options.is_ascending() {
                 cp_range.range.start
             } else {
                 cp_range.range.end.saturating_sub(1)
@@ -275,7 +280,28 @@ fn next_checkpoint_chunk(
                 if !tx_range.is_empty() {
                     let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
                     let floor = lowest_available_tx_seq(&service)?;
-                    tx_range.start = apply_tx_seq_floor(tx_range.start, explicit_lower, floor)?;
+                    let original_start = tx_range.start;
+                    let clamped = apply_tx_seq_floor(original_start, explicit_lower, floor)?;
+                    tx_range.start = clamped;
+                    if clamped != original_start {
+                        let floor_checkpoint = tx_checkpoint(&service, clamped)?;
+                        if options.is_ascending() {
+                            entry_checkpoint = entry_checkpoint.max(floor_checkpoint);
+                        } else {
+                            end_checkpoint = floor_checkpoint;
+                            end_position = floor_checkpoint;
+                        }
+                        // The clamp can consume the whole filtered span; then
+                        // nothing was actually scanned and natural completion
+                        // must not claim coverage.
+                        terminal = ScanTerminal::Range {
+                            exhaustion: cp_range.exhaustion,
+                            position: Position::Checkpoints {
+                                checkpoint: end_position,
+                            },
+                            interval_empty: tx_range.is_empty(),
+                        };
+                    }
                 }
                 if tx_range.is_empty() {
                     return Ok(CheckpointChunkDone {
@@ -295,15 +321,15 @@ fn next_checkpoint_chunk(
                     covered_checkpoint_bound: None,
                     entry_checkpoint,
                     exhaustion: cp_range.exhaustion,
-                    end_checkpoint: cp_range.end_checkpoint,
-                    end_position: cp_range.end_position,
+                    end_checkpoint,
+                    end_position,
                 }
             } else {
                 CheckpointScanState::Unfiltered {
                     range,
                     exhaustion: cp_range.exhaustion,
-                    end_checkpoint: cp_range.end_checkpoint,
-                    end_position: cp_range.end_position,
+                    end_checkpoint,
+                    end_position,
                 }
             };
             next_checkpoint_chunk(
@@ -406,6 +432,7 @@ fn next_unfiltered_checkpoint_chunk(
             position: Position::Checkpoints {
                 checkpoint: end_position,
             },
+            interval_empty: false,
         },
         remaining_scan_budget: scan_budget,
     })

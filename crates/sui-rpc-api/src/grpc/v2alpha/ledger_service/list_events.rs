@@ -53,6 +53,7 @@ use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
+use super::ledger_read::tx_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -268,6 +269,7 @@ fn next_event_chunk(
             let terminal = ScanTerminal::Range {
                 exhaustion: event_range.exhaustion,
                 position: terminal_position,
+                interval_empty: event_range.is_empty(),
             };
             let bounds = event_range.bounds;
             if event_range.is_empty() {
@@ -762,6 +764,14 @@ fn resolve_event_range(
         let clamped_tx = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
         if clamped_tx != start_tx {
             resolved.bounds.lo = Bound::Included(EventPosition::start_of_tx(clamped_tx));
+            if options.is_ascending() {
+                resolved.entry_checkpoint = resolved
+                    .entry_checkpoint
+                    .max(tx_checkpoint(service, clamped_tx)?);
+            } else {
+                resolved.end_checkpoint = tx_checkpoint(service, clamped_tx)?;
+                resolved.end_position = EventPosition::start_of_tx(clamped_tx);
+            }
         }
     }
     Ok(resolved)

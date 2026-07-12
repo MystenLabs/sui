@@ -57,6 +57,7 @@ use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
+use super::ledger_read::tx_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
 
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
@@ -261,6 +262,7 @@ fn next_transaction_chunk(
                         checkpoint: tx_range.end_checkpoint,
                         tx_seq: tx_range.end_position,
                     },
+                    interval_empty: tx_range.is_empty(),
                 };
                 let range = tx_range.range;
                 if range.is_empty() {
@@ -317,6 +319,7 @@ fn next_transaction_chunk(
                         checkpoint: end_checkpoint,
                         tx_seq: end_position,
                     },
+                    interval_empty: false,
                 };
                 break (rows, next_state, terminal, None, entry_checkpoint);
             }
@@ -607,7 +610,19 @@ fn resolve_tx_range(
     if !resolved.range.is_empty() {
         let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
         let floor = lowest_available_tx_seq(service)?;
-        resolved.range.start = apply_tx_seq_floor(resolved.range.start, explicit_lower, floor)?;
+        let original_start = resolved.range.start;
+        let clamped = apply_tx_seq_floor(original_start, explicit_lower, floor)?;
+        if clamped != original_start {
+            if options.is_ascending() {
+                resolved.entry_checkpoint = resolved
+                    .entry_checkpoint
+                    .max(tx_checkpoint(service, clamped)?);
+            } else {
+                resolved.end_checkpoint = tx_checkpoint(service, clamped)?;
+                resolved.end_position = clamped;
+            }
+        }
+        resolved.range.start = clamped;
     }
     Ok(resolved)
 }
@@ -782,6 +797,7 @@ mod tests {
                                 checkpoint: 8,
                                 tx_seq: 42,
                             },
+                            interval_empty: false,
                         },
                         remaining_scan_budget: args.scan_budget,
                     })

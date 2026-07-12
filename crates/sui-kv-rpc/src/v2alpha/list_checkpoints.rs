@@ -128,8 +128,8 @@ pub(crate) async fn list_checkpoints(
             elapsed_ms = started.elapsed().as_millis(),
             "list_checkpoints: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor. Natural
-        // completion may claim the final checkpoint; a cursor bound may not.
+        // Empty resolved ranges still surface their terminal cursor, but
+        // natural completion claims no checkpoint coverage.
         return Ok(stream::iter([Ok(range_end_response(
             &options,
             exhaustion,
@@ -137,6 +137,7 @@ pub(crate) async fn list_checkpoints(
                 checkpoint: range_end_position,
             },
             None,
+            true,
         )
         .0)])
         .boxed());
@@ -258,6 +259,7 @@ pub(crate) async fn list_checkpoints(
                         checkpoint: range_end_position,
                     },
                     covered_checkpoint_bound,
+                    false,
                 );
                 yield response;
                 break reason;
@@ -526,16 +528,19 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpoints
 }
 
 /// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree.
+/// from one `ScanTerminal`, so they cannot disagree; natural completion of an
+/// empty interval retains its cursor but claims no checkpoint coverage.
 fn range_end_response(
     options: &QueryOptions,
     exhaustion: RangeExhaustion,
     position: Position,
     covered_checkpoint_bound: Option<u64>,
+    interval_empty: bool,
 ) -> (ListCheckpointsResponse, QueryEndReason) {
     let terminal = ScanTerminal::Range {
         exhaustion,
         position,
+        interval_empty,
     };
     let reason = terminal.reason();
     (
