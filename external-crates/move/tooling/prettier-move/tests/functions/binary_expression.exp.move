@@ -28,7 +28,9 @@ module prettier::binary_expression {
             bytes[3] == ASCII_T &&
             bytes[4] == ASCII_O &&
             bytes[5] == ASCII_R)
-        ) {};
+        ) {
+            // do something
+        };
 
         return a < b && b < c && (d > e && e > f) && g <= h && h <= i && j >= k && k >= l && m == n && n == o && p != q && q != r;
 

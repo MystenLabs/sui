@@ -912,38 +912,52 @@ impl TestCluster {
 
             // The embedded rpc-store indexes asynchronously, decoupled from
             // checkpoint execution, so a settled transaction is not yet visible
-            // through the index surface (owned objects, balances). Wait for the
-            // live cohort to catch up so a subsequent index read observes it.
-            Self::wait_for_rpc_index_on_handle(handle, max_checkpoint_seq).await;
+            // through the live index surface (owned objects, balances). Wait
+            // for the live cohort to catch up so subsequent index reads
+            // observe it.
+            Self::wait_for_rpc_index_on_handle(handle, max_checkpoint_seq, false).await;
         });
         join_all(waits).await;
     }
 
-    /// Wait until the embedded rpc-store on `handle` has indexed (live cohort)
-    /// through `checkpoint`. No-op for a node without an embedded store (a
-    /// validator, or a fullnode with indexing disabled).
+    /// Wait until the embedded rpc-store on `handle` has indexed through
+    /// `checkpoint`. No-op for a node without an embedded store (a validator,
+    /// or a fullnode with indexing disabled).
     ///
     /// Unlike the legacy synchronous `rpc-index`, the embedded indexer follows
     /// the tip asynchronously and is not a blocker for checkpoint execution, so
     /// reads of the index surface must wait for it explicitly.
-    async fn wait_for_rpc_index_on_handle(handle: &SuiNodeHandle, checkpoint: u64) {
+    async fn wait_for_rpc_index_on_handle(
+        handle: &SuiNodeHandle,
+        checkpoint: u64,
+        wait_for_history: bool,
+    ) {
         // Skip nodes without an embedded index; there is nothing to wait for.
         if handle.with(|node| node.embedded_rpc_store().is_none()) {
             return;
         }
         let deadline = Instant::now() + Duration::from_secs(60);
         loop {
-            let committed = handle.with(|node| {
+            let (live_committed, history_committed) = handle.with(|node| {
                 node.embedded_rpc_store()
-                    .and_then(|embedded| embedded.live_committed_checkpoint())
+                    .map(|embedded| {
+                        (
+                            embedded.live_committed_checkpoint(),
+                            embedded.history_committed_checkpoint(),
+                        )
+                    })
+                    .unwrap_or((None, None))
             });
-            if committed.is_some_and(|c| c >= checkpoint) {
+            if live_committed.is_some_and(|c| c >= checkpoint)
+                && (!wait_for_history || history_committed.is_some_and(|c| c >= checkpoint))
+            {
                 return;
             }
             assert!(
                 Instant::now() < deadline,
                 "timed out waiting for the embedded rpc-store to index checkpoint \
-                 {checkpoint} (live committed = {committed:?})",
+                 {checkpoint} (live committed = {live_committed:?}, \
+                 history committed = {history_committed:?})",
             );
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
@@ -951,9 +965,8 @@ impl TestCluster {
 
     /// Wait until the rpc fullnode's embedded rpc-store has indexed through its
     /// current highest executed checkpoint. Call after building the cluster so
-    /// the genesis-funded object set is queryable through the index surface
-    /// before tests issue their first index reads (e.g. listing owned gas
-    /// objects). No-op when the fullnode has indexing disabled.
+    /// genesis data is queryable through index surfaces before tests issue
+    /// their first index reads. No-op when the fullnode has indexing disabled.
     pub async fn wait_for_rpc_index_ready(&self) {
         let handle = &self.fullnode_handle.sui_node;
         let highest_executed = handle.with(|node| {
@@ -963,7 +976,7 @@ impl TestCluster {
                 .expect("db error")
                 .unwrap_or(0)
         });
-        Self::wait_for_rpc_index_on_handle(handle, highest_executed).await;
+        Self::wait_for_rpc_index_on_handle(handle, highest_executed, true).await;
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
@@ -1615,10 +1628,9 @@ impl TestClusterBuilder {
             fullnode_handle,
         };
 
-        // The embedded rpc-store indexes the tip asynchronously, so the genesis
-        // object set is not queryable through the index surface the instant the
-        // node is up. Wait for it before handing the cluster to tests, whose
-        // first reads typically list owned gas objects through the index.
+        // The embedded rpc-store indexes the tip asynchronously, so genesis
+        // data is not queryable through every index surface the instant the node
+        // is up. Wait for it before handing the cluster to tests.
         cluster.wait_for_rpc_index_ready().await;
 
         cluster

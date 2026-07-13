@@ -1651,7 +1651,6 @@ impl SuiNode {
                 consensus_adapter.clone(),
                 Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
                 overload_config.admission_queue_capacity_fraction,
-                overload_config.admission_queue_bypass_fraction,
                 overload_config.admission_queue_failover_timeout,
                 inflight_slot_freed_notify,
             ));
@@ -2696,8 +2695,18 @@ async fn build_http_servers(
     // index so a client that waits for a checkpoint can immediately read its
     // indexed state (matching the legacy synchronously-committed index).
     let indexed_checkpoint = embedded_rpc_store.map(|embedded| embedded.indexed_checkpoint_fn());
+    let subscription_watermark_interval = config
+        .rpc
+        .as_ref()
+        .and_then(|rpc| rpc.subscription_watermark_interval);
+    let subscription_shards = config.rpc.as_ref().and_then(|rpc| rpc.subscription_shards);
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
-        SubscriptionService::build(prometheus_registry, indexed_checkpoint);
+        SubscriptionService::build(
+            prometheus_registry,
+            indexed_checkpoint,
+            subscription_watermark_interval,
+            subscription_shards,
+        );
     let rpc_router = {
         // Serve the index read paths from the embedded rpc-store when it
         // is enabled. Raw chain data comes from the perpetual / checkpoint
@@ -2752,9 +2761,10 @@ async fn build_http_servers(
         .rpc()
         .and_then(|config| config.tls_config().map(|tls| (tls, config.https_address())))
     {
+        let tls_server_config = https_rustls_config(tls_config.cert(), tls_config.key())?;
         let https = sui_http::Builder::new()
-            .tls_single_cert(tls_config.cert(), tls_config.key())
-            .and_then(|builder| builder.serve(https_address, router.clone()))
+            .tls_config(tls_server_config)
+            .serve(https_address, router.clone())
             .map_err(|e| anyhow::anyhow!(e))?;
 
         info!(
@@ -2785,6 +2795,33 @@ async fn build_http_servers(
         },
         Some(subscription_service_checkpoint_sender),
     ))
+}
+
+/// Builds the HTTPS RPC server's rustls config from PEM files, pinning the
+/// ring crypto provider.
+///
+/// `sui_http::Builder::tls_single_cert` resolves the provider from rustls
+/// crate features and panics at runtime when more than one provider feature is
+/// enabled in the final binary (e.g. `aws-lc-rs` is pulled in through
+/// `aws-config` in the `sui` CLI), so the provider is pinned explicitly here
+/// instead.
+fn https_rustls_config(cert: &str, key: &str) -> Result<sui_http::rustls::ServerConfig> {
+    use sui_http::rustls;
+    use sui_http::rustls::pki_types::pem::PemObject;
+
+    let certs = rustls::pki_types::CertificateDer::pem_file_iter(cert)
+        .with_context(|| format!("failed to read TLS certificate chain from {cert}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .with_context(|| format!("failed to parse TLS certificate chain from {cert}"))?;
+    let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(key)
+        .with_context(|| format!("failed to read TLS private key from {key}"))?;
+    let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_protocol_versions(rustls::DEFAULT_VERSIONS)?
+    .with_no_client_auth()
+    .with_single_cert(certs, private_key)?;
+    Ok(config)
 }
 
 #[derive(Default)]

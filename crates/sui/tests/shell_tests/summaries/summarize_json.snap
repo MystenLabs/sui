@@ -1,6 +1,5 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-assertion_line: 112
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -85,6 +84,7 @@ prover.json
 random.json
 rangeproofs.json
 ristretto255.json
+scratch.json
 sui.json
 table.json
 table_vec.json

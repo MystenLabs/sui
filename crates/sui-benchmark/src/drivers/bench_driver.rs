@@ -55,7 +55,7 @@ use tokio::{time, time::Instant};
 use tracing::{debug, error, info, warn};
 
 use super::Interval;
-use super::{BenchmarkStats, StressStats};
+use super::{BenchmarkStats, StressStats, SubmissionAmplification};
 
 /// Randomly partitions a list of transactions into groups for soft bundle submission.
 /// Each group will be submitted as a separate soft bundle.
@@ -257,6 +257,7 @@ pub struct BenchWorker {
     pub execution_proxy: Arc<dyn ValidatorProxy + Send + Sync>,
     pub group: u32,
     pub duration: Interval,
+    pub submission_amplification: SubmissionAmplification,
 }
 
 impl Debug for BenchWorker {
@@ -349,6 +350,7 @@ impl BenchDriver {
                     execution_proxy: execution_proxy.clone(),
                     group: workload_info.workload_params.group,
                     duration: workload_info.workload_params.duration,
+                    submission_amplification: workload_info.submission_amplification,
                 });
                 payloads = remaining;
                 qps -= target_qps;
@@ -1117,18 +1119,16 @@ async fn run_bench_worker(
                         // TODO: clone committee for each request is not ideal.
                         let committee = worker.execution_proxy.clone_committee();
 
-                        // Occasionally submit to multiple validators to test unpaid amplification deferral.
-                        // With 5% probability, submit to 3 to N validators to trigger deferral logic.
-                        let use_amplification = rand::thread_rng().gen_bool(0.05);
-                        let committee_size = committee.num_members();
+                        let submission_amplification = worker.submission_amplification;
                         let proxy = worker.execution_proxy.clone_new();
                         let res = async move {
-                            let res = if use_amplification {
-                                // Cap at 5 validators to limit amplification traffic and reduce latency impact
-                                let max_validators = committee_size.min(5);
-                                let min_validators = 3.min(max_validators);
-                                let num_validators = rand::thread_rng().gen_range(min_validators..=max_validators);
-                                proxy.execute_transaction_block_with_amplification(tx.clone(), num_validators).await
+                            let res = if submission_amplification.is_enabled() {
+                                proxy
+                                    .execute_transaction_block_with_submission_amplification(
+                                        tx.clone(),
+                                        submission_amplification,
+                                    )
+                                    .await
                             } else {
                                 proxy.execute_transaction_block(tx.clone()).await
                             };

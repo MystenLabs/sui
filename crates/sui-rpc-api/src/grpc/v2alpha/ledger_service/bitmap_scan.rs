@@ -8,10 +8,10 @@ use std::rc::Rc;
 use roaring::RoaringBitmap;
 use sui_inverted_index::BitmapBucketIteratorSource;
 use sui_inverted_index::BitmapQuery;
-use sui_inverted_index::BitmapScanError;
-use sui_inverted_index::BitmapScanResult;
 use sui_inverted_index::IndexDimension;
+use sui_inverted_index::LeafStop;
 use sui_inverted_index::ScanDirection;
+use sui_inverted_index::ScanStop;
 use sui_inverted_index::Watermarked;
 use sui_inverted_index::dense_universe_buckets;
 use sui_inverted_index::eval_bitmap_query_bucket_iter;
@@ -46,9 +46,10 @@ pub(super) struct DrainedBitmapHits {
     /// caller resolves it to a checkpoint and emits a scan watermark only
     /// when the chunk produced no items — item chunks carry their own watermark.
     pub(super) coalesced_frontier: Option<u64>,
-    /// The per-request bucket-scan budget was exhausted: the query stops with
-    /// `ScanLimit` rather than continuing.
-    pub(super) scan_limit_hit: bool,
+    /// The evaluator exhausted the scan budget supplied for this chunk. The
+    /// caller decides whether the request budget is also exhausted or another
+    /// chunk should continue scanning.
+    pub(super) chunk_scan_limit_reached: bool,
 }
 
 /// Evaluated bitmap state carried between blocking chunks.
@@ -170,7 +171,7 @@ pub(super) fn drain_bitmap_hits_with_budget(
             next_range: range,
             buckets_scanned: 0,
             coalesced_frontier: None,
-            scan_limit_hit: false,
+            chunk_scan_limit_reached: false,
         });
     }
 
@@ -204,13 +205,13 @@ pub(super) fn drain_bitmap_hits_with_budget(
         next_range: state.next_range,
         buckets_scanned: scan_budget_start - scan_budget.remaining(),
         coalesced_frontier: state.coalesced_frontier,
-        scan_limit_hit: state.scan_limit_hit,
+        chunk_scan_limit_reached: state.chunk_scan_limit_reached,
     })
 }
 
 /// Item type of the iterative bitmap evaluator: a matching bucket, a progress
-/// watermark, or a terminal [`BitmapScanError`].
-type WatermarkedBucketItem = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>;
+/// watermark, or a terminal [`ScanStop`].
+type WatermarkedBucketItem = Result<Watermarked<(u64, RoaringBitmap)>, ScanStop>;
 
 /// Loop state from draining a watermarked-bucket iterator, independent of budget
 /// accounting (the caller adds `buckets_scanned` from its `BitmapScanBudget`).
@@ -219,17 +220,17 @@ struct DrainLoopState {
     pending_bucket: Option<PendingBitmapBucket>,
     next_range: Option<Range<u64>>,
     coalesced_frontier: Option<u64>,
-    scan_limit_hit: bool,
+    chunk_scan_limit_reached: bool,
 }
 
 /// Drain matching member ids until `hit_limit` items, the iterator ends, or it
-/// signals [`BitmapScanError::ScanLimit`]. `open_iter` builds the iterator over
-/// a scan range and is invoked at most once, lazily — only when a fresh scan
-/// beyond `pending_bucket` is needed — so resuming a dense pending bucket never
-/// opens a RocksDB iterator. On scan-limit exhaustion the resume range is
-/// anchored past the coalesced frontier; the caller decides whether that is the
-/// per-request cap (terminal `ScanLimit`) or a per-chunk cap (resume in the next
-/// chunk).
+/// signals [`ScanStop::ScanLimit`]. `open_iter` builds the iterator over a scan
+/// range and is invoked at most once, lazily — only when a fresh scan beyond
+/// `pending_bucket` is needed — so resuming a dense pending bucket never opens
+/// a RocksDB iterator. Ascending evaluator frontiers are the first unscanned
+/// position and remain inclusive; descending frontiers retain their existing
+/// exclusive upper-bound semantics. The caller decides whether a scan-limit
+/// stop is the per-request cap or a per-chunk cap.
 fn drain_watermarked_buckets<I>(
     open_iter: impl FnOnce(Range<u64>) -> I,
     mut pending_bucket: Option<PendingBitmapBucket>,
@@ -249,7 +250,7 @@ where
     // Furthest progress watermark seen this chunk. The evaluator emits watermarks
     // monotonically in scan direction, so last-seen is furthest.
     let mut coalesced_frontier: Option<u64> = None;
-    let mut scan_limit_hit = false;
+    let mut chunk_scan_limit_reached = false;
     while out.len() < hit_limit {
         if cancel.is_cancelled() {
             return Err(cancelled());
@@ -294,28 +295,32 @@ where
             Some(Ok(Watermarked::Watermark(pos))) => {
                 coalesced_frontier = Some(pos);
             }
-            Some(Err(BitmapScanError::ScanLimit)) => {
-                // Scan-limit is a graceful stop, not an error: the evaluator
-                // emits the frontier watermark before the error, so
-                // `coalesced_frontier` already holds the resume point. Anchor the
-                // resume range past the frontier; the caller decides whether this
-                // is the per-request cap (terminal `ScanLimit`) or a per-chunk cap
-                // (resume here in the next chunk).
-                scan_limit_hit = true;
-                next_range = coalesced_frontier.and_then(|f| {
-                    remaining_range_after(iter_range.clone(), f, direction.is_ascending())
-                });
+            Some(Err(ScanStop::ScanLimit { scan_frontier })) => {
+                // Budget stop: the terminal carries the merged resume frontier
+                // (the exact value the stopping round's beacon would have held).
+                // Fold it into the chunk frontier. In ascending scans this is
+                // the first unscanned position, so resume inclusively without
+                // item-consumption's `+ 1`. Descending continuation remains
+                // strictly below the frontier.
+                chunk_scan_limit_reached = true;
+                coalesced_frontier = Some(scan_frontier);
+                next_range = if direction.is_ascending() {
+                    let remaining = scan_frontier.max(iter_range.start)..iter_range.end;
+                    (!remaining.is_empty()).then_some(remaining)
+                } else {
+                    remaining_range_after(iter_range.clone(), scan_frontier, false)
+                };
                 break;
             }
             // Cancelled stream → gRPC Cancelled status.
-            Some(Err(BitmapScanError::Cancelled)) => {
+            Some(Err(ScanStop::Cancelled)) => {
                 return Err(RpcError::new(
                     tonic::Code::Cancelled,
-                    BitmapScanError::Cancelled.to_string(),
+                    ScanStop::Cancelled.to_string(),
                 ));
             }
             // Genuine fault → gRPC Internal, carrying the error unchanged.
-            Some(Err(BitmapScanError::Source(inner))) => {
+            Some(Err(ScanStop::Fault(inner))) => {
                 return Err(RpcError::new(tonic::Code::Internal, inner.to_string()));
             }
             None => {
@@ -329,7 +334,7 @@ where
         pending_bucket,
         next_range,
         coalesced_frontier,
-        scan_limit_hit,
+        chunk_scan_limit_reached,
     })
 }
 
@@ -382,7 +387,7 @@ struct RpcIndexesBitmapIterator<'a> {
     cancel: CancellationToken,
     iter: Option<BitmapBucketIter<'a>>,
     finished: bool,
-    initial_error: Option<BitmapScanError>,
+    initial_error: Option<LeafStop>,
     /// This leaf has not yet charged a bucket. Its first bucket is reserved
     /// (always allowed) so every leaf emits its first watermark; see
     /// [`BitmapScanBudget::take_first`].
@@ -470,10 +475,10 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
         }
     }
 
-    fn read_next_bucket(&mut self) -> Option<BitmapScanResult<(u64, RoaringBitmap)>> {
+    fn read_next_bucket(&mut self) -> Option<Result<(u64, RoaringBitmap), LeafStop>> {
         if self.cancel.is_cancelled() {
             self.finished = true;
-            return Some(Err(BitmapScanError::Cancelled));
+            return Some(Err(LeafStop::Cancelled));
         }
         let Some(iter) = self.iter.as_mut() else {
             self.finished = true;
@@ -483,7 +488,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
         let next = match iter {
             BitmapBucketIter::Stored(iter) => match iter.next() {
                 Some(Ok(bucket)) => Some(Ok((bucket.bucket_id, bucket.bitmap))),
-                Some(Err(e)) => Some(Err(BitmapScanError::Source(anyhow::anyhow!(e.to_string())))),
+                Some(Err(e)) => Some(Err(LeafStop::Fault(anyhow::anyhow!(e.to_string())))),
                 None => None,
             },
             BitmapBucketIter::Universe(iter) => iter.next().map(Ok),
@@ -494,9 +499,9 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
                     // Reserved: a leaf's first bucket is always allowed so it
                     // emits its first watermark even if sibling leaves already
                     // drained the shared budget. Without it a starved leaf
-                    // never reports a watermark, its merge slot stays `None`,
-                    // and the scan ends with a cursorless `ScanLimit` — a
-                    // client livelock. See [`BitmapScanBudget::take_first`].
+                    // never reports a position, leaving the merged floor pinned
+                    // to the request bound and risking a resume loop. See
+                    // [`BitmapScanBudget::take_first`].
                     self.scan_budget.take_first();
                     self.first = false;
                 } else if let Err(e) = self.scan_budget.take_one() {
@@ -518,7 +523,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
 }
 
 impl Iterator for RpcIndexesBitmapIterator<'_> {
-    type Item = BitmapScanResult<(u64, RoaringBitmap)>;
+    type Item = Result<(u64, RoaringBitmap), LeafStop>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(e) = self.initial_error.take() {
@@ -545,10 +550,10 @@ impl BitmapScanBudget {
         }
     }
 
-    fn take_one(&self) -> BitmapScanResult<()> {
+    fn take_one(&self) -> Result<(), LeafStop> {
         let remaining = self.remaining.get();
         if remaining == 0 {
-            return Err(BitmapScanError::ScanLimit);
+            return Err(LeafStop::BudgetExhausted);
         }
         self.remaining.set(remaining - 1);
         Ok(())
@@ -638,10 +643,12 @@ mod tests {
         Ok(Watermarked::Item((bucket_id, bitmap(bits))))
     }
 
-    /// A budget-exhausted leaf: the evaluator collapses per-leaf exhaustion to
-    /// `BitmapScanError::ScanLimit` before the drain ever sees it.
-    fn budget_exceeded() -> WatermarkedBucketItem {
-        Err(BitmapScanError::ScanLimit)
+    /// A budget-stop terminal as the merged evaluator emits it: the merged
+    /// terminal always carries its frontier.
+    fn budget_exceeded(frontier: u64) -> WatermarkedBucketItem {
+        Err(ScanStop::ScanLimit {
+            scan_frontier: frontier,
+        })
     }
 
     fn drain(
@@ -684,32 +691,31 @@ mod tests {
         )
     }
 
-    /// A `ScanLimit` terminal (after a frontier watermark) is a graceful stop:
-    /// `scan_limit_hit` is set and the continuation range is anchored strictly
-    /// past the coalesced frontier — never a cursorless terminal.
+    /// A `ScanLimit` terminal is a graceful chunk stop: the chunk-limit signal
+    /// is set and the continuation range is anchored at its bundled frontier.
     #[test]
     fn scan_limit_terminal_sets_continuation_range() {
         let state = drain(
-            vec![wm(10), wm(25), Err(BitmapScanError::ScanLimit)],
+            vec![budget_exceeded(25)],
             None,
             Some(0..100),
             1,
             ScanDirection::Ascending,
             10,
         );
-        assert!(state.scan_limit_hit);
+        assert!(state.chunk_scan_limit_reached);
         assert_eq!(state.coalesced_frontier, Some(25));
-        assert_eq!(state.next_range, Some(26..100));
+        assert_eq!(state.next_range, Some(25..100));
     }
 
-    /// A `Source` fault (what a collapsed budget+fault aggregate becomes) must
-    /// surface as `Internal`, never masked as a clean `ScanLimit` end.
+    /// A `Fault` terminal (what a collapsed budget+fault aggregate becomes)
+    /// must surface as `Internal`, never masked as a clean `ScanLimit` end.
     #[test]
-    fn source_fault_terminal_is_internal() {
+    fn fault_terminal_is_internal() {
         let err = drain_result(
             vec![
                 wm(10),
-                Err(BitmapScanError::Source(anyhow::anyhow!("storage boom"))),
+                Err(ScanStop::Fault(anyhow::anyhow!("storage boom"))),
             ],
             Some(0..100),
             1,
@@ -717,7 +723,7 @@ mod tests {
             10,
         )
         .err()
-        .expect("source fault must error");
+        .expect("fault must error");
         assert_eq!(tonic::Status::from(err).code(), tonic::Code::Internal);
     }
 
@@ -726,7 +732,7 @@ mod tests {
     #[test]
     fn cancelled_terminal_is_cancelled() {
         let err = drain_result(
-            vec![wm(10), Err(BitmapScanError::Cancelled)],
+            vec![wm(10), Err(ScanStop::Cancelled)],
             Some(0..100),
             1,
             ScanDirection::Ascending,
@@ -738,54 +744,90 @@ mod tests {
     }
 
     #[test]
-    fn budget_exceeded_anchors_resume_past_frontier_ascending() {
+    fn budget_exceeded_resumes_at_frontier_ascending() {
         let state = drain(
-            vec![wm(10), wm(25), budget_exceeded()],
+            vec![wm(10), wm(25), budget_exceeded(25)],
             None,
             Some(0..100),
             1,
             ScanDirection::Ascending,
             10,
         );
-        assert!(state.scan_limit_hit);
+        assert!(state.chunk_scan_limit_reached);
         assert!(state.items.is_empty());
         assert_eq!(state.coalesced_frontier, Some(25));
-        // Resume strictly past the frontier, still within the scan range.
-        assert_eq!(state.next_range, Some(26..100));
+        // The evaluator frontier is the first unscanned position.
+        assert_eq!(state.next_range, Some(25..100));
         assert!(state.pending_bucket.is_none());
     }
 
     #[test]
     fn budget_exceeded_anchors_resume_past_frontier_descending() {
         let state = drain(
-            vec![wm(80), wm(40), budget_exceeded()],
+            vec![wm(80), wm(40), budget_exceeded(40)],
             None,
             Some(0..100),
             1,
             ScanDirection::Descending,
             10,
         );
-        assert!(state.scan_limit_hit);
+        assert!(state.chunk_scan_limit_reached);
         assert_eq!(state.coalesced_frontier, Some(40));
         // Descending resume is the range below the frontier (exclusive).
         assert_eq!(state.next_range, Some(0..40));
     }
 
     #[test]
-    fn budget_exceeded_without_frontier_leaves_no_resume_range() {
-        // No watermark before exhaustion: nothing to resume from, so the caller
-        // must treat this as terminal rather than re-scan the same range.
+    fn ascending_scan_limit_continuation_emits_frontier_bucket_edge_once() {
+        let stopped = drain(
+            vec![budget_exceeded(100)],
+            None,
+            Some(0..300),
+            100,
+            ScanDirection::Ascending,
+            10,
+        );
+        assert_eq!(stopped.next_range, Some(100..300));
+
+        let resumed = drain(
+            vec![hit(1, &[0])],
+            stopped.pending_bucket,
+            stopped.next_range,
+            100,
+            ScanDirection::Ascending,
+            10,
+        );
+        assert_eq!(resumed.items, vec![100]);
+        assert_eq!(resumed.items.iter().filter(|&&item| item == 100).count(), 1);
+    }
+
+    #[test]
+    fn ascending_scan_limit_frontier_at_numeric_end_is_safe() {
         let state = drain(
-            vec![budget_exceeded()],
+            vec![budget_exceeded(u64::MAX)],
+            None,
+            Some((u64::MAX - 1)..u64::MAX),
+            1,
+            ScanDirection::Ascending,
+            10,
+        );
+        assert_eq!(state.coalesced_frontier, Some(u64::MAX));
+        assert_eq!(state.next_range, None);
+    }
+
+    #[test]
+    fn terminal_frontier_overrides_stale_beacon() {
+        let state = drain(
+            vec![wm(10), budget_exceeded(40)],
             None,
             Some(0..100),
             1,
             ScanDirection::Ascending,
             10,
         );
-        assert!(state.scan_limit_hit);
-        assert_eq!(state.coalesced_frontier, None);
-        assert_eq!(state.next_range, None);
+        assert!(state.chunk_scan_limit_reached);
+        assert_eq!(state.coalesced_frontier, Some(40));
+        assert_eq!(state.next_range, Some(40..100));
     }
 
     #[test]
@@ -798,7 +840,7 @@ mod tests {
             ScanDirection::Ascending,
             10,
         );
-        assert!(!state.scan_limit_hit);
+        assert!(!state.chunk_scan_limit_reached);
         assert_eq!(state.items, vec![1, 3, 5]);
         assert_eq!(state.next_range, None);
         assert!(state.pending_bucket.is_none());
@@ -816,7 +858,7 @@ mod tests {
             ScanDirection::Ascending,
             2,
         );
-        assert!(!state.scan_limit_hit);
+        assert!(!state.chunk_scan_limit_reached);
         assert_eq!(state.items, vec![1, 3]);
         assert!(state.pending_bucket.is_some());
     }

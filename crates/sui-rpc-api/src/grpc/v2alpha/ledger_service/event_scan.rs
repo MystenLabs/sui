@@ -34,14 +34,14 @@ pub(super) struct DrainedEventHits {
     pub(super) next_bounds: Option<EventScanBounds>,
     pub(super) buckets_scanned: usize,
     pub(super) frontier: Option<EventPosition>,
-    pub(super) scan_limit_hit: bool,
+    pub(super) chunk_scan_limit_reached: bool,
 }
 
 pub(super) struct UnfilteredScan {
     pub(super) refs: Vec<EventRef>,
     pub(super) next_bounds: Option<EventScanBounds>,
     pub(super) rows_scanned: usize,
-    pub(super) scan_limit_hit: bool,
+    pub(super) row_limit_reached: bool,
     pub(super) frontier: Option<EventPosition>,
 }
 
@@ -88,7 +88,7 @@ pub(super) fn drain_event_bitmap_hits(
         frontier: hits
             .coalesced_frontier
             .map(|seq| EventPosition::from(event_seq::decode_event_seq(seq))),
-        scan_limit_hit: hits.scan_limit_hit,
+        chunk_scan_limit_reached: hits.chunk_scan_limit_reached,
     })
 }
 
@@ -104,7 +104,7 @@ pub(super) fn next_unfiltered_event_refs(
             refs: Vec::new(),
             next_bounds: None,
             rows_scanned: 0,
-            scan_limit_hit: false,
+            row_limit_reached: false,
             frontier: None,
         });
     };
@@ -128,15 +128,15 @@ pub(super) fn next_unfiltered_event_refs(
                 refs,
                 next_bounds: filled_next,
                 rows_scanned,
-                scan_limit_hit: false,
+                row_limit_reached: false,
                 frontier: None,
             });
         }
         next_bounds = remaining_bounds_after_scanned_tx(*bounds, row.tx_sequence_number, ascending);
     }
 
-    let scan_limit_hit = rows_scanned == row_scan_limit && next_bounds.is_some();
-    let frontier = if scan_limit_hit {
+    let row_limit_reached = rows_scanned == row_scan_limit && next_bounds.is_some();
+    let frontier = if row_limit_reached {
         next_bounds
             .as_ref()
             .and_then(|bounds| frontier_from_resume_bounds(bounds, ascending))
@@ -148,7 +148,7 @@ pub(super) fn next_unfiltered_event_refs(
         refs,
         next_bounds,
         rows_scanned,
-        scan_limit_hit,
+        row_limit_reached,
         frontier,
     })
 }

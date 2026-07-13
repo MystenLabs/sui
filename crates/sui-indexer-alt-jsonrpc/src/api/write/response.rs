@@ -8,15 +8,21 @@ use anyhow::Context as _;
 use move_core_types::annotated_value::MoveDatatypeLayout;
 use move_core_types::annotated_value::MoveTypeLayout;
 use sui_json_rpc_types::BalanceChange as SuiBalanceChange;
+use sui_json_rpc_types::DevInspectResults;
 use sui_json_rpc_types::DryRunTransactionBlockResponse;
 use sui_json_rpc_types::ObjectChange as SuiObjectChange;
+use sui_json_rpc_types::SuiArgument;
 use sui_json_rpc_types::SuiEvent;
+use sui_json_rpc_types::SuiExecutionResult;
+use sui_json_rpc_types::SuiExecutionStatus;
 use sui_json_rpc_types::SuiTransactionBlock;
 use sui_json_rpc_types::SuiTransactionBlockData;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_json_rpc_types::SuiTypeTag;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
@@ -106,6 +112,52 @@ pub(super) async fn dry_run(
         input: input(ctx, tx_data, vec![]).await?.data,
         execution_error_source: None,
         suggested_gas_price,
+    })
+}
+
+pub(super) async fn dev_inspect(
+    ctx: &Context,
+    tx_data: TransactionData,
+    executed_tx: &proto::ExecutedTransaction,
+    command_outputs: &[proto::CommandResult],
+    raw_txn_data: Vec<u8>,
+    show_raw_txn_data_and_effects: bool,
+) -> Result<DevInspectResults, RpcError<Error>> {
+    let effects = deserialize_effects(executed_tx)?;
+    let tx_digest = tx_data.digest();
+
+    let raw_effects = if show_raw_txn_data_and_effects {
+        raw_effects(executed_tx)?
+    } else {
+        vec![]
+    };
+
+    let effects = effects_response(&effects)?;
+
+    // Like the legacy implementation, exactly one of `results` and `error` is set, depending on
+    // whether execution succeeded. The error message itself may be different. Legacy stringifies
+    // the executor's `ExecutionError`, which is not part of the gRPC simulate response. Here, it is
+    // recovered from the effects' execution status instead.
+    let (results, error) = match effects.status() {
+        SuiExecutionStatus::Success => (
+            Some(
+                command_outputs
+                    .iter()
+                    .map(execution_result)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            None,
+        ),
+        SuiExecutionStatus::Failure { error } => (None, Some(error.clone())),
+    };
+
+    Ok(DevInspectResults {
+        effects,
+        events: events(ctx, tx_digest, executed_tx).await?,
+        results,
+        error,
+        raw_txn_data,
+        raw_effects,
     })
 }
 
@@ -307,4 +359,58 @@ fn effects_response(
         .clone()
         .try_into()
         .context("Failed to convert effects into JSON-RPC response type")?)
+}
+
+/// Convert a single command's outputs from the gRPC response into the dev-inspect execution
+/// result response type.
+fn execution_result(
+    command_result: &proto::CommandResult,
+) -> Result<SuiExecutionResult, RpcError<Error>> {
+    let return_values = command_result
+        .return_values
+        .iter()
+        .map(command_output_value)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mutable_reference_outputs = command_result
+        .mutated_by_ref
+        .iter()
+        .map(|output| {
+            let argument = sui_argument(
+                output
+                    .argument
+                    .as_ref()
+                    .context("Missing argument in mutated-by-ref command output")?,
+            )?;
+            let (bytes, type_tag) = command_output_value(output)?;
+            Ok::<_, RpcError<Error>>((argument, bytes, type_tag))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(SuiExecutionResult {
+        mutable_reference_outputs,
+        return_values,
+    })
+}
+
+/// Extract the BCS bytes and type of a command output from the gRPC response.
+fn command_output_value(
+    output: &proto::CommandOutput,
+) -> Result<(Vec<u8>, SuiTypeTag), RpcError<Error>> {
+    let bcs = output
+        .value
+        .as_ref()
+        .context("Missing value in command output")?;
+
+    let type_tag = TypeTag::from_str(bcs.name())
+        .with_context(|| format!("Invalid type in command output: {:?}", bcs.name()))?;
+
+    Ok((bcs.value().to_vec(), SuiTypeTag::from(type_tag)))
+}
+
+/// Convert an argument from the gRPC response into the JSON-RPC response type.
+fn sui_argument(argument: &proto::Argument) -> Result<SuiArgument, RpcError<Error>> {
+    let argument = sui_sdk_types::Argument::try_from(argument)
+        .context("Invalid argument in command output")?;
+    Ok(sui_types::transaction::Argument::from(argument).into())
 }

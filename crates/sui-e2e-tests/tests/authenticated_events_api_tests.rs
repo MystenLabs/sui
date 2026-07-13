@@ -22,8 +22,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::{
     AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
     GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse, ListEventsRequest,
     ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter, TransactionLiteral,
-    TransactionTerm, get_checkpoint_object_proof_response, list_events_response,
-    list_transactions_response,
+    TransactionTerm, get_checkpoint_object_proof_response,
 };
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk_types::ValidatorCommittee;
@@ -223,36 +222,20 @@ async fn fetch_settlements_for_range(
 
         while let Some(frame) = response.next().await {
             let frame = frame?;
-            match frame.response {
-                Some(list_transactions_response::Response::Item(item)) => {
-                    if let Some(c) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                        last_cursor = Some(c.to_vec());
-                    }
-                    let checkpoint = item
-                        .transaction
-                        .as_ref()
-                        .and_then(|tx| tx.checkpoint)
-                        .ok_or_else(|| {
-                            tonic::Status::internal("settlement tx missing checkpoint")
-                        })?;
-                    let tx_offset = item
-                        .transaction
-                        .as_ref()
-                        .and_then(|tx| tx.transaction_index)
-                        .ok_or_else(|| {
-                            tonic::Status::internal("settlement tx missing transaction_index")
-                        })?;
-                    all.push((checkpoint, tx_offset));
-                }
-                Some(list_transactions_response::Response::Watermark(w)) => {
-                    if let Some(c) = w.cursor.as_ref() {
-                        last_cursor = Some(c.to_vec());
-                    }
-                }
-                Some(list_transactions_response::Response::End(end)) => {
-                    end_reason = Some(end.reason());
-                }
-                Some(_) | None => {}
+            if let Some(c) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                last_cursor = Some(c.to_vec());
+            }
+            if let Some(tx) = frame.transaction {
+                let checkpoint = tx
+                    .checkpoint
+                    .ok_or_else(|| tonic::Status::internal("settlement tx missing checkpoint"))?;
+                let tx_offset = tx.transaction_index.ok_or_else(|| {
+                    tonic::Status::internal("settlement tx missing transaction_index")
+                })?;
+                all.push((checkpoint, tx_offset));
+            }
+            if let Some(end) = frame.end {
+                end_reason = Some(end.reason());
             }
         }
 
@@ -330,7 +313,7 @@ fn bucket_events_by_settlement(
 }
 
 /// Drive a single `ListEvents` server-streaming request, accumulating every
-/// emitted `EventItem` into `AuthenticatedEvent`s.
+/// emitted event payload into `AuthenticatedEvent`s.
 async fn fetch_list_events_page(
     client: &mut V2AlphaLedgerServiceClient<tonic::transport::Channel>,
     request: ListEventsRequest,
@@ -343,22 +326,13 @@ async fn fetch_list_events_page(
 
     while let Some(frame) = stream.next().await {
         let frame = frame?;
-        match frame.response {
-            Some(list_events_response::Response::Item(item)) => {
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                    last_cursor = Some(cursor.to_vec());
-                }
-                let event = AuthenticatedEvent::try_from(item).map_err(|e| {
-                    tonic::Status::internal(format!("failed to convert event: {e}"))
-                })?;
-                events.push(event);
-            }
-            Some(list_events_response::Response::Watermark(w)) => {
-                if let Some(cursor) = w.cursor.as_ref() {
-                    last_cursor = Some(cursor.to_vec());
-                }
-            }
-            Some(list_events_response::Response::End(_)) | Some(_) | None => {}
+        if let Some(cursor) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+            last_cursor = Some(cursor.to_vec());
+        }
+        if let Some(event) = frame.event {
+            let event = AuthenticatedEvent::try_from(event)
+                .map_err(|e| tonic::Status::internal(format!("failed to convert event: {e}")))?;
+            events.push(event);
         }
     }
 
@@ -366,7 +340,7 @@ async fn fetch_list_events_page(
 }
 
 /// Read mask covering everything the in-tree `AuthenticatedEvent` converter
-/// needs from a v2alpha `EventItem`: the event body plus its ledger-position
+/// needs from a v2alpha event payload: the event body plus its ledger-position
 /// fields (`checkpoint`, `transaction_index`, `event_index`), which the list
 /// endpoint only populates when requested.
 fn full_event_read_mask() -> FieldMask {
@@ -1236,7 +1210,7 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
             cfg.enable_authenticated_event_streams_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg.set_min_checkpoint_interval_ms_for_testing(1000);
-            cfg.disable_randomize_checkpoint_tx_limit_for_testing();
+            cfg.set_randomize_checkpoint_tx_limit_in_tests_for_testing(false);
             cfg
         });
 

@@ -5535,8 +5535,8 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto"
-version = "0.1.9"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+version = "0.1.11"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a26cabb3aabc86e6453bc8aef8f59022bf9fd702#a26cabb3aabc86e6453bc8aef8f59022bf9fd702"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5556,6 +5556,7 @@ dependencies = [
  "bs58 0.4.0",
  "bulletproofs",
  "cbc",
+ "ciborium",
  "ctr",
  "curve25519-dalek",
  "derive_more 0.99.17",
@@ -5574,10 +5575,12 @@ dependencies = [
  "num-bigint 0.4.6",
  "once_cell",
  "p256",
+ "p384",
  "rand 0.8.5",
  "readonly",
  "rfc6979 0.4.0",
  "rsa",
+ "rustls-pki-types",
  "schemars 0.8.21",
  "secp256k1 0.27.0",
  "serde",
@@ -5591,13 +5594,14 @@ dependencies = [
  "tokio",
  "tracing",
  "typenum",
+ "x509-parser",
  "zeroize",
 ]
 
 [[package]]
 name = "fastcrypto-derive"
-version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+version = "0.1.4"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a26cabb3aabc86e6453bc8aef8f59022bf9fd702#a26cabb3aabc86e6453bc8aef8f59022bf9fd702"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -5606,7 +5610,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a26cabb3aabc86e6453bc8aef8f59022bf9fd702#a26cabb3aabc86e6453bc8aef8f59022bf9fd702"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -5626,7 +5630,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a26cabb3aabc86e6453bc8aef8f59022bf9fd702#a26cabb3aabc86e6453bc8aef8f59022bf9fd702"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5642,8 +5646,8 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto-zkp"
-version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c6010b9080b00e29d039a48c08898d90c2c1cbdd#c6010b9080b00e29d039a48c08898d90c2c1cbdd"
+version = "0.1.4"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a26cabb3aabc86e6453bc8aef8f59022bf9fd702#a26cabb3aabc86e6453bc8aef8f59022bf9fd702"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -9665,7 +9669,6 @@ dependencies = [
  "multiaddr",
  "mysten-metrics",
  "once_cell",
- "pin-project-lite",
  "prometheus",
  "quinn-proto",
  "rand 0.8.5",
@@ -11434,7 +11437,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -14743,7 +14746,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.3.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c34e7a65b5983600937f965553fa373593c149d4#c34e7a65b5983600937f965553fa373593c149d4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=3beb1e871e4d2ae64684b736151e883f10218778#3beb1e871e4d2ae64684b736151e883f10218778"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -15164,18 +15167,19 @@ dependencies = [
 
 [[package]]
 name = "sui-http"
-version = "0.0.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4bfea7568dcf01ad7d41749c071492b29d2fd450a720db1e3d063c557028d50"
 dependencies = [
- "axum 0.8.3",
  "bytes",
+ "futures-core",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.8.1",
  "hyper-util",
  "pin-project-lite",
- "reqwest",
- "socket2 0.5.6",
+ "socket2 0.6.3",
  "tokio",
  "tokio-rustls",
  "tokio-util 0.7.18 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -15249,7 +15253,6 @@ dependencies = [
  "integer-encoding",
  "move-core-types",
  "mysten-common",
- "mysten-network",
  "object_store 0.13.0",
  "ouroboros 0.17.2",
  "pin-project",
@@ -15260,6 +15263,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-futures",
+ "sui-http",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
@@ -15367,7 +15371,6 @@ dependencies = [
  "diesel_migrations",
  "futures",
  "http 1.3.1",
- "mysten-network",
  "num_cpus",
  "object_store 0.13.0",
  "prometheus",
@@ -15380,6 +15383,7 @@ dependencies = [
  "serde_json",
  "sui-field-count",
  "sui-futures",
+ "sui-http",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
  "sui-pg-db",
@@ -15392,6 +15396,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.14.6",
+ "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -15526,6 +15531,7 @@ dependencies = [
  "sui-pg-db",
  "sui-protocol-config",
  "sui-rpc",
+ "sui-sdk-types",
  "sui-sql-macro",
  "sui-types",
  "telemetry-subscribers",
@@ -15778,6 +15784,7 @@ name = "sui-json-rpc-types"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "colored",
  "enum_dispatch",
@@ -15805,6 +15812,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tabled",
+ "tokio",
  "tracing",
 ]
 
@@ -15854,7 +15862,6 @@ dependencies = [
  "move-core-types",
  "mysten-common",
  "mysten-metrics",
- "mysten-network",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -15864,6 +15871,7 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-futures",
+ "sui-http",
  "sui-inverted-index",
  "sui-kvstore",
  "sui-package-resolver",
@@ -16728,7 +16736,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c34e7a65b5983600937f965553fa373593c149d4#c34e7a65b5983600937f965553fa373593c149d4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=3beb1e871e4d2ae64684b736151e883f10218778#3beb1e871e4d2ae64684b736151e883f10218778"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16766,7 +16774,6 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "mysten-common",
- "mysten-network",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -16777,6 +16784,7 @@ dependencies = [
  "sui-config",
  "sui-crypto",
  "sui-display",
+ "sui-http",
  "sui-inverted-index",
  "sui-macros",
  "sui-name-service",
@@ -16961,7 +16969,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c34e7a65b5983600937f965553fa373593c149d4#c34e7a65b5983600937f965553fa373593c149d4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=3beb1e871e4d2ae64684b736151e883f10218778#3beb1e871e4d2ae64684b736151e883f10218778"
 dependencies = [
  "base64ct",
  "bcs",
@@ -19155,7 +19163,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

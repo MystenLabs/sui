@@ -16,8 +16,6 @@ export default function (path: AstPath<Node>): treeFn | null {
             return printFunctionDefinition;
         case FunctionDefinition.MacroFunctionDefinition:
             return printMacroFunctionDefinition;
-        case FunctionDefinition.VisibilityModifier:
-            return printVisibilityModifier;
         case FunctionDefinition.FunctionParameters:
             return printFunctionParameters;
         case FunctionDefinition.FunctionParameter:
@@ -53,7 +51,6 @@ export enum FunctionDefinition {
     FunctionIdentifier = 'function_identifier',
     NativeFunctionDefinition = 'native_function_definition',
     MacroFunctionDefinition = 'macro_function_definition',
-    VisibilityModifier = 'visibility_modifier',
     FunctionParameters = 'function_parameters',
     FunctionParameter = 'function_parameter',
     MutFunctionParameter = 'mut_function_parameter',
@@ -150,18 +147,6 @@ export function printMacroFunctionDefinition(
         ' ',
         path.call(print, 'nonFormattingChildren', path.node.nonFormattingChildren.length - 1),
     ];
-}
-
-/**
- * Print `visibility_modifier` node.
- * Always followed by a space.
- */
-export function printVisibilityModifier(
-    path: AstPath<Node>, //  | Node | null,
-    _opt: MoveOptions,
-    _print: printFn,
-): Doc {
-    return [path.node.text, ' '];
 }
 
 /**
@@ -282,7 +267,7 @@ function getModifiers(path: AstPath<Node>): Modifiers {
 
     return nodes
         .filter((e) => e.type == 'modifier')
-        .map((e) => e.text.replace(' ', '')) // removes the space in `public (package)`
+        .map((e) => e.text.replace(/\s+/g, '')) // normalizes `public ( package )`
         .reduce((acc, e) => ({ ...acc, [e]: true }), {});
 }
 

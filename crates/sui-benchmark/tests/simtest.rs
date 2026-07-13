@@ -27,7 +27,7 @@ mod test {
     };
     use sui_benchmark::{
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
-        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
+        drivers::{Interval, SubmissionAmplification, bench_driver::BenchDriver, driver::Driver},
         util::get_ed25519_keypair_from_keystore,
     };
     use sui_config::ExecutionCacheConfig;
@@ -1289,11 +1289,20 @@ mod test {
         )
         .await;
 
+        // Duplicate/amplified validator submissions are only supported by the
+        // LocalValidatorAggregatorProxy, which is used when remote_env is false.
+        let submission_amplification_by_group = if config.remote_env {
+            BTreeMap::new()
+        } else {
+            BTreeMap::from([(0, SubmissionAmplification::default_enabled())])
+        };
+
         let workloads = WorkloadConfiguration::build(
             workloads_builders,
             bank,
             system_state_observer.clone(),
             gas_request_chunk_size,
+            submission_amplification_by_group,
         )
         .await
         .unwrap();
@@ -1945,6 +1954,7 @@ mod test {
             bank,
             system_state_observer.clone(),
             100,
+            BTreeMap::new(),
         )
         .await
         .unwrap();

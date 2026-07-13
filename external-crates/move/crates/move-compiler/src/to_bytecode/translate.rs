@@ -841,7 +841,7 @@ fn function_body(
     mut locals_map: UniqueMap<Var, (Mutability, H::SingleType)>,
     block_info: BTreeMap<H::Label, G::BlockInfo>,
     start: H::Label,
-    blocks_map: H::BasicBlocks,
+    blocks_map: G::BasicBlocks,
 ) -> (Vec<(IR::Var, IR::Type)>, IR::BytecodeBlocks) {
     parameters
         .iter()
