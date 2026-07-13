@@ -33,6 +33,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
+use mysten_common::fatal;
 use prometheus::Registry;
 use sui_config::NodeConfig;
 use sui_consistent_store::ChainId;
@@ -482,6 +483,11 @@ impl EmbeddedRpcStore {
     /// drops this service, which aborts the task and, with it, the inner
     /// indexer service it is joining.
     ///
+    /// A failure to *build* the indexer is fatal to the node
+    /// ([`mysten_common::fatal!`]): it will not heal on its own, and a
+    /// node whose index surface silently never advances is worse than a
+    /// crashed one.
+    ///
     /// `checkpoint_sender` is the checkpoint executor's broadcast
     /// stream; when present it drives a low-latency
     /// [`BroadcastStreamingClient`], with the perpetual-store ingestion
@@ -498,6 +504,12 @@ impl EmbeddedRpcStore {
         let chain_id = self.chain_id;
 
         let service = Service::new().spawn(async move {
+            // A node whose embedded indexer never starts would keep
+            // serving RPC from index CFs that never advance -- a frozen
+            // (or, on a fresh node, permanently empty) index surface
+            // with nothing but a log line to say why. Build failure is
+            // a configuration or database problem that will not heal on
+            // its own, so fail the node instead of limping.
             let mut service = match build_indexer(
                 store,
                 ingestion_source,
@@ -509,13 +521,17 @@ impl EmbeddedRpcStore {
             {
                 Ok(service) => service,
                 Err(e) => {
-                    error!("failed to start the embedded rpc-store indexer: {e:#}");
-                    return Ok(());
+                    fatal!("failed to build the embedded rpc-store indexer: {e:#}");
                 }
             };
             // Hold the service for the task's lifetime; `join` only
             // returns if an indexer task exits (it otherwise runs for the
-            // node's lifetime), so surface any fatal error.
+            // node's lifetime). Deliberately not fatal: an error here can
+            // be a teardown race with node shutdown (this task is aborted
+            // on drop, but the inner pipelines may observe the closing
+            // stores first), and a genuine mid-run death is surfaced by
+            // the health check as an ever-growing gap between the
+            // executed tip and the frozen live-index watermark.
             if let Err(e) = service.join().await {
                 error!("the embedded rpc-store indexer exited with an error: {e:#}");
             }

@@ -676,7 +676,17 @@ impl ReadStore for RpcStoreReadStore {
                         "live-indexed checkpoint {indexed} missing from the checkpoint store"
                     ))
                 }),
-            _ => Ok(latest),
+            Some(_) => Ok(latest),
+            // Fail closed: no live watermark means the index surface is
+            // empty -- a fresh node whose indexer has not committed its
+            // first checkpoint yet. Reporting the executed tip here would
+            // advertise checkpoints whose indexed state is not readable,
+            // the exact inconsistency the bound above exists to prevent.
+            // The window closes with the live cohort's first commit,
+            // moments after startup.
+            None => Err(StorageError::missing(
+                "the embedded rpc-store's live index has no committed checkpoint yet",
+            )),
         }
     }
 
