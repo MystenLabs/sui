@@ -7,11 +7,8 @@ use std::time::Instant;
 
 use futures::StreamExt;
 use futures::stream::BoxStream;
-use prost_types::FieldMask;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
-use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
@@ -25,7 +22,6 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
@@ -34,6 +30,7 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedRange;
+use crate::read_mask_defaults;
 
 use super::bitmap_scan::DrainedBitmapHits;
 use super::bitmap_scan::LedgerBitmapKind;
@@ -59,8 +56,6 @@ use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::merge_covered_checkpoint_bound;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
 
-const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::CHECKPOINT;
-
 pub(crate) type ListCheckpointsStream =
     BoxStream<'static, Result<ListCheckpointsResponse, RpcError>>;
 
@@ -75,7 +70,10 @@ pub(crate) async fn list_checkpoints(
     let request_options = request.options;
     let filtered = filter.is_some();
     validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
-    let read_mask = validate_read_mask(request.read_mask)?;
+    let read_mask = read_mask_defaults::validate_read_mask::<Checkpoint>(
+        request.read_mask,
+        read_mask_defaults::CHECKPOINT,
+    )?;
     let ledger_history = service.config.ledger_history();
     let endpoint = ledger_history.list_checkpoints();
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
@@ -823,16 +821,6 @@ fn render_checkpoint_seq(
     Ok(response_for(watermark, checkpoint))
 }
 
-fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
-    let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
-    read_mask.validate::<Checkpoint>().map_err(|path| {
-        FieldViolation::new("read_mask")
-            .with_description(format!("invalid read_mask path: {path}"))
-            .with_reason(ErrorReason::FieldInvalid)
-    })?;
-    Ok(FieldMaskTree::from(read_mask))
-}
-
 /// [`ResolvedRange::apply_serving_floor`]'s analogue for the filtered
 /// checkpoint scan, whose watermark metadata lives in checkpoint space
 /// beside a transaction-space scan window. A floor inside the window starts
@@ -863,7 +851,6 @@ fn apply_serving_floor_to_filtered_window(
     }
     false
 }
-
 fn resolve_cp_range(checkpoint_range: CheckpointRange, options: &QueryOptions) -> ResolvedRange {
     let cp_range = checkpoint_range.resolve(options);
     let range = cp_range.range.clone();

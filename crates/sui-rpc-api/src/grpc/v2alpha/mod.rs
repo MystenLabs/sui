@@ -3,3 +3,4 @@
 
 mod ledger_service;
 mod proof_service;
+pub(crate) mod subscription_service;

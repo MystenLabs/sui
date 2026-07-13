@@ -62,6 +62,20 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ledger_history: Option<LedgerHistoryConfig>,
 
+    /// Number of consecutive checkpoints a filtered subscription may go without
+    /// producing an item before the server emits a progress-only frame,
+    /// so sparse subscribers always learn their resume point. Defaults to 25
+    /// (~5 seconds at mainnet checkpoint cadence).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_watermark_interval: Option<u32>,
+
+    /// Number of parallel shard tasks that evaluate subscription filters and
+    /// deliver updates. Each subscriber lives on one shard; per-checkpoint
+    /// filter evaluation parallelizes across shards. Defaults to the host's
+    /// available parallelism.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_shards: Option<u32>,
+
     /// Configuration for rendering Objects based on the Display standard
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display: Option<DisplayConfig>,

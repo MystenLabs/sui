@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Buf;
-use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::IntCounter;
+use sui_http::middleware::callback::MakeCallbackHandler;
+use sui_http::middleware::callback::ResponseHandler;
 
 /// A [`MakeCallbackHandler`] that increments an [`IntCounter`] by the number of bytes observed
 /// in the response body of each request.
@@ -19,12 +20,19 @@ impl ByteCountMakeCallbackHandler {
 }
 
 impl MakeCallbackHandler for ByteCountMakeCallbackHandler {
-    type Handler = ByteCountResponseHandler;
+    type RequestHandler = ();
+    type ResponseHandler = ByteCountResponseHandler;
 
-    fn make_handler(&self, _request: &http::request::Parts) -> Self::Handler {
-        ByteCountResponseHandler {
-            counter: self.counter.clone(),
-        }
+    fn make_handler(
+        &self,
+        _request: &http::request::Parts,
+    ) -> (Self::RequestHandler, Self::ResponseHandler) {
+        (
+            (),
+            ByteCountResponseHandler {
+                counter: self.counter.clone(),
+            },
+        )
     }
 }
 
@@ -35,7 +43,7 @@ pub(crate) struct ByteCountResponseHandler {
 impl ResponseHandler for ByteCountResponseHandler {
     fn on_response(&mut self, _response: &http::response::Parts) {}
 
-    fn on_error<E>(&mut self, _error: &E)
+    fn on_service_error<E>(&mut self, _error: &E)
     where
         E: std::fmt::Display + 'static,
     {
@@ -61,7 +69,7 @@ mod tests {
 
         let request = http::Request::new(());
         let (parts, _) = request.into_parts();
-        let mut handler = make.make_handler(&parts);
+        let ((), mut handler) = make.make_handler(&parts);
 
         for frame in frames {
             handler.on_body_chunk(&Bytes::from_static(frame.as_bytes()));

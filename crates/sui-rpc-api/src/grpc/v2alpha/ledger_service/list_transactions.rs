@@ -6,11 +6,8 @@ use std::time::Instant;
 
 use futures::StreamExt;
 use futures::stream::BoxStream;
-use prost_types::FieldMask;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
-use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
@@ -24,7 +21,6 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_transaction::render_executed_transaction;
@@ -38,6 +34,7 @@ use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
+use crate::read_mask_defaults;
 
 use super::bitmap_scan::LedgerBitmapKind;
 use super::bitmap_scan::PendingBitmapBucket;
@@ -58,8 +55,6 @@ use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
 
-const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
-
 pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;
 
@@ -74,7 +69,10 @@ pub(crate) async fn list_transactions(
     let request_options = request.options;
     let filtered = filter.is_some();
     validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
-    let read_mask = validate_read_mask(request.read_mask)?;
+    let read_mask = read_mask_defaults::validate_read_mask::<ExecutedTransaction>(
+        request.read_mask,
+        read_mask_defaults::TRANSACTION,
+    )?;
     let ledger_history = service.config.ledger_history();
     let endpoint = ledger_history.list_transactions();
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
@@ -561,18 +559,6 @@ fn render_transaction_rows(
         items.push(response);
     }
     Ok(items)
-}
-
-pub(crate) fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
-    let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
-    read_mask
-        .validate::<ExecutedTransaction>()
-        .map_err(|path| {
-            FieldViolation::new("read_mask")
-                .with_description(format!("invalid read_mask path: {path}"))
-                .with_reason(ErrorReason::FieldInvalid)
-        })?;
-    Ok(FieldMaskTree::from(read_mask))
 }
 
 fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {

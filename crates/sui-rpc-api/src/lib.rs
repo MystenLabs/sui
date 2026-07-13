@@ -4,9 +4,9 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use mysten_network::callback::CallbackLayer;
 use reader::StateReader;
 use subscription::SubscriptionServiceHandle;
+use sui_http::middleware::callback::CallbackLayer;
 use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
@@ -264,6 +264,17 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
                     .await;
 
                 services = services.add_service(subscription_service);
+
+                let subscription_service_v2alpha =
+sui_rpc::proto::sui::rpc::v2alpha::subscription_service_server::SubscriptionServiceServer::new(self.clone());
+                health_reporter
+                    .set_service_status(
+                        service_name(&subscription_service_v2alpha),
+                        tonic_health::ServingStatus::Serving,
+                    )
+                    .await;
+
+                services = services.add_service(subscription_service_v2alpha);
             }
 
             for name in &extra_service_names {
