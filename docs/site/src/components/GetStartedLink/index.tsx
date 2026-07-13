@@ -11,7 +11,7 @@ export default function GetStartedLink() {
     <>
       {location.pathname === "/" && (
         <Link to="/getting-started/onboarding" className="button-cta">
-          Get started
+          Get Started
         </Link>
       )}
     </>
