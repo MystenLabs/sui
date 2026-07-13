@@ -991,16 +991,15 @@ impl TestCluster {
     /// returns raw effects, events and extra objects returned by the validators,
     /// aggregated manually (without authority aggregator).
     /// It also does not check whether the transaction is executed successfully.
-    /// In order to keep the fullnode up-to-date so that latter queries can read consistent
-    /// results, it calls execute_transaction_may_fail again which goes through fullnode.
-    /// This is less efficient and verbose, but can be used if more details are needed
-    /// from the execution results, and if the transaction is expected to fail.
+    /// Before returning, it waits for the transaction to settle on the fullnode so that
+    /// subsequent queries there read consistent results.
     pub async fn execute_transaction_return_raw_effects(
         &self,
         tx: Transaction,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
-        let results = self.submit_and_execute(tx.clone(), None).await?;
-        self.wallet.execute_transaction_may_fail(tx).await.unwrap();
+        let digest = *tx.digest();
+        let results = self.submit_and_execute(tx, None).await?;
+        self.wait_for_tx_settlement(&[digest]).await;
         Ok(results)
     }
 
