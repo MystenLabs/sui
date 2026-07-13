@@ -19,6 +19,11 @@ module sui::scratch;
 /// all access to scratch entries.
 public struct Permit<phantom K: copy + drop>() has copy, drop;
 
+/// Occupies a key's slot for operations mimicking reference-based functions, such as `get_do` and
+/// `get_fold`. This prevents anything from utilizing the key's slot while the value is being
+/// "borrowed".
+public struct PseudoBorrowMarker() has drop;
+
 /// Stand-in parent address used when hashing scratch keys.
 const DUMMY_ROOT: address = @0;
 
@@ -106,6 +111,106 @@ public fun replace<K: copy + drop, VNew: drop, VOld: drop>(
 }
 
 // === Macro Functions ===
+
+/// If an entry exists for `key`, calls `$f` on an immutable reference to its value; otherwise does
+/// nothing.
+/// Note that the value is not actually borrowed, but a placeholder is used while value is
+/// temporarily removed for the duration of the `$f` operation. As such, the function may abort
+/// if the `$key` is accessed during the `$f` operation.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun get_do<$K: copy + drop, $V: drop, $R: drop>(
+    $ctx: &mut TxContext,
+    $permit: Permit<$K>,
+    $key: $K,
+    $f: |&$V| -> $R,
+) {
+    let ctx = $ctx;
+    let permit = $permit;
+    let key = $key;
+    if (!exists(ctx, permit, key)) return;
+
+    let value = remove<$K, $V>(ctx, permit, key);
+    add(ctx, permit, key, PseudoBorrowMarker());
+    $f(&value);
+    let PseudoBorrowMarker() = remove<$K, PseudoBorrowMarker>(ctx, permit, key);
+    add(ctx, permit, key, value);
+}
+
+/// If an entry exists for `key`, calls `$f` on a mutable reference to its value; otherwise does
+/// nothing.
+/// Note that the value is not actually borrowed, but a placeholder is used while value is
+/// temporarily removed for the duration of the `$f` operation. As such, the function may abort
+/// if the `$key` is accessed during the `$f` operation.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun get_mut_do<$K: copy + drop, $V: drop, $R: drop>(
+    $ctx: &mut TxContext,
+    $permit: Permit<$K>,
+    $key: $K,
+    $f: |&mut $V| -> $R,
+) {
+    let ctx = $ctx;
+    let permit = $permit;
+    let key = $key;
+    if (!exists(ctx, permit, key)) return;
+
+    let mut value = remove<$K, $V>(ctx, permit, key);
+    add(ctx, permit, key, PseudoBorrowMarker());
+    $f(&mut value);
+    let PseudoBorrowMarker() = remove<$K, PseudoBorrowMarker>(ctx, permit, key);
+    add(ctx, permit, key, value);
+}
+
+/// If an entry exists for `key`, applies `$some` to an immutable reference to its value and returns
+/// the result; otherwise returns `$none`.
+/// Note that the value is not actually borrowed, but a placeholder is used while value is
+/// temporarily removed for the duration of the `$some` operation. As such, the function may abort
+/// if the `$key` is accessed during the `$some` operation.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun get_fold<$K: copy + drop, $V: drop, $R>(
+    $ctx: &mut TxContext,
+    $permit: Permit<$K>,
+    $key: $K,
+    $none: $R,
+    $some: |&$V| -> $R,
+): $R {
+    let ctx = $ctx;
+    let permit = $permit;
+    let key = $key;
+    if (!exists(ctx, permit, key)) return ($none);
+
+    let value = remove<$K, $V>(ctx, permit, key);
+    add(ctx, permit, key, PseudoBorrowMarker());
+    let r = $some(&value);
+    let PseudoBorrowMarker() = remove<$K, PseudoBorrowMarker>(ctx, permit, key);
+    add(ctx, permit, key, value);
+    r
+}
+
+/// If an entry exists for `key`, applies `$some` to a mutable reference to its value and returns
+/// the result; otherwise returns `$none`.
+/// Note that the value is not actually borrowed, but a placeholder is used while value is
+/// temporarily removed for the duration of the `$some` operation. As such, the function may abort
+/// if the `$key` is accessed during the `$some` operation.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun get_mut_fold<$K: copy + drop, $V: drop, $R>(
+    $ctx: &mut TxContext,
+    $permit: Permit<$K>,
+    $key: $K,
+    $none: $R,
+    $some: |&mut $V| -> $R,
+): $R {
+    let ctx = $ctx;
+    let permit = $permit;
+    let key = $key;
+    if (!exists(ctx, permit, key)) return ($none);
+
+    let mut value = remove<$K, $V>(ctx, permit, key);
+    add(ctx, permit, key, PseudoBorrowMarker());
+    let r = $some(&mut value);
+    let PseudoBorrowMarker() = remove<$K, PseudoBorrowMarker>(ctx, permit, key);
+    add(ctx, permit, key, value);
+    r
+}
 
 /// A wrapper for `add` that constructs the `Permit<$K>` directly.
 /// Aborts with `EEntryAlreadyExists` if there is already an entry for `$key`, regardless of its
