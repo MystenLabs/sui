@@ -1,50 +1,50 @@
 ---
-source: crates/move-stackless-bytecode-2/tests/tests.rs
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
 ---
   Module: bin_ops
     Function: add (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1 = Move(lcl_1)
-        reg_2 = Add(reg_0, reg_1)
-        Return(reg_2)
+        reg_0 : u64 = Move(lcl_0)
+        reg_1 : u64 = Move(lcl_1)
+        reg_2 : u64 = Add(reg_0 : u64, reg_1 : u64)
+        Return(reg_2 : u64)
 
 
     Function: div (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1 = Move(lcl_1)
-        reg_2 = Divide(reg_0, reg_1)
-        Return(reg_2)
+        reg_0 : u64 = Move(lcl_0)
+        reg_1 : u64 = Move(lcl_1)
+        reg_2 : u64 = Divide(reg_0 : u64, reg_1 : u64)
+        Return(reg_2 : u64)
 
 
     Function: greater_than (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1 = Move(lcl_1)
-        reg_2 = GreaterThan(reg_0, reg_1)
-        Return(reg_2)
+        reg_0 : u64 = Move(lcl_0)
+        reg_1 : u64 = Move(lcl_1)
+        reg_2 : bool = GreaterThan(reg_0 : u64, reg_1 : u64)
+        Return(reg_2 : bool)
 
 
     Function: less_than (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1 = Move(lcl_1)
-        reg_2 = LessThan(reg_0, reg_1)
-        Return(reg_2)
+        reg_0 : u64 = Move(lcl_0)
+        reg_1 : u64 = Move(lcl_1)
+        reg_2 : bool = LessThan(reg_0 : u64, reg_1 : u64)
+        Return(reg_2 : bool)
 
 
     Function: mul (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1 = Move(lcl_1)
-        reg_2 = Multiply(reg_0, reg_1)
-        Return(reg_2)
+        reg_0 : u64 = Move(lcl_0)
+        reg_1 : u64 = Move(lcl_1)
+        reg_2 : u64 = Multiply(reg_0 : u64, reg_1 : u64)
+        Return(reg_2 : u64)
 
 
     Function: sub (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1 = Move(lcl_1)
-        reg_2 = Subtract(reg_0, reg_1)
-        Return(reg_2)
+        reg_0 : u64 = Move(lcl_0)
+        reg_1 : u64 = Move(lcl_1)
+        reg_2 : u64 = Subtract(reg_0 : u64, reg_1 : u64)
+        Return(reg_2 : u64)
