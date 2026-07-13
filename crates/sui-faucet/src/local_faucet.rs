@@ -224,10 +224,6 @@ async fn scan_for_gas_coins(
     active_address: SuiAddress,
     config: &FaucetConfig,
 ) -> Result<Option<(Vec<GasCoin>, SuiAddress)>, FaucetError> {
-    let active_address = wallet
-        .active_address()
-        .map_err(|e| FaucetError::Wallet(e.to_string()))?;
-
     for address in std::iter::once(active_address).chain(wallet.get_addresses().into_iter()) {
         let coins: Vec<_> = wallet
             .gas_objects(address)
