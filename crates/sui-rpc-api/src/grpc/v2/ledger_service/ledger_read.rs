@@ -153,6 +153,35 @@ fn out_of_range(floor: u64) -> RpcError {
     )
 }
 
+/// Checkpoint-space analogue of [`clamp_to_serving_floor`] for scans that
+/// walk checkpoint sequence numbers directly (the unfiltered
+/// `list_checkpoints` path). Returns the floor checkpoint only when it
+/// actually moves the resolved low end (an implicit-genesis low); an
+/// explicitly requested low below the floor (`start_checkpoint` or `after`
+/// cursor) errors `OutOfRange` — that data was pruned and is permanently
+/// gone — and an untouched low returns `None`.
+pub(super) fn clamp_checkpoints_to_serving_floor(
+    service: &RpcService,
+    start: u64,
+    start_checkpoint: Option<u64>,
+    options: &crate::ledger_history::query_options::QueryOptions,
+) -> Result<Option<u64>, RpcError> {
+    let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
+    let floor = service.reader.get_lowest_available_checkpoint()?;
+    if start >= floor {
+        return Ok(None);
+    }
+    if explicit_lower {
+        return Err(RpcError::new(
+            tonic::Code::OutOfRange,
+            format!(
+                "requested data below earliest available; lowest available checkpoint is {floor}"
+            ),
+        ));
+    }
+    Ok(Some(floor))
+}
+
 pub(super) fn get_tx_seq_digest_multi(
     service: &RpcService,
     tx_seqs: &[u64],

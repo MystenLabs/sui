@@ -419,6 +419,29 @@ async fn expect_invalid_list_checkpoints(
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
 }
 
+/// Expect `OutOfRange`, wherever it surfaces: the serving-floor check
+/// runs in the scan's first chunk, so the status can arrive either on
+/// the call or as the first stream error.
+async fn expect_out_of_range_list_checkpoints(
+    client: &mut LedgerServiceClient<Channel>,
+    request: ListCheckpointsRequest,
+) {
+    let status = match client.list_checkpoints(request).await {
+        Err(status) => status,
+        Ok(response) => {
+            let mut stream = response.into_inner();
+            loop {
+                match stream.message().await {
+                    Ok(Some(_)) => continue,
+                    Ok(None) => panic!("stream ended without OutOfRange"),
+                    Err(status) => break status,
+                }
+            }
+        }
+    };
+    assert_eq!(status.code(), tonic::Code::OutOfRange);
+}
+
 async fn new_cluster() -> TestCluster {
     TestClusterBuilder::new()
         .with_num_validators(1)
@@ -2302,6 +2325,83 @@ async fn test_list_checkpoints_query_options() {
     assert!(after_exact.checkpoints.is_empty());
     assert!(after_exact.end);
     assert_eq!(after_exact.end_reason, Some(QueryEndReason::CursorBound));
+}
+
+/// Unfiltered `list_checkpoints` on a pruned store: an open-ended low
+/// end is clamped up to the serving floor (instead of failing the whole
+/// stream with `NotFound` on the first pruned checkpoint); an explicit
+/// sub-floor `start_checkpoint` is `OutOfRange`, matching the tx and
+/// event scans; and a descending scan terminates cleanly at the floor.
+#[sim_test]
+async fn test_list_checkpoints_pruned_serving_floor() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    // Advance the chain a few checkpoints so a floor above genesis
+    // still leaves a nonempty retained suffix.
+    let tx1 = transfer_self(&cluster, sender).await;
+    let tx2 = transfer_self(&cluster, sender).await;
+    let _ = tx1;
+    let floor = tx_checkpoint(&tx2);
+
+    // Raise the served floor by bumping the checkpoint store's pruned
+    // watermark. Nothing is physically deleted — the floor alone gates
+    // rendering (`get_checkpoint` rejects sub-floor sequences), so this
+    // reproduces a pruned node's serving behavior.
+    cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let checkpoint_store = state.get_checkpoint_store();
+        let checkpoint = checkpoint_store
+            .get_checkpoint_by_sequence_number(floor - 1)
+            .unwrap()
+            .expect("checkpoint below the floor should exist");
+        checkpoint_store
+            .update_highest_pruned_checkpoint(&checkpoint)
+            .unwrap();
+    });
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    // Bare ascending request: served from the floor, no error.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.options = Some(query_options(3));
+    let response = list_checkpoints_result(&mut client, req).await;
+    let seqs: Vec<_> = response
+        .checkpoints
+        .iter()
+        .map(checkpoint_sequence)
+        .collect();
+    assert_eq!(
+        seqs.first().copied(),
+        Some(floor),
+        "an open-ended ascending scan should start at the serving floor"
+    );
+
+    // An explicit start below the floor asks for pruned data: OutOfRange.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(0);
+    req.options = Some(query_options(3));
+    expect_out_of_range_list_checkpoints(&mut client, req).await;
+
+    // Descending without bounds: walks down to the floor and terminates
+    // cleanly there instead of erroring below it.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.options = Some(query_options_descending(1_000));
+    let response = list_checkpoints_result(&mut client, req).await;
+    let seqs: Vec<_> = response
+        .checkpoints
+        .iter()
+        .map(checkpoint_sequence)
+        .collect();
+    assert_eq!(
+        seqs.last().copied(),
+        Some(floor),
+        "a descending scan should stop at the serving floor"
+    );
+    assert!(response.end);
+    assert_eq!(response.end_reason, Some(QueryEndReason::CheckpointBound));
 }
 
 #[sim_test]
