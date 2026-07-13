@@ -5,6 +5,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use anyhow::bail;
+use backoff::ExponentialBackoff;
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::types::effects::TransactionEffectsAPI;
 use tokio::sync::Mutex;
@@ -28,11 +29,11 @@ use sui_sdk::wallet_context::WalletContext;
 const GAS_BUDGET: u64 = 10_000_000;
 const NUM_RETRIES: u8 = 2;
 
-/// Number of times to retry the gas-coin scan before giving up. On a freshly created
-/// `--force-regenesis` network the genesis coin objects may not yet be persisted and
-/// readable the instant the cluster reports started — especially on slow or contended
-/// storage — so we retry the scan a bounded number of times before failing.
-const GAS_COIN_LOOKUP_RETRIES: u8 = 3;
+/// On a freshly created `--force-regenesis` network the genesis coin objects may not yet be
+/// readable the instant the cluster reports started — especially on slow or contended storage —
+/// so the gas-coin scan is retried with backoff for up to this long before failing.
+const GAS_COIN_LOOKUP_INITIAL_INTERVAL: Duration = Duration::from_millis(200);
+const GAS_COIN_LOOKUP_MAX_ELAPSED_TIME: Duration = Duration::from_secs(10);
 
 pub struct LocalFaucet {
     wallet: WalletContext,
@@ -183,38 +184,44 @@ impl LocalFaucet {
 /// for the faucet. If the initial active address in the wallet does not have enough gas coins,
 /// it will iterate through the addresses to find one with sufficient gas coins.
 ///
-/// Retries the scan a bounded number of times (see [`GAS_COIN_LOOKUP_RETRIES`]) so that a
-/// transient startup race — where genesis coins are not yet readable — does not fail the faucet.
+/// Retries the scan with exponential backoff so that a transient startup race — where genesis
+/// coins are not yet readable — does not fail the faucet.
 async fn find_gas_coins_and_address(
     wallet: &mut WalletContext,
     config: &FaucetConfig,
 ) -> Result<(Vec<GasCoin>, SuiAddress), FaucetError> {
-    let mut retry_delay = Duration::from_millis(500);
-    // Preserved and returned if every attempt comes up empty, so the caller sees the original
-    // "no coins" message (or the last transient query error) rather than a generic timeout.
-    let mut last_err = FaucetError::Wallet("No address found with sufficient coins".to_string());
+    let active_address = wallet
+        .active_address()
+        .map_err(|e| FaucetError::Wallet(e.to_string()))?;
+    let wallet = &*wallet;
 
-    for attempt in 0..=GAS_COIN_LOOKUP_RETRIES {
-        match scan_for_gas_coins(wallet, config).await {
-            Ok(Some(found)) => return Ok(found),
-            Ok(None) => {}
-            Err(e) => last_err = e,
-        }
+    let backoff = ExponentialBackoff {
+        initial_interval: GAS_COIN_LOOKUP_INITIAL_INTERVAL,
+        current_interval: GAS_COIN_LOOKUP_INITIAL_INTERVAL,
+        max_elapsed_time: Some(GAS_COIN_LOOKUP_MAX_ELAPSED_TIME),
+        ..Default::default()
+    };
 
-        if attempt < GAS_COIN_LOOKUP_RETRIES {
-            tokio::time::sleep(retry_delay).await;
-            retry_delay *= 2;
-        }
-    }
+    backoff::future::retry(backoff, || async move {
+        let found = scan_for_gas_coins(wallet, active_address, config)
+            .await
+            .map_err(backoff::Error::transient)?;
 
-    Err(last_err)
+        found.ok_or_else(|| {
+            backoff::Error::transient(FaucetError::Wallet(
+                "No address found with sufficient coins".to_string(),
+            ))
+        })
+    })
+    .await
 }
 
 /// Scans the wallet's addresses once for a gas coin with a balance of at least `config.amount`,
 /// returning the matching coins and the address that holds them, or `Ok(None)` if no such coin is
 /// currently visible.
 async fn scan_for_gas_coins(
-    wallet: &mut WalletContext,
+    wallet: &WalletContext,
+    active_address: SuiAddress,
     config: &FaucetConfig,
 ) -> Result<Option<(Vec<GasCoin>, SuiAddress)>, FaucetError> {
     let active_address = wallet
