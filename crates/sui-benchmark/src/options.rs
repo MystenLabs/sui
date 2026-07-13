@@ -258,13 +258,17 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
         in_flight_ratio: Vec<u64>,
         // Probability that a logical transaction is submitted to multiple validators.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [SubmissionAmplification::DEFAULT_AMPLIFICATION_PROBABILITY])]
+        // Disabled by default: duplicate/amplified submissions require local validator
+        // execution, and deployments like Antithesis run stress with
+        // --use-fullnode-for-execution true, which is incompatible and fails at startup.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
         amplification_probability: Vec<f64>,
         // Number of validators to submit to when amplification_probability triggers.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [SubmissionAmplification::DEFAULT_AMPLIFICATION_VALIDATORS_PER_TX])]
         amplification_validators_per_tx: Vec<usize>,
         // Probability that each selected validator receives multiple copies.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [SubmissionAmplification::DEFAULT_DUPLICATE_PROBABILITY])]
+        // Disabled by default, see amplification_probability above.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
         duplicate_probability: Vec<f64>,
         // Number of copies sent to each selected validator when duplicate_probability triggers.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [SubmissionAmplification::DEFAULT_DUPLICATE_COPIES_PER_VALIDATOR])]
