@@ -264,11 +264,11 @@ fn next_event_chunk(
                 tx_seq: event_range.end_position.tx_seq,
                 event_index: event_range.end_position.event_index,
             };
-            let terminal = ScanTerminal::Range {
-                exhaustion: event_range.exhaustion,
-                position: terminal_position,
-                interval_empty: event_range.is_empty(),
-            };
+            let terminal = ScanTerminal::from_range_exhaustion(
+                event_range.exhaustion,
+                terminal_position,
+                event_range.is_empty(),
+            );
             let bounds = event_range.bounds;
             if event_range.is_empty() {
                 return Ok(EventChunkDone {

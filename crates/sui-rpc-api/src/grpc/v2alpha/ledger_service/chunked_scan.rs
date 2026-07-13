@@ -31,11 +31,9 @@ where
             watermark: frontier_watermark()?,
         })
     } else {
-        Ok(ScanTerminal::Range {
-            exhaustion,
-            position,
-            interval_empty: false,
-        })
+        Ok(ScanTerminal::from_range_exhaustion(
+            exhaustion, position, false,
+        ))
     }
 }
 
@@ -199,6 +197,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::ledger_history::watermark::NaturalRangeEnd;
 
     #[tokio::test]
     async fn chunked_scan_drains_vector_chunks_in_order() {
@@ -224,14 +223,14 @@ mod tests {
                     produced: items.len(),
                     items,
                     next_state: (state < 2).then_some(state + 1),
-                    terminal: ScanTerminal::Range {
-                        exhaustion: RangeExhaustion::CheckpointBound,
-                        position: Position::Transactions {
+                    terminal: ScanTerminal::from_range_exhaustion(
+                        RangeExhaustion::CheckpointBound,
+                        Position::Transactions {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                        interval_empty: false,
-                    },
+                        false,
+                    ),
                     remaining_scan_budget: scan_budget - 1,
                 })
             })
@@ -245,11 +244,11 @@ mod tests {
         assert_eq!(items, vec![0, 1, 10, 11, 20]);
         assert_eq!(
             scan.into_terminal(),
-            Some(ScanTerminal::Range {
-                exhaustion: RangeExhaustion::CheckpointBound,
+            Some(ScanTerminal::NaturalRange {
+                end: NaturalRangeEnd::CheckpointBound,
                 position: Position::Transactions {
                     checkpoint: 0,
-                    tx_seq: 0
+                    tx_seq: 0,
                 },
                 interval_empty: false,
             })
@@ -271,14 +270,14 @@ mod tests {
                     items: Vec::new(),
                     produced: 0,
                     next_state: None,
-                    terminal: ScanTerminal::Range {
-                        exhaustion: RangeExhaustion::CheckpointBound,
-                        position: Position::Transactions {
+                    terminal: ScanTerminal::from_range_exhaustion(
+                        RangeExhaustion::CheckpointBound,
+                        Position::Transactions {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                        interval_empty: false,
-                    },
+                        false,
+                    ),
                     remaining_scan_budget: args.scan_budget,
                 })
             })

@@ -251,13 +251,13 @@ fn next_checkpoint_chunk(
             let interval_empty = cp_range.is_empty();
             let mut end_checkpoint = cp_range.end_checkpoint;
             let mut end_position = cp_range.end_position;
-            let mut terminal = ScanTerminal::Range {
-                exhaustion: cp_range.exhaustion,
-                position: Position::Checkpoints {
+            let mut terminal = ScanTerminal::from_range_exhaustion(
+                cp_range.exhaustion,
+                Position::Checkpoints {
                     checkpoint: end_position,
                 },
                 interval_empty,
-            };
+            );
             let mut entry_checkpoint = if options.is_ascending() {
                 cp_range.range.start
             } else {
@@ -292,13 +292,13 @@ fn next_checkpoint_chunk(
                         floor.checkpoint,
                         options.is_ascending(),
                     );
-                    terminal = ScanTerminal::Range {
-                        exhaustion: cp_range.exhaustion,
-                        position: Position::Checkpoints {
+                    terminal = ScanTerminal::from_range_exhaustion(
+                        cp_range.exhaustion,
+                        Position::Checkpoints {
                             checkpoint: end_position,
                         },
-                        interval_empty: consumed,
-                    };
+                        consumed,
+                    );
                 }
                 if tx_range.is_empty() {
                     return Ok(CheckpointChunkDone {
@@ -424,13 +424,13 @@ fn next_unfiltered_checkpoint_chunk(
         items,
         produced,
         next_state,
-        terminal: ScanTerminal::Range {
+        terminal: ScanTerminal::from_range_exhaustion(
             exhaustion,
-            position: Position::Checkpoints {
+            Position::Checkpoints {
                 checkpoint: end_position,
             },
-            interval_empty: false,
-        },
+            false,
+        ),
         remaining_scan_budget: scan_budget,
     })
 }

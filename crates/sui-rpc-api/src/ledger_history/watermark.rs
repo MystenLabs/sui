@@ -26,7 +26,7 @@
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc_cursor::{CursorToken, Position};
+use sui_rpc_cursor::{CursorKind, CursorToken, Position};
 
 use crate::ledger_history::query_options::{QueryOptions, RangeExhaustion};
 
@@ -188,14 +188,20 @@ fn terminal_boundary_watermark(options: &QueryOptions, end_position: Position) -
 /// drive loops fuse it onto the final item frame and suppress the trailing
 /// frame. The wire reason and the watermark policy are projections of the
 /// same value, so they cannot disagree.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NaturalRangeEnd {
+    LedgerTip,
+    CheckpointBound,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScanTerminal {
     /// Scan budget exhausted. Owns the mandatory authoritative frontier
     /// watermark (its cursor is always set by the frontier constructors).
     ScanLimit { watermark: Watermark },
-    /// The resolved interval is exhausted at `position`.
-    Range {
-        exhaustion: RangeExhaustion,
+    /// The resolved interval is naturally exhausted at `position`.
+    NaturalRange {
+        end: NaturalRangeEnd,
         position: Position,
         /// The resolved interval contained no scannable positions. Natural
         /// completion of an empty interval covered nothing, so its terminal
@@ -204,13 +210,46 @@ pub enum ScanTerminal {
         /// cursor is unaffected.
         interval_empty: bool,
     },
+    /// The caller-provided cursor bound truncates the interval at `position`.
+    CursorBound {
+        position: Position,
+        kind: CursorKind,
+    },
 }
 
 impl ScanTerminal {
+    pub fn from_range_exhaustion(
+        exhaustion: RangeExhaustion,
+        position: Position,
+        interval_empty: bool,
+    ) -> Self {
+        match exhaustion {
+            RangeExhaustion::LedgerTip => Self::NaturalRange {
+                end: NaturalRangeEnd::LedgerTip,
+                position,
+                interval_empty,
+            },
+            RangeExhaustion::CheckpointBound => Self::NaturalRange {
+                end: NaturalRangeEnd::CheckpointBound,
+                position,
+                interval_empty,
+            },
+            RangeExhaustion::CursorBound { kind } => Self::CursorBound { position, kind },
+        }
+    }
+
     pub fn reason(&self) -> QueryEndReason {
         match self {
             Self::ScanLimit { .. } => QueryEndReason::ScanLimit,
-            Self::Range { exhaustion, .. } => exhaustion.reason(),
+            Self::NaturalRange {
+                end: NaturalRangeEnd::LedgerTip,
+                ..
+            } => QueryEndReason::LedgerTip,
+            Self::NaturalRange {
+                end: NaturalRangeEnd::CheckpointBound,
+                ..
+            } => QueryEndReason::CheckpointBound,
+            Self::CursorBound { .. } => QueryEndReason::CursorBound,
         }
     }
 
@@ -228,10 +267,10 @@ impl ScanTerminal {
     ) -> Watermark {
         match self {
             Self::ScanLimit { watermark } => watermark,
-            Self::Range {
-                exhaustion: RangeExhaustion::LedgerTip | RangeExhaustion::CheckpointBound,
+            Self::NaturalRange {
                 position,
                 interval_empty,
+                ..
             } => {
                 if interval_empty {
                     boundary_watermark(position, None)
@@ -239,11 +278,9 @@ impl ScanTerminal {
                     terminal_boundary_watermark(options, position)
                 }
             }
-            Self::Range {
-                exhaustion: RangeExhaustion::CursorBound { kind },
-                position,
-                interval_empty: _,
-            } => cursor_watermark(position, covered_checkpoint_bound, kind),
+            Self::CursorBound { position, kind } => {
+                cursor_watermark(position, covered_checkpoint_bound, kind)
+            }
         }
     }
 }
@@ -411,6 +448,61 @@ mod tests {
     }
 
     #[test]
+    fn scan_terminal_converts_every_range_exhaustion() {
+        let position = Position::Transactions {
+            checkpoint: 9,
+            tx_seq: 4,
+        };
+        let cases = [
+            (
+                RangeExhaustion::LedgerTip,
+                false,
+                ScanTerminal::NaturalRange {
+                    end: NaturalRangeEnd::LedgerTip,
+                    position,
+                    interval_empty: false,
+                },
+            ),
+            (
+                RangeExhaustion::CheckpointBound,
+                true,
+                ScanTerminal::NaturalRange {
+                    end: NaturalRangeEnd::CheckpointBound,
+                    position,
+                    interval_empty: true,
+                },
+            ),
+            (
+                RangeExhaustion::CursorBound {
+                    kind: CursorKind::Item,
+                },
+                false,
+                ScanTerminal::CursorBound {
+                    position,
+                    kind: CursorKind::Item,
+                },
+            ),
+            (
+                RangeExhaustion::CursorBound {
+                    kind: CursorKind::Item,
+                },
+                true,
+                ScanTerminal::CursorBound {
+                    position,
+                    kind: CursorKind::Item,
+                },
+            ),
+        ];
+
+        for (exhaustion, interval_empty, expected) in cases {
+            assert_eq!(
+                ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn scan_terminal_natural_range_uses_terminal_boundary_watermark() {
         let ascending = options(true);
         let descending = options(false);
@@ -419,8 +511,8 @@ mod tests {
             tx_seq: 4,
         };
 
-        let checkpoint_bound = ScanTerminal::Range {
-            exhaustion: RangeExhaustion::CheckpointBound,
+        let checkpoint_bound = ScanTerminal::NaturalRange {
+            end: NaturalRangeEnd::CheckpointBound,
             position,
             interval_empty: false,
         };
@@ -438,8 +530,8 @@ mod tests {
         );
         assert_eq!(watermark.checkpoint, Some(9));
 
-        let ledger_tip = ScanTerminal::Range {
-            exhaustion: RangeExhaustion::LedgerTip,
+        let ledger_tip = ScanTerminal::NaturalRange {
+            end: NaturalRangeEnd::LedgerTip,
             position,
             interval_empty: false,
         };
@@ -470,13 +562,19 @@ mod tests {
             tx_seq: 4,
         };
 
-        for exhaustion in [RangeExhaustion::CheckpointBound, RangeExhaustion::LedgerTip] {
-            let terminal = ScanTerminal::Range {
-                exhaustion,
+        for (end, reason) in [
+            (
+                NaturalRangeEnd::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ),
+            (NaturalRangeEnd::LedgerTip, QueryEndReason::LedgerTip),
+        ] {
+            let terminal = ScanTerminal::NaturalRange {
+                end,
                 position,
                 interval_empty: true,
             };
-            assert_eq!(terminal.reason(), exhaustion.reason());
+            assert_eq!(terminal.reason(), reason);
             let watermark = terminal.clone().into_watermark(&ascending, None);
             assert_eq!(
                 watermark.cursor,
@@ -499,12 +597,9 @@ mod tests {
             checkpoint: 9,
             tx_seq: 4,
         };
-        let terminal = ScanTerminal::Range {
-            exhaustion: RangeExhaustion::CursorBound {
-                kind: CursorKind::Boundary,
-            },
+        let terminal = ScanTerminal::CursorBound {
             position,
-            interval_empty: false,
+            kind: CursorKind::Boundary,
         };
         assert_eq!(terminal.reason(), QueryEndReason::CursorBound);
 
@@ -531,12 +626,9 @@ mod tests {
             tx_seq: 4,
             event_index: 2,
         };
-        let terminal = ScanTerminal::Range {
-            exhaustion: RangeExhaustion::CursorBound {
-                kind: CursorKind::Item,
-            },
+        let terminal = ScanTerminal::CursorBound {
             position,
-            interval_empty: false,
+            kind: CursorKind::Item,
         };
         assert_eq!(terminal.reason(), QueryEndReason::CursorBound);
 

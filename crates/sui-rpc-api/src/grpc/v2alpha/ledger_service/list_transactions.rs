@@ -254,14 +254,14 @@ fn next_transaction_chunk(
                 let tx_range =
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
                 let entry_checkpoint = tx_range.entry_checkpoint;
-                let terminal = ScanTerminal::Range {
-                    exhaustion: tx_range.exhaustion,
-                    position: Position::Transactions {
+                let terminal = ScanTerminal::from_range_exhaustion(
+                    tx_range.exhaustion,
+                    Position::Transactions {
                         checkpoint: tx_range.end_checkpoint,
                         tx_seq: tx_range.end_position,
                     },
-                    interval_empty: tx_range.is_empty(),
-                };
+                    tx_range.is_empty(),
+                );
                 let range = tx_range.range;
                 if range.is_empty() {
                     return Ok(TransactionChunkDone {
@@ -311,14 +311,14 @@ fn next_transaction_chunk(
                         end_checkpoint,
                         end_position,
                     });
-                let terminal = ScanTerminal::Range {
+                let terminal = ScanTerminal::from_range_exhaustion(
                     exhaustion,
-                    position: Position::Transactions {
+                    Position::Transactions {
                         checkpoint: end_checkpoint,
                         tx_seq: end_position,
                     },
-                    interval_empty: false,
-                };
+                    false,
+                );
                 break (rows, next_state, terminal, None, entry_checkpoint);
             }
             TransactionScanState::Filtered {
@@ -778,14 +778,14 @@ mod tests {
                         items: vec![response],
                         produced: 1,
                         next_state: Some(1),
-                        terminal: ScanTerminal::Range {
-                            exhaustion: RangeExhaustion::CheckpointBound,
-                            position: Position::Transactions {
+                        terminal: ScanTerminal::from_range_exhaustion(
+                            RangeExhaustion::CheckpointBound,
+                            Position::Transactions {
                                 checkpoint: 8,
                                 tx_seq: 42,
                             },
-                            interval_empty: false,
-                        },
+                            false,
+                        ),
                         remaining_scan_budget: args.scan_budget,
                     })
                 } else if expected_code == tonic::Code::Cancelled {

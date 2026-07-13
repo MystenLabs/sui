@@ -537,11 +537,7 @@ fn range_end_response(
     covered_checkpoint_bound: Option<u64>,
     interval_empty: bool,
 ) -> (ListCheckpointsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::Range {
-        exhaustion,
-        position,
-        interval_empty,
-    };
+    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
     let reason = terminal.reason();
     (
         end_response(
