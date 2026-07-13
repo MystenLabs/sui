@@ -1,0 +1,114 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:10:22
+   │
+10 │         let _x: i8 = 128i8;
+   │                      ^^^^^ Invalid number literal. This literal does not fit into the type 'i8'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:14:23
+   │
+14 │         let _x: i16 = 32768i16;
+   │                       ^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i16'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:18:23
+   │
+18 │         let _x: i32 = 2147483648i32;
+   │                       ^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i32'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:22:23
+   │
+22 │         let _x: i64 = 9223372036854775808i64;
+   │                       ^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i64'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:26:24
+   │
+26 │         let _x: i128 = 170141183460469231731687303715884105728i128;
+   │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i128'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:30:24
+   │
+30 │         let _x: i256 = 57896044618658097711785492504343953926634992332820282019728792003956564819968i256;
+   │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i256'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:36:23
+   │
+36 │         let _x: i8 = -129i8;
+   │                       ^^^^^ Invalid number literal. This literal does not fit into the type 'i8'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:40:24
+   │
+40 │         let _x: i16 = -32769i16;
+   │                        ^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i16'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:44:24
+   │
+44 │         let _x: i32 = -2147483649i32;
+   │                        ^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i32'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:48:24
+   │
+48 │         let _x: i64 = -9223372036854775809i64;
+   │                        ^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i64'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:52:25
+   │
+52 │         let _x: i128 = -170141183460469231731687303715884105729i128;
+   │                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i128'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:56:25
+   │
+56 │         let _x: i256 = -57896044618658097711785492504343953926634992332820282019728792003956564819969i256;
+   │                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i256'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:62:22
+   │
+62 │         let _x: i8 = 0x80i8;
+   │                      ^^^^^^ Invalid number literal. This literal does not fit into the type 'i8'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:66:23
+   │
+66 │         let _x: i16 = 0x8000i16;
+   │                       ^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i16'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:70:23
+   │
+70 │         let _x: i32 = 0x80000000i32;
+   │                       ^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i32'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:74:23
+   │
+74 │         let _x: i64 = 0x8000000000000000i64;
+   │                       ^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i64'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:78:24
+   │
+78 │         let _x: i128 = 0x80000000000000000000000000000000i128;
+   │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i128'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_boundary_values_overflow.move:82:24
+   │
+82 │         let _x: i256 = 0x8000000000000000000000000000000000000000000000000000000000000000i256;
+   │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i256'

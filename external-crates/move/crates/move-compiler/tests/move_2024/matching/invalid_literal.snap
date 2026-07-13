@@ -15,4 +15,4 @@ error[E01006]: invalid number literal
   ┌─ tests/move_2024/matching/invalid_literal.move:9:26
   │
 9 │             Option::Some(256u8) => (),
-  │                          ^^^^^ Invalid number literal. The given literal is too large to fit into 'u8'
+  │                          ^^^^^ Invalid number literal. This literal does not fit into the type 'u8'

@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E04003]: built-in operation not supported
+  ┌─ tests/development/signed_ints/invalid/signed_int_neg_bool_var.move:5:19
+  │
+4 │         let _b = true;
+  │                  ---- Found: 'bool'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+5 │         let _x = -_b;
+  │                   ^^ Invalid argument to '-'

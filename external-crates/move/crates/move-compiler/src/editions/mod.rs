@@ -55,6 +55,7 @@ pub enum FeatureGate {
     ModuleLabel,
     ModuleExtension,
     StringLiterals,
+    SignedIntegers,
 }
 
 /// Compiler flavor — selects syntax and semantic rules (e.g. `Core` vs `Sui`).
@@ -129,7 +130,10 @@ pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) ->
         panic!("Previous assert should have failed");
     };
     let mut diag = diag!(Editions::FeatureTooNew, (loc, message));
-    diag.add_note(UPGRADE_NOTE);
+    let valid_editions = valid_editions_for_feature(feature);
+    if !valid_editions.is_empty() {
+        diag.add_note(UPGRADE_NOTE);
+    }
     diag
 }
 
@@ -152,7 +156,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[FeatureGate::ModuleExtension];
 
 const E2024_BETA_FEATURES: &[FeatureGate] = &[];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::SignedIntegers];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 
@@ -295,7 +299,7 @@ impl Flavor {
 }
 
 impl FeatureGate {
-    fn error_prefix(&self) -> &'static str {
+    pub(crate) fn error_prefix(&self) -> &'static str {
         match self {
             FeatureGate::NestedUse => "Nested 'use' forms are",
             FeatureGate::PublicPackage => "'public(package)' is",
@@ -320,6 +324,7 @@ impl FeatureGate {
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
             FeatureGate::ModuleExtension => "module extensions are",
             FeatureGate::StringLiterals => "string literals (without a leading 'b' or 'x') are",
+            FeatureGate::SignedIntegers => "signed integer types are",
         }
     }
 }

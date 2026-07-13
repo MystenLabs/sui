@@ -5,15 +5,17 @@
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
     PreCompiledProgramInfo,
-    cfgir::{ast as G, translate::move_value_from_value_},
+    cfgir::ast as G,
     compiled_unit::*,
-    diag,
+    dev_feature, diag,
     diagnostics::{DiagnosticReporter, Diagnostics, filter::FilterStack},
+    editions::FeatureGate,
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
         translate::{single_type as hlir_single_type, translate_var, type_},
     },
+    ice_assert,
     naming::{
         ast::{self as N, BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
@@ -996,6 +998,25 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U128))), _) => IRT::U128,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U256))), _) => IRT::U256,
 
+        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I8))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I16))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I32))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I64))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I128))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I256))), _) => {
+            debug_assert!(
+                context
+                    .env
+                    .supports_feature(context.current_package(), FeatureGate::SignedIntegers),
+                "ICE signed integer type reached bytecode signature translation with feature not supported"
+            );
+            context
+                .env
+                .diagnostic_reporter_at_top_level()
+                .add_diag(dev_feature!(FeatureGate::SignedIntegers, bt_loc));
+            IRT::U64
+        }
+
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Bool))), _) => IRT::Bool,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Vector))), mut args) => {
             assert!(
@@ -1204,6 +1225,20 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 V::U64(u) => B::LdU64(u),
                 V::U128(u) => B::LdU128(u),
                 V::U256(u) => B::LdU256(u),
+                V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
+                    debug_assert!(
+                        context.env.supports_feature(
+                            context.current_package(),
+                            FeatureGate::SignedIntegers
+                        ),
+                        "ICE signed integer value reached bytecode emission with feature not supported"
+                    );
+                    context
+                        .env
+                        .diagnostic_reporter_at_top_level()
+                        .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
+                    B::LdU64(0)
+                }
                 V::Bool(b) => {
                     if b {
                         B::LdTrue
@@ -1215,7 +1250,23 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     let [ty]: [IR::Type; 1] = types(context, e.ty)
                         .try_into()
                         .expect("ICE value type should have one element");
-                    B::LdConst(ty, move_value_from_value_(v_))
+                    match crate::cfgir::translate::move_value_from_value(
+                        context.env,
+                        context.current_package(),
+                        sp(loc, v_),
+                    ) {
+                        Some(mv) => B::LdConst(ty, mv),
+                        None => {
+                            let reporter = context.env.diagnostic_reporter_at_top_level();
+                            ice_assert!(
+                                reporter,
+                                context.env.has_errors(),
+                                loc,
+                                "Failed to translate value into bytecode value"
+                            );
+                            B::LdU64(0)
+                        }
+                    }
                 }
             };
             code.push(sp(loc, ld_value));
@@ -1278,7 +1329,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::UnaryExp(op, er) => {
             exp(context, code, *er);
-            unary_op(code, op);
+            unary_op(context, code, op);
         }
 
         E::BinopExp(el, op, er) => {
@@ -1366,6 +1417,20 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 BT::U64 => B::CastU64,
                 BT::U128 => B::CastU128,
                 BT::U256 => B::CastU256,
+                BT::I8 | BT::I16 | BT::I32 | BT::I64 | BT::I128 | BT::I256 => {
+                    debug_assert!(
+                        context.env.supports_feature(
+                            context.current_package(),
+                            FeatureGate::SignedIntegers
+                        ),
+                        "ICE signed integer cast reached bytecode emission with feature not supported"
+                    );
+                    context
+                        .env
+                        .diagnostic_reporter_at_top_level()
+                        .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
+                    B::CastU64
+                }
                 BT::Address | BT::Signer | BT::Vector | BT::Bool => {
                     panic!("ICE type checking failed. unexpected cast")
                 }
@@ -1393,13 +1458,26 @@ fn module_call(
     }
 }
 
-fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
+fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
     use IR::Bytecode_ as B;
     use UnaryOp_ as O;
     code.push(sp(
         loc,
         match op_ {
             O::Not => B::Not,
+            O::Neg => {
+                debug_assert!(
+                    context
+                        .env
+                        .supports_feature(context.current_package(), FeatureGate::SignedIntegers),
+                    "ICE unary negation reached bytecode emission with feature not supported"
+                );
+                context
+                    .env
+                    .diagnostic_reporter_at_top_level()
+                    .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
+                B::Not
+            }
         },
     ));
 }

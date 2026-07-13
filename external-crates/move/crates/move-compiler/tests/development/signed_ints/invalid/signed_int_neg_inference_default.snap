@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+warning[W04039]: unable to determine literal's type
+  ┌─ tests/development/signed_ints/invalid/signed_int_neg_inference_default.move:7:19
+  │
+7 │         let _x = -1;
+  │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04039]: unable to determine literal's type
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_inference_default.move:12:20
+   │
+12 │         let _x = -(5);
+   │                    ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04039]: unable to determine literal's type
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_inference_default.move:22:19
+   │
+22 │         let _a = -1 + 2;
+   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

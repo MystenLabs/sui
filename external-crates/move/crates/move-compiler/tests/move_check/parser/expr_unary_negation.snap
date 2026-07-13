@@ -5,38 +5,32 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04016]: too few arguments
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:5
-  │
-5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │     ^^^^^^^^^^^^^^^^^
-  │     │      │
-  │     │      Found 0 argument(s) here
-  │     Invalid call of 'assert'. The call expected 2 argument(s) but got 0
-
-error[E01002]: unexpected token
+error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:19
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                   ^
-  │                   │
-  │                   Unexpected '-'
-  │                   Expected an expression term
+  │                   ^ signed integer types are under development and should not be used right now.
 
-error[E04007]: incompatible types
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:23
+warning[W04039]: unable to determine literal's type
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:20
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │     ----------------- ^^ ---- Found: 'u64'. It is not compatible with the other type.
-  │     │                 │   
-  │     │                 Incompatible arguments to '=='
-  │     Found: '()'. It is not compatible with the other type.
+  │                    ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:30
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:36
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                              ^
-  │                              │
-  │                              Unexpected ')'
-  │                              Expected ';'
+  │                                    ^ signed integer types are under development and should not be used right now.
+
+warning[W04039]: unable to determine literal's type
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:38
+  │
+5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
+  │                                      ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

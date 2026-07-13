@@ -1539,6 +1539,10 @@ fn maybe_parse_value(context: &mut Context) -> Result<Option<Value>, Box<Diagnos
         }
         Tok::NumTypedValue => {
             let num = context.tokens.content().into();
+            if has_signed_suffix(context.tokens.content()) {
+                let loc = current_token_loc(context.tokens);
+                context.check_feature(FeatureGate::SignedIntegers, loc);
+            }
             context.tokens.advance()?;
             Value_::Num(num)
         }
@@ -1773,7 +1777,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 //          | "match" "(" <Exp> ")" "{" (<MatchArm> ",")+ "}"
 #[growing_stack]
 fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
-    const VECTOR_IDENT: &str = "vector";
+    const VECTOR_IDENT: &str = crate::shared::builtin_types::VECTOR;
 
     let start_loc = context.tokens.start_loc();
     let term = match context.tokens.peek() {
@@ -2718,6 +2722,7 @@ fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp
 // Parse a unary expression:
 //      UnaryExp =
 //          "!" <UnaryExp>
+//          | "-" <UnaryExp>
 //          | "&mut" <UnaryExp>
 //          | "&" "mut" <UnaryExp>
 //          | "&" <UnaryExp>
@@ -2736,6 +2741,20 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                 start_loc,
                 op_end_loc,
                 UnaryOp_::Not,
+            );
+            let e = parse_unary_exp(context)?;
+            Exp_::UnaryExp(op, Box::new(e))
+        }
+        Tok::Minus => {
+            let loc = current_token_loc(context.tokens);
+            context.check_feature(FeatureGate::SignedIntegers, loc);
+            context.tokens.advance()?;
+            let op_end_loc = context.tokens.previous_end_loc();
+            let op = spanned(
+                context.tokens.file_hash(),
+                start_loc,
+                op_end_loc,
+                UnaryOp_::Neg,
             );
             let e = parse_unary_exp(context)?;
             Exp_::UnaryExp(op, Box::new(e))

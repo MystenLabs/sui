@@ -359,6 +359,18 @@ pub enum Value_ {
     U128(u128),
     // <num>u256
     U256(move_core_types::u256::U256),
+    // <num>i8
+    I8(i8),
+    // <num>i16
+    I16(i16),
+    // <num>i32
+    I32(i32),
+    // <num>i64
+    I64(i64),
+    // <num>i128
+    I128(i128),
+    // <num>i256
+    I256(move_core_types::i256::I256),
     // true
     // false
     Bool(bool),
@@ -921,6 +933,12 @@ impl std::fmt::Display for Value_ {
             V::U64(u) => write!(f, "{}", u),
             V::U128(u) => write!(f, "{}", u),
             V::U256(u) => write!(f, "{}", u),
+            V::I8(i) => write!(f, "{}", i),
+            V::I16(i) => write!(f, "{}", i),
+            V::I32(i) => write!(f, "{}", i),
+            V::I64(i) => write!(f, "{}", i),
+            V::I128(i) => write!(f, "{}", i),
+            V::I256(i) => write!(f, "{}", i),
             V::Bool(b) => write!(f, "{}", b),
             // TODO preserve the user's original string
             V::Bytearray(v) => {
@@ -1450,6 +1468,12 @@ impl AstDebug for Value_ {
             V::U64(u) => w.write(format!("{}u64", u)),
             V::U128(u) => w.write(format!("{}u128", u)),
             V::U256(u) => w.write(format!("{}u256", u)),
+            V::I8(i) => w.write(format!("{}i8", i)),
+            V::I16(i) => w.write(format!("{}i16", i)),
+            V::I32(i) => w.write(format!("{}i32", i)),
+            V::I64(i) => w.write(format!("{}i64", i)),
+            V::I128(i) => w.write(format!("{}i128", i)),
+            V::I256(i) => w.write(format!("{}i256", i)),
             V::Bool(b) => w.write(format!("{}", b)),
             V::Bytearray(v) => w.write(format!("{:?}", v)),
             V::InferredString(v) => w.write(format!("string<{:?}>", v)),
@@ -1519,7 +1543,7 @@ impl AstDebug for Exp_ {
                 w.write("}");
             }
             E::Vector(_loc, tys_opt, sp!(_, elems)) => {
-                w.write("vector");
+                w.write(crate::shared::builtin_types::VECTOR);
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);

@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/development/signed_ints/invalid/signed_int_return_types.move:31:9
+   │
+30 │     fun ret_wrong_signed(): i64 {
+   │                             --- Expected: 'i64'
+31 │         1i32
+   │         ^^^^
+   │         │
+   │         Invalid return expression
+   │         Given: 'i32'
+
+error[E04007]: incompatible types
+   ┌─ tests/development/signed_ints/invalid/signed_int_return_types.move:36:9
+   │
+35 │     fun ret_unsigned_for_signed(): i64 {
+   │                                    --- Expected: 'i64'
+36 │         1u64
+   │         ^^^^
+   │         │
+   │         Invalid return expression
+   │         Given: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/development/signed_ints/invalid/signed_int_return_types.move:41:9
+   │
+40 │     fun ret_signed_for_unsigned(): u64 {
+   │                                    --- Expected: 'u64'
+41 │         1i64
+   │         ^^^^
+   │         │
+   │         Invalid return expression
+   │         Given: 'i64'

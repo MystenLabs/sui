@@ -74,6 +74,7 @@ pub enum Constraint {
         constraints: AbilitySet,
     },
     NumericConstraint(Loc, &'static str, Type),
+    SignedNumericConstraint(Loc, &'static str, Type),
     BitsConstraint(Loc, &'static str, Type),
     OrderedConstraint(Loc, &'static str, Type),
     BaseTypeConstraint(Loc, String, Type),
@@ -1097,6 +1098,25 @@ impl<'env, 'outer> Context<'env, 'outer> {
             .push(Constraint::NumericConstraint(loc, op, t))
     }
 
+    pub fn add_signed_numeric_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
+        // If the type is a numeric type variable (e.g., from an untyped literal as `1`), upgrade
+        // its VarConstraint from Num to SignedNum so it defaults to i64 instead of u64. For all
+        // other types the deferred constraint handles error reporting later to avoid 'default'
+        // errors for non-numerical values (e.g., `bool`).
+        if let TI::Var(v) = t.value.inner() {
+            let cur = forward_tvar(&self.subst, *v);
+            if let Some(c) = self.subst.tvar_constraints.get(&cur)
+                && c.is_num_var()
+            {
+                self.subst
+                    .tvar_constraints
+                    .insert(cur, VarConstraint::SignedNum(loc));
+            }
+        }
+        self.constraints
+            .push(Constraint::SignedNumericConstraint(loc, op, t))
+    }
+
     pub fn add_bits_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
         self.constraints
             .push(Constraint::BitsConstraint(loc, op, t))
@@ -1349,6 +1369,7 @@ pub struct Subst {
 // This will eventually hold constraints like `Void` and `String` as well
 pub enum VarConstraint {
     Num(Loc),
+    SignedNum(Loc),
     String(Loc),
     Divergent(Loc),
 }
@@ -1383,6 +1404,16 @@ impl Subst {
         tvar
     }
 
+    pub fn new_signed_num_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
+        let tvar = counter.next();
+        assert!(
+            self.tvar_constraints
+                .insert(tvar, VarConstraint::SignedNum(loc))
+                .is_none()
+        );
+        tvar
+    }
+
     pub fn new_string_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
         let tvar = counter.next();
         assert!(
@@ -1412,7 +1443,11 @@ impl Subst {
     pub fn is_value_constrainted_var(&self, tvar: &TVar) -> bool {
         self.tvar_constraints
             .get(tvar)
-            .map(|constraint| constraint.is_num_var() || constraint.is_string_var())
+            .map(|constraint| {
+                constraint.is_num_var()
+                    || constraint.is_signed_num_var()
+                    || constraint.is_string_var()
+            })
             .unwrap_or(false)
     }
 
@@ -1420,6 +1455,13 @@ impl Subst {
         self.tvar_constraints
             .get(tvar)
             .map(|constraint| constraint.is_num_var())
+            .unwrap_or(false)
+    }
+
+    pub fn is_signed_num_var(&self, tvar: &TVar) -> bool {
+        self.tvar_constraints
+            .get(tvar)
+            .map(|constraint| constraint.is_signed_num_var())
             .unwrap_or(false)
     }
 
@@ -1443,6 +1485,10 @@ impl VarConstraint {
         matches!(self, VarConstraint::Num(_))
     }
 
+    pub fn is_signed_num_var(&self) -> bool {
+        matches!(self, VarConstraint::SignedNum(_))
+    }
+
     pub fn is_string_var(&self) -> bool {
         matches!(self, VarConstraint::String(_))
     }
@@ -1453,15 +1499,17 @@ impl VarConstraint {
 
     pub fn loc(&self) -> Loc {
         match self {
-            VarConstraint::Num(loc) => *loc,
-            VarConstraint::String(loc) => *loc,
-            VarConstraint::Divergent(loc) => *loc,
+            VarConstraint::Num(loc)
+            | VarConstraint::SignedNum(loc)
+            | VarConstraint::String(loc)
+            | VarConstraint::Divergent(loc) => *loc,
         }
     }
 
     pub fn kind(&self) -> String {
         match self {
             VarConstraint::Num(_) => "num".to_owned(),
+            VarConstraint::SignedNum(_) => "signed num".to_owned(),
             VarConstraint::String(_) => "string".to_owned(),
             VarConstraint::Divergent(_) => "divergent".to_owned(),
         }
@@ -1706,9 +1754,9 @@ pub fn make_divergent_tvar(context: &mut Context, loc: Loc) -> Type {
 pub fn is_type_divergent(subst: &Subst, ty: &Type) -> bool {
     match ty.value.inner() {
         TI::Anything | TI::Void => true,
-        TI::Var(tvar) => {
-            let last_tvar = forward_tvar(subst, *tvar);
-            subst.get(last_tvar).is_none() && subst.is_divergent_var(&last_tvar)
+        TI::Var(id) => {
+            let last_id = forward_tvar(subst, *id);
+            subst.get(last_id).is_none() && subst.is_divergent_var(&last_id)
         }
         TI::UnresolvedError
         | TI::Unit
@@ -1721,6 +1769,13 @@ pub fn is_type_divergent(subst: &Subst, ty: &Type) -> bool {
 
 pub fn make_num_tvar(context: &mut Context, loc: Loc) -> Type {
     let tvar = context.subst.new_num_var(&mut context.tvar_counter, loc);
+    sp(loc, TI::Var(tvar).into())
+}
+
+pub fn make_signed_num_tvar(context: &mut Context, loc: Loc) -> Type {
+    let tvar = context
+        .subst
+        .new_signed_num_var(&mut context.tvar_counter, loc);
     sp(loc, TI::Var(tvar).into())
 }
 
@@ -2432,6 +2487,9 @@ pub fn solve_constraints(context: &mut Context) {
             Constraint::NumericConstraint(loc, op, t) => {
                 solve_builtin_type_constraint(context, BT::numeric(), loc, op, &t)
             }
+            Constraint::SignedNumericConstraint(loc, op, t) => {
+                solve_builtin_type_constraint(context, BT::signed_numeric(), loc, op, &t)
+            }
             Constraint::BitsConstraint(loc, op, t) => {
                 solve_builtin_type_constraint(context, BT::bits(), loc, op, &t)
             }
@@ -2456,6 +2514,11 @@ pub fn solve_constraints(context: &mut Context) {
                 // Already resolved above.
             }
             VarConstraint::Num(loc) => {
+                // If this var was merged with a SignedNum var, skip — handled below
+                let last_var = forward_tvar(&subst, var);
+                if subst.is_signed_num_var(&last_var) {
+                    continue;
+                }
                 let tvar = sp(loc, TI::Var(var).into());
                 let unfolded_ty_ = unfold_type(&subst, &tvar).value;
                 let ti = unfolded_ty_.inner();
@@ -2474,6 +2537,28 @@ pub fn solve_constraints(context: &mut Context) {
                 if matches!(ti, TI::UnresolvedError | TI::Anything) {
                     let next_subst =
                         join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
+                            .unwrap()
+                            .0;
+                    subst = next_subst;
+                }
+            }
+            VarConstraint::SignedNum(loc) => {
+                let tvar = sp(loc, TI::Var(var).into());
+                let unfolded_ty_ = unfold_type(&subst, &tvar).value;
+                let ti = unfolded_ty_.inner();
+                if matches!(ti, TI::Anything) {
+                    let msg = "Could not determine a concrete type for this signed numeric \
+                                       literal, so defaulting to 'i64'";
+                    let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                    diag.add_note(
+                        "To avoid this warning, add an explicit type annotation, \
+                                           e.g., '<num>i64'",
+                    );
+                    context.add_diag(diag);
+                }
+                if matches!(ti, TI::UnresolvedError | TI::Anything) {
+                    let next_subst =
+                        join(&mut context.tvar_counter, subst, &Type_::i64(loc), &tvar)
                             .unwrap()
                             .0;
                     subst = next_subst;
@@ -2616,6 +2701,16 @@ fn solve_builtin_type_constraint(
     ty: &Type,
 ) {
     use TypeName_::*;
+    let signed_supported = context
+        .env()
+        .supports_feature(context.current_package(), FeatureGate::SignedIntegers);
+    let filtered;
+    let builtin_set = if signed_supported {
+        builtin_set
+    } else {
+        filtered = builtin_set - BuiltinTypeName_::signed_numeric();
+        &filtered
+    };
     let t = unfold_type(&context.subst, ty);
     let tloc = t.loc;
     let mk_tmsg = || {
@@ -3461,7 +3556,7 @@ pub fn join_var_constraints(
 ) -> Result<Option<VarConstraint>, TypingError> {
     use VarConstraint as C;
     match (&lhs, &rhs) {
-        // divergnce propagates only if both arms are divergent; otherwise, use the other constraint
+        // divergence propagates only if both arms are divergent; otherwise, use the other constraint
         (Some(C::Divergent(_)), Some(C::Divergent(_))) => Ok(rhs),
         (Some(C::Divergent(_)), other) | (other, Some(C::Divergent(_))) => Ok(other.clone()),
 
@@ -3470,13 +3565,24 @@ pub fn join_var_constraints(
         (Some(C::Num(_)), None) => Ok(lhs),
         (None, Some(C::Num(_))) => Ok(rhs),
 
+        // Num + SignedNum => SignedNum (signed is more restrictive)
+        (Some(C::Num(_)), rhs @ Some(C::SignedNum(_))) => Ok(rhs.clone()),
+        (lhs @ Some(C::SignedNum(_)), Some(C::Num(_))) => Ok(lhs.clone()),
+
+        // signed num constraints propagate
+        (Some(C::SignedNum(_)), Some(C::SignedNum(_))) => Ok(rhs),
+        (Some(C::SignedNum(_)), None) => Ok(lhs),
+        (None, Some(C::SignedNum(_))) => Ok(rhs),
+
         // string constraints propagates if either arms is strings
         (Some(C::String(_)), Some(C::String(_))) => Ok(rhs),
         (Some(C::String(_)), None) => Ok(lhs),
         (None, Some(C::String(_))) => Ok(rhs),
 
         (Some(lhs @ C::String(_)), Some(rhs @ C::Num(_)))
-        | (Some(lhs @ C::Num(_)), Some(rhs @ C::String(_))) => {
+        | (Some(lhs @ C::Num(_)), Some(rhs @ C::String(_)))
+        | (Some(lhs @ C::String(_)), Some(rhs @ C::SignedNum(_)))
+        | (Some(lhs @ C::SignedNum(_)), Some(rhs @ C::String(_))) => {
             let err_lhs = (lhs.loc(), Box::new(lhs.kind()));
             let err_rhs = (rhs.loc(), Box::new(rhs.kind()));
             Err(TypingError::IncompatibleConstraints(err_lhs, err_rhs))
@@ -3589,6 +3695,7 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
 
 fn check_tvar_constraints(subst: &Subst, _loc: Loc, tvar: &TVar, ty: &Type) -> bool {
     (!subst.is_num_var(tvar) || check_num_tvar_(subst, ty))
+        && (!subst.is_signed_num_var(tvar) || check_signed_num_tvar_(subst, ty))
         && (!subst.is_string_var(tvar) || check_string_tvar_(subst, ty))
 }
 
@@ -3603,7 +3710,25 @@ fn check_num_tvar_(subst: &Subst, ty: &Type) -> bool {
                 assert!(!ty.value.is_var());
                 check_num_tvar_(subst, ty)
             } else {
-                subst.is_num_var(&last_tvar)
+                subst.is_num_var(&last_tvar) || subst.is_signed_num_var(&last_tvar)
+            }
+        }
+        _ => false,
+    }
+}
+
+fn check_signed_num_tvar_(subst: &Subst, ty: &Type) -> bool {
+    match &ty.value.inner() {
+        TI::UnresolvedError | TI::Anything => true,
+        TI::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), _) => bt.is_signed_numeric(),
+
+        TI::Var(v) => {
+            let last_tvar = forward_tvar(subst, *v);
+            if let Some(ty) = subst.get(last_tvar) {
+                assert!(!ty.value.is_var());
+                check_signed_num_tvar_(subst, ty)
+            } else {
+                subst.is_signed_num_var(&last_tvar)
             }
         }
         _ => false,

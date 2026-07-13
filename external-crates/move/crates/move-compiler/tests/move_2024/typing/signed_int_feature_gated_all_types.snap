@@ -1,0 +1,78 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:4:17
+  │
+4 │         let _x: i8 = 0;
+  │                 ^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:8:17
+  │
+8 │         let _x: i16 = 0;
+  │                 ^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:12:17
+   │
+12 │         let _x: i32 = 0;
+   │                 ^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:16:17
+   │
+16 │         let _x: i64 = 0;
+   │                 ^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:20:17
+   │
+20 │         let _x: i128 = 0;
+   │                 ^^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:24:18
+   │
+24 │         let _x = 1i8;
+   │                  ^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:28:18
+   │
+28 │         let _x = 1i16;
+   │                  ^^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:32:18
+   │
+32 │         let _x = 1i32;
+   │                  ^^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:36:18
+   │
+36 │         let _x = 1i64;
+   │                  ^^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:40:17
+   │
+40 │         let _x: i256 = 0;
+   │                 ^^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:44:18
+   │
+44 │         let _x = 1i128;
+   │                  ^^^^^ signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:48:18
+   │
+48 │         let _x = 1i256;
+   │                  ^^^^^ signed integer types are under development and should not be used right now.

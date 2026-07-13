@@ -874,6 +874,17 @@ macro_rules! ice {
 }
 
 #[macro_export]
+macro_rules! dev_feature {
+    ($feature:expr, $loc:expr $(,)?) => {{
+        let msg = format!("{} under development", $feature.error_prefix());
+        $crate::diag!(
+            $crate::diagnostics::codes::Editions::FeatureInDevelopment,
+            ($loc, msg)
+        )
+    }};
+}
+
+#[macro_export]
 macro_rules! ice_assert {
     ($reporter: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
         if !$cond {

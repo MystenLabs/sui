@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E04003]: built-in operation not supported
+  ┌─ tests/development/signed_ints/invalid/signed_int_neg_non_numeric.move:7:18
+  │
+7 │         let _x = -true;
+  │                  ^^^^^ Negation '-' is only valid for numeric types, but found 'bool'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_non_numeric.move:12:19
+   │
+11 │         let b = false;
+   │                 ----- Found: 'bool'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+12 │         let _x = -b;
+   │                   ^ Invalid argument to '-'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_non_numeric.move:17:18
+   │
+17 │         let _x = -@0x42;
+   │                  ^^^^^^ Negation '-' is only valid for numeric types, but found 'address'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_non_numeric.move:23:19
+   │
+22 │         let v = vector[1i8];
+   │                 ----------- Found: 'vector<i8>'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+23 │         let _x = -v;
+   │                   ^ Invalid argument to '-'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_non_numeric.move:31:19
+   │
+30 │         let s = S { val: 1i64 };
+   │                 --------------- Found: '0x42::m::S'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+31 │         let _x = -s;
+   │                   ^ Invalid argument to '-'

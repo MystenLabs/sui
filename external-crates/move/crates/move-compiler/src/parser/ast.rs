@@ -570,6 +570,8 @@ pub type Value = Spanned<Value_>;
 pub enum UnaryOp_ {
     // !
     Not,
+    // - (unary negation)
+    Neg,
 }
 pub type UnaryOp = Spanned<UnaryOp_>;
 
@@ -1270,11 +1272,13 @@ impl Type_ {
 
 impl UnaryOp_ {
     pub const NOT: &'static str = "!";
+    pub const NEG: &'static str = "-";
 
     pub fn symbol(&self) -> &'static str {
         use UnaryOp_ as U;
         match self {
             U::Not => U::NOT,
+            U::Neg => U::NEG,
         }
     }
 
@@ -1282,6 +1286,7 @@ impl UnaryOp_ {
         use UnaryOp_ as U;
         match self {
             U::Not => true,
+            U::Neg => true,
         }
     }
 }
@@ -2362,7 +2367,7 @@ impl AstDebug for Exp_ {
                 w.write("}");
             }
             E::Vector(_loc, tys_opt, sp!(_, elems)) => {
-                w.write("vector");
+                w.write(crate::shared::builtin_types::VECTOR);
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
