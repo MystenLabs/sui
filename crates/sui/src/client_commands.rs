@@ -114,7 +114,7 @@ use move_package_alt::{
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
 use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
-use sui_source_verification::{VerifiedMetadata, verify_source};
+use sui_source_verification::{VerifiedMetadata, verify_built, verify_source};
 use tracing::{debug, info};
 
 /// Concurrency level for fetching coin metadata for balances.
@@ -637,6 +637,12 @@ pub enum SuiClientCommands {
         /// reading it from the package's publish metadata.
         #[clap(long)]
         toolchain_version: Option<String>,
+
+        /// Compare the modules already compiled under `<package_path>/build` against the on-chain
+        /// package with this id, without rebuilding. Only module bytecode is compared, not linkage.
+        /// Intended for tooling such as the debugger.
+        #[clap(long, hide = true, value_name = "ON_CHAIN_ID")]
+        verify_only: Option<ObjectID>,
     },
 
     /// Remove an existing address by its alias or hexadecimal string.
@@ -1833,43 +1839,52 @@ impl SuiClientCommands {
                 package_path,
                 build_config,
                 toolchain_version,
+                verify_only,
             } => {
-                // Resolve the environment the way the rest of the CLI does, and read the address and
-                // toolchain from the package's own publication, so they are exactly what the package
-                // system would resolve when linking against this package.
-                let environment = find_environment(
-                    &package_path,
-                    build_config.environment.clone(),
-                    context,
-                    false,
-                )
-                .await?;
+                if let Some(on_chain_id) = verify_only {
+                    // Compare the existing build against a caller-supplied on-chain id, without
+                    // rebuilding. This path resolves no publication and no toolchain, so it has no
+                    // metadata to report.
+                    let client = context.grpc_client()?;
+                    verify_built(&package_path, on_chain_id, &client).await?;
+                    SuiClientCommandResult::VerifySource(None)
+                } else {
+                    // Resolve the environment the way the rest of the CLI does, and read the address
+                    // and toolchain from the package's own publication, so they are exactly what the
+                    // package system would resolve when linking against this package.
+                    let environment = find_environment(
+                        &package_path,
+                        build_config.environment.clone(),
+                        context,
+                        false,
+                    )
+                    .await?;
 
-                let flavor = SuiFlavor::with_client(context);
-                let publication =
-                    read_publication::<SuiFlavor>(&package_path, &environment, &flavor)
-                        .await?
-                        .with_context(|| {
-                            format!(
-                                "package at {} records no publication for environment `{}`; \
-                                 nothing to verify against",
-                                package_path.display(),
-                                environment.name(),
-                            )
-                        })?;
+                    let flavor = SuiFlavor::with_client(context);
+                    let publication =
+                        read_publication::<SuiFlavor>(&package_path, &environment, &flavor)
+                            .await?
+                            .with_context(|| {
+                                format!(
+                                    "package at {} records no publication for environment `{}`; \
+                                     nothing to verify against",
+                                    package_path.display(),
+                                    environment.name(),
+                                )
+                            })?;
 
-                let client = context.grpc_client()?;
-                let metadata = verify_source(
-                    &package_path,
-                    &publication,
-                    toolchain_version,
-                    &environment,
-                    &client,
-                    Some(context.config.path()),
-                )
-                .await?;
-
-                SuiClientCommandResult::VerifySource(metadata)
+                    let client = context.grpc_client()?;
+                    let metadata = verify_source(
+                        &package_path,
+                        &publication,
+                        toolchain_version,
+                        &environment,
+                        &client,
+                        Some(context.config.path()),
+                    )
+                    .await?;
+                    SuiClientCommandResult::VerifySource(Some(metadata))
+                }
             }
             SuiClientCommands::PartyTransfer {
                 to,
@@ -2405,18 +2420,20 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::VerifySource(metadata) => {
                 writeln!(writer, "Source verification succeeded!")?;
-                writeln!(writer, "  original ID:       {}", metadata.original_id)?;
-                writeln!(writer, "  published at:      {}", metadata.published_at)?;
-                writeln!(
-                    writer,
-                    "  toolchain version: {}",
-                    metadata.toolchain_version
-                )?;
-                writeln!(
-                    writer,
-                    "  binary:            {}",
-                    metadata.binary_path.display()
-                )?;
+                if let Some(metadata) = metadata {
+                    writeln!(writer, "  original ID:       {}", metadata.original_id)?;
+                    writeln!(writer, "  published at:      {}", metadata.published_at)?;
+                    writeln!(
+                        writer,
+                        "  toolchain version: {}",
+                        metadata.toolchain_version
+                    )?;
+                    writeln!(
+                        writer,
+                        "  binary:            {}",
+                        metadata.binary_path.display()
+                    )?;
+                }
             }
             SuiClientCommandResult::VerifyBytecodeMeter {
                 success,
@@ -2983,7 +3000,7 @@ pub enum SuiClientCommandResult {
         max_function_ticks: Option<u128>,
         used_ticks: Accumulator,
     },
-    VerifySource(VerifiedMetadata),
+    VerifySource(Option<VerifiedMetadata>),
 }
 
 #[derive(Serialize, Clone)]
