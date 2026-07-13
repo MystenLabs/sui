@@ -54,10 +54,8 @@ use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
 use super::query_end::query_end;
-use crate::ledger_history::watermark::advance_boundary_excluding_cp;
 use crate::ledger_history::watermark::advance_checkpoint_boundary;
-use crate::ledger_history::watermark::boundary_cursor_cp;
-use crate::ledger_history::watermark::boundary_watermark;
+use crate::ledger_history::watermark::frontier_boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::reached_range_end;
 use crate::ledger_history::watermark::terminal_boundary_watermark;
@@ -102,7 +100,6 @@ pub(crate) async fn list_checkpoints(
         filter_query,
     };
 
-    let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
         let mut scan = ChunkedScan::new(
             initial_state,
@@ -132,10 +129,7 @@ pub(crate) async fn list_checkpoints(
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(
-                &terminal_options,
-                terminal.position,
-            ));
+            yield watermark_response(terminal.watermark);
         }
         yield end_response(reason);
         info!(
@@ -187,8 +181,7 @@ enum CheckpointScanState {
     Unfiltered {
         range: Range<u64>,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal_watermark: Watermark,
     },
     Filtered {
         query: BitmapQuery,
@@ -197,8 +190,7 @@ enum CheckpointScanState {
         buffered_cp_seqs: VecDeque<u64>,
         last_cp_seq: Option<u64>,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal_watermark: Watermark,
     },
 }
 
@@ -232,9 +224,12 @@ fn next_checkpoint_chunk(
             }
             let terminal = ChunkTerminal {
                 reason: cp_range.end_reason,
-                position: Position::Checkpoints {
-                    checkpoint: cp_range.end_position,
-                },
+                watermark: terminal_boundary_watermark(
+                    &options,
+                    Position::Checkpoints {
+                        checkpoint: cp_range.end_position,
+                    },
+                ),
             };
             let range = cp_range.range;
             if range.is_empty() {
@@ -269,15 +264,13 @@ fn next_checkpoint_chunk(
                     buffered_cp_seqs: VecDeque::new(),
                     last_cp_seq: None,
                     end_reason: terminal.reason,
-                    end_checkpoint: cp_range.end_checkpoint,
-                    end_position: cp_range.end_position,
+                    terminal_watermark: terminal.watermark,
                 }
             } else {
                 CheckpointScanState::Unfiltered {
                     range,
                     end_reason: terminal.reason,
-                    end_checkpoint: cp_range.end_checkpoint,
-                    end_position: cp_range.end_position,
+                    terminal_watermark: terminal.watermark,
                 }
             };
             next_checkpoint_chunk(
@@ -295,14 +288,12 @@ fn next_checkpoint_chunk(
         CheckpointScanState::Unfiltered {
             range,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark,
         } => next_unfiltered_checkpoint_chunk(
             service,
             range,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark,
             read_mask,
             options,
             scan_budget,
@@ -316,8 +307,7 @@ fn next_checkpoint_chunk(
             buffered_cp_seqs,
             last_cp_seq,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark,
         } => next_filtered_checkpoint_chunk(
             service,
             query,
@@ -326,8 +316,7 @@ fn next_checkpoint_chunk(
             buffered_cp_seqs,
             last_cp_seq,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark,
             read_mask,
             options,
             scan_budget,
@@ -343,8 +332,7 @@ fn next_unfiltered_checkpoint_chunk(
     service: RpcService,
     range: Range<u64>,
     end_reason: QueryEndReason,
-    end_checkpoint: u64,
-    end_position: u64,
+    terminal_watermark: Watermark,
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
@@ -359,8 +347,7 @@ fn next_unfiltered_checkpoint_chunk(
         .map(|range| CheckpointScanState::Unfiltered {
             range,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark: terminal_watermark.clone(),
         });
     if cancel.is_cancelled() {
         return Err(cancelled());
@@ -373,9 +360,7 @@ fn next_unfiltered_checkpoint_chunk(
         next_state,
         terminal: ChunkTerminal {
             reason: end_reason,
-            position: Position::Checkpoints {
-                checkpoint: end_position,
-            },
+            watermark: terminal_watermark,
         },
         remaining_scan_budget: scan_budget,
     })
@@ -389,8 +374,7 @@ fn next_filtered_checkpoint_chunk(
     mut buffered_cp_seqs: VecDeque<u64>,
     mut last_cp_seq: Option<u64>,
     end_reason: QueryEndReason,
-    end_checkpoint: u64,
-    end_position: u64,
+    terminal_watermark: Watermark,
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
@@ -494,8 +478,7 @@ fn next_filtered_checkpoint_chunk(
                 buffered_cp_seqs,
                 last_cp_seq,
                 end_reason,
-                end_checkpoint,
-                end_position,
+                terminal_watermark: terminal_watermark.clone(),
             },
         )
     };
@@ -527,9 +510,7 @@ fn next_filtered_checkpoint_chunk(
         next_state,
         terminal: ChunkTerminal {
             reason,
-            position: Position::Checkpoints {
-                checkpoint: end_position,
-            },
+            watermark: terminal_watermark,
         },
         remaining_scan_budget,
     })
@@ -556,19 +537,8 @@ fn scan_checkpoint_watermark(
     let Some(cp) = sequence_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-    // The frontier lands partway through checkpoint `cp`, so `cp` itself is not
-    // yet proven complete — exclude it from the boundary (`cp ∓ 1`). Contrast
-    // the item path, which feeds an emitted (hence complete) cp_seq straight
-    // into `advance_checkpoint_boundary`.
-    let boundary = advance_boundary_excluding_cp(None, cp, options);
     // Checkpoint cursors live in checkpoint space: position == checkpoint.
-    let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
-    let watermark = boundary_watermark(
-        Position::Checkpoints {
-            checkpoint: cursor_cp,
-        },
-        boundary,
-    );
+    let watermark = frontier_boundary_watermark(options, Position::Checkpoints { checkpoint: cp });
     Ok(Some(watermark_response(watermark)))
 }
 

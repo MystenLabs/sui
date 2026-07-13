@@ -35,8 +35,7 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedRange;
 use crate::ledger_history::watermark::advance_boundary_excluding_cp;
-use crate::ledger_history::watermark::boundary_cursor_cp;
-use crate::ledger_history::watermark::boundary_watermark;
+use crate::ledger_history::watermark::frontier_boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::reached_range_end;
 use crate::ledger_history::watermark::terminal_boundary_watermark;
@@ -102,7 +101,6 @@ pub(crate) async fn list_transactions(
         filter_query,
     };
 
-    let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
         let render_contents = should_render_transaction_contents(&read_mask);
         let mut scan = ChunkedScan::new(
@@ -134,10 +132,7 @@ pub(crate) async fn list_transactions(
         let terminal = scan.into_terminal().expect("query emits terminal state");
         let reason = query_end(emitted, limit_items, terminal.reason);
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(
-                &terminal_options,
-                terminal.position,
-            ));
+            yield watermark_response(terminal.watermark);
         }
         yield end_response(reason);
         info!(
@@ -191,16 +186,14 @@ enum TransactionScanState {
     Unfiltered {
         range: Range<u64>,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal_watermark: Watermark,
     },
     Filtered {
         query: BitmapQuery,
         range: Option<Range<u64>>,
         pending_bucket: Option<PendingBitmapBucket>,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal_watermark: Watermark,
     },
 }
 
@@ -220,7 +213,7 @@ fn next_transaction_chunk(
 ) -> Result<TransactionChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
-    let (rows, next_state, terminal, scan_watermark) = loop {
+    let (rows, next_state, terminal, scan_limited, frontier) = loop {
         if cancel.is_cancelled() {
             return Err(cancelled());
         }
@@ -239,10 +232,13 @@ fn next_transaction_chunk(
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
                 let terminal = ChunkTerminal {
                     reason: tx_range.end_reason,
-                    position: Position::Transactions {
-                        checkpoint: tx_range.end_checkpoint,
-                        tx_seq: tx_range.end_position,
-                    },
+                    watermark: terminal_boundary_watermark(
+                        &options,
+                        Position::Transactions {
+                            checkpoint: tx_range.end_checkpoint,
+                            tx_seq: tx_range.end_position,
+                        },
+                    ),
                 };
                 let range = tx_range.range;
                 if range.is_empty() {
@@ -260,14 +256,12 @@ fn next_transaction_chunk(
                         range: Some(range),
                         pending_bucket: None,
                         end_reason: terminal.reason,
-                        end_checkpoint: tx_range.end_checkpoint,
-                        end_position: tx_range.end_position,
+                        terminal_watermark: terminal.watermark,
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
                         end_reason: terminal.reason,
-                        end_checkpoint: tx_range.end_checkpoint,
-                        end_position: tx_range.end_position,
+                        terminal_watermark: terminal.watermark,
                     },
                 };
                 continue;
@@ -275,8 +269,7 @@ fn next_transaction_chunk(
             TransactionScanState::Unfiltered {
                 range,
                 end_reason,
-                end_checkpoint,
-                end_position,
+                terminal_watermark,
             } => {
                 let rows =
                     get_tx_seq_digest_rows(&service, range.clone(), !ascending, chunk_item_limit)?;
@@ -286,25 +279,22 @@ fn next_transaction_chunk(
                     .map(|range| TransactionScanState::Unfiltered {
                         range,
                         end_reason,
-                        end_checkpoint,
-                        end_position,
+                        terminal_watermark: terminal_watermark.clone(),
                     });
                 let terminal = ChunkTerminal {
                     reason: end_reason,
-                    position: Position::Transactions {
-                        checkpoint: end_checkpoint,
-                        tx_seq: end_position,
-                    },
+                    watermark: terminal_watermark,
                 };
-                break (rows, next_state, terminal, None);
+                // An unfiltered scan spends no budget between items (every row
+                // scanned is an item), so it can never end mid-gap.
+                break (rows, next_state, terminal, false, None);
             }
             TransactionScanState::Filtered {
                 query,
                 range,
                 pending_bucket,
                 end_reason,
-                end_checkpoint,
-                end_position,
+                terminal_watermark,
             } => {
                 let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
                 let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -341,8 +331,7 @@ fn next_transaction_chunk(
                             range: hits.next_range,
                             pending_bucket: hits.pending_bucket,
                             end_reason,
-                            end_checkpoint,
-                            end_position,
+                            terminal_watermark: terminal_watermark.clone(),
                         },
                     )
                 };
@@ -353,22 +342,9 @@ fn next_transaction_chunk(
                 };
                 let terminal = ChunkTerminal {
                     reason,
-                    position: Position::Transactions {
-                        checkpoint: end_checkpoint,
-                        tx_seq: end_position,
-                    },
+                    watermark: terminal_watermark,
                 };
-                // A transaction member id is its own tx_sequence_number, so the
-                // frontier decodes to itself.
-                let scan_watermark = scan_transaction_watermark(
-                    &service,
-                    &options,
-                    scan_limited,
-                    rows.is_empty(),
-                    coalesced_frontier,
-                    ascending,
-                )?;
-                break (rows, next_state, terminal, scan_watermark);
+                break (rows, next_state, terminal, scan_limited, coalesced_frontier);
             }
         }
     };
@@ -376,6 +352,14 @@ fn next_transaction_chunk(
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
+    let scan_watermark = scan_transaction_watermark(
+        &service,
+        &options,
+        scan_limited,
+        rows.is_empty(),
+        frontier,
+        ascending,
+    )?;
     let mut items = render_transaction_rows(
         &service,
         rows,
@@ -397,9 +381,8 @@ fn next_transaction_chunk(
     })
 }
 
-/// Scan watermark for a filtered chunk that matched nothing before the
-/// scan budget ran out mid-gap. A transaction's member id is its own
-/// `tx_sequence_number`, so the frontier decodes to itself.
+/// Scan watermark for a filtered chunk that matched nothing before the scan budget ran out mid-gap.
+/// A transaction's member id is its own `tx_sequence_number`, so the frontier decodes to itself.
 fn scan_transaction_watermark(
     service: &RpcService,
     options: &QueryOptions,
@@ -417,14 +400,12 @@ fn scan_transaction_watermark(
     let Some(cp) = sequence_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-    let boundary = advance_boundary_excluding_cp(None, cp, options);
-    let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
-    let watermark = boundary_watermark(
+    let watermark = frontier_boundary_watermark(
+        options,
         Position::Transactions {
-            checkpoint: cursor_cp,
+            checkpoint: cp,
             tx_seq: frontier,
         },
-        boundary,
     );
     Ok(Some(watermark_response(watermark)))
 }

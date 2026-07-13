@@ -121,13 +121,27 @@ pub fn boundary_cursor_cp(cp: u64, direction: ScanDirection) -> u64 {
     }
 }
 
-/// Boundary watermark emitted once a scan has drained its entire resolved
-/// range under natural completion. Unlike per-item watermarks it can claim
-/// the range's final checkpoint complete — `end_checkpoint - 1` ascending
-/// (the exclusive cp upper) or `end_checkpoint` descending (the inclusive cp
-/// lower) — because no further items exist in it within the requested range.
-/// The `(end_checkpoint, end_position)` cursor resumes exactly past the
-/// scanned range.
+/// Build the standalone scan-frontier `Watermark` from a frontier position
+/// carrying its raw containing checkpoint. The frontier lands partway
+/// through that checkpoint, so the frame's two fields project it in
+/// opposite directions: the completion claim excludes it looking backward
+/// ([`advance_boundary_excluding_cp`], `cp ∓ 1`), while the resume cursor
+/// keeps it included looking forward ([`boundary_cursor_cp`] rewrites the
+/// position's cp coordinate; the scalar coordinates pass through).
+pub fn frontier_boundary_watermark(options: &QueryOptions, position: Position) -> Watermark {
+    let cp = position.checkpoint();
+    let boundary = advance_boundary_excluding_cp(None, cp, options);
+    boundary_watermark(
+        position.with_checkpoint(boundary_cursor_cp(cp, options.scan_direction())),
+        boundary,
+    )
+}
+
+/// Boundary watermark emitted once a scan has drained its entire resolved range under natural
+/// completion. Unlike per-item watermarks it can claim the range's final checkpoint complete —
+/// `end_checkpoint - 1` ascending (the exclusive cp upper) or `end_checkpoint` descending (the
+/// inclusive cp lower) — because no further items exist in it within the requested range. The
+/// `(end_checkpoint, end_position)` cursor resumes exactly past the scanned range.
 pub fn terminal_boundary_watermark(options: &QueryOptions, end_position: Position) -> Watermark {
     let end_checkpoint = end_position.checkpoint();
     let boundary = if options.is_ascending() {
@@ -135,10 +149,7 @@ pub fn terminal_boundary_watermark(options: &QueryOptions, end_position: Positio
     } else {
         Some(end_checkpoint)
     };
-    let mut wm = Watermark::default();
-    wm.cursor = Some(CursorToken::boundary(end_position).encode());
-    set_checkpoint_bound(&mut wm, boundary);
-    wm
+    boundary_watermark(end_position, boundary)
 }
 
 /// Whether the scan reached the natural end of the requested range (the
@@ -234,6 +245,40 @@ mod tests {
 
         let wm = item_watermark(pos, None);
         assert_eq!(wm.checkpoint, None);
+    }
+
+    /// A frontier frame projects its raw containing cp in opposite
+    /// directions: the claim excludes it looking backward (`cp ∓ 1`), the
+    /// resume cursor keeps it included looking forward (`cp` ascending,
+    /// `cp + 1` descending); scalar coordinates pass through unchanged.
+    #[test]
+    fn frontier_boundary_watermark_splits_claim_and_resume() {
+        let pos = Position::Transactions {
+            checkpoint: 10,
+            tx_seq: 100,
+        };
+
+        let asc = options(true);
+        let wm = frontier_boundary_watermark(&asc, pos);
+        assert_eq!(wm.checkpoint, Some(9));
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&CursorToken::boundary(pos).encode())
+        );
+
+        let desc = options(false);
+        let wm = frontier_boundary_watermark(&desc, pos);
+        assert_eq!(wm.checkpoint, Some(11));
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(
+                &CursorToken::boundary(Position::Transactions {
+                    checkpoint: 11,
+                    tx_seq: 100,
+                })
+                .encode()
+            )
+        );
     }
 
     /// On natural completion the terminal frame claims the range's final

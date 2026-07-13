@@ -58,8 +58,7 @@ use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::advance_boundary_excluding_cp;
-use crate::ledger_history::watermark::boundary_cursor_cp;
-use crate::ledger_history::watermark::boundary_watermark;
+use crate::ledger_history::watermark::frontier_boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::reached_range_end;
 use crate::ledger_history::watermark::terminal_boundary_watermark;
@@ -103,7 +102,6 @@ pub(crate) async fn list_events(
         filter_query,
     };
 
-    let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
         let unfiltered_row_scan_budget = endpoint.max_limit_items as usize;
         let mut scan = ChunkedScan::new(
@@ -137,10 +135,7 @@ pub(crate) async fn list_events(
         // Natural completion proves the range's final checkpoint complete; emit a
         // terminal watermark carrying that bound and the resume cursor.
         if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(
-                &terminal_options,
-                terminal.position,
-            ));
+            yield watermark_response(terminal.watermark);
         }
         yield end_response(reason);
         info!(
@@ -199,16 +194,14 @@ enum EventScanState {
         // rows per request.
         row_scan_budget: usize,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: EventPosition,
+        terminal_watermark: Watermark,
     },
     Filtered {
         query: BitmapQuery,
         bounds: Option<EventScanBounds>,
         pending_bucket: Option<PendingBitmapBucket>,
         end_reason: QueryEndReason,
-        end_checkpoint: u64,
-        end_position: EventPosition,
+        terminal_watermark: Watermark,
     },
 }
 
@@ -228,7 +221,7 @@ fn next_event_chunk(
 ) -> Result<EventChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
-    let (refs, next_state, terminal, scan_watermark) = match state {
+    let (refs, next_state, terminal, scan_limited, frontier) = match state {
         EventScanState::Init {
             start_checkpoint,
             end_checkpoint,
@@ -246,11 +239,14 @@ fn next_event_chunk(
             }
             let terminal = ChunkTerminal {
                 reason: event_range.end_reason,
-                position: Position::Events {
-                    checkpoint: event_range.end_checkpoint,
-                    tx_seq: event_range.end_position.tx_seq,
-                    event_index: event_range.end_position.event_index,
-                },
+                watermark: terminal_boundary_watermark(
+                    &options,
+                    Position::Events {
+                        checkpoint: event_range.end_checkpoint,
+                        tx_seq: event_range.end_position.tx_seq,
+                        event_index: event_range.end_position.event_index,
+                    },
+                ),
             };
             let bounds = event_range.bounds;
             if event_range.is_empty() {
@@ -268,15 +264,13 @@ fn next_event_chunk(
                     bounds: Some(bounds),
                     pending_bucket: None,
                     end_reason: terminal.reason,
-                    end_checkpoint: event_range.end_checkpoint,
-                    end_position: event_range.end_position,
+                    terminal_watermark: terminal.watermark,
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
                     row_scan_budget: unfiltered_row_scan_budget,
                     end_reason: terminal.reason,
-                    end_checkpoint: event_range.end_checkpoint,
-                    end_position: event_range.end_position,
+                    terminal_watermark: terminal.watermark,
                 },
             };
             return next_event_chunk(
@@ -296,8 +290,7 @@ fn next_event_chunk(
             bounds,
             row_scan_budget,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark,
         } => {
             if cancel.is_cancelled() {
                 return Err(cancelled());
@@ -319,8 +312,7 @@ fn next_event_chunk(
                     bounds,
                     row_scan_budget,
                     end_reason,
-                    end_checkpoint,
-                    end_position,
+                    terminal_watermark: terminal_watermark.clone(),
                 })
             };
             let reason = if request_exhausted {
@@ -330,29 +322,22 @@ fn next_event_chunk(
             };
             let terminal = ChunkTerminal {
                 reason,
-                position: Position::Events {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position.tx_seq,
-                    event_index: end_position.event_index,
-                },
+                watermark: terminal_watermark,
             };
-            let scan_watermark = scan_event_watermark(
-                &service,
-                &options,
+            (
+                scan.refs,
+                next_state,
+                terminal,
                 scan.scan_limit_hit,
-                scan.refs.is_empty(),
                 scan.frontier,
-                ascending,
-            )?;
-            (scan.refs, next_state, terminal, scan_watermark)
+            )
         }
         EventScanState::Filtered {
             query,
             bounds,
             pending_bucket,
             end_reason,
-            end_checkpoint,
-            end_position,
+            terminal_watermark,
         } => {
             let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
             let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -389,8 +374,7 @@ fn next_event_chunk(
                         bounds: hits.next_bounds,
                         pending_bucket: hits.pending_bucket,
                         end_reason,
-                        end_checkpoint,
-                        end_position,
+                        terminal_watermark: terminal_watermark.clone(),
                     },
                 )
             };
@@ -401,27 +385,23 @@ fn next_event_chunk(
             };
             let terminal = ChunkTerminal {
                 reason,
-                position: Position::Events {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position.tx_seq,
-                    event_index: end_position.event_index,
-                },
+                watermark: terminal_watermark,
             };
-            let scan_watermark = scan_event_watermark(
-                &service,
-                &options,
-                scan_limited,
-                refs.is_empty(),
-                frontier,
-                ascending,
-            )?;
-            (refs, next_state, terminal, scan_watermark)
+            (refs, next_state, terminal, scan_limited, frontier)
         }
     };
 
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
+    let scan_watermark = scan_event_watermark(
+        &service,
+        &options,
+        scan_limited,
+        refs.is_empty(),
+        frontier,
+        ascending,
+    )?;
     let mut items = render_event_chunk(&service, refs, &read_mask, &options, cancel)?;
     let produced = items.len();
     if let Some(watermark) = scan_watermark {
@@ -436,10 +416,9 @@ fn next_event_chunk(
     })
 }
 
-/// Build the scan watermark frame for a filtered chunk that matched
-/// nothing while the scan budget ran out mid-gap. Resolves the coalesced
-/// frontier to its checkpoint; yields nothing at genesis (asc) where no progress
-/// can be claimed.
+/// Build the scan watermark frame for a chunk that matched nothing while its scan budget (bitmap
+/// buckets when filtered, tx rows when unfiltered) ran out mid-gap. Resolves the coalesced frontier
+/// to its checkpoint; yields nothing at genesis (asc) where no progress can be claimed.
 fn scan_event_watermark(
     service: &RpcService,
     options: &QueryOptions,
@@ -457,15 +436,13 @@ fn scan_event_watermark(
     let Some(cp) = event_frontier_checkpoint(service, frontier, ascending)? else {
         return Ok(None);
     };
-    let boundary = advance_boundary_excluding_cp(None, cp, options);
-    let cursor_cp = boundary_cursor_cp(cp, options.scan_direction());
-    let watermark = boundary_watermark(
+    let watermark = frontier_boundary_watermark(
+        options,
         Position::Events {
-            checkpoint: cursor_cp,
+            checkpoint: cp,
             tx_seq: frontier.tx_seq,
             event_index: frontier.event_index,
         },
-        boundary,
     );
     Ok(Some(watermark_response(watermark)))
 }
