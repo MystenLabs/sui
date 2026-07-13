@@ -9,4 +9,4 @@ public struct Y {
     y: other_child::a::X,
 }
 
-public fun g() { }
+public fun g() {}
