@@ -17,7 +17,7 @@ use sui_system::staking_pool::{
     StakedSui,
     pool_id,
     FungibleStakedSui,
-    fungible_staked_sui_pool_id
+    fungible_staked_sui_pool_id,
 };
 use sui_system::validator::{Validator, staking_pool_id, sui_address};
 use sui_system::validator_cap::{UnverifiedValidatorOperationCap, ValidatorOperationCap};
@@ -247,8 +247,7 @@ fun can_join(self: &ValidatorSet, stake: u64, ctx: &TxContext): bool {
 fun get_voting_power_thresholds(self: &ValidatorSet, ctx: &TxContext): (u64, u64, u64) {
     let start_epoch = {
         let key = VotingPowerAdmissionStartEpochKey();
-        if (self.extra_fields.contains(key)) self.extra_fields[key]
-        else ctx.epoch() + 1 // will give us the phase 1 values
+        if (self.extra_fields.contains(key)) self.extra_fields[key] else ctx.epoch() + 1 // will give us the phase 1 values
     };
 
     // these numbers come from SIP-39: https://github.com/sui-foundation/sips/blob/main/sips/sip-39.md
