@@ -8,12 +8,11 @@ use sui_macros::sim_test;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as AlphaLedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::subscription_service_client::SubscriptionServiceClient as AlphaSubscriptionServiceClient;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -89,35 +88,33 @@ async fn subscription_cluster() -> TestCluster {
         .await
 }
 
-async fn alpha_subscription_client(
-    cluster: &TestCluster,
-) -> AlphaSubscriptionServiceClient<Channel> {
-    AlphaSubscriptionServiceClient::connect(cluster.rpc_url().to_owned())
+async fn alpha_subscription_client(cluster: &TestCluster) -> SubscriptionServiceClient<Channel> {
+    SubscriptionServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap()
 }
 
-fn sender_tx_filter(address: SuiAddress, negated: bool) -> v2alpha::TransactionFilter {
-    let mut sender = v2alpha::SenderFilter::default();
+fn sender_tx_filter(address: SuiAddress, negated: bool) -> v2::TransactionFilter {
+    let mut sender = v2::SenderFilter::default();
     sender.address = Some(address.to_string());
-    let mut literal = v2alpha::TransactionLiteral::default();
-    literal.predicate = Some(v2alpha::transaction_literal::Predicate::Sender(sender));
+    let mut literal = v2::TransactionLiteral::default();
+    literal.predicate = Some(v2::transaction_literal::Predicate::Sender(sender));
     literal.negated = negated;
-    let mut term = v2alpha::TransactionTerm::default();
+    let mut term = v2::TransactionTerm::default();
     term.literals = vec![literal];
-    let mut filter = v2alpha::TransactionFilter::default();
+    let mut filter = v2::TransactionFilter::default();
     filter.terms = vec![term];
     filter
 }
 
-fn emit_module_event_filter(module: &str) -> v2alpha::EventFilter {
-    let mut emit_module = v2alpha::EmitModuleFilter::default();
+fn emit_module_event_filter(module: &str) -> v2::EventFilter {
+    let mut emit_module = v2::EmitModuleFilter::default();
     emit_module.module = Some(module.to_owned());
-    let mut literal = v2alpha::EventLiteral::default();
-    literal.predicate = Some(v2alpha::event_literal::Predicate::EmitModule(emit_module));
-    let mut term = v2alpha::EventTerm::default();
+    let mut literal = v2::EventLiteral::default();
+    literal.predicate = Some(v2::event_literal::Predicate::EmitModule(emit_module));
+    let mut term = v2::EventTerm::default();
     term.literals = vec![literal];
-    let mut filter = v2alpha::EventFilter::default();
+    let mut filter = v2::EventFilter::default();
     filter.terms = vec![term];
     filter
 }
@@ -160,7 +157,7 @@ async fn transfer_self(cluster: &TestCluster, sender: SuiAddress) -> ExecutedTra
 
 /// Fold a watermark into the non-decreasing checkpoint tracker, asserting
 /// subscription watermarks never move backwards.
-fn assert_checkpoint_monotone(last: &mut Option<u64>, watermark: &v2alpha::Watermark) {
+fn assert_checkpoint_monotone(last: &mut Option<u64>, watermark: &v2::Watermark) {
     if let Some(checkpoint) = watermark.checkpoint {
         if let Some(prev) = *last {
             assert!(
@@ -178,7 +175,7 @@ async fn subscribe_transactions_sender_filter() {
     let sender = cluster.get_address_0();
 
     let mut client = alpha_subscription_client(&cluster).await;
-    let mut request = v2alpha::SubscribeTransactionsRequest::default();
+    let mut request = v2::SubscribeTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest", "transaction_index"]));
     request.filter = Some(sender_tx_filter(sender, false));
     let mut stream = client
@@ -221,7 +218,7 @@ async fn subscribe_transactions_unfiltered() {
     let sender = cluster.get_address_0();
 
     let mut client = alpha_subscription_client(&cluster).await;
-    let mut request = v2alpha::SubscribeTransactionsRequest::default();
+    let mut request = v2::SubscribeTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths([
         "digest",
         "transaction_index",
@@ -291,7 +288,7 @@ async fn subscribe_checkpoints_filtered_and_unfiltered() {
 
     let mut client = alpha_subscription_client(&cluster).await;
 
-    let mut request = v2alpha::SubscribeCheckpointsRequest::default();
+    let mut request = v2::SubscribeCheckpointsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     let mut unfiltered = client
         .subscribe_checkpoints(request)
@@ -299,7 +296,7 @@ async fn subscribe_checkpoints_filtered_and_unfiltered() {
         .unwrap()
         .into_inner();
 
-    let mut request = v2alpha::SubscribeCheckpointsRequest::default();
+    let mut request = v2::SubscribeCheckpointsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     request.filter = Some(sender_tx_filter(sender, false));
     let mut filtered = client
@@ -368,7 +365,7 @@ async fn subscribe_events_filtered() {
 
     let mut client = alpha_subscription_client(&cluster).await;
     let module = format!("{}::emit_test_event", pkg.to_canonical_string(true));
-    let mut request = v2alpha::SubscribeEventsRequest::default();
+    let mut request = v2::SubscribeEventsRequest::default();
     request.read_mask = Some(FieldMask::from_paths([
         "checkpoint",
         "transaction_digest",
@@ -429,7 +426,7 @@ async fn subscribe_events_unfiltered() {
     let (pkg, _) = super::publish_package(&cluster, sender, path).await;
 
     let mut client = alpha_subscription_client(&cluster).await;
-    let mut request = v2alpha::SubscribeEventsRequest::default();
+    let mut request = v2::SubscribeEventsRequest::default();
     request.read_mask = Some(FieldMask::from_paths([
         "checkpoint",
         "transaction_digest",
@@ -498,7 +495,7 @@ async fn subscribe_watermark_ticks_on_sparse_filter() {
     // the stream must still make progress via interval ticks.
     let unused = SuiAddress::random_for_testing_only();
     let mut client = alpha_subscription_client(&cluster).await;
-    let mut request = v2alpha::SubscribeTransactionsRequest::default();
+    let mut request = v2::SubscribeTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest"]));
     request.filter = Some(sender_tx_filter(unused, false));
     let mut stream = client
@@ -549,7 +546,7 @@ async fn subscription_cursor_backfills_via_list() {
     let sender = cluster.get_address_0();
 
     let mut client = alpha_subscription_client(&cluster).await;
-    let mut request = v2alpha::SubscribeTransactionsRequest::default();
+    let mut request = v2::SubscribeTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest"]));
     request.filter = Some(sender_tx_filter(sender, false));
     let mut stream = client
@@ -587,13 +584,13 @@ async fn subscription_cursor_backfills_via_list() {
     let tx2 = transfer_self(&cluster, sender).await;
     let digest2 = tx2.digest().to_owned();
 
-    let mut ledger = AlphaLedgerServiceClient::connect(cluster.rpc_url().to_owned())
+    let mut ledger = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
-    let mut options = v2alpha::QueryOptions::default();
+    let mut options = v2::QueryOptions::default();
     options.limit = Some(100);
     options.after = resume_cursor;
-    let mut request = v2alpha::ListTransactionsRequest::default();
+    let mut request = v2::ListTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest"]));
     request.filter = Some(sender_tx_filter(sender, false));
     request.options = Some(options);
@@ -628,7 +625,7 @@ async fn subscribe_transactions_unanchored_negation() {
     // NOT sender=address_1: matches every transaction (including system
     // transactions) except address_1's.
     let mut client = alpha_subscription_client(&cluster).await;
-    let mut request = v2alpha::SubscribeTransactionsRequest::default();
+    let mut request = v2::SubscribeTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest"]));
     request.filter = Some(sender_tx_filter(sender_1, true));
     let mut stream = client
@@ -678,7 +675,7 @@ async fn filtered_subscription_first_frame_is_progress_only() {
 
     let mut client = alpha_subscription_client(&cluster).await;
 
-    let mut transaction_request = v2alpha::SubscribeTransactionsRequest::default();
+    let mut transaction_request = v2::SubscribeTransactionsRequest::default();
     transaction_request.read_mask = Some(FieldMask::from_paths(["digest"]));
     transaction_request.filter = Some(filter.clone());
     let mut transactions = client
@@ -687,7 +684,7 @@ async fn filtered_subscription_first_frame_is_progress_only() {
         .unwrap()
         .into_inner();
 
-    let mut checkpoint_request = v2alpha::SubscribeCheckpointsRequest::default();
+    let mut checkpoint_request = v2::SubscribeCheckpointsRequest::default();
     checkpoint_request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     checkpoint_request.filter = Some(filter);
     let mut checkpoints = client
@@ -792,8 +789,8 @@ async fn subscribe_with_invalid_filter_is_rejected() {
     // A present filter with zero terms is invalid, and is rejected on stream
     // open rather than surfacing as a stream error.
     let mut client = alpha_subscription_client(&cluster).await;
-    let mut request = v2alpha::SubscribeTransactionsRequest::default();
-    request.filter = Some(v2alpha::TransactionFilter::default());
+    let mut request = v2::SubscribeTransactionsRequest::default();
+    request.filter = Some(v2::TransactionFilter::default());
     let status = client
         .subscribe_transactions(request)
         .await

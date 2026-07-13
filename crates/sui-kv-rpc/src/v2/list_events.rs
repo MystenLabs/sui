@@ -20,11 +20,11 @@ use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::Event as ProtoEvent;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
@@ -832,8 +832,8 @@ mod tests {
     use super::*;
     use sui_rpc_cursor::CursorToken;
 
-    use crate::v2alpha::test_utils::ascending_options;
-    use crate::v2alpha::test_utils::query_context;
+    use crate::v2::test_utils::ascending_options;
+    use crate::v2::test_utils::query_context;
 
     #[tokio::test]
     async fn empty_ledger_tip_emits_one_standalone_event_boundary() {
@@ -874,7 +874,7 @@ mod tests {
     use sui_rpc_api::ledger_history::query_options::Ordering;
 
     fn options(ordering: Ordering) -> QueryOptions {
-        let mut request = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();
+        let mut request = sui_rpc::proto::sui::rpc::v2::QueryOptions::default();
         request.ordering = Some(match ordering {
             Ordering::Ascending => 0,
             Ordering::Descending => 1,

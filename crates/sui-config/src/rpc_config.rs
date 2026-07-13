@@ -55,7 +55,7 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_initialization: Option<RpcIndexInitConfig>,
 
-    /// Tunables for the v2alpha ledger-history list APIs (`list_transactions`,
+    /// Tunables for the ledger-history list APIs (`list_transactions`,
     /// `list_events`, `list_checkpoints`). These scan the historical inverted
     /// indexes, unlike the live object-set listings (`list_owned_objects`,
     /// `list_dynamic_fields`), so they carry their own time and scan-cost bounds.
@@ -345,7 +345,7 @@ impl LedgerHistoryMethodConfig {
     }
 }
 
-/// Tunables for the v2alpha ledger-history list APIs. Per-endpoint knobs live in
+/// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
 /// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are global across
 /// all three. Every field is optional and falls back to a built-in default.
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]

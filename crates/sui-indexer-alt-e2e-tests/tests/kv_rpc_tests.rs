@@ -16,39 +16,38 @@ use sui_kv_rpc::StageConfig;
 use sui_kv_rpc::StagesConfig;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
+use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
+use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
+use sui_rpc::proto::sui::rpc::v2::EventFilter;
+use sui_rpc::proto::sui::rpc::v2::EventLiteral;
+use sui_rpc::proto::sui::rpc::v2::EventStreamHeadFilter;
+use sui_rpc::proto::sui::rpc::v2::EventTerm;
+use sui_rpc::proto::sui::rpc::v2::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
+use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
+use sui_rpc::proto::sui::rpc::v2::Ordering;
+use sui_rpc::proto::sui::rpc::v2::PackageWriteFilter;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+use sui_rpc::proto::sui::rpc::v2::SenderFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionLiteral;
+use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
+use sui_rpc::proto::sui::rpc::v2::event_literal;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::AffectedAddressFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::AffectedObjectFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::EventStreamHeadFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventTerm;
-use sui_rpc::proto::sui::rpc::v2alpha::EventTypeFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
-use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
-use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as KvLedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
+use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -379,7 +378,7 @@ fn checkpoint_sequence(response: &ListCheckpointsResponse) -> u64 {
 }
 
 async fn list_transactions_result(
-    client: &mut KvLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListTransactionsRequest,
 ) -> TransactionsResult {
     let ordering = request_ordering(request.options.as_ref());
@@ -433,7 +432,7 @@ async fn list_transactions_result(
 }
 
 async fn list_events_result(
-    client: &mut KvLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListEventsRequest,
 ) -> EventsResult {
     let ordering = request_ordering(request.options.as_ref());
@@ -483,7 +482,7 @@ async fn list_events_result(
 }
 
 async fn list_checkpoints_result(
-    client: &mut KvLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListCheckpointsRequest,
 ) -> CheckpointsResult {
     let ordering = request_ordering(request.options.as_ref());
@@ -533,7 +532,7 @@ async fn list_checkpoints_result(
 }
 
 async fn expect_invalid_list_transactions(
-    client: &mut KvLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListTransactionsRequest,
 ) {
     let err = client
@@ -544,7 +543,7 @@ async fn expect_invalid_list_transactions(
 }
 
 async fn expect_invalid_list_events(
-    client: &mut KvLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListEventsRequest,
 ) {
     let err = client
@@ -555,7 +554,7 @@ async fn expect_invalid_list_events(
 }
 
 async fn expect_invalid_list_checkpoints(
-    client: &mut KvLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListCheckpointsRequest,
 ) {
     let err = client
@@ -1053,7 +1052,7 @@ async fn test_list_transactions_unfiltered() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -1121,7 +1120,7 @@ async fn test_list_transactions_with_sender_filter() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -1175,7 +1174,7 @@ async fn test_list_package_write_filter() {
     let checkpoint = cluster.create_checkpoint().await;
     let cp = checkpoint.sequence_number;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -1235,7 +1234,7 @@ async fn test_list_transactions_query_options() {
     // the last in-range checkpoint while preserving that missing-boundary shape.
     wait_for_kv_checkpoint(&cluster, tx_start).await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -1465,7 +1464,7 @@ async fn test_list_events_unfiltered() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -1573,7 +1572,7 @@ async fn test_list_events_unfiltered_row_cap_scan_limit_resumes() {
     }
     let _ = transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -1749,12 +1748,12 @@ async fn test_list_events_with_emit_module_filter() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
     // Filter by emit_module matching our package.
-    let mut emit_mod = sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter::default();
+    let mut emit_mod = sui_rpc::proto::sui::rpc::v2::EmitModuleFilter::default();
     emit_mod.module = Some(format!(
         "{}::emit_test_event",
         pkg_id.to_canonical_string(true)
@@ -1818,12 +1817,12 @@ async fn test_list_events_query_options() {
     // the last in-range checkpoint while preserving that missing-boundary shape.
     wait_for_kv_checkpoint(&cluster, event_start).await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
     // Use emit_module filter to find only events from our package.
-    let mut emit_mod = sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter::default();
+    let mut emit_mod = sui_rpc::proto::sui::rpc::v2::EmitModuleFilter::default();
     emit_mod.module = Some(pkg_id.to_canonical_string(true));
     let ev_filter = ev_filter(vec![ev_include(event_literal::Predicate::EmitModule(
         emit_mod,
@@ -2040,7 +2039,7 @@ async fn test_list_transactions_or_prefix_and_event_predicates() {
 
     cluster.create_checkpoint().await;
 
-    let client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2168,7 +2167,7 @@ async fn test_list_events_sender_or_filter() {
 
     cluster.create_checkpoint().await;
 
-    let client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2232,7 +2231,7 @@ async fn test_list_event_stream_head_filter() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2323,7 +2322,7 @@ async fn test_list_transactions_combinator_and() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2370,7 +2369,7 @@ async fn test_list_transactions_combinator_or_not() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2413,7 +2412,7 @@ async fn test_list_transactions_unanchored_negation() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2496,7 +2495,7 @@ async fn test_list_transactions_recipient_and_affected_object() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2570,7 +2569,7 @@ async fn test_list_events_event_type_cascading_and_generics() {
 
     cluster.create_checkpoint().await;
 
-    let client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2665,7 +2664,7 @@ async fn test_list_events_combinator_and() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2732,7 +2731,7 @@ async fn test_list_events_combinator_or_not() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2802,7 +2801,7 @@ async fn test_list_events_unanchored_negation() {
 
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -2911,7 +2910,7 @@ async fn test_list_events_query_options_multi_event_tx() {
     let emit_start = emit_checkpoint.sequence_number;
     let emit_end = emit_start + 1;
 
-    let client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3128,7 +3127,7 @@ async fn test_list_filter_edge_cases() {
     transfer_self(&mut cluster, sender, &kp, gas).await;
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3314,7 +3313,7 @@ async fn test_list_limit_items_over_cap_is_coerced() {
     transfer_self(&mut cluster, sender, &kp, gas).await;
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3349,7 +3348,7 @@ async fn test_list_checkpoints_unfiltered_range() {
         gas = transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
     }
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3389,7 +3388,7 @@ async fn test_list_checkpoints_with_sender_filter() {
     // Checkpoint with sender_b's tx.
     transfer_in_own_checkpoint(&mut cluster, sender_b, &kp_b, gas_b).await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3440,7 +3439,7 @@ async fn test_list_checkpoints_combinator_or() {
     transfer_in_own_checkpoint(&mut cluster, sender_c, &kp_c, gas_c).await;
     let cp_c = cluster.latest_checkpoint().await.unwrap().unwrap();
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3478,7 +3477,7 @@ async fn test_list_checkpoints_unanchored_negation() {
     transfer_in_own_checkpoint(&mut cluster, sender_b, &kp_b, gas_b).await;
     let cp_b = cluster.latest_checkpoint().await.unwrap().unwrap();
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3525,7 +3524,7 @@ async fn test_list_checkpoints_query_options() {
     let checkpoint_start = *checkpoint_seqs.first().unwrap();
     let checkpoint_end = checkpoint_seqs.last().unwrap() + 1;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3804,7 +3803,7 @@ async fn test_list_checkpoints_combinator_and() {
     cluster.create_checkpoint().await;
     let cp_b_call = cluster.latest_checkpoint().await.unwrap().unwrap();
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3844,7 +3843,7 @@ async fn test_list_checkpoints_empty_range_past_watermark() {
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3878,7 +3877,7 @@ async fn test_list_checkpoints_with_transactions_read_mask() {
     let checkpoint = cluster.create_checkpoint().await;
     let seq = checkpoint.sequence_number;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -3928,7 +3927,7 @@ async fn test_list_checkpoints_with_objects_read_mask() {
     transfer_self(&mut cluster, sender, &kp, gas).await;
     cluster.create_checkpoint().await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -4092,7 +4091,7 @@ async fn test_list_transactions_sparse_filter_emits_watermarks() {
     )
     .await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -4193,7 +4192,7 @@ async fn test_list_events_sparse_filter_emits_watermarks() {
     }
     let _ = gas_a;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -4262,7 +4261,7 @@ async fn test_list_transactions_resume_from_standalone_watermark() {
     )
     .await;
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
 
@@ -4366,7 +4365,7 @@ fn is_resumable(reason: QueryEndReason) -> bool {
 /// Drain a filtered `ListTransactions` fully, following cursors, and return the
 /// distinct set of checkpoint sequence numbers its transactions fall in.
 async fn drain_transaction_checkpoints(
-    client: &mut KvLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     filter: TransactionFilter,
     ascending: bool,
     limit: u32,
@@ -4403,7 +4402,7 @@ async fn drain_transaction_checkpoints(
 /// Drain a filtered `ListCheckpoints` fully, following cursors, and return the
 /// set of checkpoint sequence numbers plus the final terminal reason.
 async fn drain_checkpoint_set(
-    client: &mut KvLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     filter: TransactionFilter,
     ascending: bool,
     limit: u32,
@@ -4501,7 +4500,7 @@ async fn test_list_checkpoints_dense_bucket_matches_transactions() {
     let expected: BTreeSet<u64> = [cp_lo, cp_m1, cp_m2, cp_hi].into_iter().collect();
     assert_eq!(expected.len(), 4, "distinct matching checkpoints");
 
-    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
     let filter = tx_sender(match_sender);

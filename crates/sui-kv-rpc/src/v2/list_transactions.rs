@@ -15,11 +15,11 @@ use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
+use sui_rpc::proto::sui::rpc::v2::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
@@ -627,8 +627,8 @@ mod tests {
     use super::*;
     use sui_rpc_cursor::CursorToken;
 
-    use crate::v2alpha::test_utils::ascending_options;
-    use crate::v2alpha::test_utils::query_context;
+    use crate::v2::test_utils::ascending_options;
+    use crate::v2::test_utils::query_context;
 
     #[tokio::test]
     async fn empty_ledger_tip_emits_one_standalone_transaction_boundary() {
@@ -713,7 +713,7 @@ mod tests {
             let mut proto_options = ascending_options();
             if !direction.is_ascending() {
                 proto_options.ordering =
-                    Some(sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32);
+                    Some(sui_rpc::proto::sui::rpc::v2::Ordering::Descending as i32);
             }
             let options =
                 QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
@@ -763,7 +763,7 @@ mod tests {
             let mut proto_options = ascending_options();
             if !direction.is_ascending() {
                 proto_options.ordering =
-                    Some(sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32);
+                    Some(sui_rpc::proto::sui::rpc::v2::Ordering::Descending as i32);
             }
             let options =
                 QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
