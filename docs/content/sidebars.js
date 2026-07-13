@@ -102,6 +102,7 @@ export default {
         items: [
             'develop/manage-packages/move-package-management',
             'develop/manage-packages/automated-address-management',
+            'develop/manage-packages/source-verification',
         ]
       },      
       {

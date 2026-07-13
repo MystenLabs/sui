@@ -1,0 +1,154 @@
+---
+title: Source Verification
+sidebar_label: Source Verification
+description: "Verify that a Move source package compiles to the bytecode of an on-chain package using sui client verify-source."
+keywords: [source verification, verify source, verify-source, verify package, reproducible build, bytecode verification, toolchain version]
+---
+
+Source verification checks that a Move source package compiles to the bytecode and linkage of a
+package that is already on chain. It lets anyone confirm that a published package matches its
+purported source, without trusting the publisher.
+
+`sui client verify-source` rebuilds the source with the toolchain the package was published with and
+compares the result to the on-chain package:
+
+```bash
+sui client verify-source <PACKAGE_PATH>
+```
+
+`PACKAGE_PATH` is the path to the source package (the directory containing `Move.toml`); it defaults
+to the current directory. You do not pass an on-chain address: the address to compare against, the
+package's original id, and the toolchain version are all read from the package's own publication
+metadata (`Published.toml`, or `Move.lock` for packages published before v1.63) for the environment
+you are verifying on. Reading the address from the same metadata the package system uses to link this
+package means the verifier checks exactly the package a dependent would link against.
+
+Verification runs against whichever network your CLI is pointed at, so switch to the right environment
+first:
+
+```bash
+sui client switch --env mainnet
+sui client verify-source ./my-package
+```
+
+On success it prints `Source verification succeeded!` and exits with status 0. Otherwise it lists
+every difference it found and exits non-zero.
+
+## What is verified
+
+Only the **root** package is verified: the bytecode of its modules and its linkage table (the
+versions of its dependencies). The source of the dependencies themselves is not checked. To verify a
+dependency, run `verify-source` again against that dependency's own source.
+
+The command performs no compilation itself. It resolves the toolchain version the package was
+published with, downloads that release's `sui` binary if it is not already cached under
+`$MOVE_HOME/binaries`, and uses it to build the source. Because the on-chain bytecode was produced by
+that same toolchain, a matching build is strong evidence that the source is authentic.
+
+:::note
+
+Verification compares **bytecode**, not source text. Anything that does not affect the compiled
+output — comments, formatting, and the bodies of `macro` functions that are never called — can differ
+between the source and what was published and still verify successfully. (The bodies of macros that
+*are* called are inlined into their callers, so they do affect the bytecode and are covered.)
+Conversely, a package that verifies has bytecode identical to what is on chain.
+
+:::
+
+## Making a package verifiable
+
+If you publish a package and want others to be able to verify it out of the box:
+
+- **Pin every dependency to a commit hash**, not a branch or tag. The current package system does
+  this automatically; see [Dependencies are not pinned to commit
+  hashes](#dependencies-are-not-pinned-to-commit-hashes) below for older packages.
+- **Tag a commit whose source verifies**, so others can check out the precise source. This is not
+  necessarily the original publish commit: if you had to add a `Published.toml` or pin dependencies to
+  make it verify (see below), tag the commit that carries those changes.
+- **Make sure the publication records the toolchain version.** Modern publishing writes it to
+  `Published.toml`. If yours does not (see below), you can add it.
+
+If a package's publication does not record its address or toolchain — for example, it was published
+before `Published.toml` existed, or through an offline or multisig flow — you can add a `Published.toml`
+alongside the manifest recording the on-chain address and toolchain version for each environment.
+Older `sui` versions ignore this file, so its only effect is to let `verify-source` (and anyone
+depending on the package) find the metadata. The verifier and the package system both prefer a
+`Published.toml` over legacy addresses, so the two always agree on the address. It looks like this,
+with one section per environment:
+
+```toml
+[published.mainnet]
+chain-id = "35834a8a"                          # the network's chain id
+published-at = "0x0e735f8c93a95722efd735..."   # the package's current on-chain address
+original-id = "0x2c8d603bc51326b8c13cef..."    # its original, first-published address
+version = 8
+toolchain-version = "1.71.1"                   # the sui release it was built with
+```
+
+## When verification fails
+
+A failure does not necessarily mean the source is wrong. Reproducing a build is exacting, and there
+are a few common reasons a genuine source fails to verify.
+
+### You are on the wrong commit
+
+The most common cause is source drift: the working tree is close to, but not exactly, what was
+published. The command reports which modules differ, and a small number of named modules is a strong
+hint that only those files have changed since publication.
+
+Check out the exact commit that was published. Because the commit that *records* a package's
+`published-at` in source control is often later than the one that was built, search for when the
+address first appeared and check out the earliest such commit:
+
+```bash
+git log --all -S <PACKAGE_ID> -- '**/Published.toml' '**/Move.lock'
+```
+
+### The toolchain version is not recorded
+
+By default the toolchain version comes from the package's publish metadata. Some publications do not
+record it — notably packages published before v1.23, and some multisig or offline flows. In that case
+the command stops and asks you to supply the version:
+
+```bash
+sui client verify-source <PACKAGE_PATH> --toolchain-version 1.71.1
+```
+
+If you do not know the exact version, the release that was current when the package was published is a
+good first guess. Compiler output is stable across neighbouring releases, so an adjacent version
+usually reproduces the same bytecode; a version from far in the past or future may not, because the
+bytecode file format changes occasionally.
+
+`--toolchain-version` is also the workaround when a package's recorded toolchain cannot be used at
+all — for example, a release whose framework revision is no longer available. The command fails early
+in that case and suggests trying a different version.
+
+Any `sui` release that ships a binary for your platform can be used as the rebuild toolchain — in
+practice every mainnet release from v1.8 onward. Packages published from v1.23 record enough metadata
+(a resolvable address, and usually the toolchain version) to verify with no extra arguments; earlier
+publications need `--toolchain-version`, and possibly a hand-written `Published.toml`, supplied
+manually.
+
+### Dependencies are not pinned to commit hashes
+
+The current package system pins every dependency to a specific commit hash, so its builds are
+reproducible. Packages published under the older system (before v1.63) may record a dependency's
+revision as a **branch** rather than a hash. Rebuilding then fetches whatever that branch points at
+now, which is almost never what was published — and often does not even compile against the older
+toolchain. When this happens, the command reports each dependency that is not pinned to a hash.
+
+The fix is to pin those dependencies yourself in `Move.toml` — replace each branch with the exact
+commit hash that was used at publication — and rebuild, which updates `Move.lock` to match. For a
+framework dependency, the
+revision that was deployed on the network at publish time is recorded per protocol version in
+[`crates/sui-framework-snapshot/manifest.json`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework-snapshot/manifest.json);
+the commit of the `sui` release that was current when the package was published is also a good
+approximation, since the framework is backwards compatible.
+
+### The package cannot be rebuilt from its repository
+
+Some packages are not built directly from their committed manifest — for example, a build script may
+swap in a per-network manifest, or resolve a dependency from a local checkout rather than a pinned
+revision. Such packages cannot be verified from the repository alone. Reproducibly verifiable source
+requires that the manifest committed alongside the package is the one it was built from, with every
+dependency pinned to a hash.
