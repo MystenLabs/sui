@@ -25,7 +25,7 @@ pub type ExternalPrefix = Option<&'static str>;
 pub const DIAGNOSTIC_FILTER_WILDCARD: u8 = u8::MAX;
 
 /// The ID for a diagnostic, consisting of an optional prefix, an optional code tag (a letter
-/// rendered between the severity and the category, e.g. the `S` in `Lint WS02001`), a category,
+/// rendered between the severity and the category, e.g. the `S` in `Lint WS2001`), a category,
 /// and a code. Also used as a filter key with [`ANY`] wildcards for category/code.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct DiagnosticsID {
@@ -107,8 +107,11 @@ pub(crate) trait DiagnosticCode: Copy {
 
 /// A custom DiagnosticInfo.
 /// The diagnostic will get rendered as
-/// `"[{external_prefix}{severity}{code_tag}{category}{code}] {message}"`.
-/// Note, this will panic if `category > 99`
+/// `"[{external_prefix}{severity}{code_tag}{category}{code}] {message}"`. Untagged diagnostic
+/// categories use two digits to preserve existing codes; tagged diagnostic categories use one
+/// digit to keep the overall code length unchanged.
+/// Note, this will panic if `category > 99`, or when adding a code tag to a category greater than
+/// `9`.
 pub const fn custom(
     external_prefix: &'static str,
     severity: Severity,
@@ -433,17 +436,23 @@ impl DiagnosticInfo {
             Severity::Note => "I",
             Severity::Bug => "ICE",
         };
-        debug_assert!(self.category <= 99);
+        let category_width = if self.code_tag.is_empty() {
+            debug_assert!(self.category <= 99);
+            2
+        } else {
+            debug_assert!(self.category <= 9);
+            1
+        };
         let string_code = if let Some(ext) = self.external_prefix {
             format!(
-                "{ext}{sev_prefix}{tag}{category:02}{code:03}",
+                "{ext}{sev_prefix}{tag}{category:0category_width$}{code:03}",
                 tag = self.code_tag,
                 category = self.category,
                 code = self.code,
             )
         } else {
             format!(
-                "{sev_prefix}{tag}{category:02}{code:03}",
+                "{sev_prefix}{tag}{category:0category_width$}{code:03}",
                 tag = self.code_tag,
                 category = self.category,
                 code = self.code,
@@ -453,6 +462,8 @@ impl DiagnosticInfo {
     }
 
     pub const fn with_code_tag(mut self, tag: &'static str) -> Self {
+        assert!(tag.len() <= 1);
+        assert!(tag.is_empty() || self.category <= 9);
         self.code_tag = tag;
         self
     }

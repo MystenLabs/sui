@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-error[Lint ES01011]: unnecessary `entry` on a `public` function
+error[Lint ES1011]: unnecessary `entry` on a `public` function
   ┌─ tests/sui_mode/linter/nested_allow_lint_all_inner_deny_lint_specific.move:6:12
   │
 5 │     #[deny(lint(public_entry))]

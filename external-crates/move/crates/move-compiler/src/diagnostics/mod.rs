@@ -1171,14 +1171,17 @@ mod tests {
             (Symbol::from("test.move"), Arc::<str>::from(source)),
         )]));
 
-        let json = diagnostic(lint_info("S", "Sui lint"), loc).to_json(&mapped_files);
+        let core_json = diagnostic(lint_info("", "Core lint"), loc).to_json(&mapped_files);
+        let sui_json = diagnostic(lint_info("S", "Sui lint"), loc).to_json(&mapped_files);
 
-        assert_eq!(json.rendered_code, "Lint WS04002");
-        assert_eq!(json.category, 4);
-        assert_eq!(json.code, 2);
+        assert_eq!(core_json.rendered_code, "Lint W04002");
+        assert_eq!(sui_json.rendered_code, "Lint WS4002");
+        assert_eq!(core_json.rendered_code.len(), sui_json.rendered_code.len());
+        assert_eq!(sui_json.category, 4);
+        assert_eq!(sui_json.code, 2);
         assert_eq!(
-            serde_json::to_value(json).unwrap()["rendered_code"],
-            "Lint WS04002",
+            serde_json::to_value(sui_json).unwrap()["rendered_code"],
+            "Lint WS4002",
         );
     }
 

@@ -46,7 +46,13 @@ pub enum LinterDiagnosticCategory {
     Style,
 }
 
-/// Each flavor's lints carry the flavor's letter in their rendered code, e.g. Sui's `Lint WS02001`.
+pub(crate) const fn lint_category_code(category: LinterDiagnosticCategory) -> u8 {
+    let category = category as u8;
+    assert!(category <= 9);
+    category
+}
+
+/// Each flavor's lints carry the flavor's letter in their rendered code, e.g. Sui's `Lint WS2001`.
 pub(crate) const fn lint_code_tag(flavor: Flavor) -> &'static str {
     match flavor {
         Flavor::Core => "",
@@ -81,7 +87,9 @@ macro_rules! lints {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
                     $(Self::$lint_name => (
-                        $crate::linters::LinterDiagnosticCategory::$category as u8,
+                        $crate::linters::lint_category_code(
+                            $crate::linters::LinterDiagnosticCategory::$category,
+                        ),
                         code,
                         $code_msg,
                     ),)*
@@ -94,7 +102,9 @@ macro_rules! lints {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
                     $(Self::$lint_name => (
-                        $crate::linters::LinterDiagnosticCategory::$category as u8,
+                        $crate::linters::lint_category_code(
+                            $crate::linters::LinterDiagnosticCategory::$category,
+                        ),
                         code,
                         $filter_name,
                     ),)*
