@@ -2695,8 +2695,18 @@ async fn build_http_servers(
     // index so a client that waits for a checkpoint can immediately read its
     // indexed state (matching the legacy synchronously-committed index).
     let indexed_checkpoint = embedded_rpc_store.map(|embedded| embedded.indexed_checkpoint_fn());
+    let subscription_watermark_interval = config
+        .rpc
+        .as_ref()
+        .and_then(|rpc| rpc.subscription_watermark_interval);
+    let subscription_shards = config.rpc.as_ref().and_then(|rpc| rpc.subscription_shards);
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
-        SubscriptionService::build(prometheus_registry, indexed_checkpoint);
+        SubscriptionService::build(
+            prometheus_registry,
+            indexed_checkpoint,
+            subscription_watermark_interval,
+            subscription_shards,
+        );
     let rpc_router = {
         // Serve the index read paths from the embedded rpc-store when it
         // is enabled. Raw chain data comes from the perpetual / checkpoint
