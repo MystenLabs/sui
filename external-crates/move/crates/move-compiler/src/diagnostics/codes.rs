@@ -426,28 +426,30 @@ codes!(
 //**************************************************************************************************
 
 impl DiagnosticInfo {
-    pub fn render(self) -> (/* code */ String, /* message */ &'static str) {
-        let Self {
-            severity,
-            category,
-            code,
-            external_prefix,
-            code_tag,
-            message,
-        } = self;
-        let sev_prefix = match severity {
+    pub fn render(&self) -> (/* code */ String, /* message */ &'static str) {
+        let sev_prefix = match self.severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
             Severity::Warning => "W",
             Severity::Note => "I",
             Severity::Bug => "ICE",
         };
-        debug_assert!(category <= 99);
-        let string_code = if let Some(ext) = external_prefix {
-            format!("{ext}{sev_prefix}{code_tag}{category:02}{code:03}")
+        debug_assert!(self.category <= 99);
+        let string_code = if let Some(ext) = self.external_prefix {
+            format!(
+                "{ext}{sev_prefix}{tag}{category:02}{code:03}",
+                tag = self.code_tag,
+                category = self.category,
+                code = self.code,
+            )
         } else {
-            format!("{sev_prefix}{code_tag}{category:02}{code:03}")
+            format!(
+                "{sev_prefix}{tag}{category:02}{code:03}",
+                tag = self.code_tag,
+                category = self.category,
+                code = self.code,
+            )
         };
-        (string_code, message)
+        (string_code, self.message)
     }
 
     pub const fn with_code_tag(mut self, tag: &'static str) -> Self {
