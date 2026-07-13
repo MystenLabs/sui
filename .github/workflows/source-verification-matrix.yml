@@ -1,0 +1,75 @@
+name: Source Verification Version Matrix
+
+# Rebuilds a fixture with historical `sui` release binaries and verifies the result with the current
+# CLI. This downloads release archives from GitHub, so it is deliberately kept out of the required
+# pull request checks: it runs on a schedule and on demand only, and a failure here never blocks a
+# merge.
+on:
+  schedule:
+    - cron: '0 10 * * *' # UTC timing is every day at 2am PST
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: "Comma-separated sui versions to sweep instead of the curated set (reports a table, does not fail)"
+        type: string
+        required: false
+        default: ''
+
+# The job only checks out the repository and runs cargo, so restrict the token to reading contents.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+
+jobs:
+  version-matrix:
+    name: Verify packages published by historical toolchains
+    runs-on: [ubuntu-ghcloud]
+    timeout-minutes: 120
+    steps:
+      - name: Install Rust
+        run: rustup update stable
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+
+      - uses: taiki-e/install-action@protoc
+
+      # `version_matrix` locates the CLI with `get_cargo_bin("sui")`, which does not build it.
+      - name: Build the sui CLI
+        run: cargo build -p sui
+
+      # Also exercise the newest release so a layout or interoperability change in a future release is
+      # caught; the curated set alone would never see it.
+      - name: Determine latest sui release
+        id: latest
+        if: ${{ github.event.inputs.versions == '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(gh release list --repo MystenLabs/sui --limit 40 --json tagName --jq '.[].tagName' \
+            | grep '^mainnet-v' | sed 's/mainnet-v//' | sort -V | tail -1)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Curated matrix (asserts)
+        if: ${{ github.event.inputs.versions == '' }}
+        env:
+          SUI_MATRIX_EXTRA_VERSIONS: ${{ steps.latest.outputs.version }}
+        run: >
+          cargo test -p sui-source-verification --test version_matrix
+          -- --ignored --nocapture era_matrix
+
+      - name: Historical sweep (reports)
+        if: ${{ github.event.inputs.versions != '' }}
+        env:
+          SUI_MATRIX_VERSIONS: ${{ github.event.inputs.versions }}
+        run: >
+          cargo test -p sui-source-verification --test version_matrix
+          -- --ignored --nocapture historical_sweep

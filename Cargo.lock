@@ -14012,7 +14012,7 @@ dependencies = [
  "sui-rpc-api",
  "sui-sdk",
  "sui-simulator",
- "sui-source-validation",
+ "sui-source-verification",
  "sui-swarm",
  "sui-swarm-config",
  "sui-test-transaction-builder",
@@ -17096,13 +17096,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-source-validation"
+name = "sui-source-verification"
 version = "1.76.0"
 dependencies = [
  "anyhow",
  "colored",
  "datatest-stable",
  "expect-test",
+ "fastcrypto",
  "flate2",
  "fs_extra",
  "futures",
@@ -17120,6 +17121,7 @@ dependencies = [
  "mysten-common",
  "rand 0.8.5",
  "serde",
+ "serde_json",
  "sui-config",
  "sui-move-build",
  "sui-package-alt",
