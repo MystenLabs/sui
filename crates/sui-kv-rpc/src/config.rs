@@ -42,7 +42,7 @@ const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMeth
     max_limit_items: 100,
 };
 
-/// Per-endpoint tunables for one v2alpha ledger-history list API. Every field is
+/// Per-endpoint tunables for one ledger-history list API. Every field is
 /// optional and falls back to a built-in default; see
 /// [`ResolvedLedgerHistoryMethodConfig`].
 #[derive(Clone, Debug, Default, Deserialize, Serialize, schemars::JsonSchema)]
@@ -177,7 +177,7 @@ impl StagesConfig {
     }
 }
 
-/// Tunables for the v2alpha ledger-history list APIs. Per-endpoint knobs live in
+/// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
 /// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are
 /// global across all three. Every field is optional and falls back to a built-in
 /// default.
@@ -360,11 +360,11 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
 
-    /// Enable the v2alpha List APIs (and their alpha service-info pipelines).
+    /// Enable the List APIs (and their alpha service-info pipelines).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_experimental_query_apis: Option<bool>,
 
-    /// Tunables for the v2alpha ledger-history list APIs.
+    /// Tunables for the ledger-history list APIs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ledger_history: Option<LedgerHistoryConfig>,
 

@@ -560,7 +560,7 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
-    use sui_rpc::proto::sui::rpc::v2alpha as proto;
+    use sui_rpc::proto::sui::rpc::v2 as proto;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
     use sui_types::event::Event;

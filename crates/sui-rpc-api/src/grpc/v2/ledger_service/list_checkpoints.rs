@@ -11,12 +11,12 @@ use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -883,8 +883,8 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpoints
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
-    use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
+    use sui_rpc::proto::sui::rpc::v2::Ordering;
+    use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;
 
     fn options(ascending: bool) -> QueryOptions {

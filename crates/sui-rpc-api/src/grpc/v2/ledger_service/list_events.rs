@@ -14,11 +14,11 @@ use mysten_common::ZipDebugEqIteratorExt;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::Event as ProtoEvent;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_cursor::Position;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
@@ -771,8 +771,8 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsRespo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
-    use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
+    use sui_rpc::proto::sui::rpc::v2::Ordering;
+    use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;
 
     fn options(ascending: bool) -> QueryOptions {

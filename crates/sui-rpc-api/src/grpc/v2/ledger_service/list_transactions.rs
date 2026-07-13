@@ -9,11 +9,11 @@ use futures::stream::BoxStream;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
+use sui_rpc::proto::sui::rpc::v2::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_cursor::Position;
 use sui_sdk_types::Digest;
 use sui_types::storage::LedgerTxSeqDigest;
@@ -637,8 +637,8 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransaction
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
-    use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
+    use sui_rpc::proto::sui::rpc::v2::Ordering;
+    use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;
 
     fn options(ascending: bool) -> QueryOptions {

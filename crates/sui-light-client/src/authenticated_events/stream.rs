@@ -8,8 +8,8 @@ use futures::stream::Stream;
 use mysten_common::debug_fatal;
 use std::sync::Arc;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::{
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::{
     AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
     ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter,
     TransactionLiteral, TransactionTerm,
@@ -24,7 +24,7 @@ struct EventStreamState {
     stream_object_id: ObjectID,
     /// Inclusive lower bound on the next ListEvents request. Bumped only
     /// when the server reports a final `QueryEndReason` (LedgerTip /
-    /// CheckpointBound / CursorBound / Unspecified) so the next request
+    /// CheckpointBound / CursorBound / Unknown) so the next request
     /// starts past the last fully-scanned checkpoint.
     next_checkpoint: u64,
     /// Opaque resume cursor within the current scan. Set when the server
@@ -97,7 +97,7 @@ impl EventStreamState {
             .with_filter(self.filter.clone())
             .with_options(options);
 
-        let mut ledger_service = self.client.ledger_service_v2alpha();
+        let mut ledger_service = self.client.ledger_service();
         let response = ledger_service
             .list_events(request)
             .await
@@ -224,7 +224,7 @@ impl EventStreamState {
             (Some(first), Some(last)) => (first.checkpoint, last.checkpoint),
             _ => (up_to_checkpoint, up_to_checkpoint),
         };
-        let mut ledger_service = self.client.ledger_service_v2alpha();
+        let mut ledger_service = self.client.ledger_service();
         let settlements = fetch_settlements_for_range(
             &mut ledger_service,
             self.stream_object_id,
@@ -374,7 +374,7 @@ impl EventStreamState {
 /// ascending — the same order the events stream uses, which lets
 /// downstream bucketing walk both with a single cursor.
 async fn fetch_settlements_for_range(
-    client: &mut V2AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     stream_object_id: ObjectID,
     start_checkpoint: u64,
     end_checkpoint_exclusive: u64,

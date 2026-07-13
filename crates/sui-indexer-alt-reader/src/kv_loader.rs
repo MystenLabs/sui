@@ -189,7 +189,7 @@ impl KvArgs {
         ))
     }
 
-    /// Construct a v2alpha streaming reader when the operator has opted in via
+    /// Construct a streaming list reader when the operator has opted in via
     /// `experimental_query_apis` AND a ledger gRPC URL is configured. Returns `None`
     /// otherwise. Reuses the same channel settings as the v2 `ledger_grpc_reader`.
     pub async fn alpha_ledger_grpc_reader(

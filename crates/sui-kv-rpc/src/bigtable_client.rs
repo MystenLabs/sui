@@ -96,7 +96,7 @@ impl Metrics {
             .unwrap(),
             permits_peak: register_histogram_vec_with_registry!(
                 "kv_rpc_bigtable_permits_peak",
-                "Peak in-use BigTable limiter permits observed during a single v2alpha request.",
+                "Peak in-use BigTable limiter permits observed during a single list request.",
                 &["method"],
                 vec![1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0],
                 registry,
@@ -104,7 +104,7 @@ impl Metrics {
             .unwrap(),
             ops_total: register_histogram_vec_with_registry!(
                 "kv_rpc_bigtable_ops_total",
-                "Total BigTable limiter acquisitions issued by a single v2alpha request.",
+                "Total BigTable limiter acquisitions issued by a single list request.",
                 &["method"],
                 prometheus::exponential_buckets(1.0, 2.0, 14).unwrap(),
                 registry,

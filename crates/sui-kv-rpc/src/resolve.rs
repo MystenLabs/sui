@@ -4,7 +4,7 @@
 //! Shared BigTable resolution layer: turns streams (or bounded sets) of
 //! checkpoint/transaction identifiers into fully-resolved entities — their
 //! transactions and objects — using the chunked, concurrency-limited pipeline
-//! primitives. Both the v2 point-get handlers and the v2alpha list handlers
+//! primitives. Both the v2 point-get handlers and the list handlers
 //! build on these so request-size chunking, stage overlap, and object
 //! deduplication are identical across them.
 

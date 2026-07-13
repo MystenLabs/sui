@@ -414,15 +414,15 @@ mod tests {
     #[test]
     fn known_grpc_method_without_matched_path_uses_uri_path_label() {
         let mut allowlist = HashSet::new();
-        allowlist.insert("/sui.rpc.v2alpha.LedgerService/ListTransactions".to_owned());
+        allowlist.insert("/sui.rpc.v2.LedgerService/ListTransactions".to_owned());
 
         let label = compute_metric_label(
             true,
-            "/sui.rpc.v2alpha.LedgerService/ListTransactions",
+            "/sui.rpc.v2.LedgerService/ListTransactions",
             None,
             &allowlist,
         );
-        assert_eq!(label, "/sui.rpc.v2alpha.LedgerService/ListTransactions");
+        assert_eq!(label, "/sui.rpc.v2.LedgerService/ListTransactions");
     }
 
     #[test]

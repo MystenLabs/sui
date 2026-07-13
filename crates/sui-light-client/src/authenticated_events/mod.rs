@@ -18,7 +18,6 @@ use std::time::Duration;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::{Event as ProtoEvent, GetCheckpointRequest, GetEpochRequest};
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::{
     GetCheckpointObjectProofResponse, get_checkpoint_object_proof_response,
@@ -213,7 +212,6 @@ impl ClientError {
 }
 
 pub struct AuthenticatedEventsClient {
-    ledger_service_v2alpha: V2AlphaLedgerServiceClient<Channel>,
     proof_service: ProofServiceClient<Channel>,
     ledger_service: LedgerServiceClient<Channel>,
     epoch_cache: Arc<tokio::sync::Mutex<EpochCache>>,
@@ -240,13 +238,11 @@ impl AuthenticatedEventsClient {
         for _ in 0..MAX_RETRIES {
             match endpoint.connect().await {
                 Ok(ch) => {
-                    let ledger_service_v2alpha = V2AlphaLedgerServiceClient::new(ch.clone());
                     let proof_service = ProofServiceClient::new(ch.clone());
                     let ledger_service = LedgerServiceClient::new(ch);
                     let epoch_cache = EpochCache::new(genesis_committee);
 
                     return Ok(Self {
-                        ledger_service_v2alpha,
                         proof_service,
                         ledger_service,
                         epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
@@ -509,8 +505,8 @@ impl AuthenticatedEventsClient {
         }
     }
 
-    pub(crate) fn ledger_service_v2alpha(&self) -> V2AlphaLedgerServiceClient<Channel> {
-        self.ledger_service_v2alpha.clone()
+    pub(crate) fn ledger_service(&self) -> LedgerServiceClient<Channel> {
+        self.ledger_service.clone()
     }
 
     pub(crate) async fn fetch_and_verify_stream_head(

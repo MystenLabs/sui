@@ -10,36 +10,35 @@ use prost_types::FieldMask;
 use sui_macros::sim_test;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
+use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
+use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
+use sui_rpc::proto::sui::rpc::v2::EventFilter;
+use sui_rpc::proto::sui::rpc::v2::EventLiteral;
+use sui_rpc::proto::sui::rpc::v2::EventStreamHeadFilter;
+use sui_rpc::proto::sui::rpc::v2::EventTerm;
+use sui_rpc::proto::sui::rpc::v2::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
-use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient as V2LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::AffectedAddressFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::AffectedObjectFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::EventStreamHeadFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventTerm;
-use sui_rpc::proto::sui::rpc::v2alpha::EventTypeFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
-use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
-use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as AlphaLedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
+use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
+use sui_rpc::proto::sui::rpc::v2::Ordering;
+use sui_rpc::proto::sui::rpc::v2::PackageWriteFilter;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+use sui_rpc::proto::sui::rpc::v2::SenderFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionLiteral;
+use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
+use sui_rpc::proto::sui::rpc::v2::event_literal;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -278,7 +277,7 @@ fn event_digest_set(result: &EventsResult) -> HashSet<String> {
 }
 
 async fn list_transactions_result(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListTransactionsRequest,
 ) -> TransactionsResult {
     let mut stream = client
@@ -317,7 +316,7 @@ async fn list_transactions_result(
 }
 
 async fn list_events_result(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListEventsRequest,
 ) -> EventsResult {
     let mut stream = client.list_events(request).await.unwrap().into_inner();
@@ -352,7 +351,7 @@ async fn list_events_result(
 }
 
 async fn list_checkpoints_result(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListCheckpointsRequest,
 ) -> CheckpointsResult {
     let mut stream = client.list_checkpoints(request).await.unwrap().into_inner();
@@ -388,7 +387,7 @@ async fn list_checkpoints_result(
 }
 
 async fn expect_invalid_list_transactions(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListTransactionsRequest,
 ) {
     let err = client
@@ -399,7 +398,7 @@ async fn expect_invalid_list_transactions(
 }
 
 async fn expect_invalid_list_events(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListEventsRequest,
 ) {
     let err = client
@@ -410,7 +409,7 @@ async fn expect_invalid_list_events(
 }
 
 async fn expect_invalid_list_checkpoints(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListCheckpointsRequest,
 ) {
     let err = client
@@ -432,14 +431,14 @@ async fn new_cluster() -> TestCluster {
         .await
 }
 
-async fn new_ledger_client(cluster: &TestCluster) -> AlphaLedgerServiceClient<Channel> {
-    AlphaLedgerServiceClient::connect(cluster.rpc_url().to_owned())
+async fn new_ledger_client(cluster: &TestCluster) -> LedgerServiceClient<Channel> {
+    LedgerServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap()
 }
 
 async fn latest_checkpoint_sequence(cluster: &TestCluster) -> u64 {
-    let mut client = V2LedgerServiceClient::connect(cluster.rpc_url().to_owned())
+    let mut client = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
     client
