@@ -22,11 +22,17 @@ All access (mutable and immutable) is controlled through the module that defines
 -  [Function `remove`](#sui_scratch_remove)
 -  [Function `exists`](#sui_scratch_exists)
 -  [Function `exists_with_type`](#sui_scratch_exists_with_type)
+-  [Function `read_opt`](#sui_scratch_read_opt)
+-  [Function `remove_opt`](#sui_scratch_remove_opt)
+-  [Function `replace`](#sui_scratch_replace)
 -  [Macro function `internal_add`](#sui_scratch_internal_add)
 -  [Macro function `internal_read`](#sui_scratch_internal_read)
 -  [Macro function `internal_remove`](#sui_scratch_internal_remove)
 -  [Macro function `internal_exists`](#sui_scratch_internal_exists)
 -  [Macro function `internal_exists_with_type`](#sui_scratch_internal_exists_with_type)
+-  [Macro function `internal_read_opt`](#sui_scratch_internal_read_opt)
+-  [Macro function `internal_remove_opt`](#sui_scratch_internal_remove_opt)
+-  [Macro function `internal_replace`](#sui_scratch_internal_replace)
 -  [Function `hash_type_and_key`](#sui_scratch_hash_type_and_key)
 -  [Function `add_impl`](#sui_scratch_add_impl)
 -  [Function `read_impl`](#sui_scratch_read_impl)
@@ -278,6 +284,101 @@ Requires a <code><a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&
 
 </details>
 
+<a name="sui_scratch_read_opt"></a>
+
+## Function `read_opt`
+
+Returns a copy of the value bound to <code>key</code> as <code>some(value)</code> if it exists, or <code>none</code> otherwise.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>V</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_read_opt">read_opt</a>&lt;K: <b>copy</b>, drop, V: <b>copy</b>, drop&gt;(ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;V&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_read_opt">read_opt</a>&lt;K: <b>copy</b> + drop, V: <b>copy</b> + drop&gt;(
+    ctx: &TxContext,
+    <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
+    key: K,
+): Option&lt;V&gt; {
+    <b>if</b> (<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) option::some(<a href="../sui/scratch.md#sui_scratch_read">read</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <b>else</b> option::none()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_remove_opt"></a>
+
+## Function `remove_opt`
+
+Removes the entry bound to <code>key</code> if it exists, returning <code>some(value)</code>, or <code>none</code> otherwise.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>V</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_remove_opt">remove_opt</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;V&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_remove_opt">remove_opt</a>&lt;K: <b>copy</b> + drop, V: drop&gt;(
+    ctx: &<b>mut</b> TxContext,
+    <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
+    key: K,
+): Option&lt;V&gt; {
+    <b>if</b> (<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) option::some(<a href="../sui/scratch.md#sui_scratch_remove">remove</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <b>else</b> option::none()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_replace"></a>
+
+## Function `replace`
+
+Removes the existing value at <code>key</code> (if any) and adds <code>value</code> in its place.
+Returns the old value if it existed, or <code>none</code> otherwise.
+Note: the old and new value types may differ.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>VOld</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_replace">replace</a>&lt;K: <b>copy</b>, drop, VNew: drop, VOld: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K, value: VNew): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;VOld&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_replace">replace</a>&lt;K: <b>copy</b> + drop, VNew: drop, VOld: drop&gt;(
+    ctx: &<b>mut</b> TxContext,
+    <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
+    key: K,
+    value: VNew,
+): Option&lt;VOld&gt; {
+    <b>let</b> old = <a href="../sui/scratch.md#sui_scratch_remove_opt">remove_opt</a>&lt;K, VOld&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key);
+    <a href="../sui/scratch.md#sui_scratch_add">add</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, value);
+    old
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_scratch_internal_add"></a>
 
 ## Macro function `internal_add`
@@ -409,6 +510,94 @@ A wrapper for <code><a href="../sui/scratch.md#sui_scratch_exists_with_type">exi
     $key: $K,
 ): bool {
     <a href="../sui/scratch.md#sui_scratch_exists_with_type">exists_with_type</a>&lt;$K, $V&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_internal_read_opt"></a>
+
+## Macro function `internal_read_opt`
+
+A wrapper for <code><a href="../sui/scratch.md#sui_scratch_read_opt">read_opt</a></code> that constructs the <code><a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;</code> directly.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_read_opt">internal_read_opt</a>&lt;$K: <b>copy</b>, drop, $V: <b>copy</b>, drop&gt;($ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $key: $K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$V&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_read_opt">internal_read_opt</a>&lt;$K: <b>copy</b> + drop, $V: <b>copy</b> + drop&gt;(
+    $ctx: &TxContext,
+    $key: $K,
+): Option&lt;$V&gt; {
+    <a href="../sui/scratch.md#sui_scratch_read_opt">read_opt</a>&lt;$K, $V&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_internal_remove_opt"></a>
+
+## Macro function `internal_remove_opt`
+
+A wrapper for <code><a href="../sui/scratch.md#sui_scratch_remove_opt">remove_opt</a></code> that constructs the <code><a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;</code> directly.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_remove_opt">internal_remove_opt</a>&lt;$K: <b>copy</b>, drop, $V: drop&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $key: $K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$V&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_remove_opt">internal_remove_opt</a>&lt;$K: <b>copy</b> + drop, $V: drop&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $key: $K,
+): Option&lt;$V&gt; {
+    <a href="../sui/scratch.md#sui_scratch_remove_opt">remove_opt</a>&lt;$K, $V&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_internal_replace"></a>
+
+## Macro function `internal_replace`
+
+A wrapper for <code><a href="../sui/scratch.md#sui_scratch_replace">replace</a></code> that constructs the <code><a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;</code> directly.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$VOld</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_replace">internal_replace</a>&lt;$K: <b>copy</b>, drop, $VNew: drop, $VOld: drop&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $key: $K, $value: $VNew): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$VOld&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_replace">internal_replace</a>&lt;$K: <b>copy</b> + drop, $VNew: drop, $VOld: drop&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $key: $K,
+    $value: $VNew,
+): Option&lt;$VOld&gt; {
+    <a href="../sui/scratch.md#sui_scratch_replace">replace</a>&lt;$K, $VNew, $VOld&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key, $value)
 }
 </code></pre>
 

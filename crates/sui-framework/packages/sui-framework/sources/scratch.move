@@ -70,6 +70,41 @@ public fun exists_with_type<K: copy + drop, V: drop>(_: &TxContext, _: Permit<K>
     exists_with_type_impl<V>(hash_type_and_key(key))
 }
 
+/// Returns a copy of the value bound to `key` as `some(value)` if it exists, or `none` otherwise.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `V`.
+public fun read_opt<K: copy + drop, V: copy + drop>(
+    ctx: &TxContext,
+    permit: Permit<K>,
+    key: K,
+): Option<V> {
+    if (exists(ctx, permit, key)) option::some(read(ctx, permit, key)) else option::none()
+}
+
+/// Removes the entry bound to `key` if it exists, returning `some(value)`, or `none` otherwise.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `V`.
+public fun remove_opt<K: copy + drop, V: drop>(
+    ctx: &mut TxContext,
+    permit: Permit<K>,
+    key: K,
+): Option<V> {
+    if (exists(ctx, permit, key)) option::some(remove(ctx, permit, key)) else option::none()
+}
+
+/// Removes the existing value at `key` (if any) and adds `value` in its place.
+/// Returns the old value if it existed, or `none` otherwise.
+/// Note: the old and new value types may differ.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `VOld`.
+public fun replace<K: copy + drop, VNew: drop, VOld: drop>(
+    ctx: &mut TxContext,
+    permit: Permit<K>,
+    key: K,
+    value: VNew,
+): Option<VOld> {
+    let old = remove_opt<K, VOld>(ctx, permit, key);
+    add(ctx, permit, key, value);
+    old
+}
+
 // === Macro Functions ===
 
 /// A wrapper for `add` that constructs the `Permit<$K>` directly.
@@ -108,6 +143,34 @@ public macro fun internal_exists_with_type<$K: copy + drop, $V: drop>(
     $key: $K,
 ): bool {
     exists_with_type<$K, $V>($ctx, permit(internal::permit<$K>()), $key)
+}
+
+/// A wrapper for `read_opt` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_read_opt<$K: copy + drop, $V: copy + drop>(
+    $ctx: &TxContext,
+    $key: $K,
+): Option<$V> {
+    read_opt<$K, $V>($ctx, permit(internal::permit<$K>()), $key)
+}
+
+/// A wrapper for `remove_opt` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_remove_opt<$K: copy + drop, $V: drop>(
+    $ctx: &mut TxContext,
+    $key: $K,
+): Option<$V> {
+    remove_opt<$K, $V>($ctx, permit(internal::permit<$K>()), $key)
+}
+
+/// A wrapper for `replace` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$VOld`.
+public macro fun internal_replace<$K: copy + drop, $VNew: drop, $VOld: drop>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $value: $VNew,
+): Option<$VOld> {
+    replace<$K, $VNew, $VOld>($ctx, permit(internal::permit<$K>()), $key, $value)
 }
 
 /// Hashes the type and value of `k` against `DUMMY_ROOT` to produce the address identifying its
