@@ -44,6 +44,7 @@ use super::chunked_scan::cancelled;
 use super::chunked_scan::scan_limit_or_range;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
+use super::ledger_read::clamp_checkpoints_to_serving_floor;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::remaining_range_after;
@@ -242,9 +243,30 @@ fn next_checkpoint_chunk(
                 end_checkpoint,
                 checkpoint_hi_exclusive(&service)?,
             )?;
-            let cp_range = resolve_cp_range(checkpoint_range, &options);
+            let mut cp_range = resolve_cp_range(checkpoint_range, &options);
             if cancel.is_cancelled() {
                 return Err(cancelled());
+            }
+            // Clamp the resolved window's low end to the serving floor
+            // before either scan shape consumes it: checkpoints below
+            // the floor are pruned, and rendering one would fail the
+            // whole stream. An open-ended low end is raised to the
+            // floor; an explicit sub-floor `start_checkpoint` or
+            // `after` cursor is `OutOfRange`, matching the tx and
+            // event scans. `cp_range` is in checkpoint units, so the
+            // floor checkpoint serves as both the position and the
+            // checkpoint argument of the reconciliation. (The filtered
+            // arm's tx-space clamp below derives from the same floor
+            // and becomes a no-op backstop.)
+            if !cp_range.is_empty()
+                && let Some(floor) = clamp_checkpoints_to_serving_floor(
+                    &service,
+                    cp_range.range.start,
+                    start_checkpoint,
+                    &options,
+                )?
+            {
+                cp_range.apply_serving_floor(floor, floor, &options);
             }
             let interval_empty = cp_range.is_empty();
             let mut end_checkpoint = cp_range.end_checkpoint;
