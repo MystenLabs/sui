@@ -22,6 +22,11 @@ sui client --client.config $CONFIG --json verify-source "b" 2>/dev/null | jq -S 
   | .publishedAt = "<redacted>"
   | .toolchainVersion = "<redacted>"'
 
+# --verify-only takes the on-chain id as its value and compares the bytecode already built under
+# b/build against that package, skipping the rebuild (used by tooling such as the debugger).
+b_id=$(sed -n 's/^published-at = "\(0x[0-9a-f]*\)"$/\1/p' b/Published.toml | head -1)
+sui client --client.config $CONFIG verify-source --verify-only "$b_id" "b"
+
 sui client --client.config $CONFIG publish "a" > /dev/null 2>&1
 if sui client --client.config $CONFIG verify-source "a" > /dev/null 2>&1; then
   echo "Source verification succeeded!"

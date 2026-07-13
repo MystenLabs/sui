@@ -17,6 +17,7 @@ mod build;
 mod compare;
 mod onchain;
 mod pinning;
+mod prebuilt;
 mod toolchain_version;
 
 pub use binary::ensure_binary;
@@ -93,6 +94,24 @@ pub async fn verify_source(
         toolchain_version: toolchain,
         binary_path: binary,
     })
+}
+
+/// Verify that the modules already compiled under `source_path/build` match the on-chain package at
+/// `on_chain_id`, without invoking the compiler. Only module bytecode is compared, not linkage. The
+/// caller supplies `on_chain_id` directly (there is no publication metadata to read), so this is a
+/// local-build-versus-chain diff rather than an authenticity check on recorded source.
+pub async fn verify_built(
+    source_path: &Path,
+    on_chain_id: ObjectID,
+    client: &Client,
+) -> Result<(), AggregateError> {
+    let modules = prebuilt::read_modules(source_path)?;
+    let generated = build::GeneratedPackage {
+        modules,
+        dependencies: vec![],
+    };
+    let onchain = onchain::fetch(client, on_chain_id).await?;
+    compare::check(client, generated, onchain).await
 }
 
 /// Determine which toolchain version to rebuild with.
