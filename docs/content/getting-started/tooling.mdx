@@ -322,6 +322,13 @@ export const ToolGrid = ({ children }) => (
   website="https://www.playmove.dev/"
 />
 
+<ToolCard
+  name="Sui Devstack"
+  description="Boot a local Sui stack with Walrus, Seal, DeepBook, and faucets from a single TypeScript config. Publishes packages, funds accounts, and generates typed bindings."
+  install="pnpm create @mysten-incubation/devstack-app@latest my-app"
+  docs="https://ts-sdks-incubation.vercel.app/devstack"
+/>
+
 </ToolGrid>
 
 ## Writing Move
@@ -866,6 +873,20 @@ Block explorers and network monitoring dashboards.
   website="https://rpcs.polymedia.app/"
   community
 />
+
+<ToolCard
+  name="devxplorer"
+  description="Developer-focused explorer built on GraphQL. Works with local and custom RPCs, focusing on transactions, effects, objects, events, packages, and types."
+  website="https://devxplorer.io/"
+  community
+/>
+
+<ToolCard
+  name="Sui Data Stack Explorer"
+  description="AI-native explorer with smart routing across gRPC, GraphQL, and Archival Service. Includes a Pulse checkpoint feed and an object Time Machine for historical inspection."
+  github="https://github.com/abhinavg6/sui-data-stack-explorer"
+  community
+/>
 </ToolGrid>
 
 ## Oracles
@@ -921,6 +942,28 @@ Autonomous agents, verifiable inference, and TEE infrastructure.
   name="Eliza"
   description="Framework for building autonomous agents."
   github="https://github.com/elizaOS/eliza"
+  community
+/>
+
+<ToolCard
+  name="Sui Pilot"
+  description="Claude Code plugin that bundles Sui ecosystem docs, a Move LSP bridge, and formal verification tooling into a doc-first development agent."
+  github="https://github.com/alilloig/sui-pilot"
+  website="https://contract-hero.github.io/sui-pilot/"
+  community
+/>
+
+<ToolCard
+  name="Local Sui MCP Server"
+  description="Local MCP server exposing 29 agent-callable tools for querying Sui via gRPC, GraphQL, and Archival Service with automatic transport routing."
+  github="https://github.com/abhinavg6/sui-mcp-server"
+  community
+/>
+
+<ToolCard
+  name="Hosted Sui MCP Server (Kapa)"
+  description="Hosted MCP server providing semantic search over Sui documentation for AI tools and agents like Claude Code, Cursor, and VS Code."
+  website="https://sui.mcp.kapa.ai/"
   community
 />
 
