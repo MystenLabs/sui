@@ -644,6 +644,90 @@ mod tests {
         assert_eq!(publication.addresses.published_at, PublishedID::from(2));
     }
 
+    /// When a package records a publication in *both* a `Published.toml` and a legacy manifest
+    /// `published-at`, the `Published.toml` address wins. This is the address the package system
+    /// bakes into a dependent's linkage table during publication, so the verifier (which reads it
+    /// through the same path) and a publisher cannot disagree about which address to link.
+    #[test(tokio::test)]
+    async fn published_toml_wins_over_manifest_published_at() {
+        // The legacy manifest records published-at = 0x2 (original 0x1); the Published.toml records a
+        // different address, 0x4 (original 0x3).
+        let pubfile = r#"
+            [published._test_env]
+            chain-id = "_test_env_id"
+            published-at = "0x4"
+            original-id = "0x3"
+            version = 1
+        "#;
+
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("a", |a| {
+                a.set_legacy()
+                    .publish(OriginalID::from(1), PublishedID::from(2), None)
+                    .add_file("Published.toml", pubfile)
+            })
+            .build();
+
+        let publication = read_publication::<Vanilla>(
+            &scenario.path_for("a"),
+            &Vanilla::default_environment(),
+            &Vanilla::new(),
+        )
+        .await
+        .unwrap()
+        .expect("package records a publication");
+
+        assert_eq!(publication.addresses.published_at, PublishedID::from(4));
+        assert_eq!(publication.addresses.original_id, OriginalID::from(3));
+    }
+
+    /// When a package records a publication in *both* a `Published.toml` and a legacy `Move.lock`
+    /// `[env]` managed section, the `Published.toml` address wins. DeepBook's pre-v6 releases record
+    /// their address in the `[env]` lock, so this is the case retrofitting a `Published.toml` relies
+    /// on; the resolution stays identical for the verifier and for a publisher building linkage.
+    #[test(tokio::test)]
+    async fn published_toml_wins_over_legacy_lock() {
+        // The legacy Move.lock records the managed address 0x6 (original 0x5); the Published.toml
+        // records a different address, 0x4 (original 0x3).
+        let lock = r#"
+            [move]
+            version = 1
+
+            [env._test_env]
+            chain-id = "_test_env_id"
+            original-published-id = "0x5"
+            latest-published-id = "0x6"
+            published-version = "1"
+        "#;
+        let pubfile = r#"
+            [published._test_env]
+            chain-id = "_test_env_id"
+            published-at = "0x4"
+            original-id = "0x3"
+            version = 1
+        "#;
+
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("a", |a| {
+                a.set_legacy()
+                    .add_file("Move.lock", lock)
+                    .add_file("Published.toml", pubfile)
+            })
+            .build();
+
+        let publication = read_publication::<Vanilla>(
+            &scenario.path_for("a"),
+            &Vanilla::default_environment(),
+            &Vanilla::new(),
+        )
+        .await
+        .unwrap()
+        .expect("package records a publication");
+
+        assert_eq!(publication.addresses.published_at, PublishedID::from(4));
+        assert_eq!(publication.addresses.original_id, OriginalID::from(3));
+    }
+
     /// `read_publication` returns `None` for a package that has not been published.
     #[test(tokio::test)]
     async fn read_publication_is_none_when_unpublished() {
