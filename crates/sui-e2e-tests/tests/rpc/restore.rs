@@ -51,9 +51,11 @@ use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::AuthorityName;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -199,6 +201,9 @@ struct Transfer {
     receiver: SuiAddress,
     amount: u64,
     digest: TransactionDigest,
+    /// The coin object the transfer created for `receiver`, at the
+    /// version it was created with.
+    created_coin: ObjectRef,
 }
 
 /// Transfer `amount` MIST of SUI to a fresh address through the cluster's
@@ -208,11 +213,19 @@ async fn transfer_to_fresh_address(cluster: &TestCluster, amount: u64) -> Transf
     let receiver = SuiAddress::random_for_testing_only();
     let txn = make_transfer_sui_transaction(&cluster.wallet, Some(receiver), Some(amount)).await;
     let executed = cluster.execute_transaction(txn).await;
+    let created_coin = executed
+        .effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(a) if *a == receiver))
+        .expect("the transfer creates the receiver's coin")
+        .0;
     let transfer = Transfer {
         sender: executed.transaction.sender(),
         receiver,
         amount,
         digest: *executed.effects.transaction_digest(),
+        created_coin,
     };
     cluster.wait_for_tx_settlement(&[transfer.digest]).await;
     transfer
@@ -365,6 +378,34 @@ async fn enabling_embedded_store_rebuilds_indexes() {
     // through both index cohorts.
     wait_for_indexed(&cluster, &name, target).await;
     assert_transfer_indexed(&rpc_url, &transfer).await;
+
+    // With nothing pruned the from-genesis backfill owns the whole
+    // `object_version_by_checkpoint` history: the receiver's coin --
+    // created mid-chain, before indexing was enabled -- must not exist
+    // at genesis, and must resolve to its creation version at the tip.
+    // A restore of that CF at the tip would instead leave only a floor
+    // row there, making the genesis read fall back to it and resolve
+    // an object that did not exist yet.
+    let (coin_id, coin_version, _) = transfer.created_coin;
+    with_node(&cluster, &name, |node| {
+        let reader = node.embedded_rpc_store().unwrap().reader();
+        assert_eq!(
+            reader
+                .schema()
+                .get_object_version_at_checkpoint(coin_id, 0)
+                .unwrap(),
+            None,
+            "a coin created mid-chain must not resolve at genesis",
+        );
+        assert_eq!(
+            reader
+                .schema()
+                .get_object_version_at_checkpoint(coin_id, target)
+                .unwrap(),
+            Some(coin_version),
+            "the backfill should record the coin's creation version",
+        );
+    });
 }
 
 /// Toggling indexing off, advancing the chain, then back on lets the store

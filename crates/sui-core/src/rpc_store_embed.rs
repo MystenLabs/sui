@@ -346,19 +346,37 @@ impl EmbeddedRpcStore {
                 // so the indexer builds both cohorts from genesis as
                 // checkpoints execute.
                 if let Some(target) = highest_committed {
+                    // At `L > 0` the history cohort backfills only
+                    // `(L, T]`, so the restore also bulk-loads the
+                    // `object_version_by_checkpoint` and
+                    // `package_versions` floor rows at `T` (the seed
+                    // below rewinds their watermarks to `L-1`). At
+                    // `L == 0` the backfill replays the whole chain
+                    // from genesis and rebuilds both CFs in full, so
+                    // those pipelines must not be restored at all --
+                    // the `__watermark = T` rows the restore would
+                    // stamp on them would make them skip `(0, T]`
+                    // entirely.
+                    let layer = if lowest_available > 0 {
+                        RestoreLayer::indexes_only()
+                    } else {
+                        RestoreLayer::live_only()
+                    };
                     restore_live(
                         db.clone(),
                         schema.clone(),
                         perpetual.clone(),
                         target,
                         chain_id,
+                        layer,
                         registry,
                     )
                     .await?;
                     // `L == 0` means genesis is still available, so the
                     // history cohort backfills from checkpoint 0 with no
-                    // seed (an unwatermarked pipeline resumes at
-                    // `first_checkpoint = 0`).
+                    // seed (every history pipeline -- including the two
+                    // the restore skipped -- is unwatermarked and
+                    // resumes at `first_checkpoint = 0`).
                     if lowest_available > 0 {
                         seed_history(
                             &db,
@@ -632,12 +650,19 @@ fn stored_chain_id(db: &Db) -> anyhow::Result<Option<ChainId>> {
 
 /// Bulk-load the live cohort from the perpetual store up to
 /// `target_checkpoint`, blocking until the restore completes.
+///
+/// `layer` selects whether the `object_version_by_checkpoint` and
+/// `package_versions` floor rows are also bulk-loaded
+/// ([`RestoreLayer::indexes_only`], for `L > 0`) or left entirely to
+/// the from-genesis backfill ([`RestoreLayer::live_only`], for
+/// `L == 0`).
 async fn restore_live(
     db: Db,
     schema: Arc<RpcStoreSchema>,
     perpetual: Arc<AuthorityPerpetualTables>,
     target_checkpoint: u64,
     chain_id: ChainId,
+    layer: RestoreLayer,
     registry: &Registry,
 ) -> anyhow::Result<()> {
     let source = PerpetualStoreRestoreSource::new(perpetual, target_checkpoint, chain_id);
@@ -647,7 +672,7 @@ async fn restore_live(
         schema,
         source,
         RestoreDriverConfig::default(),
-        RestoreLayer::indexes_only(),
+        layer,
         metrics,
     )
     .context("starting the live-cohort restore")?;

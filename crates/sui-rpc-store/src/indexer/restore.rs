@@ -92,7 +92,8 @@ pub const LIVE_COHORT: &[&str] = &[ObjectByOwner::NAME, ObjectByType::NAME, Bala
 /// so they are seeded, never restored.
 ///
 /// `object_version_by_checkpoint` and `package_versions` are the
-/// exceptions: they are *both* restored and backfilled.
+/// exceptions: when some prefix of the chain has been pruned
+/// (`L > 0`) they are *both* restored and backfilled.
 /// [`restore_indexes`] bulk-loads their floor rows at the tip `T` (the
 /// versions live in the snapshot but predate the available window, so a
 /// checkpoint-bounded read treats them as having always existed), and
@@ -101,7 +102,14 @@ pub const LIVE_COHORT: &[&str] = &[ObjectByOwner::NAME, ObjectByType::NAME, Bala
 /// `object_version_by_checkpoint`'s per-checkpoint changes, and
 /// `package_versions`'s real publish checkpoint for versions published
 /// in the window. The embedded bootstrap runs the restore before the
-/// seed, so the `L-1` watermark wins.
+/// seed, so the `L-1` watermark wins. When nothing has been pruned
+/// (`L == 0`) the backfill covers the whole chain and rebuilds both
+/// CFs in full, so the embedded bootstrap skips restoring them
+/// entirely ([`RestoreLayer::live_only`]) -- restoring them would
+/// waste bulk-load work and stamp `__watermark = T` rows that would
+/// make them skip `(0, T]`.
+///
+/// [`RestoreLayer::live_only`]: crate::RestoreLayer::live_only
 ///
 /// Matches the history half of
 /// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded).
@@ -119,14 +127,16 @@ pub const HISTORY_COHORT: &[&str] = &[
 /// `layer` on a [`RestoreDriver`] bound to `db` / `schema` and
 /// `source`, then run the resulting [`Service`].
 ///
-/// The live-cohort pipelines are always registered, plus
+/// The live-cohort pipelines are always registered.
 /// `object_version_by_checkpoint` and `package_versions` -- history-
 /// cohort members whose floor rows are bulk-loaded from the live set
-/// here (the history seed separately rewinds their watermarks so they
-/// also backfill `(L, T]`). The raw [`Objects`] pipeline is only
-/// registered when `layer.objects` is set. The returned `Service`'s
-/// primary task completes once every registered pipeline transitions to
-/// [`RestoreState::Complete`].
+/// (the history seed separately rewinds their watermarks so they also
+/// backfill `(L, T]`) -- are registered only when
+/// `layer.history_floors` is set; a caller whose history cohort
+/// replays from genesis leaves them to the backfill. The raw
+/// [`Objects`] pipeline is only registered when `layer.objects` is
+/// set. The returned `Service`'s primary task completes once every
+/// registered pipeline transitions to [`RestoreState::Complete`].
 ///
 /// [`Restore`]: sui_consistent_store::Restore
 /// [`RestoreState::Complete`]: sui_consistent_store::restore_state::Complete
@@ -143,11 +153,13 @@ pub fn restore_indexes<Src: RestoreSource>(
     // object to it.
     let target_checkpoint = source.target_checkpoint();
     let mut driver = RestoreDriver::new(db, schema, source, config, metrics);
-    // History-cohort members, but their floor rows are restored from the
-    // live set; the embedded history seed later rewinds their watermarks
-    // so they also backfill `(L, T]`.
-    driver.register(ObjectVersionByCheckpoint::for_restore(target_checkpoint))?;
-    driver.register(PackageVersions)?;
+    if layer.history_floors {
+        // History-cohort members, but their floor rows are restored
+        // from the live set; the embedded history seed later rewinds
+        // their watermarks so they also backfill `(L, T]`.
+        driver.register(ObjectVersionByCheckpoint::for_restore(target_checkpoint))?;
+        driver.register(PackageVersions)?;
+    }
     driver.register(ObjectByOwner)?;
     driver.register(ObjectByType)?;
     driver.register(Balance)?;
@@ -189,24 +201,18 @@ pub fn floor_unrestored_pipelines(
     target_chain_id: ChainId,
     layer: &RestoreLayer,
 ) -> anyhow::Result<()> {
-    let restored: &[&'static str] = if layer.objects {
-        &[
-            ObjectVersionByCheckpoint::NAME,
-            ObjectByOwner::NAME,
-            ObjectByType::NAME,
-            Balance::NAME,
-            PackageVersions::NAME,
-            Objects::NAME,
-        ]
-    } else {
-        &[
-            ObjectVersionByCheckpoint::NAME,
-            ObjectByOwner::NAME,
-            ObjectByType::NAME,
-            Balance::NAME,
-            PackageVersions::NAME,
-        ]
-    };
+    // The set of pipelines `restore_indexes` registered for this
+    // `layer` -- their watermarks were written by the restore driver's
+    // finalize step and must not be clobbered here.
+    let mut restored: Vec<&'static str> =
+        vec![ObjectByOwner::NAME, ObjectByType::NAME, Balance::NAME];
+    if layer.history_floors {
+        restored.push(ObjectVersionByCheckpoint::NAME);
+        restored.push(PackageVersions::NAME);
+    }
+    if layer.objects {
+        restored.push(Objects::NAME);
+    }
 
     // Every rpc-store pipeline. Kept exhaustive so any new
     // pipeline added to `PipelineLayer` needs an explicit
@@ -855,6 +861,81 @@ mod tests {
                 checkpoint_lo: 1_000,
             }),
         );
+    }
+
+    /// `RestoreLayer::live_only` registers only the live-cohort
+    /// pipelines: `object_version_by_checkpoint` and
+    /// `package_versions` get no restore state, no watermark, no
+    /// chain id, and no floor rows, so a from-genesis backfill owns
+    /// them outright and never skips `(0, T]`.
+    #[tokio::test]
+    async fn restore_indexes_live_only_skips_history_floors() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let schema = Arc::new(schema);
+
+        let owner = SuiAddress::random_for_testing_only();
+        let objects: Vec<Object> = (1..=4u8)
+            .map(|i| Object::with_id_owner_for_testing(ObjectID::from_single_byte(i), owner))
+            .collect();
+
+        let chain_id = ChainId([8u8; 32]);
+        let source = VecSource::from_objects(123, chain_id, vec![objects.clone()]);
+
+        restore_indexes(
+            db.clone(),
+            schema.clone(),
+            source,
+            RestoreDriverConfig::default(),
+            RestoreLayer::live_only(),
+            RestoreMetrics::new(None, &prometheus::Registry::new()),
+        )
+        .unwrap()
+        .shutdown()
+        .await
+        .unwrap();
+
+        // The live cohort restored and finalized as usual.
+        for name in LIVE_COHORT {
+            let key = PipelineTaskKey::new(*name);
+            let state = db.framework().restore.get(&key).unwrap().unwrap();
+            assert!(
+                matches!(
+                    state.state.unwrap(),
+                    restore_state::State::Complete(c) if c.restored_at == 123,
+                ),
+                "{name} should complete its restore",
+            );
+            assert_eq!(
+                db.framework().watermarks.get(&key).unwrap(),
+                Some(Watermark::for_checkpoint(123)),
+                "{name} should resume from the restore target",
+            );
+        }
+
+        // The history-floor pipelines were never registered: no
+        // restore state, no watermark (so tip indexing backfills them
+        // from genesis), and no floor rows in their CFs.
+        for name in [ObjectVersionByCheckpoint::NAME, PackageVersions::NAME] {
+            let key = PipelineTaskKey::new(name);
+            assert!(
+                db.framework().restore.get(&key).unwrap().is_none(),
+                "{name} should have no restore state under live_only",
+            );
+            assert!(
+                db.framework().watermarks.get(&key).unwrap().is_none(),
+                "{name} should have no watermark under live_only",
+            );
+        }
+        for o in &objects {
+            assert_eq!(
+                schema
+                    .get_object_version_at_checkpoint(o.id(), 123)
+                    .unwrap(),
+                None,
+                "live_only must write no restore floor rows",
+            );
+        }
     }
 
     /// The live and history cohorts are disjoint and each has the
