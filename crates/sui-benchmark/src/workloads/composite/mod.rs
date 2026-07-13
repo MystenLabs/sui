@@ -11,8 +11,8 @@ pub use operations::{
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AuthenticatedEventEmit,
     CoinReservationWithdraw, INVALID_ALIAS_TX, ImmutableObjectRead, ObjectBalanceDeposit,
     ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw,
+    RequestCrash, SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit,
+    TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -319,6 +319,9 @@ impl CompositeWorkloadConfig {
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
         probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
+        // Every composite transaction opts in to crash injection; whether it is actually poisoned
+        // is then decided (content-addressed) at the configured crash probability.
+        probabilities.insert(RequestCrash::NAME, 1.0);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -343,8 +346,13 @@ impl CompositeWorkloadConfig {
             .map(|desc| (desc.factory)())
             .collect();
 
-        if ops.is_empty()
-            && let Some(desc) = ALL_OPERATIONS.first()
+        // Ensure at least one command-producing operation. RequestCrash only attaches an unused
+        // marker argument and produces no command, so a transaction containing only it would be an
+        // empty (command-less) PTB.
+        if ops.iter().all(|op| op.name() == RequestCrash::NAME)
+            && let Some(desc) = ALL_OPERATIONS
+                .iter()
+                .find(|desc| desc.name != RequestCrash::NAME)
         {
             ops.push((desc.factory)());
         }

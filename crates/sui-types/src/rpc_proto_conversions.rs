@@ -1323,6 +1323,8 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 ExecutionErrorKind::WrittenObjectsTooLarge
             }
             E::CertificateDenied => ExecutionErrorKind::CertificateDenied,
+            // Test/antithesis-only; no dedicated proto kind, map to the generic InvariantViolation.
+            E::InternalExecutionError => ExecutionErrorKind::InvariantViolation,
             E::SuiMoveVerificationTimedout => ExecutionErrorKind::SuiMoveVerificationTimedout,
             E::SharedObjectOperationNotAllowed => {
                 ExecutionErrorKind::ConsensusObjectOperationNotAllowed

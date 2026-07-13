@@ -880,6 +880,14 @@ async fn run_bench_worker(
                     err,
                     transaction.digest()
                 );
+                #[cfg(msim)]
+                if sui_core::crash_recovery::crash_recovery_probability().is_some()
+                    && sui_core::crash_recovery::should_poison_transaction(
+                        transaction.data().transaction_data(),
+                    )
+                {
+                    return NextOp::Failure { payload };
+                }
                 match payload.get_failure_type() {
                     Some(ExpectedFailureType::NoFailure) => {
                         panic!(

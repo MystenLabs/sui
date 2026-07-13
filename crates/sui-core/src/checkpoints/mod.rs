@@ -1740,7 +1740,6 @@ impl CheckpointBuilder {
             contents_digest = ?contents.digest(),
             "writing checkpoint",
         );
-
         if let Some(previously_computed_summary) = self
             .store
             .tables
