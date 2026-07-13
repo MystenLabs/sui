@@ -1,51 +1,50 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module base_addr::base {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-    use sui::event;
+module base_addr::base;
 
-    public struct A<T> {
-        f1: bool,
-        f2: T
-    }
+use sui::event;
+use sui::object::{Self, UID};
+use sui::transfer;
+use sui::tx_context::{Self, TxContext};
 
-    public struct B has key {
-        id: UID,
-        x: u64,
-    }
+public struct A<T> {
+    f1: bool,
+    f2: T,
+}
 
-    public struct BModEvent has copy, drop {
-        old: u64,
-        new: u64,
-    }
+public struct B has key {
+    id: UID,
+    x: u64,
+}
 
-    public fun return_0(): u64 { abort 42 }
+public struct BModEvent has copy, drop {
+    old: u64,
+    new: u64,
+}
 
-    public fun plus_1(x: u64): u64 { x + 1 }
+public fun return_0(): u64 { abort 42 }
 
-    public(package) fun friend_fun(x: u64): u64 { x }
+public fun plus_1(x: u64): u64 { x + 1 }
 
-    fun non_public_fun(y: bool): u64 { if (y) 0 else 1 }
+public(package) fun friend_fun(x: u64): u64 { x }
 
-    entry fun makes_b(ctx: &mut TxContext) {
-        transfer::transfer(
-            B { id: object::new(ctx), x: 42 },
-            tx_context::sender(ctx),
-        )
-    }
+fun non_public_fun(y: bool): u64 { if (y) 0 else 1 }
 
-    entry fun destroys_b(b: B) {
-        let B { id, x: _ }  = b;
-        object::delete(id);
-    }
+entry fun makes_b(ctx: &mut TxContext) {
+    transfer::transfer(
+        B { id: object::new(ctx), x: 42 },
+        ctx.sender(),
+    )
+}
 
-    entry fun modifies_b(mut b: B, ctx: &mut TxContext) {
-        event::emit(BModEvent{ old: b.x, new: 7 });
-        b.x = 7;
-        transfer::transfer(b, tx_context::sender(ctx))
-    }
+entry fun destroys_b(b: B) {
+    let B { id, x: _ } = b;
+    id.delete();
+}
 
+entry fun modifies_b(mut b: B, ctx: &mut TxContext) {
+    event::emit(BModEvent { old: b.x, new: 7 });
+    b.x = 7;
+    transfer::transfer(b, ctx.sender())
 }

@@ -3,11 +3,11 @@
 
 /// Test depending on another unpublished package, which is published
 /// along with your own.
-module depends::depends_on_basics {
-    use examples::object_basics;
-    use sui::tx_context::TxContext;
+module depends::depends_on_basics;
 
-    public entry fun delegate(ctx: &mut TxContext) {
-        object_basics::share(ctx);
-    }
+use examples::object_basics;
+use sui::tx_context::TxContext;
+
+public fun delegate(ctx: &mut TxContext) {
+    object_basics::share(ctx);
 }
