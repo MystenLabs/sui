@@ -1,6 +1,7 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
 ---
+{ 0 }
 if (0) {
     switch (1) {
         _0 => 

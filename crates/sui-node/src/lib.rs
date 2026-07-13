@@ -19,6 +19,7 @@ use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::future::Future;
+use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
@@ -113,7 +114,6 @@ use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
-use sui_core::rpc_index::RpcIndexStore;
 use sui_core::rpc_store_embed::EmbeddedRpcStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
@@ -298,10 +298,10 @@ pub struct SuiNode {
 
     subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 
-    /// The embedded `sui-rpc-store`, present when the node is configured
-    /// with `use_experimental_rpc_store`. Held for the node's lifetime
-    /// so its tip indexer keeps running (dropping it aborts the indexer).
-    /// Exposed through [`SuiNode::embedded_rpc_store`] for introspection.
+    /// The embedded `sui-rpc-store`, present when the node is a fullnode
+    /// with indexing enabled. Held for the node's lifetime so its tip
+    /// indexer keeps running (dropping it aborts the indexer). Exposed
+    /// through [`SuiNode::embedded_rpc_store`] for introspection.
     embedded_rpc_store: Option<EmbeddedRpcStore>,
 }
 
@@ -686,51 +686,37 @@ impl SuiNode {
 
         let chain_identifier = epoch_store.get_chain_identifier();
 
-        // The embedded `sui-rpc-store` and the legacy `rpc-index` are
-        // mutually exclusive index backends; selecting the experimental
-        // store skips building the old index and serves the index read
-        // paths from the embedded store instead.
-        let (rpc_index, mut embedded_rpc_store) =
+        // The embedded `sui-rpc-store` is the node's index backend: when
+        // indexing is enabled it builds the derived-index and ledger-history
+        // column families (indexed independently of the authority store) and
+        // serves the index read paths from the embedded store. Raw chain data
+        // is still served from the perpetual store.
+        let mut embedded_rpc_store =
             if node_role.is_fullnode() && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
-                if config
-                    .rpc()
-                    .is_some_and(|rpc| rpc.use_experimental_rpc_store())
-                {
-                    info!("creating embedded rpc-store");
-                    // The tip indexer pulls checkpoints from the node's local
-                    // checkpoint / perpetual stores via a dedicated read handle.
-                    let ingestion_source = RocksDbStore::new(
-                        cache_traits.clone(),
-                        committee_store.clone(),
-                        checkpoint_store.clone(),
-                    );
-                    let embedded_rpc_store = EmbeddedRpcStore::bootstrap(
-                        &config,
-                        &store,
-                        &checkpoint_store,
-                        ingestion_source,
-                        chain_identifier,
-                        &prometheus_registry,
-                    )
-                    .await?;
-                    (None, Some(embedded_rpc_store))
-                } else {
-                    info!("creating rpc index store");
-                    let rpc_index = Arc::new(
-                        RpcIndexStore::new(
-                            &config.db_path(),
-                            &store,
-                            &checkpoint_store,
-                            &epoch_store,
-                            &cache_traits.backing_package_store,
-                            config.rpc().cloned().unwrap_or_default(),
-                        )
-                        .await,
-                    );
-                    (Some(rpc_index), None)
-                }
+                info!("creating embedded rpc-store");
+                // The embedded `sui-rpc-store` replaced the legacy `rpc-index`
+                // backend; remove its now-dead on-disk directory if a prior
+                // version left one behind.
+                remove_legacy_rpc_index_store(&config.db_path());
+                // The tip indexer pulls checkpoints from the node's local
+                // checkpoint / perpetual stores via a dedicated read handle.
+                let ingestion_source = RocksDbStore::new(
+                    cache_traits.clone(),
+                    committee_store.clone(),
+                    checkpoint_store.clone(),
+                );
+                let embedded_rpc_store = EmbeddedRpcStore::bootstrap(
+                    &config,
+                    &store,
+                    &checkpoint_store,
+                    ingestion_source,
+                    chain_identifier,
+                    &prometheus_registry,
+                )
+                .await?;
+                Some(embedded_rpc_store)
             } else {
-                (None, None)
+                None
             };
 
         info!("creating archive reader");
@@ -816,7 +802,6 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
-            rpc_index,
             embedded_rpc_store.as_ref().map(|embedded| embedded.store()),
             checkpoint_store.clone(),
             &prometheus_registry,
@@ -1665,7 +1650,6 @@ impl SuiNode {
                 consensus_adapter.clone(),
                 Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
                 overload_config.admission_queue_capacity_fraction,
-                overload_config.admission_queue_bypass_fraction,
                 overload_config.admission_queue_failover_timeout,
                 inflight_slot_freed_notify,
             ));
@@ -1719,8 +1703,8 @@ impl SuiNode {
         self.state.clone()
     }
 
-    /// The embedded `sui-rpc-store` index backend, when the node runs
-    /// with `use_experimental_rpc_store`. Exposes the startup bootstrap
+    /// The embedded `sui-rpc-store` index backend, when the node is a
+    /// fullnode with indexing enabled. Exposes the startup bootstrap
     /// decision and per-cohort watermarks for introspection (used by
     /// tests to observe restore/resume behavior across restarts without
     /// going through the RPC surface).
@@ -2694,6 +2678,31 @@ async fn build_json_rpc_router(
     Ok(server.to_router(server_type).await?)
 }
 
+/// Remove the on-disk directory of the legacy `rpc-index` backend.
+///
+/// The embedded `sui-rpc-store` replaced the `RpcIndexStore` backend, which
+/// wrote to `<db_path>/rpc-index`; that data is now dead. Remove it on startup
+/// so a node upgraded from an older version does not leave it lingering and
+/// wasting disk. Best-effort: a node that never ran the legacy backend has
+/// nothing to remove, and a failure to remove stale data must not block
+/// startup.
+fn remove_legacy_rpc_index_store(db_path: &Path) {
+    let legacy_dir = db_path.join("rpc-index");
+    match std::fs::remove_dir_all(&legacy_dir) {
+        Ok(()) => info!(
+            "removed legacy rpc-index directory {}",
+            legacy_dir.display()
+        ),
+        // The common case: the node never ran the legacy backend, or it was
+        // already cleaned up on a prior startup.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => warn!(
+            "failed to remove legacy rpc-index directory {}: {e:?}",
+            legacy_dir.display()
+        ),
+    }
+}
+
 async fn build_http_servers(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
@@ -2741,8 +2750,8 @@ async fn build_http_servers(
         SubscriptionService::build(prometheus_registry, indexed_checkpoint);
     let rpc_router = {
         // Serve the index read paths from the embedded rpc-store when it
-        // is enabled, otherwise from the legacy `rpc-index`. Raw chain
-        // data comes from the perpetual / checkpoint stores either way.
+        // is enabled. Raw chain data comes from the perpetual / checkpoint
+        // stores either way.
         let reader: Arc<dyn RpcStateReader> = match embedded_rpc_store {
             Some(embedded) => Arc::new(RpcStoreReadStore::new(
                 state.clone(),
@@ -2932,6 +2941,32 @@ mod tests {
             deny_config_broadcast_payload(&oversized, true, true, false),
             DenyConfigBroadcastAction::Skip,
         );
+    }
+
+    // A present legacy `rpc-index` directory is removed, while its siblings
+    // (notably the still-used jsonrpc `indexes` store) are left untouched, and a
+    // missing directory is a no-op.
+    #[test]
+    fn removes_only_the_legacy_rpc_index_directory() {
+        let db = tempfile::tempdir().unwrap();
+        let legacy = db.path().join("rpc-index");
+        let sibling = db.path().join("indexes");
+        std::fs::create_dir(&legacy).unwrap();
+        std::fs::create_dir(&sibling).unwrap();
+        std::fs::write(legacy.join("CURRENT"), b"stale").unwrap();
+
+        remove_legacy_rpc_index_store(db.path());
+        assert!(
+            !legacy.exists(),
+            "legacy rpc-index directory should be gone"
+        );
+        assert!(sibling.exists(), "sibling stores must be left untouched");
+
+        // Idempotent: a second run (nothing to remove) does not error or touch
+        // the siblings.
+        remove_legacy_rpc_index_store(db.path());
+        assert!(!legacy.exists());
+        assert!(sibling.exists());
     }
 
     #[tokio::test]

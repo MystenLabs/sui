@@ -266,7 +266,11 @@ def discover_binaries(args, repo_root):
     discovered = []
 
     if not args.no_build and (args.package or test_names_in_build):
-        cmd = ["cargo", "simtest", "build", "--tests"]
+        cmd = ["cargo", "simtest", "build"]
+        # `--tests` builds all test targets; it conflicts with naming specific
+        # targets via `--test`, so only pass it when no `--test` is present.
+        if not test_names_in_build:
+            cmd.append("--tests")
         for pkg in args.package or []:
             cmd.extend(["--package", pkg])
         for name in test_names_in_build:

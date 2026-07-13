@@ -3,7 +3,7 @@
 
 // tests invalid gas coin usage by value
 
-//# init --addresses test=0x0 --accounts A --enable-accumulators --enable-address-balance-gas-payments
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m1 {

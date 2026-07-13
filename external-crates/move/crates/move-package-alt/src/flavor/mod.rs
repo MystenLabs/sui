@@ -47,6 +47,13 @@ pub trait MoveFlavor: Debug + Send + Sync {
     /// Used for populating new manifests & migration purposes.
     fn default_environments(&self) -> IndexMap<EnvironmentName, EnvironmentID>;
 
+    /// Whether two environment IDs identify the same environment. Defaults to string equality;
+    /// flavors that admit multiple encodings of the same ID (e.g. full and truncated chain
+    /// identifiers) can override this.
+    fn environment_ids_match(&self, a: &EnvironmentID, b: &EnvironmentID) -> bool {
+        a == b
+    }
+
     /// Return ALL the system dependencies for the requested `environment`.
     async fn system_deps(
         &self,

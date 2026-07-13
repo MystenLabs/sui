@@ -168,6 +168,36 @@ pub struct PackageVersionInfo {
     /// is stored.
     #[prost(bytes = "bytes", tag = "1")]
     pub storage_id: ::prost::bytes::Bytes,
+    /// The checkpoint at which this package version was published.
+    ///
+    /// Absent on rows written by the live-set restore at the anchor
+    /// checkpoint: those versions were published before the available
+    /// window, so a checkpoint-bounded read treats them as having
+    /// always existed (a restore floor). Tip indexing and the
+    /// post-restore backfill of `\[L, T\]` set the real publish
+    /// checkpoint.
+    #[prost(uint64, optional, tag = "2")]
+    pub checkpoint: ::core::option::Option<u64>,
+}
+/// The object version live as of a checkpoint, stored in
+/// `object_version_by_checkpoint` keyed by `(ObjectID, checkpoint)`.
+///
+/// `version` is the object's final version at the end of the keyed
+/// checkpoint (a live version, or the tombstone version for an object
+/// removed in that checkpoint).
+///
+/// `from_restore` is set only on rows written by the live-set restore
+/// at the restore anchor checkpoint; tip indexing and backfill leave it
+/// unset, so the common case pays no extra bytes. It lets a
+/// checkpoint-pinned read tell a static object's restore floor (the
+/// object existed before the available window) apart from an object
+/// created in the anchor checkpoint.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ObjectVersionInfo {
+    #[prost(uint64, tag = "1")]
+    pub version: u64,
+    #[prost(bool, optional, tag = "2")]
+    pub from_restore: ::core::option::Option<bool>,
 }
 /// Per-epoch metadata stored in `epochs` keyed by `EpochId`.
 ///
@@ -205,6 +235,40 @@ pub struct StoredEpoch {
     /// captured at epoch start.
     #[prost(bytes = "bytes", optional, tag = "7")]
     pub system_state_bcs: ::core::option::Option<::prost::bytes::Bytes>,
+    /// The network's cumulative transaction count after the epoch's
+    /// final checkpoint (`CheckpointSummary::network_total_transactions`)
+    /// — an exclusive upper bound on the epoch's transaction sequence
+    /// numbers. Equivalent to postgres `kv_epoch_ends.tx_hi`.
+    #[prost(uint64, optional, tag = "8")]
+    pub tx_hi: ::core::option::Option<u64>,
+    /// Whether the epoch ended in safe mode. When `true` no
+    /// `SystemEpochInfoEvent` was emitted, so the counters below are
+    /// unset.
+    #[prost(bool, optional, tag = "9")]
+    pub safe_mode: ::core::option::Option<bool>,
+    #[prost(uint64, optional, tag = "10")]
+    pub total_stake: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "11")]
+    pub storage_fund_balance: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "12")]
+    pub storage_fund_reinvestment: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "13")]
+    pub storage_charge: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "14")]
+    pub storage_rebate: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "15")]
+    pub stake_subsidy_amount: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "16")]
+    pub total_gas_fees: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "17")]
+    pub total_stake_rewards_distributed: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "18")]
+    pub leftover_storage_fund_inflow: ::core::option::Option<u64>,
+    /// BCS-encoded
+    /// `Vec<sui_types::messages_checkpoint::CheckpointCommitment>` from
+    /// the checkpoint's end-of-epoch data.
+    #[prost(bytes = "bytes", optional, tag = "19")]
+    pub epoch_commitments: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// The lowest still-available data per axis. Drives compaction
 /// filters on the bitmap CFs and feeds `available_range` queries.

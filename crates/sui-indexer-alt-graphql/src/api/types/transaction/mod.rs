@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -22,6 +21,8 @@ use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionC
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
@@ -29,7 +30,10 @@ use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionExpiration;
 
 use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::id::Id;
@@ -48,6 +52,7 @@ use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
 use crate::error::RpcError;
+use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
@@ -68,8 +73,9 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub(crate) type CTransaction = JsonCursor<u64>;
+pub type CTransaction = MultiCursor<OpaqueCursor<CursorToken>, JsonCursor<u64>>;
 
+/// Custom `Connection` for transactions to support partially-filled pages.
 pub(crate) struct TransactionConnection {
     pub edges: Vec<Edge<String, Transaction, EmptyFields>>,
     pub page_info: PageInfo,
@@ -276,27 +282,43 @@ impl Transaction {
     // TODO(DVX-2068): Add cursor consistency test between subscriptions and query API.
     pub(crate) fn paginate_preloaded_transactions(
         scope: Scope,
+        source_cp_sequence_number: u64,
         transactions: &[ProcessedTransaction],
         page: &Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<TransactionConnection, RpcError> {
-        let after = page.after().map(|c| **c);
-        let before = page.before().map(|c| **c);
+        let after = page.after().map(|c| c.tx_sequence_number());
+        let before = page.before().map(|c| c.tx_sequence_number());
 
-        let filtered: Vec<_> = transactions
+        let mut filtered: Vec<_> = transactions
             .iter()
             .filter(|tx| filter.matches(&tx.contents))
             .filter(|tx| after.is_none_or(|a| tx.tx_sequence_number >= a))
             .filter(|tx| before.is_none_or(|b| tx.tx_sequence_number <= b))
-            .take(page.limit_with_overhead())
             .collect();
+
+        // `paginate_results` expects the window of results surrounding the requested page, so a
+        // `last` page keeps the tail of the filtered set, not the head.
+        if page.is_from_front() {
+            filtered.truncate(page.limit_with_overhead());
+        } else {
+            filtered.drain(..filtered.len().saturating_sub(page.limit_with_overhead()));
+        }
 
         page.paginate_results(
             filtered,
-            |tx| JsonCursor::new(tx.tx_sequence_number),
+            |tx| {
+                MultiCursor::new(OpaqueCursor::new(CursorToken::item(
+                    Position::Transactions {
+                        checkpoint: source_cp_sequence_number,
+                        tx_seq: tx.tx_sequence_number,
+                    },
+                )))
+            },
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
         .map(Into::into)
+        .map_err(upcast)
     }
 
     /// Load the transaction from the store, and return it fully inflated (with contents already
@@ -366,7 +388,14 @@ impl Transaction {
 
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| JsonCursor::new(*s),
+            |(s, _)| {
+                MultiCursor::new(OpaqueCursor::new(CursorToken::item(
+                    Position::Transactions {
+                        checkpoint: 0,
+                        tx_seq: *s,
+                    },
+                )))
+            },
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
@@ -446,7 +475,34 @@ impl TransactionConnection {
 
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
-        *self.deref()
+        match self {
+            CTransaction::Primary(c) => match c.position {
+                Position::Transactions { tx_seq, .. } => tx_seq,
+                _ => unreachable!("validated at decode"),
+            },
+            CTransaction::Secondary(c) => **c,
+        }
+    }
+}
+
+impl ByteCursor for CursorToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        let cursor = CursorToken::decode(bytes)?;
+        if !matches!(cursor.position, Position::Transactions { .. }) {
+            anyhow::bail!("invalid cursor");
+        }
+        Ok(cursor)
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        self.encode()
+    }
+}
+
+impl Eq for CTransaction {}
+impl PartialEq for CTransaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.tx_sequence_number() == other.tx_sequence_number()
     }
 }
 
@@ -726,4 +782,221 @@ async fn tx_unfiltered(
 
     let tx_sequence_numbers = (tx_lo..tx_hi).collect();
     Ok(tx_sequence_numbers)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pagination::PageLimits;
+    use async_graphql::connection::CursorType;
+    use sui_indexer_alt_reader::kv_loader::ExecutedTransactionData;
+    use sui_rpc_cursor::CursorKind;
+    use sui_types::base_types::random_object_ref;
+    use sui_types::effects::TransactionEffects as NativeTransactionEffects;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::TransactionData;
+
+    const STREAMED_CP: u64 = 42;
+
+    /// Build a `ProcessedTransaction` with just enough content for `TransactionFilter::matches`
+    /// (sender + effects) and digest extraction.
+    fn preloaded_tx(tx_sequence_number: u64, sender: NativeSuiAddress) -> ProcessedTransaction {
+        let pt = ProgrammableTransactionBuilder::new().finish();
+        let data = TransactionData::new_programmable(sender, vec![random_object_ref()], pt, 1, 1);
+        let contents = NativeTransactionContents::ExecutedTransaction(ExecutedTransactionData {
+            effects: Box::new(NativeTransactionEffects::default()),
+            events: vec![],
+            transaction_data: Box::new(data),
+            signatures: vec![],
+            balance_changes: vec![],
+            proto_effects: None,
+            proto_transaction: None,
+            timestamp_ms: Some(0),
+            cp_sequence_number: Some(STREAMED_CP),
+        });
+
+        ProcessedTransaction {
+            tx_sequence_number,
+            contents: Arc::new(contents),
+        }
+    }
+
+    fn preloaded_txs(seqs: std::ops::Range<u64>) -> Vec<ProcessedTransaction> {
+        seqs.map(|seq| preloaded_tx(seq, NativeSuiAddress::ZERO))
+            .collect()
+    }
+
+    fn page_params_for_testing(
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+    ) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: 10,
+            max: 100,
+        };
+        Page::from_params(&limits, first, after, last, before).expect("valid page")
+    }
+
+    fn primary_cursor(checkpoint: u64, position: u64) -> CTransaction {
+        MultiCursor::new(OpaqueCursor::new(CursorToken::item(
+            Position::Transactions {
+                checkpoint,
+                tx_seq: position,
+            },
+        )))
+    }
+
+    /// Legacy pg-style cursor: a bare JSON-encoded `tx_sequence_number`.
+    fn legacy_cursor(position: u64) -> CTransaction {
+        MultiCursor::Secondary(JsonCursor::new(position))
+    }
+
+    /// Decode an edge cursor back into its `CursorToken`.
+    fn edge_token(cursor: &str) -> CursorToken {
+        match CTransaction::decode_cursor(cursor).expect("decodable edge cursor") {
+            MultiCursor::Primary(c) => (*c).clone(),
+            MultiCursor::Secondary(_) => panic!("expected grpc cursor, got legacy"),
+        }
+    }
+
+    fn edge_positions(conn: &TransactionConnection) -> Vec<u64> {
+        conn.edges
+            .iter()
+            .map(|e| match edge_token(&e.cursor).position {
+                Position::Transactions { tx_seq, .. } => tx_seq,
+                position => panic!("expected transactions position, got {position:?}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn paginate_preloaded_mints_cursors() {
+        let txs = preloaded_txs(10..15);
+        let conn = Transaction::paginate_preloaded_transactions(
+            Scope::for_tests(),
+            STREAMED_CP,
+            &txs,
+            &page_params_for_testing(Some(3), None, None, None),
+            TransactionFilter::default(),
+        )
+        .expect("paginated");
+
+        assert_eq!(edge_positions(&conn), [10, 11, 12]);
+        assert!(!conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
+
+        for edge in &conn.edges {
+            let token = edge_token(&edge.cursor);
+            assert_eq!(token.kind, CursorKind::Item);
+            let Position::Transactions { checkpoint, .. } = token.position else {
+                panic!("expected transactions position, got {:?}", token.position);
+            };
+            assert_eq!(checkpoint, STREAMED_CP);
+        }
+
+        assert_eq!(
+            conn.page_info.start_cursor.as_deref(),
+            Some(conn.edges[0].cursor.as_str())
+        );
+        assert_eq!(
+            conn.page_info.end_cursor.as_deref(),
+            Some(conn.edges[2].cursor.as_str())
+        );
+    }
+
+    /// Resuming from a grpc cursor keys off the position only: the cursor's checkpoint is
+    /// deliberately wrong here, mimicking a cursor minted elsewhere.
+    #[test]
+    fn paginate_preloaded_resumes_after_primary_cursor() {
+        let txs = preloaded_txs(10..15);
+        let conn = Transaction::paginate_preloaded_transactions(
+            Scope::for_tests(),
+            STREAMED_CP,
+            &txs,
+            &page_params_for_testing(Some(2), Some(primary_cursor(0, 11)), None, None),
+            TransactionFilter::default(),
+        )
+        .expect("paginated");
+
+        assert_eq!(edge_positions(&conn), [12, 13]);
+        assert!(conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
+    }
+
+    /// A legacy pg-style cursor (bare JSON `tx_sequence_number`) resumes the same way as a grpc
+    /// cursor with the same position.
+    #[test]
+    fn paginate_preloaded_resumes_after_legacy_cursor() {
+        let txs = preloaded_txs(10..15);
+        let conn = Transaction::paginate_preloaded_transactions(
+            Scope::for_tests(),
+            STREAMED_CP,
+            &txs,
+            &page_params_for_testing(Some(2), Some(legacy_cursor(11)), None, None),
+            TransactionFilter::default(),
+        )
+        .expect("paginated");
+
+        assert_eq!(edge_positions(&conn), [12, 13]);
+        assert!(conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
+    }
+
+    /// `last: n` must return the tail of the matching set.
+    #[test]
+    fn paginate_preloaded_backward_page_returns_tail() {
+        let txs = preloaded_txs(10..15);
+        let conn = Transaction::paginate_preloaded_transactions(
+            Scope::for_tests(),
+            STREAMED_CP,
+            &txs,
+            &page_params_for_testing(None, None, Some(2), None),
+            TransactionFilter::default(),
+        )
+        .expect("paginated");
+
+        assert_eq!(edge_positions(&conn), [13, 14]);
+        assert!(conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
+    }
+
+    /// `last: n, before: <cursor>` must return the transactions immediately preceding the cursor.
+    #[test]
+    fn paginate_preloaded_backward_page_before_cursor() {
+        let txs = preloaded_txs(10..17);
+        let conn = Transaction::paginate_preloaded_transactions(
+            Scope::for_tests(),
+            STREAMED_CP,
+            &txs,
+            &page_params_for_testing(None, None, Some(2), Some(primary_cursor(STREAMED_CP, 15))),
+            TransactionFilter::default(),
+        )
+        .expect("paginated");
+
+        assert_eq!(edge_positions(&conn), [13, 14]);
+        assert!(conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
+    }
+
+    /// A `last: n` page over fewer matches than `n`: the tail-windowing is a no-op (pins the
+    /// `saturating_sub` underflow guard) and the underfilled page returns everything.
+    #[test]
+    fn paginate_preloaded_backward_page_smaller_than_window() {
+        // Two transactions (10 and 11), requesting the last three.
+        let txs = preloaded_txs(10..12);
+        let conn = Transaction::paginate_preloaded_transactions(
+            Scope::for_tests(),
+            STREAMED_CP,
+            &txs,
+            &page_params_for_testing(None, None, Some(3), None),
+            TransactionFilter::default(),
+        )
+        .expect("paginated");
+
+        assert_eq!(edge_positions(&conn), [10, 11]);
+        assert!(!conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
+    }
 }

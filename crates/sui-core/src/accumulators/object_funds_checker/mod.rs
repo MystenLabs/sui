@@ -15,7 +15,6 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
-    execution_status::ExecutionStatus,
     transaction::TransactionDataAPI,
 };
 use tokio::{
@@ -62,6 +61,9 @@ struct Inner {
     /// Balance are updated only by settlement transactions, not when we withdraw funds.
     /// Hence when we are checking object funds, on top of the settled balance, we also need to account for
     /// the amount of withdraws from the same consensus commit (that all reads from the same accumulator version).
+    /// When `record_net_unsettled_object_withdraws` is enabled, the recorded amounts are the per-account
+    /// net withdraws from effects (what settlement will actually deduct); otherwise they are the
+    /// running max withdraws.
     unsettled_withdraws: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>,
     /// Tracks the accounts that have pending withdraws at each accumulator version.
     /// This information is not required for functional correctness, but needed to garbage collect
@@ -89,17 +91,16 @@ impl ObjectFundsChecker {
     pub fn should_commit_object_funds_withdraws(
         &self,
         certificate: &VerifiedExecutableTransaction,
-        execution_status: &ExecutionStatus,
+        effects: &TransactionEffects,
         accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
         execution_env: &ExecutionEnv,
         funds_read: &Arc<dyn AccountFundsRead>,
         execution_scheduler: &Arc<ExecutionScheduler>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> bool {
-        if execution_status.is_err() {
+        if effects.status().is_err() {
             // This transaction already failed. It does not matter any more
             // whether it has sufficient object funds or not.
-            debug!("Transaction failed, committing effects");
             return true;
         }
         let address_funds_reservations: BTreeSet<_> = certificate
@@ -110,14 +111,13 @@ impl ObjectFundsChecker {
         // All withdraws will show up as accumulator events with integer values.
         // Among them, addresses that do not have funds reservations are object
         // withdraws.
-        let object_withdraws: BTreeMap<_, _> = accumulator_running_max_withdraws
+        let object_running_max_withdraws: BTreeMap<_, _> = accumulator_running_max_withdraws
             .clone()
             .into_iter()
             .filter(|(account, _)| !address_funds_reservations.contains(account))
             .collect();
         // If there are no object withdraws, we can skip checking object funds.
-        if object_withdraws.is_empty() {
-            debug!("No object withdraws, committing effects");
+        if object_running_max_withdraws.is_empty() {
             return true;
         }
         // A tx with object withdraws can only exist when accumulators are enabled
@@ -128,7 +128,58 @@ impl ObjectFundsChecker {
             debug_fatal!("accumulator_version must be set for a tx with object withdraws");
             return false;
         };
-        match self.check_object_funds(object_withdraws, accumulator_version, funds_read.as_ref()) {
+        // The sufficiency check must use the running max withdraws (the peak withdraw
+        // exposure at any point during execution), but the amount that settlement will
+        // actually deduct from each account is the net amount recorded in the effects.
+        // E.g. a tx that withdraws 10 and deposits 10 back has a running max of 10 but
+        // nets to 0. Recording the running max as unsettled would over-count against
+        // other withdraws in the same consensus commit.
+        let unsettled_withdraw_updates = if epoch_store
+            .protocol_config()
+            .record_net_unsettled_object_withdraws()
+        {
+            let updates: BTreeMap<_, _> = effects
+                .accumulator_events()
+                .into_iter()
+                .filter(|event| !address_funds_reservations.contains(&event.accumulator_obj))
+                .filter_map(|event| {
+                    event
+                        .write
+                        .get_fund_withdraw_amount()
+                        // A zero-amount withdraw emits a single Split(0) accumulator event,
+                        // which survives effects folding as a Split (the fold's Merge
+                        // tie-break only applies when an account has multiple writes).
+                        // It contributes nothing to the running max nor to settlement,
+                        // so recording it would be a no-op; skip it.
+                        .filter(|amount| *amount > 0)
+                        .map(|amount| (event.accumulator_obj, amount))
+                })
+                .collect();
+            // A positive net withdraw in effects implies a positive peak, so the account
+            // must have a running max entry that the net cannot exceed. Recording more
+            // than what the sufficiency check covered could break the
+            // funds >= unsettled_withdraw invariant in try_withdraw.
+            debug_assert!(
+                updates.iter().all(|(obj_id, net)| {
+                    object_running_max_withdraws
+                        .get(obj_id)
+                        .is_some_and(|max| net <= max)
+                }),
+                "net withdraw exceeds running max: tx={:?} updates={:?} running_max={:?}",
+                certificate.digest(),
+                updates,
+                object_running_max_withdraws,
+            );
+            updates
+        } else {
+            object_running_max_withdraws.clone()
+        };
+        match self.check_object_funds(
+            object_running_max_withdraws,
+            unsettled_withdraw_updates,
+            accumulator_version,
+            funds_read.as_ref(),
+        ) {
             // Sufficient funds, we can go ahead and commit the execution results as it is.
             ObjectFundsWithdrawStatus::SufficientFunds => {
                 assert_reachable!("object funds sufficient");
@@ -208,7 +259,8 @@ impl ObjectFundsChecker {
 
     fn check_object_funds(
         &self,
-        object_withdraws: BTreeMap<AccumulatorObjId, u128>,
+        object_running_max_withdraws: BTreeMap<AccumulatorObjId, u128>,
+        unsettled_withdraw_updates: BTreeMap<AccumulatorObjId, u128>,
         accumulator_version: SequenceNumber,
         funds_read: &dyn AccountFundsRead,
     ) -> ObjectFundsWithdrawStatus {
@@ -216,7 +268,12 @@ impl ObjectFundsChecker {
         if accumulator_version <= last_settled_version {
             // If the version we are withdrawing from is already settled, we have all the information
             // we need to determine if the funds are sufficient or not.
-            if self.try_withdraw(funds_read, &object_withdraws, accumulator_version) {
+            if self.try_withdraw(
+                funds_read,
+                &object_running_max_withdraws,
+                &unsettled_withdraw_updates,
+                accumulator_version,
+            ) {
                 return ObjectFundsWithdrawStatus::SufficientFunds;
             } else {
                 let (sender, receiver) = oneshot::channel();
@@ -250,13 +307,16 @@ impl ObjectFundsChecker {
         ObjectFundsWithdrawStatus::Pending(receiver)
     }
 
+    /// Checks that each account can cover its running max withdraw (`object_running_max_withdraws`),
+    /// and if so, adds `unsettled_withdraw_updates` to the unsettled withdraws of each account.
     fn try_withdraw(
         &self,
         funds_read: &dyn AccountFundsRead,
-        object_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        object_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        unsettled_withdraw_updates: &BTreeMap<AccumulatorObjId, u128>,
         accumulator_version: SequenceNumber,
     ) -> bool {
-        for (obj_id, amount) in object_withdraws {
+        for (obj_id, amount) in object_running_max_withdraws {
             let funds = funds_read.get_account_amount_at_version(obj_id, accumulator_version);
             // Reading inner without a top-level lock is safe because no two transactions can be withdrawing
             // from the same account at the same time.
@@ -282,7 +342,7 @@ impl ObjectFundsChecker {
             }
         }
         let mut inner = self.inner.write();
-        for (obj_id, amount) in object_withdraws {
+        for (obj_id, amount) in unsettled_withdraw_updates {
             let entry = inner
                 .unsettled_withdraws
                 .entry(*obj_id)

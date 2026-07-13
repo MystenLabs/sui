@@ -3,7 +3,7 @@
 
 // A sponsored transaction cannot pay gas via an address-balance withdrawal.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 // Seed B's address balance so a hypothetical sponsor-side withdrawal would
 // have funds available.

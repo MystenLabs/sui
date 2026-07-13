@@ -11,7 +11,7 @@
 //! `end_of_epoch_data`). Every other checkpoint returns `None`
 //! and contributes nothing.
 //!
-//! Mirroring the `index_epoch` flow in `sui-core::rpc_index`:
+//! For the new epoch the pipeline:
 //!
 //! 1. Emit a *start* operand for the new epoch — protocol version,
 //!    reference gas price, start timestamp, start checkpoint, and
@@ -19,22 +19,27 @@
 //!    system-state object the end-of-epoch transaction wrote to
 //!    its outputs.
 //! 2. If the new epoch is non-genesis, emit an *end* operand for
-//!    the prior epoch — `end_timestamp_ms` is taken from the new
-//!    epoch's start (the prior epoch ended at the moment the new
-//!    one began) and `end_checkpoint` is the checkpoint
-//!    immediately before the new epoch's first.
+//!    the prior epoch, built from the boundary checkpoint (the prior
+//!    epoch's last, which carries `end_of_epoch_data`): its
+//!    timestamp and sequence number, its
+//!    `network_total_transactions` as `tx_hi`, the end-of-epoch
+//!    commitments, and — unless the epoch ended in safe mode — the
+//!    gas and stake counters from the change-epoch transaction's
+//!    `SystemEpochInfoEvent`. Mirrors the postgres `kv_epoch_ends`
+//!    handler.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential;
+use sui_types::event::SystemEpochInfoEvent;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::schema::epochs;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 /// Pipeline marker for `epochs`.
 pub struct Epochs;
@@ -90,15 +95,72 @@ impl Processor for Epochs {
         if epoch_info.epoch > 0 {
             rows.push(Row {
                 epoch: checkpoint.summary.epoch(),
-                value: epochs::end(
-                    checkpoint.summary.timestamp_ms,
-                    checkpoint.summary.sequence_number,
-                ),
+                value: epochs::end(epoch_end(checkpoint)?),
             });
         }
 
         Ok(rows)
     }
+}
+
+/// Build the end-of-epoch record for the epoch ending at
+/// `checkpoint` — the boundary checkpoint carrying
+/// `end_of_epoch_data`.
+///
+/// Mirrors the postgres `kv_epoch_ends` handler: the gas and stake
+/// counters come from the `SystemEpochInfoEvent` emitted by the
+/// change-epoch transaction. An epoch that ends in safe mode emits
+/// no such event, so those counters stay `None` and `safe_mode` is
+/// recorded as `true`.
+fn epoch_end(checkpoint: &Checkpoint) -> anyhow::Result<epochs::EpochEnd> {
+    let summary = &checkpoint.summary;
+
+    let epoch_commitments = summary
+        .end_of_epoch_data
+        .as_ref()
+        .map(|data| bcs::to_bytes(&data.epoch_commitments))
+        .transpose()
+        .map_err(|e| anyhow::anyhow!("bcs encode epoch_commitments: {e}"))?
+        .unwrap_or_default();
+
+    // The `SystemEpochInfoEvent` is emitted only by the change-epoch
+    // transaction, so scanning every transaction's events finds it
+    // without having to identify that transaction by kind.
+    let event: Option<SystemEpochInfoEvent> = checkpoint
+        .transactions
+        .iter()
+        .filter_map(|tx| tx.events.as_ref())
+        .flat_map(|events| &events.data)
+        .find_map(|event| {
+            event
+                .is_system_epoch_info_event()
+                .then(|| bcs::from_bytes(&event.contents))
+        })
+        .transpose()
+        .map_err(|e| anyhow::anyhow!("bcs decode SystemEpochInfoEvent: {e}"))?;
+
+    let mut end = epochs::EpochEnd {
+        end_timestamp_ms: summary.timestamp_ms,
+        end_checkpoint: summary.sequence_number,
+        tx_hi: summary.network_total_transactions,
+        safe_mode: event.is_none(),
+        epoch_commitments,
+        ..Default::default()
+    };
+
+    if let Some(e) = event {
+        end.total_stake = Some(e.total_stake);
+        end.storage_fund_balance = Some(e.storage_fund_balance);
+        end.storage_fund_reinvestment = Some(e.storage_fund_reinvestment);
+        end.storage_charge = Some(e.storage_charge);
+        end.storage_rebate = Some(e.storage_rebate);
+        end.stake_subsidy_amount = Some(e.stake_subsidy_amount);
+        end.total_gas_fees = Some(e.total_gas_fees);
+        end.total_stake_rewards_distributed = Some(e.total_stake_rewards_distributed);
+        end.leftover_storage_fund_inflow = Some(e.leftover_storage_fund_inflow);
+    }
+
+    Ok(end)
 }
 
 #[async_trait]
@@ -127,6 +189,7 @@ impl sequential::Handler for Epochs {
 mod tests {
     use std::sync::Arc;
 
+    use sui_types::test_checkpoint_data_builder::AdvanceEpochConfig;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
@@ -136,5 +199,37 @@ mod tests {
         let checkpoint = Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
         let rows = Epochs.process(&checkpoint).await.unwrap();
         assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn epoch_end_captures_system_epoch_info_event() {
+        let mut builder = TestCheckpointBuilder::new(0);
+        let checkpoint = builder.advance_epoch(AdvanceEpochConfig::default());
+
+        let end = epoch_end(&checkpoint).unwrap();
+        assert!(!end.safe_mode);
+        // The builder emits a `SystemEpochInfoEvent` with default
+        // (zero) counters, which we record as `Some(0)` — distinct
+        // from the safe-mode `None`.
+        assert_eq!(end.total_gas_fees, Some(0));
+        assert_eq!(end.total_stake, Some(0));
+        assert_eq!(end.storage_charge, Some(0));
+        // Commitments are always recorded (BCS of the vec, never
+        // empty bytes even for an empty vec).
+        assert!(!end.epoch_commitments.is_empty());
+    }
+
+    #[test]
+    fn epoch_end_safe_mode_leaves_counters_unset() {
+        let mut builder = TestCheckpointBuilder::new(0);
+        let checkpoint = builder.advance_epoch(AdvanceEpochConfig {
+            safe_mode: true,
+            ..Default::default()
+        });
+
+        let end = epoch_end(&checkpoint).unwrap();
+        assert!(end.safe_mode);
+        assert_eq!(end.total_gas_fees, None);
+        assert_eq!(end.total_stake, None);
     }
 }

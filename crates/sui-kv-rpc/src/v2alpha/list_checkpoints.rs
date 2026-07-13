@@ -9,6 +9,8 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
+use sui_inverted_index::ScanDirection;
+use sui_inverted_index::ScanStop;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::tables;
@@ -16,9 +18,24 @@ use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
+use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
+use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::ScanTerminal;
+use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
+use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc_cursor::Position;
 use tracing::Instrument;
 use tracing::debug_span;
 use tracing::info;
@@ -28,40 +45,27 @@ use crate::bigtable_client::stage;
 use crate::config::PipelineStage;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
+use crate::pipeline::dedup_consecutive;
 use crate::pipeline::pipelined_chunks;
-use crate::pipeline::resolve_watermarks;
+use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
 use crate::render::render_full_checkpoint;
 use crate::resolve;
 use crate::resolve::list_checkpoint_columns;
 use crate::resolve::needs_transactions_or_objects;
-use sui_inverted_index::BitmapScanLimitExceeded;
-use sui_inverted_index::ScanDirection;
-use sui_inverted_index::error_contains;
-use sui_rpc_api::ledger_history::query_options::CheckpointRange;
-use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::QueryType;
-use sui_rpc_api::ledger_history::query_options::ResolvedRange;
-use sui_rpc_api::ledger_history::watermark::advance_checkpoint_boundary;
-use sui_rpc_api::ledger_history::watermark::boundary_watermark;
-use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::reached_range_end;
-use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
-
-use sui_rpc::proto::sui::rpc::v2alpha::CheckpointItem;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 
 const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
 pub(crate) type ListCheckpointsStream =
     BoxStream<'static, Result<ListCheckpointsResponse, RpcError>>;
+
+enum CheckpointListItem {
+    Summary(u64, CheckpointData),
+    Full(resolve::ResolvedCp),
+}
 
 pub(crate) async fn list_checkpoints(
     ctx: QueryContext,
@@ -76,6 +80,7 @@ pub(crate) async fn list_checkpoints(
     let checkpoints_stage = ctx.stage(PipelineStage::Checkpoints);
     let transactions_stage = ctx.stage(PipelineStage::Transactions);
     let objects_stage = ctx.stage(PipelineStage::Objects);
+    let tx_seq_digest_stage = ctx.stage(PipelineStage::TxSeqDigest);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -93,11 +98,10 @@ pub(crate) async fn list_checkpoints(
         })?;
         FieldMaskTree::from(read_mask)
     };
-    let options = QueryOptions::from_proto(
+    let options = QueryOptions::checkpoints_from_proto(
         request.options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
-        QueryType::Checkpoints,
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -106,9 +110,13 @@ pub(crate) async fn list_checkpoints(
     let cp_range = async { Ok::<_, RpcError>(resolve_cp_range(checkpoint_range, &options)) }
         .instrument(debug_span!("resolve_cp_range"))
         .await?;
-    let end_reason = cp_range.end_reason;
-    let end_checkpoint = cp_range.end_checkpoint;
-    let end_position = cp_range.end_position;
+    let exhaustion = cp_range.exhaustion;
+    let range_end_position = cp_range.end_position;
+    let entry_checkpoint = if direction.is_ascending() {
+        cp_range.range.start
+    } else {
+        cp_range.range.end.saturating_sub(1)
+    };
     let cp_range = cp_range.range;
 
     if cp_range.is_empty() {
@@ -120,22 +128,18 @@ pub(crate) async fn list_checkpoints(
             elapsed_ms = started.elapsed().as_millis(),
             "list_checkpoints: empty range"
         );
-        // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
-        // range; still surface the terminal boundary so the client learns the
-        // final checkpoint is complete without waiting for the next item.
-        let terminal = reached_range_end(end_reason).then(|| {
-            watermark_response(terminal_boundary_watermark(
-                &options,
-                end_checkpoint,
-                end_position,
-            ))
-        });
-        return Ok(stream::iter(
-            terminal
-                .into_iter()
-                .chain([end_response(end_reason)])
-                .map(Ok),
+        // Empty resolved ranges still surface their terminal cursor, but
+        // natural completion claims no checkpoint coverage.
+        return Ok(stream::iter([Ok(range_end_response(
+            &options,
+            exhaustion,
+            Position::Checkpoints {
+                checkpoint: range_end_position,
+            },
+            None,
+            true,
         )
+        .0)])
         .boxed());
     }
 
@@ -146,185 +150,185 @@ pub(crate) async fn list_checkpoints(
     // requests use sparse bitmap-eval over transactions and then fetch the
     // deduped checkpoint rows. Unfiltered requests scan the dense checkpoint
     // keyspace directly, bounded by limit_items.
-    let cp_data_stream: BoxStream<
-        'static,
-        Result<Watermarked<(u64, CheckpointData)>, anyhow::Error>,
-    > = if let Some(filter) = &request.filter {
-        let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
-        let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
-        let seq_stream = filtered_checkpoint_seq_stream(
-            &ctx,
-            filter,
-            tx_range,
-            limit_items,
-            options.clone(),
-            scan_budget,
-        )
-        .await?;
-        let seq_stream = take_items(seq_stream, limit_items);
-        pipelined_chunks(
-            seq_stream,
-            checkpoints_stage.chunk_size,
-            checkpoints_stage.concurrency,
-            {
-                let client = client.clone();
-                let columns = cp_columns.clone();
-                move |seqs| fetch_checkpoint_data(client.clone(), columns.clone(), seqs)
-            },
-        )
-    } else {
-        scan_checkpoint_data(
-            client.clone(),
-            cp_columns.clone(),
-            cp_range.clone(),
-            limit_items,
-            &options,
-        )
-        .await?
-    };
-
-    // Fast path: read_mask doesn't request transactions or objects → render
-    // directly from CheckpointData via the existing `checkpoint_to_response`.
-    if !needs_full {
-        let cp_data_stream = resolve_watermarks(cp_data_stream, client.tx_wm_resolver(direction));
-        return Ok(async_stream::try_stream! {
-            futures::pin_mut!(cp_data_stream);
-            let mut emitted = 0usize;
-            let mut checkpoint_boundary: Option<u64> = None;
-            let mut scan_limit_hit = false;
-            while let Some(item) = cp_data_stream.next().await {
-                match item {
-                    Ok(ResolvedWatermarked::Item((cp_seq, cp_data))) => {
-                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                        let wm = item_watermark(&options, cp_seq, cp_seq, checkpoint_boundary);
-                        emitted += 1;
-                        let message =
-                            crate::render::checkpoint_to_response(cp_data, &read_mask)?;
-                        yield response_for(wm, message);
-                    }
-                    Ok(ResolvedWatermarked::Watermark { position: _, cp: raw_cp }) => {
-                        // Tx-space → cp-space translation done in the
-                        // combinator; here we just clamp past anything
-                        // we've already emitted and convert to a
-                        // boundary cursor.
-                        let cp_frontier = if direction.is_ascending() {
-                            Some(raw_cp)
-                        } else {
-                            raw_cp.checked_add(1)
-                        };
-                        let Some(cp_frontier) = clamp_cp_frontier_past_last(cp_frontier, checkpoint_boundary, direction) else {
-                            continue;
-                        };
-                        if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
-                            checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
-                        }
-                        let wm = boundary_watermark(&options, cp_frontier, cp_frontier, checkpoint_boundary);
-                        yield watermark_response(wm);
-                    }
-                    Err(e) => {
-                        if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
-                            scan_limit_hit = true;
-                            break;
-                        } else {
-                            Err(RpcError::from(e))?;
-                        }
-                    }
-                }
-            }
-            let reason = if scan_limit_hit {
-                QueryEndReason::ScanLimit
-            } else if emitted == limit_items {
-                QueryEndReason::ItemLimit
-            } else {
-                end_reason
-            };
-            if reached_range_end(reason) {
-                yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
-            }
-            yield end_response(reason);
-            info!(
-                filtered,
-                limit_items,
-                ?ordering,
-                emitted,
-                ?reason,
-                elapsed_ms = started.elapsed().as_millis(),
-                "list_checkpoints: done (summary only)"
+    let cp_data_stream: BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, ScanStop>> =
+        if let Some(filter) = &request.filter {
+            let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
+            let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
+            let query = ctx.transaction_filter_query(filter)?;
+            let tx_seq_stream = client.eval_bitmap_query_stream(
+                query,
+                tx_range,
+                BitmapIndexSpec::tx(),
+                direction,
+                scan_budget,
+                ctx.bitmap_scan_observer(),
             );
-        }
-        .boxed());
-    }
+            // Stage A2: resolve tx_seq -> cp_seq, streaming each cp as soon as the
+            // scan-order prefix is contiguous, then collapse each checkpoint's
+            // (contiguous) transactions to a single cp_seq. Dedup is its own stage
+            // rather than a per-chunk mapper because it carries state across chunk
+            // boundaries.
+            let cp_seq_stream = pipelined_chunks(
+                tx_seq_stream,
+                tx_seq_digest_stage.chunk_size,
+                tx_seq_digest_stage.concurrency,
+                {
+                    let client = client.clone();
+                    move |tx_seqs| {
+                        let client = client.clone();
+                        async move {
+                            resolve_checkpoint_seqs(client, tx_seqs)
+                                .await
+                                .map(|s| s.map_err(ScanStop::Fault).boxed())
+                                .map_err(ScanStop::Fault)
+                        }
+                    }
+                },
+            );
+            let cp_seq_stream = take_items(dedup_consecutive(cp_seq_stream), limit_items);
+            // Stage A3: fetch checkpoint rows for the deduped cp_seqs.
+            pipelined_chunks(
+                cp_seq_stream,
+                checkpoints_stage.chunk_size,
+                checkpoints_stage.concurrency,
+                {
+                    let client = client.clone();
+                    let columns = cp_columns.clone();
+                    move |seqs| {
+                        let client = client.clone();
+                        let columns = columns.clone();
+                        async move {
+                            fetch_checkpoint_data(client, columns, seqs)
+                                .await
+                                .map(|s| s.map_err(ScanStop::Fault).boxed())
+                                .map_err(ScanStop::Fault)
+                        }
+                    }
+                },
+            )
+        } else {
+            scan_checkpoint_data(
+                client.clone(),
+                cp_columns.clone(),
+                cp_range.clone(),
+                limit_items,
+                &options,
+            )
+            .await?
+        };
 
-    // Heavy path: needs transactions and/or objects.
-    let cp_full_stream = resolve::resolve_checkpoints(
-        client.clone(),
-        &read_mask,
-        transactions_stage,
-        objects_stage,
-        cp_data_stream,
+    let checkpoint_stream: BoxStream<'static, Result<Watermarked<CheckpointListItem>, ScanStop>> =
+        if needs_full {
+            // Heavy path: needs transactions and/or objects.
+            resolve::resolve_checkpoints(
+                client.clone(),
+                &read_mask,
+                transactions_stage,
+                objects_stage,
+                cp_data_stream,
+            )
+            .map_ok(|marked| marked.map_item(CheckpointListItem::Full))
+            .boxed()
+        } else {
+            // Fast path: render directly from CheckpointData without transaction or
+            // object lookups.
+            cp_data_stream
+                .map_ok(|marked| {
+                    marked.map_item(|(seq, data)| CheckpointListItem::Summary(seq, data))
+                })
+                .boxed()
+        };
+    let checkpoint_stream = resolve_scan_watermarks(
+        checkpoint_stream,
+        client.tx_wm_resolver(direction),
+        std::convert::identity,
     );
-    let cp_full_stream = resolve_watermarks(cp_full_stream, client.tx_wm_resolver(direction));
 
-    // Stage E: sync render — build full_checkpoint_content::Checkpoint and
-    // merge into the proto Checkpoint (CPU-only, no further IO).
+    // Stage E: sync render — build the requested Checkpoint shape (CPU-only,
+    // with no further IO).
     Ok(async_stream::try_stream! {
-        futures::pin_mut!(cp_full_stream);
+        futures::pin_mut!(checkpoint_stream);
         let mut emitted = 0usize;
-        let mut checkpoint_boundary: Option<u64> = None;
-        let mut scan_limit_hit = false;
-        while let Some(item) = cp_full_stream.next().await {
+        let mut covered_checkpoint_bound: Option<u64> = None;
+        let terminal_reason = loop {
+            let Some(item) = checkpoint_stream.next().await else {
+                let (response, reason) = range_end_response(
+                    &options,
+                    exhaustion,
+                    Position::Checkpoints {
+                        checkpoint: range_end_position,
+                    },
+                    covered_checkpoint_bound,
+                    false,
+                );
+                yield response;
+                break reason;
+            };
             match item {
-                Ok(ResolvedWatermarked::Item((cp_seq, cp_data, txs, objects))) => {
-                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                    let wm = item_watermark(&options, cp_seq, cp_seq, checkpoint_boundary);
-                    let message =
-                        render_full_checkpoint(cp_data, txs, objects.as_ref(), &read_mask)?;
+                Ok(ResolvedWatermarked::Item(item)) => {
+                    let item_checkpoint = match &item {
+                        CheckpointListItem::Summary(item_checkpoint, _) => *item_checkpoint,
+                        CheckpointListItem::Full((item_checkpoint, _, _, _)) => *item_checkpoint,
+                    };
+                    // Checkpoint items are emitted in scan order and deduped, so
+                    // emitting this item proves its checkpoint fully covered.
+                    covered_checkpoint_bound = Some(item_checkpoint);
+                    let watermark = item_watermark(
+                        Position::Checkpoints {
+                            checkpoint: item_checkpoint,
+                        },
+                        covered_checkpoint_bound,
+                    );
+                    let message = match item {
+                        CheckpointListItem::Summary(_, cp_data) => {
+                            crate::render::checkpoint_to_response(cp_data, &read_mask)?
+                        }
+                        CheckpointListItem::Full((_, cp_data, txs, objects)) => {
+                            render_full_checkpoint(cp_data, txs, objects, &read_mask)?
+                        }
+                    };
                     emitted += 1;
-                    yield response_for(wm, message);
-                }
-                Ok(ResolvedWatermarked::Watermark { position: _, cp: raw_cp }) => {
-                    // See light-path arm — same clamp + boundary logic.
-                    let cp_frontier = if direction.is_ascending() {
-                        Some(raw_cp)
-                    } else {
-                        raw_cp.checked_add(1)
-                    };
-                    let Some(cp_frontier) = clamp_cp_frontier_past_last(cp_frontier, checkpoint_boundary, direction) else {
-                        continue;
-                    };
-                    if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
-                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
+                    let mut response = response_for(watermark, message);
+                    if emitted == limit_items {
+                        let mut end = QueryEnd::default();
+                        end.reason = Some(QueryEndReason::ItemLimit as i32);
+                        response.end = Some(end);
+                        yield response;
+                        break QueryEndReason::ItemLimit;
                     }
-                    let wm = boundary_watermark(&options, cp_frontier, cp_frontier, checkpoint_boundary);
-                    yield watermark_response(wm);
+                    yield response;
                 }
-                Err(e) => {
-                    if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
-                        scan_limit_hit = true;
-                        break;
-                    } else {
-                        Err(RpcError::from(e))?;
-                    }
+                Ok(ResolvedWatermarked::Watermark {
+                    position: _,
+                    cp: checkpoint_at_frontier,
+                }) => {
+                    let watermark = checkpoint_frontier_watermark(
+                        checkpoint_at_frontier,
+                        entry_checkpoint,
+                        direction,
+                        &options,
+                        &mut covered_checkpoint_bound,
+                    );
+                    yield watermark_response(watermark);
+                }
+                Err(stop) => {
+                    yield terminal_response_from_scan_stop(
+                        stop,
+                        &options,
+                        direction,
+                        entry_checkpoint,
+                        &mut covered_checkpoint_bound,
+                    )?;
+                    break QueryEndReason::ScanLimit;
                 }
             }
-        }
-        let reason = if scan_limit_hit {
-            QueryEndReason::ScanLimit
-        } else if emitted == limit_items {
-            QueryEndReason::ItemLimit
-        } else {
-            end_reason
         };
-        if reached_range_end(reason) {
-            yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
-        }
-        yield end_response(reason);
         info!(
             filtered,
             limit_items,
             ?ordering,
             emitted,
-            ?reason,
+            ?terminal_reason,
             elapsed_ms = started.elapsed().as_millis(),
             "list_checkpoints: done"
         );
@@ -332,31 +336,80 @@ pub(crate) async fn list_checkpoints(
     .boxed())
 }
 
-/// Convert a cp-space scan frontier from `filtered_checkpoint_seq_stream`
-/// into a checkpoint-boundary candidate for `advance_checkpoint_boundary`.
-///
-/// ListCheckpoints dedupes cp_seq, so "cp X emitted" ≡ "cp X complete" and
-/// the item path feeds the item's cp straight into `advance_checkpoint_boundary`.
-/// The frontier path needs this adjustment instead:
-///
-/// - Ascending: frontier means "all matching cps strictly less than `p`
-///   have been emitted." The last fully-scanned cp is `p - 1`.
-/// - Descending: frontier means "all matching cps at least `p` have
-///   been emitted." The candidate is `p` directly.
-///
-/// Returns `None` only when `p == 0` ascending (no preceding cp), in
-/// which case the boundary stays at whatever the items have built up.
-fn frontier_to_boundary_candidate(frontier: u64, options: &QueryOptions) -> Option<u64> {
-    if options.is_ascending() {
-        frontier.checked_sub(1)
-    } else {
-        Some(frontier)
-    }
+/// Convert the checkpoint containing a transaction-space scan frontier into a
+/// safe checkpoint-space resume cursor. The containing checkpoint is not fully
+/// covered. A coverage candidate before the interval's entry checkpoint proves
+/// nothing and is suppressed, so the wire checkpoint stays unset until the
+/// scan's first checkpoint is fully covered.
+fn checkpoint_frontier_watermark(
+    checkpoint_at_frontier: u64,
+    entry_checkpoint: u64,
+    direction: ScanDirection,
+    options: &QueryOptions,
+    covered_checkpoint_bound: &mut Option<u64>,
+) -> Watermark {
+    let resume_checkpoint = boundary_cursor_cp(checkpoint_at_frontier, direction);
+    let resume_checkpoint = clamp_cp_frontier_past_last(
+        Some(resume_checkpoint),
+        *covered_checkpoint_bound,
+        direction,
+    )
+    .expect("checkpoint scan frontier is always representable");
+    *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
+        *covered_checkpoint_bound,
+        checkpoint_at_frontier,
+        entry_checkpoint,
+        options,
+    );
+    boundary_watermark(
+        Position::Checkpoints {
+            checkpoint: resume_checkpoint,
+        },
+        *covered_checkpoint_bound,
+    )
+}
+
+fn terminal_response_from_scan_stop(
+    stop: ResolvedScanStop<u64>,
+    options: &QueryOptions,
+    direction: ScanDirection,
+    entry_checkpoint: u64,
+    covered_checkpoint_bound: &mut Option<u64>,
+) -> Result<ListCheckpointsResponse, RpcError> {
+    let (position, checkpoint) = stop.into_scan_limit()?;
+    let checkpoint_at_frontier = checkpoint
+        .or_else(|| {
+            ((direction.is_ascending() && position == 0)
+                || (!direction.is_ascending() && position == u64::MAX))
+                .then_some(position)
+        })
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!(
+                    "checkpoint scan frontier transaction {position} has no checkpoint mapping"
+                ),
+            )
+        })?;
+    let terminal = ScanTerminal::ScanLimit {
+        watermark: checkpoint_frontier_watermark(
+            checkpoint_at_frontier,
+            entry_checkpoint,
+            direction,
+            options,
+            covered_checkpoint_bound,
+        ),
+    };
+    let reason = terminal.reason();
+    Ok(end_response(
+        terminal.into_watermark(options, *covered_checkpoint_bound),
+        reason,
+    ))
 }
 
 fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
     let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::Watermark(watermark));
+    response.watermark = Some(watermark);
     response
 }
 
@@ -366,13 +419,15 @@ async fn scan_checkpoint_data(
     range: std::ops::Range<u64>,
     limit: usize,
     options: &QueryOptions,
-) -> Result<BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, anyhow::Error>>, RpcError>
-{
+) -> Result<BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, ScanStop>>, RpcError> {
     let column_filter = BigTableClient::column_filter(&columns);
     let rows = client
         .scan_checkpoints_stream(range, options.scan_direction(), limit, Some(column_filter))
         .await?;
-    Ok(rows.map_ok(Watermarked::Item).boxed())
+    Ok(rows
+        .map_ok(Watermarked::Item)
+        .map_err(ScanStop::Fault)
+        .boxed())
 }
 
 async fn fetch_checkpoint_data(
@@ -421,123 +476,76 @@ async fn fetch_checkpoint_data(
     .boxed())
 }
 
-fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
-    let mut item = CheckpointItem::default();
-    item.checkpoint = Some(message);
-    item.watermark = Some(watermark);
-
-    let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::Item(item));
-    response
-}
-
-fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = reason as i32;
-
-    let mut response = ListCheckpointsResponse::default();
-    response.response = Some(list_checkpoints_response::Response::End(end));
-    response
-}
-
-/// Filtered cp_seq discovery for `ListCheckpoints`. The tx-bitmap scan and
-/// the `tx_seq -> cp_seq` mapping live in the same chunked loop so cp dedup
-/// stays local. Tx-space watermarks emitted by the bitmap are
-/// translated into cp-space watermarks in-band: each marker arrival
-/// flushes the current chunk (so the marker stays ordered AFTER any cps it
-/// dominates) and then emits `Watermarked::Watermark(cp_seq)` of its own.
-///
-/// Returns the cp_seq stream. `BitmapScanLimitExceeded` propagates as `anyhow::Error`
-/// through the stream; the parent handler downcasts to detect it.
-async fn filtered_checkpoint_seq_stream(
-    ctx: &QueryContext,
-    filter: &sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter,
-    tx_range: std::ops::Range<u64>,
-    limit: usize,
-    options: QueryOptions,
-    budget: u64,
-) -> Result<BoxStream<'static, Result<Watermarked<u64>, anyhow::Error>>, RpcError> {
-    if limit == 0 || tx_range.is_empty() {
+/// Resolve a chunk of `tx_sequence_number`s (already in scan order) to their
+/// checkpoint sequence numbers, streaming each cp_seq as soon as the scan-order
+/// prefix is contiguously available rather than buffering the whole batch.
+/// BigTable multi-get rows arrive unordered, so `InputOrderEmitter` (keyed by
+/// the input scan order) releases the contiguous front as rows fill in — the
+/// same ordering trick as `fetch_checkpoint_data`. Consecutive duplicates (one
+/// checkpoint's multiple transactions) are collapsed downstream by
+/// `dedup_consecutive`.
+async fn resolve_checkpoint_seqs(
+    client: BigTableClient,
+    tx_seqs: Vec<u64>,
+) -> Result<BoxStream<'static, Result<u64, anyhow::Error>>, anyhow::Error> {
+    if tx_seqs.is_empty() {
         return Ok(stream::empty().boxed());
     }
-
-    let client = ctx.client();
-    let query = ctx.transaction_filter_query(filter)?;
-    let chunk_max = ctx.stage(PipelineStage::TxSeqDigest).chunk_size;
-
-    let tx_seq_stream = client.eval_bitmap_query_stream(
-        query,
-        tx_range,
-        BitmapIndexSpec::tx(),
-        options.scan_direction(),
-        budget,
-        ctx.bitmap_scan_observer(),
-    );
-    let fetch_client: BigTableClient = client.clone();
-    let direction = options.scan_direction();
-
-    let stream = async_stream::try_stream! {
-        futures::pin_mut!(tx_seq_stream);
-        let mut tx_seq_chunk: Vec<u64> = Vec::with_capacity(chunk_max);
-        let mut last_cp_seq: Option<u64> = None;
-        let mut emitted = 0usize;
-
-        loop {
-            // Read until we have a full chunk of tx_seq Items, OR a Frontier
-            // marker arrives (forcing flush), OR the upstream ends.
-            let mut pending_watermark: Option<u64> = None;
-            while tx_seq_chunk.len() < chunk_max && pending_watermark.is_none() {
-                match tx_seq_stream.try_next().await? {
-                    Some(Watermarked::Item(tx_seq)) => tx_seq_chunk.push(tx_seq),
-                    Some(Watermarked::Watermark(p)) => pending_watermark = Some(p),
-                    None => break,
-                }
+    let rows = client
+        .resolve_tx_checkpoints_stream(tx_seqs.clone())
+        .await?;
+    Ok(async_stream::try_stream! {
+        let mut emitter: InputOrderEmitter<u64, u64> = InputOrderEmitter::new(tx_seqs);
+        futures::pin_mut!(rows);
+        while let Some(row) = rows.next().await {
+            let (tx_seq, cp_seq) = row?;
+            for cp in emitter.push(tx_seq, cp_seq, "list_checkpoints: tx -> checkpoint resolution")? {
+                yield cp;
             }
-
-            // Resolve items' cps via one multi_get; dedupe by cp_seq.
-            // The WM (if any) stays in tx-space — it passes through to
-            // the tail `coalesce_watermarks`, which may drop it as
-            // item-superseded. Surviving WMs do their own one-row
-            // lookup in the handler at emit time. This decouples the
-            // small WM lookup from the bulky item multi_get, mirroring
-            // the structure in list_transactions / list_events.
-            if !tx_seq_chunk.is_empty() {
-                let mut tx_checkpoints = fetch_client.resolve_tx_checkpoints(&tx_seq_chunk).await?;
-                if direction.is_ascending() {
-                    tx_checkpoints.sort_by_key(|(tx_seq, _)| *tx_seq);
-                } else {
-                    tx_checkpoints.sort_by_key(|(tx_seq, _)| std::cmp::Reverse(*tx_seq));
-                }
-                tx_seq_chunk.clear();
-                for (_, cp_seq) in tx_checkpoints {
-                    if last_cp_seq == Some(cp_seq) {
-                        continue;
-                    }
-                    last_cp_seq = Some(cp_seq);
-                    emitted += 1;
-                    yield Watermarked::Item(cp_seq);
-                    if emitted >= limit {
-                        return;
-                    }
-                }
-            }
-
-            // Pass the WM through untranslated (tx-space position).
-            // Downstream `coalesce_watermarks` drops it if items
-            // follow; otherwise the handler resolves it to cp and
-            // applies the clamp at emit time.
-            if let Some(tx_frontier) = pending_watermark {
-                yield Watermarked::Watermark(tx_frontier);
-                continue;
-            }
-
-            // Upstream ended.
-            break;
+        }
+        for cp in emitter.finish("list_checkpoints: missing tx -> checkpoint row")? {
+            yield cp;
         }
     }
-    .boxed();
+    .boxed())
+}
 
-    Ok(stream)
+fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
+    let mut response = ListCheckpointsResponse::default();
+    response.checkpoint = Some(message);
+    response.watermark = Some(watermark);
+    response
+}
+
+fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpointsResponse {
+    let mut end = QueryEnd::default();
+    end.reason = Some(reason as i32);
+
+    let mut response = ListCheckpointsResponse::default();
+    response.watermark = Some(watermark);
+    response.end = Some(end);
+    response
+}
+
+/// Trailing terminal frame for range exhaustion. Reason and watermark derive
+/// from one `ScanTerminal`, so they cannot disagree; natural completion of an
+/// empty interval retains its cursor but claims no checkpoint coverage.
+fn range_end_response(
+    options: &QueryOptions,
+    exhaustion: RangeExhaustion,
+    position: Position,
+    covered_checkpoint_bound: Option<u64>,
+    interval_empty: bool,
+) -> (ListCheckpointsResponse, QueryEndReason) {
+    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
+    let reason = terminal.reason();
+    (
+        end_response(
+            terminal.into_watermark(options, covered_checkpoint_bound),
+            reason,
+        ),
+        reason,
+    )
 }
 
 /// Determine the checkpoint_sequence_number scan window from the logical
@@ -588,6 +596,256 @@ fn clamp_cp_frontier_past_last(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sui_rpc_cursor::CursorToken;
+
+    use crate::v2alpha::test_utils::ascending_options;
+    use crate::v2alpha::test_utils::query_context;
+
+    #[tokio::test]
+    async fn natural_empty_range_emits_one_standalone_terminal_boundary() {
+        let (ctx, server) = query_context("test_list_checkpoints_natural_end", 10).await;
+        let mut request = ListCheckpointsRequest::default();
+        request.start_checkpoint = Some(0);
+        request.end_checkpoint = Some(0);
+        request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        request.options = Some(ascending_options());
+
+        let responses: Vec<_> = list_checkpoints(ctx, request)
+            .await
+            .expect("construct checkpoint stream")
+            .try_collect()
+            .await
+            .expect("collect checkpoint stream");
+        server.abort();
+
+        assert_eq!(responses.len(), 1, "empty range has one terminal frame");
+        let response = &responses[0];
+        assert!(
+            response.checkpoint.is_none(),
+            "terminal frame has no payload"
+        );
+        assert_eq!(
+            response.end.as_ref().and_then(|end| end.reason),
+            Some(QueryEndReason::CheckpointBound as i32),
+        );
+        let watermark = response
+            .watermark
+            .as_ref()
+            .expect("natural completion proves a terminal boundary");
+        let expected_cursor =
+            CursorToken::boundary(Position::Checkpoints { checkpoint: 0 }).encode();
+        assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
+        assert_eq!(watermark.checkpoint, None);
+    }
+
+    #[tokio::test]
+    async fn cursor_bounded_empty_range_emits_terminal_cursor_without_false_checkpoint_bound() {
+        let (ctx, server) = query_context("test_list_checkpoints_cursor_end", 10).await;
+        let mut options = ascending_options();
+        options.before =
+            Some(CursorToken::boundary(Position::Checkpoints { checkpoint: 0 }).encode());
+        let expected_cursor = options.before.clone();
+        let mut request = ListCheckpointsRequest::default();
+        request.start_checkpoint = Some(0);
+        request.end_checkpoint = Some(10);
+        request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        request.options = Some(options);
+
+        let responses: Vec<_> = list_checkpoints(ctx, request)
+            .await
+            .expect("construct checkpoint stream")
+            .try_collect()
+            .await
+            .expect("collect checkpoint stream");
+        server.abort();
+
+        assert_eq!(responses.len(), 1, "empty range has one terminal frame");
+        let response = &responses[0];
+        assert!(
+            response.checkpoint.is_none(),
+            "terminal frame has no payload"
+        );
+        let watermark = response
+            .watermark
+            .as_ref()
+            .expect("cursor truncation carries its resolved boundary cursor");
+        assert_eq!(
+            watermark.cursor.as_ref(),
+            expected_cursor.as_ref(),
+            "terminal cursor is the exclusive client boundary"
+        );
+        assert_eq!(
+            watermark.checkpoint, None,
+            "cursor truncation must not claim natural checkpoint completion"
+        );
+        assert_eq!(
+            response.end.as_ref().and_then(|end| end.reason),
+            Some(QueryEndReason::CursorBound as i32),
+        );
+    }
+
+    #[test]
+    fn scan_limit_terminal_frames_use_checkpoint_domain_in_both_directions() {
+        for (
+            direction,
+            entry_checkpoint,
+            position,
+            checkpoint,
+            initial_proof,
+            expected_cursor,
+            expected_proof,
+        ) in [
+            (ScanDirection::Ascending, 0, 0, None, None, 0, None),
+            (
+                ScanDirection::Descending,
+                u64::MAX,
+                u64::MAX,
+                None,
+                None,
+                u64::MAX,
+                None,
+            ),
+            (ScanDirection::Ascending, 10, 50, Some(10), None, 10, None),
+            (ScanDirection::Descending, 10, 50, Some(10), None, 11, None),
+            (
+                ScanDirection::Ascending,
+                0,
+                50,
+                Some(10),
+                Some(5),
+                10,
+                Some(9),
+            ),
+            (
+                ScanDirection::Descending,
+                u64::MAX,
+                50,
+                Some(10),
+                Some(20),
+                11,
+                Some(11),
+            ),
+            (
+                ScanDirection::Ascending,
+                0,
+                50,
+                Some(10),
+                Some(15),
+                16,
+                Some(15),
+            ),
+            (
+                ScanDirection::Descending,
+                u64::MAX,
+                50,
+                Some(10),
+                Some(5),
+                5,
+                Some(5),
+            ),
+        ] {
+            let mut proto_options = ascending_options();
+            if !direction.is_ascending() {
+                proto_options.ordering =
+                    Some(sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32);
+            }
+            let options =
+                QueryOptions::checkpoints_from_proto(Some(&proto_options), 10, 100).unwrap();
+            let mut covered = initial_proof;
+            let response = terminal_response_from_scan_stop(
+                ResolvedScanStop::ScanLimit {
+                    position,
+                    checkpoint,
+                },
+                &options,
+                direction,
+                entry_checkpoint,
+                &mut covered,
+            )
+            .expect("representable checkpoint frontier");
+
+            assert!(response.checkpoint.is_none(), "terminal has no payload");
+            assert_eq!(
+                response.end.as_ref().map(|end| end.reason()),
+                Some(QueryEndReason::ScanLimit)
+            );
+            let watermark = response.watermark.expect("terminal watermark");
+            assert_eq!(
+                CursorToken::decode(watermark.cursor.as_deref().expect("cursor")).unwrap(),
+                CursorToken::boundary(Position::Checkpoints {
+                    checkpoint: expected_cursor,
+                })
+            );
+            assert_eq!(
+                watermark.checkpoint, expected_proof,
+                "terminal checkpoint proof must exactly preserve or advance coverage"
+            );
+            assert_eq!(
+                covered, expected_proof,
+                "accumulated checkpoint proof must match the emitted watermark"
+            );
+        }
+    }
+
+    #[test]
+    fn scan_limit_terminal_rejects_missing_non_edge_checkpoint_mapping() {
+        for (direction, position) in [
+            (ScanDirection::Ascending, 1),
+            (ScanDirection::Descending, u64::MAX - 1),
+        ] {
+            let mut proto_options = ascending_options();
+            if !direction.is_ascending() {
+                proto_options.ordering =
+                    Some(sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32);
+            }
+            let options =
+                QueryOptions::checkpoints_from_proto(Some(&proto_options), 10, 100).unwrap();
+            let mut covered = None;
+            let entry_checkpoint = if direction.is_ascending() {
+                0
+            } else {
+                u64::MAX
+            };
+            let error = terminal_response_from_scan_stop(
+                ResolvedScanStop::ScanLimit {
+                    position,
+                    checkpoint: None,
+                },
+                &options,
+                direction,
+                entry_checkpoint,
+                &mut covered,
+            )
+            .expect_err("only numeric-edge frontiers may omit a checkpoint mapping");
+
+            assert_eq!(error.into_status_proto().code, tonic::Code::Internal as i32);
+        }
+    }
+
+    #[test]
+    fn backend_fault_and_cancellation_return_status_without_query_end() {
+        let options =
+            QueryOptions::checkpoints_from_proto(Some(&ascending_options()), 10, 100).unwrap();
+        for (stop, expected_code) in [
+            (ResolvedScanStop::Cancelled, tonic::Code::Cancelled),
+            (
+                ResolvedScanStop::Fault(anyhow::anyhow!("injected backend fault")),
+                tonic::Code::Internal,
+            ),
+        ] {
+            let mut covered = None;
+            let entry_checkpoint = 0;
+            let error = terminal_response_from_scan_stop(
+                stop,
+                &options,
+                ScanDirection::Ascending,
+                entry_checkpoint,
+                &mut covered,
+            )
+            .expect_err("fault/cancellation must not produce a QueryEnd response");
+            assert_eq!(error.into_status_proto().code, expected_code as i32);
+        }
+    }
 
     #[test]
     fn clamp_passes_through_when_no_item_emitted() {

@@ -8,7 +8,6 @@ mod metrics;
 
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::authority::AuthorityState;
-use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_network_config};
 use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::CertifiedCheckpointOutput;
@@ -42,6 +41,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::{mpsc, watch};
+#[cfg(not(tidehunter))]
 use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -186,6 +186,7 @@ pub struct CheckpointStoreTables {
     full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
 }
 
+#[cfg(not(tidehunter))]
 fn full_checkpoint_content_table_default_config() -> DBOptions {
     DBOptions {
         options: default_db_options().options,
@@ -400,7 +401,7 @@ impl CheckpointStore {
             None => {
                 if epoch_store.epoch() == checkpoint.epoch {
                     epoch_store
-                        .put_genesis_checkpoint_in_builder(checkpoint.data(), &contents)
+                        .put_genesis_checkpoint_in_builder(checkpoint.data())
                         .unwrap();
                 } else {
                     debug!(
@@ -1792,7 +1793,7 @@ impl CheckpointBuilder {
 
         self.notify_aggregator.notify_one();
         self.epoch_store
-            .process_constructed_checkpoint(height, new_checkpoint);
+            .process_constructed_checkpoint(height, new_checkpoint.0);
         Ok(())
     }
 
@@ -2024,7 +2025,7 @@ impl CheckpointBuilder {
             let epoch_commitments = if self
                 .epoch_store
                 .protocol_config()
-                .check_commit_root_state_digest_supported()
+                .commit_root_state_digest()
             {
                 vec![root_state_digest.into()]
             } else {

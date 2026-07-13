@@ -276,8 +276,8 @@ pub enum ToolCommand {
         /// Defaults to 3 retries. Set to 0 to disable retries.
         #[clap(long = "max-retries", default_value = "3")]
         max_retries: usize,
-        /// Port for the Prometheus metrics server. Defaults to 9184.
-        #[clap(long = "metrics-port", default_value = "9184")]
+        /// Port for the Prometheus metrics server. Defaults to 9185.
+        #[clap(long = "metrics-port", default_value = "9185")]
         metrics_port: u16,
     },
 

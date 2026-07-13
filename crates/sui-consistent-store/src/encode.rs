@@ -178,6 +178,29 @@ impl Decode for Bytes {
     }
 }
 
+// Concatenating encode for tuples of `Encode` values. Encoding a
+// tuple appends each element's encoding in order, so call sites can
+// compose key fragments at the point of use — for example, building
+// a `(kind, type_filter)` prefix from two independently-encodable
+// pieces — instead of defining a bespoke wrapper type per
+// combination. There is deliberately no `Decode` counterpart: tuples
+// of variable-length fragments are not self-delimiting, so a generic
+// decode could not know where one element ends and the next begins.
+macro_rules! impl_encode_for_tuple {
+    ($($t:ident => $idx:tt),+) => {
+        impl<$($t: Encode),+> Encode for ($($t,)+) {
+            fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
+                $(self.$idx.encode_into(buf)?;)+
+                Ok(())
+            }
+        }
+    };
+}
+
+impl_encode_for_tuple!(T0 => 0, T1 => 1);
+impl_encode_for_tuple!(T0 => 0, T1 => 1, T2 => 2);
+impl_encode_for_tuple!(T0 => 0, T1 => 1, T2 => 2, T3 => 3);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +282,40 @@ mod tests {
         let err = U64BeKey::decode(&mut &[0u8; 9][..]).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("got 9"), "unexpected message: {msg}");
+    }
+
+    #[test]
+    fn tuple_concatenates_element_encodings() {
+        // A tuple encodes to the concatenation of its elements'
+        // encodings, in order — equivalent to encoding each piece
+        // into the same buffer by hand.
+        let pair = (U64BeKey(1), U64BeKey(2));
+        assert_eq!(
+            pair.encode().unwrap(),
+            [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2],
+        );
+
+        let triple = (U64BeKey(1), U64BeKey(2), U64BeKey(3));
+        let mut expected = Vec::new();
+        U64BeKey(1).encode_into(&mut expected).unwrap();
+        U64BeKey(2).encode_into(&mut expected).unwrap();
+        U64BeKey(3).encode_into(&mut expected).unwrap();
+        assert_eq!(triple.encode().unwrap(), expected);
+    }
+
+    #[test]
+    fn tuple_supports_heterogeneous_elements() {
+        // Elements need not share a type: a `Vec<u8>` fragment and a
+        // fixed-width key concatenate cleanly.
+        let quad = (
+            vec![0xAAu8, 0xBB],
+            U64BeKey(7),
+            Bytes::from_static(&[0xCC]),
+            vec![0xDDu8],
+        );
+        assert_eq!(
+            quad.encode().unwrap(),
+            [0xAA, 0xBB, 0, 0, 0, 0, 0, 0, 0, 7, 0xCC, 0xDD],
+        );
     }
 }

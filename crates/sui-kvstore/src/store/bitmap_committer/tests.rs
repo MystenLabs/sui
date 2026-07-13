@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use sui_inverted_index::event_seq;
 
 use bytes::Bytes;
 use roaring::RoaringBitmap;
@@ -77,7 +78,7 @@ impl BitmapIndexProcessor for EventSealProcessor {
 
     fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
         let seal_tx_hi = ((bucket_id + 1) * event_bitmap_index::BUCKET_SIZE)
-            .div_ceil(event_bitmap_index::MAX_EVENTS_PER_TX as u64);
+            .div_ceil(event_seq::MAX_EVENTS_PER_TX as u64);
         watermark.tx_hi >= seal_tx_hi
     }
 }
@@ -1304,7 +1305,7 @@ async fn restart_replay_skips_buckets_sealed_before_startup() {
 #[test]
 fn event_bitmap_seal_handles_exact_boundaries() {
     let txs_per_event_bucket =
-        event_bitmap_index::BUCKET_SIZE / event_bitmap_index::MAX_EVENTS_PER_TX as u64;
+        event_bitmap_index::BUCKET_SIZE / event_seq::MAX_EVENTS_PER_TX as u64;
     let wm = |tx_hi: u64| CommitterWatermark {
         tx_hi,
         ..Default::default()

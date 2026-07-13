@@ -445,18 +445,10 @@ impl RandomnessManager {
             highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
             randomness_receiver_handle,
         };
-        let dkg_output = match tables
+        let dkg_output = tables
             .dkg_output_v2
             .get(&SINGLETON_KEY)
-            .expect("typed_store should not fail")
-        {
-            Some(dkg_output) => Some(dkg_output),
-            None => tables
-                .dkg_output
-                .get(&SINGLETON_KEY)
-                .expect("typed_store should not fail")
-                .map(Some),
-        };
+            .expect("typed_store should not fail");
         match dkg_output {
             Some(Some(dkg_output)) => {
                 info!(
@@ -473,7 +465,7 @@ impl RandomnessManager {
                 // Update the randomness round receiver with the public key, so it can now
                 // verify randomness round signatures received out of consensus.
                 rm.randomness_receiver_handle
-                    .set_public_key(*dkg_output.vss_pk.c0());
+                    .set_public_key(dkg_output.vss_pk.c0());
 
                 if let DkgRole::Party(party) = rm.role.as_ref() {
                     network_handle.update_epoch(
@@ -776,7 +768,7 @@ impl RandomnessManager {
                     consensus_output.set_dkg_output(Some(output.clone()));
 
                     self.randomness_receiver_handle
-                        .set_public_key(*output.vss_pk.c0());
+                        .set_public_key(output.vss_pk.c0());
 
                     let epoch_elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
                     epoch_store
@@ -1615,12 +1607,12 @@ mod tests {
         >(dkg_nodes, threshold, 0, party_id);
         let expected_dkg_output_bytes =
             bcs::to_bytes(&expected_dkg_output).expect("DKG output serialization should not fail");
-        let expected_public_key = *expected_dkg_output.vss_pk.c0();
+        let expected_public_key = expected_dkg_output.vss_pk.c0();
 
         let tables = epoch_store.tables().unwrap();
         tables
-            .dkg_output
-            .insert(&SINGLETON_KEY, &expected_dkg_output)
+            .dkg_output_v2
+            .insert(&SINGLETON_KEY, &Some(expected_dkg_output))
             .unwrap();
         tables
             .randomness_next_round

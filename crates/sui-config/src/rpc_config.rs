@@ -19,22 +19,6 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_indexing: Option<bool>,
 
-    /// Use the experimental `sui-rpc-store` backend instead of the built-in
-    /// `rpc-index`.
-    ///
-    /// When set, the node builds the embedded `sui-rpc-store` indexer (the
-    /// derived-index and ledger-history column families, indexed independently
-    /// of the authority store) and serves the index read paths through it
-    /// rather than building the legacy `rpc-index`. The two are mutually
-    /// exclusive; raw chain data is still served from the perpetual store
-    /// either way.
-    ///
-    /// Experimental.
-    ///
-    /// Defaults to `false`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub use_experimental_rpc_store: Option<bool>,
-
     /// Configure the address to listen on for https
     ///
     /// Defaults to `0.0.0.0:9443` if not specified.
@@ -71,18 +55,6 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_initialization: Option<RpcIndexInitConfig>,
 
-    /// Enable historical checkpoint/transaction indexes for RPC queries.
-    ///
-    /// This flag is persisted in the `rpc-index` DB's own `settings` column
-    /// family. Enabling it triggers a full rebuild to backfill the historical
-    /// rows; disabling it drops the now-unused history column families in place
-    /// (no rebuild). While it stays put, forward indexing and pruning maintain
-    /// these indexes normally.
-    ///
-    /// Defaults to `false`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ledger_history_indexing: Option<bool>,
-
     /// Tunables for the v2alpha ledger-history list APIs (`list_transactions`,
     /// `list_events`, `list_checkpoints`). These scan the historical inverted
     /// indexes, unlike the live object-set listings (`list_owned_objects`,
@@ -98,10 +70,6 @@ pub struct RpcConfig {
 impl RpcConfig {
     pub fn enable_indexing(&self) -> bool {
         self.enable_indexing.unwrap_or(false)
-    }
-
-    pub fn use_experimental_rpc_store(&self) -> bool {
-        self.use_experimental_rpc_store.unwrap_or(false)
     }
 
     pub fn https_address(&self) -> SocketAddr {
@@ -124,10 +92,6 @@ impl RpcConfig {
 
     pub fn index_initialization_config(&self) -> Option<&RpcIndexInitConfig> {
         self.index_initialization.as_ref()
-    }
-
-    pub fn ledger_history_indexing(&self) -> bool {
-        self.ledger_history_indexing.unwrap_or(false)
     }
 
     pub fn ledger_history(&self) -> &LedgerHistoryConfig {

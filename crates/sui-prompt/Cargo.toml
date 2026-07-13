@@ -1,0 +1,18 @@
+[package]
+name = "sui-prompt"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+
+[build-dependencies]
+serde.workspace = true
+serde_yaml.workspace = true

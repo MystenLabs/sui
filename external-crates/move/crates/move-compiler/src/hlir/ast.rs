@@ -20,7 +20,7 @@ use crate::{
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeSet, VecDeque},
     sync::Arc,
 };
 
@@ -238,10 +238,6 @@ pub enum Statement_ {
 pub type Statement = Spanned<Statement_>;
 
 pub type Block = VecDeque<Statement>;
-
-pub type BasicBlocks = BTreeMap<Label, BasicBlock>;
-
-pub type BasicBlock = VecDeque<Command>;
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
 pub struct Label(pub usize);

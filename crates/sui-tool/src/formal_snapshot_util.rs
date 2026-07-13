@@ -20,7 +20,7 @@ pub(crate) async fn read_summaries_for_list_no_verify<S>(
 where
     S: WriteStore + Clone,
 {
-    let client = build_object_store(&ingestion_url, vec![]);
+    let client = build_object_store(&ingestion_url, vec![], vec![]);
     futures::stream::iter(checkpoints)
         .map(|sq| fetch_checkpoint(&client, sq))
         .buffer_unordered(concurrency)

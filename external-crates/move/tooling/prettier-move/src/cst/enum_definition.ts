@@ -4,8 +4,8 @@
 import { AstPath, Doc, doc } from 'prettier';
 import { Node } from '..';
 import { MoveOptions, printFn, treeFn } from '../printer';
-import { list, printIdentifier, printTrailingComment } from '../utilities';
-const { join, lineSuffix, group } = doc.builders;
+import { inlineTrailingComment, list, printIdentifier } from '../utilities';
+const { lineSuffix, group } = doc.builders;
 
 export default function (path: AstPath<Node>): treeFn | null {
     switch (path.node.type) {
@@ -48,10 +48,6 @@ export function printEnumDefinition(path: AstPath<Node>, _opt: MoveOptions, prin
  * List of `variant` nodes.
  */
 export function printEnumVariants(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-    if (path.node.nonFormattingChildren.length === 0) {
-        return ' {}';
-    }
-
     return [
         ' ',
         group(list({ path, print, options, open: '{', close: '}', addWhitespace: true }), {
@@ -67,7 +63,7 @@ export function printEnumVariants(path: AstPath<Node>, options: MoveOptions, pri
  * - `datatype_fields` (optional)
  */
 export function printVariant(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
-    const trailing = lineSuffix(printTrailingComment(path, false));
+    const trailing = lineSuffix(inlineTrailingComment(path));
     path.node.disableTrailingComment();
     return [path.map(print, 'nonFormattingChildren'), trailing];
 }

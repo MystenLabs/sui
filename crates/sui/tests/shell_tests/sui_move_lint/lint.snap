@@ -5,8 +5,8 @@ source: crates/sui/tests/shell_tests.rs
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# Tests that `sui move lint` runs the extra linters (lint level `All`) and reports
-# warnings that a plain `sui move build` does not. `COLOR_MODE=NONE` disables ANSI
+# Tests that `sui move lint` enables Sui mode and runs the Sui-specific linters (here
+# `self_transfer`), not just the generic Move linters. `COLOR_MODE=NONE` disables ANSI
 # color codes in the compiler diagnostics so the snapshot is stable.
 COLOR_MODE=NONE sui move --client.config $CONFIG lint -p example
 
@@ -19,10 +19,15 @@ INCLUDING DEPENDENCY Sui
 BUILDING example
 
 ----- stderr -----
-warning[Lint W04004]: unneeded return
-   ┌─ ./sources/example.move:12:5
+warning[Lint W99001]: non-composable transfer to sender
+   ┌─ ./sources/example.move:15:5
    │
-12 │     return VALUE
-   │     ^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+14 │ public fun mint(ctx: &mut TxContext) {
+   │            ---- Returning an object from a function, allows a caller to use the object and enables composability via programmable transactions.
+15 │     transfer::public_transfer(Obj { id: object::new(ctx) }, ctx.sender())
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │                                                       │
+   │     │                                                       Transaction sender address coming from here
+   │     Transfer of an object to transaction sender address
    │
-   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

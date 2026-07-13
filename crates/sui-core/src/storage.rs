@@ -5,10 +5,6 @@ use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::ExecutionCacheTraitPointers;
-use crate::rpc_index::CoinIndexInfo;
-use crate::rpc_index::OwnerIndexInfo;
-use crate::rpc_index::OwnerIndexKey;
-use crate::rpc_index::RpcIndexStore;
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -48,7 +44,6 @@ use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
 use sui_types::storage::{ObjectKey, OverlayBackingPackageStore, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
-use tap::Pipe;
 use tap::TapFallible;
 use tracing::error;
 use typed_store::TypedStoreError;
@@ -412,13 +407,6 @@ impl RestReadStore {
     pub fn new(state: Arc<AuthorityState>, rocks: RocksDbStore) -> Self {
         Self { state, rocks }
     }
-
-    fn index(&self) -> sui_types::storage::error::Result<&RpcIndexStore> {
-        self.state
-            .rpc_index
-            .as_deref()
-            .ok_or_else(|| sui_types::storage::error::Error::custom("rest index store is disabled"))
-    }
 }
 
 impl ObjectStore for RestReadStore {
@@ -592,7 +580,10 @@ impl RpcStateReader for RestReadStore {
     }
 
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
-        Some(self)
+        // The legacy `rpc-index` backend has been removed; a node serving
+        // reads through `RestReadStore` exposes no index surface. Index
+        // reads are served by the embedded rpc-store via `RpcStoreReadStore`.
+        None
     }
 
     fn get_struct_layout_with_overlay(
@@ -614,204 +605,11 @@ impl RpcStateReader for RestReadStore {
     }
 }
 
-impl RpcIndexes for RestReadStore {
-    fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<sui_types::storage::EpochInfo>> {
-        self.index()?
-            .get_epoch_info(epoch)
-            .map_err(StorageError::custom)
-    }
-
-    fn owned_objects_iter(
-        &self,
-        owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
-    ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>> {
-        let cursor = cursor.map(|cursor| OwnerIndexKey {
-            owner: cursor.owner,
-            object_type: cursor.object_type,
-            inverted_balance: cursor.balance.map(std::ops::Not::not),
-            object_id: cursor.object_id,
-        });
-
-        let iter = self
-            .index()?
-            .owner_iter(owner, object_type, cursor)?
-            .map(|result| {
-                result.map(
-                    |(
-                        OwnerIndexKey {
-                            owner,
-                            object_id,
-                            object_type,
-                            inverted_balance,
-                        },
-                        OwnerIndexInfo { version },
-                    )| {
-                        OwnedObjectInfo {
-                            owner,
-                            object_type,
-                            balance: inverted_balance.map(std::ops::Not::not),
-                            object_id,
-                            version,
-                        }
-                    },
-                )
-            });
-
-        Ok(Box::new(iter) as _)
-    }
-
-    fn dynamic_field_iter(
-        &self,
-        parent: ObjectID,
-        cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_>,
-    > {
-        let iter = self.index()?.dynamic_field_iter(parent, cursor)?;
-        Ok(Box::new(iter) as _)
-    }
-
-    fn get_coin_info(
-        &self,
-        coin_type: &StructTag,
-    ) -> sui_types::storage::error::Result<Option<CoinInfo>> {
-        self.index()?
-            .get_coin_info(coin_type)?
-            .map(
-                |CoinIndexInfo {
-                     coin_metadata_object_id,
-                     treasury_object_id,
-                     regulated_coin_metadata_object_id,
-                 }| CoinInfo {
-                    coin_metadata_object_id,
-                    treasury_object_id,
-                    regulated_coin_metadata_object_id,
-                },
-            )
-            .pipe(Ok)
-    }
-
-    fn get_balance(
-        &self,
-        owner: &SuiAddress,
-        coin_type: &StructTag,
-    ) -> sui_types::storage::error::Result<Option<BalanceInfo>> {
-        self.index()?
-            .get_balance(owner, coin_type)?
-            .map(|info| info.into())
-            .pipe(Ok)
-    }
-
-    fn balance_iter(
-        &self,
-        owner: &SuiAddress,
-        cursor: Option<(SuiAddress, StructTag)>,
-    ) -> sui_types::storage::error::Result<BalanceIterator<'_>> {
-        let cursor_key =
-            cursor.map(|(owner, coin_type)| crate::rpc_index::BalanceKey { owner, coin_type });
-
-        Ok(Box::new(
-            self.index()?
-                .balance_iter(*owner, cursor_key)?
-                .map(|result| {
-                    result
-                        .map(|(key, info)| (key.coin_type, info.into()))
-                        .map_err(Into::into)
-                }),
-        ))
-    }
-
-    fn package_versions_iter(
-        &self,
-        original_id: ObjectID,
-        cursor: Option<u64>,
-    ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>,
-    > {
-        let iter = self.index()?.package_versions_iter(original_id, cursor)?;
-        Ok(
-            Box::new(iter.map(|result| result.map(|(key, info)| (key.version, info.storage_id))))
-                as _,
-        )
-    }
-
-    fn get_highest_indexed_checkpoint_seq_number(
-        &self,
-    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
-        self.index()?
-            .get_highest_indexed_checkpoint_seq_number()
-            .map_err(Into::into)
-    }
-
-    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>> {
-        self.index()?
-            .ledger_tx_seq_digest(tx_seq)
-            .map_err(Into::into)
-    }
-
-    fn ledger_tx_seq_digest_multi_get(
-        &self,
-        tx_seqs: &[u64],
-    ) -> Result<Vec<Option<LedgerTxSeqDigest>>> {
-        self.index()?
-            .ledger_tx_seq_digest_multi_get(tx_seqs)
-            .map_err(Into::into)
-    }
-
-    fn ledger_tx_seq_digest_iter(
-        &self,
-        start: u64,
-        end_exclusive: u64,
-        descending: bool,
-    ) -> Result<LedgerTxSeqDigestIterator<'_>> {
-        self.index()?
-            .ledger_tx_seq_digest_iter(start, end_exclusive, descending)
-            .map_err(Into::into)
-    }
-
-    fn transaction_bitmap_bucket_iter(
-        &self,
-        dimension_key: Vec<u8>,
-        start_bucket: u64,
-        end_bucket_exclusive: u64,
-        descending: bool,
-    ) -> Result<LedgerBitmapBucketIterator<'_>> {
-        self.index()?
-            .transaction_bitmap_bucket_iter(
-                dimension_key,
-                start_bucket,
-                end_bucket_exclusive,
-                descending,
-            )
-            .map_err(Into::into)
-    }
-
-    fn event_bitmap_bucket_iter(
-        &self,
-        dimension_key: Vec<u8>,
-        start_bucket: u64,
-        end_bucket_exclusive: u64,
-        descending: bool,
-    ) -> Result<LedgerBitmapBucketIterator<'_>> {
-        self.index()?
-            .event_bitmap_bucket_iter(
-                dimension_key,
-                start_bucket,
-                end_bucket_exclusive,
-                descending,
-            )
-            .map_err(Into::into)
-    }
-}
-
-/// Read store backed by the embedded [`sui_rpc_store`] indexer instead
-/// of the built-in [`RpcIndexStore`].
+/// Read store backed by the embedded [`sui_rpc_store`] indexer.
 ///
-/// The two read stores serve the same `sui-rpc-api` trait stack; the
-/// difference is where the *index* surface comes from. This wrapper
-/// composes two backends:
+/// Like [`RestReadStore`] it serves the `sui-rpc-api` trait stack, but it
+/// additionally exposes the index surface (which [`RestReadStore`] no
+/// longer does). This wrapper composes two backends:
 ///
 /// - **Raw chain data** — objects, transactions, effects, events,
 ///   checkpoints, committees, and child-object resolution — is served
@@ -861,7 +659,25 @@ impl ReadStore for RpcStoreReadStore {
     }
 
     fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint> {
-        self.rocks.get_latest_checkpoint()
+        let latest = self.rocks.get_latest_checkpoint()?;
+        // Bound the reported tip to what the live-object index has committed.
+        // The embedded indexer follows the tip asynchronously, so without this
+        // the rpc-api could surface a checkpoint -- and the transactions in it
+        // -- whose indexed state (owned objects, balances, coins) is not yet
+        // readable, breaking read-after-write consistency. The history cohort
+        // backfills independently and bounds the ledger-history APIs
+        // separately, so it does not constrain this tip.
+        match self.reader.highest_live_committed_checkpoint()? {
+            Some(indexed) if indexed < latest.sequence_number => self
+                .rocks
+                .get_checkpoint_by_sequence_number(indexed)
+                .ok_or_else(|| {
+                    StorageError::missing(format!(
+                        "live-indexed checkpoint {indexed} missing from the checkpoint store"
+                    ))
+                }),
+            _ => Ok(latest),
+        }
     }
 
     fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint> {
@@ -1014,6 +830,14 @@ impl RpcStateReader for RpcStoreReadStore {
         Some(self)
     }
 
+    fn get_highest_executed_checkpoint_seq_number(&self) -> Result<CheckpointSequenceNumber> {
+        // The raw executed tip, read straight from the checkpoint store. Unlike
+        // `get_latest_checkpoint`, this is not bounded to the live-object index
+        // frontier -- the health check measures how far that frontier trails
+        // the executed tip, so it must see the unbounded value.
+        Ok(*self.rocks.get_latest_checkpoint()?.sequence_number())
+    }
+
     fn get_struct_layout_with_overlay(
         &self,
         struct_tag: &move_core_types::language_storage::StructTag,
@@ -1053,7 +877,7 @@ impl RpcIndexes for RpcStoreReadStore {
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
-        cursor: Option<ObjectID>,
+        cursor: Option<DynamicFieldKey>,
     ) -> Result<Box<dyn Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_>> {
         self.reader.dynamic_field_iter(parent, cursor)
     }
@@ -1090,6 +914,12 @@ impl RpcIndexes for RpcStoreReadStore {
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>> {
         self.reader.get_highest_indexed_checkpoint_seq_number()
+    }
+
+    fn get_highest_live_indexed_checkpoint_seq_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>> {
+        self.reader.get_highest_live_indexed_checkpoint_seq_number()
     }
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>> {

@@ -514,6 +514,31 @@ where
         self.iter_forward(prefix_to_byte_bounds(prefix)?)
     }
 
+    /// Iterate forward over the subset of entries whose keys, when
+    /// encoded, begin with `prefix`'s encoding and sort at or after
+    /// `from`'s encoding.
+    ///
+    /// Like [`iter_prefix`](Self::iter_prefix) but with the lower bound
+    /// raised to `from` (inclusive) -- typically a pagination cursor
+    /// whose encoding extends `prefix`. The upper bound stays the
+    /// prefix's lex successor, so the scan still stops cleanly at the
+    /// end of the prefix range without per-item filtering; a `from`
+    /// that sorts past the prefix simply yields nothing. The same
+    /// prefix-encoding contract as [`iter_prefix`](Self::iter_prefix)
+    /// applies: the schema's encoding must make `from`'s bytes
+    /// well-ordered against the full keys.
+    pub fn iter_prefix_from<P: Encode, F: Encode>(
+        &self,
+        prefix: &P,
+        from: &F,
+    ) -> Result<Iter<'_, K, V>, Error> {
+        let ByteBounds::Range(_, upper) = prefix_to_byte_bounds(prefix)? else {
+            return Ok(Iter::empty());
+        };
+        let lower = from.encode()?;
+        self.iter_forward(ByteBounds::Range(Some(lower), upper))
+    }
+
     /// Iterate in reverse over the subset of entries whose keys fall
     /// within `range`.
     pub fn iter_rev(&self, range: impl RangeBounds<K>) -> Result<RevIter<'_, K, V>, Error> {
@@ -1580,6 +1605,45 @@ mod tests {
             collected,
             vec![ByteAndU32(2, 0), ByteAndU32(2, 1), ByteAndU32(2, 2),],
         );
+    }
+
+    #[test]
+    fn iter_prefix_from_resumes_within_prefix_and_stops_at_prefix_end() {
+        let (_dir, db, schema) = open_compound();
+        // Three first-byte buckets, three rows each.
+        for first in [1u8, 2, 3] {
+            for second in 0u32..3 {
+                seed_compound(&db, &ByteAndU32(first, second), &U64Be(0));
+            }
+        }
+        // Resume from `(2, 1)`: inclusive of the cursor, and bounded to bucket 2
+        // -- bucket 1 (before the cursor) and bucket 3 (past the prefix) are
+        // both excluded.
+        let collected: Vec<_> = schema
+            .rows
+            .iter_prefix_from(&BytePrefix(2), &ByteAndU32(2, 1))
+            .unwrap()
+            .map(|r| r.unwrap().0)
+            .collect();
+        assert_eq!(collected, vec![ByteAndU32(2, 1), ByteAndU32(2, 2)]);
+    }
+
+    #[test]
+    fn iter_prefix_from_past_last_row_yields_nothing_without_spilling() {
+        let (_dir, db, schema) = open_compound();
+        // Bucket 2 and a bucket 3 row that must not leak through.
+        for second in 0u32..3 {
+            seed_compound(&db, &ByteAndU32(2, second), &U64Be(0));
+        }
+        seed_compound(&db, &ByteAndU32(3, 0), &U64Be(0));
+        // A `from` above every bucket-2 row yields nothing and does not spill
+        // into bucket 3, because the upper bound stays the prefix successor.
+        let count = schema
+            .rows
+            .iter_prefix_from(&BytePrefix(2), &ByteAndU32(2, u32::MAX))
+            .unwrap()
+            .count();
+        assert_eq!(count, 0);
     }
 
     #[test]

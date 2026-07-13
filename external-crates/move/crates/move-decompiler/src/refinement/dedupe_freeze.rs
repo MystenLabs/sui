@@ -7,7 +7,7 @@
 //!   twice has the same observable result as once (after the inner the type is already
 //!   `&T`, and the outer would no-op).
 //! - `freeze(&e)` -> `&e`. An immutable `Borrow(false, _)` is already `&T`, so wrapping
-//!   it in `freeze` is a no-op. Note we *don't* strip `freeze(&mut e)` — that one
+//!   it in `freeze` is a no-op. Note we *don't* strip `freeze(&mut e)` - that one
 //!   genuinely downgrades `&mut e` to `&e`.
 //!
 //! Both shapes survive the structurer in cases where the bytecode emitted a `FreezeRef`
@@ -38,7 +38,7 @@ impl Refine for DedupeFreeze {
             return false;
         };
         match inner {
-            // `freeze(freeze(e))` → `freeze(e)`. After the inner the value is already `&T`,
+            // `freeze(freeze(e))` -> `freeze(e)`. After the inner the value is already `&T`,
             // so the outer is a no-op. Drop the outer, keep the inner `Data { FreezeRef }`.
             Exp::Data {
                 op: DataOp::FreezeRef,
@@ -47,8 +47,8 @@ impl Refine for DedupeFreeze {
                 *exp = args.pop().expect("checked above");
                 true
             }
-            // `freeze(&e)` → `&e`. The immutable borrow already produces `&T`, so the
-            // outer freeze is a no-op. We do *not* match `Borrow(true, _)` — freezing a
+            // `freeze(&e)` -> `&e`. The immutable borrow already produces `&T`, so the
+            // outer freeze is a no-op. We do *not* match `Borrow(true, _)` - freezing a
             // `&mut T` is a real downgrade we must keep.
             Exp::Borrow(false, _) => {
                 *exp = args.pop().expect("checked above");
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn keeps_freeze_of_mut_borrow() {
-        // freeze(&mut x) is a real downgrade — leave it alone.
+        // freeze(&mut x) is a real downgrade - leave it alone.
         let mut e = freeze(Exp::Borrow(true, Box::new(var("x"))));
         assert!(!refine(&mut e));
         assert!(matches!(

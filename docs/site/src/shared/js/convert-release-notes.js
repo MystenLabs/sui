@@ -165,6 +165,14 @@ function sanitizeForMDX(content) {
   return content;
 }
 
+function stripReviewRequests(content) {
+  // Remove PR title/author lines like "PR #27067: [framework] future proofing type_name in coin by @Damir (Damir Shamanaev)"
+  content = content.replace(/^PR #\d+:.*by @.+$/gim, '');
+  // Clean up excess blank lines left behind
+  content = content.replace(/\n{3,}/g, '\n\n');
+  return content.trim();
+}
+
 function convertGitHubHeadingsToH3(content) {
   return content.replace(/^(#{1,6})\s+(.*)$/gm, (match, hashes, text) => {
     const trimmedText = text.trim();
@@ -358,7 +366,8 @@ async function consolidateReleaseNotes() {
       }
 
       // Process content
-      let processedGitHubContent = sanitizeForMDX(releaseToUse.content);
+      let processedGitHubContent = stripReviewRequests(releaseToUse.content);
+      processedGitHubContent = sanitizeForMDX(processedGitHubContent);
       processedGitHubContent = convertGitHubHeadingsToH3(processedGitHubContent);
       processedGitHubContent = processedGitHubContent.replace(/\n{3,}/g, '\n\n');
 

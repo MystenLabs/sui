@@ -16,22 +16,6 @@ pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())
 }
 
-/// Reject list queries when ledger-history indexing is disabled. The v2alpha
-/// list APIs read the history indexes (`tx_seq_digest`, transaction/event
-/// bitmaps); when an operator has not enabled `ledger_history_indexing` those
-/// column families are absent, so the API is unsupported rather than merely
-/// empty. Gates both indexing and serving the same way `authenticated_events`
-/// does.
-pub(super) fn ensure_ledger_history_enabled(service: &RpcService) -> Result<(), RpcError> {
-    if !service.config.ledger_history_indexing() {
-        return Err(RpcError::new(
-            tonic::Code::Unimplemented,
-            "ledger history indexing is disabled",
-        ));
-    }
-    Ok(())
-}
-
 pub(super) fn validate_checkpoint_bounds(
     start_checkpoint: Option<u64>,
     end_checkpoint: Option<u64>,
@@ -105,7 +89,7 @@ pub(super) fn checkpoint_to_tx_range(
 /// `checkpoint_to_tx_boundary` reads the lowest available checkpoint's predecessor
 /// from `certified_checkpoints`, which is retained across pruning, so this resolves
 /// even at the floor.
-pub(super) fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
+fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
     let lowest_checkpoint = service.reader.get_lowest_available_checkpoint()?;
     checkpoint_to_tx_boundary(service, lowest_checkpoint)
 }
@@ -115,11 +99,7 @@ pub(super) fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcEr
 /// the floor when the low end was open-ended; or `OutOfRange` when an explicitly
 /// requested low end (a `start_checkpoint` or `after` cursor) is below the floor —
 /// that data was pruned and is permanently gone.
-pub(super) fn apply_tx_seq_floor(
-    start: u64,
-    explicit_lower: bool,
-    floor: u64,
-) -> Result<u64, RpcError> {
+fn apply_tx_seq_floor(start: u64, explicit_lower: bool, floor: u64) -> Result<u64, RpcError> {
     if start >= floor {
         Ok(start)
     } else if explicit_lower {
@@ -127,6 +107,43 @@ pub(super) fn apply_tx_seq_floor(
     } else {
         Ok(floor)
     }
+}
+
+/// The serving floor resolved onto a scan: the effective first scannable
+/// transaction and its containing checkpoint, after clamping a resolved
+/// scan's low end to the pruning floor.
+pub(super) struct ServingFloor {
+    pub(super) tx_seq: u64,
+    pub(super) checkpoint: u64,
+}
+
+/// Clamp a resolved scan's low end (`start_tx`, tx-seq space) to the serving
+/// floor. Returns the resolved floor only when it actually moved the low end
+/// (an implicit-genesis low); an explicitly requested low below the floor
+/// (`start_checkpoint` or `after` cursor) errors `OutOfRange` instead, and an
+/// untouched low returns `None`. Callers MUST reconcile their interval and
+/// watermark metadata from the returned floor, so no watermark ever claims
+/// pruned, never-scanned checkpoints: for a nonempty retained intersection,
+/// ascending scans raise their entry claim to `checkpoint` and descending
+/// scans pin their terminal to it; a floor that consumes the interval leaves
+/// the request-derived terminal boundary in place and marks the interval
+/// empty.
+pub(super) fn clamp_to_serving_floor(
+    service: &RpcService,
+    start_tx: u64,
+    start_checkpoint: Option<u64>,
+    options: &crate::ledger_history::query_options::QueryOptions,
+) -> Result<Option<ServingFloor>, RpcError> {
+    let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
+    let floor = lowest_available_tx_seq(service)?;
+    let clamped = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
+    if clamped == start_tx {
+        return Ok(None);
+    }
+    Ok(Some(ServingFloor {
+        tx_seq: clamped,
+        checkpoint: tx_checkpoint(service, clamped)?,
+    }))
 }
 
 fn out_of_range(floor: u64) -> RpcError {
@@ -213,34 +230,34 @@ pub(super) fn get_tx_seq_digest_rows(
     Ok(rows)
 }
 
-/// Resolve a bitmap scan frontier (absolute member-id position) to the
-/// checkpoint that bounds the covered range. The watermark proves coverage up to
-/// `frontier - 1` ascending (the last position emitted) or `frontier` descending;
-/// `decode_tx_seq` maps that position to the transaction whose checkpoint we
-/// look up. Returns `None` only when the ascending frontier is at genesis, where
-/// nothing is yet covered. Frontiers stay within the request's contiguous tx
-/// range, so the exact `tx_seq` lookup always resolves.
-pub(super) fn resolve_frontier_checkpoint(
-    service: &RpcService,
-    frontier: u64,
-    ascending: bool,
-    decode_tx_seq: impl FnOnce(u64) -> u64,
-) -> Result<Option<u64>, RpcError> {
-    let lookup_position = if ascending {
-        match frontier.checked_sub(1) {
-            Some(p) => p,
-            None => return Ok(None),
-        }
-    } else {
-        frontier
-    };
-    let tx_seq = decode_tx_seq(lookup_position);
+/// Resolve a transaction sequence number to its containing checkpoint.
+pub(super) fn tx_checkpoint(service: &RpcService, tx_seq: u64) -> Result<u64, RpcError> {
     let checkpoint = get_tx_seq_digest_multi(service, &[tx_seq])?
         .into_iter()
         .next()
         .expect("multi-get of one tx_seq returns one row")
         .checkpoint_number;
-    Ok(Some(checkpoint))
+    Ok(checkpoint)
+}
+
+/// Resolve a u64 scan frontier to the checkpoint that bounds the covered range.
+/// The watermark proves coverage up to `frontier - 1` ascending or `frontier`
+/// descending. Returns `None` only when the ascending frontier is at genesis,
+/// where nothing is yet covered.
+pub(super) fn sequence_frontier_checkpoint(
+    service: &RpcService,
+    frontier: u64,
+    ascending: bool,
+) -> Result<Option<u64>, RpcError> {
+    let lookup_position = if ascending {
+        match frontier.checked_sub(1) {
+            Some(position) => position,
+            None => return Ok(None),
+        }
+    } else {
+        frontier
+    };
+    tx_checkpoint(service, lookup_position).map(Some)
 }
 
 /// Classify a missing `tx_seq_digest` row encountered during a scan. The serving

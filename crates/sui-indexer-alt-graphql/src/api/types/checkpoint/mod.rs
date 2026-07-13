@@ -35,6 +35,7 @@ use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
 use crate::error::RpcError;
+use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
@@ -69,7 +70,7 @@ struct CheckpointContents {
     streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-pub(crate) type CCheckpoint = JsonCursor<u64>;
+pub type CCheckpoint = JsonCursor<u64>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -242,6 +243,7 @@ impl CheckpointContents {
             if let Some(streamed) = &self.streamed_data {
                 return Ok(Some(Transaction::paginate_preloaded_transactions(
                     self.scope.clone(),
+                    summary.sequence_number,
                     &streamed.transactions,
                     &page,
                     filter,
@@ -249,7 +251,9 @@ impl CheckpointContents {
             }
 
             Ok(Some(
-                Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+                Transaction::paginate(ctx, self.scope.clone(), page, filter)
+                    .await
+                    .map_err(upcast)?,
             ))
         }
         .await

@@ -582,20 +582,16 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
 }
 
 impl TransactionEffectsV2 {
-    pub fn new(
-        status: ExecutionStatus,
-        executed_epoch: EpochId,
-        gas_used: GasCostSummary,
+    /// Derive the unchanged consensus objects of a transaction from its shared inputs and the
+    /// per-epoch config objects it read, given the set of objects it changed. Callers compute
+    /// this before constructing the effects and pass the result to [`Self::new`], so additional
+    /// unchanged consensus objects can be appended before construction if needed.
+    pub fn compute_unchanged_consensus_objects(
         shared_objects: Vec<SharedInput>,
         loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
-        transaction_digest: TransactionDigest,
-        lamport_version: SequenceNumber,
-        changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
-        gas_object: Option<ObjectID>,
-        events_digest: Option<TransactionEventsDigest>,
-        dependencies: Vec<TransactionDigest>,
-    ) -> Self {
-        let unchanged_consensus_objects = shared_objects
+        changed_objects: &BTreeMap<ObjectID, EffectsObjectChange>,
+    ) -> Vec<(ObjectID, UnchangedConsensusKind)> {
+        shared_objects
             .into_iter()
             .filter_map(|shared_input| match shared_input {
                 SharedInput::Existing((id, version, digest)) => {
@@ -634,7 +630,21 @@ impl TransactionEffectsV2 {
                     .into_iter()
                     .map(|id| (id, UnchangedConsensusKind::PerEpochConfig)),
             )
-            .collect();
+            .collect()
+    }
+
+    pub fn new(
+        status: ExecutionStatus,
+        executed_epoch: EpochId,
+        gas_used: GasCostSummary,
+        unchanged_consensus_objects: Vec<(ObjectID, UnchangedConsensusKind)>,
+        transaction_digest: TransactionDigest,
+        lamport_version: SequenceNumber,
+        changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
+        gas_object: Option<ObjectID>,
+        events_digest: Option<TransactionEventsDigest>,
+        dependencies: Vec<TransactionDigest>,
+    ) -> Self {
         let changed_objects: Vec<_> = changed_objects.into_iter().collect();
 
         let gas_object_index = gas_object.map(|gas_id| {

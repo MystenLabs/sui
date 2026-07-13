@@ -33,7 +33,7 @@ use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
 
 use crate::proto::PruningWatermarks;
-use crate::schema::keys::UnitKey;
+use crate::schema::primitives::UnitKey;
 
 pub const NAME: &str = "pruning_watermark";
 

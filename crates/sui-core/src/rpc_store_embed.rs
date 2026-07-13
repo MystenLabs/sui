@@ -4,11 +4,9 @@
 //! Startup orchestration for the embedded `sui-rpc-store` indexer.
 //!
 //! When a fullnode is configured with
-//! [`RpcConfig::use_experimental_rpc_store`](sui_config::RpcConfig::use_experimental_rpc_store),
-//! it serves the rpc-api
-//! index surface from an embedded [`sui_rpc_store`] instance instead of
-//! the legacy `rpc-index`. This module owns the lifecycle of that
-//! instance:
+//! [`RpcConfig::enable_indexing`](sui_config::RpcConfig::enable_indexing), it
+//! serves the rpc-api index surface from an embedded [`sui_rpc_store`]
+//! instance. This module owns the lifecycle of that instance:
 //!
 //! 1. Open the rpc-store database under the node's `db_path()`.
 //! 2. Compare its persisted per-pipeline watermarks against the
@@ -42,10 +40,11 @@ use sui_consistent_store::Db;
 use sui_consistent_store::DbOptions;
 use sui_consistent_store::PipelineTaskKey;
 use sui_consistent_store::Watermark;
+use sui_consistent_store::metrics::ColumnFamilyStatsCollector;
 use sui_consistent_store::restore::RestoreDriverConfig;
 use sui_consistent_store::restore::metrics::RestoreMetrics;
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
+use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
@@ -83,9 +82,12 @@ use crate::storage::RocksDbStore;
 const RPC_STORE_DIR: &str = "rpc_store";
 
 /// Number of in-memory snapshots retained for consistent reads.
-/// Mirrors the standalone `sui-rpc-node` default; with the default
-/// stride of 1 this is roughly a 32-checkpoint consistency window.
-const SNAPSHOT_CAPACITY: usize = 32;
+///
+/// Zero disables snapshotting entirely (the synchronizer's
+/// `take_snapshot` becomes a no-op). Today the embedded deployment never
+/// serves point-in-time reads from a RocksDB snapshot so we will disable
+/// it for now.
+const SNAPSHOT_CAPACITY: usize = 0;
 
 fn db_options() -> DbOptions {
     DbOptions {
@@ -268,6 +270,15 @@ impl EmbeddedRpcStore {
         let path = config.db_path().join(RPC_STORE_DIR);
         let (db, schema) = open_db(&path).await?;
         let schema = Arc::new(schema);
+
+        // Expose per-CF RocksDB stats (sizes, compaction backlog,
+        // write-stall state) for the store's database.
+        registry
+            .register(Box::new(ColumnFamilyStatsCollector::new(
+                Some(METRICS_PREFIX),
+                &db,
+            )))
+            .context("registering the embedded rpc-store RocksDB stats collector")?;
 
         // The highest checkpoint whose transaction outputs are durably
         // committed to the perpetual store. This is the live cohort's restore
@@ -518,12 +529,12 @@ async fn build_indexer(
     // reads the current tip from the same local store the ingestion
     // client uses (so the framework's `peek()` resolves immediately even
     // on an idle chain), and the ingestion client backfills any gap.
-    let streaming_client: Option<BoxedStreamingClient> = checkpoint_sender.map(|sender| {
-        Box::new(BroadcastStreamingClient::new(
+    let streaming_client: Option<ArcStreamingClient> = checkpoint_sender.map(|sender| {
+        Arc::new(BroadcastStreamingClient::new(
             sender,
             chain_id,
             ingestion_source,
-        )) as BoxedStreamingClient
+        )) as ArcStreamingClient
     });
 
     let mut indexer = Indexer::from_store(

@@ -178,6 +178,33 @@ message PackageVersionInfo {
   // 32-byte `ObjectID` under which this version of the package
   // is stored.
   bytes storage_id = 1;
+  // The checkpoint at which this package version was published.
+  //
+  // Absent on rows written by the live-set restore at the anchor
+  // checkpoint: those versions were published before the available
+  // window, so a checkpoint-bounded read treats them as having
+  // always existed (a restore floor). Tip indexing and the
+  // post-restore backfill of `[L, T]` set the real publish
+  // checkpoint.
+  optional uint64 checkpoint = 2;
+}
+
+// The object version live as of a checkpoint, stored in
+// `object_version_by_checkpoint` keyed by `(ObjectID, checkpoint)`.
+//
+// `version` is the object's final version at the end of the keyed
+// checkpoint (a live version, or the tombstone version for an object
+// removed in that checkpoint).
+//
+// `from_restore` is set only on rows written by the live-set restore
+// at the restore anchor checkpoint; tip indexing and backfill leave it
+// unset, so the common case pays no extra bytes. It lets a
+// checkpoint-pinned read tell a static object's restore floor (the
+// object existed before the available window) apart from an object
+// created in the anchor checkpoint.
+message ObjectVersionInfo {
+  uint64 version = 1;
+  optional bool from_restore = 2;
 }
 
 // Per-epoch metadata stored in `epochs` keyed by `EpochId`.
@@ -208,6 +235,37 @@ message StoredEpoch {
   // BCS-encoded `sui_types::sui_system_state::SuiSystemState`
   // captured at epoch start.
   optional bytes system_state_bcs = 7;
+
+  // === End-of-epoch info =========================================
+  //
+  // Captured at the epoch's final checkpoint, mirroring the postgres
+  // `kv_epoch_ends` table. The gas and stake counters originate in
+  // the `SystemEpochInfoEvent` emitted by the change-epoch
+  // transaction; an epoch that ends in safe mode emits no such event,
+  // so those counters are left unset and `safe_mode` is `true`.
+
+  // The network's cumulative transaction count after the epoch's
+  // final checkpoint (`CheckpointSummary::network_total_transactions`)
+  // — an exclusive upper bound on the epoch's transaction sequence
+  // numbers. Equivalent to postgres `kv_epoch_ends.tx_hi`.
+  optional uint64 tx_hi = 8;
+  // Whether the epoch ended in safe mode. When `true` no
+  // `SystemEpochInfoEvent` was emitted, so the counters below are
+  // unset.
+  optional bool safe_mode = 9;
+  optional uint64 total_stake = 10;
+  optional uint64 storage_fund_balance = 11;
+  optional uint64 storage_fund_reinvestment = 12;
+  optional uint64 storage_charge = 13;
+  optional uint64 storage_rebate = 14;
+  optional uint64 stake_subsidy_amount = 15;
+  optional uint64 total_gas_fees = 16;
+  optional uint64 total_stake_rewards_distributed = 17;
+  optional uint64 leftover_storage_fund_inflow = 18;
+  // BCS-encoded
+  // `Vec<sui_types::messages_checkpoint::CheckpointCommitment>` from
+  // the checkpoint's end-of-epoch data.
+  optional bytes epoch_commitments = 19;
 }
 
 // === Pruning watermarks ========================================

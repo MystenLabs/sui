@@ -19,11 +19,10 @@ use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::{
-    AffectedObjectFilter, EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter,
-    EventTerm, GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse,
-    ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter,
-    TransactionLiteral, TransactionPredicate, TransactionTerm,
-    get_checkpoint_object_proof_response, list_events_response, list_transactions_response,
+    AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
+    GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse, ListEventsRequest,
+    ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter, TransactionLiteral,
+    TransactionTerm, get_checkpoint_object_proof_response,
 };
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk_types::ValidatorCommittee;
@@ -42,7 +41,6 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 /// backs the v2alpha ListEvents and ProofService endpoints.
 fn create_rpc_config_with_ledger_history() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
-        ledger_history_indexing: Some(true),
         enable_indexing: Some(true),
         ..Default::default()
     }
@@ -172,17 +170,15 @@ where
 
 fn build_event_stream_head_filter(stream_id: SuiAddress) -> EventFilter {
     let head_filter = EventStreamHeadFilter::default().with_stream_id(stream_id.to_string());
-    let predicate = EventPredicate::default().with_event_stream_head(head_filter);
-    let literal = EventLiteral::default().with_include(predicate);
+    let literal = EventLiteral::default().with_event_stream_head(head_filter);
     let term = EventTerm::default().with_literals(vec![literal]);
     EventFilter::default().with_terms(vec![term])
 }
 
 fn build_affected_object_filter(object_id: ObjectID) -> TransactionFilter {
-    let predicate = TransactionPredicate::default().with_affected_object(
+    let literal = TransactionLiteral::default().with_affected_object(
         AffectedObjectFilter::default().with_object_id(object_id.to_string()),
     );
-    let literal = TransactionLiteral::default().with_include(predicate);
     let term = TransactionTerm::default().with_literals(vec![literal]);
     TransactionFilter::default().with_terms(vec![term])
 }
@@ -202,12 +198,12 @@ async fn fetch_settlements_for_range(
     use futures::StreamExt;
 
     let filter = build_affected_object_filter(stream_head_object_id);
-    let read_mask = FieldMask::from_paths(["checkpoint"]);
+    let read_mask = FieldMask::from_paths(["checkpoint", "transaction_index"]);
     let mut all = Vec::new();
     let mut cursor: Option<Vec<u8>> = None;
 
     loop {
-        let mut options = QueryOptions::default().with_limit_items(1000);
+        let mut options = QueryOptions::default().with_limit(1000);
         if let Some(c) = cursor.clone() {
             options.set_after(c);
         }
@@ -226,32 +222,20 @@ async fn fetch_settlements_for_range(
 
         while let Some(frame) = response.next().await {
             let frame = frame?;
-            match frame.response {
-                Some(list_transactions_response::Response::Item(item)) => {
-                    if let Some(c) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                        last_cursor = Some(c.to_vec());
-                    }
-                    let checkpoint = item
-                        .transaction
-                        .as_ref()
-                        .and_then(|tx| tx.checkpoint)
-                        .ok_or_else(|| {
-                            tonic::Status::internal("settlement tx missing checkpoint")
-                        })?;
-                    let tx_offset = item.transaction_offset.ok_or_else(|| {
-                        tonic::Status::internal("settlement tx missing transaction_offset")
-                    })?;
-                    all.push((checkpoint, tx_offset));
-                }
-                Some(list_transactions_response::Response::Watermark(w)) => {
-                    if let Some(c) = w.cursor.as_ref() {
-                        last_cursor = Some(c.to_vec());
-                    }
-                }
-                Some(list_transactions_response::Response::End(end)) => {
-                    end_reason = QueryEndReason::try_from(end.reason).ok();
-                }
-                Some(_) | None => {}
+            if let Some(c) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                last_cursor = Some(c.to_vec());
+            }
+            if let Some(tx) = frame.transaction {
+                let checkpoint = tx
+                    .checkpoint
+                    .ok_or_else(|| tonic::Status::internal("settlement tx missing checkpoint"))?;
+                let tx_offset = tx.transaction_index.ok_or_else(|| {
+                    tonic::Status::internal("settlement tx missing transaction_index")
+                })?;
+                all.push((checkpoint, tx_offset));
+            }
+            if let Some(end) = frame.end {
+                end_reason = Some(end.reason());
             }
         }
 
@@ -329,7 +313,7 @@ fn bucket_events_by_settlement(
 }
 
 /// Drive a single `ListEvents` server-streaming request, accumulating every
-/// emitted `EventItem` into `AuthenticatedEvent`s.
+/// emitted event payload into `AuthenticatedEvent`s.
 async fn fetch_list_events_page(
     client: &mut V2AlphaLedgerServiceClient<tonic::transport::Channel>,
     request: ListEventsRequest,
@@ -342,33 +326,34 @@ async fn fetch_list_events_page(
 
     while let Some(frame) = stream.next().await {
         let frame = frame?;
-        match frame.response {
-            Some(list_events_response::Response::Item(item)) => {
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                    last_cursor = Some(cursor.to_vec());
-                }
-                let event = AuthenticatedEvent::try_from(item).map_err(|e| {
-                    tonic::Status::internal(format!("failed to convert event: {e}"))
-                })?;
-                events.push(event);
-            }
-            Some(list_events_response::Response::Watermark(w)) => {
-                if let Some(cursor) = w.cursor.as_ref() {
-                    last_cursor = Some(cursor.to_vec());
-                }
-            }
-            Some(list_events_response::Response::End(_)) | Some(_) | None => {}
+        if let Some(cursor) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+            last_cursor = Some(cursor.to_vec());
+        }
+        if let Some(event) = frame.event {
+            let event = AuthenticatedEvent::try_from(event)
+                .map_err(|e| tonic::Status::internal(format!("failed to convert event: {e}")))?;
+            events.push(event);
         }
     }
 
     Ok((events, last_cursor))
 }
 
-/// Read mask covering everything the in-tree `AuthenticatedEvent`
-/// converter needs from a v2alpha `EventItem`. The server's default mask
-/// drops `contents`, so we request the full event explicitly.
+/// Read mask covering everything the in-tree `AuthenticatedEvent` converter
+/// needs from a v2alpha event payload: the event body plus its ledger-position
+/// fields (`checkpoint`, `transaction_index`, `event_index`), which the list
+/// endpoint only populates when requested.
 fn full_event_read_mask() -> FieldMask {
-    FieldMask::from_paths(["package_id", "module", "sender", "event_type", "contents"])
+    FieldMask::from_paths([
+        "package_id",
+        "module",
+        "sender",
+        "event_type",
+        "contents",
+        "checkpoint",
+        "transaction_index",
+        "event_index",
+    ])
 }
 
 /// Issue one `ListEvents` call for the given stream and return the events
@@ -384,7 +369,7 @@ async fn query_authenticated_events(
 
     let mut options = QueryOptions::default();
     if let Some(size) = page_size {
-        options.set_limit_items(size);
+        options.set_limit(size);
     }
     let request = ListEventsRequest::default()
         .with_read_mask(full_event_read_mask())
@@ -416,7 +401,7 @@ async fn list_authenticated_events(
     loop {
         let mut options = QueryOptions::default();
         if let Some(size) = page_size {
-            options.set_limit_items(size);
+            options.set_limit(size);
         }
         if let Some(cursor) = next_cursor.clone() {
             options.set_after(cursor);
@@ -427,7 +412,11 @@ async fn list_authenticated_events(
             .with_filter(filter.clone())
             .with_options(options);
 
-        let (events, last_cursor) = fetch_list_events_page(&mut client, request).await.unwrap();
+        let (events, last_cursor) = match fetch_list_events_page(&mut client, request).await {
+            Ok((events, last_cursor)) => (events, last_cursor),
+            Err(status) if status.code() == tonic::Code::Unavailable => return vec![],
+            Err(status) => panic!("{status}"),
+        };
         let event_count = events.len();
         let last_checkpoint = events.last().map(|e| e.checkpoint);
         all_events.extend(events);
@@ -989,32 +978,6 @@ async fn list_authenticated_events_no_events_for_stream() {
 }
 
 #[sim_test]
-async fn authenticated_events_disabled_test() {
-    let _guard: sui_protocol_config::OverrideGuard =
-        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-            cfg.enable_authenticated_event_streams_for_testing();
-            cfg
-        });
-
-    // No `ledger_history_indexing` enabled — the v2alpha ListEvents endpoint
-    // should reject the request with `Unimplemented`.
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let sender = test_cluster.wallet.config.keystore.addresses()[0];
-
-    let result = query_authenticated_events(test_cluster.rpc_url(), sender, 0, Some(10)).await;
-
-    let error = result.expect_err("ListEvents should fail when ledger history indexing is off");
-    assert_eq!(error.code(), tonic::Code::Unimplemented);
-    assert!(
-        error
-            .message()
-            .contains("ledger history indexing is disabled"),
-        "got: {}",
-        error.message()
-    );
-}
-
-#[sim_test]
 async fn authenticated_events_backfill_test() {
     let _guard: sui_protocol_config::OverrideGuard =
         ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
@@ -1023,7 +986,6 @@ async fn authenticated_events_backfill_test() {
         });
 
     let rpc_config = sui_config::RpcConfig {
-        ledger_history_indexing: Some(false),
         enable_indexing: Some(true),
         ..Default::default()
     };
@@ -1048,7 +1010,6 @@ async fn authenticated_events_backfill_test() {
 
         if let Some(ref mut rpc_config) = new_fullnode_config.rpc {
             rpc_config.enable_indexing = Some(true);
-            rpc_config.ledger_history_indexing = Some(true);
         }
 
         let new_fullnode_handle = test_cluster
@@ -1204,13 +1165,17 @@ async fn test_object_inclusion_proof_returns_non_inclusion() {
     let stream_id = SuiAddress::from(package_id);
     let event_stream_head_id = get_event_stream_head_object_id(stream_id).unwrap();
 
-    let highest_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
-        node.state()
-            .get_checkpoint_store()
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap()
-            .unwrap()
-    });
+    let highest_checkpoint = test_cluster
+        .grpc_client()
+        .get_latest_checkpoint()
+        .await
+        .unwrap()
+        .sequence_number;
+
+    // The proof service serves from the embedded rpc-store, which indexes the
+    // tip asynchronously; wait for it to catch up before requesting a proof at
+    // the highest executed checkpoint.
+    test_cluster.wait_for_rpc_index_ready().await;
 
     let mut proof_client =
         connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
@@ -1245,7 +1210,7 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
             cfg.enable_authenticated_event_streams_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg.set_min_checkpoint_interval_ms_for_testing(1000);
-            cfg.disable_randomize_checkpoint_tx_limit_for_testing();
+            cfg.set_randomize_checkpoint_tx_limit_in_tests_for_testing(false);
             cfg
         });
 

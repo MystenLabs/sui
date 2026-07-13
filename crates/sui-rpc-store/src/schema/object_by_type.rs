@@ -21,7 +21,7 @@ use sui_consistent_store::reader::Reader;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 
-use crate::schema::keys::U64Varint;
+use crate::schema::primitives::U64Varint;
 use crate::schema::type_filter::TypeFilter;
 
 pub const NAME: &str = "object_by_type";

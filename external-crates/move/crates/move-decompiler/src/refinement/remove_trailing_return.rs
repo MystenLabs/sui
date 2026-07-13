@@ -5,7 +5,7 @@ use crate::ast::Exp;
 
 // Elide a bare `return` (no operands) when it appears in tail position of the function
 // body. Recurs through `Seq` (last element), `IfElse` (both arms), and `Switch` (all
-// cases). Does NOT recur through loops/whiles — `return` there exits the function,
+// cases). Does NOT recur through loops/whiles - `return` there exits the function,
 // not the loop, so it is not interchangeable with falling through.
 pub fn refine(exp: &mut Exp) -> bool {
     elide_tail(exp)
@@ -30,7 +30,7 @@ fn elide_tail(exp: &mut Exp) -> bool {
             }
             changed
         }
-        // Transparently descend through Block — the block ID rides along but doesn't gate
+        // Transparently descend through Block - the block ID rides along but doesn't gate
         // tail-return elision.
         Exp::Block(_, body) => elide_tail(body),
         _ => false,

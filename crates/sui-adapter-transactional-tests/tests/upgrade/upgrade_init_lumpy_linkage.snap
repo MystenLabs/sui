@@ -1,0 +1,91 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-13:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-19:
+//# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 21-24:
+//# publish --upgradeable --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 26-31:
+//# publish --upgradeable --dependencies Dep_V1 --sender A
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 68-74:
+//# programmable --sender A --inputs object(3,1) 0u8 digest(NoInit_V1)
+// The upgrade has no new-module init, so its Dep_V1 linkage does not conflict with the exact call
+// to Dep_V2 in the same PTB.
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: Upgrade(NoInit_V1, [Dep_V1,sui,std], NoInit_V0, Result(0));
+//> 2: Dep_V2::d::ping();
+//> sui::package::commit_upgrade(Input(0), Result(1))
+created: object(8,0)
+mutated: object(0,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 9, lines 76-82:
+//# programmable --sender A --inputs object(4,1) 0u8 digest(Init_V1_Dep1)
+// The upgrade introduces a new module with init, so its Dep_V1 linkage pins Dep exact(1). Calling
+// Dep_V2 in the same PTB requires exact(2), which conflicts.
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: Upgrade(Init_V1_Dep1, [Dep_V1,sui,std], Init_V0, Result(0));
+//> 2: Dep_V2::d::ping();
+//> sui::package::commit_upgrade(Input(0), Result(1))
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly Dep_V1 (version 1) and Dep_V2 (version 2) to be used in the same transaction"), command: Some(2) } }
+
+task 10, lines 84-91:
+//# programmable --sender A --inputs object(4,1) 0u8 digest(Init_V1_Dep2)
+// When the upgraded package is already in Lumpy, overlapping upgrade linkage is checked for exact
+// equality rather than unified. Init_V0::m::ping puts Init_V0 and at_least(Dep_V1) in Lumpy, so the
+// upgrade's Dep_V2 linkage conflicts instead of upgrading the at_least constraint.
+//> 0: Init_V0::m::ping();
+//> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 2: Upgrade(Init_V1_Dep2, [Dep_V2,sui,std], Init_V0, Result(1));
+//> sui::package::commit_upgrade(Input(0), Result(2))
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("upgrade init linkage conflicts with transaction linkage: package Dep_V1 resolves to Dep_V1 in transaction linkage, but upgrade linkage requires Dep_V2"), command: Some(2) } }
+
+task 11, lines 93-99:
+//# programmable --sender A --inputs object(4,1) 0u8 digest(Init_V1_Dep2)
+// If the upgrade's init linkage and the rest of the PTB agree on Dep_V2, the transaction succeeds
+// and init observes Dep_V2.
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: Upgrade(Init_V1_Dep2, [Dep_V2,sui,std], Init_V0, Result(0));
+//> 2: Dep_V2::d::ping();
+//> sui::package::commit_upgrade(Input(0), Result(1))
+created: object(11,0), object(11,1)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 9720400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 12, line 101:
+//# view-object 11,1
+Owner: Shared( 9 )
+Version: 9
+Contents: Init_V0::init_dep::Config {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(11,1),
+        },
+    },
+    v: 2u64,
+}

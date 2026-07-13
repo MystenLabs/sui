@@ -74,6 +74,7 @@ prover.json
 random.json
 rangeproofs.json
 ristretto255.json
+scratch.json
 sui.json
 table.json
 table_vec.json
@@ -801,6 +802,11 @@ vector.json
       {
         "module_name": "ristretto255",
         "datatype_name": "G",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "scratch",
+        "datatype_name": "Permit",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {

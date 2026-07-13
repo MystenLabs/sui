@@ -258,6 +258,11 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 
+    /// Window (ms) during which a given transaction is allowed into consensus at most once, to
+    /// suppress duplicate resubmissions. Defaults to 1000ms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recent_submission_dedup_window_ms: Option<u64>,
+
     /// Allow overriding the chain for testing purposes. For instance, it allows you to
     /// create a test network that believes it is mainnet or testnet. Attempting to
     /// override this value on production networks will result in an error.
@@ -874,6 +879,12 @@ impl NodeConfig {
         self.protocol_key_pair.authority_keypair()
     }
 
+    /// Window during which a given transaction is allowed into consensus at most once, used to
+    /// suppress duplicate resubmissions at the submission handler.
+    pub fn recent_submission_dedup_window(&self) -> Duration {
+        Duration::from_millis(self.recent_submission_dedup_window_ms.unwrap_or(1000))
+    }
+
     pub fn worker_key_pair(&self) -> &NetworkKeyPair {
         match self.worker_key_pair.keypair() {
             SuiKeyPair::Ed25519(kp) => kp,
@@ -974,6 +985,7 @@ impl NodeConfig {
             .map(|config| ArchiveReaderConfig {
                 ingestion_url: config.ingestion_url.clone(),
                 remote_store_options: config.remote_store_options.clone(),
+                remote_store_headers: config.remote_store_headers.clone(),
                 download_concurrency: NonZeroUsize::new(config.concurrency)
                     .unwrap_or(NonZeroUsize::new(5).unwrap()),
                 remote_store_config: ObjectStoreConfig::default(),
@@ -1335,6 +1347,7 @@ pub struct ArchiveReaderConfig {
     pub download_concurrency: NonZeroUsize,
     pub ingestion_url: Option<String>,
     pub remote_store_options: Vec<(String, String)>,
+    pub remote_store_headers: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1351,6 +1364,11 @@ pub struct StateArchiveConfig {
         deserialize_with = "deserialize_remote_store_options"
     )]
     pub remote_store_options: Vec<(String, String)>,
+    /// Default headers (name, value) attached to every archive store request,
+    /// e.g. `x-goog-user-project` to bill a GCS requester-pays bucket. Unlike
+    /// `remote_store_options`, these are HTTP headers, not object-store config keys.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub remote_store_headers: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1434,12 +1452,6 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_admission_queue_capacity_fraction")]
     pub admission_queue_capacity_fraction: f64,
 
-    // Fraction of max_pending_transactions below which the admission queue is
-    // bypassed (transactions are submitted directly to consensus). Above this
-    // threshold, transactions go through the priority queue.
-    #[serde(default = "default_admission_queue_bypass_fraction")]
-    pub admission_queue_bypass_fraction: f64,
-
     // Enables use of a gas-price-based priority queue for load shedding of
     // transactions at admission time. If false, when consensus is saturated, transactions
     // are rejected with TooManyTransactionsPendingConsensus.
@@ -1498,10 +1510,6 @@ fn default_admission_queue_capacity_fraction() -> f64 {
     0.5
 }
 
-fn default_admission_queue_bypass_fraction() -> f64 {
-    0.9
-}
-
 fn default_admission_queue_enabled() -> bool {
     true
 }
@@ -1526,7 +1534,6 @@ impl Default for AuthorityOverloadConfig {
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),
             admission_queue_capacity_fraction: default_admission_queue_capacity_fraction(),
-            admission_queue_bypass_fraction: default_admission_queue_bypass_fraction(),
             admission_queue_enabled: default_admission_queue_enabled(),
             admission_queue_failover_timeout: default_admission_queue_failover_timeout(),
         }

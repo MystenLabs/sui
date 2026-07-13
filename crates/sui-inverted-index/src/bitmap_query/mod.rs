@@ -42,7 +42,6 @@ mod stream;
 
 pub use iter::eval_bitmap_query_bucket_iter;
 pub use stream::BitmapScanMetrics;
-pub use stream::buckets_with_watermarks;
 pub use stream::eval_bitmap_query_stream;
 pub use stream::flatten_watermarked_buckets;
 
@@ -52,69 +51,106 @@ pub(crate) use stream::BitmapScanBudget;
 #[cfg(test)]
 pub(crate) use stream::eval_bitmap_query_bucket_stream;
 
-/// Terminal signal: the per-request bucket-fetch budget is exhausted.
-/// Surfaced as `anyhow::Error` so it short-circuits `try_stream!`
-/// pipelines through the existing error path. A silent EOF would be
-/// indistinguishable from a leaf reaching the range terminus, so the
-/// driver would advance the cursor to the end and claim full coverage
-/// instead of truncating the scan at the current floor.
+/// Terminal raised by a single leaf/backend bucket stream. Positionless by
+/// construction — one leaf cannot know the merged multi-term floor. Leaf stops
+/// never reach a List driver: the DNF evaluators consume them and re-raise a
+/// [`ScanStop`] carrying the merged frontier.
 #[derive(Debug, thiserror::Error)]
-#[error("bitmap scan budget exhausted")]
-pub struct BitmapScanLimitExceeded;
+pub enum LeafStop {
+    /// This leaf's share of the bucket-scan budget is exhausted.
+    #[error("bitmap scan limit reached")]
+    BudgetExhausted,
+    /// The request's cancellation token fired.
+    #[error("bitmap scan cancelled")]
+    Cancelled,
+    /// A backend/storage fault.
+    #[error(transparent)]
+    Fault(anyhow::Error),
+}
 
-/// Aggregate of multiple terminal errors raised in the same driver round
-/// (e.g. two leaves both exhaust the shared budget before the next round).
-/// The single-error shortcut returns the inner error directly so existing
-/// downcasts on the wire keep working — `MultiError` only appears when 2+
-/// errors coincide, in which case downstream consumers should use
-/// [`error_contains`] to interrogate the aggregate.
-#[derive(Debug)]
-pub struct MultiError(Vec<anyhow::Error>);
+/// Terminal signal of a merged bitmap eval stream, raised on the error channel
+/// so the `try_stream!` pipeline short-circuits (a clean end-of-stream means
+/// "scanned the whole range"). The List handlers map each variant to a wire
+/// outcome with one exhaustive match.
+///
+/// Mental model: leaves raise positionless [`LeafStop`]s; the evaluator turns
+/// them into a `ScanStop` that ALWAYS carries the resume frontier on
+/// `ScanLimit`; in-band `Watermarked::Watermark`s are only mid-scan progress
+/// beacons, never the resume channel.
+#[derive(Debug, thiserror::Error)]
+pub enum ScanStop {
+    /// Budget exhausted: a graceful early stop. The handler ends the stream
+    /// with `QUERY_END_REASON_SCAN_LIMIT`; the frontier is the resume cursor.
+    #[error("bitmap scan limit reached")]
+    ScanLimit {
+        /// Merged floor position every term provably scanned to when the budget
+        /// died — the exact value the stopping round's progress beacon would
+        /// have carried. It lives in the scanned index's member-id domain
+        /// (tx-seq for transaction/checkpoint indexes; encoded event-seq — see
+        /// `event_seq` — for the event index). Consumers apply their existing
+        /// domain conversion and resume arithmetic.
+        scan_frontier: u64,
+    },
+    /// Cancelled → gRPC `Cancelled` status.
+    #[error("bitmap scan cancelled")]
+    Cancelled,
+    /// Backend/storage fault → gRPC `Internal`, error carried unchanged.
+    #[error(transparent)]
+    Fault(anyhow::Error),
+}
 
-impl MultiError {
-    /// Wrap a non-empty error list into an `anyhow::Error`. With exactly
-    /// one error, returns it unwrapped so the common case preserves
-    /// `downcast_ref` behavior on the original concrete type.
-    pub fn collapse(mut errs: Vec<anyhow::Error>) -> anyhow::Error {
-        assert!(!errs.is_empty(), "MultiError::collapse on empty Vec");
-        if errs.len() == 1 {
-            return errs.pop().expect("len == 1");
-        }
-        anyhow::Error::new(MultiError(errs))
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &anyhow::Error> {
-        self.0.iter()
+impl From<anyhow::Error> for LeafStop {
+    fn from(err: anyhow::Error) -> Self {
+        LeafStop::Fault(err)
     }
 }
 
-impl std::fmt::Display for MultiError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} concurrent errors", self.0.len())?;
-        for (i, e) in self.0.iter().enumerate() {
-            write!(f, "\n  [{i}] {e}")?;
-        }
-        Ok(())
+impl From<anyhow::Error> for ScanStop {
+    fn from(err: anyhow::Error) -> Self {
+        ScanStop::Fault(err)
     }
 }
 
-impl std::error::Error for MultiError {}
-
-/// Downcast probe that looks through a `MultiError` aggregate. Returns
-/// the first inner `T` whether the top-level error is `T` directly or a
-/// `MultiError` containing one. Use this instead of `downcast_ref::<T>`
-/// at sites that may receive aggregated errors from the bitmap eval
-/// driver.
-pub fn error_contains<T: std::error::Error + Send + Sync + 'static>(
-    err: &anyhow::Error,
-) -> Option<&T> {
-    if let Some(t) = err.downcast_ref::<T>() {
-        return Some(t);
+/// Reduce the leaf stops raised in one evaluator round to the driver-facing
+/// terminal. Precedence: Fault > BudgetExhausted > Cancelled (a real fault must
+/// surface as Internal; a budget stop with its frontier beats a bare Cancel —
+/// the resume point costs nothing to deliver). `frontier` is the merged floor
+/// the caller computed for this round; it is bound into `ScanLimit` only.
+/// Panics on empty input — evaluators only collapse when a leaf actually erred.
+pub(crate) fn collapse(stops: Vec<LeafStop>, scan_frontier: u64) -> ScanStop {
+    assert!(!stops.is_empty(), "collapse on empty Vec");
+    let mut cancelled = false;
+    let mut budget = false;
+    let mut faults: Vec<anyhow::Error> = Vec::new();
+    for s in stops {
+        match s {
+            LeafStop::Cancelled => cancelled = true,
+            LeafStop::BudgetExhausted => budget = true,
+            LeafStop::Fault(err) => faults.push(err),
+        }
     }
-    if let Some(multi) = err.downcast_ref::<MultiError>() {
-        return multi.iter().find_map(|e| e.downcast_ref::<T>());
+    match faults.len() {
+        0 => {
+            if budget {
+                ScanStop::ScanLimit { scan_frontier }
+            } else {
+                debug_assert!(cancelled, "collapse saw only non-erroring leaves");
+                ScanStop::Cancelled
+            }
+        }
+        1 => ScanStop::Fault(faults.pop().expect("len == 1")),
+        n => {
+            let combined = faults
+                .iter()
+                .enumerate()
+                .map(|(i, err)| format!("  [{i}] {err}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            ScanStop::Fault(anyhow::anyhow!(
+                "{n} concurrent bitmap scan faults:\n{combined}"
+            ))
+        }
     }
-    None
 }
 
 /// Item or progress watermark flowing through a bitmap eval pipeline.
@@ -123,16 +159,23 @@ pub fn error_contains<T: std::error::Error + Send + Sync + 'static>(
 /// preserve watermark/item ordering — that's what makes the watermark a
 /// safe resume cursor on timeout.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Watermarked<T> {
+pub enum Watermarked<T, P = u64> {
     Item(T),
-    Watermark(u64),
+    Watermark(P),
 }
 
-impl<T> Watermarked<T> {
-    pub fn map_item<U>(self, f: impl FnOnce(T) -> U) -> Watermarked<U> {
+impl<T, P> Watermarked<T, P> {
+    pub fn map_item<U>(self, f: impl FnOnce(T) -> U) -> Watermarked<U, P> {
         match self {
             Watermarked::Item(t) => Watermarked::Item(f(t)),
             Watermarked::Watermark(p) => Watermarked::Watermark(p),
+        }
+    }
+
+    pub fn map_watermark<Q>(self, f: impl FnOnce(P) -> Q) -> Watermarked<T, Q> {
+        match self {
+            Watermarked::Item(t) => Watermarked::Item(t),
+            Watermarked::Watermark(p) => Watermarked::Watermark(f(p)),
         }
     }
 }
@@ -140,13 +183,13 @@ impl<T> Watermarked<T> {
 /// A stream of `(bucket_id, RoaringBitmap)` in the requested bucket order.
 /// Bitmap positions are **relative** to the bucket (u32 offsets `[0, BUCKET_SIZE)`)
 /// - edge trimming against the requested range happens at the flatten step.
-pub type BucketItem = Result<(u64, RoaringBitmap)>;
+pub type BucketItem = Result<(u64, RoaringBitmap), LeafStop>;
 pub type BucketStream = BoxStream<'static, BucketItem>;
 
 /// A bucket stream that interleaves data buckets with progress watermarks.
 /// The flat DNF driver derives each watermark from the slowest leaf's
 /// position, so the output always reflects "every source has scanned past P."
-pub(crate) type WatermarkedBucket = Result<Watermarked<(u64, RoaringBitmap)>>;
+pub(crate) type WatermarkedBucket = Result<Watermarked<(u64, RoaringBitmap)>, ScanStop>;
 pub type WatermarkedBucketStream = BoxStream<'static, WatermarkedBucket>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

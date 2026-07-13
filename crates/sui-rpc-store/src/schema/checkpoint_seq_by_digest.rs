@@ -22,7 +22,7 @@ use sui_consistent_store::reader::Reader;
 use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::schema::keys::U64Varint;
+use crate::schema::primitives::U64Varint;
 
 pub const NAME: &str = "checkpoint_seq_by_digest";
 

@@ -63,6 +63,7 @@ use sui_types::{
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
 use sui_types::{dynamic_field::DynamicFieldType, messages_consensus::ConsensusTransaction};
 
+use crate::authority::authority_store::ObjectLockStatus;
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::transaction_deferral::DeferralKey;
@@ -1210,24 +1211,15 @@ async fn test_handle_transfer_transaction_bad_signature() {
     // assert_eq!(metrics.signature_errors.get(), 1);
 
     let object = authority_state.get_object(&object_id).unwrap();
-    assert!(
+    assert_eq!(
         authority_state
-            .get_transaction_lock(
-                &object.compute_object_reference(),
+            .get_object_cache_reader()
+            .get_lock(
+                object.compute_object_reference(),
                 &authority_state.epoch_store_for_testing()
             )
-            .unwrap()
-            .is_none()
-    );
-
-    assert!(
-        authority_state
-            .get_transaction_lock(
-                &object.compute_object_reference(),
-                &authority_state.epoch_store_for_testing()
-            )
-            .unwrap()
-            .is_none()
+            .unwrap(),
+        ObjectLockStatus::Initialized
     );
 }
 
@@ -1305,24 +1297,15 @@ async fn test_handle_transfer_transaction_unknown_sender() {
     );
 
     let object = authority_state.get_object(&object_id).unwrap();
-    assert!(
+    assert_eq!(
         authority_state
-            .get_transaction_lock(
-                &object.compute_object_reference(),
+            .get_object_cache_reader()
+            .get_lock(
+                object.compute_object_reference(),
                 &authority_state.epoch_store_for_testing()
             )
-            .unwrap()
-            .is_none()
-    );
-
-    assert!(
-        authority_state
-            .get_transaction_lock(
-                &object.compute_object_reference(),
-                &authority_state.epoch_store_for_testing()
-            )
-            .unwrap()
-            .is_none()
+            .unwrap(),
+        ObjectLockStatus::Initialized
     );
 }
 
@@ -2222,22 +2205,27 @@ async fn test_handle_confirmation_transaction_ok() {
     assert_eq!(next_sequence_number, new_account.version());
 
     // Check locks are set and archived correctly
-    assert!(
+    assert_eq!(
         authority_state
-            .get_transaction_lock(
-                &(object_id, 1.into(), old_account.digest()),
+            .get_object_cache_reader()
+            .get_lock(
+                (object_id, 1.into(), old_account.digest()),
                 &authority_state.epoch_store_for_testing()
             )
-            .is_err()
+            .unwrap(),
+        ObjectLockStatus::LockedAtDifferentVersion {
+            locked_ref: (object_id, 2.into(), new_account.digest())
+        }
     );
-    assert!(
+    assert_eq!(
         authority_state
-            .get_transaction_lock(
-                &(object_id, 2.into(), new_account.digest()),
+            .get_object_cache_reader()
+            .get_lock(
+                (object_id, 2.into(), new_account.digest()),
                 &authority_state.epoch_store_for_testing()
             )
-            .expect("Exists")
-            .is_none()
+            .unwrap(),
+        ObjectLockStatus::Initialized
     );
 }
 
@@ -5791,7 +5779,9 @@ where
         TestConsensusCommit::new(consensus_txns, round, epoch_start_ms + (1000 * round), 0);
 
     // Process through the consensus handler
-    consensus_handler.handle_consensus_commit(commit).await;
+    consensus_handler
+        .handle_consensus_commit_for_test(commit)
+        .await;
 
     // Give a bit of time for the async capture to complete
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;

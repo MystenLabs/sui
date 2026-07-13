@@ -30,12 +30,12 @@ use move_proc_macros::growing_stack;
 
 use crate::{
     cfgir::{
-        ast::remap_labels,
+        ast::{BasicBlocks, remap_labels},
         cfg::{CFG, MutForwardCFG},
     },
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
-    hlir::ast::{BasicBlocks, Command, Command_, FunctionSignature, Label, SingleType, Value, Var},
+    hlir::ast::{Command, Command_, FunctionSignature, Label, SingleType, Value, Var},
     parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
 };
