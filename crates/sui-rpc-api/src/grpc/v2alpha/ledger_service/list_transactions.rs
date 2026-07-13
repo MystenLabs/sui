@@ -606,10 +606,10 @@ fn resolve_tx_range(
     let resolved = cp_range.with_range(tx_range, options.ordering);
     let mut resolved = options.apply_cursor_bounds(resolved);
     if !resolved.range.is_empty()
-        && let Some(fence) =
+        && let Some(floor) =
             clamp_to_serving_floor(service, resolved.range.start, start_checkpoint, options)?
     {
-        resolved.apply_low_fence(fence.tx_seq, fence.checkpoint, options);
+        resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
     }
     Ok(resolved)
 }

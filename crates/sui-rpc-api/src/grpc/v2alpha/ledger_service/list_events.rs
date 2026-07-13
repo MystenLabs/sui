@@ -757,8 +757,8 @@ fn resolve_event_range(
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
             Bound::Unbounded => 0,
         };
-        if let Some(fence) = clamp_to_serving_floor(service, start_tx, start_checkpoint, options)? {
-            resolved.apply_low_fence(fence.tx_seq, fence.checkpoint, options);
+        if let Some(floor) = clamp_to_serving_floor(service, start_tx, start_checkpoint, options)? {
+            resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
         }
     }
     Ok(resolved)

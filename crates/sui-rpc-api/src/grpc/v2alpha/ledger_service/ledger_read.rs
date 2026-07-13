@@ -109,35 +109,35 @@ fn apply_tx_seq_floor(start: u64, explicit_lower: bool, floor: u64) -> Result<u6
     }
 }
 
-/// The serving-floor fence: the effective first scannable transaction and its
-/// containing checkpoint, after clamping a resolved scan's low end to the
-/// pruning floor.
-pub(super) struct ServingFloorFence {
+/// The serving floor resolved onto a scan: the effective first scannable
+/// transaction and its containing checkpoint, after clamping a resolved
+/// scan's low end to the pruning floor.
+pub(super) struct ServingFloor {
     pub(super) tx_seq: u64,
     pub(super) checkpoint: u64,
 }
 
 /// Clamp a resolved scan's low end (`start_tx`, tx-seq space) to the serving
-/// floor. Returns the fence only when the floor actually moved the low end
+/// floor. Returns the resolved floor only when it actually moved the low end
 /// (an implicit-genesis low); an explicitly requested low below the floor
 /// (`start_checkpoint` or `after` cursor) errors `OutOfRange` instead, and an
 /// untouched low returns `None`. Callers MUST reconcile their watermark
-/// metadata from the fence — ascending scans raise their entry claim to
-/// `checkpoint`, descending scans pin their terminal to it — so no watermark
-/// ever claims pruned, never-scanned checkpoints.
+/// metadata from the returned floor — ascending scans raise their entry claim
+/// to `checkpoint`, descending scans pin their terminal to it — so no
+/// watermark ever claims pruned, never-scanned checkpoints.
 pub(super) fn clamp_to_serving_floor(
     service: &RpcService,
     start_tx: u64,
     start_checkpoint: Option<u64>,
     options: &crate::ledger_history::query_options::QueryOptions,
-) -> Result<Option<ServingFloorFence>, RpcError> {
+) -> Result<Option<ServingFloor>, RpcError> {
     let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
     let floor = lowest_available_tx_seq(service)?;
     let clamped = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
     if clamped == start_tx {
         return Ok(None);
     }
-    Ok(Some(ServingFloorFence {
+    Ok(Some(ServingFloor {
         tx_seq: clamped,
         checkpoint: tx_checkpoint(service, clamped)?,
     }))

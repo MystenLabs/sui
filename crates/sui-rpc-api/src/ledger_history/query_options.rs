@@ -567,36 +567,36 @@ impl ResolvedRange {
     }
 
     /// Reconcile the interval and its watermark metadata after the backend
-    /// clamped the interval's low end to a serving fence (`fence_tx` = the
-    /// effective first scannable transaction, `fence_checkpoint` = its
+    /// clamped the interval's low end to the serving floor (`floor_tx` = the
+    /// effective first scannable transaction, `floor_checkpoint` = its
     /// containing checkpoint).
     ///
-    /// A fence inside the interval starts the scan there: an ascending scan
+    /// A floor inside the interval starts the scan there: an ascending scan
     /// must not claim coverage below it (entry rises), and a descending scan
     /// terminates at it (terminal pinned), so no watermark ever claims
-    /// unscanned history. A fence at or past the interval's high end leaves
+    /// unscanned history. A floor at or past the interval's high end leaves
     /// an empty intersection with retained history: the interval
     /// canonicalizes to empty and the terminal metadata stays at the
     /// requested boundary — the cursor must not move outside the requested
     /// interval, and the empty interval already claims nothing.
-    pub fn apply_low_fence(
+    pub fn apply_serving_floor(
         &mut self,
-        fence_tx: u64,
-        fence_checkpoint: u64,
+        floor_tx: u64,
+        floor_checkpoint: u64,
         options: &QueryOptions,
     ) {
-        if fence_tx >= self.range.end {
+        if floor_tx >= self.range.end {
             // Canonical empty form everywhere in this module: the interval
             // collapses onto its reported terminal bound.
             self.range = self.end_position..self.end_position;
             return;
         }
-        self.range.start = fence_tx;
+        self.range.start = floor_tx;
         if options.is_ascending() {
-            self.entry_checkpoint = self.entry_checkpoint.max(fence_checkpoint);
+            self.entry_checkpoint = self.entry_checkpoint.max(floor_checkpoint);
         } else {
-            self.end_checkpoint = fence_checkpoint;
-            self.end_position = fence_tx;
+            self.end_checkpoint = floor_checkpoint;
+            self.end_position = floor_tx;
         }
     }
 }
@@ -679,35 +679,35 @@ impl ResolvedEventRange {
         self.bounds.is_empty()
     }
 
-    /// [`ResolvedRange::apply_low_fence`]'s analogue for event scans: a fence
-    /// inside the bounds moves the low bound to the start of the fence
-    /// transaction (ascending entry rises to the fence checkpoint, a
-    /// descending terminal is pinned to it); a fence that empties the bounds
-    /// canonicalizes them to empty at the requested high boundary and leaves
-    /// the terminal metadata at the requested boundary.
-    pub fn apply_low_fence(
+    /// [`ResolvedRange::apply_serving_floor`]'s analogue for event scans: a
+    /// floor inside the bounds moves the low bound to the start of the floor
+    /// transaction (ascending entry rises to the floor checkpoint, a
+    /// descending terminal is pinned to it); a floor that empties the bounds
+    /// canonicalizes them to empty at the reported terminal boundary and
+    /// leaves the terminal metadata at the requested boundary.
+    pub fn apply_serving_floor(
         &mut self,
-        fence_tx: u64,
-        fence_checkpoint: u64,
+        floor_tx: u64,
+        floor_checkpoint: u64,
         options: &QueryOptions,
     ) {
-        let fenced_lo = Bound::Included(EventPosition::start_of_tx(fence_tx));
-        let fenced = EventScanBounds {
-            lo: fenced_lo,
+        let floored_lo = Bound::Included(EventPosition::start_of_tx(floor_tx));
+        let floored = EventScanBounds {
+            lo: floored_lo,
             hi: self.bounds.hi,
         };
-        if fenced.is_empty() {
+        if floored.is_empty() {
             // Canonical empty form everywhere in this module: the interval
             // collapses onto its reported terminal bound.
             self.bounds = EventScanBounds::empty_at(self.end_position);
             return;
         }
-        self.bounds.lo = fenced_lo;
+        self.bounds.lo = floored_lo;
         if options.is_ascending() {
-            self.entry_checkpoint = self.entry_checkpoint.max(fence_checkpoint);
+            self.entry_checkpoint = self.entry_checkpoint.max(floor_checkpoint);
         } else {
-            self.end_checkpoint = fence_checkpoint;
-            self.end_position = EventPosition::start_of_tx(fence_tx);
+            self.end_checkpoint = floor_checkpoint;
+            self.end_position = EventPosition::start_of_tx(floor_tx);
         }
     }
 }
@@ -907,18 +907,18 @@ mod tests {
         query_options_from_proto(Some(&request)).unwrap()
     }
 
-    /// Serving-floor fence reconciliation for tx intervals: a fence inside
-    /// the interval moves the scan start and the direction-relevant
-    /// watermark metadata; a fence at/past the high end empties the
-    /// intersection, and the terminal metadata stays at the requested
-    /// boundary instead of moving to a fence outside the requested interval.
+    /// Serving-floor reconciliation for tx intervals: a floor inside the
+    /// interval moves the scan start and the direction-relevant watermark
+    /// metadata; a floor at/past the high end empties the intersection, and
+    /// the terminal metadata stays at the requested boundary instead of
+    /// moving to a floor outside the requested interval.
     #[test]
-    fn tx_low_fence_reconciles_or_canonicalizes_empty() {
+    fn tx_serving_floor_reconciles_or_canonicalizes_empty() {
         let asc = directional_options(true);
         let desc = directional_options(false);
 
-        // Ascending, fence inside 0..100: scan starts at the fence; the
-        // entry claim rises to the fence checkpoint; terminal untouched.
+        // Ascending, floor inside 0..100: scan starts at the floor; the
+        // entry claim rises to the floor checkpoint; terminal untouched.
         let mut resolved = ResolvedRange {
             range: 0..100,
             end_checkpoint: 20,
@@ -926,14 +926,14 @@ mod tests {
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 0,
         };
-        resolved.apply_low_fence(50, 10, &asc);
+        resolved.apply_serving_floor(50, 10, &asc);
         assert_eq!(resolved.range, 50..100);
         assert_eq!(resolved.entry_checkpoint, 10);
         assert_eq!(resolved.end_checkpoint, 20);
         assert_eq!(resolved.end_position, 100);
 
-        // Descending, fence inside: entry (the high edge) untouched; the
-        // terminal pins to the fence.
+        // Descending, floor inside: entry (the high edge) untouched; the
+        // terminal pins to the floor.
         let mut resolved = ResolvedRange {
             range: 0..100,
             end_checkpoint: 0,
@@ -941,16 +941,18 @@ mod tests {
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 20,
         };
-        resolved.apply_low_fence(50, 10, &desc);
+        resolved.apply_serving_floor(50, 10, &desc);
         assert_eq!(resolved.range, 50..100);
         assert_eq!(resolved.entry_checkpoint, 20);
         assert_eq!(resolved.end_checkpoint, 10);
         assert_eq!(resolved.end_position, 50);
 
-        // Ascending, fence at/past the high end (covers the == boundary):
-        // empty intersection, canonicalized at the reported terminal bound;
-        // no metadata moves.
-        for fence_tx in [40, 50] {
+        // Floor at/past the high end (covers the == boundary), both
+        // directions: empty intersection, canonicalized at the reported
+        // terminal bound; no metadata moves. Descending, the terminal must
+        // NOT move to the floor (checkpoint 10 lies outside the requested
+        // interval).
+        for floor_tx in [40, 50] {
             let mut resolved = ResolvedRange {
                 range: 0..40,
                 end_checkpoint: 8,
@@ -958,40 +960,37 @@ mod tests {
                 exhaustion: RangeExhaustion::CheckpointBound,
                 entry_checkpoint: 0,
             };
-            resolved.apply_low_fence(fence_tx, 10, &asc);
+            resolved.apply_serving_floor(floor_tx, 10, &asc);
             assert!(resolved.is_empty());
             assert_eq!(resolved.range, 40..40);
             assert_eq!(resolved.entry_checkpoint, 0);
             assert_eq!(resolved.end_checkpoint, 8);
             assert_eq!(resolved.end_position, 40);
-        }
 
-        // Descending, fence past the high end: the terminal must NOT move to
-        // the fence (checkpoint 10 lies outside the requested interval); the
-        // interval collapses onto its reported terminal bound.
-        let mut resolved = ResolvedRange {
-            range: 0..40,
-            end_checkpoint: 0,
-            end_position: 0,
-            exhaustion: RangeExhaustion::CheckpointBound,
-            entry_checkpoint: 8,
-        };
-        resolved.apply_low_fence(50, 10, &desc);
-        assert!(resolved.is_empty());
-        assert_eq!(resolved.range, 0..0);
-        assert_eq!(resolved.entry_checkpoint, 8);
-        assert_eq!(resolved.end_checkpoint, 0);
-        assert_eq!(resolved.end_position, 0);
+            let mut resolved = ResolvedRange {
+                range: 0..40,
+                end_checkpoint: 0,
+                end_position: 0,
+                exhaustion: RangeExhaustion::CheckpointBound,
+                entry_checkpoint: 8,
+            };
+            resolved.apply_serving_floor(floor_tx, 10, &desc);
+            assert!(resolved.is_empty());
+            assert_eq!(resolved.range, 0..0);
+            assert_eq!(resolved.entry_checkpoint, 8);
+            assert_eq!(resolved.end_checkpoint, 0);
+            assert_eq!(resolved.end_position, 0);
+        }
     }
 
-    /// [`ResolvedEventRange::apply_low_fence`] mirrors the tx behavior in
+    /// [`ResolvedEventRange::apply_serving_floor`] mirrors the tx behavior in
     /// event coordinates.
     #[test]
-    fn event_low_fence_reconciles_or_canonicalizes_empty() {
+    fn event_serving_floor_reconciles_or_canonicalizes_empty() {
         let asc = directional_options(true);
         let desc = directional_options(false);
 
-        // Ascending, fence inside: low bound moves, entry rises, terminal
+        // Ascending, floor inside: low bound moves, entry rises, terminal
         // untouched.
         let mut resolved = ResolvedEventRange {
             bounds: EventScanBounds::tx_span(0, 100),
@@ -1000,7 +999,7 @@ mod tests {
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 0,
         };
-        resolved.apply_low_fence(50, 10, &asc);
+        resolved.apply_serving_floor(50, 10, &asc);
         assert_eq!(
             resolved.bounds.lo,
             Bound::Included(EventPosition::start_of_tx(50))
@@ -1009,7 +1008,7 @@ mod tests {
         assert_eq!(resolved.end_checkpoint, 20);
         assert_eq!(resolved.end_position, EventPosition::start_of_tx(100));
 
-        // Descending, fence inside: terminal pins to the fence.
+        // Descending, floor inside: terminal pins to the floor.
         let mut resolved = ResolvedEventRange {
             bounds: EventScanBounds::tx_span(0, 100),
             end_checkpoint: 0,
@@ -1017,7 +1016,7 @@ mod tests {
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 20,
         };
-        resolved.apply_low_fence(50, 10, &desc);
+        resolved.apply_serving_floor(50, 10, &desc);
         assert_eq!(
             resolved.bounds.lo,
             Bound::Included(EventPosition::start_of_tx(50))
@@ -1026,9 +1025,27 @@ mod tests {
         assert_eq!(resolved.end_checkpoint, 10);
         assert_eq!(resolved.end_position, EventPosition::start_of_tx(50));
 
-        // Fence that empties the bounds (covers the == boundary): canonical
-        // empty at the reported terminal bound, no metadata moves.
-        for fence_tx in [40, 50] {
+        // Floor that empties the bounds (covers the == boundary), both
+        // directions: canonical empty at the reported terminal bound, no
+        // metadata moves.
+        for floor_tx in [40, 50] {
+            let mut resolved = ResolvedEventRange {
+                bounds: EventScanBounds::tx_span(0, 40),
+                end_checkpoint: 8,
+                end_position: EventPosition::start_of_tx(40),
+                exhaustion: RangeExhaustion::CheckpointBound,
+                entry_checkpoint: 0,
+            };
+            resolved.apply_serving_floor(floor_tx, 10, &asc);
+            assert!(resolved.is_empty());
+            assert_eq!(
+                resolved.bounds,
+                EventScanBounds::empty_at(EventPosition::start_of_tx(40))
+            );
+            assert_eq!(resolved.entry_checkpoint, 0);
+            assert_eq!(resolved.end_checkpoint, 8);
+            assert_eq!(resolved.end_position, EventPosition::start_of_tx(40));
+
             let mut resolved = ResolvedEventRange {
                 bounds: EventScanBounds::tx_span(0, 40),
                 end_checkpoint: 0,
@@ -1036,7 +1053,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CheckpointBound,
                 entry_checkpoint: 8,
             };
-            resolved.apply_low_fence(fence_tx, 10, &desc);
+            resolved.apply_serving_floor(floor_tx, 10, &desc);
             assert!(resolved.is_empty());
             assert_eq!(
                 resolved.bounds,
