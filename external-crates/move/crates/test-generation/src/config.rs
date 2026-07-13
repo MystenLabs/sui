@@ -60,6 +60,18 @@ pub const VALUE_STACK_LIMIT: usize = 1024;
 /// larger then this, a new module and bytecode generation will be attempted.
 pub const INHABITATION_INSTRUCTION_LIMIT: usize = 1000;
 
+/// A basic block reaches its final state once its abstract stack is empty. For some randomly
+/// generated (block, state) combinations the stack never drains within a reasonable number of
+/// steps, which would otherwise let block generation grind toward the per-function instruction
+/// cap. This bounds the number of instructions generated for a single block's body; if it is
+/// exceeded, a new module and bytecode generation will be attempted.
+pub const BLOCK_INSTRUCTION_LIMIT: usize = 2000;
+
+/// Some randomly generated module skeletons cannot be filled with a valid bytecode body (for
+/// example a function whose stack can never be drained to reach a block's final state). Rather than
+/// retry such a skeleton forever, give up after this many attempts and skip it.
+pub const BYTECODE_GENERATION_RETRY_LIMIT: u64 = 500;
+
 /// The module generation settings that are used for generation module scaffolding for bytecode
 /// generation.
 pub fn module_generation_settings() -> ModuleGeneratorOptions {
