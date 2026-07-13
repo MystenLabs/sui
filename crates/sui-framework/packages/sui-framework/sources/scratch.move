@@ -278,6 +278,48 @@ public macro fun internal_replace<$K: copy + drop, $VNew: drop, $VOld: drop>(
     replace<$K, $VNew, $VOld>($ctx, permit(internal::permit<$K>()), $key, $value)
 }
 
+/// A wrapper for `get_do` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_get_do<$K: copy + drop, $V: drop, $R: drop>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $f: |&$V| -> $R,
+) {
+    get_do<$K, $V, $R>($ctx, permit(internal::permit<$K>()), $key, $f)
+}
+
+/// A wrapper for `get_mut_do` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_get_mut_do<$K: copy + drop, $V: drop, $R: drop>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $f: |&mut $V| -> $R,
+) {
+    get_mut_do<$K, $V, $R>($ctx, permit(internal::permit<$K>()), $key, $f)
+}
+
+/// A wrapper for `get_fold` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_get_fold<$K: copy + drop, $V: drop, $R>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $none: $R,
+    $some: |&$V| -> $R,
+): $R {
+    get_fold<$K, $V, $R>($ctx, permit(internal::permit<$K>()), $key, $none, $some)
+}
+
+/// A wrapper for `get_mut_fold` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_get_mut_fold<$K: copy + drop, $V: drop, $R>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $none: $R,
+    $some: |&mut $V| -> $R,
+): $R {
+    get_mut_fold<$K, $V, $R>($ctx, permit(internal::permit<$K>()), $key, $none, $some)
+}
+
 /// Hashes the type and value of `k` against `DUMMY_ROOT` to produce the address identifying its
 /// scratch entry.
 fun hash_type_and_key<K: copy + drop>(k: K): address {
