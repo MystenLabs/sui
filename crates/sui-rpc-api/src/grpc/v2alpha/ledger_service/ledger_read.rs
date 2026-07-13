@@ -121,10 +121,13 @@ pub(super) struct ServingFloor {
 /// floor. Returns the resolved floor only when it actually moved the low end
 /// (an implicit-genesis low); an explicitly requested low below the floor
 /// (`start_checkpoint` or `after` cursor) errors `OutOfRange` instead, and an
-/// untouched low returns `None`. Callers MUST reconcile their watermark
-/// metadata from the returned floor — ascending scans raise their entry claim
-/// to `checkpoint`, descending scans pin their terminal to it — so no
-/// watermark ever claims pruned, never-scanned checkpoints.
+/// untouched low returns `None`. Callers MUST reconcile their interval and
+/// watermark metadata from the returned floor, so no watermark ever claims
+/// pruned, never-scanned checkpoints: for a nonempty retained intersection,
+/// ascending scans raise their entry claim to `checkpoint` and descending
+/// scans pin their terminal to it; a floor that consumes the interval leaves
+/// the request-derived terminal boundary in place and marks the interval
+/// empty.
 pub(super) fn clamp_to_serving_floor(
     service: &RpcService,
     start_tx: u64,

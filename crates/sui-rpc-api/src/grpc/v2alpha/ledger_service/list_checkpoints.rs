@@ -916,20 +916,23 @@ mod tests {
     /// moves outside the requested interval.
     #[test]
     fn filtered_window_serving_floor_matrix() {
-        // (ascending, floor_tx, expected: consumed, tx_range, entry, end_cp, end_pos)
-        // Window: txs 0..40 spanning checkpoints 0..=8; floor checkpoint 10.
-        for (ascending, floor_tx, consumed, expected_range, entry, end_cp, end_pos) in [
+        // (ascending, floor_tx, floor_cp, expected: consumed, tx_range, entry, end_cp, end_pos)
+        // Window: txs 0..40 spanning checkpoints 0..=8. A floor tx inside
+        // the window maps to a checkpoint inside the interval (tx 20 -> cp
+        // 4); only a floor past the window can carry an out-of-interval
+        // checkpoint (cp 10).
+        for (ascending, floor_tx, floor_cp, consumed, expected_range, entry, end_cp, end_pos) in [
             // Floor inside: ascending raises the entry claim only.
-            (true, 20, false, 20..40, 10, 8, 40),
+            (true, 20, 4, false, 20..40, 4, 8, 40),
             // Floor inside: descending pins the terminal only.
-            (false, 20, false, 20..40, 8, 10, 10),
+            (false, 20, 4, false, 20..40, 8, 4, 4),
             // Floor at / past the window end: consumed in both directions —
             // window empties, nothing moves (descending terminal stays at
             // the requested boundary, not the out-of-interval floor).
-            (true, 40, true, 40..40, 0, 8, 40),
-            (true, 50, true, 40..40, 0, 8, 40),
-            (false, 40, true, 40..40, 8, 0, 0),
-            (false, 50, true, 40..40, 8, 0, 0),
+            (true, 40, 10, true, 40..40, 0, 8, 40),
+            (true, 50, 10, true, 40..40, 0, 8, 40),
+            (false, 40, 10, true, 40..40, 8, 0, 0),
+            (false, 50, 10, true, 40..40, 8, 0, 0),
         ] {
             let mut tx_range = 0..40u64;
             let (mut entry_checkpoint, mut end_checkpoint, mut end_position) = if ascending {
@@ -943,7 +946,7 @@ mod tests {
                 &mut end_checkpoint,
                 &mut end_position,
                 floor_tx,
-                10,
+                floor_cp,
                 ascending,
             );
             assert_eq!(
