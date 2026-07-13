@@ -39,6 +39,7 @@ pub use read_store::DynamicFieldIteratorItem;
 pub use read_store::DynamicFieldKey;
 pub use read_store::EpochInfo;
 pub use read_store::LedgerBitmapBucket;
+pub use read_store::LedgerBitmapBucketIter;
 pub use read_store::LedgerBitmapBucketIterator;
 pub use read_store::LedgerTxSeqDigest;
 pub use read_store::LedgerTxSeqDigestIterator;

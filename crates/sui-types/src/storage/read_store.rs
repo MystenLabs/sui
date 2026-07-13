@@ -683,8 +683,17 @@ pub trait RpcStateReader:
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub type LedgerTxSeqDigestIterator<'a> =
     Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
-pub type LedgerBitmapBucketIterator<'a> =
-    Box<dyn Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>> + 'a>;
+/// Iterator over ledger bitmap buckets that can skip directly to a bucket.
+pub trait LedgerBitmapBucketIter:
+    Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>>
+{
+    /// Reposition so the next row is the first bucket at or past `bucket_id`
+    /// in the iterator's direction. Implementations never move backward.
+    fn seek_bucket(&mut self, bucket_id: u64);
+}
+
+/// Boxed seekable iterator over ledger bitmap buckets.
+pub type LedgerBitmapBucketIterator<'a> = Box<dyn LedgerBitmapBucketIter + 'a>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LedgerTxSeqDigest {

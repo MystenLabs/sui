@@ -66,6 +66,7 @@ fn bitmap_query_stream(
         spec.bucket_size,
         direction,
         u64::MAX,
+        sui_inverted_index::SkipPolicy::DRAIN_ONLY,
         |_| {},
     );
     use futures::TryStreamExt;
@@ -241,6 +242,57 @@ async fn test_eval_bitmap_query_and() -> Result<()> {
     .await?;
     assert_eq!(result, vec![3, 4, 5]);
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn filters_seek_past_skewed_gap_against_emulator() -> Result<()> {
+    let (mut client, _emulator) = setup_emulator().await?;
+    let dimension_x = encode_dimension_key(IndexDimension::Sender, &[0x11; 32]);
+    let dimension_y = encode_dimension_key(IndexDimension::MoveCall, &[0x22; 32]);
+    let spec = BitmapIndexSpec::tx();
+    let bucket_size = spec.bucket_size;
+
+    for bucket in [0, 40] {
+        write_bitmap(&mut client, &dimension_x, bucket, &[1]).await?;
+    }
+    for bucket in 0..=40 {
+        write_bitmap(&mut client, &dimension_y, bucket, &[1]).await?;
+    }
+
+    let query = BitmapQuery::new(vec![BitmapTerm::new(vec![
+        BitmapLiteral::include(dimension_x)?,
+        BitmapLiteral::include(dimension_y)?,
+    ])?])?;
+    let source = BigTableBitmapSource::new(client, spec);
+    let (metrics_tx, metrics_rx) = std::sync::mpsc::channel();
+    let marked: Vec<Watermarked<u64>> = eval_bitmap_query_stream(
+        source,
+        query,
+        0..(41 * bucket_size),
+        bucket_size,
+        ScanDirection::Ascending,
+        1_000,
+        sui_inverted_index::SkipPolicy {
+            drain_probe_rows: std::num::NonZeroU32::new(2),
+        },
+        move |metrics| metrics_tx.send(metrics).unwrap(),
+    )
+    .map_err(anyhow::Error::new)
+    .try_collect()
+    .await?;
+    let items: Vec<u64> = marked
+        .into_iter()
+        .filter_map(|item| match item {
+            Watermarked::Item(item) => Some(item),
+            Watermarked::Watermark(_) => None,
+        })
+        .collect();
+    let metrics = metrics_rx.recv().expect("metrics callback ran");
+
+    assert_eq!(items, vec![1, 40 * bucket_size + 1]);
+    assert!(metrics.leaf_seeks >= 1);
+    assert!(metrics.buckets_discarded <= 4);
     Ok(())
 }
 

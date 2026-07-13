@@ -3,12 +3,14 @@
 
 //! Archival (BigTable) KV RPC configuration.
 
+use std::num::NonZeroU32;
 use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Context;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_inverted_index::SkipPolicy;
 use sui_kvstore::PoolConfig;
 use sui_kvstore::validate_pipeline_name;
 
@@ -18,6 +20,7 @@ const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 1_024;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 1_024;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
+const DEFAULT_BITMAP_DRAIN_PROBE_ROWS: u32 = 50;
 const DEFAULT_REQUEST_BIGTABLE_CONCURRENCY: usize = 10;
 const DEFAULT_STAGE_CHUNK_SIZE: usize = 100;
 const DEFAULT_STAGE_CONCURRENCY: usize = 10;
@@ -217,6 +220,14 @@ pub struct LedgerHistoryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bitmap_bucket_budget_event: Option<u64>,
 
+    /// Dead bucket rows drained from an open leaf scan per lag episode before
+    /// abandoning the stream and reopening it past the gap. A fresh reopen is
+    /// disabled by `0`; provably dead gaps still advance the resume cursor.
+    ///
+    /// Defaults to `50` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bitmap_drain_probe_rows: Option<u32>,
+
     /// Maximum total filter literals (bitmap dimensions) accepted in one filtered
     /// request, across all DNF terms. Each literal becomes one bitmap leaf, so
     /// this bounds a single filter's scan fanout. Must not exceed either bitmap
@@ -254,6 +265,14 @@ impl LedgerHistoryConfig {
     pub fn bitmap_bucket_budget_event(&self) -> u64 {
         self.bitmap_bucket_budget_event
             .unwrap_or(DEFAULT_BITMAP_BUCKET_BUDGET_EVENT)
+    }
+    pub fn bitmap_skip_policy(&self) -> SkipPolicy {
+        SkipPolicy {
+            drain_probe_rows: NonZeroU32::new(
+                self.bitmap_drain_probe_rows
+                    .unwrap_or(DEFAULT_BITMAP_DRAIN_PROBE_ROWS),
+            ),
+        }
     }
 
     pub fn max_bitmap_filter_literals(&self) -> usize {

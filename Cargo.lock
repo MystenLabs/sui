@@ -15638,6 +15638,7 @@ dependencies = [
  "bcs",
  "futures",
  "move-core-types",
+ "mysten-common",
  "roaring",
  "sui-test-transaction-builder",
  "sui-types",

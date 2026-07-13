@@ -271,6 +271,7 @@ mod test_utils {
             list_checkpoints: Some(method_config),
             bitmap_bucket_budget_tx: Some(10),
             bitmap_bucket_budget_event: Some(10),
+            bitmap_drain_probe_rows: None,
             max_bitmap_filter_literals: Some(1),
         };
         let stage = StageConfig {

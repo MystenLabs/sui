@@ -8,10 +8,13 @@ use std::rc::Rc;
 use roaring::RoaringBitmap;
 use sui_inverted_index::BitmapBucketIteratorSource;
 use sui_inverted_index::BitmapQuery;
+use sui_inverted_index::DenseUniverseBuckets;
 use sui_inverted_index::IndexDimension;
 use sui_inverted_index::LeafStop;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
+use sui_inverted_index::SeekableBucketIterator;
+use sui_inverted_index::SkipPolicy;
 use sui_inverted_index::Watermarked;
 use sui_inverted_index::dense_universe_buckets;
 use sui_inverted_index::eval_bitmap_query_bucket_iter;
@@ -29,6 +32,9 @@ pub(super) const TX_BITMAP_BUCKET_SIZE: u64 = 65_536;
 // `schema::event_bitmap` and sui-kvstore's `event_bitmap_index::BUCKET_SIZE`
 // (2^28).
 pub(super) const EVENT_BITMAP_BUCKET_SIZE: u64 = 268_435_456;
+// Provisional heuristic: favor a native local seek after a short drain probe.
+// This only affects performance; correctness does not depend on the threshold.
+const BITMAP_DRAIN_PROBE_ROWS: u32 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum LedgerBitmapKind {
@@ -190,7 +196,16 @@ pub(super) fn drain_bitmap_hits_with_budget(
     );
     let state = drain_watermarked_buckets(
         move |scan_range| {
-            eval_bitmap_query_bucket_iter(source, query, scan_range, bucket_size, direction)
+            eval_bitmap_query_bucket_iter(
+                source,
+                query,
+                scan_range,
+                bucket_size,
+                direction,
+                SkipPolicy {
+                    drain_probe_rows: std::num::NonZeroU32::new(BITMAP_DRAIN_PROBE_ROWS),
+                },
+            )
         },
         pending_bucket,
         range,
@@ -379,7 +394,7 @@ impl<'a> BitmapBucketIteratorSource<'a> for RpcIndexesBitmapSource<'a> {
 /// never reaches storage.
 enum BitmapBucketIter<'a> {
     Stored(LedgerBitmapBucketIterator<'a>),
-    Universe(Box<dyn Iterator<Item = (u64, RoaringBitmap)> + Send + 'a>),
+    Universe(DenseUniverseBuckets),
 }
 
 struct RpcIndexesBitmapIterator<'a> {
@@ -427,8 +442,10 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
                 scan_budget,
                 cancel,
                 finished: false,
-                iter: Some(BitmapBucketIter::Universe(Box::new(
-                    dense_universe_buckets(range, bucket_size, direction),
+                iter: Some(BitmapBucketIter::Universe(dense_universe_buckets(
+                    range,
+                    bucket_size,
+                    direction,
                 ))),
                 initial_error: None,
                 first: true,
@@ -535,6 +552,15 @@ impl Iterator for RpcIndexesBitmapIterator<'_> {
         }
 
         self.read_next_bucket()
+    }
+}
+impl SeekableBucketIterator for RpcIndexesBitmapIterator<'_> {
+    fn seek_bucket(&mut self, bucket: u64) {
+        match self.iter.as_mut() {
+            Some(BitmapBucketIter::Stored(iter)) => iter.seek_bucket(bucket),
+            Some(BitmapBucketIter::Universe(iter)) => iter.seek_bucket(bucket),
+            None => {}
+        }
     }
 }
 
