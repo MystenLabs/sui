@@ -89,7 +89,7 @@ pub(super) fn checkpoint_to_tx_range(
 /// `checkpoint_to_tx_boundary` reads the lowest available checkpoint's predecessor
 /// from `certified_checkpoints`, which is retained across pruning, so this resolves
 /// even at the floor.
-pub(super) fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
+fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
     let lowest_checkpoint = service.reader.get_lowest_available_checkpoint()?;
     checkpoint_to_tx_boundary(service, lowest_checkpoint)
 }
@@ -99,11 +99,7 @@ pub(super) fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcEr
 /// the floor when the low end was open-ended; or `OutOfRange` when an explicitly
 /// requested low end (a `start_checkpoint` or `after` cursor) is below the floor —
 /// that data was pruned and is permanently gone.
-pub(super) fn apply_tx_seq_floor(
-    start: u64,
-    explicit_lower: bool,
-    floor: u64,
-) -> Result<u64, RpcError> {
+fn apply_tx_seq_floor(start: u64, explicit_lower: bool, floor: u64) -> Result<u64, RpcError> {
     if start >= floor {
         Ok(start)
     } else if explicit_lower {
@@ -111,6 +107,43 @@ pub(super) fn apply_tx_seq_floor(
     } else {
         Ok(floor)
     }
+}
+
+/// The serving floor resolved onto a scan: the effective first scannable
+/// transaction and its containing checkpoint, after clamping a resolved
+/// scan's low end to the pruning floor.
+pub(super) struct ServingFloor {
+    pub(super) tx_seq: u64,
+    pub(super) checkpoint: u64,
+}
+
+/// Clamp a resolved scan's low end (`start_tx`, tx-seq space) to the serving
+/// floor. Returns the resolved floor only when it actually moved the low end
+/// (an implicit-genesis low); an explicitly requested low below the floor
+/// (`start_checkpoint` or `after` cursor) errors `OutOfRange` instead, and an
+/// untouched low returns `None`. Callers MUST reconcile their interval and
+/// watermark metadata from the returned floor, so no watermark ever claims
+/// pruned, never-scanned checkpoints: for a nonempty retained intersection,
+/// ascending scans raise their entry claim to `checkpoint` and descending
+/// scans pin their terminal to it; a floor that consumes the interval leaves
+/// the request-derived terminal boundary in place and marks the interval
+/// empty.
+pub(super) fn clamp_to_serving_floor(
+    service: &RpcService,
+    start_tx: u64,
+    start_checkpoint: Option<u64>,
+    options: &crate::ledger_history::query_options::QueryOptions,
+) -> Result<Option<ServingFloor>, RpcError> {
+    let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
+    let floor = lowest_available_tx_seq(service)?;
+    let clamped = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
+    if clamped == start_tx {
+        return Ok(None);
+    }
+    Ok(Some(ServingFloor {
+        tx_seq: clamped,
+        checkpoint: tx_checkpoint(service, clamped)?,
+    }))
 }
 
 fn out_of_range(floor: u64) -> RpcError {

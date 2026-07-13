@@ -12,7 +12,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClien
 use sui_rpc::proto::sui::rpc::v2alpha::{
     AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
     ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter,
-    TransactionLiteral, TransactionTerm, list_events_response, list_transactions_response,
+    TransactionLiteral, TransactionTerm,
 };
 use sui_types::accumulator_root::{EventCommitment, EventStreamHead};
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -109,22 +109,14 @@ impl EventStreamState {
 
         while let Some(frame) = stream.next().await {
             let frame = frame.map_err(ClientError::RpcError)?;
-            match frame.response {
-                Some(list_events_response::Response::Item(item)) => {
-                    if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                        last_cursor = Some(cursor.to_vec());
-                    }
-                    new_events.push(item.try_into()?);
-                }
-                Some(list_events_response::Response::Watermark(w)) => {
-                    if let Some(cursor) = w.cursor.as_ref() {
-                        last_cursor = Some(cursor.to_vec());
-                    }
-                }
-                Some(list_events_response::Response::End(end)) => {
-                    end_reason = Some(end.reason());
-                }
-                Some(_) | None => {}
+            if let Some(cursor) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                last_cursor = Some(cursor.to_vec());
+            }
+            if let Some(event) = frame.event {
+                new_events.push(event.try_into()?);
+            }
+            if let Some(end) = frame.end {
+                end_reason = Some(end.reason());
             }
         }
 
@@ -420,40 +412,24 @@ async fn fetch_settlements_for_range(
 
         while let Some(frame) = response.next().await {
             let frame = frame.map_err(ClientError::RpcError)?;
-            match frame.response {
-                Some(list_transactions_response::Response::Item(item)) => {
-                    if let Some(c) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                        last_cursor = Some(c.to_vec());
-                    }
-                    let checkpoint = item
-                        .transaction
-                        .as_ref()
-                        .and_then(|tx| tx.checkpoint)
-                        .ok_or_else(|| {
-                            ClientError::InternalError(
-                                "settlement transaction missing checkpoint".to_string(),
-                            )
-                        })?;
-                    let tx_offset = item
-                        .transaction
-                        .as_ref()
-                        .and_then(|tx| tx.transaction_index)
-                        .ok_or_else(|| {
-                            ClientError::InternalError(
-                                "settlement transaction missing transaction_index".to_string(),
-                            )
-                        })?;
-                    all.push((checkpoint, tx_offset));
-                }
-                Some(list_transactions_response::Response::Watermark(w)) => {
-                    if let Some(c) = w.cursor.as_ref() {
-                        last_cursor = Some(c.to_vec());
-                    }
-                }
-                Some(list_transactions_response::Response::End(end)) => {
-                    end_reason = Some(end.reason());
-                }
-                Some(_) | None => {}
+            if let Some(c) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                last_cursor = Some(c.to_vec());
+            }
+            if let Some(transaction) = frame.transaction {
+                let checkpoint = transaction.checkpoint.ok_or_else(|| {
+                    ClientError::InternalError(
+                        "settlement transaction missing checkpoint".to_string(),
+                    )
+                })?;
+                let tx_offset = transaction.transaction_index.ok_or_else(|| {
+                    ClientError::InternalError(
+                        "settlement transaction missing transaction_index".to_string(),
+                    )
+                })?;
+                all.push((checkpoint, tx_offset));
+            }
+            if let Some(end) = frame.end {
+                end_reason = Some(end.reason());
             }
         }
 

@@ -15,17 +15,18 @@ use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient as V2LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::AffectedObjectFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::CheckpointItem;
 use sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventItem;
 use sui_rpc::proto::sui::rpc::v2alpha::EventLiteral;
 use sui_rpc::proto::sui::rpc::v2alpha::EventStreamHeadFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
 use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
@@ -33,15 +34,11 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as AlphaLedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
-use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
-use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
 use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -56,22 +53,26 @@ const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 const DEFAULT_CHECKPOINT_RANGE_END: u64 = 3_000_000;
 
 struct TransactionsResult {
-    transactions: Vec<TransactionItem>,
+    transactions: Vec<ListTransactionsResponse>,
+    frames: Vec<ListTransactionsResponse>,
     end: bool,
     end_cursor: Option<Bytes>,
     end_reason: Option<QueryEndReason>,
 }
 
 struct EventsResult {
-    events: Vec<EventItem>,
+    events: Vec<ListEventsResponse>,
+    frames: Vec<ListEventsResponse>,
     end: bool,
     end_cursor: Option<Bytes>,
     end_reason: Option<QueryEndReason>,
 }
 
 struct CheckpointsResult {
-    checkpoints: Vec<CheckpointItem>,
-    // Standalone `Response::Watermark` frames (scan/terminal), in stream order.
+    checkpoints: Vec<ListCheckpointsResponse>,
+    // Watermarks from payload-less frames (scan beacons or the natural / ScanLimit
+    // terminal frame), in stream order. ItemLimit contributes none: its end signal
+    // is fused onto the last item frame, which keeps its own watermark.
     watermarks: Vec<Watermark>,
     end: bool,
     end_cursor: Option<Bytes>,
@@ -223,7 +224,7 @@ fn assert_checkpoint_cursors(result: &CheckpointsResult) {
     }
 }
 
-fn checkpoint_sequence(response: &CheckpointItem) -> u64 {
+fn checkpoint_sequence(response: &ListCheckpointsResponse) -> u64 {
     response
         .checkpoint
         .as_ref()
@@ -240,18 +241,18 @@ fn transaction_digest_set(result: &TransactionsResult) -> HashSet<String> {
 }
 
 /// The event's ledger position now lives on the embedded `Event`, not the
-/// enclosing `EventItem`; these accessors read it back for assertions.
-fn event_transaction_digest(item: &EventItem) -> Option<String> {
+/// response frame; these accessors read it back for assertions.
+fn event_transaction_digest(item: &ListEventsResponse) -> Option<String> {
     item.event
         .as_ref()
         .and_then(|event| event.transaction_digest.clone())
 }
 
-fn event_checkpoint(item: &EventItem) -> Option<u64> {
+fn event_checkpoint(item: &ListEventsResponse) -> Option<u64> {
     item.event.as_ref().and_then(|event| event.checkpoint)
 }
 
-fn event_index_of(item: &EventItem) -> Option<u32> {
+fn event_index_of(item: &ListEventsResponse) -> Option<u32> {
     item.event.as_ref().and_then(|event| event.event_index)
 }
 
@@ -286,36 +287,29 @@ async fn list_transactions_result(
         .unwrap()
         .into_inner();
     let mut transactions = Vec::new();
+    let mut frames = Vec::new();
     let mut end = false;
     // Resume cursor is the latest watermark cursor seen, on an item or a
     // scan watermark frame — QueryEnd no longer carries one.
     let mut end_cursor = None;
     let mut end_reason = None;
     while let Some(response) = stream.message().await.unwrap() {
-        match response.response.expect("list_transactions response frame") {
-            list_transactions_response::Response::Item(item) => {
-                assert!(!end, "item frame after end");
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.clone()) {
-                    end_cursor = Some(cursor);
-                }
-                transactions.push(item);
-            }
-            list_transactions_response::Response::Watermark(watermark) => {
-                assert!(!end, "watermark frame after end");
-                if let Some(cursor) = watermark.cursor {
-                    end_cursor = Some(cursor);
-                }
-            }
-            list_transactions_response::Response::End(end_frame) => {
-                assert!(!end, "duplicate end frame");
-                end = true;
-                end_reason = Some(end_frame.reason());
-            }
-            other => panic!("unexpected list_transactions response frame: {other:?}"),
+        assert!(!end, "frame after end");
+        if let Some(cursor) = response.watermark.as_ref().and_then(|w| w.cursor.clone()) {
+            end_cursor = Some(cursor);
+        }
+        if let Some(end_frame) = &response.end {
+            end = true;
+            end_reason = Some(end_frame.reason());
+        }
+        frames.push(response.clone());
+        if response.transaction.is_some() {
+            transactions.push(response);
         }
     }
     TransactionsResult {
         transactions,
+        frames,
         end,
         end_cursor,
         end_reason,
@@ -328,36 +322,29 @@ async fn list_events_result(
 ) -> EventsResult {
     let mut stream = client.list_events(request).await.unwrap().into_inner();
     let mut events = Vec::new();
+    let mut frames = Vec::new();
     let mut end = false;
     // Resume cursor is the latest watermark cursor seen, on an item or a
     // scan watermark frame — QueryEnd no longer carries one.
     let mut end_cursor = None;
     let mut end_reason = None;
     while let Some(response) = stream.message().await.unwrap() {
-        match response.response.expect("list_events response frame") {
-            list_events_response::Response::Item(item) => {
-                assert!(!end, "item frame after end");
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.clone()) {
-                    end_cursor = Some(cursor);
-                }
-                events.push(item);
-            }
-            list_events_response::Response::Watermark(watermark) => {
-                assert!(!end, "watermark frame after end");
-                if let Some(cursor) = watermark.cursor {
-                    end_cursor = Some(cursor);
-                }
-            }
-            list_events_response::Response::End(end_frame) => {
-                assert!(!end, "duplicate end frame");
-                end = true;
-                end_reason = Some(end_frame.reason());
-            }
-            other => panic!("unexpected list_events response frame: {other:?}"),
+        assert!(!end, "frame after end");
+        if let Some(cursor) = response.watermark.as_ref().and_then(|w| w.cursor.clone()) {
+            end_cursor = Some(cursor);
+        }
+        if let Some(end_frame) = &response.end {
+            end = true;
+            end_reason = Some(end_frame.reason());
+        }
+        frames.push(response.clone());
+        if response.event.is_some() {
+            events.push(response);
         }
     }
     EventsResult {
         events,
+        frames,
         end,
         end_cursor,
         end_reason,
@@ -377,27 +364,18 @@ async fn list_checkpoints_result(
     let mut end_cursor = None;
     let mut end_reason = None;
     while let Some(response) = stream.message().await.unwrap() {
-        match response.response.expect("list_checkpoints response frame") {
-            list_checkpoints_response::Response::Item(item) => {
-                assert!(!end, "item frame after end");
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.clone()) {
-                    end_cursor = Some(cursor);
-                }
-                checkpoints.push(item);
-            }
-            list_checkpoints_response::Response::Watermark(watermark) => {
-                assert!(!end, "watermark frame after end");
-                if let Some(cursor) = watermark.cursor.clone() {
-                    end_cursor = Some(cursor);
-                }
-                watermarks.push(watermark);
-            }
-            list_checkpoints_response::Response::End(end_frame) => {
-                assert!(!end, "duplicate end frame");
-                end = true;
-                end_reason = Some(end_frame.reason());
-            }
-            other => panic!("unexpected list_checkpoints response frame: {other:?}"),
+        assert!(!end, "frame after end");
+        if let Some(cursor) = response.watermark.as_ref().and_then(|w| w.cursor.clone()) {
+            end_cursor = Some(cursor);
+        }
+        if let Some(end_frame) = &response.end {
+            end = true;
+            end_reason = Some(end_frame.reason());
+        }
+        if response.checkpoint.is_some() {
+            checkpoints.push(response);
+        } else if let Some(watermark) = response.watermark {
+            watermarks.push(watermark);
         }
     }
     CheckpointsResult {
@@ -1363,7 +1341,11 @@ async fn test_list_events_query_options_multi_event_tx() {
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(ev_emit_module(&module));
-    req.options = Some(query_options_between(8, first_cursor, last_cursor.clone()));
+    req.options = Some(query_options_between(
+        8,
+        first_cursor.clone(),
+        last_cursor.clone(),
+    ));
     let bounded = list_events_result(&mut client_for_bounds, req).await;
     assert_eq!(bounded.events.len(), 6);
     assert_eq!(bounded.end_reason, Some(QueryEndReason::CursorBound));
@@ -1405,6 +1387,34 @@ async fn test_list_events_query_options_multi_event_tx() {
     deduped.sort_unstable();
     deduped.dedup();
     assert_eq!(deduped.len(), reverse_keys.len(), "no reverse duplicates");
+
+    let mut client_for_descending_bounds = client.clone();
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(event_type_and_position_mask());
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(ev_emit_module(&module));
+    req.options = Some(query_options_between_descending(
+        8,
+        first_cursor,
+        last_cursor.clone(),
+    ));
+    let bounded_descending = list_events_result(&mut client_for_descending_bounds, req).await;
+    assert_eq!(bounded_descending.events.len(), 6);
+    assert_eq!(
+        bounded_descending.end_reason,
+        Some(QueryEndReason::CursorBound)
+    );
+    let terminal = bounded_descending
+        .frames
+        .last()
+        .expect("descending cursor bound terminal frame");
+    assert!(terminal.event.is_none());
+    assert!(terminal.watermark.is_some());
+    assert_eq!(
+        terminal.end.as_ref().map(|end| end.reason()),
+        Some(QueryEndReason::CursorBound)
+    );
 
     let mut client_after_exact = client.clone();
     let mut req = ListEventsRequest::default();
@@ -2311,6 +2321,15 @@ async fn test_list_checkpoints_read_masks_and_empty_range() {
     assert!(resp.checkpoints.is_empty());
     assert!(resp.end);
     assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
+    // Natural completion of an empty interval keeps its resume cursor but
+    // claims no checkpoint coverage ("unset until the scan's first checkpoint
+    // is fully covered").
+    let terminal_watermark = resp
+        .watermarks
+        .last()
+        .expect("empty-range terminal watermark");
+    assert!(terminal_watermark.cursor.is_some());
+    assert_eq!(terminal_watermark.checkpoint, None);
 
     let tx1 = transfer_self(&cluster, sender).await;
     let tx2 = transfer_self(&cluster, sender).await;
@@ -2397,9 +2416,9 @@ async fn test_list_checkpoints_read_masks_and_empty_range() {
 // list_checkpoints dedupes cp_seq, so an emitted checkpoint is proven complete:
 // its item watermark must claim its OWN sequence number as the covered boundary
 // (`checkpoint` == sequence_number, in either ordering), not sequence_number ∓ 1.
-// This pins the item path onto `advance_checkpoint_boundary`; the previous
-// (buggy) `advance_boundary_excluding_cp` path under-claimed by one. Also asserts
-// the wire-documented monotonicity.
+// This pins the item path onto `merge_covered_checkpoint_bound`; the previous
+// (buggy) `advance_covered_bound_before_checkpoint` path under-claimed by one.
+// It also asserts the wire-documented monotonicity.
 #[sim_test]
 async fn test_list_checkpoints_item_watermark_boundary() {
     let cluster = new_cluster().await;
@@ -2475,6 +2494,9 @@ async fn test_list_checkpoints_item_watermark_boundary() {
 // complete (more matches may sit at higher event_seqs). The covered boundary
 // must therefore EXCLUDE C itself — `checkpoint` == C - 1 ascending, C + 1
 // descending — i.e. the under-claim is correct here and a bug for checkpoints.
+// Items still inside the interval's first checkpoint have covered nothing, so
+// their watermark leaves `checkpoint` unset ("unset until the scan's first
+// checkpoint is fully covered").
 #[sim_test]
 async fn test_list_events_item_watermark_boundary() {
     let cluster = new_cluster().await;
@@ -2499,8 +2521,15 @@ async fn test_list_events_item_watermark_boundary() {
     for item in &resp.events {
         let cp = event_checkpoint(item).expect("event item checkpoint");
         assert!(cp >= 1, "user events are never in the genesis checkpoint");
-        let expected_hi = cp - 1;
         let wm = item.watermark.as_ref().expect("event item watermark");
+        if cp == start {
+            assert_eq!(
+                wm.checkpoint, None,
+                "item inside the interval's first checkpoint covers nothing yet"
+            );
+            continue;
+        }
+        let expected_hi = cp - 1;
         assert_eq!(
             wm.checkpoint,
             Some(expected_hi),
@@ -2526,8 +2555,16 @@ async fn test_list_events_item_watermark_boundary() {
     let mut prev_lo: Option<u64> = None;
     for item in &resp.events {
         let cp = event_checkpoint(item).expect("event item checkpoint");
-        let expected_lo = cp + 1;
         let wm = item.watermark.as_ref().expect("event item watermark");
+        // `end_checkpoint` is exclusive: the descending scan enters at `end - 1`.
+        if cp == end - 1 {
+            assert_eq!(
+                wm.checkpoint, None,
+                "item inside the interval's first checkpoint covers nothing yet"
+            );
+            continue;
+        }
+        let expected_lo = cp + 1;
         assert_eq!(
             wm.checkpoint,
             Some(expected_lo),
@@ -2544,12 +2581,12 @@ async fn test_list_events_item_watermark_boundary() {
 }
 
 // Natural completion (the scan drains the whole range without hitting the item
-// limit) emits a single standalone terminal `Watermark` frame before `QueryEnd`,
-// claiming the range's final checkpoint complete. An item-limited query stops
-// early with `ItemLimit` and emits NO standalone frame — the last item's
-// embedded watermark already carries the resume cursor. (The mid-stream
-// sparse-gap scan watermark is not reachable in e2e: it needs the scan to cross
-// ~16M empty tx_seqs to exhaust the per-chunk bucket budget.)
+// limit) emits a payload-free terminal frame whose `Watermark` claims the
+// range's final checkpoint complete. An item-limited query instead fuses the
+// `ItemLimit` end onto the final item frame — no payload-free watermark frame is
+// emitted, and that item carries its own watermark as the resume cursor. (The
+// mid-stream sparse-gap scan watermark is not reachable in e2e: it needs the
+// scan to cross ~16M empty tx_seqs to exhaust the per-chunk bucket budget.)
 #[sim_test]
 async fn test_list_checkpoints_terminal_watermark() {
     let cluster = new_cluster().await;
@@ -2572,7 +2609,7 @@ async fn test_list_checkpoints_terminal_watermark() {
     assert_eq!(
         resp.watermarks.len(),
         1,
-        "natural completion emits exactly one standalone terminal watermark"
+        "natural completion carries exactly one terminal watermark on the end frame"
     );
     let terminal = &resp.watermarks[0];
     let last_item_hi = resp
@@ -2600,7 +2637,9 @@ async fn test_list_checkpoints_terminal_watermark() {
         "resuming past the terminal watermark should yield no more items"
     );
 
-    // Item-limited query: stops early, no standalone watermark frame.
+    // Item-limited query: the `ItemLimit` end is fused onto the final item frame,
+    // so no payload-free watermark frame is emitted and the last item carries both
+    // its own watermark and the end signal.
     let mut req = ListCheckpointsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     req.start_checkpoint = Some(start);
@@ -2611,8 +2650,469 @@ async fn test_list_checkpoints_terminal_watermark() {
     assert_item_limit_end(limited.end, limited.end_reason);
     assert!(
         limited.watermarks.is_empty(),
-        "item-limited query must not emit a standalone terminal watermark"
+        "item-limited query must not emit a payload-free watermark frame"
     );
+    let last_checkpoint = limited
+        .checkpoints
+        .last()
+        .expect("item-limited query returns checkpoints");
+    assert_eq!(
+        last_checkpoint.end.as_ref().map(|qe| qe.reason()),
+        Some(QueryEndReason::ItemLimit),
+        "the fused last item frame carries the ItemLimit end"
+    );
+    let cursor = last_checkpoint
+        .watermark
+        .as_ref()
+        .and_then(|wm| wm.cursor.clone())
+        .expect("fused last item carries its own watermark cursor");
+
+    // Resuming from the fused item's own cursor covers exactly the remaining
+    // checkpoints once: item page plus resume page equals the full matching set.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_sender(sender));
+    req.options = Some(query_options_after(100, cursor));
+    let resumed = list_checkpoints_result(&mut client, req).await;
+    assert_eq!(
+        limited.checkpoints.len() + resumed.checkpoints.len(),
+        resp.checkpoints.len(),
+        "item page plus resume page covers the full matching set exactly once"
+    );
+}
+
+#[sim_test]
+async fn test_list_transactions_and_events_raw_terminal_frames() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let (pkg, _) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
+    let tx1 = transfer_self(&cluster, sender).await;
+    let tx2 = call_emit_many(&cluster, sender, pkg, 2).await;
+    let tx3 = transfer_self(&cluster, sender).await;
+    let (start, end) = checkpoint_range(&[&tx1, &tx2, &tx3]);
+    let module = format!("{}::emit_test_event", pkg.to_canonical_string(true));
+    let mut client = new_ledger_client(&cluster).await;
+
+    for descending in [false, true] {
+        let options = if descending {
+            query_options_descending(100)
+        } else {
+            query_options(100)
+        };
+        let mut request = ListTransactionsRequest::default();
+        request.read_mask = Some(FieldMask::from_paths(["digest", "checkpoint"]));
+        request.start_checkpoint = Some(start);
+        request.end_checkpoint = Some(end);
+        request.filter = Some(tx_sender(sender));
+        request.options = Some(options);
+        let result = list_transactions_result(&mut client, request).await;
+        assert!(!result.transactions.is_empty());
+        assert_eq!(result.end_reason, Some(QueryEndReason::CheckpointBound));
+        let terminal_frames: Vec<_> = result
+            .frames
+            .iter()
+            .filter(|frame| frame.end.is_some())
+            .collect();
+        assert_eq!(terminal_frames.len(), 1);
+        let terminal = terminal_frames[0];
+        assert!(terminal.transaction.is_none());
+        let terminal_watermark = terminal
+            .watermark
+            .as_ref()
+            .expect("natural transaction terminal watermark");
+        assert!(terminal_watermark.cursor.is_some());
+        assert_eq!(
+            terminal.end.as_ref().map(|end| end.reason()),
+            Some(QueryEndReason::CheckpointBound)
+        );
+        let terminal_checkpoint = terminal_watermark
+            .checkpoint
+            .expect("natural transaction terminal checkpoint");
+        if descending {
+            assert!(
+                (start..=start.saturating_add(1)).contains(&terminal_checkpoint),
+                "descending natural terminal watermark must safely claim the requested start bound"
+            );
+        } else {
+            assert!(
+                (end.saturating_sub(1)..=end).contains(&terminal_checkpoint),
+                "ascending natural terminal watermark must safely claim the requested end bound"
+            );
+        }
+        assert!(std::ptr::eq(
+            terminal,
+            result.frames.last().expect("terminal is final frame")
+        ));
+
+        let cursor = terminal_watermark
+            .cursor
+            .clone()
+            .expect("natural terminal resume cursor");
+        let mut resumed_request = ListTransactionsRequest::default();
+        resumed_request.read_mask = Some(FieldMask::from_paths(["digest"]));
+        resumed_request.start_checkpoint = Some(start);
+        resumed_request.end_checkpoint = Some(end);
+        resumed_request.filter = Some(tx_sender(sender));
+        resumed_request.options = Some(if descending {
+            query_options_descending_before(100, cursor)
+        } else {
+            query_options_after(100, cursor)
+        });
+        let resumed = list_transactions_result(&mut client, resumed_request).await;
+        assert!(resumed.transactions.is_empty());
+    }
+
+    for descending in [false, true] {
+        let options = if descending {
+            query_options_descending(100)
+        } else {
+            query_options(100)
+        };
+        let mut request = ListEventsRequest::default();
+        request.read_mask = Some(event_type_and_position_mask());
+        request.start_checkpoint = Some(start);
+        request.end_checkpoint = Some(end);
+        request.filter = Some(ev_emit_module(&module));
+        request.options = Some(options);
+        let result = list_events_result(&mut client, request).await;
+        assert_eq!(result.events.len(), 2);
+        assert_eq!(result.end_reason, Some(QueryEndReason::CheckpointBound));
+        let terminal_frames: Vec<_> = result
+            .frames
+            .iter()
+            .filter(|frame| frame.end.is_some())
+            .collect();
+        assert_eq!(terminal_frames.len(), 1);
+        let terminal = terminal_frames[0];
+        assert!(terminal.event.is_none());
+        let terminal_watermark = terminal
+            .watermark
+            .as_ref()
+            .expect("natural event terminal watermark");
+        assert!(terminal_watermark.cursor.is_some());
+        assert_eq!(
+            terminal.end.as_ref().map(|end| end.reason()),
+            Some(QueryEndReason::CheckpointBound)
+        );
+        let terminal_checkpoint = terminal_watermark
+            .checkpoint
+            .expect("natural event terminal checkpoint");
+        if descending {
+            assert!(
+                (start..=start.saturating_add(1)).contains(&terminal_checkpoint),
+                "descending natural terminal watermark must safely claim the requested start bound"
+            );
+        } else {
+            assert!(
+                (end.saturating_sub(1)..=end).contains(&terminal_checkpoint),
+                "ascending natural terminal watermark must safely claim the requested end bound"
+            );
+        }
+        assert!(std::ptr::eq(
+            terminal,
+            result.frames.last().expect("terminal is final frame")
+        ));
+
+        let cursor = terminal_watermark
+            .cursor
+            .clone()
+            .expect("natural terminal resume cursor");
+        let mut resumed_request = ListEventsRequest::default();
+        resumed_request.read_mask = Some(event_type_and_position_mask());
+        resumed_request.start_checkpoint = Some(start);
+        resumed_request.end_checkpoint = Some(end);
+        resumed_request.filter = Some(ev_emit_module(&module));
+        resumed_request.options = Some(if descending {
+            query_options_descending_before(100, cursor)
+        } else {
+            query_options_after(100, cursor)
+        });
+        let resumed = list_events_result(&mut client, resumed_request).await;
+        assert!(resumed.events.is_empty());
+    }
+
+    let mut full_transaction_request = ListTransactionsRequest::default();
+    full_transaction_request.read_mask = Some(FieldMask::from_paths(["digest"]));
+    full_transaction_request.start_checkpoint = Some(start);
+    full_transaction_request.end_checkpoint = Some(end);
+    full_transaction_request.filter = Some(tx_sender(sender));
+    full_transaction_request.options = Some(query_options(100));
+    let full_transactions = list_transactions_result(&mut client, full_transaction_request).await;
+    let full_transaction_digests: Vec<_> = full_transactions
+        .transactions
+        .iter()
+        .map(|frame| {
+            frame
+                .transaction
+                .as_ref()
+                .and_then(|transaction| transaction.digest.clone())
+                .expect("transaction digest")
+        })
+        .collect();
+
+    let mut limited_transaction_request = ListTransactionsRequest::default();
+    limited_transaction_request.read_mask = Some(FieldMask::from_paths(["digest"]));
+    limited_transaction_request.start_checkpoint = Some(start);
+    limited_transaction_request.end_checkpoint = Some(end);
+    limited_transaction_request.filter = Some(tx_sender(sender));
+    limited_transaction_request.options = Some(query_options(2));
+    let limited_transactions =
+        list_transactions_result(&mut client, limited_transaction_request).await;
+    assert_eq!(limited_transactions.frames.len(), 2);
+    let fused_transaction = limited_transactions
+        .frames
+        .last()
+        .expect("fused transaction item");
+    assert!(fused_transaction.transaction.is_some());
+    assert!(fused_transaction.watermark.is_some());
+    assert_eq!(
+        fused_transaction.end.as_ref().map(|end| end.reason()),
+        Some(QueryEndReason::ItemLimit)
+    );
+    let transaction_cursor = fused_transaction
+        .watermark
+        .as_ref()
+        .and_then(|watermark| watermark.cursor.clone())
+        .expect("fused transaction cursor");
+    let mut transaction_resume_request = ListTransactionsRequest::default();
+    transaction_resume_request.read_mask = Some(FieldMask::from_paths(["digest"]));
+    transaction_resume_request.start_checkpoint = Some(start);
+    transaction_resume_request.end_checkpoint = Some(end);
+    transaction_resume_request.filter = Some(tx_sender(sender));
+    transaction_resume_request.options = Some(query_options_after(100, transaction_cursor));
+    let remaining_transactions =
+        list_transactions_result(&mut client, transaction_resume_request).await;
+    let paged_transaction_digests: Vec<_> = limited_transactions
+        .transactions
+        .iter()
+        .chain(remaining_transactions.transactions.iter())
+        .map(|frame| {
+            frame
+                .transaction
+                .as_ref()
+                .and_then(|transaction| transaction.digest.clone())
+                .expect("transaction digest")
+        })
+        .collect();
+    assert_eq!(paged_transaction_digests, full_transaction_digests);
+
+    let mut full_event_request = ListEventsRequest::default();
+    full_event_request.read_mask = Some(event_type_and_position_mask());
+    full_event_request.start_checkpoint = Some(start);
+    full_event_request.end_checkpoint = Some(end);
+    full_event_request.filter = Some(ev_emit_module(&module));
+    full_event_request.options = Some(query_options(100));
+    let full_events = list_events_result(&mut client, full_event_request).await;
+    let full_event_positions: Vec<_> = full_events
+        .events
+        .iter()
+        .map(|frame| {
+            (
+                event_transaction_digest(frame).expect("event transaction digest"),
+                event_index_of(frame).expect("event index"),
+            )
+        })
+        .collect();
+
+    let mut limited_event_request = ListEventsRequest::default();
+    limited_event_request.read_mask = Some(event_type_and_position_mask());
+    limited_event_request.start_checkpoint = Some(start);
+    limited_event_request.end_checkpoint = Some(end);
+    limited_event_request.filter = Some(ev_emit_module(&module));
+    limited_event_request.options = Some(query_options(1));
+    let limited_events = list_events_result(&mut client, limited_event_request).await;
+    assert_eq!(limited_events.frames.len(), 1);
+    let fused_event = limited_events.frames.last().expect("fused event item");
+    assert!(fused_event.event.is_some());
+    assert!(fused_event.watermark.is_some());
+    assert_eq!(
+        fused_event.end.as_ref().map(|end| end.reason()),
+        Some(QueryEndReason::ItemLimit)
+    );
+    let event_cursor = fused_event
+        .watermark
+        .as_ref()
+        .and_then(|watermark| watermark.cursor.clone())
+        .expect("fused event cursor");
+    let mut event_resume_request = ListEventsRequest::default();
+    event_resume_request.read_mask = Some(event_type_and_position_mask());
+    event_resume_request.start_checkpoint = Some(start);
+    event_resume_request.end_checkpoint = Some(end);
+    event_resume_request.filter = Some(ev_emit_module(&module));
+    event_resume_request.options = Some(query_options_after(100, event_cursor));
+    let remaining_events = list_events_result(&mut client, event_resume_request).await;
+    let paged_event_positions: Vec<_> = limited_events
+        .events
+        .iter()
+        .chain(remaining_events.events.iter())
+        .map(|frame| {
+            (
+                event_transaction_digest(frame).expect("event transaction digest"),
+                event_index_of(frame).expect("event index"),
+            )
+        })
+        .collect();
+    assert_eq!(paged_event_positions, full_event_positions);
+}
+
+#[sim_test]
+async fn test_list_events_unfiltered_scan_limit_frames_and_resume() {
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .with_rpc_config(sui_config::RpcConfig {
+            enable_indexing: Some(true),
+            ledger_history: Some(sui_config::rpc_config::LedgerHistoryConfig {
+                list_events: Some(sui_config::rpc_config::LedgerHistoryMethodConfig {
+                    default_limit_items: Some(2),
+                    max_limit_items: Some(2),
+                    chunk_max: Some(2),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .build()
+        .await;
+    let sender = cluster.get_address_0();
+    let (pkg, _) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
+    let tx1 = transfer_self(&cluster, sender).await;
+    let tx2 = transfer_self(&cluster, sender).await;
+    let event_tx = call_emit_many(&cluster, sender, pkg, 1).await;
+    let (start, end) = checkpoint_range(&[&tx1, &tx2, &event_tx]);
+    let mut client = new_ledger_client(&cluster).await;
+
+    for descending in [false, true] {
+        let mut request = ListEventsRequest::default();
+        request.read_mask = Some(event_type_and_position_mask());
+        request.start_checkpoint = Some(start);
+        request.end_checkpoint = Some(end);
+        request.options = Some(if descending {
+            query_options_descending(100)
+        } else {
+            query_options(100)
+        });
+        let first = list_events_result(&mut client, request).await;
+        assert_eq!(first.end_reason, Some(QueryEndReason::ScanLimit));
+        let end_frames: Vec<_> = first
+            .frames
+            .iter()
+            .filter(|frame| frame.end.is_some())
+            .collect();
+        assert_eq!(end_frames.len(), 1);
+        let terminal = end_frames[0];
+        assert!(terminal.event.is_none());
+        let watermark = terminal
+            .watermark
+            .as_ref()
+            .expect("ScanLimit terminal watermark");
+        let mut cursor = watermark.cursor.clone().expect("ScanLimit terminal cursor");
+        assert_eq!(
+            terminal.end.as_ref().map(|end| end.reason()),
+            Some(QueryEndReason::ScanLimit)
+        );
+        assert!(std::ptr::eq(
+            terminal,
+            first.frames.last().expect("ScanLimit is final frame")
+        ));
+        // The claim is unset while the frontier is still inside the interval's
+        // first checkpoint ("unset until the scan's first checkpoint is fully
+        // covered"); once set it must stay inside the requested range and
+        // track emitted items.
+        if let Some(scan_checkpoint) = watermark.checkpoint {
+            if descending {
+                assert!(
+                    scan_checkpoint >= start,
+                    "descending ScanLimit watermark must not pass the requested start checkpoint"
+                );
+            } else {
+                assert!(
+                    scan_checkpoint <= end,
+                    "ascending ScanLimit watermark must not pass the requested end checkpoint"
+                );
+            }
+            if let Some(last_event_checkpoint) = first.events.last().and_then(event_checkpoint) {
+                if descending {
+                    assert!(scan_checkpoint <= last_event_checkpoint + 1);
+                } else {
+                    assert!(scan_checkpoint >= last_event_checkpoint.saturating_sub(1));
+                }
+            }
+        } else {
+            // Nothing covered yet: no event outside the entry checkpoint may
+            // have been emitted.
+            for event in &first.events {
+                let cp = event_checkpoint(event).expect("event item checkpoint");
+                assert_eq!(
+                    cp,
+                    if descending { end - 1 } else { start },
+                    "unset ScanLimit claim requires the scan still inside its first checkpoint"
+                );
+            }
+        }
+
+        let mut positions: Vec<_> = first
+            .events
+            .iter()
+            .map(|event| {
+                (
+                    event_transaction_digest(event).expect("event transaction digest"),
+                    event_index_of(event).expect("event index"),
+                )
+            })
+            .collect();
+        let mut completed = false;
+        for _ in 0..512 {
+            let mut resumed_request = ListEventsRequest::default();
+            resumed_request.read_mask = Some(event_type_and_position_mask());
+            resumed_request.start_checkpoint = Some(start);
+            resumed_request.end_checkpoint = Some(end);
+            resumed_request.options = Some(if descending {
+                query_options_descending_before(100, cursor)
+            } else {
+                query_options_after(100, cursor)
+            });
+            let resumed = list_events_result(&mut client, resumed_request).await;
+            positions.extend(resumed.events.iter().map(|event| {
+                (
+                    event_transaction_digest(event).expect("event transaction digest"),
+                    event_index_of(event).expect("event index"),
+                )
+            }));
+            if resumed.end_reason != Some(QueryEndReason::ScanLimit) {
+                completed = true;
+                break;
+            }
+            let resumed_terminal = resumed.frames.last().expect("resumed ScanLimit frame");
+            assert!(resumed_terminal.event.is_none());
+            assert_eq!(
+                resumed_terminal.end.as_ref().map(|end| end.reason()),
+                Some(QueryEndReason::ScanLimit)
+            );
+            cursor = resumed_terminal
+                .watermark
+                .as_ref()
+                .and_then(|watermark| watermark.cursor.clone())
+                .expect("resumed ScanLimit cursor");
+        }
+        assert!(
+            completed,
+            "event scan should finish within bounded resumptions (descending={descending})"
+        );
+        let delivered = positions.len();
+        positions.sort_unstable();
+        positions.dedup();
+        assert_eq!(
+            positions.len(),
+            delivered,
+            "resume must not duplicate events"
+        );
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].0, tx_digest(&event_tx));
+    }
 }
 
 #[sim_test]

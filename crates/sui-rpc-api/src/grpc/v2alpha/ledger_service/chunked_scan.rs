@@ -3,21 +3,38 @@
 
 use std::collections::VecDeque;
 
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::sync::DropGuard;
 
 use crate::RpcError;
+use crate::ledger_history::query_options::RangeExhaustion;
+use crate::ledger_history::watermark::ScanTerminal;
 
-/// How a query stream ended, plus the typed exclusive range boundary the scan
-/// reached. The boundary lets the caller build the terminal progress watermark
-/// when the scan completed naturally.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ChunkTerminal {
-    pub(crate) reason: QueryEndReason,
-    pub(crate) position: Position,
+/// Chunk terminal for a scan that either exhausted its request scan budget
+/// (authoritative frontier watermark, built lazily) or ended at the resolved
+/// range boundary. Chunks only run over nonempty intervals, so the range
+/// terminal is never `interval_empty`.
+pub(crate) fn scan_limit_or_range<Frontier>(
+    request_scan_limit_reached: bool,
+    exhaustion: RangeExhaustion,
+    position: Position,
+    frontier_watermark: Frontier,
+) -> Result<ScanTerminal, RpcError>
+where
+    Frontier: FnOnce() -> Result<Watermark, RpcError>,
+{
+    if request_scan_limit_reached {
+        Ok(ScanTerminal::ScanLimit {
+            watermark: frontier_watermark()?,
+        })
+    } else {
+        Ok(ScanTerminal::from_range_exhaustion(
+            exhaustion, position, false,
+        ))
+    }
 }
 
 pub(crate) struct ScanChunkDone<State, Item> {
@@ -28,7 +45,7 @@ pub(crate) struct ScanChunkDone<State, Item> {
     /// Drives the request item limit, not `items.len()`.
     pub(crate) produced: usize,
     pub(crate) next_state: Option<State>,
-    pub(crate) terminal: ChunkTerminal,
+    pub(crate) terminal: ScanTerminal,
     pub(crate) remaining_scan_budget: usize,
 }
 
@@ -64,7 +81,7 @@ where
     spawn: Spawn,
     produced: usize,
     scan_budget: usize,
-    terminal: Option<ChunkTerminal>,
+    terminal: Option<ScanTerminal>,
     limit_items: usize,
     chunk_max: usize,
     cancel: CancellationToken,
@@ -131,13 +148,19 @@ where
         }
     }
 
-    pub(crate) fn into_terminal(self) -> Option<ChunkTerminal> {
+    pub(crate) fn into_terminal(self) -> Option<ScanTerminal> {
         self.terminal
     }
 
     /// Total real items produced across all chunks (excludes watermark frames).
     pub(crate) fn produced(&self) -> usize {
         self.produced
+    }
+
+    /// True when no buffered frame remains and no further chunk is in flight —
+    /// the next `next_item()` call would return `None`.
+    pub(crate) fn exhausted(&self) -> bool {
+        self.buffered.is_empty() && self.current.is_none()
     }
 
     #[cfg(test)]
@@ -174,6 +197,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::ledger_history::watermark::NaturalRangeEnd;
 
     #[tokio::test]
     async fn chunked_scan_drains_vector_chunks_in_order() {
@@ -199,13 +223,14 @@ mod tests {
                     produced: items.len(),
                     items,
                     next_state: (state < 2).then_some(state + 1),
-                    terminal: ChunkTerminal {
-                        reason: QueryEndReason::CheckpointBound,
-                        position: Position::Transactions {
+                    terminal: ScanTerminal::from_range_exhaustion(
+                        RangeExhaustion::CheckpointBound,
+                        Position::Transactions {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                    },
+                        false,
+                    ),
                     remaining_scan_budget: scan_budget - 1,
                 })
             })
@@ -219,12 +244,13 @@ mod tests {
         assert_eq!(items, vec![0, 1, 10, 11, 20]);
         assert_eq!(
             scan.into_terminal(),
-            Some(ChunkTerminal {
-                reason: QueryEndReason::CheckpointBound,
+            Some(ScanTerminal::NaturalRange {
+                end: NaturalRangeEnd::CheckpointBound,
                 position: Position::Transactions {
                     checkpoint: 0,
-                    tx_seq: 0
+                    tx_seq: 0,
                 },
+                interval_empty: false,
             })
         );
         assert_eq!(
@@ -244,13 +270,14 @@ mod tests {
                     items: Vec::new(),
                     produced: 0,
                     next_state: None,
-                    terminal: ChunkTerminal {
-                        reason: QueryEndReason::CheckpointBound,
-                        position: Position::Transactions {
+                    terminal: ScanTerminal::from_range_exhaustion(
+                        RangeExhaustion::CheckpointBound,
+                        Position::Transactions {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                    },
+                        false,
+                    ),
                     remaining_scan_budget: args.scan_budget,
                 })
             })
@@ -280,5 +307,57 @@ mod tests {
             .expect_err("expected cancelled error");
         let status = tonic::Status::from(err);
         assert_eq!(status.code(), tonic::Code::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn limit_reaching_final_item_exhausts_without_scheduling_another_chunk() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+
+        let spawn_count = Arc::new(AtomicUsize::new(0));
+        let spawn_count_for_worker = spawn_count.clone();
+        let mut scan = ChunkedScan::new(0usize, 2, 2, 10, move |_state, args: ChunkArgs| {
+            spawn_count_for_worker.fetch_add(1, Ordering::SeqCst);
+            tokio::task::spawn_blocking(move || {
+                Ok(ScanChunkDone {
+                    items: vec!["first", "final"],
+                    produced: 2,
+                    next_state: Some(1),
+                    terminal: ScanTerminal::ScanLimit {
+                        watermark: {
+                            let mut watermark = Watermark::default();
+                            watermark.cursor = Some(b"scan-frontier".to_vec().into());
+                            watermark
+                        },
+                    },
+                    remaining_scan_budget: args.scan_budget - 1,
+                })
+            })
+        });
+
+        assert_eq!(scan.next_item().await.unwrap(), Some("first"));
+        assert_eq!(scan.produced(), 2);
+        assert!(!scan.exhausted(), "the final item is still buffered");
+
+        assert_eq!(scan.next_item().await.unwrap(), Some("final"));
+        assert_eq!(scan.produced(), 2);
+        assert!(
+            scan.exhausted(),
+            "the item limit leaves no trailing frame or chunk in flight"
+        );
+        assert_eq!(scan.next_item().await.unwrap(), None);
+        let terminal = scan.into_terminal().expect("worker terminal is retained");
+        let ScanTerminal::ScanLimit { watermark } = terminal else {
+            panic!("expected scan-limit terminal");
+        };
+        assert!(
+            watermark.cursor.is_some(),
+            "scan-limit terminal must own a resume cursor"
+        );
+        assert_eq!(
+            spawn_count.load(Ordering::SeqCst),
+            1,
+            "next_state must not schedule another chunk at the item limit"
+        );
     }
 }
