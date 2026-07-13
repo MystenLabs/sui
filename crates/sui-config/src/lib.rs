@@ -24,7 +24,9 @@ pub mod validator_client_monitor_config;
 pub mod verifier_signing_config;
 
 pub use node::{ConsensusConfig, ExecutionCacheConfig, NodeConfig};
-pub use rpc_config::{RpcConfig, RpcIndexInitConfig, RpcTlsConfig};
+pub use rpc_config::{
+    PipelineAvailabilityConfig, RpcAvailabilityConfig, RpcConfig, RpcIndexInitConfig, RpcTlsConfig,
+};
 use sui_types::multiaddr::Multiaddr;
 use tracing::debug;
 

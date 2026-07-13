@@ -13,16 +13,21 @@
 //! directly.
 
 use sui_consistent_store::reader::Reader;
+use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::VersionNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
 use tracing::error;
 
+use crate::indexer::objects::Objects;
 use crate::reader::RpcStoreReader;
 
 impl<R: Reader + Send + Sync> ObjectStore for RpcStoreReader<R> {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        if !self.pipelines_available(&[Objects::NAME]) {
+            return None;
+        }
         match self.schema().get_object(*object_id) {
             Ok(object) => object,
             Err(e) => {
@@ -33,6 +38,9 @@ impl<R: Reader + Send + Sync> ObjectStore for RpcStoreReader<R> {
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
+        if !self.pipelines_available(&[Objects::NAME]) {
+            return None;
+        }
         match self.schema().get_object_by_key(*object_id, version) {
             Ok(object) => object,
             Err(e) => {
@@ -130,6 +138,26 @@ mod tests {
         assert!(
             reader
                 .get_object_by_key(&object.id(), missing_version)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn gated_object_read_withholds_present_row() {
+        use crate::config::PipelineAvailability;
+        use crate::reader::availability;
+
+        let (_dir, db, schema) = open();
+        let object = dummy(ObjectID::from_single_byte(9));
+        seed(&db, &schema, &object);
+
+        let reader = RpcStoreReader::new(db.clone(), Arc::new(schema)).with_availability(
+            availability(None, &[("objects", PipelineAvailability::Disabled)]),
+        );
+        assert!(reader.get_object(&object.id()).is_none());
+        assert!(
+            reader
+                .get_object_by_key(&object.id(), object.version())
                 .is_none()
         );
     }

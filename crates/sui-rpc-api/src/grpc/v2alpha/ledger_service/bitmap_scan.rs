@@ -314,9 +314,16 @@ where
                     BitmapScanError::Cancelled.to_string(),
                 ));
             }
-            // Genuine fault → gRPC Internal, carrying the error unchanged.
+            // Genuine fault → gRPC Internal, carrying the error unchanged — except an
+            // unavailable-index signal from the reader, which renders as `Unavailable`.
             Some(Err(BitmapScanError::Source(inner))) => {
-                return Err(RpcError::new(tonic::Code::Internal, inner.to_string()));
+                return Err(match inner.downcast::<sui_types::storage::error::Error>() {
+                    Ok(e) if e.kind() == sui_types::storage::error::Kind::Unavailable => {
+                        RpcError::from(e)
+                    }
+                    Ok(e) => RpcError::new(tonic::Code::Internal, e.to_string()),
+                    Err(inner) => RpcError::new(tonic::Code::Internal, inner.to_string()),
+                });
             }
             None => {
                 next_range = None;
@@ -453,7 +460,9 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
                         descending,
                     ),
                 };
-                iter.map_err(|e| anyhow::anyhow!(e.to_string()))
+                // Keep the typed error so the drain loop can distinguish an
+                // unavailable-index signal from a genuine fault.
+                iter.map_err(anyhow::Error::new)
             });
 
         let (iter, initial_error) = match iter {

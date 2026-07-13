@@ -65,6 +65,13 @@ pub struct RpcConfig {
     /// Configuration for rendering Objects based on the Display standard
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display: Option<DisplayConfig>,
+
+    /// Read-availability policies for the index pipelines served by the
+    /// embedded rpc-store. Only meaningful when `enable-indexing` is true.
+    /// A pipeline with no policy (neither here nor via the global default)
+    /// is always served.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub availability: Option<RpcAvailabilityConfig>,
 }
 
 impl RpcConfig {
@@ -109,10 +116,18 @@ impl RpcConfig {
             .unwrap_or(&DEFAULT_LEDGER_HISTORY_CONFIG)
     }
 
+    pub fn availability(&self) -> Option<&RpcAvailabilityConfig> {
+        self.availability.as_ref()
+    }
+
     /// Validate cross-field invariants. Call once at startup to fail fast on a
     /// misconfiguration rather than surfacing it per-request.
     pub fn validate(&self) -> anyhow::Result<()> {
-        self.ledger_history().validate()
+        self.ledger_history().validate()?;
+        if let Some(availability) = &self.availability {
+            availability.validate()?;
+        }
+        Ok(())
     }
 
     pub fn display(&self) -> &DisplayConfig {
@@ -427,5 +442,180 @@ impl LedgerHistoryConfig {
             self.max_bitmap_filter_literals(),
         );
         Ok(())
+    }
+}
+
+/// Read-availability policies for the embedded rpc-store's index pipelines,
+/// under `rpc.availability` in the node YAML. The top-level `enabled` /
+/// `max-checkpoint-lag` keys set a default policy for every pipeline;
+/// `pipelines` overrides it per pipeline:
+///
+/// ```yaml
+/// rpc:
+///   enable-indexing: true
+///   availability:
+///     max-checkpoint-lag: 100
+///     pipelines:
+///       balance:
+///         enabled: false
+/// ```
+///
+/// Policy semantics: `enabled: true` always serves the pipeline, `enabled:
+/// false` never serves it, and `max-checkpoint-lag: N` serves it only while
+/// its committed watermark is within N checkpoints of the tip. A policy sets
+/// at most one of the two keys. Gated pipelines fail their reads as
+/// unavailable and stop pinning the reported tip; indexing is unaffected.
+///
+/// Pipelines are keyed by their canonical snake_case names (e.g. `balance`,
+/// `object_by_owner`, `transaction_bitmap`) — the same names the watermark
+/// metrics use. Unknown names are rejected at startup.
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct RpcAvailabilityConfig {
+    /// Default policy: always (`true`) or never (`false`) serve pipelines
+    /// without an override. Mutually exclusive with `max-checkpoint-lag`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+
+    /// Default policy: serve pipelines without an override only while their
+    /// committed watermark is within this many checkpoints of the tip.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_lag: Option<u64>,
+
+    /// Per-pipeline overrides, keyed by pipeline name.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub pipelines: std::collections::BTreeMap<String, PipelineAvailabilityConfig>,
+}
+
+/// A single pipeline's availability policy override. Semantics as on
+/// [`RpcAvailabilityConfig`]; at most one key may be set.
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct PipelineAvailabilityConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_lag: Option<u64>,
+}
+
+impl RpcAvailabilityConfig {
+    /// The global default expressed as a per-pipeline policy value.
+    pub fn default_policy(&self) -> PipelineAvailabilityConfig {
+        PipelineAvailabilityConfig {
+            enabled: self.enabled,
+            max_checkpoint_lag: self.max_checkpoint_lag,
+        }
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        self.default_policy()
+            .validate()
+            .context("rpc.availability")?;
+        for (name, policy) in &self.pipelines {
+            policy
+                .validate()
+                .with_context(|| format!("rpc.availability.pipelines.{name}"))?;
+        }
+        Ok(())
+    }
+}
+
+impl PipelineAvailabilityConfig {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !(self.enabled.is_some() && self.max_checkpoint_lag.is_some()),
+            "an availability policy must set at most one of `enabled` / `max-checkpoint-lag`",
+        );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn availability_parses_from_yaml() {
+        let config: RpcConfig = serde_yaml::from_str(
+            r#"
+            enable-indexing: true
+            availability:
+              max-checkpoint-lag: 100
+              pipelines:
+                balance:
+                  enabled: false
+                object_by_owner:
+                  enabled: true
+                epochs:
+                  max-checkpoint-lag: 1000
+            "#,
+        )
+        .unwrap();
+
+        let availability = config.availability().unwrap();
+        assert_eq!(availability.max_checkpoint_lag, Some(100));
+        assert_eq!(availability.enabled, None);
+        assert_eq!(availability.pipelines["balance"].enabled, Some(false));
+        assert_eq!(
+            availability.pipelines["object_by_owner"].enabled,
+            Some(true)
+        );
+        assert_eq!(
+            availability.pipelines["epochs"].max_checkpoint_lag,
+            Some(1000)
+        );
+        config.validate().unwrap();
+    }
+
+    #[test]
+    fn availability_policy_keys_are_mutually_exclusive() {
+        for yaml in [
+            // Global default sets both keys.
+            r#"
+            availability:
+              enabled: true
+              max-checkpoint-lag: 100
+            "#,
+            // A per-pipeline override sets both keys.
+            r#"
+            availability:
+              pipelines:
+                balance:
+                  enabled: false
+                  max-checkpoint-lag: 100
+            "#,
+        ] {
+            let config: RpcConfig = serde_yaml::from_str(yaml).unwrap();
+            let err = config.validate().unwrap_err();
+            assert!(
+                format!("{err:#}").contains("at most one of"),
+                "unexpected error for {yaml:?}: {err:#}",
+            );
+        }
+    }
+
+    #[test]
+    fn availability_rejects_unknown_keys() {
+        let result: Result<RpcConfig, _> = serde_yaml::from_str(
+            r#"
+            availability:
+              max-checkpoint-lagg: 5
+            "#,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn config_without_availability_serializes_unchanged() {
+        let config = RpcConfig {
+            enable_indexing: Some(true),
+            ..RpcConfig::default()
+        };
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(!yaml.contains("availability"), "{yaml}");
+        let parsed: RpcConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(parsed.availability().is_none());
     }
 }

@@ -76,16 +76,29 @@ impl From<RpcError> for tonic::Status {
 
 impl From<sui_types::storage::error::Error> for RpcError {
     fn from(value: sui_types::storage::error::Error) -> Self {
+        use std::error::Error;
         use sui_types::storage::error::Kind;
 
         let code = match value.kind() {
             Kind::Missing => Code::NotFound,
+            Kind::Unavailable => Code::Unavailable,
             _ => Code::Internal,
+        };
+
+        // `storage::Error`'s `Display` is a debug dump; for the client-facing `Unavailable`
+        // message prefer the human-readable source.
+        let message = if value.kind() == Kind::Unavailable {
+            value
+                .source()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| value.to_string())
+        } else {
+            value.to_string()
         };
 
         Self {
             code,
-            message: Some(value.to_string()),
+            message: Some(message),
             details: None,
         }
     }
@@ -436,5 +449,26 @@ impl std::error::Error for EpochNotFoundError {}
 impl From<EpochNotFoundError> for crate::RpcError {
     fn from(value: EpochNotFoundError) -> Self {
         Self::new(tonic::Code::NotFound, value.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unavailable_storage_error_maps_to_unavailable_status() {
+        let err = RpcError::from(sui_types::storage::error::Error::unavailable(
+            "pipeline balance is disabled by config",
+        ));
+        let status = tonic::Status::from(err);
+        assert_eq!(status.code(), Code::Unavailable);
+        assert_eq!(status.message(), "pipeline balance is disabled by config");
+    }
+
+    #[test]
+    fn missing_storage_error_still_maps_to_not_found() {
+        let err = RpcError::from(sui_types::storage::error::Error::missing("no row"));
+        assert_eq!(tonic::Status::from(err).code(), Code::NotFound);
     }
 }

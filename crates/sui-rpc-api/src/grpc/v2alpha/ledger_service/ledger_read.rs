@@ -40,7 +40,7 @@ pub(super) fn checkpoint_hi_exclusive(service: &RpcService) -> Result<u64, RpcEr
         .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
     let checkpoint = indexes
         .get_highest_indexed_checkpoint_seq_number()
-        .map_err(storage_error)?
+        .map_err(RpcError::from)?
         .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
     checkpoint
         .checked_add(1)
@@ -135,7 +135,7 @@ pub(super) fn get_tx_seq_digest_multi(
         .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
     indexes
         .ledger_tx_seq_digest_multi_get(tx_seqs)
-        .map_err(storage_error)?
+        .map_err(RpcError::from)?
         .into_iter()
         .zip_debug_eq(tx_seqs.iter().copied())
         .map(|(row, tx_seq)| row.ok_or_else(|| missing_row_error(service, tx_seq)))
@@ -159,7 +159,7 @@ pub(super) fn get_tx_seq_digest_rows(
         .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
     let mut iter = indexes
         .ledger_tx_seq_digest_iter(range.start, range.end, descending)
-        .map_err(storage_error)?;
+        .map_err(RpcError::from)?;
     let mut rows = Vec::with_capacity(row_limit);
     let mut expected = if descending {
         range.end - 1

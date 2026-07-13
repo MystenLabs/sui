@@ -59,7 +59,7 @@ use sui_types::transaction::TransactionDataAPI;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 
-const SUI_COIN_TYPE: &str =
+pub(crate) const SUI_COIN_TYPE: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
 
 /// How long to wait for the dedicated fullnode to sync and index a target
@@ -89,7 +89,10 @@ fn no_indexing_config() -> RpcConfig {
 /// (stable) name and rpc url. The handle `spawn_new_node` returns is
 /// dropped immediately so the node keeps no external strong reference and a
 /// later [`restart_fullnode`] can release its DB locks on stop.
-async fn spawn_fullnode(cluster: &mut TestCluster, rpc: RpcConfig) -> (AuthorityName, String) {
+pub(crate) async fn spawn_fullnode(
+    cluster: &mut TestCluster,
+    rpc: RpcConfig,
+) -> (AuthorityName, String) {
     let config = cluster
         .fullnode_config_builder()
         .with_rpc_config(rpc)
@@ -172,7 +175,7 @@ async fn wait_for_executed(cluster: &TestCluster, name: &AuthorityName, target: 
 /// Block until both cohorts of the dedicated fullnode's embedded store have
 /// committed through `target`. Panics on timeout with the last-observed
 /// watermarks.
-async fn wait_for_indexed(cluster: &TestCluster, name: &AuthorityName, target: u64) {
+pub(crate) async fn wait_for_indexed(cluster: &TestCluster, name: &AuthorityName, target: u64) {
     let deadline = tokio::time::Instant::now() + WAIT_TIMEOUT;
     loop {
         let live = live_committed(cluster, name);
@@ -192,20 +195,20 @@ async fn wait_for_indexed(cluster: &TestCluster, name: &AuthorityName, target: u
 
 /// A transfer executed against the cluster, with the facts a test asserts
 /// on afterward.
-struct Transfer {
+pub(crate) struct Transfer {
     /// The transaction's sender (whichever account funded the gas).
-    sender: SuiAddress,
+    pub(crate) sender: SuiAddress,
     /// A fresh address with no prior coins, so its post-transfer SUI
     /// balance is exactly `amount`.
-    receiver: SuiAddress,
-    amount: u64,
-    digest: TransactionDigest,
+    pub(crate) receiver: SuiAddress,
+    pub(crate) amount: u64,
+    pub(crate) digest: TransactionDigest,
 }
 
 /// Transfer `amount` MIST of SUI to a fresh address through the cluster's
 /// primary fullnode and wait for the transaction to land in an executed
 /// checkpoint.
-async fn transfer_to_fresh_address(cluster: &TestCluster, amount: u64) -> Transfer {
+pub(crate) async fn transfer_to_fresh_address(cluster: &TestCluster, amount: u64) -> Transfer {
     let receiver = SuiAddress::random_for_testing_only();
     let txn = make_transfer_sui_transaction(&cluster.wallet, Some(receiver), Some(amount)).await;
     let executed = cluster.execute_transaction(txn).await;
@@ -221,7 +224,7 @@ async fn transfer_to_fresh_address(cluster: &TestCluster, amount: u64) -> Transf
 
 /// The chain tip as seen by the cluster's primary fullnode -- an upper
 /// bound on the checkpoints the dedicated node must sync and index.
-fn chain_tip(cluster: &TestCluster) -> u64 {
+pub(crate) fn chain_tip(cluster: &TestCluster) -> u64 {
     cluster.fullnode_handle.sui_node.with(|node| {
         node.state()
             .get_checkpoint_store()
@@ -250,7 +253,7 @@ async fn sui_balance(rpc_url: &str, owner: SuiAddress) -> u64 {
 }
 
 /// A `ListTransactions` filter matching a single sender.
-fn sender_filter(sender: SuiAddress) -> TransactionFilter {
+pub(crate) fn sender_filter(sender: SuiAddress) -> TransactionFilter {
     let mut sender_filter = SenderFilter::default();
     sender_filter.address = Some(sender.to_string());
     let mut literal = TransactionLiteral::default();

@@ -38,8 +38,12 @@ use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::service::Service;
 
+pub use crate::config::AvailabilityConfig;
+pub use crate::config::AvailabilityLayer;
 pub use crate::config::CommitterLayer;
 pub use crate::config::ConsistencyConfig;
+pub use crate::config::PipelineAvailability;
+pub use crate::config::PipelineConfig;
 pub use crate::config::PipelineLayer;
 pub use crate::config::PrunerConfig;
 pub use crate::config::RestoreLayer;

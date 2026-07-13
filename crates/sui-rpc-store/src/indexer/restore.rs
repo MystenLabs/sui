@@ -115,6 +115,31 @@ pub const HISTORY_COHORT: &[&str] = &[
     EventBitmap::NAME,
 ];
 
+/// Every rpc-store pipeline. Kept exhaustive so any new pipeline
+/// added to [`PipelineLayer`](crate::config::PipelineLayer) needs an
+/// explicit decision about restore behaviour (in
+/// [`floor_unrestored_pipelines`]) and gets a stable name for
+/// availability policies.
+pub const ALL_PIPELINES: &[&str] = &[
+    Epochs::NAME,
+    CheckpointSummary::NAME,
+    CheckpointContents::NAME,
+    CheckpointSeqByDigest::NAME,
+    Transactions::NAME,
+    TxSeqByDigest::NAME,
+    TxMetadataBySeq::NAME,
+    Effects::NAME,
+    Events::NAME,
+    Objects::NAME,
+    ObjectVersionByCheckpoint::NAME,
+    ObjectByOwner::NAME,
+    ObjectByType::NAME,
+    Balance::NAME,
+    PackageVersions::NAME,
+    TransactionBitmap::NAME,
+    EventBitmap::NAME,
+];
+
 /// Register every [`Restore`]-implementing pipeline opted in by
 /// `layer` on a [`RestoreDriver`] bound to `db` / `schema` and
 /// `source`, then run the resulting [`Service`].
@@ -208,36 +233,12 @@ pub fn floor_unrestored_pipelines(
         ]
     };
 
-    // Every rpc-store pipeline. Kept exhaustive so any new
-    // pipeline added to `PipelineLayer` needs an explicit
-    // decision here about whether it's a restore-time pipeline
-    // or a tip-only one.
-    let all: &[&'static str] = &[
-        Epochs::NAME,
-        CheckpointSummary::NAME,
-        CheckpointContents::NAME,
-        CheckpointSeqByDigest::NAME,
-        Transactions::NAME,
-        TxSeqByDigest::NAME,
-        TxMetadataBySeq::NAME,
-        Effects::NAME,
-        Events::NAME,
-        Objects::NAME,
-        ObjectVersionByCheckpoint::NAME,
-        ObjectByOwner::NAME,
-        ObjectByType::NAME,
-        Balance::NAME,
-        PackageVersions::NAME,
-        TransactionBitmap::NAME,
-        EventBitmap::NAME,
-    ];
-
     // Use the owned `FrameworkSchema` over `Db` (rather than the
     // borrowed view from `Db::framework`) so the `DbMap`s line up
     // with `Batch::put`'s `R = Db` expectation.
     let framework = FrameworkSchema::new(db.clone());
     let mut batch = db.batch();
-    for name in all.iter().filter(|n| !restored.contains(n)) {
+    for name in ALL_PIPELINES.iter().filter(|n| !restored.contains(n)) {
         let key = PipelineTaskKey::new(*name);
         batch
             .put(&framework.watermarks, &key, &target_watermark)

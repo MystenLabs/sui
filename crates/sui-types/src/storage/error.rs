@@ -23,6 +23,11 @@ pub enum Kind {
     Serialization,
     Missing,
     Custom,
+
+    /// The data exists (or may exist) but the store is currently unwilling to serve it, e.g.
+    /// because the pipeline that produces it is disabled or lagging. Distinct from `Missing` so
+    /// consumers can render it as a retriable "unavailable" condition rather than "not found".
+    Unavailable,
 }
 
 impl Error {
@@ -45,6 +50,10 @@ impl Error {
 
     pub fn custom<E: Into<BoxError>>(e: E) -> Self {
         Self::new(Kind::Custom, Some(e))
+    }
+
+    pub fn unavailable<E: Into<BoxError>>(e: E) -> Self {
+        Self::new(Kind::Unavailable, Some(e))
     }
 
     pub fn kind(&self) -> Kind {

@@ -32,9 +32,18 @@ use sui_types::storage::RpcIndexes;
 /// `sui_types::storage::read_store::PackageVersionsIterator`.
 type PackageVersionsIterator<'a> =
     Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
+use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::storage::error::Result as StorageResult;
 use typed_store_error::TypedStoreError;
 
+use crate::indexer::balance::Balance;
+use crate::indexer::epochs::Epochs;
+use crate::indexer::event_bitmap::EventBitmap;
+use crate::indexer::object_by_owner::ObjectByOwner;
+use crate::indexer::object_by_type::ObjectByType;
+use crate::indexer::package_versions::PackageVersions;
+use crate::indexer::transaction_bitmap::TransactionBitmap;
+use crate::indexer::tx_metadata_by_seq::TxMetadataBySeq;
 use crate::reader::RpcStoreReader;
 use crate::schema::type_filter::TypeFilter;
 
@@ -69,6 +78,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         &self,
         epoch: sui_types::committee::EpochId,
     ) -> StorageResult<Option<EpochInfo>> {
+        self.require_pipelines(&[Epochs::NAME])?;
         self.schema()
             .get_epoch(epoch)
             .map_err(sui_types::storage::error::Error::custom)
@@ -81,6 +91,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
+        self.require_pipelines(&[ObjectByOwner::NAME])?;
         use crate::schema::object_by_owner::{Key, OwnerKind};
         let map = &self.schema().object_by_owner;
         let kind = OwnerKind::AddressOwner(owner);
@@ -122,6 +133,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         parent: ObjectID,
         cursor: Option<DynamicFieldKey>,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
+        self.require_pipelines(&[ObjectByOwner::NAME])?;
         use crate::schema::object_by_owner::{Key, OwnerKind};
         // Dynamic fields are `Field<Name, Value>` objects owned (in the
         // object-owner sense) by `parent`, so they share the `object_by_owner`
@@ -156,6 +168,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     }
 
     fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
+        self.require_pipelines(&[ObjectByType::NAME])?;
         // Coin metadata / treasury cap / regulated coin metadata
         // are typed objects whose Move type wraps the requested
         // `coin_type`. Discover each via an `object_by_type`
@@ -191,6 +204,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         owner: &SuiAddress,
         coin_type: &StructTag,
     ) -> StorageResult<Option<BalanceInfo>> {
+        self.require_pipelines(&[Balance::NAME])?;
         let balance = self
             .schema()
             .get_balance(*owner, coin_type.clone().into())
@@ -210,6 +224,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         owner: &SuiAddress,
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> StorageResult<BalanceIterator<'_>> {
+        self.require_pipelines(&[Balance::NAME])?;
         use crate::schema::balance::{Key, OwnerPrefix};
         let map = &self.schema().balance;
         // When resuming, the page token carries the cursor's coin type -- the
@@ -260,6 +275,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         original_id: ObjectID,
         cursor: Option<u64>,
     ) -> StorageResult<PackageVersionsIterator<'_>> {
+        self.require_pipelines(&[PackageVersions::NAME])?;
         use crate::schema::package_versions::{Key, OriginalIdPrefix};
         // The cursor passed in by `list_package_versions` is the version of the
         // first row of the next page (the previous page popped its
@@ -296,17 +312,33 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
         // Min across all registered pipeline watermarks: every CF
         // has caught up to at least this checkpoint, so reads
-        // against any of them are coherent through here.
+        // against any of them are coherent through here. Pipelines
+        // gated by the availability policy are excluded — their
+        // reads fail as unavailable, so they must not pin this
+        // bound. The tip for lag policies is the MAX over all rows
+        // (including gated ones) to keep the reference stable.
         let framework = sui_consistent_store::FrameworkSchema::new(self.db().clone());
-        let mut min: Option<u64> = None;
+        let mut rows: Vec<(String, u64)> = Vec::new();
         for entry in framework
             .watermarks
             .iter(..)
             .map_err(sui_types::storage::error::Error::custom)?
         {
-            let (_, watermark) = entry.map_err(sui_types::storage::error::Error::custom)?;
-            let hi = watermark.checkpoint_hi_inclusive;
-            min = Some(min.map_or(hi, |m| m.min(hi)));
+            let (key, watermark) = entry.map_err(sui_types::storage::error::Error::custom)?;
+            rows.push((key.0, watermark.checkpoint_hi_inclusive));
+        }
+
+        let tip = rows.iter().map(|(_, hi)| *hi).max().unwrap_or(0);
+        let mut min: Option<u64> = None;
+        for (name, hi) in &rows {
+            let available = match self.availability.policy_for(name) {
+                None => true,
+                Some(policy) => policy.is_available(Some(*hi), tip),
+            };
+            if !available {
+                continue;
+            }
+            min = Some(min.map_or(*hi, |m| m.min(*hi)));
         }
         Ok(min)
     }
@@ -321,6 +353,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     }
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
+        self.require_pipelines(&[TxMetadataBySeq::NAME])?;
         let meta = self
             .schema()
             .get_tx_metadata_by_seq(tx_seq)
@@ -340,6 +373,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         end_exclusive: u64,
         descending: bool,
     ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
+        self.require_pipelines(&[TxMetadataBySeq::NAME])?;
         use crate::schema::primitives::U64Be;
         let range = (
             Bound::Included(U64Be(start)),
@@ -383,6 +417,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         end_bucket_exclusive: u64,
         descending: bool,
     ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        self.require_pipelines(&[TransactionBitmap::NAME])?;
         let map = &self.schema().transaction_bitmap;
         let lower = crate::schema::transaction_bitmap::Key {
             dimension_key: dimension_key.clone(),
@@ -412,6 +447,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         end_bucket_exclusive: u64,
         descending: bool,
     ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        self.require_pipelines(&[EventBitmap::NAME])?;
         let map = &self.schema().event_bitmap;
         let lower = crate::schema::event_bitmap::Key {
             dimension_key: dimension_key.clone(),
@@ -496,6 +532,103 @@ mod tests {
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
         let reader = RpcStoreReader::new(db.clone(), Arc::new(schema));
         (dir, db, reader)
+    }
+
+    #[test]
+    fn gated_index_reads_return_unavailable() {
+        use crate::config::PipelineAvailability;
+        use crate::reader::{availability, seed_watermark};
+        use sui_types::storage::error::Kind;
+
+        let (_dir, db, reader) = setup();
+        // `object_by_owner` is at the tip; `balance` lags it by 100.
+        seed_watermark(&db, "object_by_owner", 200);
+        seed_watermark(&db, "balance", 100);
+
+        let reader = reader.with_availability(availability(
+            Some(PipelineAvailability::MaxCheckpointLag(50)),
+            &[
+                ("balance", PipelineAvailability::Enabled),
+                ("object_by_type", PipelineAvailability::Disabled),
+            ],
+        ));
+
+        // Disabled override.
+        let err = reader.get_coin_info(&a_type()).unwrap_err();
+        assert_eq!(err.kind(), Kind::Unavailable);
+
+        // Lag default gates a pipeline with no watermark (`epochs`).
+        let err = reader.get_epoch_info(0).unwrap_err();
+        assert_eq!(err.kind(), Kind::Unavailable);
+
+        // The tip pipeline is within any lag budget of itself.
+        assert!(
+            reader
+                .owned_objects_iter(sui_types::base_types::SuiAddress::ZERO, None, None)
+                .is_ok()
+        );
+
+        // Enabled override exempts `balance` from the lag default it would
+        // otherwise fail (it is 100 behind, budget 50).
+        assert!(
+            reader
+                .get_balance(&sui_types::base_types::SuiAddress::ZERO, &a_type())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn highest_indexed_excludes_gated_rows() {
+        use crate::config::PipelineAvailability;
+        use crate::reader::{availability, seed_watermark};
+
+        let (_dir, db, reader) = setup();
+        seed_watermark(&db, "object_by_owner", 100);
+        seed_watermark(&db, "epochs", 40);
+
+        // Ungated: the MIN across all rows.
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            Some(40)
+        );
+
+        // Disabling the laggard advances the bound.
+        let gated = reader.clone().with_availability(availability(
+            None,
+            &[("epochs", PipelineAvailability::Disabled)],
+        ));
+        assert_eq!(
+            gated.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            Some(100)
+        );
+
+        // Lag boundary: 60 keeps the laggard (tip 100, distance 60), 59 drops it.
+        let within = reader.clone().with_availability(availability(
+            Some(PipelineAvailability::MaxCheckpointLag(60)),
+            &[],
+        ));
+        assert_eq!(
+            within.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            Some(40)
+        );
+        let beyond = reader.clone().with_availability(availability(
+            Some(PipelineAvailability::MaxCheckpointLag(59)),
+            &[],
+        ));
+        assert_eq!(
+            beyond.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            Some(100)
+        );
+
+        // Every row gated ⇒ no available index data.
+        let all_gated =
+            reader.with_availability(availability(Some(PipelineAvailability::Disabled), &[]));
+        assert_eq!(
+            all_gated
+                .get_highest_indexed_checkpoint_seq_number()
+                .unwrap(),
+            None
+        );
     }
 
     #[test]

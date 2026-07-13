@@ -385,13 +385,16 @@ impl Indexer {
             event_bitmap,
         } = layer;
 
+        // `entry.availability` is deliberately unused here: it is a
+        // read-side serving policy consumed by the reader, orthogonal
+        // to registration — a gated pipeline keeps indexing.
         macro_rules! add {
             ($handler:expr, $cfg:expr) => {
-                if let Some(layer) = $cfg {
+                if let Some(entry) = $cfg {
                     self.sequential_pipeline(
                         $handler,
                         SequentialConfig {
-                            committer: layer.finish(committer.clone()),
+                            committer: entry.committer.finish(committer.clone()),
                             // The synchronizer requires one
                             // checkpoint per write batch; folding
                             // multiple checkpoints into one batch
@@ -756,7 +759,7 @@ mod tests {
         let err = indexer
             .add_pipelines(
                 PipelineLayer {
-                    balance: Some(crate::config::CommitterLayer::default()),
+                    balance: Some(crate::config::PipelineConfig::default()),
                     ..PipelineLayer::default()
                 },
                 CommitterConfig::default(),
@@ -783,7 +786,7 @@ mod tests {
         indexer
             .add_pipelines(
                 PipelineLayer {
-                    balance: Some(crate::config::CommitterLayer::default()),
+                    balance: Some(crate::config::PipelineConfig::default()),
                     ..PipelineLayer::default()
                 },
                 CommitterConfig::default(),
