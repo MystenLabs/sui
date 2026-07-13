@@ -6,6 +6,7 @@ BUILDING Test
     "line": 2,
     "column": 15,
     "level": "Warning",
+    "rendered_code": "W09002",
     "category": 9,
     "code": 2,
     "msg": "unused variable"
@@ -15,6 +16,7 @@ BUILDING Test
     "line": 6,
     "column": 9,
     "level": "BlockingError",
+    "rendered_code": "E04007",
     "category": 4,
     "code": 7,
     "msg": "incompatible types"
@@ -27,6 +29,7 @@ Command `disassemble --json-errors --package Test --name m`:
     "line": 2,
     "column": 15,
     "level": "Warning",
+    "rendered_code": "W09002",
     "category": 9,
     "code": 2,
     "msg": "unused variable"
@@ -36,6 +39,7 @@ Command `disassemble --json-errors --package Test --name m`:
     "line": 6,
     "column": 9,
     "level": "BlockingError",
+    "rendered_code": "E04007",
     "category": 4,
     "code": 7,
     "msg": "incompatible types"
@@ -49,6 +53,7 @@ BUILDING Test
     "line": 6,
     "column": 9,
     "level": "BlockingError",
+    "rendered_code": "E04007",
     "category": 4,
     "code": 7,
     "msg": "incompatible types"
@@ -62,6 +67,7 @@ BUILDING Test
     "line": 6,
     "column": 9,
     "level": "BlockingError",
+    "rendered_code": "E04007",
     "category": 4,
     "code": 7,
     "msg": "incompatible types"
@@ -75,6 +81,7 @@ BUILDING Test
     "line": 2,
     "column": 15,
     "level": "NonblockingError",
+    "rendered_code": "E09002",
     "category": 9,
     "code": 2,
     "msg": "unused variable"
@@ -84,6 +91,7 @@ BUILDING Test
     "line": 6,
     "column": 9,
     "level": "BlockingError",
+    "rendered_code": "E04007",
     "category": 4,
     "code": 7,
     "msg": "incompatible types"
@@ -97,6 +105,7 @@ BUILDING Test
     "line": 2,
     "column": 15,
     "level": "NonblockingError",
+    "rendered_code": "E09002",
     "category": 9,
     "code": 2,
     "msg": "unused variable"
@@ -106,6 +115,7 @@ BUILDING Test
     "line": 6,
     "column": 9,
     "level": "BlockingError",
+    "rendered_code": "E04007",
     "category": 4,
     "code": 7,
     "msg": "incompatible types"
