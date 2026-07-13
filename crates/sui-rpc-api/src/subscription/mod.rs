@@ -305,8 +305,8 @@ pub struct SubscriptionService {
 }
 
 impl SubscriptionService {
-    /// `watermark_interval` and `shards` are tuning knobs; `None` picks the
-    /// service defaults ([`DEFAULT_WATERMARK_INTERVAL`], [`default_shards`]).
+    /// `None` defaults `watermark_interval` to 25 checkpoints and `shards` to
+    /// the host's available parallelism, with a minimum of one.
     pub fn build(
         registry: &prometheus::Registry,
         indexed_checkpoint: Option<IndexedCheckpointFn>,
