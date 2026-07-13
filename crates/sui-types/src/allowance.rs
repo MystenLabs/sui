@@ -103,7 +103,7 @@ pub fn parse_allowance_object(object: &Object) -> UserInputResult<ResolvedAllowa
     let tag = move_obj.type_().clone().into();
     if !Allowance::is_allowance(&tag) {
         return Err(invalid(format!(
-            "object {id} is not a sui::allowance::Allowance"
+            "declared allowance {id} is not a sui::allowance::Allowance"
         )));
     }
     if !object.owner.is_shared() {

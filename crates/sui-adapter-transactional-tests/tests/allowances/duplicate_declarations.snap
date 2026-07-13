@@ -1,0 +1,88 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 10-13:
+//# programmable --sender A --inputs 5000 @A
+// Fund A's (the funder) address balance.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 5000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-19:
+//# programmable --sender C --inputs 1000 @C
+// Fund C, so the mismatched declaration gets past the balance check and
+// reaches the funder comparison.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,2)
+accumulators_written: (object(2,0), C, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 21:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 23-25:
+//# programmable --sender A --inputs b"dup" @B vector[10000u256] vector[] vector[] vector[] vector[]
+// A issues an allowance to B: 10000 lifetime cap.
+//> 0: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6));
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6361200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 27-30:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(4,0)) allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@C,object(4,0)) mutshared(4,0) immshared(6)
+// Correct funder first, wrong funder second: rejected at signing.
+//> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(2), Input(0), Input(3));
+//> 1: sui::allowance::spend_balance<sui::sui::SUI>(Input(2), Input(1), Input(3));
+Error: Error checking transaction input objects: Invalid withdraw reservation: Declared funder @C does not match the funder of allowance object(4,0)
+
+task 6, lines 32-33:
+//# view-object 4,0
+Owner: Shared( 3 )
+Version: 3
+Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    funder: A,
+    spender: std::option::Option<address> {
+        vec: vector[
+            B,
+        ],
+    },
+    app: std::option::Option<std::type_name::TypeName> {
+        vec: vector[],
+    },
+    lifetime_cap: std::option::Option<u256> {
+        vec: vector[
+            10000u256,
+        ],
+    },
+    current_spend: 0u256,
+    start_timestamp_ms: std::option::Option<u64> {
+        vec: vector[],
+    },
+    expiration_timestamp_ms: std::option::Option<u64> {
+        vec: vector[],
+    },
+    rate_limit: std::option::Option<sui::allowance::RateLimit> {
+        vec: vector[],
+    },
+    name: std::string::String {
+        bytes: vector[
+            100u8,
+            117u8,
+            112u8,
+        ],
+    },
+}
