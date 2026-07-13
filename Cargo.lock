@@ -14987,6 +14987,7 @@ version = "1.76.0"
 dependencies = [
  "anyhow",
  "axum 0.8.3",
+ "backoff",
  "bin-version",
  "clap",
  "http 1.3.1",
