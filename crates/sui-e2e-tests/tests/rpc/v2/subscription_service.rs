@@ -517,9 +517,10 @@ async fn subscribe_watermark_ticks_on_sparse_filter() {
         start_watermark.cursor.is_some(),
         "start frame carries a resume cursor"
     );
-    let start_checkpoint = start_watermark
-        .checkpoint
-        .expect("ascending stream sets checkpoint");
+    assert_eq!(
+        start_watermark.checkpoint, None,
+        "start frame has not fully covered a checkpoint in the subscription interval"
+    );
 
     let mut ticks = Vec::new();
     while ticks.len() < 3 {
@@ -534,10 +535,6 @@ async fn subscribe_watermark_ticks_on_sparse_filter() {
         let checkpoint = watermark
             .checkpoint
             .expect("ascending stream sets checkpoint");
-        assert!(
-            checkpoint > start_checkpoint,
-            "interval tick must advance beyond the start frame"
-        );
         ticks.push(checkpoint);
     }
     assert!(
