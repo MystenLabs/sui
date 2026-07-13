@@ -293,6 +293,12 @@ type ExecutionModuleCache = SyncModuleCache<ResolverWrapper>;
 // Data related to VM and Move execution and type layout
 pub struct ExecutionComponents {
     pub(crate) executor: Arc<dyn Executor + Send + Sync>,
+    /// A dedicated executor used for transaction simulation
+    /// (dry-run/dev-inspect). Simulation executes arbitrary, unvalidated
+    /// transactions, so it gets its own VM instance to keep its internal
+    /// state (e.g. package caches) isolated from the executor used for
+    /// committed transaction execution.
+    pub(crate) simulate_executor: Arc<dyn Executor + Send + Sync>,
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
     pub(crate) module_cache: Arc<ExecutionModuleCache>,
     metrics: Arc<ResolverMetrics>,
@@ -1425,6 +1431,13 @@ impl AuthorityPerEpochStore {
 
     pub fn executor(&self) -> &Arc<dyn Executor + Send + Sync> {
         &self.execution_component.executor
+    }
+
+    /// The executor dedicated to transaction simulation
+    /// (dry-run/dev-inspect). It is refreshed together with the regular
+    /// executor at epoch boundaries.
+    pub fn simulate_executor(&self) -> &Arc<dyn Executor + Send + Sync> {
+        &self.execution_component.simulate_executor
     }
 
     pub fn set_local_execution_time_channels(
@@ -3390,6 +3403,8 @@ impl ExecutionComponents {
         let silent = true;
         let executor = sui_execution::executor(protocol_config, silent)
             .expect("Creating an executor should not fail here");
+        let simulate_executor = sui_execution::executor(protocol_config, silent)
+            .expect("Creating an executor should not fail here");
 
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
             store,
@@ -3397,6 +3412,7 @@ impl ExecutionComponents {
         )));
         Self {
             executor,
+            simulate_executor,
             module_cache,
             metrics,
         }

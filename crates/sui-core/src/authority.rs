@@ -2472,12 +2472,7 @@ impl AuthorityState {
             )?
         };
 
-        // TODO see if we can spin up a VM once and reuse it
-        let executor = sui_execution::executor(
-            protocol_config,
-            true, // silent
-        )
-        .expect("Creating an executor should not fail here");
+        let executor = epoch_store.simulate_executor();
 
         let (mut kind, signer, gas_data) = transaction.execution_parts();
         let rewritten_inputs = rewrite_transaction_for_coin_reservations(
