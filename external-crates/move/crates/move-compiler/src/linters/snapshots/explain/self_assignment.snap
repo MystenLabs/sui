@@ -1,25 +1,26 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-self_assignment
-===============
+self_assignment (W02008): assignment preserves the same value
 
-category: Suspicious
-origin:   Move
-level:    requires `--lint`
-code:     W02008
+Assigning a location to itself (`x = x`, `*r = *r`, `s.f = s.f`) has no effect. It usually signals a
+typo or an unfinished edit.
 
-assignment preserves the same value
+This lint is off by default; enable it with `--lint`.
 
-Assigning a location to itself (`x = x`, `*r = *r`, `s.f = s.f`) has no effect. It usually signals a typo or an unfinished edit.
+## Example
 
-Example:
+Flagged:
 
-  // flagged
-  p = p;
+```move
+p = p;
+```
 
-  // suggested
-  // remove the redundant statement
+Suggested:
+
+```move
+// remove the redundant statement
+```
 
 Suppress a specific case with `#[allow(lint(self_assignment))]`.

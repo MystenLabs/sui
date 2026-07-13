@@ -1,25 +1,27 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-unnecessary_conditional
-=======================
+unnecessary_conditional (W01007): 'if' expression can be removed
 
-category: Complexity
-origin:   Move
-level:    requires `--lint`
-code:     W01007
+An `if` with one branch `true` and the other `false` collapses to the condition itself (or its
+negation), and one whose branches are the same literal value collapses to that value. The
+conditional only adds noise.
 
-'if' expression can be removed
+This lint is off by default; enable it with `--lint`.
 
-An `if` with one branch `true` and the other `false` collapses to the condition itself (or its negation), and one whose branches are the same literal value collapses to that value. The conditional only adds noise.
+## Example
 
-Example:
+Flagged:
 
-  // flagged
-  let b = if (!condition) true else false;
+```move
+let b = if (!condition) true else false;
+```
 
-  // suggested
-  let b = !condition;
+Suggested:
+
+```move
+let b = !condition;
+```
 
 Suppress a specific case with `#[allow(lint(unnecessary_conditional))]`.

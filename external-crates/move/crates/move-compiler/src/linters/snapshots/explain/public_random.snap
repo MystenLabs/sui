@@ -1,28 +1,33 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-public_random
-=============
+public_random (W99006): Risky use of 'sui::random'
 
-category: Sui
-origin:   Sui
-level:    on by default
-code:     W99006
+A `public` function that takes `Random` or `RandomGenerator` can be called by other Move code,
+letting an attacker draw randomness and react to the outcome within the same transaction. Randomness
+should only be reachable from a transaction, not composed by another contract.
 
-Risky use of 'sui::random'
+This lint is on by default.
 
-A `public` function that takes `Random` or `RandomGenerator` can be called by other Move code, letting an attacker draw randomness and react to the outcome within the same transaction. Randomness should only be reachable from a transaction, not composed by another contract.
+## When it's OK
 
-When it's OK:
-  Reduce the visibility below `public` — a non-public `entry` function, `public(package)`, or a private function — so it can't be composed by another contract. Adding `entry` to a function that stays `public` does not help.
+Reduce the visibility below `public` — a non-public `entry` function, `public(package)`, or a
+private function — so it can't be composed by another contract. Adding `entry` to a function that
+stays `public` does not help.
 
-Example:
+## Example
 
-  // flagged
-  public fun not_allowed(_r: &Random) {}
+Flagged:
 
-  // suggested
-  entry fun basic_random(_r: &Random) {}
+```move
+public fun not_allowed(_r: &Random) {}
+```
+
+Suggested:
+
+```move
+entry fun basic_random(_r: &Random) {}
+```
 
 Suppress a specific case with `#[allow(lint(public_random))]`.

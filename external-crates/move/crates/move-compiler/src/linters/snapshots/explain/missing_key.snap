@@ -1,29 +1,30 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-missing_key
-===========
+missing_key (W99007): struct with id but missing key ability
 
-category: Sui
-origin:   Sui
-level:    on by default
-code:     W99007
+A struct whose first field is `id: UID` looks like a Sui object, but without the `key` ability it
+can never be stored, transferred, or shared as one. This is almost always a forgotten `has key`.
 
-struct with id but missing key ability
+This lint is on by default.
 
-A struct whose first field is `id: UID` looks like a Sui object, but without the `key` ability it can never be stored, transferred, or shared as one. This is almost always a forgotten `has key`.
+## Example
 
-Example:
+Flagged:
 
-  // flagged
-  public struct MissingKeyAbility {
-      id: UID,
-  }
+```move
+public struct MissingKeyAbility {
+    id: UID,
+}
+```
 
-  // suggested
-  public struct HasKeyAbility has key {
-      id: UID,
-  }
+Suggested:
+
+```move
+public struct HasKeyAbility has key {
+    id: UID,
+}
+```
 
 Suppress a specific case with `#[allow(lint(missing_key))]`.

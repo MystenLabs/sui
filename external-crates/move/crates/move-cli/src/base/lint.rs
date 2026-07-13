@@ -36,8 +36,8 @@ impl Lint {
         }
 
         if let Some(query) = self.explain.as_deref() {
-            match move_compiler::linters::docs::find_lint_doc(query) {
-                Some(doc) => print!("{doc}"),
+            match move_compiler::linters::docs::find_lint(query) {
+                Some(explanation) => print!("{explanation}"),
                 None => {
                     anyhow::bail!(
                         "unknown lint `{query}`; run `{} --list` to see every lint",

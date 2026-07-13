@@ -4,7 +4,10 @@
 use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::Visitor,
-    diagnostics::{codes::DiagnosticsID, filter::FilterName},
+    diagnostics::{
+        codes::{DiagnosticInfo, DiagnosticsID, Severity, custom},
+        filter::FilterName,
+    },
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
     linters::{ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX, LintLevel, LinterDiagnosticCategory},
@@ -64,154 +67,123 @@ pub const VEC_MAP_STRUCT_NAME: &str = "VecMap";
 pub const VEC_SET_MOD_NAME: &str = "vec_set";
 pub const VEC_SET_STRUCT_NAME: &str = "VecSet";
 
-pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
-pub const SELF_TRANSFER_FILTER_NAME: &str = "self_transfer";
-pub const CUSTOM_STATE_CHANGE_FILTER_NAME: &str = "custom_state_change";
-pub const COIN_FIELD_FILTER_NAME: &str = "coin_field";
-pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
-pub const COLLECTION_EQUALITY_FILTER_NAME: &str = "collection_equality";
-pub const PUBLIC_RANDOM_FILTER_NAME: &str = "public_random";
-pub const MISSING_KEY_FILTER_NAME: &str = "missing_key";
-pub const FREEZING_CAPABILITY_FILTER_NAME: &str = "freezing_capability";
-pub const PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME: &str = "prefer_mut_tx_context";
-pub const UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME: &str = "public_entry";
-pub const UNCALLABLE_FUNCTION_FILTER_NAME: &str = "uncallable_function";
-pub const UNUSED_OBJECT_WITH_FIELDS_FILTER_NAME: &str = "unused_object_with_fields";
-
 pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
 pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
-#[repr(u8)]
-pub enum LinterDiagnosticCode {
-    ShareOwned,
-    SelfTransfer,
-    CustomStateChange,
-    CoinField,
-    FreezeWrapped,
-    CollectionEquality,
-    PublicRandom,
-    MissingKey,
-    FreezingCapability,
-    PreferMutableTxContext,
-    UnnecessaryPublicEntry,
-    UncallableFunction,
-    UnusedObjWithFields,
+macro_rules! sui_lints {
+    (
+        $(
+            ($enum_name:ident, $filter_name:expr, $code_msg:expr)
+        ),* $(,)?
+    ) => {
+        // Unlike `StyleCodes`, there is no zero placeholder -- Sui lint codes start at 0 and are
+        // positional: reordering or removing a variant changes the rendered `W99xxx` codes.
+        #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
+        #[repr(u8)]
+        pub enum LinterDiagnosticCode {
+            $(
+                $enum_name,
+            )*
+        }
+
+        impl LinterDiagnosticCode {
+            pub(crate) const fn diag_info(&self) -> DiagnosticInfo {
+                let code = *self as u8;
+                match self {
+                    // A lint has an explanation iff
+                    // `diagnostics/explanations/Sui_<CodeName>.md` exists -- keyed by
+                    // identifiers rather than the rendered code since the numeric portion is
+                    // positional (see `codes!` in diagnostics/codes.rs).
+                    $(Self::$enum_name => custom(
+                        LINT_WARNING_PREFIX,
+                        Severity::Warning,
+                        LinterDiagnosticCategory::Sui as u8,
+                        code,
+                        $code_msg,
+                    ).with_explanation(move_proc_macros::optional_include_str!(
+                        "src/diagnostics/explanations/", Sui, "_", $enum_name, ".md"
+                    )),)*
+                }
+            }
+        }
+
+        /// Every Sui lint as `(filter name, diagnostic info)`, in code order.
+        pub(crate) const SUI_LINTS: &[(&str, DiagnosticInfo)] = &[
+            $(($filter_name, LinterDiagnosticCode::$enum_name.diag_info()),)*
+        ];
+    }
 }
 
+sui_lints!(
+    (ShareOwned, "share_owned", "possible owned object share"),
+    (
+        SelfTransfer,
+        "self_transfer",
+        "non-composable transfer to sender"
+    ),
+    (
+        CustomStateChange,
+        "custom_state_change",
+        "potentially unenforceable custom transfer/share/freeze policy"
+    ),
+    (
+        CoinField,
+        "coin_field",
+        "sub-optimal 'sui::coin::Coin' field type"
+    ),
+    (
+        FreezeWrapped,
+        "freeze_wrapped",
+        "attempting to freeze wrapped objects"
+    ),
+    (
+        CollectionEquality,
+        "collection_equality",
+        "possibly useless collections compare"
+    ),
+    (PublicRandom, "public_random", "Risky use of 'sui::random'"),
+    (
+        MissingKey,
+        "missing_key",
+        "struct with id but missing key ability"
+    ),
+    (
+        FreezingCapability,
+        "freezing_capability",
+        "freezing potential capability"
+    ),
+    (
+        PreferMutableTxContext,
+        "prefer_mut_tx_context",
+        "prefer '&mut TxContext' over '&TxContext'"
+    ),
+    (
+        UnnecessaryPublicEntry,
+        "public_entry",
+        "unnecessary `entry` on a `public` function"
+    ),
+    (
+        UncallableFunction,
+        "uncallable_function",
+        "it will not be possible to call this function"
+    ),
+    (
+        UnusedObjWithFields,
+        "unused_object_with_fields",
+        "unused object with fields"
+    ),
+);
+
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
-    let sui = LinterDiagnosticCategory::Sui as u8;
     // `lint(all)` is registered by the core linter (`linters::known_filters`); don't
     // register it again here or `filter_from_str` returns duplicate ids.
-    let filters = vec![
-        (
-            Symbol::from(SHARE_OWNED_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::ShareOwned as u8,
-            )],
-        ),
-        (
-            Symbol::from(SELF_TRANSFER_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::SelfTransfer as u8,
-            )],
-        ),
-        (
-            Symbol::from(CUSTOM_STATE_CHANGE_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::CustomStateChange as u8,
-            )],
-        ),
-        (
-            Symbol::from(COIN_FIELD_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::CoinField as u8,
-            )],
-        ),
-        (
-            Symbol::from(FREEZE_WRAPPED_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::FreezeWrapped as u8,
-            )],
-        ),
-        (
-            Symbol::from(COLLECTION_EQUALITY_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::CollectionEquality as u8,
-            )],
-        ),
-        (
-            Symbol::from(PUBLIC_RANDOM_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::PublicRandom as u8,
-            )],
-        ),
-        (
-            Symbol::from(MISSING_KEY_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::MissingKey as u8,
-            )],
-        ),
-        (
-            Symbol::from(FREEZING_CAPABILITY_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::FreezingCapability as u8,
-            )],
-        ),
-        (
-            Symbol::from(PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::PreferMutableTxContext as u8,
-            )],
-        ),
-        (
-            Symbol::from(UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
-            )],
-        ),
-        (
-            Symbol::from(UNCALLABLE_FUNCTION_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::UncallableFunction as u8,
-            )],
-        ),
-        (
-            Symbol::from(UNUSED_OBJECT_WITH_FIELDS_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
-                sui,
-                LinterDiagnosticCode::UnusedObjWithFields as u8,
-            )],
-        ),
-    ];
-
+    let filters = SUI_LINTS
+        .iter()
+        .map(|(filter_name, info)| (Symbol::from(*filter_name), vec![info.id()]))
+        .collect();
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
 

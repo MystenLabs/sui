@@ -1,34 +1,40 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-share_owned
-===========
+share_owned (W99000): possible owned object share
 
-category: Sui
-origin:   Sui
-level:    on by default
-code:     W99000
+Sharing is irreversible and makes an object world-writable forever. Calling `share_object` on an
+object that is not freshly created in this function (it arrives as a parameter or from an unpack)
+can silently hand every account write access to something a user believed was theirs. It fires only
+when the type is also transferable — it has `store`, or is transferred with `transfer::transfer`
+elsewhere; a `key`-only type that is never transferred is not flagged.
 
-possible owned object share
+This lint is on by default.
 
-Sharing is irreversible and makes an object world-writable forever. Calling `share_object` on an object that is not freshly created in this function (it arrives as a parameter or from an unpack) can silently hand every account write access to something a user believed was theirs. It fires only when the type is also transferable — it has `store`, or is transferred with `transfer::transfer` elsewhere; a `key`-only type that is never transferred is not flagged.
+## When it's OK
 
-When it's OK:
-  The shared object really is fresh, but was produced through a helper call the local analysis can't see through — a conservative false positive.
+The shared object really is fresh, but was produced through a helper call the local analysis can't
+see through — a conservative false positive.
 
-Example:
+## Example
 
-  // flagged
-  // `o` is a parameter — the checker can't prove it is fresh
-  public fun share(o: Obj) {
-      transfer::public_share_object(o)
-  }
+Flagged:
 
-  // suggested
-  // packed here, so provably a fresh object
-  public fun share(ctx: &mut TxContext) {
-      transfer::share_object(Obj { id: object::new(ctx) })
-  }
+```move
+// `o` is a parameter — the checker can't prove it is fresh
+public fun share(o: Obj) {
+    transfer::public_share_object(o)
+}
+```
+
+Suggested:
+
+```move
+// packed here, so provably a fresh object
+public fun share(ctx: &mut TxContext) {
+    transfer::share_object(Obj { id: object::new(ctx) })
+}
+```
 
 Suppress a specific case with `#[allow(lint(share_owned))]`.

@@ -1,29 +1,33 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-constant_naming
-===============
+constant_naming (W04001): constant should follow naming convention
 
-category: Style
-origin:   Move
-level:    requires `--lint`
-code:     W04001
+Constants are expected to be `UPPER_SNAKE_CASE` or PascalCase (either is accepted for any constant).
+A lowercase or mixed name (`max_supply`, `JSON_Max_Size`) reads like a variable and breaks module
+consistency.
 
-constant should follow naming convention
+This lint is off by default; enable it with `--lint`.
 
-Constants are expected to be `UPPER_SNAKE_CASE` or PascalCase (either is accepted for any constant). A lowercase or mixed name (`max_supply`, `JSON_Max_Size`) reads like a variable and breaks module consistency.
+## When it's OK
 
-When it's OK:
-  PascalCase is deliberately allowed — including the `E`-prefixed PascalCase used for error constants, such as `ENotAuthorized`.
+PascalCase is deliberately allowed — including the `E`-prefixed PascalCase used for error constants,
+such as `ENotAuthorized`.
 
-Example:
+## Example
 
-  // flagged
-  const Another_BadName: u64 = 42;
+Flagged:
 
-  // suggested
-  const MAX_LIMIT: u64 = 1000;
-  const ENotAuthorized: u64 = 0;
+```move
+const Another_BadName: u64 = 42;
+```
+
+Suggested:
+
+```move
+const MAX_LIMIT: u64 = 1000;
+const ENotAuthorized: u64 = 0;
+```
 
 Suppress a specific case with `#[allow(lint(constant_naming))]`.

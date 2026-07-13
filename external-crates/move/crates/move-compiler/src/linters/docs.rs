@@ -1,87 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Human-facing documentation for each lint, surfaced via `move lint --explain <CODE>` and
-//! referenced by a per-diagnostic hint. This module is the single source of truth for lint prose;
-//! the numeric `(category, code)` ids are only used to render the `Wxxyyy` code and to match
-//! emitted diagnostics so the hint can name the right lint.
+//! Lookups and rendering for `move lint --explain <CODE>` and `--list`. The per-lint prose lives
+//! in `diagnostics/explanations/<Category>_<CodeName>.md` files, attached to each lint's
+//! [`DiagnosticInfo`] at compile time (see the `lints!`/`sui_lints!` macros); this module only
+//! resolves user queries against the lint tables and wraps the file contents with the few lines
+//! that would drift if hand-written -- the positional `Wxxyyy` code and the suppression
+//! attribute.
 
-use crate::linters::LinterDiagnosticCategory;
+use crate::{
+    diagnostics::codes::DiagnosticInfo,
+    linters::{LinterDiagnosticCategory, MOVE_LINTS},
+    sui_mode::linters::SUI_LINTS,
+};
 use std::{collections::BTreeMap, fmt, sync::LazyLock};
 
-/// Where a lint originates.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum LintOrigin {
-    /// Generic Move linter (`move_compiler::linters`).
-    Move,
-    /// Sui-specific linter (`move_compiler::sui_mode::linters`).
-    Sui,
+type Lint = (&'static str, DiagnosticInfo);
+
+/// Every lint as `(filter name, info)`, Move lints followed by Sui lints, in code order.
+fn all_lints() -> impl Iterator<Item = &'static Lint> {
+    MOVE_LINTS.iter().chain(SUI_LINTS.iter())
 }
 
-impl LintOrigin {
-    fn label(self) -> &'static str {
-        match self {
-            LintOrigin::Move => "Move",
-            LintOrigin::Sui => "Sui",
-        }
-    }
-}
+static LINTS_BY_NAME: LazyLock<BTreeMap<&'static str, &'static Lint>> =
+    LazyLock::new(|| all_lints().map(|lint| (lint.0, lint)).collect());
 
-/// A worked bad/good pair illustrating a lint.
-pub struct LintExample {
-    /// A snippet that triggers the lint.
-    pub bad: &'static str,
-    /// The corrected snippet that does not.
-    pub good: &'static str,
-}
-
-/// Human-facing documentation for a single lint.
-pub struct LintDoc {
-    /// Filter name: the canonical `--explain` key and the `#[allow(lint(<name>))]` key.
-    pub name: &'static str,
-    pub origin: LintOrigin,
-    /// `true` if the lint runs at the default level; `false` if it requires `--lint`.
-    pub default: bool,
-    /// Diagnostic category and code. Used to render the `Wxxyyy` code and to match emitted
-    /// diagnostics for the `--explain` hint. These follow the current (origin-based) numbering.
-    pub category: u8,
-    pub code: u8,
-    /// One-line description of what the lint flags (matches the diagnostic message).
-    pub summary: &'static str,
-    /// Why the flagged pattern matters.
-    pub rationale: &'static str,
-    /// When firing is acceptable, or how to knowingly opt out. `None` omits the section.
-    pub when_ok: Option<&'static str>,
-    pub example: LintExample,
-}
-
-impl LintDoc {
-    /// The rendered diagnostic code, e.g. `W99000`. Lints are always warnings, so the severity
-    /// prefix is always `W`.
-    pub fn rendered_code(&self) -> String {
-        format!("W{:02}{:03}", self.category, self.code)
-    }
-}
-
-static DOCS_BY_NAME: LazyLock<BTreeMap<&'static str, &'static LintDoc>> =
-    LazyLock::new(|| LINT_DOCS.iter().map(|d| (d.name, d)).collect());
-
-static DOCS_BY_ID: LazyLock<BTreeMap<(u8, u8), &'static LintDoc>> = LazyLock::new(|| {
-    LINT_DOCS
-        .iter()
-        .map(|d| ((d.category, d.code), d))
+static LINTS_BY_ID: LazyLock<BTreeMap<(u8, u8), &'static Lint>> = LazyLock::new(|| {
+    all_lints()
+        .map(|lint| ((lint.1.category(), lint.1.code()), lint))
         .collect()
 });
 
-/// Look up a lint doc from raw `--explain <query>` user input: either a filter name
-/// (`share_owned`) or a rendered diagnostic code (`W99000`).
-pub fn find_lint_doc(query: &str) -> Option<&'static LintDoc> {
+/// The `--explain` output for a single lint: the explanation file printed verbatim, between a
+/// generated `name (Wxxyyy): message` header and a generated suppression footer.
+pub struct LintExplanation {
+    name: &'static str,
+    info: &'static DiagnosticInfo,
+}
+
+/// The rendered diagnostic code without the `Lint ` prefix, e.g. `W99000`. Lints are always
+/// warnings, so the severity prefix is always `W`.
+fn rendered_code(info: &DiagnosticInfo) -> String {
+    format!("W{:02}{:03}", info.category(), info.code())
+}
+
+/// Look up a lint from raw `--explain <query>` user input: either a filter name (`share_owned`)
+/// or a rendered diagnostic code (`W99000`). A lint without an explanation file is treated as
+/// undocumented.
+pub fn find_lint(query: &str) -> Option<LintExplanation> {
     let q = query.trim();
-    if let Some(doc) = DOCS_BY_NAME.get(q) {
-        return Some(doc);
-    }
-    let (category, code) = parse_rendered_code(q)?;
-    lint_doc_by_id(category, code)
+    let (name, info) = LINTS_BY_NAME.get(q).copied().or_else(|| {
+        let (category, code) = parse_rendered_code(q)?;
+        LINTS_BY_ID.get(&(category, code)).copied()
+    })?;
+    info.explanation()?;
+    Some(LintExplanation { name, info })
 }
 
 /// Parse a rendered `Wxxyyy` code back into its `(category, code)` id. Accepts the forms a user is
@@ -97,64 +70,25 @@ fn parse_rendered_code(s: &str) -> Option<(u8, u8)> {
     Some((digits[..2].parse().ok()?, digits[2..].parse().ok()?))
 }
 
-/// Look up a lint doc by its diagnostic `(category, code)`. Used to attach the `--explain` hint to
-/// emitted lint diagnostics.
-pub fn lint_doc_by_id(category: u8, code: u8) -> Option<&'static LintDoc> {
-    DOCS_BY_ID.get(&(category, code)).copied()
+/// The filter name of the lint with the given diagnostic `(category, code)`, if it has an
+/// explanation to point at. Used to attach the `--explain` hint to emitted lint diagnostics.
+pub fn explained_lint_name(category: u8, code: u8) -> Option<&'static str> {
+    let (name, info) = LINTS_BY_ID.get(&(category, code))?;
+    info.explanation()?;
+    Some(name)
 }
 
-/// Write `s` indented by two spaces, preserving blank lines, with a trailing newline.
-fn write_indented(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result {
-    for line in s.lines() {
-        if line.is_empty() {
-            writeln!(f)?;
-        } else {
-            writeln!(f, "  {line}")?;
-        }
-    }
-    Ok(())
-}
-
-/// The `--explain <name>` output for a single lint.
-impl fmt::Display for LintDoc {
+impl fmt::Display for LintExplanation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let level = if self.default {
-            "on by default"
-        } else {
-            "requires `--lint`"
-        };
-        writeln!(f, "{}", self.name)?;
-        writeln!(f, "{}", "=".repeat(self.name.len()))?;
+        let Self { name, info } = self;
+        // `find_lint` only constructs documented lints.
+        let explanation = info.explanation().expect("documented lint");
+        writeln!(f, "{name} ({}): {}", rendered_code(info), info.message())?;
         writeln!(f)?;
-        let category =
-            LinterDiagnosticCategory::try_from_u8(self.category).map_or("Unknown", |c| c.name());
-        writeln!(f, "category: {category}")?;
-        writeln!(f, "origin:   {}", self.origin.label())?;
-        writeln!(f, "level:    {level}")?;
-        writeln!(f, "code:     {}", self.rendered_code())?;
+        // The explanation file is printed verbatim; it ends with a newline.
+        write!(f, "{explanation}")?;
         writeln!(f)?;
-        writeln!(f, "{}", self.summary)?;
-        writeln!(f)?;
-        writeln!(f, "{}", self.rationale)?;
-        if let Some(when_ok) = self.when_ok {
-            writeln!(f)?;
-            writeln!(f, "When it's OK:")?;
-            write_indented(f, when_ok)?;
-        }
-        writeln!(f)?;
-        writeln!(f, "Example:")?;
-        writeln!(f)?;
-        writeln!(f, "  // flagged")?;
-        write_indented(f, self.example.bad)?;
-        writeln!(f)?;
-        writeln!(f, "  // suggested")?;
-        write_indented(f, self.example.good)?;
-        writeln!(f)?;
-        writeln!(
-            f,
-            "Suppress a specific case with `#[allow(lint({}))]`.",
-            self.name
-        )
+        writeln!(f, "Suppress a specific case with `#[allow(lint({name}))]`.")
     }
 }
 
@@ -171,16 +105,16 @@ impl fmt::Display for LintIndex<'_> {
             "Move lint index. Run `{} --explain <name>` for details on any lint.\n",
             self.command
         )?;
-        let width = LINT_DOCS.iter().map(|d| d.name.len()).max().unwrap_or(0);
+        let width = all_lints().map(|(name, _)| name.len()).max().unwrap_or(0);
         // Categories in `LinterDiagnosticCategory` order; empty ones are skipped.
         for category in LinterDiagnosticCategory::ALL {
             let mut any = false;
-            for doc in LINT_DOCS.iter().filter(|d| d.category == *category as u8) {
+            for (name, info) in all_lints().filter(|(_, info)| info.category() == *category as u8) {
                 if !any {
                     writeln!(f, "{}", category.name())?;
                     any = true;
                 }
-                writeln!(f, "    {:width$}  {}", doc.name, doc.summary, width = width)?;
+                writeln!(f, "    {name:width$}  {}", info.message())?;
             }
             if any {
                 writeln!(f)?;
@@ -189,503 +123,6 @@ impl fmt::Display for LintIndex<'_> {
         Ok(())
     }
 }
-
-//**************************************************************************************************
-// Registry
-//**************************************************************************************************
-
-// A flat registry; `LintIndex` groups by category. The `(category, code)` pairs are the lints'
-// actual diagnostic ids (see `LinterDiagnosticCategory`), used to render `Wxxyyy` and match
-// emitted diagnostics.
-pub const LINT_DOCS: &[LintDoc] = &[
-    LintDoc {
-        name: "share_owned",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 0,
-        summary: "possible owned object share",
-        rationale: "\
-Sharing is irreversible and makes an object world-writable forever. Calling `share_object` on an \
-object that is not freshly created in this function (it arrives as a parameter or from an unpack) \
-can silently hand every account write access to something a user believed was theirs. It fires only \
-when the type is also transferable — it has `store`, or is transferred with `transfer::transfer` \
-elsewhere; a `key`-only type that is never transferred is not flagged.",
-        when_ok: Some(
-            "The shared object really is fresh, but was produced through a helper call the local \
-analysis can't see through — a conservative false positive.",
-        ),
-        example: LintExample {
-            bad: "// `o` is a parameter — the checker can't prove it is fresh\npublic fun share(o: Obj) {\n    transfer::public_share_object(o)\n}",
-            good: "// packed here, so provably a fresh object\npublic fun share(ctx: &mut TxContext) {\n    transfer::share_object(Obj { id: object::new(ctx) })\n}",
-        },
-    },
-    LintDoc {
-        name: "custom_state_change",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 2,
-        summary: "potentially unenforceable custom transfer/share/freeze policy",
-        rationale: "\
-A by-value struct defined in this module that has the `store` ability can already be transferred, \
-shared, or frozen by anyone through the `public_*` API. Routing it through the private \
-`transfer`/`share_object`/`freeze_object` therefore cannot enforce any custom policy — callers just \
-bypass it.",
-        when_ok: Some(
-            "If the type keeps `store`, call the honest `public_*` variant. If the policy must \
-actually hold, remove `store` so the private variant is the only path.",
-        ),
-        example: LintExample {
-            bad: "// `S1` has `key` + `store`, so callers can already freeze it via `public_freeze_object`\npublic fun custom_freeze(o: S1) {\n    transfer::freeze_object(o)\n}",
-            good: "public fun custom_freeze(o: S1) {\n    transfer::public_freeze_object(o)\n}",
-        },
-    },
-    LintDoc {
-        name: "freeze_wrapped",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 4,
-        summary: "attempting to freeze wrapped objects",
-        rationale: "\
-Freezing makes an object immutable forever. If the frozen object wraps another object — a field \
-whose type has `key`, directly or transitively — that inner object is frozen and made unrecoverable \
-too, which is almost never intended.",
-        when_ok: None,
-        example: LintExample {
-            bad: "public struct Inner has key, store { id: UID }\npublic struct Wrapper has key, store { id: UID, inner: Inner }\n\npublic fun freeze_wrapper(w: Wrapper) {\n    transfer::public_freeze_object(w)\n}",
-            good: "public struct Config has key, store { id: UID, fee: u64 }\n\npublic fun freeze_config(c: Config) {\n    transfer::public_freeze_object(c)\n}",
-        },
-    },
-    LintDoc {
-        name: "public_random",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 6,
-        summary: "Risky use of 'sui::random'",
-        rationale: "\
-A `public` function that takes `Random` or `RandomGenerator` can be called by other Move code, \
-letting an attacker draw randomness and react to the outcome within the same transaction. Randomness \
-should only be reachable from a transaction, not composed by another contract.",
-        when_ok: Some(
-            "Reduce the visibility below `public` — a non-public `entry` function, `public(package)`, \
-or a private function — so it can't be composed by another contract. Adding `entry` to a function \
-that stays `public` does not help.",
-        ),
-        example: LintExample {
-            bad: "public fun not_allowed(_r: &Random) {}",
-            good: "entry fun basic_random(_r: &Random) {}",
-        },
-    },
-    LintDoc {
-        name: "freezing_capability",
-        origin: LintOrigin::Sui,
-        default: false,
-        category: 99,
-        code: 8,
-        summary: "freezing potential capability",
-        rationale: "\
-Capabilities gate privileged actions. Freezing one turns it into a permanent immutable object that \
-anyone can reference and that can never be revoked — usually the opposite of the intended access \
-control. The lint matches by struct name (a capitalized `Cap`).",
-        when_ok: Some(
-            "The match is by name — a `Cap` at the end of the name, or followed by an uppercase \
-letter, digit, or `_`. So a non-capability like `NoCap` is a false positive, while a real \
-capability with an off-pattern name (`AdminRights`, `Capv0`) is missed.",
-        ),
-        example: LintExample {
-            bad: "public struct AdminCap has key { id: UID }\n\npublic fun freeze_cap(cap: AdminCap) {\n    transfer::public_freeze_object(cap)\n}",
-            good: "// keep the capability owned instead of freezing it\npublic fun keep_cap(cap: AdminCap, owner: address) {\n    transfer::transfer(cap, owner)\n}",
-        },
-    },
-    LintDoc {
-        name: "missing_key",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 7,
-        summary: "struct with id but missing key ability",
-        rationale: "\
-A struct whose first field is `id: UID` looks like a Sui object, but without the `key` ability it \
-can never be stored, transferred, or shared as one. This is almost always a forgotten `has key`.",
-        when_ok: None,
-        example: LintExample {
-            bad: "public struct MissingKeyAbility {\n    id: UID,\n}",
-            good: "public struct HasKeyAbility has key {\n    id: UID,\n}",
-        },
-    },
-    LintDoc {
-        name: "collection_equality",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 5,
-        summary: "possibly useless collections compare",
-        rationale: "\
-Sui collections — `Bag`, `ObjectBag`, `Table`, `ObjectTable`, `LinkedTable`, `TableVec`, `VecMap`, \
-and `VecSet` — have no meaningful `==`. The UID-backed ones (`Bag`, `Table`, …) compare by their \
-internal handle, not contents; `VecMap`/`VecSet` compare their backing vector, so equal contents in \
-a different insertion order compare unequal. Either way `==`/`!=` rarely means what it looks like.",
-        when_ok: None,
-        example: LintExample {
-            bad: "public fun bag_eq(bag1: &Bag, bag2: &Bag): bool {\n    bag1 == bag2\n}",
-            good: "// compare the state you care about, not the collection handle\npublic fun bag_eq(bag1: &Bag, bag2: &Bag): bool {\n    bag1.length() == bag2.length()\n}",
-        },
-    },
-    LintDoc {
-        name: "uncallable_function",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 11,
-        summary: "it will not be possible to call this function",
-        rationale: "\
-The transaction runtime can only supply certain argument shapes. Taking `TxContext` by value, a \
-`&mut TxContext` alongside any other `TxContext` parameter (it must be the only one), or a `&mut` to \
-`Clock`/`Random` makes the function impossible to call from a transaction.",
-        when_ok: Some(
-            "A single `&mut TxContext` is fine. Use `&Clock` and `&Random` rather than `&mut`.",
-        ),
-        example: LintExample {
-            bad: "// `Clock` must be passed by immutable reference\nfun uses_clock(_c: &mut Clock) {}",
-            good: "fun uses_clock(_c: &Clock) {}",
-        },
-    },
-    LintDoc {
-        name: "unused_object_with_fields",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 12,
-        summary: "unused object with fields",
-        rationale: "\
-A reference to an object that carries data beyond its `id`, but whose fields are never read, is a \
-likely mistake: the function takes the object yet never looks at the values it holds.",
-        when_ok: Some(
-            "Objects with no field beyond `id` (pure marker capabilities), by-value params, and \
-generic object types are out of scope. Otherwise the function should assert on or otherwise read a \
-field — or drop the parameter if it truly isn't needed.",
-        ),
-        example: LintExample {
-            bad: "public struct OwnerCap has key { id: UID, owns: address }\n\npublic fun unused(_c: &OwnerCap) {}",
-            good: "public fun owner(c: &OwnerCap): address {\n    c.owns\n}",
-        },
-    },
-    LintDoc {
-        name: "loop_without_exit",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 2,
-        code: 6,
-        summary: "'loop' without 'break' or 'return'",
-        rationale: "\
-A `loop` whose body contains neither `break` nor `return` has no normal exit — it runs until it \
-aborts, if ever. This is almost always a missing exit condition. (`while` is covered separately by \
-`while_true`.)",
-        when_ok: Some(
-            "An `abort` inside the loop is not treated as an exit, so a deliberately divergent loop \
-is a false positive.",
-        ),
-        example: LintExample {
-            bad: "let i = 0;\nloop {\n    i = i + 1;\n}",
-            good: "let i = 0;\nloop {\n    if (i >= 10) break;\n    i = i + 1;\n}",
-        },
-    },
-    LintDoc {
-        name: "self_assignment",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 2,
-        code: 8,
-        summary: "assignment preserves the same value",
-        rationale: "\
-Assigning a location to itself (`x = x`, `*r = *r`, `s.f = s.f`) has no effect. It usually signals a \
-typo or an unfinished edit.",
-        when_ok: None,
-        example: LintExample {
-            bad: "p = p;",
-            good: "// remove the redundant statement",
-        },
-    },
-    LintDoc {
-        name: "always_equal_operands",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 2,
-        code: 11,
-        summary: "redundant, always-equal operands for binary operation",
-        rationale: "\
-A binary operation whose two operands are the same expression has an already-known result: `x == x` \
-is always `true`, `x - x` is `0`, `x / x` is `1`, `x & x` is just `x`. The operation is dead weight \
-and often a copy-paste bug where one side should differ.",
-        when_ok: None,
-        example: LintExample {
-            bad: "let b = x == x;",
-            good: "let b = true;",
-        },
-    },
-    LintDoc {
-        name: "unused_return_value",
-        origin: LintOrigin::Move,
-        // Only the Sui-mode visitor set runs this by default (vanilla `move` needs `--lint`), but
-        // in practice every consumer of these docs is Sui-flavored, so claim the Sui default.
-        default: true,
-        category: 2,
-        code: 13,
-        summary: "return value of a non-mutating call is discarded",
-        rationale: "\
-Discarding the result of a call that has no `&mut` arguments means the call did nothing observable. \
-Either use the value or make the intent explicit with `let _ = ...`. In Sui mode `&mut TxContext` is \
-treated as non-mutating, so such calls are still flagged.",
-        when_ok: Some(
-            "Calls that take a `&mut` argument (a real side effect) are not flagged. Bind to `let _` \
-to acknowledge an intentionally discarded value.",
-        ),
-        example: LintExample {
-            bad: "fun price(x: u64): u64 { x + 1 }\n// ...\nprice(10);",
-            good: "let _ = price(10);",
-        },
-    },
-    LintDoc {
-        name: "self_transfer",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 1,
-        summary: "non-composable transfer to sender",
-        rationale: "\
-Transferring an object (one with `key` + `store`) to `ctx.sender()` inside the function makes it \
-non-composable: a caller (or a programmable transaction block) cannot use the object because the \
-function gives it away internally. Returning the object lets the caller decide what to do with it.",
-        when_ok: Some(
-            "Rare — the composable pattern is to return the object and let the caller place it. \
-`entry` functions and `init` are already exempt.",
-        ),
-        example: LintExample {
-            bad: "// `S1` has `key` + `store`\npublic fun mint(ctx: &mut TxContext) {\n    transfer::public_transfer(S1 { id: object::new(ctx) }, ctx.sender())\n}",
-            good: "public fun mint(ctx: &mut TxContext): S1 {\n    S1 { id: object::new(ctx) }\n}",
-        },
-    },
-    LintDoc {
-        name: "coin_field",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 3,
-        summary: "sub-optimal 'sui::coin::Coin' field type",
-        rationale: "\
-`Coin<T>` is itself a full object (it has an `id: UID`) meant for transfers between accounts. Held \
-as a field it adds needless object plumbing; `Balance<T>` is the storage-oriented type for keeping \
-value inside another object.",
-        when_ok: Some(
-            "Keep `Coin` only if the field genuinely needs to be an independent object. An alias does \
-not avoid the lint — the resolved type is what's matched.",
-        ),
-        example: LintExample {
-            bad: "public struct S2 has key, store {\n    id: UID,\n    c: Coin<S1>,\n}",
-            good: "public struct S2 has key, store {\n    id: UID,\n    c: Balance<S1>,\n}",
-        },
-    },
-    LintDoc {
-        name: "public_entry",
-        origin: LintOrigin::Sui,
-        default: true,
-        category: 99,
-        code: 10,
-        summary: "unnecessary `entry` on a `public` function",
-        rationale: "\
-`entry` on a `public` function is redundant: a `public` function is already callable from a \
-programmable transaction block. `entry` is only meaningful on a non-`public` function, where it is \
-what makes the function callable as a transaction command.",
-        when_ok: None,
-        example: LintExample {
-            bad: "public entry fun mint() {}",
-            good: "public fun mint() {}",
-        },
-    },
-    LintDoc {
-        name: "prefer_mut_tx_context",
-        origin: LintOrigin::Sui,
-        default: false,
-        category: 99,
-        code: 9,
-        summary: "prefer '&mut TxContext' over '&TxContext'",
-        rationale: "\
-A public function that takes `&TxContext` cannot later create objects — which needs \
-`&mut TxContext` — without a breaking signature change. Taking `&mut TxContext` up front keeps the \
-API upgrade-compatible.",
-        when_ok: Some(
-            "Only `public` functions are checked; any non-`public` visibility (private, \
-`public(package)`, `public(friend)`) is exempt, since those signatures can change freely.",
-        ),
-        example: LintExample {
-            bad: "public fun incorrect_mint(_ctx: &TxContext) {}",
-            good: "public fun correct_mint(_ctx: &mut TxContext) {}",
-        },
-    },
-    LintDoc {
-        name: "constant_naming",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 4,
-        code: 1,
-        summary: "constant should follow naming convention",
-        rationale: "\
-Constants are expected to be `UPPER_SNAKE_CASE` or PascalCase (either is accepted for any constant). \
-A lowercase or mixed name (`max_supply`, `JSON_Max_Size`) reads like a variable and breaks module \
-consistency.",
-        when_ok: Some(
-            "PascalCase is deliberately allowed — including the `E`-prefixed PascalCase used for \
-error constants, such as `ENotAuthorized`.",
-        ),
-        example: LintExample {
-            bad: "const Another_BadName: u64 = 42;",
-            good: "const MAX_LIMIT: u64 = 1000;\nconst ENotAuthorized: u64 = 0;",
-        },
-    },
-    LintDoc {
-        name: "abort_without_constant",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 4,
-        code: 5,
-        summary: "'abort' or 'assert' without named constant",
-        rationale: "\
-A bare numeric abort code carries no meaning at the call site or in error output. A named constant \
-documents the failure and keeps codes consistent across the module.",
-        when_ok: Some(
-            "The whole argument must be a single named constant — `abort A + B` still fires. \
-`assert!(cond, ECode)` is the idiomatic form.",
-        ),
-        example: LintExample {
-            bad: "abort 100",
-            good: "const ERR_INVALID_ARGUMENT: u64 = 1;\n// ...\nabort ERR_INVALID_ARGUMENT",
-        },
-    },
-    LintDoc {
-        name: "unnecessary_math",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 1,
-        code: 3,
-        summary: "math operator can be simplified",
-        rationale: "\
-An operation with an identity operand (`* 1`, `/ 1`, `+ 0`, `- 0`, `<< 0`, `>> 0`) does nothing; one \
-with an absorbing operand (`* 0`, `0 / x`, `x % 1`, `0 % x`) is `0`; and `1 % x` is `1`. Only literal \
-`0`/`1` operands are detected.",
-        when_ok: None,
-        example: LintExample {
-            bad: "let y = x * 1;",
-            good: "let y = x;",
-        },
-    },
-    LintDoc {
-        name: "unnecessary_conditional",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 1,
-        code: 7,
-        summary: "'if' expression can be removed",
-        rationale: "\
-An `if` with one branch `true` and the other `false` collapses to the condition itself (or its \
-negation), and one whose branches are the same literal value collapses to that value. The \
-conditional only adds noise.",
-        when_ok: None,
-        example: LintExample {
-            bad: "let b = if (!condition) true else false;",
-            good: "let b = !condition;",
-        },
-    },
-    LintDoc {
-        name: "redundant_ref_deref",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 1,
-        code: 9,
-        summary: "redundant reference/dereference",
-        rationale: "\
-Taking a reference and immediately dereferencing it (`&*(&x)`), or dereferencing a fresh field \
-borrow (`*(&s.f)`), is a no-op the compiler already performs for you.",
-        when_ok: Some(
-            "Dereferencing an existing reference (`*r`) is fine — only dereferencing a fresh borrow \
-(`*(&x)` or `&*(&x)`) is redundant.",
-        ),
-        example: LintExample {
-            bad: "let _ref = &*(&resource);",
-            good: "let _ref = &resource;",
-        },
-    },
-    LintDoc {
-        name: "combinable_comparisons",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 1,
-        code: 12,
-        summary: "comparison operations condition can be simplified",
-        rationale: "\
-Two comparisons over the same operand pair joined by `&&`/`||` often collapse to a single comparison \
-(`x == y && x >= y` is just `x == y`), or to a constant `true`/`false` (`x >= y || x <= y`).",
-        when_ok: Some("Negated comparisons are not handled and won't fire."),
-        example: LintExample {
-            bad: "let b = x == y && x >= y;",
-            good: "let b = x == y;",
-        },
-    },
-    LintDoc {
-        name: "while_true",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 4,
-        code: 2,
-        summary: "unnecessary 'while (true)', replace with 'loop'",
-        rationale: "\
-`while (true)` is an infinite loop written the long way. `loop` states the intent directly and can \
-`break` with a value. Only the literal `true` condition is detected.",
-        when_ok: None,
-        example: LintExample {
-            bad: "while (true) {\n    // ...\n}",
-            good: "loop {\n    // ...\n}",
-        },
-    },
-    LintDoc {
-        name: "unneeded_return",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 4,
-        code: 4,
-        summary: "unneeded return",
-        rationale: "\
-In tail position the `return` keyword is redundant — the trailing expression is already the \
-function's value.",
-        when_ok: Some(
-            "Only a tail-position `return` is flagged — of any value-yielding expression (a call, \
-`S { .. }`, arithmetic, a cast, `loop`, even `()`). A `return` used as an early exit, or whose \
-operand doesn't yield a value (e.g. `return abort E`), is left alone.",
-        ),
-        example: LintExample {
-            bad: "fun price(): u64 {\n    return 5\n}",
-            good: "fun price(): u64 {\n    5\n}",
-        },
-    },
-    LintDoc {
-        name: "unnecessary_unit",
-        origin: LintOrigin::Move,
-        default: false,
-        category: 4,
-        code: 10,
-        summary: "unit `()` expression can be removed or simplified",
-        rationale: "\
-A `()` unit expression as a non-final statement, or as a branch of an `if`, adds nothing. Remove it, \
-or invert the condition to drop the empty branch.",
-        when_ok: None,
-        example: LintExample {
-            bad: "if (b) () else { x = 1 };",
-            good: "if (!b) { x = 1 };",
-        },
-    },
-];
 
 #[cfg(test)]
 mod tests {
@@ -702,10 +139,24 @@ mod tests {
     }
 
     #[test]
+    fn every_lint_has_an_explanation() {
+        let missing: Vec<_> = all_lints()
+            .filter(|(_, info)| info.explanation().is_none())
+            .map(|(name, info)| format!("{name} ({})", rendered_code(info)))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "lints without an explanation file under \
+             src/diagnostics/explanations/<Category>_<CodeName>.md: {missing:?}"
+        );
+    }
+
+    #[test]
     fn explain_output_per_lint() {
         explain_settings().bind(|| {
-            for doc in LINT_DOCS {
-                insta::assert_snapshot!(doc.name, doc.to_string());
+            for (name, _) in all_lints() {
+                let explanation = find_lint(name).expect("documented lint");
+                insta::assert_snapshot!(*name, explanation.to_string());
             }
         });
     }
@@ -727,79 +178,11 @@ mod tests {
     fn ids_and_names_are_unique() {
         let mut names = HashSet::new();
         let mut ids = HashSet::new();
-        for doc in LINT_DOCS {
-            assert!(names.insert(doc.name), "duplicate lint name {}", doc.name);
+        for (name, info) in all_lints() {
+            assert!(names.insert(*name), "duplicate lint name {name}");
             assert!(
-                ids.insert((doc.category, doc.code)),
-                "duplicate lint id for {}",
-                doc.name
-            );
-        }
-    }
-
-    #[test]
-    fn every_registered_lint_has_a_doc() {
-        use crate::diagnostics::filter::FILTER_ALL;
-        let documented: HashSet<&str> = LINT_DOCS.iter().map(|d| d.name).collect();
-        let mut registered: HashSet<String> = HashSet::new();
-        for (_prefix, filters) in [
-            crate::linters::known_filters(),
-            crate::sui_mode::linters::known_filters(),
-        ] {
-            for (name, _ids) in filters {
-                if name.as_str() != FILTER_ALL {
-                    registered.insert(name.to_string());
-                }
-            }
-        }
-        let missing: Vec<_> = registered
-            .iter()
-            .filter(|n| !documented.contains(n.as_str()))
-            .collect();
-        assert!(
-            missing.is_empty(),
-            "lints missing an --explain doc: {missing:?}"
-        );
-        // Every doc must correspond to a real registered lint (no stale entries).
-        let extra: Vec<_> = documented
-            .iter()
-            .filter(|n| !registered.contains(**n))
-            .collect();
-        assert!(extra.is_empty(), "docs for unregistered lints: {extra:?}");
-    }
-
-    #[test]
-    fn doc_ids_match_registered_filters() {
-        use crate::diagnostics::filter::FILTER_ALL;
-        // name -> (category, code) as the linter actually registers it.
-        let mut registered: std::collections::HashMap<String, (u8, u8)> =
-            std::collections::HashMap::new();
-        for (_prefix, filters) in [
-            crate::linters::known_filters(),
-            crate::sui_mode::linters::known_filters(),
-        ] {
-            for (name, ids) in filters {
-                if name.as_str() == FILTER_ALL {
-                    continue;
-                }
-                let id = ids.first().expect("lint filter has an id");
-                registered.insert(name.to_string(), (id.category, id.code));
-            }
-        }
-        for doc in LINT_DOCS {
-            let (category, code) = registered
-                .get(doc.name)
-                .unwrap_or_else(|| panic!("{} is not a registered lint", doc.name));
-            assert_eq!(
-                (doc.category, doc.code),
-                (*category, *code),
-                "doc for `{}` claims id ({}, {}) but the lint registers ({}, {}) — \
-                 category/code must match the linter, not be hand-set",
-                doc.name,
-                doc.category,
-                doc.code,
-                category,
-                code
+                ids.insert((info.category(), info.code())),
+                "duplicate lint id for {name}"
             );
         }
     }
@@ -845,14 +228,14 @@ mod tests {
 
     #[test]
     fn find_by_name_and_code() {
-        let doc = find_lint_doc("share_owned").expect("by name");
-        assert_eq!(doc.name, "share_owned");
-        assert_eq!(find_lint_doc("W99000").unwrap().name, "share_owned");
-        assert_eq!(find_lint_doc("Lint W99000").unwrap().name, "share_owned");
-        assert_eq!(find_lint_doc("99000").unwrap().name, "share_owned");
+        let explanation = find_lint("share_owned").expect("by name");
+        assert_eq!(explanation.name, "share_owned");
+        assert_eq!(find_lint("W99000").unwrap().name, "share_owned");
+        assert_eq!(find_lint("Lint W99000").unwrap().name, "share_owned");
+        assert_eq!(find_lint("99000").unwrap().name, "share_owned");
         // Escalated rendering (`#[deny(lint(...))]`, `--warnings-are-errors`) prints an `E` code.
-        assert_eq!(find_lint_doc("E99000").unwrap().name, "share_owned");
-        assert_eq!(find_lint_doc("Lint E99000").unwrap().name, "share_owned");
-        assert!(find_lint_doc("nonsense").is_none());
+        assert_eq!(find_lint("E99000").unwrap().name, "share_owned");
+        assert_eq!(find_lint("Lint E99000").unwrap().name, "share_owned");
+        assert!(find_lint("nonsense").is_none());
     }
 }

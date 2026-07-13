@@ -1,25 +1,27 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-public_entry
-============
+public_entry (W99010): unnecessary `entry` on a `public` function
 
-category: Sui
-origin:   Sui
-level:    on by default
-code:     W99010
+`entry` on a `public` function is redundant: a `public` function is already callable from a
+programmable transaction block. `entry` is only meaningful on a non-`public` function, where it is
+what makes the function callable as a transaction command.
 
-unnecessary `entry` on a `public` function
+This lint is on by default.
 
-`entry` on a `public` function is redundant: a `public` function is already callable from a programmable transaction block. `entry` is only meaningful on a non-`public` function, where it is what makes the function callable as a transaction command.
+## Example
 
-Example:
+Flagged:
 
-  // flagged
-  public entry fun mint() {}
+```move
+public entry fun mint() {}
+```
 
-  // suggested
-  public fun mint() {}
+Suggested:
+
+```move
+public fun mint() {}
+```
 
 Suppress a specific case with `#[allow(lint(public_entry))]`.

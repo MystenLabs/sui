@@ -1,25 +1,27 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-always_equal_operands
-=====================
+always_equal_operands (W02011): redundant, always-equal operands for binary operation
 
-category: Suspicious
-origin:   Move
-level:    requires `--lint`
-code:     W02011
+A binary operation whose two operands are the same expression has an already-known result: `x == x`
+is always `true`, `x - x` is `0`, `x / x` is `1`, `x & x` is just `x`. The operation is dead weight
+and often a copy-paste bug where one side should differ.
 
-redundant, always-equal operands for binary operation
+This lint is off by default; enable it with `--lint`.
 
-A binary operation whose two operands are the same expression has an already-known result: `x == x` is always `true`, `x - x` is `0`, `x / x` is `1`, `x & x` is just `x`. The operation is dead weight and often a copy-paste bug where one side should differ.
+## Example
 
-Example:
+Flagged:
 
-  // flagged
-  let b = x == x;
+```move
+let b = x == x;
+```
 
-  // suggested
-  let b = true;
+Suggested:
+
+```move
+let b = true;
+```
 
 Suppress a specific case with `#[allow(lint(always_equal_operands))]`.

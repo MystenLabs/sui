@@ -1,28 +1,32 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-prefer_mut_tx_context
-=====================
+prefer_mut_tx_context (W99009): prefer '&mut TxContext' over '&TxContext'
 
-category: Sui
-origin:   Sui
-level:    requires `--lint`
-code:     W99009
+A public function that takes `&TxContext` cannot later create objects — which needs `&mut TxContext`
+— without a breaking signature change. Taking `&mut TxContext` up front keeps the API
+upgrade-compatible.
 
-prefer '&mut TxContext' over '&TxContext'
+This lint is off by default; enable it with `--lint`.
 
-A public function that takes `&TxContext` cannot later create objects — which needs `&mut TxContext` — without a breaking signature change. Taking `&mut TxContext` up front keeps the API upgrade-compatible.
+## When it's OK
 
-When it's OK:
-  Only `public` functions are checked; any non-`public` visibility (private, `public(package)`, `public(friend)`) is exempt, since those signatures can change freely.
+Only `public` functions are checked; any non-`public` visibility (private, `public(package)`,
+`public(friend)`) is exempt, since those signatures can change freely.
 
-Example:
+## Example
 
-  // flagged
-  public fun incorrect_mint(_ctx: &TxContext) {}
+Flagged:
 
-  // suggested
-  public fun correct_mint(_ctx: &mut TxContext) {}
+```move
+public fun incorrect_mint(_ctx: &TxContext) {}
+```
+
+Suggested:
+
+```move
+public fun correct_mint(_ctx: &mut TxContext) {}
+```
 
 Suppress a specific case with `#[allow(lint(prefer_mut_tx_context))]`.

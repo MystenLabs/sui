@@ -5,10 +5,10 @@
 //! Detects and reports instances where a non-mutable reference to `TxContext` is used in public function signatures.
 //! Promotes best practices for future-proofing smart contract code by allowing mutation of the transaction context.
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::LinterDiagnosticCode;
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::DiagnosticInfo,
     expansion::ast::{ModuleIdent, Visibility},
     naming::ast::TypeInner,
     parser::ast::FunctionName,
@@ -17,13 +17,8 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 
-const REQUIRE_MUTABLE_TX_CONTEXT_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::PreferMutableTxContext as u8,
-    "prefer '&mut TxContext' over '&TxContext'",
-);
+const REQUIRE_MUTABLE_TX_CONTEXT_DIAG: DiagnosticInfo =
+    LinterDiagnosticCode::PreferMutableTxContext.diag_info();
 
 simple_visitor!(
     PreferMutableTxContext,

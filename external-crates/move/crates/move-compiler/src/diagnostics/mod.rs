@@ -304,15 +304,14 @@ fn render_diagnostic_text(
         mut notes,
     } = diag;
     let mut diag = csr::diagnostic::Diagnostic::new(info.severity().into_codespan_severity());
-    // Attach an `--explain` hint to every lint diagnostic that has a doc. `info.render()` below
-    // consumes `info`, so read its id first.
+    // Attach an `--explain` hint to every lint diagnostic that has an explanation.
+    // `info.render()` below consumes `info`, so read its id first.
     if info.external_prefix() == Some(crate::linters::LINT_WARNING_PREFIX)
-        && let Some(doc) = crate::linters::docs::lint_doc_by_id(info.category(), info.code())
+        && let Some(name) = crate::linters::docs::explained_lint_name(info.category(), info.code())
     {
         notes.push(format!(
-            "run `{} --explain {}` for more information",
+            "run `{} --explain {name}` for more information",
             explain_command(),
-            doc.name
         ));
     }
     let (code, message) = info.render();

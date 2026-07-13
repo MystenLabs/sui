@@ -18,10 +18,7 @@ use crate::{
         },
     },
     diag,
-    diagnostics::{
-        Diagnostic, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
-    },
+    diagnostics::{Diagnostic, Diagnostics, codes::DiagnosticInfo},
     hlir::ast::{Label, ModuleCall, Type, Type_, Var},
     parser::ast::Ability_,
     sui_mode::{SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME},
@@ -29,8 +26,8 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    INVALID_LOC, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-    PUBLIC_TRANSFER_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME, type_abilities,
+    INVALID_LOC, LinterDiagnosticCode, PUBLIC_TRANSFER_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME,
+    type_abilities,
 };
 
 const TRANSFER_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
@@ -38,13 +35,7 @@ const TRANSFER_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, TRANSFER_FUN),
 ];
 
-const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::SelfTransfer as u8,
-    "non-composable transfer to sender",
-);
+const SELF_TRANSFER_DIAG: DiagnosticInfo = LinterDiagnosticCode::SelfTransfer.diag_info();
 
 //**************************************************************************************************
 // types

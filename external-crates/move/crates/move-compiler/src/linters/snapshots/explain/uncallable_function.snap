@@ -1,29 +1,32 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-uncallable_function
-===================
+uncallable_function (W99011): it will not be possible to call this function
 
-category: Sui
-origin:   Sui
-level:    on by default
-code:     W99011
+The transaction runtime can only supply certain argument shapes. Taking `TxContext` by value, a
+`&mut TxContext` alongside any other `TxContext` parameter (it must be the only one), or a `&mut` to
+`Clock`/`Random` makes the function impossible to call from a transaction.
 
-it will not be possible to call this function
+This lint is on by default.
 
-The transaction runtime can only supply certain argument shapes. Taking `TxContext` by value, a `&mut TxContext` alongside any other `TxContext` parameter (it must be the only one), or a `&mut` to `Clock`/`Random` makes the function impossible to call from a transaction.
+## When it's OK
 
-When it's OK:
-  A single `&mut TxContext` is fine. Use `&Clock` and `&Random` rather than `&mut`.
+A single `&mut TxContext` is fine. Use `&Clock` and `&Random` rather than `&mut`.
 
-Example:
+## Example
 
-  // flagged
-  // `Clock` must be passed by immutable reference
-  fun uses_clock(_c: &mut Clock) {}
+Flagged:
 
-  // suggested
-  fun uses_clock(_c: &Clock) {}
+```move
+// `Clock` must be passed by immutable reference
+fun uses_clock(_c: &mut Clock) {}
+```
+
+Suggested:
+
+```move
+fun uses_clock(_c: &Clock) {}
+```
 
 Suppress a specific case with `#[allow(lint(uncallable_function))]`.

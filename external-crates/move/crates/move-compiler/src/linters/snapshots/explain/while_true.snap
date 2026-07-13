@@ -1,29 +1,30 @@
 ---
 source: crates/move-compiler/src/linters/docs.rs
-expression: doc.to_string()
+expression: explanation.to_string()
 ---
-while_true
-==========
+while_true (W04002): unnecessary 'while (true)', replace with 'loop'
 
-category: Style
-origin:   Move
-level:    requires `--lint`
-code:     W04002
+`while (true)` is an infinite loop written the long way. `loop` states the intent directly and can
+`break` with a value. Only the literal `true` condition is detected.
 
-unnecessary 'while (true)', replace with 'loop'
+This lint is off by default; enable it with `--lint`.
 
-`while (true)` is an infinite loop written the long way. `loop` states the intent directly and can `break` with a value. Only the literal `true` condition is detected.
+## Example
 
-Example:
+Flagged:
 
-  // flagged
-  while (true) {
-      // ...
-  }
+```move
+while (true) {
+    // ...
+}
+```
 
-  // suggested
-  loop {
-      // ...
-  }
+Suggested:
+
+```move
+loop {
+    // ...
+}
+```
 
 Suppress a specific case with `#[allow(lint(while_true))]`.

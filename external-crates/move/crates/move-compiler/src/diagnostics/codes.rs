@@ -66,6 +66,7 @@ pub struct DiagnosticInfo {
     code: u8,
     external_prefix: ExternalPrefix,
     message: &'static str,
+    explanation: Option<&'static str>,
 }
 
 pub(crate) trait DiagnosticCode: Copy {
@@ -75,16 +76,20 @@ pub(crate) trait DiagnosticCode: Copy {
 
     fn code_and_message(&self) -> (u8, &'static str);
 
+    fn explanation(&self) -> Option<&'static str>;
+
     fn into_info(self) -> DiagnosticInfo {
         let severity = self.severity();
         let category = Self::CATEGORY as u8;
         let (code, message) = self.code_and_message();
+        let explanation = self.explanation();
         DiagnosticInfo {
             severity,
             category,
             code,
             external_prefix: None,
             message,
+            explanation,
         }
     }
 }
@@ -111,6 +116,7 @@ pub const fn custom(
         code,
         external_prefix: Some(external_prefix),
         message,
+        explanation: None,
     }
 }
 
@@ -165,6 +171,20 @@ macro_rules! codes {
                         Self::DontStartAtZeroPlaceholder =>
                             panic!("ICE do not use placeholder error code"),
                         $(Self::$code => (code, $code_msg),)*
+                    }
+                }
+
+                // A code has an explanation iff `diagnostics/explanations/<Category>_<CodeName>.md`
+                // exists -- keyed by the category and code identifiers rather than the rendered
+                // code (e.g. "E04006") since the numeric portions are positional and would drift
+                // if a code were added mid-category.
+                fn explanation(&self) -> Option<&'static str> {
+                    match self {
+                        Self::DontStartAtZeroPlaceholder =>
+                            panic!("ICE do not use placeholder error code"),
+                        $(Self::$code => move_proc_macros::optional_include_str!(
+                            "src/diagnostics/explanations/", $cat, "_", $code, ".md"
+                        ),)*
                     }
                 }
             }
@@ -420,6 +440,7 @@ impl DiagnosticInfo {
             code,
             external_prefix,
             message,
+            explanation: _,
         } = self;
         let sev_prefix = match severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
@@ -463,6 +484,17 @@ impl DiagnosticInfo {
 
     pub fn message(&self) -> &'static str {
         self.message
+    }
+
+    pub fn explanation(&self) -> Option<&'static str> {
+        self.explanation
+    }
+
+    /// Attach an explanation to a `custom` info. `const` so lint definitions can pair
+    /// `custom(...)` with an `optional_include_str!` explanation in a `const` context.
+    pub(crate) const fn with_explanation(mut self, explanation: Option<&'static str>) -> Self {
+        self.explanation = explanation;
+        self
     }
 
     pub fn is_external(&self) -> bool {

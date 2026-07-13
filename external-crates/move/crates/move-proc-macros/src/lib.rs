@@ -3,7 +3,12 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DataEnum, DeriveInput, Ident, ItemFn, parse_macro_input};
+use syn::{
+    Data, DataEnum, DeriveInput, Ident, ItemFn, LitStr, Token,
+    parse::{Parse, ParseStream},
+    parse_macro_input,
+    punctuated::Punctuated,
+};
 
 /// This macro generates a function `order_to_variant_map` which returns a map
 /// of the position of each variant to the name of the variant.
@@ -109,6 +114,60 @@ pub fn growing_stack(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    output.into()
+}
+
+/// A segment of the path given to `optional_include_str!`: either a string literal or an
+/// identifier (so `macro_rules!` callers can splice in captured idents).
+enum PathPart {
+    Lit(LitStr),
+    Ident(Ident),
+}
+
+impl Parse for PathPart {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(LitStr) {
+            Ok(Self::Lit(input.parse()?))
+        } else {
+            Ok(Self::Ident(input.parse()?))
+        }
+    }
+}
+
+/// Like `include_str!`, but expands to `Some(include_str!(...))` if the file exists and `None`
+/// if it does not. The path is the concatenation of the comma-separated arguments (string
+/// literals and identifiers), resolved relative to the `CARGO_MANIFEST_DIR` of the crate
+/// invoking the macro.
+///
+/// ```rust,ignore
+/// // Some(...) if `<crate root>/docs/Foo_Bar.md` exists, None otherwise
+/// let doc: Option<&'static str> = optional_include_str!("docs/", Foo, "_", Bar, ".md");
+/// ```
+///
+/// Note: rustc only records a dependency on the file when it is actually included, so a crate
+/// using this macro should also have a build script with `cargo::rerun-if-changed` on the
+/// relevant directory to pick up newly added files.
+#[proc_macro]
+pub fn optional_include_str(input: TokenStream) -> TokenStream {
+    let parts = parse_macro_input!(input with Punctuated::<PathPart, Token![,]>::parse_terminated);
+    let relative_path: String = parts
+        .iter()
+        .map(|part| match part {
+            PathPart::Lit(lit) => lit.value(),
+            PathPart::Ident(ident) => ident.to_string(),
+        })
+        .collect();
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .expect("CARGO_MANIFEST_DIR not set when expanding optional_include_str!");
+    let full_path = std::path::Path::new(&manifest_dir).join(&relative_path);
+    let output = if full_path.is_file() {
+        let full_path = full_path
+            .to_str()
+            .expect("non-UTF-8 path in optional_include_str!");
+        quote! { Some(include_str!(#full_path)) }
+    } else {
+        quote! { None }
+    };
     output.into()
 }
 
