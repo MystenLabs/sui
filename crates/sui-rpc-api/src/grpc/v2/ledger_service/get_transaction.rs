@@ -18,6 +18,7 @@ use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionResult;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
+use sui_rpc::proto::sui::rpc::v2::TransactionEffects;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::Digest;
@@ -26,6 +27,27 @@ use sui_types::full_checkpoint_content::ObjectSet;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
 pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
+
+fn read_mask_requires_objects(mask: &FieldMaskTree) -> bool {
+    mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
+        || mask
+            .subtree(ExecutedTransaction::EFFECTS_FIELD.name)
+            .is_some_and(|effects_mask| {
+                effects_mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD)
+                    || effects_mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD)
+            })
+}
+
+fn lowest_available_checkpoint_for_mask(
+    service: &RpcService,
+    mask: &FieldMaskTree,
+) -> Result<u64, RpcError> {
+    if read_mask_requires_objects(mask) {
+        service.reader.get_lowest_available_checkpoint_combined()
+    } else {
+        Ok(service.reader.inner().get_lowest_available_checkpoint()?)
+    }
+}
 
 #[tracing::instrument(skip(service))]
 pub fn get_transaction(
@@ -73,7 +95,7 @@ pub fn get_transaction(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
-    let lowest_available_checkpoint = service.reader.inner().get_lowest_available_checkpoint()?;
+    let lowest_available_checkpoint = lowest_available_checkpoint_for_mask(service, &read_mask)?;
 
     if !(lowest_available_checkpoint..=latest_checkpoint).contains(&transaction_checkpoint) {
         return Err(TransactionNotFoundError(transaction_digest).into());
@@ -122,7 +144,7 @@ pub fn batch_get_transactions(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
-    let lowest_available_checkpoint = service.reader.inner().get_lowest_available_checkpoint()?;
+    let lowest_available_checkpoint = lowest_available_checkpoint_for_mask(service, &read_mask)?;
 
     let transactions = digests
         .into_iter()
@@ -199,11 +221,9 @@ pub(crate) fn render_executed_transaction(
 
     let unchanged_loaded_runtime_objects = unchanged_loaded_runtime_objects.unwrap_or_default();
 
-    let objects: ObjectSet = if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
-        || mask.contains(ExecutedTransaction::EFFECTS_FIELD)
-    {
-        // These fields render the transaction's input and output objects, which object pruning
-        // removes independently of transaction data.
+    let objects: ObjectSet = if read_mask_requires_objects(mask) {
+        // These fields need historical object contents, which object pruning removes
+        // independently of transaction data.
         if checkpoint
             < service
                 .reader
@@ -279,4 +299,30 @@ pub(crate) fn render_executed_transaction(
     }
 
     Ok(message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn object_dependent_read_masks_require_objects() {
+        for path in [
+            "balance_changes",
+            "effects",
+            "effects.changed_objects",
+            "effects.unchanged_consensus_objects",
+        ] {
+            let mask = FieldMaskTree::from(FieldMask::from_str(path));
+            assert!(read_mask_requires_objects(&mask), "{path}");
+        }
+    }
+
+    #[test]
+    fn object_independent_read_masks_do_not_require_objects() {
+        for path in ["digest", "effects.status", "effects.gas_used"] {
+            let mask = FieldMaskTree::from(FieldMask::from_str(path));
+            assert!(!read_mask_requires_objects(&mask), "{path}");
+        }
+    }
 }
