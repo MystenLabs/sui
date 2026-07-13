@@ -126,7 +126,6 @@ members = [
     "crates/sui-framework-tests",
     "crates/sui-futures",
     "crates/sui-genesis-builder",
-    "crates/sui-http",
     "crates/sui-indexer-alt",
     "crates/sui-indexer-alt-consistent-api",
     "crates/sui-indexer-alt-consistent-store",
@@ -646,9 +645,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f855
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c34e7a65b5983600937f965553fa373593c149d4", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c34e7a65b5983600937f965553fa373593c149d4", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c34e7a65b5983600937f965553fa373593c149d4", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "05018477066df865513f8a771d898ed6a1ded4b1", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "05018477066df865513f8a771d898ed6a1ded4b1", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "05018477066df865513f8a771d898ed6a1ded4b1", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -686,7 +685,7 @@ sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
-sui-http = { path = "crates/sui-http" }
+sui-http = "0.2.0"
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
 sui-indexer-alt-consistent-api = { path = "crates/sui-indexer-alt-consistent-api" }
 sui-indexer-alt-consistent-store = { path = "crates/sui-indexer-alt-consistent-store" }

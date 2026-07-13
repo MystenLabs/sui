@@ -10,8 +10,8 @@ use sui_inverted_index::BitmapQuery;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::tables::event_bitmap_index;
 use sui_kvstore::tables::transaction_bitmap_index;
-use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
+use sui_rpc::proto::sui::rpc::v2::EventFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc_api::RpcError;
 use tokio::time::Instant;
 

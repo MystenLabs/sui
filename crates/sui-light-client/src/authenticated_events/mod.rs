@@ -17,11 +17,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::{Event as ProtoEvent, GetCheckpointRequest, GetEpochRequest};
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::{
-    EventItem, GetCheckpointObjectProofResponse, get_checkpoint_object_proof_response,
+    GetCheckpointObjectProofResponse, get_checkpoint_object_proof_response,
 };
 use sui_types::accumulator_root::{EventStreamHead, derive_event_stream_head_object_id};
 use sui_types::base_types::SuiAddress;
@@ -47,14 +46,10 @@ pub struct AuthenticatedEvent {
     pub event_index: u32,
 }
 
-impl TryFrom<EventItem> for AuthenticatedEvent {
+impl TryFrom<ProtoEvent> for AuthenticatedEvent {
     type Error = ClientError;
 
-    fn try_from(item: EventItem) -> Result<Self, Self::Error> {
-        let proto_event = item
-            .event
-            .ok_or_else(|| ClientError::InternalError("Missing event data".to_string()))?;
-
+    fn try_from(proto_event: ProtoEvent) -> Result<Self, Self::Error> {
         let contents = proto_event
             .contents
             .ok_or_else(|| ClientError::InternalError("Missing event contents".to_string()))?;
@@ -102,7 +97,7 @@ impl TryFrom<EventItem> for AuthenticatedEvent {
         };
 
         // The ledger position now lives on the `Event` message rather than the
-        // enclosing `EventItem`.
+        // response frame.
         let checkpoint = proto_event
             .checkpoint
             .ok_or_else(|| ClientError::InternalError("Missing checkpoint".to_string()))?;
@@ -217,7 +212,6 @@ impl ClientError {
 }
 
 pub struct AuthenticatedEventsClient {
-    ledger_service_v2alpha: V2AlphaLedgerServiceClient<Channel>,
     proof_service: ProofServiceClient<Channel>,
     ledger_service: LedgerServiceClient<Channel>,
     epoch_cache: Arc<tokio::sync::Mutex<EpochCache>>,
@@ -244,13 +238,11 @@ impl AuthenticatedEventsClient {
         for _ in 0..MAX_RETRIES {
             match endpoint.connect().await {
                 Ok(ch) => {
-                    let ledger_service_v2alpha = V2AlphaLedgerServiceClient::new(ch.clone());
                     let proof_service = ProofServiceClient::new(ch.clone());
                     let ledger_service = LedgerServiceClient::new(ch);
                     let epoch_cache = EpochCache::new(genesis_committee);
 
                     return Ok(Self {
-                        ledger_service_v2alpha,
                         proof_service,
                         ledger_service,
                         epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
@@ -513,8 +505,8 @@ impl AuthenticatedEventsClient {
         }
     }
 
-    pub(crate) fn ledger_service_v2alpha(&self) -> V2AlphaLedgerServiceClient<Channel> {
-        self.ledger_service_v2alpha.clone()
+    pub(crate) fn ledger_service(&self) -> LedgerServiceClient<Channel> {
+        self.ledger_service.clone()
     }
 
     pub(crate) async fn fetch_and_verify_stream_head(

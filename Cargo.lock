@@ -660,7 +660,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-serde",
  "alloy-sol-types",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "serde",
  "serde_json",
  "serde_with",
@@ -9669,7 +9669,6 @@ dependencies = [
  "multiaddr",
  "mysten-metrics",
  "once_cell",
- "pin-project-lite",
  "prometheus",
  "quinn-proto",
  "rand 0.8.5",
@@ -11438,8 +11437,8 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
- "heck 0.4.1",
- "itertools 0.14.0",
+ "heck 0.5.0",
+ "itertools 0.12.1",
  "log",
  "multimap",
  "once_cell",
@@ -11461,7 +11460,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -11474,7 +11473,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -11672,7 +11671,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.6.3",
+ "socket2 0.5.6",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -14747,7 +14746,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.3.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c34e7a65b5983600937f965553fa373593c149d4#c34e7a65b5983600937f965553fa373593c149d4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=05018477066df865513f8a771d898ed6a1ded4b1#05018477066df865513f8a771d898ed6a1ded4b1"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14988,6 +14987,7 @@ version = "1.76.0"
 dependencies = [
  "anyhow",
  "axum 0.8.3",
+ "backoff",
  "bin-version",
  "clap",
  "http 1.3.1",
@@ -15168,18 +15168,19 @@ dependencies = [
 
 [[package]]
 name = "sui-http"
-version = "0.0.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4bfea7568dcf01ad7d41749c071492b29d2fd450a720db1e3d063c557028d50"
 dependencies = [
- "axum 0.8.3",
  "bytes",
+ "futures-core",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.8.1",
  "hyper-util",
  "pin-project-lite",
- "reqwest",
- "socket2 0.5.6",
+ "socket2 0.6.3",
  "tokio",
  "tokio-rustls",
  "tokio-util 0.7.18 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -15253,7 +15254,6 @@ dependencies = [
  "integer-encoding",
  "move-core-types",
  "mysten-common",
- "mysten-network",
  "object_store 0.13.0",
  "ouroboros 0.17.2",
  "pin-project",
@@ -15264,6 +15264,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-futures",
+ "sui-http",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
@@ -15371,7 +15372,6 @@ dependencies = [
  "diesel_migrations",
  "futures",
  "http 1.3.1",
- "mysten-network",
  "num_cpus",
  "object_store 0.13.0",
  "prometheus",
@@ -15384,6 +15384,7 @@ dependencies = [
  "serde_json",
  "sui-field-count",
  "sui-futures",
+ "sui-http",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
  "sui-pg-db",
@@ -15396,6 +15397,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.14.6",
+ "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -15783,6 +15785,7 @@ name = "sui-json-rpc-types"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "colored",
  "enum_dispatch",
@@ -15810,6 +15813,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tabled",
+ "tokio",
  "tracing",
 ]
 
@@ -15859,7 +15863,6 @@ dependencies = [
  "move-core-types",
  "mysten-common",
  "mysten-metrics",
- "mysten-network",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -15869,6 +15872,7 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-futures",
+ "sui-http",
  "sui-inverted-index",
  "sui-kvstore",
  "sui-package-resolver",
@@ -16733,7 +16737,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c34e7a65b5983600937f965553fa373593c149d4#c34e7a65b5983600937f965553fa373593c149d4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=05018477066df865513f8a771d898ed6a1ded4b1#05018477066df865513f8a771d898ed6a1ded4b1"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16771,7 +16775,6 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "mysten-common",
- "mysten-network",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -16782,6 +16785,7 @@ dependencies = [
  "sui-config",
  "sui-crypto",
  "sui-display",
+ "sui-http",
  "sui-inverted-index",
  "sui-macros",
  "sui-name-service",
@@ -16966,7 +16970,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=c34e7a65b5983600937f965553fa373593c149d4#c34e7a65b5983600937f965553fa373593c149d4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=05018477066df865513f8a771d898ed6a1ded4b1#05018477066df865513f8a771d898ed6a1ded4b1"
 dependencies = [
  "base64ct",
  "bcs",

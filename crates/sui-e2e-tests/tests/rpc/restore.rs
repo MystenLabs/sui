@@ -41,15 +41,14 @@ use sui_node::SuiNode;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetBalanceRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
-use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+use sui_rpc::proto::sui::rpc::v2::SenderFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionLiteral;
+use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::AuthorityName;
 use sui_types::base_types::SuiAddress;
@@ -281,9 +280,7 @@ async fn list_transaction_digests_by_sender(rpc_url: &str, sender: SuiAddress) -
         .into_inner();
     let mut digests = HashSet::new();
     while let Some(response) = stream.message().await.unwrap() {
-        if let Some(list_transactions_response::Response::Item(item)) = response.response
-            && let Some(digest) = item.transaction.and_then(|tx| tx.digest)
-        {
+        if let Some(digest) = response.transaction.and_then(|tx| tx.digest) {
             digests.insert(digest);
         }
     }

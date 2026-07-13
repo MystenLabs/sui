@@ -55,12 +55,26 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_initialization: Option<RpcIndexInitConfig>,
 
-    /// Tunables for the v2alpha ledger-history list APIs (`list_transactions`,
+    /// Tunables for the ledger-history list APIs (`list_transactions`,
     /// `list_events`, `list_checkpoints`). These scan the historical inverted
     /// indexes, unlike the live object-set listings (`list_owned_objects`,
     /// `list_dynamic_fields`), so they carry their own time and scan-cost bounds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ledger_history: Option<LedgerHistoryConfig>,
+
+    /// Number of consecutive checkpoints a filtered subscription may go without
+    /// producing an item before the server emits a progress-only frame,
+    /// so sparse subscribers always learn their resume point. Defaults to 25
+    /// (~5 seconds at mainnet checkpoint cadence).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_watermark_interval: Option<u32>,
+
+    /// Number of parallel shard tasks that evaluate subscription filters and
+    /// deliver updates. Each subscriber lives on one shard; per-checkpoint
+    /// filter evaluation parallelizes across shards. Defaults to the host's
+    /// available parallelism.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_shards: Option<u32>,
 
     /// Configuration for rendering Objects based on the Display standard
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -331,7 +345,7 @@ impl LedgerHistoryMethodConfig {
     }
 }
 
-/// Tunables for the v2alpha ledger-history list APIs. Per-endpoint knobs live in
+/// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
 /// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are global across
 /// all three. Every field is optional and falls back to a built-in default.
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
