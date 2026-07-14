@@ -17,7 +17,7 @@ use sui_system::staking_pool::{
     StakedSui,
     pool_id,
     FungibleStakedSui,
-    fungible_staked_sui_pool_id
+    fungible_staked_sui_pool_id,
 };
 use sui_system::validator::{Validator, staking_pool_id, sui_address};
 use sui_system::validator_cap::{UnverifiedValidatorOperationCap, ValidatorOperationCap};
