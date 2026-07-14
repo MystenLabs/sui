@@ -32,6 +32,7 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Object;
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
 use tokio::join;
@@ -85,7 +86,7 @@ pub(super) async fn transaction(
     }
 
     if options.show_raw_input {
-        response.raw_transaction = tx.raw_transaction()?;
+        response.raw_transaction = raw_input(&tx)?;
     }
 
     if options.show_effects {
@@ -125,6 +126,12 @@ async fn input(
             .context("Failed to resolve types in transaction data")?,
         tx_signatures,
     })
+}
+
+/// Extract the transaction's raw BCS input in the JSON-RPC representation.
+fn raw_input(tx: &TransactionContents) -> Result<Vec<u8>, RpcError<Error>> {
+    let data = SenderSignedData::new(tx.data()?, tx.signatures()?);
+    Ok(bcs::to_bytes(&data).context("Failed to serialize transaction")?)
 }
 
 /// Extract a representation of the transaction's effects from the stored form.
