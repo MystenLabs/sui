@@ -4,11 +4,11 @@
 // verifies Todd's PTB arity example: an identity function that returns
 // &mut TxContext cannot be chained into a generic identity function whose
 // type parameter unifies to TxContext, because auto-injection fills the
-// generic's slot after unification.
-// Pinned to v129 because tx_context_mut_id itself is rejected by the v130
-// tx_context_restrictions_verifier.
+// generic's slot after unification. The tx_context_restrictions_verifier
+// only applies to system packages, so this user package publishes fine;
+// the PTB arity check is the safety mechanism here.
 
-//# init --addresses test=0x0 --protocol-version 129 --allow-references-in-ptbs
+//# init --addresses test=0x0 --allow-references-in-ptbs
 
 //# publish
 module test::m;

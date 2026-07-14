@@ -1,9 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tx_context_restrictions_verifier: a function that takes `&mut TxContext`
-// and returns a mutable reference must also have a non-`TxContext` `&mut U`
-// parameter. Each publish below violates the rule and must be rejected.
+// tx_context_restrictions_verifier only applies to system packages: it is a
+// checksum on our own implementations, and cannot be enforced generally
+// because user packages can express the same shape through generic
+// instantiation (PTB arity and auto-injection checks are the actual safety
+// mechanism for user code). Every publish below has a signature the rule
+// rejects in system packages, but publishes successfully at a user address
+// even with the flag on. System packages cannot be published from these
+// tests; the rule is exercised against the real system packages at framework
+// build time via `sui-move-build`'s bytecode verification.
 
 //# init --check-tx-context-restrictions
 
@@ -28,21 +34,7 @@ mvir 0x0::m {
     }
 }
 
-// Non-TxContext parameter passed by value: it is not a reference at all, so
-// it cannot serve as the mutable root for the `&mut u64` return.
-//# publish
-mvir 0x0::m {
-    import 0x2::tx_context;
-    public fun bad(ctx: &mut tx_context::TxContext, x: u64): &mut u64 {
-        label l0:
-        abort 0;
-    }
-}
-
-// Identity-shape return: `&mut TxContext -> &mut TxContext`. Rejected under
-// the universal rule — nobody legitimately writes this, and PTB machinery
-// (auto-injection + arity) is already the actual safety mechanism for the
-// exploit path.
+// Identity-shape return: `&mut TxContext -> &mut TxContext`.
 //# publish
 mvir 0x0::m {
     import 0x2::tx_context;

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Enforces a signature-level rule at Move module publish time:
+//! Enforces a signature-level rule on system packages at publish time:
 //!
 //! > If a function has an `&mut TxContext` parameter and any `&mut _` in its
 //! > return list, its parameter list must also contain at least one `&mut U`
@@ -11,12 +11,20 @@
 //! `ProtocolConfig::check_tx_context_restrictions()`. Activates at protocol
 //! version 130.
 //!
-//! Functions that do not take `&mut TxContext` are out of scope: they cannot
-//! use `TxContext` as a mutable root because they never hold one. The rule
-//! applies uniformly to every in-scope function definition in every module,
-//! natives included (framework natives are declared as `native fun` in Move
-//! source and appear here as function defs with `None` code). No safelist:
-//! any function violating the rule must be reworked, not grandfathered.
+//! The rule applies only to system packages: it is a checksum on our own
+//! implementations, ensuring no framework function can hand back a mutable
+//! reference rooted in the auto-injected `TxContext`. It cannot be enforced
+//! generally because user packages can always express the same shape through
+//! generic instantiation; for user code, PTB argument arity and auto-injection
+//! checks are the actual safety mechanism. User-published modules are exempt
+//! (their addresses are freshly generated, never system addresses).
+//!
+//! Within a system package, functions that do not take `&mut TxContext` are
+//! out of scope: they cannot use `TxContext` as a mutable root because they
+//! never hold one. The rule covers natives too (framework natives are
+//! declared as `native fun` in Move source and appear here as function defs
+//! with `None` code). No safelist: any function violating the rule must be
+//! reworked, not grandfathered.
 
 use move_binary_format::{
     CompiledModule,
@@ -26,6 +34,7 @@ use move_vm_config::verifier::VerifierConfig;
 use sui_types::{
     base_types::{TxContext, TxContextKind},
     error::ExecutionError,
+    is_system_package,
 };
 
 use crate::verification_failure;
@@ -35,6 +44,9 @@ pub fn verify_module(
     verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
     if !verifier_config.check_tx_context_restrictions {
+        return Ok(());
+    }
+    if !is_system_package(*module.self_id().address()) {
         return Ok(());
     }
     for func_def in &module.function_defs {
