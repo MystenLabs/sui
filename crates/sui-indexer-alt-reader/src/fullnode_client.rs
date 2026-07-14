@@ -4,6 +4,7 @@
 use anyhow::Context;
 use anyhow::anyhow;
 use async_graphql::dataloader::DataLoader;
+use futures::future::try_join_all;
 use prometheus::Registry;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
@@ -21,6 +22,10 @@ use url::Url;
 
 use crate::metrics::GrpcMetricsLayer;
 use crate::metrics::GrpcMetricsService;
+
+// Programmable transaction validation requires the command count to be strictly less than the
+// protocol's 1,024-command limit.
+const MAX_REWARDS_PER_PTB: usize = 1023;
 
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct FullnodeArgs {
@@ -159,66 +164,14 @@ impl FullnodeClient {
             .map_err(Into::into)
     }
 
-    /// Construct and dry run a PTB to calculate the rewards for a list of staked SUI objects.
+    /// Construct and dry run PTBs to calculate the rewards for a list of staked SUI objects.
     /// Returns a list of u64 guaranteed to match the order of the input staked SUI ids.
     pub async fn calculate_rewards(&self, staked_sui_ids: &[Address]) -> Result<Vec<u64>, Error> {
-        let mut ptb = proto::ProgrammableTransaction::default()
-            .with_inputs(vec![proto::Input::default().with_object_id("0x5")]);
-        let system_object = proto::Argument::new_input(0);
+        let batches = staked_sui_ids
+            .chunks(MAX_REWARDS_PER_PTB)
+            .map(|batch| self.calculate_rewards_batch(batch));
 
-        for id in staked_sui_ids {
-            let staked_sui = proto::Argument::new_input(ptb.inputs.len() as u16);
-            ptb.inputs.push(proto::Input::default().with_object_id(id));
-            ptb.commands.push(
-                proto::MoveCall::default()
-                    .with_package("0x3")
-                    .with_module("sui_system")
-                    .with_function("calculate_rewards")
-                    .with_arguments(vec![system_object, staked_sui])
-                    .into(),
-            );
-        }
-
-        let transaction = proto::Transaction::default()
-            .with_kind(ptb)
-            .with_sender("0x0");
-
-        let resp = self
-            .simulate_transaction(
-                transaction,
-                false,
-                false,
-                FieldMask::from_paths([
-                    "command_outputs.return_values.value",
-                    "transaction.effects.status",
-                ]),
-            )
-            .await?;
-
-        if !resp.transaction().effects().status().success() {
-            return Err(Error::Internal(anyhow!("transaction execution failed")));
-        }
-
-        if staked_sui_ids.len() != resp.command_outputs.len() {
-            return Err(Error::Internal(anyhow!(
-                "missing transaction command_outputs"
-            )));
-        }
-
-        resp.command_outputs
-            .iter()
-            .map(|output| {
-                // At success, expect every command to guarantee a u64 returned
-                let bcs_rewards = output
-                    .return_values
-                    .first()
-                    .and_then(|o| o.value_opt())
-                    .ok_or_else(|| Error::Internal(anyhow!("missing rewards bcs")))?;
-
-                bcs::from_bytes::<u64>(bcs_rewards.value())
-                    .map_err(|e| Error::Internal(anyhow!("Failed to deserialize rewards: {e}")))
-            })
-            .collect()
+        Ok(try_join_all(batches).await?.into_iter().flatten().collect())
     }
 
     /// Construct and dry run a PTB to get the corresponding validator addresses for a list of
@@ -285,6 +238,66 @@ impl FullnodeClient {
 
                 Address::from_bytes(bcs_address.value())
                     .map_err(|e| Error::Internal(anyhow!("Failed to deserialize address: {e}")))
+            })
+            .collect()
+    }
+
+    async fn calculate_rewards_batch(&self, staked_sui_ids: &[Address]) -> Result<Vec<u64>, Error> {
+        let mut ptb = proto::ProgrammableTransaction::default()
+            .with_inputs(vec![proto::Input::default().with_object_id("0x5")]);
+        let system_object = proto::Argument::new_input(0);
+
+        for id in staked_sui_ids {
+            let staked_sui = proto::Argument::new_input(ptb.inputs.len() as u16);
+            ptb.inputs.push(proto::Input::default().with_object_id(id));
+            ptb.commands.push(
+                proto::MoveCall::default()
+                    .with_package("0x3")
+                    .with_module("sui_system")
+                    .with_function("calculate_rewards")
+                    .with_arguments(vec![system_object, staked_sui])
+                    .into(),
+            );
+        }
+
+        let transaction = proto::Transaction::default()
+            .with_kind(ptb)
+            .with_sender("0x0");
+
+        let resp = self
+            .simulate_transaction(
+                transaction,
+                false,
+                false,
+                FieldMask::from_paths([
+                    "command_outputs.return_values.value",
+                    "transaction.effects.status",
+                ]),
+            )
+            .await?;
+
+        if !resp.transaction().effects().status().success() {
+            return Err(Error::Internal(anyhow!("transaction execution failed")));
+        }
+
+        if staked_sui_ids.len() != resp.command_outputs.len() {
+            return Err(Error::Internal(anyhow!(
+                "missing transaction command_outputs"
+            )));
+        }
+
+        resp.command_outputs
+            .iter()
+            .map(|output| {
+                // At success, expect every command to guarantee a u64 returned
+                let bcs_rewards = output
+                    .return_values
+                    .first()
+                    .and_then(|o| o.value_opt())
+                    .ok_or_else(|| Error::Internal(anyhow!("missing rewards bcs")))?;
+
+                bcs::from_bytes::<u64>(bcs_rewards.value())
+                    .map_err(|e| Error::Internal(anyhow!("Failed to deserialize rewards: {e}")))
             })
             .collect()
     }
