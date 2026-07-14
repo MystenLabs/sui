@@ -562,6 +562,14 @@ fn retract_object_version_by_checkpoint(
 /// the perpetual store prunes to, so the embedded rpc-store's history
 /// cohort stays in lockstep with it. Idempotent: a re-run with the same
 /// or a lower floor is a no-op.
+///
+/// Ordering contract: the caller must invoke this BEFORE durably
+/// committing its own prune of the same checkpoints. The
+/// `object_version_by_checkpoint` retraction is driven by the `effects`
+/// passed in this call and is never re-derived; if the caller's floor
+/// committed first, a crash between the two commits would skip these
+/// effects forever and leak the rows they retract. Committing this side
+/// first is safe precisely because a re-run is idempotent.
 pub fn prune_history_cohort(
     db: &Db,
     schema: &RpcStoreSchema,

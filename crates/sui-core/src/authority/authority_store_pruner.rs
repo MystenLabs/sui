@@ -226,10 +226,17 @@ impl AuthorityStorePruner {
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
 
-        wb.write()?;
-
+        // Prune the embedded rpc-store's history cohort to the same floor
+        // BEFORE committing the perpetual batch. The rpc-store's
+        // `object_version_by_checkpoint` retraction is driven by the
+        // effects passed here; if the perpetual floor committed first, a
+        // crash between the two commits would resume the pruner past these
+        // checkpoints and their effects would never be replayed, leaking
+        // the rpc-store rows they retract. In this order a crash re-reads
+        // the same checkpoints on restart (the perpetual floor has not
+        // moved) and `prune_history_cohort` re-runs as an idempotent
+        // no-op.
         if let Some(rpc_store) = rpc_store {
-            // Prune the embedded rpc-store's history cohort to the same floor.
             sui_rpc_store::prune_history_cohort(
                 rpc_store.db(),
                 rpc_store.schema(),
@@ -238,6 +245,8 @@ impl AuthorityStorePruner {
                 &transaction_effects,
             )?;
         }
+
+        wb.write()?;
 
         Ok(())
     }
@@ -273,10 +282,11 @@ impl AuthorityStorePruner {
 
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
-        wb.write()?;
 
+        // Prune the embedded rpc-store's history cohort BEFORE committing
+        // the perpetual batch; see the rocksdb variant above for the
+        // crash-ordering rationale.
         if let Some(rpc_store) = rpc_store {
-            // Prune the embedded rpc-store's history cohort to the same floor.
             sui_rpc_store::prune_history_cohort(
                 rpc_store.db(),
                 rpc_store.schema(),
@@ -285,6 +295,8 @@ impl AuthorityStorePruner {
                 &transaction_effects,
             )?;
         }
+
+        wb.write()?;
 
         Ok(())
     }
