@@ -62,7 +62,7 @@ use sui_rpc_api::{
     client::{ExecutedTransaction, SimulateTransactionResponse},
 };
 use sui_sdk::{
-    SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
+    SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
     digests::chain_id_base58,
     sui_client_config::{SuiClientConfig, SuiEnv},
     sui_sdk_types::bcs::ToBcs,
@@ -79,7 +79,7 @@ use sui_types::{
     event::EventID,
     execution_status::{ExecutionFailure, ExecutionStatus},
     gas::GasCostSummary,
-    gas_coin::GasCoin,
+    gas_coin::{GAS, GasCoin},
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
     move_package::{MovePackage, UpgradeCap},
@@ -1363,11 +1363,9 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 let client = context.grpc_client()?;
 
-                let sui_type_tag =
-                    TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid");
-                let coin_type_tag = coin_type.unwrap_or_else(|| sui_type_tag.clone());
+                let coin_type_tag = coin_type.unwrap_or_else(GAS::type_tag);
 
-                let is_sui = coin_type_tag == sui_type_tag;
+                let is_sui = coin_type_tag == GAS::type_tag();
 
                 if all_coins {
                     return send_all_coins(
@@ -3448,9 +3446,8 @@ async fn send_all_coins(
     processing: TxProcessingArgs,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let client = context.grpc_client()?;
-    let sui_type_tag = TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid");
     ensure!(
-        coin_type_tag == sui_type_tag,
+        coin_type_tag == GAS::type_tag(),
         "--all-coins is only supported for SUI. Use --amount with --stateless to send another \
          coin type from your address balance."
     );
@@ -3463,7 +3460,7 @@ async fn send_all_coins(
     );
 
     let coins: Vec<Object> = client
-        .list_owned_objects(signer, Some(Coin::type_(coin_type_tag.clone())))
+        .list_owned_objects(signer, Some(GasCoin::type_()))
         .try_collect()
         .await?;
     ensure!(!coins.is_empty(), "No coins available to send");
