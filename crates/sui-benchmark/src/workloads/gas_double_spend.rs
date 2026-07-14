@@ -28,13 +28,12 @@ use sui_types::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GasDoubleSpendSubmission {
     /// Submit each copy independently through the normal transaction path so they race
-    /// against the gas-object lock as separate submissions. This is the default and the
-    /// cleanest way to observe per-copy conflicts.
-    #[default]
+    /// against the gas-object lock as separate submissions.
     Direct,
     /// Pack all copies into a single soft bundle. Soft bundles are not atomic, so the copies
     /// still contend at execution; this exercises the case where conflicting transactions are
     /// co-submitted in one bundle.
+    #[default]
     SoftBundle,
 }
 

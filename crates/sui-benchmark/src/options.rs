@@ -254,7 +254,7 @@ pub enum RunSpec {
         gas_double_spend_copies: Vec<usize>,
         // How the conflicting copies are submitted: "direct" submits each copy independently,
         // "soft-bundle" packs all copies into a single soft bundle.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [String::from("direct")])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [String::from("soft-bundle")])]
         gas_double_spend_submission: Vec<String>,
 
         // --- generic options ---
