@@ -366,12 +366,14 @@ async fn enabling_embedded_store_rebuilds_indexes() {
     let target = chain_tip(&cluster);
 
     // Turn on the embedded store and restart. With no prior rpc-store
-    // database the live cohort has no watermark, so the store rebuilds it
-    // (resuming any partial restore in place rather than clearing).
+    // database the live cohort has no watermark and no restore is in
+    // progress, so the store rebuilds from a clean slate (the clear is
+    // a no-op on the fresh database; only a restore actually mid-run
+    // resumes without clearing).
     restart_fullnode(&cluster, &name, embedded_indexing_config()).await;
     assert_eq!(
         bootstrap_action(&cluster, &name),
-        Some(Bootstrap::Restore { clear: false }),
+        Some(Bootstrap::Restore { clear: true }),
     );
 
     // After the rebuild + backfill the pre-enable transfer is visible

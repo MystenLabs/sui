@@ -54,6 +54,8 @@ pub use crate::indexer::pruner::prune_history_cohort;
 pub use crate::indexer::restore::HISTORY_COHORT;
 pub use crate::indexer::restore::LIVE_COHORT;
 pub use crate::indexer::restore::floor_unrestored_pipelines;
+pub use crate::indexer::restore::history_seed_pending;
+pub use crate::indexer::restore::restore_in_progress;
 pub use crate::indexer::restore::restore_indexes;
 pub use crate::indexer::restore::seed_current_epoch_start;
 pub use crate::indexer::restore::seed_history_cohort;

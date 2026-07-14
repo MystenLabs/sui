@@ -168,41 +168,60 @@ pub enum Bootstrap {
     Restore { clear: bool },
 }
 
-/// Decide what bootstrap action the embedded store needs from the
-/// persisted framework state and the perpetual store's available
-/// range.
-///
-/// - `live_resume` is `Some(c)` when every [`LIVE_COHORT`] pipeline
-///   has a committed watermark, where `c` is the lowest checkpoint tip
-///   indexing would resume from across them
-///   (`min(checkpoint_hi_inclusive) + 1`); `None` when any live
-///   pipeline lacks a watermark (never restored, or a restore that did
-///   not finish).
-/// - `history_resume` is the same for the [`HISTORY_COHORT`], but a
-///   missing watermark maps to `0`: an unwatermarked pipeline resumes
-///   at `first_checkpoint`, which the embedded path leaves at its `0`
-///   default, so the history cohort backfills from genesis.
-/// - `chain_matches` is `Some(false)` when the database is bound to a
-///   different chain, `Some(true)` when it matches, and `None` when no
-///   chain id has been recorded yet.
-/// - `lowest_available` is `L`, the lowest checkpoint the perpetual
-///   store can still serve.
-fn decide(
+/// The persisted framework state [`decide`] consumes, read from the
+/// on-disk store at bootstrap.
+#[derive(Debug, Clone, Copy)]
+struct StoreState {
+    /// `Some(c)` when every [`LIVE_COHORT`] pipeline has a committed
+    /// watermark, where `c` is the lowest checkpoint tip indexing
+    /// would resume from across them
+    /// (`min(checkpoint_hi_inclusive) + 1`); `None` when any live
+    /// pipeline lacks a watermark.
     live_resume: Option<u64>,
+
+    /// The same for the [`HISTORY_COHORT`], but a missing watermark
+    /// maps to `0`: an unwatermarked pipeline resumes at
+    /// `first_checkpoint`, which the embedded path leaves at its `0`
+    /// default, so the history cohort backfills from genesis.
     history_resume: u64,
+
+    /// `Some(false)` when the database is bound to a different chain,
+    /// `Some(true)` when it matches, and `None` when no chain id has
+    /// been recorded yet.
     chain_matches: Option<bool>,
-    lowest_available: u64,
-) -> Bootstrap {
+
+    /// A bulk restore crashed mid-run and its per-shard cursors are
+    /// resumable ([`sui_rpc_store::restore_in_progress`]).
+    restore_in_progress: bool,
+
+    /// The store is in the exact post-restore, pre-seed state that
+    /// [`seed_history_cohort`] repairs
+    /// ([`sui_rpc_store::history_seed_pending`]).
+    history_seed_pending: bool,
+}
+
+/// Decide what bootstrap action the embedded store needs from the
+/// persisted framework state and `lowest_available` — `L`, the lowest
+/// checkpoint the perpetual store can still serve.
+fn decide(state: StoreState, lowest_available: u64) -> Bootstrap {
     // A database bound to another chain is unusable; wipe and rebuild.
-    if chain_matches == Some(false) {
+    if state.chain_matches == Some(false) {
         return Bootstrap::Restore { clear: true };
     }
 
-    let Some(live_resume) = live_resume else {
-        // The live cohort never finished restoring. Resume the restore
-        // in place -- the driver picks up from its per-shard cursors --
-        // rather than clearing partial progress.
-        return Bootstrap::Restore { clear: false };
+    let Some(live_resume) = state.live_resume else {
+        // No complete live cohort. Resume in place only when a bulk
+        // restore is actually mid-run (per-shard cursors on disk).
+        // Anything else that lacks a live watermark -- a fresh store,
+        // or a from-genesis run that crashed between the live
+        // pipelines' first commits -- must start from a clean slate:
+        // the bulk restore merges and puts on top of whatever rows
+        // exist, so running it over partially tip-indexed CFs would
+        // double-count balances and leave stale owner and type rows.
+        // (On a genuinely fresh store the clear is a no-op.)
+        return Bootstrap::Restore {
+            clear: !state.restore_in_progress,
+        };
     };
 
     // The live cohort's indexes reference checkpoints the perpetual
@@ -211,10 +230,23 @@ fn decide(
         return Bootstrap::Restore { clear: true };
     }
 
-    // The live cohort is in range; the history cohort either was never
-    // seeded above the floor or fell behind it. Re-seed it alone.
-    if history_resume < lowest_available {
-        return Bootstrap::SeedHistory;
+    if state.history_resume < lowest_available {
+        // The history cohort sits below the available floor. Seeding
+        // it in place is sound only in the post-restore, pre-seed
+        // state (a crash between the restore's finalize and the
+        // history seed): there the floor pipelines' restored rows
+        // anchor reads at the target and nothing else has committed.
+        // Any other coverage below the floor sits behind a pruned,
+        // unfillable gap -- e.g. pruning advanced while indexing was
+        // disabled -- and seeding over it would advertise `[L, tip]`
+        // as served while stale sub-floor rows resolve
+        // checkpoint-pinned reads to pre-gap versions. Wipe and
+        // rebuild instead.
+        return if state.history_seed_pending {
+            Bootstrap::SeedHistory
+        } else {
+            Bootstrap::Restore { clear: true }
+        };
     }
 
     Bootstrap::Resume
@@ -309,11 +341,15 @@ impl EmbeddedRpcStore {
         let lowest_available = lowest_available_checkpoint(&perpetual, checkpoint_store)?;
 
         let chain_id = ChainId(*chain_identifier.as_bytes());
-        let live_resume = cohort_resume(&db, LIVE_COHORT)?;
-        let history_resume = cohort_resume(&db, HISTORY_COHORT)?.unwrap_or(0);
-        let chain_matches = stored_chain_id(&db)?.map(|stored| stored == chain_id);
+        let state = StoreState {
+            live_resume: cohort_resume(&db, LIVE_COHORT)?,
+            history_resume: cohort_resume(&db, HISTORY_COHORT)?.unwrap_or(0),
+            chain_matches: stored_chain_id(&db)?.map(|stored| stored == chain_id),
+            restore_in_progress: sui_rpc_store::restore_in_progress(&db)?,
+            history_seed_pending: sui_rpc_store::history_seed_pending(&db)?,
+        };
 
-        let action = decide(live_resume, history_resume, chain_matches, lowest_available);
+        let action = decide(state, lowest_available);
         info!(
             ?action,
             lowest_available,
@@ -739,33 +775,85 @@ fn seed_history(
 mod tests {
     use super::*;
 
+    /// A [`StoreState`] with neither a mid-run restore nor a pending
+    /// history seed — the shape of every store that was not stopped
+    /// inside the bootstrap's own restore/seed sequence.
+    fn state(
+        live_resume: Option<u64>,
+        history_resume: u64,
+        chain_matches: Option<bool>,
+    ) -> StoreState {
+        StoreState {
+            live_resume,
+            history_resume,
+            chain_matches,
+            restore_in_progress: false,
+            history_seed_pending: false,
+        }
+    }
+
     // `L = 0` (nothing pruned): an unseeded history cohort backfills
     // from genesis, so a complete live cohort is enough to resume.
     #[test]
     fn resumes_from_genesis_when_nothing_pruned() {
-        assert_eq!(decide(Some(10), 0, Some(true), 0), Bootstrap::Resume);
+        assert_eq!(decide(state(Some(10), 0, Some(true)), 0), Bootstrap::Resume);
         // History never seeded (resume 0) is fine at L = 0.
-        assert_eq!(decide(Some(10), 0, None, 0), Bootstrap::Resume);
+        assert_eq!(decide(state(Some(10), 0, None), 0), Bootstrap::Resume);
     }
 
     // Both cohorts resume at or above the available floor.
     #[test]
     fn resumes_when_in_range() {
-        assert_eq!(decide(Some(100), 100, Some(true), 100), Bootstrap::Resume);
-        assert_eq!(decide(Some(200), 100, Some(true), 100), Bootstrap::Resume);
+        assert_eq!(
+            decide(state(Some(100), 100, Some(true)), 100),
+            Bootstrap::Resume
+        );
+        assert_eq!(
+            decide(state(Some(200), 100, Some(true)), 100),
+            Bootstrap::Resume
+        );
     }
 
-    // The live cohort never finished restoring: resume the restore in
-    // place rather than clearing partial progress.
+    // A bulk restore crashed mid-run: resume it in place from its
+    // per-shard cursors rather than discarding the partial progress.
     #[test]
-    fn restores_without_clearing_when_live_uninitialized() {
+    fn resumes_restore_in_progress_without_clearing() {
         assert_eq!(
-            decide(None, 0, None, 0),
+            decide(
+                StoreState {
+                    restore_in_progress: true,
+                    ..state(None, 0, None)
+                },
+                0,
+            ),
             Bootstrap::Restore { clear: false }
         );
         assert_eq!(
-            decide(None, 50, Some(true), 100),
+            decide(
+                StoreState {
+                    restore_in_progress: true,
+                    ..state(None, 50, Some(true))
+                },
+                100,
+            ),
             Bootstrap::Restore { clear: false }
+        );
+    }
+
+    // No live watermark and no restore in progress: a fresh store (the
+    // clear is a no-op) or a from-genesis run that crashed between the
+    // live pipelines' first commits (whose partial rows the bulk
+    // restore would otherwise merge on top of, double-counting
+    // balances). Either way, start from a clean slate.
+    #[test]
+    fn clears_when_live_unwatermarked_without_restore_in_progress() {
+        assert_eq!(
+            decide(state(None, 0, None), 0),
+            Bootstrap::Restore { clear: true }
+        );
+        assert_eq!(
+            decide(state(None, 50, Some(true)), 100),
+            Bootstrap::Restore { clear: true }
         );
     }
 
@@ -774,7 +862,7 @@ mod tests {
     #[test]
     fn clears_and_restores_when_live_out_of_range() {
         assert_eq!(
-            decide(Some(50), 200, Some(true), 100),
+            decide(state(Some(50), 200, Some(true)), 100),
             Bootstrap::Restore { clear: true }
         );
     }
@@ -783,31 +871,57 @@ mod tests {
     #[test]
     fn clears_and_restores_on_chain_mismatch() {
         assert_eq!(
-            decide(Some(200), 200, Some(false), 100),
+            decide(state(Some(200), 200, Some(false)), 100),
             Bootstrap::Restore { clear: true }
         );
         // Chain mismatch dominates even an otherwise-resumable state.
         assert_eq!(
-            decide(Some(200), 200, Some(false), 0),
+            decide(state(Some(200), 200, Some(false)), 0),
             Bootstrap::Restore { clear: true }
         );
     }
 
-    // The live cohort is in range but the history cohort is missing or
-    // has fallen behind the floor: re-seed history alone.
+    // The crash window between the restore's finalize and the history
+    // seed: the floor pipelines hold the restore watermark, nothing
+    // else in the history cohort has committed, and re-running the
+    // seed alone repairs the store.
     #[test]
-    fn seeds_history_when_history_behind_floor() {
-        // History never seeded (resume 0) but L > 0.
+    fn seeds_history_only_in_post_restore_state() {
         assert_eq!(
-            decide(Some(200), 0, Some(true), 100),
-            Bootstrap::SeedHistory
-        );
-        // History seeded but below the (advanced) floor.
-        assert_eq!(
-            decide(Some(200), 50, Some(true), 100),
+            decide(
+                StoreState {
+                    history_seed_pending: true,
+                    ..state(Some(200), 0, Some(true))
+                },
+                100,
+            ),
             Bootstrap::SeedHistory
         );
         // History exactly at the floor resumes.
-        assert_eq!(decide(Some(200), 100, Some(true), 100), Bootstrap::Resume);
+        assert_eq!(
+            decide(state(Some(200), 100, Some(true)), 100),
+            Bootstrap::Resume
+        );
+    }
+
+    // Committed history coverage below the available floor (e.g.
+    // pruning advanced while indexing was disabled): the gap up to the
+    // floor is pruned and unfillable, so seeding in place would leave
+    // stale sub-floor rows poisoning checkpoint-pinned reads above the
+    // floor. Wipe and rebuild instead.
+    #[test]
+    fn clears_when_history_coverage_behind_floor() {
+        // The whole history cohort committed below the floor.
+        assert_eq!(
+            decide(state(Some(200), 50, Some(true)), 100),
+            Bootstrap::Restore { clear: true }
+        );
+        // Partially unwatermarked history (resume 0) that is not the
+        // post-restore state — e.g. a live_only bootstrap whose
+        // history cohort never committed before pruning advanced.
+        assert_eq!(
+            decide(state(Some(200), 0, Some(true)), 100),
+            Bootstrap::Restore { clear: true }
+        );
     }
 }
