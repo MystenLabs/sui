@@ -529,6 +529,36 @@ async fn test_ping_gets_position_at_next_block() {
 }
 
 #[tokio::test]
+async fn test_pending_pings_are_bounded() {
+    let (pool, _state) = make_pool(100, 100).await;
+    let mut receivers = Vec::with_capacity(MAX_PENDING_PINGS);
+    for _ in 0..MAX_PENDING_PINGS {
+        let (rx, newly_inserted) = pool.submit_user_transactions(0, vec![], None).unwrap();
+        assert!(newly_inserted);
+        receivers.push(rx);
+    }
+
+    let err = pool.submit_user_transactions(0, vec![], None).unwrap_err();
+    assert!(matches!(
+        err.as_inner(),
+        SuiErrorKind::TooManyTransactionsPendingConsensus
+    ));
+
+    let (transactions, ack, _) = pool.take(1, usize::MAX);
+    assert!(transactions.is_empty());
+    ack(block_ref(3));
+    for rx in receivers {
+        assert_eq!(
+            rx.await.unwrap().unwrap(),
+            vec![ConsensusPosition::ping(0, block_ref(3))]
+        );
+    }
+
+    // Acknowledging the pings releases their capacity.
+    pool.submit_user_transactions(0, vec![], None).unwrap();
+}
+
+#[tokio::test]
 async fn test_context_rotate_shuts_down_old_pool() {
     let state = TestAuthorityBuilder::new().build().await;
     let epoch_store = state.epoch_store_for_testing().clone();

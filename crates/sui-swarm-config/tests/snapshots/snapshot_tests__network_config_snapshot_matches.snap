@@ -158,6 +158,7 @@ validator_configs:
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
+      transaction-pool-enabled: false
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -337,6 +338,7 @@ validator_configs:
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
+      transaction-pool-enabled: false
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -516,6 +518,7 @@ validator_configs:
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
+      transaction-pool-enabled: false
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -695,6 +698,7 @@ validator_configs:
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
+      transaction-pool-enabled: false
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -874,6 +878,7 @@ validator_configs:
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
+      transaction-pool-enabled: false
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1053,6 +1058,7 @@ validator_configs:
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
+      transaction-pool-enabled: false
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1232,6 +1238,7 @@ validator_configs:
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
+      transaction-pool-enabled: false
     execution-cache:
       writeback-cache:
         max_cache_size: ~

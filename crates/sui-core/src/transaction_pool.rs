@@ -180,6 +180,10 @@ enum PriorityClass {
     User,
 }
 
+/// Ping entries have no transaction bytes and consume neither block nor user-pool
+/// capacity. Bound them separately so RPC pings cannot create unbounded proposer work.
+pub(crate) const MAX_PENDING_PINGS: usize = 128;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum EntryKind {
     User,
@@ -386,6 +390,8 @@ struct PoolInner {
     /// User transactions staged or proposed and not yet settled, counted per
     /// transaction.
     inflight_user_txs: usize,
+    /// Ping entries resident in the pool, including entries staged for a proposal.
+    pending_pings: usize,
     shutdown: bool,
 }
 
@@ -438,6 +444,9 @@ impl PoolInner {
                 }
             }
             EntryState::Settled => unreachable!(),
+        }
+        if matches!(entry.kind, EntryKind::Ping) {
+            self.pending_pings -= 1;
         }
         for key in &entry.keys {
             if let std::collections::hash_map::Entry::Occupied(slot) =
@@ -576,6 +585,7 @@ impl SuiTransactionPool {
                 next_seq: 0,
                 pending_user_txs: 0,
                 inflight_user_txs: 0,
+                pending_pings: 0,
                 shutdown: false,
             })),
             metrics,
@@ -709,6 +719,9 @@ impl SuiTransactionPool {
             if inner.shutdown {
                 return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
             }
+            if matches!(kind, EntryKind::Ping) && inner.pending_pings >= MAX_PENDING_PINGS {
+                return Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into());
+            }
 
             // Coalesce onto an existing entry when the key sets match exactly: the new
             // waiter shares the existing entry's positions. A partial overlap is
@@ -834,6 +847,9 @@ impl SuiTransactionPool {
             }
             if kind.is_user() {
                 inner.pending_user_txs += num_txs;
+            }
+            if matches!(kind, EntryKind::Ping) {
+                inner.pending_pings += 1;
             }
             inner.pending.insert(pool_key, entry);
 
@@ -1281,6 +1297,7 @@ impl StagedBatch {
                 match m.state {
                     EntryState::Staged if matches!(entry.kind, EntryKind::Ping) => {
                         m.state = EntryState::Settled;
+                        inner.pending_pings -= 1;
                         let waiters = std::mem::take(&mut m.waiters);
                         drop(m);
                         for waiter in waiters {
