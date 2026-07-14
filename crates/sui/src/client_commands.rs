@@ -89,8 +89,8 @@ use sui_types::{
     signature::GenericSignature,
     sui_sdk_types_conversions::type_tag_sdk_to_core,
     transaction::{
-        Argument, Command, FundsWithdrawalArg, GasData, ObjectArg,
-        SenderSignedData, SharedObjectMutability, Transaction, TransactionData, TransactionDataAPI,
+        Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, SenderSignedData,
+        SharedObjectMutability, Transaction, TransactionData, TransactionDataAPI,
         TransactionExpiration, TransactionKind,
     },
 };
@@ -3740,9 +3740,15 @@ async fn dry_run_or_execute_or_serialize_impl(
             // Estimate against an empty gas payment so the fullnode simulates with a mock gas
             // coin. Passing the real payment here would have it checked against the very budget
             // we are trying to compute.
-            let budget =
-                estimate_gas_budget(context, signer, tx_kind.clone(), gas_price, vec![], gas_sponsor)
-                    .await?;
+            let budget = estimate_gas_budget(
+                context,
+                signer,
+                tx_kind.clone(),
+                gas_price,
+                vec![],
+                gas_sponsor,
+            )
+            .await?;
             debug!("Finished estimating gas budget");
             budget
         }
@@ -3766,10 +3772,8 @@ async fn dry_run_or_execute_or_serialize_impl(
     } else if !gas_payment.is_empty() {
         (gas_payment, gas_budget, TransactionExpiration::None)
     } else {
-        select_gas_with_fullnode(
-            &client, signer, &tx_kind, gas_owner, gas_budget, gas_price,
-        )
-        .await?
+        select_gas_with_fullnode(&client, signer, &tx_kind, gas_owner, gas_budget, gas_price)
+            .await?
     };
 
     debug!("Preparing transaction data");

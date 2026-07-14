@@ -3795,7 +3795,10 @@ async fn test_publish_with_coins_and_address_balance() -> Result<(), anyhow::Err
     assert!(response.transaction.gas_data().payment.is_empty());
     let after = client.get_balance(publisher, &GAS::type_()).await?;
     assert_eq!(after.coin_balance(), before.coin_balance());
-    assert_eq!(sui_coins(&client, publisher).await?.len(), coins_before.len());
+    assert_eq!(
+        sui_coins(&client, publisher).await?.len(),
+        coins_before.len()
+    );
     assert!(after.address_balance() < funded);
 
     Ok(())
@@ -3868,7 +3871,10 @@ async fn test_publish_with_explicit_gas_coin() -> Result<(), anyhow::Error> {
     assert_eq!(payment.len(), 1);
     assert_eq!(payment[0].0, gas_coin);
     assert_eq!(response.effects.gas_object().unwrap().0.0, gas_coin);
-    assert_eq!(sui_coins(&client, publisher).await?.len(), coins_before.len());
+    assert_eq!(
+        sui_coins(&client, publisher).await?.len(),
+        coins_before.len()
+    );
 
     Ok(())
 }
