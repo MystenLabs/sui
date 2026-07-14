@@ -30,12 +30,12 @@ task 3, line 21:
 Checkpoint created: 1
 
 task 4, lines 23-25:
-//# programmable --sender A --inputs b"dup" @B vector[10000u256] vector[] vector[] vector[] vector[]
+//# programmable --sender A --inputs b"dup" @B vector[10000u256] vector[] vector[99999999999999] vector[] vector[]
 // A issues an allowance to B: 10000 lifetime cap.
 //> 0: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6));
 created: object(4,0), object(4,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6361200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 6422000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 27-30:
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(4,0)) allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@C,object(4,0)) mutshared(4,0) immshared(6)
@@ -73,7 +73,9 @@ Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
         vec: vector[],
     },
     expiration_timestamp_ms: std::option::Option<u64> {
-        vec: vector[],
+        vec: vector[
+            99999999999999u64,
+        ],
     },
     rate_limit: std::option::Option<sui::allowance::RateLimit> {
         vec: vector[],
