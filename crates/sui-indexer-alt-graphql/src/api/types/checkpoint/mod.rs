@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -8,6 +9,8 @@ use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::CheckpointDigest;
 use sui_types::message_envelope::Message;
@@ -17,7 +20,10 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 
 use crate::api::query::Query;
 use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::uint53::UInt53;
@@ -70,7 +76,11 @@ struct CheckpointContents {
     streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-pub type CCheckpoint = JsonCursor<u64>;
+/// Wrapper around a `CursorToken` that is validated at decode to carry a `Checkpoints` position.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckpointToken(CursorToken);
+
+pub type CCheckpoint = MultiCursor<OpaqueCursor<CheckpointToken>, JsonCursor<u64>>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -339,7 +349,7 @@ impl Checkpoint {
 
         page.paginate_results(
             results,
-            |c| JsonCursor::new(*c),
+            |c| CheckpointToken::cursor(*c),
             |c| Ok(Self::with_sequence_number(scope.clone(), Some(c)).unwrap()),
         )
     }
@@ -381,5 +391,97 @@ impl CheckpointContents {
             )),
             streamed_data: Some(Arc::clone(processed)),
         })
+    }
+}
+
+impl CheckpointToken {
+    /// Mint the edge cursor for the checkpoint at the given sequence number.
+    pub fn cursor(checkpoint: u64) -> CCheckpoint {
+        MultiCursor::new(OpaqueCursor::new(Self(CursorToken::item(
+            Position::Checkpoints { checkpoint },
+        ))))
+    }
+}
+
+impl CCheckpoint {
+    pub(crate) fn sequence_number(&self) -> u64 {
+        match self {
+            CCheckpoint::Primary(c) => match c.position {
+                Position::Checkpoints { checkpoint } => checkpoint,
+                _ => unreachable!("validated at decode"),
+            },
+            CCheckpoint::Secondary(c) => **c,
+        }
+    }
+}
+
+impl ByteCursor for CheckpointToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        let token = CursorToken::decode(bytes)?;
+        if !matches!(token.position, Position::Checkpoints { .. }) {
+            anyhow::bail!("invalid cursor");
+        }
+        Ok(Self(token))
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        self.0.encode()
+    }
+}
+
+impl Deref for CheckpointToken {
+    type Target = CursorToken;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Eq for CCheckpoint {}
+
+/// Cursors minted by different paths can disagree on the kind, so pagination only compares the
+/// checkpoint coordinate.
+impl PartialEq for CCheckpoint {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence_number() == other.sequence_number()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::connection::CursorType;
+    use fastcrypto::encoding::Base64 as B64;
+    use fastcrypto::encoding::Encoding;
+
+    /// Legacy pg-style cursor: a bare JSON-encoded checkpoint sequence number.
+    fn legacy_cursor(checkpoint: u64) -> CCheckpoint {
+        MultiCursor::Secondary(JsonCursor::new(checkpoint))
+    }
+
+    #[test]
+    fn primary_cursor_roundtrips() {
+        let cursor = CheckpointToken::cursor(42);
+        let decoded = CCheckpoint::decode_cursor(&cursor.encode_cursor()).expect("valid cursor");
+        assert_eq!(decoded.sequence_number(), 42);
+        assert_eq!(decoded, cursor);
+    }
+
+    /// A legacy cursor paginates the same as a grpc cursor at the same sequence number.
+    #[test]
+    fn legacy_cursor_matches_primary() {
+        assert_eq!(legacy_cursor(42).sequence_number(), 42);
+        assert_eq!(legacy_cursor(42), CheckpointToken::cursor(42));
+    }
+
+    /// A token scoped to another endpoint must not decode as a checkpoint cursor.
+    #[test]
+    fn rejects_wrong_variant_cursor() {
+        let token = CursorToken::item(Position::Transactions {
+            checkpoint: 1,
+            tx_seq: 2,
+        });
+        let encoded = B64::encode(token.encode());
+        assert!(CCheckpoint::decode_cursor(&encoded).is_err());
     }
 }

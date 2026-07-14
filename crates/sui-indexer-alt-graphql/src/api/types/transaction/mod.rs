@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -73,7 +74,11 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub type CTransaction = MultiCursor<OpaqueCursor<CursorToken>, JsonCursor<u64>>;
+/// Wrapper around a `CursorToken` that is validated at decode to carry a `Transactions` position.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TransactionToken(CursorToken);
+
+pub type CTransaction = MultiCursor<OpaqueCursor<TransactionToken>, JsonCursor<u64>>;
 
 /// Custom `Connection` for transactions to support partially-filled pages.
 pub(crate) struct TransactionConnection {
@@ -307,14 +312,7 @@ impl Transaction {
 
         page.paginate_results(
             filtered,
-            |tx| {
-                MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-                    Position::Transactions {
-                        checkpoint: source_cp_sequence_number,
-                        tx_seq: tx.tx_sequence_number,
-                    },
-                )))
-            },
+            |tx| TransactionToken::cursor(source_cp_sequence_number, tx.tx_sequence_number),
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
         .map(Into::into)
@@ -388,14 +386,7 @@ impl Transaction {
 
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| {
-                MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-                    Position::Transactions {
-                        checkpoint: 0,
-                        tx_seq: *s,
-                    },
-                )))
-            },
+            |(s, _)| TransactionToken::cursor(0, *s),
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
@@ -473,6 +464,15 @@ impl TransactionConnection {
     }
 }
 
+impl TransactionToken {
+    /// Mint the edge cursor for the transaction at the given coordinates.
+    pub(crate) fn cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
+        MultiCursor::new(OpaqueCursor::new(Self(CursorToken::item(
+            Position::Transactions { checkpoint, tx_seq },
+        ))))
+    }
+}
+
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
         match self {
@@ -485,17 +485,25 @@ impl TxBoundsCursor for CTransaction {
     }
 }
 
-impl ByteCursor for CursorToken {
+impl ByteCursor for TransactionToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let cursor = CursorToken::decode(bytes)?;
-        if !matches!(cursor.position, Position::Transactions { .. }) {
+        let token = CursorToken::decode(bytes)?;
+        if !matches!(token.position, Position::Transactions { .. }) {
             anyhow::bail!("invalid cursor");
         }
-        Ok(cursor)
+        Ok(Self(token))
     }
 
     fn encode_cursor(&self) -> bytes::Bytes {
-        self.encode()
+        self.0.encode()
+    }
+}
+
+impl Deref for TransactionToken {
+    type Target = CursorToken;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -840,12 +848,7 @@ mod tests {
     }
 
     fn primary_cursor(checkpoint: u64, position: u64) -> CTransaction {
-        MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-            Position::Transactions {
-                checkpoint,
-                tx_seq: position,
-            },
-        )))
+        TransactionToken::cursor(checkpoint, position)
     }
 
     /// Legacy pg-style cursor: a bare JSON-encoded `tx_sequence_number`.
@@ -856,7 +859,7 @@ mod tests {
     /// Decode an edge cursor back into its `CursorToken`.
     fn edge_token(cursor: &str) -> CursorToken {
         match CTransaction::decode_cursor(cursor).expect("decodable edge cursor") {
-            MultiCursor::Primary(c) => (*c).clone(),
+            MultiCursor::Primary(c) => (**c).clone(),
             MultiCursor::Secondary(_) => panic!("expected grpc cursor, got legacy"),
         }
     }
