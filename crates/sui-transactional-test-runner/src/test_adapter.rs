@@ -1496,7 +1496,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     SuiValue::Shared(_, _, _) => {
                         bail!("shared object is not supported as an input")
                     }
-                    SuiValue::Withdraw(_, _) => {
+                    SuiValue::Withdraw(_, _) | SuiValue::AllowanceWithdraw(_, _, _, _) => {
                         bail!("withdraw reservation is not supported as an input for set-address")
                     }
                 };

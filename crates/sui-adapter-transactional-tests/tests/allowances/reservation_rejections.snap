@@ -1,0 +1,190 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 12-15:
+//# programmable --sender A --inputs 5000 @A
+// Fund A's (the funder) address balance.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 5000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-21:
+//# programmable --sender C --inputs 1000 @C
+// Fund C, so the wrong-funder case gets past the balance check and reaches
+// the funder comparison.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,2)
+accumulators_written: (object(2,0), C, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 23:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 25-27:
+//# programmable --sender A --inputs b"capped" @B vector[10000u256] vector[] vector[99999999999999] vector[] vector[]
+// A issues an allowance to B: 10000 lifetime cap, more than A's balance.
+//> 0: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6));
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6444800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 29-31:
+//# programmable --sender A --inputs b"rated" @B vector[] vector[] vector[] vector[100000] vector[200u256]
+// A issues a second allowance to B: rate limit only, 200 per window.
+//> 0: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6));
+created: object(5,0), object(5,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6748800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 33-35:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(6000,@A,object(4,0)) mutshared(4,0) immshared(6)
+// Within the 10000 cap but over A's 5000 balance: rejected at signing.
+//> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(1), Input(0), Input(2));
+Error: Error checking transaction input objects: Invalid withdraw reservation: Available amount in account for object id object(1,0) is less than requested: 5000 < 6000
+
+task 7, lines 37-39:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@C,object(4,0)) mutshared(4,0) immshared(6)
+// B declares C as the funder of A's allowance: rejected at signing.
+//> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(1), Input(0), Input(2));
+Error: Error checking transaction input objects: Invalid withdraw reservation: Declared funder @C does not match the funder of allowance object(4,0)
+
+task 8, lines 41-43:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(6)) immshared(6)
+// B declares the Clock as the allowance: rejected at signing.
+//> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(1), Input(0), Input(1));
+Error: Error checking transaction input objects: Invalid withdraw reservation: declared allowance object(0xobject(0x0000000000000000000000000000000000000000000000000000000000000006)) is not a sui::allowance::Allowance
+
+task 9, lines 45-48:
+//# programmable --sender B --inputs 100 @B
+// A plain coin for the next case.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(9,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 10, lines 50-52:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(9,0)) object(9,0) immshared(6)
+// B declares their own coin as the allowance: rejected at signing.
+//> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(1), Input(0), Input(2));
+Error: Error checking transaction input objects: Invalid withdraw reservation: declared allowance object(9,0) is not a sui::allowance::Allowance
+
+task 11, lines 54-56:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(4,0)) immshared(6)
+// The declared allowance is not an input of the tx: rejected at signing.
+//> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(1), Input(0), Input(1));
+Error: Error checking transaction input objects: Invalid withdraw reservation: declared allowance object(4,0) not found among the tx inputs
+
+task 12, lines 58-61:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(300,@A,object(5,0)) mutshared(5,0) immshared(6)
+// 300 against the rate-limited allowance's 200 per window: over the spend
+// limit, can never clear at execution, rejected at signing.
+//> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(1), Input(0), Input(2));
+Error: Error checking transaction input objects: Invalid withdraw reservation: Reservations against allowance object(5,0) exceed its spend limit 200
+
+task 13, line 63:
+//# view-object 4,0
+Owner: Shared( 3 )
+Version: 3
+Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    funder: A,
+    spender: std::option::Option<address> {
+        vec: vector[
+            B,
+        ],
+    },
+    app: std::option::Option<std::type_name::TypeName> {
+        vec: vector[],
+    },
+    lifetime_cap: std::option::Option<u256> {
+        vec: vector[
+            10000u256,
+        ],
+    },
+    current_spend: 0u256,
+    start_timestamp_ms: std::option::Option<u64> {
+        vec: vector[],
+    },
+    expiration_timestamp_ms: std::option::Option<u64> {
+        vec: vector[
+            99999999999999u64,
+        ],
+    },
+    rate_limit: std::option::Option<sui::allowance::RateLimit> {
+        vec: vector[],
+    },
+    name: std::string::String {
+        bytes: vector[
+            99u8,
+            97u8,
+            112u8,
+            112u8,
+            101u8,
+            100u8,
+        ],
+    },
+}
+
+task 14, lines 65-66:
+//# view-object 5,0
+Owner: Shared( 4 )
+Version: 4
+Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    funder: A,
+    spender: std::option::Option<address> {
+        vec: vector[
+            B,
+        ],
+    },
+    app: std::option::Option<std::type_name::TypeName> {
+        vec: vector[],
+    },
+    lifetime_cap: std::option::Option<u256> {
+        vec: vector[],
+    },
+    current_spend: 0u256,
+    start_timestamp_ms: std::option::Option<u64> {
+        vec: vector[],
+    },
+    expiration_timestamp_ms: std::option::Option<u64> {
+        vec: vector[],
+    },
+    rate_limit: std::option::Option<sui::allowance::RateLimit> {
+        vec: vector[
+            sui::allowance::RateLimit::FixedWindow{
+                period_ms: 100000u64,
+                limit: 200u256,
+                spent: 0u256,
+                window_start_ms: 0u64,
+            },
+        ],
+    },
+    name: std::string::String {
+        bytes: vector[
+            114u8,
+            97u8,
+            116u8,
+            101u8,
+            100u8,
+        ],
+    },
+}

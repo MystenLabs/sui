@@ -3175,7 +3175,9 @@ impl TransactionDataAPI for TransactionDataV1 {
                 Entry::Vacant(entry) => {
                     let object = objects_by_id.get(allowance).ok_or_else(|| {
                         UserInputError::InvalidWithdrawReservation {
-                            error: format!("allowance object {allowance} not found"),
+                            error: format!(
+                                "declared allowance {allowance} not found among the tx inputs"
+                            ),
                         }
                     })?;
                     entry.insert(parse_allowance_object(object)?)
