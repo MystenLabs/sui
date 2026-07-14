@@ -95,8 +95,7 @@ public struct AllowanceCap<phantom T> has key {
 }
 
 /// A tumbling cap: at most `limit` per `period_ms`, the window restarting at
-/// the first spend after it elapses. An enum to leave layout room for future
-/// kinds (public because the compiler does not support internal enums yet).
+/// the first spend after it elapses. An enum to leave room for future kinds.
 public enum RateLimit has copy, drop, store {
     FixedWindow {
         period_ms: u64,
@@ -296,7 +295,6 @@ fun share_new<T>(
 ) {
     // we do not allow unlimited allowances (TODO: Do we?)
     assert!(lifetime_cap.is_some() || rate_limit.is_some(), ENoLimit);
-    // Either a hard end date or bounded drain velocity.
     assert!(expiration_timestamp_ms.is_some() || rate_limit.is_some(), ENoExpiration);
     assert!(name.length() <= MAX_NAME_LENGTH, ENameTooLong);
     lifetime_cap.do_ref!(|cap| assert!(*cap > 0, EZeroLifetimeCap));

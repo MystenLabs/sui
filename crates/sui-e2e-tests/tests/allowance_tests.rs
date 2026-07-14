@@ -156,10 +156,8 @@ async fn test_allowance_issue_and_spend() {
     test_env.trigger_reconfiguration().await;
 }
 
-/// The mid-flight race: a spend is admitted while the allowance is alive, and
-/// the revoke sequences ahead of it in the same consensus position. The spend
-/// then executes against a deleted shared object and fails closed: gas is
-/// charged, nothing is debited.
+/// A spend admitted while the allowance is alive, with the revoke sequenced
+/// ahead of it: the spend hits a deleted shared object and nothing is debited.
 #[sim_test]
 async fn test_allowance_revoked_mid_flight() {
     if has_mainnet_protocol_config_override() {
@@ -298,8 +296,8 @@ async fn test_allowance_revoked_mid_flight() {
         test_env.rgp,
     );
 
-    // One soft bundle admits both while the allowance is alive, then consensus
-    // sequences them in submission order (same gas price): revoke, then spend.
+    // Both are admitted while the allowance is alive; the bundle keeps
+    // submission order, so the revoke lands first.
     let results = test_env
         .cluster
         .sign_and_execute_txns_in_soft_bundle(&[revoke_tx, spend_tx])

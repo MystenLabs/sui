@@ -3181,8 +3181,6 @@ impl TransactionDataAPI for TransactionDataV1 {
                     entry.insert(parse_allowance_object(object)?)
                 }
             };
-            // Execution trusts the declared funder, so this match is what makes
-            // `owner_for_withdrawal` sound for allowance sources.
             if &resolved.funder != funder {
                 return Err(UserInputError::InvalidWithdrawReservation {
                     error: format!(

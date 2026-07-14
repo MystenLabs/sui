@@ -419,7 +419,6 @@ fun test_cap_only_without_expiration_rejected() {
 #[test]
 fun test_rate_only_without_expiration_ok() {
     test_tx!(FUNDER, |scenario, _clock| {
-        // Bounded velocity stands in for an end date.
         allowance::new<Balance<TEST>>(
             b"test allowance".to_string(),
             SPENDER,

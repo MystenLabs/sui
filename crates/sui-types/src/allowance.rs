@@ -34,9 +34,7 @@ pub struct MoveTypeName {
     pub name: String,
 }
 
-/// BCS mirror of the Move enum `sui::allowance::RateLimit`. A variant added
-/// on the Move side without a mirror here fails deserialization, so signing
-/// fails closed until both sides ship together.
+/// BCS mirror of the Move enum `sui::allowance::RateLimit`
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum RateLimit {
     FixedWindow {

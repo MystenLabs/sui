@@ -234,8 +234,7 @@ allowance API has its own authorization type instead of <code>internal::Permit</
 ## Enum `RateLimit`
 
 A tumbling cap: at most <code>limit</code> per <code>period_ms</code>, the window restarting at
-the first spend after it elapses. An enum to leave layout room for future
-kinds (public because the compiler does not support internal enums yet).
+the first spend after it elapses. An enum to leave room for future kinds.
 
 
 <pre><code><b>public</b> <b>enum</b> <a href="../sui/allowance.md#sui_allowance_RateLimit">RateLimit</a> <b>has</b> <b>copy</b>, drop, store
@@ -882,7 +881,6 @@ Both <code>Some</code> (a limit) or both <code>None</code> (no limit); a mismatc
 ) {
     // we do not allow unlimited allowances (TODO: Do we?)
     <b>assert</b>!(lifetime_cap.is_some() || rate_limit.is_some(), <a href="../sui/allowance.md#sui_allowance_ENoLimit">ENoLimit</a>);
-    // Either a hard end date or bounded drain velocity.
     <b>assert</b>!(expiration_timestamp_ms.is_some() || rate_limit.is_some(), <a href="../sui/allowance.md#sui_allowance_ENoExpiration">ENoExpiration</a>);
     <b>assert</b>!(name.length() &lt;= <a href="../sui/allowance.md#sui_allowance_MAX_NAME_LENGTH">MAX_NAME_LENGTH</a>, <a href="../sui/allowance.md#sui_allowance_ENameTooLong">ENameTooLong</a>);
     lifetime_cap.do_ref!(|cap| <b>assert</b>!(*cap &gt; 0, <a href="../sui/allowance.md#sui_allowance_EZeroLifetimeCap">EZeroLifetimeCap</a>));
