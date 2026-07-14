@@ -67,7 +67,7 @@
     },
     {
       "source": "/learn/about-sui",
-      "destination": "/develop/sui-architecture/index",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
@@ -452,12 +452,12 @@
     },
     {
       "source": "/learn/how-sui-works",
-      "destination": "/develop/sui-architecture/index",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/learn/sui-compared",
-      "destination": "/develop/sui-architecture/index",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
@@ -1652,7 +1652,7 @@
     },
     {
       "source": "/guides/developer/transactions/ptbs/sign-and-send-txn",
-      "destination": "/develop/transactions/ptbs/sign-and-send-txn",
+      "destination": "/develop/transactions/transaction-auth/auth-overview",
       "permanent": true
     },
     {
@@ -2082,7 +2082,7 @@
     },
     {
       "source": "/guides/developer/digital-assets/gasless-transactions",
-      "destination": "/develop/transaction-payment/gasless-transactions",
+      "destination": "/develop/transaction-payment/gasless-stablecoin-transfers",
       "permanent": true
     },
     {
@@ -2332,7 +2332,7 @@
     },
     {
       "source": "/standards/deepbook-margin",
-      "destination": "/onchain-finance/deepbook-margin/deepbook-margin",
+      "destination": "/onchain-finance/deepbook-margin",
       "permanent": true
     },
     {
@@ -2342,7 +2342,7 @@
     },
     {
       "source": "/standards/deepbook-margin-sdk",
-      "destination": "/onchain-finance/deepbook-margin-sdk/deepbook-margin-sdk",
+      "destination": "/onchain-finance/deepbook-margin-sdk",
       "permanent": true
     },
     {
@@ -2432,7 +2432,7 @@
     },
     {
       "source": "/standards/deepbookv3-sdk",
-      "destination": "/onchain-finance/deepbookv3-sdk/deepbookv3-sdk",
+      "destination": "/onchain-finance/deepbookv3-sdk",
       "permanent": true
     },
     {
