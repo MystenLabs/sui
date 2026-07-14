@@ -294,21 +294,16 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
-        // Min across all registered pipeline watermarks: every CF
-        // has caught up to at least this checkpoint, so reads
-        // against any of them are coherent through here.
-        let framework = sui_consistent_store::FrameworkSchema::new(self.db().clone());
-        let mut min: Option<u64> = None;
-        for entry in framework
-            .watermarks
-            .iter(..)
-            .map_err(sui_types::storage::error::Error::custom)?
-        {
-            let (_, watermark) = entry.map_err(sui_types::storage::error::Error::custom)?;
-            let hi = watermark.checkpoint_hi_inclusive;
-            min = Some(min.map_or(hi, |m| m.min(hi)));
-        }
-        Ok(min)
+        // Min across the registered pipelines' watermarks: every CF
+        // this reader serves has caught up to at least this
+        // checkpoint, so reads against any of them are coherent
+        // through here. Bounded to the registered set -- rather than
+        // every row in the framework CF -- so a stale watermark left
+        // behind by a pipeline that is no longer registered cannot
+        // pin the reported tip forever. `None` while any registered
+        // pipeline has no watermark yet: nothing is fully indexed,
+        // so nothing is served (fail closed).
+        self.min_committed(self.pipelines.iter().copied())
     }
 
     fn get_highest_live_indexed_checkpoint_seq_number(
@@ -601,6 +596,73 @@ mod tests {
             .collect();
         // Bob's bucket is not visible under Alice's dimension.
         assert_eq!(buckets, vec![0]);
+    }
+
+    /// The indexed tip is bounded by the registered pipeline set: a
+    /// stale watermark from a pipeline that is no longer registered
+    /// (e.g. `transactions`, disabled on the embedded deployment) must
+    /// not pin the reported tip, and a registered pipeline with no
+    /// watermark yet reads as "nothing fully indexed".
+    #[test]
+    fn highest_indexed_bounds_to_registered_pipelines() {
+        use sui_consistent_store::FrameworkSchema;
+        use sui_consistent_store::PipelineTaskKey;
+        use sui_consistent_store::Watermark;
+
+        let (_dir, db, reader) = setup();
+
+        let framework = FrameworkSchema::new(db.clone());
+        let stamp = |names: &[&str], hi: u64| {
+            let mut batch = db.batch();
+            for name in names {
+                batch
+                    .put(
+                        &framework.watermarks,
+                        &PipelineTaskKey::new(*name),
+                        &Watermark::for_checkpoint(hi),
+                    )
+                    .unwrap();
+            }
+            batch.commit().unwrap();
+        };
+
+        // Nothing committed yet: nothing is fully indexed. A stale row
+        // from an unregistered pipeline does not change that.
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            None,
+        );
+        stamp(&["transactions"], 3);
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            None,
+        );
+
+        // Only part of the registered set committed: still nothing
+        // fully indexed (fail closed).
+        stamp(crate::LIVE_COHORT, 40);
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            None,
+        );
+
+        // The whole registered set committed: the slowest registered
+        // pipeline bounds the tip, and the stale `transactions` row at
+        // 3 stays excluded.
+        stamp(crate::HISTORY_COHORT, 40);
+        stamp(&[crate::HISTORY_COHORT[0]], 25);
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            Some(25),
+        );
+
+        // A reader for a different deployment bounds by exactly its
+        // own registered set.
+        let custom = reader.clone().with_pipelines(["transactions"]);
+        assert_eq!(
+            custom.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            Some(3),
+        );
     }
 
     #[test]
