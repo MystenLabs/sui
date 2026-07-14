@@ -84,9 +84,9 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::node_role::NodeRole;
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::InputKey;
 use sui_types::storage::OverlayBackingPackageStore;
+use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::TrackingBackingStore;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
@@ -3698,7 +3698,9 @@ impl AuthorityState {
         });
 
         let coin_reservation_resolver = Arc::new(CachingCoinReservationResolver::new(
-            execution_cache_trait_pointers.child_object_resolver.clone(),
+            execution_cache_trait_pointers
+                .runtime_object_resolver
+                .clone(),
         ));
 
         let object_funds_checker_metrics =
@@ -3813,8 +3815,8 @@ impl AuthorityState {
         &self.execution_cache_trait_pointers.backing_store
     }
 
-    pub fn get_child_object_resolver(&self) -> &Arc<dyn ChildObjectResolver + Send + Sync> {
-        &self.execution_cache_trait_pointers.child_object_resolver
+    pub fn get_runtime_object_resolver(&self) -> &Arc<dyn RuntimeObjectResolver + Send + Sync> {
+        &self.execution_cache_trait_pointers.runtime_object_resolver
     }
 
     pub(crate) fn get_account_funds_read(&self) -> &Arc<dyn AccountFundsRead> {
@@ -4658,7 +4660,7 @@ impl AuthorityState {
     ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
         let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
         let accumulator_obj = AccumulatorValue::load_object_by_id(
-            self.get_child_object_resolver().as_ref(),
+            self.get_runtime_object_resolver().as_ref(),
             None,
             *accumulator_id.inner(),
         )?;
@@ -4674,7 +4676,7 @@ impl AuthorityState {
 
         let balance = crate::accumulators::balances::get_balance(
             owner,
-            self.get_child_object_resolver().as_ref(),
+            self.get_runtime_object_resolver().as_ref(),
             currency_type,
         )?;
 

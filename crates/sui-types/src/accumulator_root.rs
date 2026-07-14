@@ -14,7 +14,7 @@ use crate::{
     },
     error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ObjectStore},
+    storage::{ObjectStore, RuntimeObjectResolver},
 };
 use move_core_types::{
     ident_str,
@@ -136,7 +136,7 @@ impl AccumulatorValue {
     }
 
     pub fn exists(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -155,11 +155,11 @@ impl AccumulatorValue {
             AccumulatorKey::get_type_tag(std::slice::from_ref(type_)),
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-        .exists(child_object_resolver)
+        .exists(runtime_object_resolver)
     }
 
     pub fn load_by_id<T>(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         id: AccumulatorObjId,
     ) -> SuiResult<Option<T>>
@@ -171,13 +171,13 @@ impl AccumulatorValue {
             id.0,
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
-        .load_object(child_object_resolver)?
+        .load_object(runtime_object_resolver)?
         .map(|o| o.load_value::<T>())
         .transpose()
     }
 
     pub fn load(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -194,7 +194,7 @@ impl AccumulatorValue {
 
         let Some(value) = DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
             .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-            .load_object(child_object_resolver)?
+            .load_object(runtime_object_resolver)?
             .map(|o| o.load_value::<U128>())
             .transpose()?
         else {
@@ -205,7 +205,7 @@ impl AccumulatorValue {
     }
 
     pub fn load_object(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -216,13 +216,13 @@ impl AccumulatorValue {
         Ok(
             DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
                 .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-                .load_object(child_object_resolver)?
+                .load_object(runtime_object_resolver)?
                 .map(|o| o.into_object()),
         )
     }
 
     pub fn load_object_by_id(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         id: ObjectID,
     ) -> SuiResult<Option<Object>> {
@@ -231,7 +231,7 @@ impl AccumulatorValue {
             id,
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
-        .load_object(child_object_resolver)?
+        .load_object(runtime_object_resolver)?
         .map(|o| o.into_object()))
     }
 

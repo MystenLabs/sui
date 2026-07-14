@@ -29,7 +29,6 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
-use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::LedgerBitmapBucketIterator;
@@ -39,6 +38,7 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
+use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::WriteStore;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
@@ -531,7 +531,7 @@ impl ReadStore for RestReadStore {
     }
 }
 
-impl ChildObjectResolver for RestReadStore {
+impl RuntimeObjectResolver for RestReadStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
@@ -778,7 +778,7 @@ impl ReadStore for RpcStoreReadStore {
     }
 }
 
-impl ChildObjectResolver for RpcStoreReadStore {
+impl RuntimeObjectResolver for RpcStoreReadStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,

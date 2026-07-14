@@ -47,7 +47,7 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -66,7 +66,7 @@ type Set<K> = IndexSet<K>;
 pub struct InMemoryTestStore(pub RefCell<InMemoryStorage>);
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
-impl ChildObjectResolver for InMemoryTestStore {
+impl RuntimeObjectResolver for InMemoryTestStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
