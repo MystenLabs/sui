@@ -32,7 +32,8 @@ pub struct CheckpointMetrics {
     pub transaction_fork_crash_mode: IntGaugeVec,
     pub checkpoint_fork_auto_recovered: IntGauge,
     pub transaction_fork_auto_recovered: IntGauge,
-    pub fork_auto_recovery_exhausted: IntGauge,
+    pub fork_auto_recovery_awaiting_new_binary: IntGauge,
+    pub fork_auto_recovery_blocked_uncertified: IntGauge,
     pub last_created_checkpoint_age: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     pub last_created_checkpoint_age_ms: MystenHistogram,
@@ -186,10 +187,20 @@ impl CheckpointMetrics {
                 registry
             )
             .unwrap(),
-            fork_auto_recovery_exhausted: register_int_gauge_with_registry!(
-                "fork_auto_recovery_exhausted",
-                "Set to 1 when automatic fork recovery was already attempted with this binary \
-                 version and the node equivocated again, so it is halting awaiting a new binary",
+            fork_auto_recovery_awaiting_new_binary: register_int_gauge_with_registry!(
+                "fork_auto_recovery_awaiting_new_binary",
+                "Set to 1 when a fork marker was recorded by the currently running binary \
+                 version, which would deterministically fork again; the node is halting until a \
+                 corrected binary is deployed",
+                registry
+            )
+            .unwrap(),
+            fork_auto_recovery_blocked_uncertified: register_int_gauge_with_registry!(
+                "fork_auto_recovery_blocked_uncertified",
+                "Set to 1 when a fork marker was left in place because the fork was not detected \
+                 against a certified checkpoint or the covering certificate could not be \
+                 verified locally, so automatic recovery would risk equivocating on an undecided \
+                 outcome; the node is halting awaiting operator intervention",
                 registry
             )
             .unwrap(),

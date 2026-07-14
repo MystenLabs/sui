@@ -1446,11 +1446,13 @@ mod test {
         }
     }
 
-    // One validator forks (checkpoint fork) while the other three keep a quorum and certify past it.
-    // After the injection is cleared it restarts under RecoverOncePerVersion, clears its fork state,
-    // and rejoins.
+    // A checkpoint fork (vs the transaction fork below): one validator participates in consensus
+    // live with fork injection on all execution paths, so its builder constructs a divergent
+    // local checkpoint while the other three keep a quorum and certify the canonical one. After
+    // the injection is cleared it restarts under RecoverOncePerVersion as a corrected binary,
+    // clears its fork state, and rejoins.
     #[sim_test(config = "test_config()")]
-    async fn test_auto_fork_recovery_minority_validator() {
+    async fn test_auto_fork_recovery_checkpoint_fork() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = build_test_cluster(4, 10_000, 4).await;
@@ -1522,8 +1524,14 @@ mod test {
             "expected the forked validator to detect a checkpoint fork"
         );
 
-        // Corrected binary: stop injecting forks.
+        // Corrected binary: stop injecting forks and report a new binary version, since recovery
+        // refuses to clear a fork under the version that produced it.
         clear_fail_point("simulate_fork_during_execution");
+        register_fail_point_arg("override_binary_version", || {
+            Some(std::sync::Arc::new(std::sync::Mutex::new(
+                "corrected-binary".to_string(),
+            )))
+        });
 
         // Restart the forked validator under RecoverOncePerVersion (no overrides).
         for validator in test_cluster.swarm.validator_nodes() {
@@ -1549,6 +1557,7 @@ mod test {
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
         clear_fork_kill_failpoints();
+        clear_fail_point("override_binary_version");
 
         let target_name = *forked_validators
             .lock()
@@ -1557,7 +1566,7 @@ mod test {
             .next()
             .expect("a validator forked");
 
-        // The forked validator auto-recovered: fork markers cleared, recovery attempt recorded.
+        // The forked validator auto-recovered: fork markers cleared.
         test_cluster
             .swarm
             .validator_nodes()
@@ -1575,10 +1584,6 @@ mod test {
                 assert!(
                     cp.get_transaction_fork_detected().unwrap().is_none(),
                     "transaction fork marker should be cleared after auto-recovery"
-                );
-                assert!(
-                    cp.get_auto_recovery_attempt().unwrap().is_some(),
-                    "an auto-recovery attempt should be recorded for this binary version"
                 );
             });
 
@@ -1708,7 +1713,7 @@ mod test {
         test_cluster.wait_for_next_epoch_all_nodes().await;
     }
 
-    // A transaction fork (vs the checkpoint fork in the minority test): a fallen-behind validator
+    // A transaction fork (vs the checkpoint fork above): a fallen-behind validator
     // re-executes a certified checkpoint's transactions via the checkpoint executor (where
     // expected_effects_digest is set) and diverges, tripping the per-transaction fork check. The
     // executor_path_only injection flag forks only on that path, guaranteeing a transaction fork; it
@@ -1822,7 +1827,14 @@ mod test {
             "expected a transaction fork (no checkpoint fork should have been recorded)"
         );
 
-        // Recover under RecoverOncePerVersion: clears the tx fork marker and re-executes canonically.
+        // Recover under RecoverOncePerVersion with a new binary version (recovery refuses to
+        // clear a fork under the version that produced it): clears the tx fork marker and
+        // re-executes canonically.
+        register_fail_point_arg("override_binary_version", || {
+            Some(std::sync::Arc::new(std::sync::Mutex::new(
+                "corrected-binary".to_string(),
+            )))
+        });
         {
             let target_node = test_cluster
                 .swarm
@@ -1843,8 +1855,9 @@ mod test {
         }
 
         clear_fork_kill_failpoints();
+        clear_fail_point("override_binary_version");
 
-        // The recovered validator cleared its transaction fork marker and recorded a recovery attempt.
+        // The recovered validator cleared its transaction fork marker.
         test_cluster
             .swarm
             .validator_nodes()
@@ -1858,10 +1871,6 @@ mod test {
                 assert!(
                     cp.get_transaction_fork_detected().unwrap().is_none(),
                     "transaction fork marker should be cleared after recovery"
-                );
-                assert!(
-                    cp.get_auto_recovery_attempt().unwrap().is_some(),
-                    "a recovery attempt should be recorded for this binary version"
                 );
             });
 

@@ -808,6 +808,36 @@ impl AuthorityMetrics {
 ///
 pub type StableSyncAuthoritySigner = Pin<Arc<dyn Signer<AuthoritySignature> + Send + Sync>>;
 
+/// The expected effects digest of a transaction, when the effects are known before execution,
+/// tagged with where the expectation came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpectedEffectsDigest {
+    /// Read from the contents of the certified checkpoint at `checkpoint_seq`.
+    Certified {
+        digest: TransactionEffectsDigest,
+        checkpoint_seq: CheckpointSequenceNumber,
+    },
+    /// Known but not network-certified: this validator's own previously signed effects, or an
+    /// operator override.
+    Uncertified(TransactionEffectsDigest),
+}
+
+impl ExpectedEffectsDigest {
+    pub fn digest(&self) -> TransactionEffectsDigest {
+        match self {
+            Self::Certified { digest, .. } => *digest,
+            Self::Uncertified(digest) => *digest,
+        }
+    }
+
+    pub fn checkpoint_seq(&self) -> Option<CheckpointSequenceNumber> {
+        match self {
+            Self::Certified { checkpoint_seq, .. } => Some(*checkpoint_seq),
+            Self::Uncertified(_) => None,
+        }
+    }
+}
+
 /// Execution env contains the "environment" for the transaction to be executed in, that is,
 /// all the information necessary for execution that is not specified by the transaction itself.
 #[derive(Debug, Clone)]
@@ -816,7 +846,7 @@ pub struct ExecutionEnv {
     pub assigned_versions: AssignedVersions,
     /// The expected digest of the effects of the transaction, if executing from checkpoint or
     /// other sources where the effects are known in advance.
-    pub expected_effects_digest: Option<TransactionEffectsDigest>,
+    pub expected_effects_digest: Option<ExpectedEffectsDigest>,
     /// Status of the address funds withdraw scheduling of the transaction,
     /// including both address and object funds withdraws.
     pub funds_withdraw_status: FundsWithdrawStatus,
@@ -841,11 +871,8 @@ impl ExecutionEnv {
         Default::default()
     }
 
-    pub fn with_expected_effects_digest(
-        mut self,
-        expected_effects_digest: TransactionEffectsDigest,
-    ) -> Self {
-        self.expected_effects_digest = Some(expected_effects_digest);
+    pub fn with_expected_effects(mut self, expected: ExpectedEffectsDigest) -> Self {
+        self.expected_effects_digest = Some(expected);
         self
     }
 
@@ -1500,7 +1527,8 @@ impl AuthorityState {
                 override_digest = ?override_digest,
                 "Applying fork recovery override for transaction effects digest"
             );
-            execution_env.expected_effects_digest = Some(override_digest);
+            execution_env.expected_effects_digest =
+                Some(ExpectedEffectsDigest::Uncertified(override_digest));
         }
 
         // prevent concurrent executions of the same tx.
@@ -1511,7 +1539,7 @@ impl AuthorityState {
             if let Some(expected_effects_digest) = execution_env.expected_effects_digest {
                 assert_eq!(
                     effects.digest(),
-                    expected_effects_digest,
+                    expected_effects_digest.digest(),
                     "Unexpected effects digest for transaction {:?}",
                     tx_digest
                 );
@@ -1759,7 +1787,7 @@ impl AuthorityState {
                 // restarting with a new binary. In this situation, if we have published an effects signature,
                 // we must be sure not to equivocate.
                 match epoch_store.get_signed_effects_digest(&tx_digest) {
-                    Ok(digest) => digest,
+                    Ok(digest) => digest.map(ExpectedEffectsDigest::Uncertified),
                     Err(e) => return ExecutionOutput::Fatal(e),
                 }
             }
@@ -2013,7 +2041,7 @@ impl AuthorityState {
         _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
-        expected_effects_digest: Option<TransactionEffectsDigest>,
+        expected_effects_digest: Option<ExpectedEffectsDigest>,
         execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> ExecutionOutput<(
@@ -2203,9 +2231,10 @@ impl AuthorityState {
             }
         });
 
-        if let Some(expected_effects_digest) = expected_effects_digest
-            && effects.digest() != expected_effects_digest
+        if let Some(expected) = expected_effects_digest
+            && effects.digest() != expected.digest()
         {
+            let expected_effects_digest = expected.digest();
             // We dont want to mask the original error, so we log it and continue.
             match self.debug_dump_transaction_state(
                 &tx_digest,
@@ -2231,7 +2260,7 @@ impl AuthorityState {
                 .get_effects(&expected_effects_digest);
             error!(
                 ?tx_digest,
-                ?expected_effects_digest,
+                ?expected,
                 actual_effects = ?effects,
                 expected_effects = ?expected_effects,
                 "fork detected!"
@@ -2240,6 +2269,7 @@ impl AuthorityState {
                 tx_digest,
                 expected_effects_digest,
                 effects.digest(),
+                expected.checkpoint_seq(),
             ) {
                 error!("Failed to record transaction fork: {e}");
             }

@@ -335,7 +335,13 @@ fn default_congestion_log_max_files() -> u32 {
 #[serde(rename_all = "kebab-case")]
 pub enum ForkCrashBehavior {
     /// On a detected fork, clear the local fork state and re-execute against the canonical
-    /// certified checkpoint, at most once per binary version; halt if the same binary re-forks.
+    /// certified checkpoint. Recovery only proceeds when (1) the fork was recorded by a
+    /// different binary version than the one now running — the binary that forked would
+    /// deterministically fork again, so the node halts until a corrected binary is deployed —
+    /// and (2) a certified checkpoint covering the forked checkpoint or transaction is verified
+    /// in the local store — proof that the network already sealed the canonical outcome, so
+    /// re-deriving cannot equivocate on an undecided result. Forks failing either condition
+    /// halt the node awaiting a new binary or operator intervention.
     #[serde(rename = "recover-once-per-version")]
     #[default]
     RecoverOncePerVersion,

@@ -215,14 +215,18 @@ async fn test_checkpoint_fork_detection_storage() {
         );
 
         checkpoint_store
-            .record_checkpoint_fork_detected(fork_seq, fork_digest)
+            .record_checkpoint_fork_detected(
+                fork_seq,
+                fork_digest,
+                Some(CheckpointDigest::random()),
+            )
             .expect("Failed to record checkpoint fork");
 
         let retrieved = checkpoint_store.get_checkpoint_fork_detected().unwrap();
         assert!(retrieved.is_some());
-        let (retrieved_seq, retrieved_digest) = retrieved.unwrap();
-        assert_eq!(retrieved_seq, fork_seq);
-        assert_eq!(retrieved_digest, fork_digest);
+        let fork_info = retrieved.unwrap();
+        assert_eq!(fork_info.checkpoint_seq, fork_seq);
+        assert_eq!(fork_info.checkpoint_digest, fork_digest);
 
         checkpoint_store.clear_checkpoint_fork_detected().unwrap();
         let retrieved_after_clear = checkpoint_store.get_checkpoint_fork_detected().unwrap();

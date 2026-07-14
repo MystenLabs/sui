@@ -132,7 +132,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_macros::fail_point;
-use sui_macros::{fail_point_async, replay_log};
+use sui_macros::{fail_point_arg, fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::endpoint_manager::EndpointManager;
@@ -515,12 +515,26 @@ impl SuiNode {
         );
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
 
+        #[allow(unused_mut)]
+        let mut build_version = server_version.version.to_string();
+        fail_point_arg!("override_binary_version", |version: std::sync::Arc<
+            std::sync::Mutex<String>,
+        >| {
+            #[cfg(msim)]
+            {
+                build_version = version.lock().unwrap().clone();
+            }
+        });
+        // Embedded in any fork marker this run records, so recovery can refuse to clear a fork
+        // under the same binary version that produced it.
+        checkpoint_store.set_binary_version(&build_version);
+
         if node_role.runs_consensus() {
             Self::check_and_recover_forks(
                 &checkpoint_store,
                 &checkpoint_metrics,
                 config.fork_recovery.as_ref(),
-                server_version.version,
+                &build_version,
             )
             .await?;
         }
@@ -2206,7 +2220,7 @@ impl SuiNode {
             ForkCrashBehavior::AwaitForkRecovery | ForkCrashBehavior::ReturnError => {}
         }
 
-        if let Some((checkpoint_seq, checkpoint_digest)) = checkpoint_store
+        if let Some(fork_info) = checkpoint_store
             .get_checkpoint_fork_detected()
             .map_err(|e| {
                 error!("Failed to check for checkpoint fork: {:?}", e);
@@ -2214,14 +2228,14 @@ impl SuiNode {
             })?
         {
             Self::handle_checkpoint_fork(
-                checkpoint_seq,
-                checkpoint_digest,
+                fork_info.checkpoint_seq,
+                fork_info.checkpoint_digest,
                 checkpoint_metrics,
                 fork_recovery,
             )
             .await?;
         }
-        if let Some((tx_digest, expected_effects, actual_effects)) = checkpoint_store
+        if let Some(fork_info) = checkpoint_store
             .get_transaction_fork_detected()
             .map_err(|e| {
                 error!("Failed to check for transaction fork: {:?}", e);
@@ -2229,9 +2243,9 @@ impl SuiNode {
             })?
         {
             Self::handle_transaction_fork(
-                tx_digest,
-                expected_effects,
-                actual_effects,
+                fork_info.tx_digest,
+                fork_info.expected_effects_digest,
+                fork_info.actual_effects_digest,
                 checkpoint_metrics,
                 fork_recovery,
             )
@@ -2280,13 +2294,14 @@ impl SuiNode {
             }
         }
 
-        if let Some((checkpoint_seq, checkpoint_digest)) =
-            checkpoint_store.get_checkpoint_fork_detected()?
-            && recovery.checkpoint_overrides.contains_key(&checkpoint_seq)
+        if let Some(fork_info) = checkpoint_store.get_checkpoint_fork_detected()?
+            && recovery
+                .checkpoint_overrides
+                .contains_key(&fork_info.checkpoint_seq)
         {
             info!(
                 "Fork recovery enabled: clearing checkpoint fork at seq {} with digest {:?}",
-                checkpoint_seq, checkpoint_digest
+                fork_info.checkpoint_seq, fork_info.checkpoint_digest
             );
             checkpoint_store
                 .clear_checkpoint_fork_detected()
@@ -2305,14 +2320,14 @@ impl SuiNode {
             return Ok(());
         }
 
-        if let Some((tx_digest, _, _)) = checkpoint_store.get_transaction_fork_detected()?
+        if let Some(fork_info) = checkpoint_store.get_transaction_fork_detected()?
             && recovery
                 .transaction_overrides
-                .contains_key(&tx_digest.to_string())
+                .contains_key(&fork_info.tx_digest.to_string())
         {
             info!(
                 "Fork recovery enabled: clearing transaction fork for tx {:?}",
-                tx_digest
+                fork_info.tx_digest
             );
             checkpoint_store
                 .clear_transaction_fork_detected()
@@ -2321,61 +2336,107 @@ impl SuiNode {
         Ok(())
     }
 
-    /// Auto-recovery: clear any fork markers (the affected seq/tx is read from the markers) so the
-    /// node re-derives canonically, at most once per binary version. If this binary already recovered
-    /// and re-forked, the markers are left in place so it halts rather than crash-looping; deploying a
-    /// new binary version resets the guard.
+    /// Auto-recovery: clear fork markers (the affected seq/tx is read from the markers) so the
+    /// node re-derives canonically. A marker is cleared only if both gates pass:
+    ///
+    /// - Version gate: the marker was recorded by a different binary version than the one now
+    ///   running. The binary that forked would deterministically fork again, so clearing under
+    ///   it would only add a second equivocation; the node hangs until a corrected binary is
+    ///   deployed.
+    /// - Certification gate: the marker records the certified checkpoint the node diverged
+    ///   from. Markers carry it only when detection compared against a certificate already
+    ///   durably persisted locally, so its presence proves the network certified the canonical
+    ///   outcome. Recovery is deliberate equivocation — the node may have already signed the
+    ///   forked result and will sign a different one after re-deriving — which is safe only
+    ///   under that proof: a quorum certificate is irrevocable (a conflicting certificate would
+    ///   require f+1 double-signers), so re-signing can no longer influence what finalizes.
+    ///   Self-divergence markers (the node disagreeing with its own prior result rather than a
+    ///   certificate) carry no certified reference and never pass; the node halts awaiting
+    ///   operator intervention.
     fn try_recover_forks(
         checkpoint_store: &CheckpointStore,
         checkpoint_metrics: &CheckpointMetrics,
         build_version: &str,
     ) -> Result<()> {
-        let checkpoint_fork = checkpoint_store.get_checkpoint_fork_detected()?;
-        let transaction_fork = checkpoint_store.get_transaction_fork_detected()?;
-        if checkpoint_fork.is_none() && transaction_fork.is_none() {
-            return Ok(());
+        if let Some(fork_info) = checkpoint_store.get_checkpoint_fork_detected()? {
+            if fork_info.binary_version == build_version {
+                error!(
+                    checkpoint_seq = fork_info.checkpoint_seq,
+                    build_version,
+                    "Fork recovery blocked: this binary version produced the checkpoint fork and \
+                     would fork again. Halting; deploy a corrected binary to recover."
+                );
+                checkpoint_metrics
+                    .fork_auto_recovery_awaiting_new_binary
+                    .set(1);
+            } else if fork_info.certified_checkpoint_digest.is_none() {
+                // The builder re-derived a previously computed checkpoint differently: the fork
+                // is against the node's own prior result, not a certified checkpoint, so there
+                // is no canonical outcome to converge toward.
+                error!(
+                    checkpoint_seq = fork_info.checkpoint_seq,
+                    checkpoint_digest = ?fork_info.checkpoint_digest,
+                    "Fork recovery blocked: the builder re-derived its own previous checkpoint \
+                     differently, so there is no certified checkpoint proving the canonical \
+                     outcome to converge toward. Halting awaiting operator intervention."
+                );
+                checkpoint_metrics
+                    .fork_auto_recovery_blocked_uncertified
+                    .set(1);
+            } else {
+                info!(
+                    checkpoint_seq = fork_info.checkpoint_seq,
+                    checkpoint_digest = ?fork_info.checkpoint_digest,
+                    forked_binary_version = ?fork_info.binary_version,
+                    build_version,
+                    "Fork recovery: clearing checkpoint fork and locally computed checkpoints \
+                     from the forked sequence so the builder rebuilds toward the certified \
+                     checkpoint"
+                );
+                checkpoint_store
+                    .clear_locally_computed_checkpoints_from(fork_info.checkpoint_seq)
+                    .context("Failed to clear locally computed checkpoints during fork recovery")?;
+                checkpoint_store.clear_checkpoint_fork_detected()?;
+                checkpoint_metrics.checkpoint_fork_auto_recovered.set(1);
+            }
         }
 
-        if checkpoint_store.get_auto_recovery_attempt()?.as_deref() == Some(build_version) {
-            error!(
-                build_version,
-                "Fork recovery already attempted with this binary version, but the node \
-                 equivocated again. Halting; deploy a corrected binary to recover."
-            );
-            checkpoint_metrics.fork_auto_recovery_exhausted.set(1);
-            return Ok(());
-        }
-
-        // Record the attempt before clearing so a crash mid-recovery still counts as this binary
-        // version's one attempt.
-        checkpoint_store.record_auto_recovery_attempt(build_version)?;
-
-        if let Some((checkpoint_seq, checkpoint_digest)) = checkpoint_fork {
-            info!(
-                checkpoint_seq,
-                ?checkpoint_digest,
-                build_version,
-                "Fork recovery: clearing checkpoint fork and locally computed checkpoints from the \
-                 forked sequence so the builder rebuilds toward the certified checkpoint"
-            );
-            checkpoint_store
-                .clear_locally_computed_checkpoints_from(checkpoint_seq)
-                .context("Failed to clear locally computed checkpoints during fork recovery")?;
-            checkpoint_store.clear_checkpoint_fork_detected()?;
-            checkpoint_metrics.checkpoint_fork_auto_recovered.set(1);
-        }
-
-        if let Some((tx_digest, expected_effects, actual_effects)) = transaction_fork {
-            info!(
-                ?tx_digest,
-                ?expected_effects,
-                ?actual_effects,
-                build_version,
-                "Fork recovery: clearing transaction fork; re-execution will converge toward the \
-                 canonical certified effects"
-            );
-            checkpoint_store.clear_transaction_fork_detected()?;
-            checkpoint_metrics.transaction_fork_auto_recovered.set(1);
+        if let Some(fork_info) = checkpoint_store.get_transaction_fork_detected()? {
+            if fork_info.binary_version == build_version {
+                error!(
+                    tx_digest = ?fork_info.tx_digest,
+                    build_version,
+                    "Fork recovery blocked: this binary version produced the transaction fork and \
+                     would fork again. Halting; deploy a corrected binary to recover."
+                );
+                checkpoint_metrics
+                    .fork_auto_recovery_awaiting_new_binary
+                    .set(1);
+            } else if fork_info.certified_checkpoint_seq.is_none() {
+                error!(
+                    tx_digest = ?fork_info.tx_digest,
+                    "Fork recovery blocked: the expected effects of the forked transaction did \
+                     not come from a certified checkpoint (they came from this validator's own \
+                     previously signed effects), so the network has not provably certified the \
+                     canonical outcome. Halting awaiting operator intervention."
+                );
+                checkpoint_metrics
+                    .fork_auto_recovery_blocked_uncertified
+                    .set(1);
+            } else {
+                info!(
+                    tx_digest = ?fork_info.tx_digest,
+                    expected_effects = ?fork_info.expected_effects_digest,
+                    actual_effects = ?fork_info.actual_effects_digest,
+                    certified_checkpoint_seq = ?fork_info.certified_checkpoint_seq,
+                    forked_binary_version = ?fork_info.binary_version,
+                    build_version,
+                    "Fork recovery: clearing transaction fork; re-execution will converge toward \
+                     the canonical certified effects"
+                );
+                checkpoint_store.clear_transaction_fork_detected()?;
+                checkpoint_metrics.transaction_fork_auto_recovered.set(1);
+            }
         }
 
         Ok(())
@@ -2961,7 +3022,11 @@ mod tests {
 
         // Checkpoint fork.
         checkpoint_store
-            .record_checkpoint_fork_detected(42, CheckpointDigest::random())
+            .record_checkpoint_fork_detected(
+                42,
+                CheckpointDigest::random(),
+                Some(CheckpointDigest::random()),
+            )
             .unwrap();
         let r = SuiNode::check_and_recover_forks(
             &checkpoint_store,
@@ -2989,6 +3054,7 @@ mod tests {
                 TransactionDigest::random(),
                 TransactionEffectsDigest::random(),
                 TransactionEffectsDigest::random(),
+                Some(1),
             )
             .unwrap();
         let r = SuiNode::check_and_recover_forks(
@@ -3005,38 +3071,25 @@ mod tests {
         );
     }
 
-    // RecoverOncePerVersion clears the fork marker once per binary version (deriving the sequence
-    // from the marker), but leaves it set if the same binary version re-forks; a new binary version
-    // gets a fresh attempt.
+    // A fork marker carrying the currently running binary version is never cleared — the binary
+    // that forked would deterministically fork again — so the node hangs until a corrected
+    // binary (different version) runs recovery.
     #[tokio::test]
-    async fn test_recover_once_per_version() {
+    async fn test_same_binary_version_does_not_recover() {
         let checkpoint_store = CheckpointStore::new_for_tests();
         let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
         let seq = 7;
-        let digest = CheckpointDigest::random();
+        // The fork is recorded by binary "v1", against a certified checkpoint.
+        checkpoint_store.set_binary_version("v1");
         checkpoint_store
-            .record_checkpoint_fork_detected(seq, digest)
+            .record_checkpoint_fork_detected(
+                seq,
+                CheckpointDigest::random(),
+                Some(CheckpointDigest::random()),
+            )
             .unwrap();
 
-        // First attempt with "v1": recovers and flags the recovery in metrics.
-        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v1").unwrap();
-        assert!(
-            checkpoint_store
-                .get_checkpoint_fork_detected()
-                .unwrap()
-                .is_none()
-        );
-        assert_eq!(
-            checkpoint_store.get_auto_recovery_attempt().unwrap(),
-            Some("v1".to_string())
-        );
-        assert_eq!(checkpoint_metrics.checkpoint_fork_auto_recovered.get(), 1);
-        assert_eq!(checkpoint_metrics.fork_auto_recovery_exhausted.get(), 0);
-
-        // Same binary version re-forks: one-shot consumed, marker stays, exhaustion is flagged.
-        checkpoint_store
-            .record_checkpoint_fork_detected(seq, digest)
-            .unwrap();
+        // Restarting the same binary: recovery refused despite certification.
         SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v1").unwrap();
         assert!(
             checkpoint_store
@@ -3044,9 +3097,15 @@ mod tests {
                 .unwrap()
                 .is_some()
         );
-        assert_eq!(checkpoint_metrics.fork_auto_recovery_exhausted.get(), 1);
+        assert_eq!(
+            checkpoint_metrics
+                .fork_auto_recovery_awaiting_new_binary
+                .get(),
+            1
+        );
+        assert_eq!(checkpoint_metrics.checkpoint_fork_auto_recovered.get(), 0);
 
-        // Corrected binary (new version): fresh attempt.
+        // Corrected binary (new version): recovers.
         SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v2").unwrap();
         assert!(
             checkpoint_store
@@ -3054,10 +3113,7 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert_eq!(
-            checkpoint_store.get_auto_recovery_attempt().unwrap(),
-            Some("v2".to_string())
-        );
+        assert_eq!(checkpoint_metrics.checkpoint_fork_auto_recovered.get(), 1);
     }
 
     // The default behavior (RecoverOncePerVersion) recovers with no fork-recovery config present.
@@ -3067,16 +3123,20 @@ mod tests {
         let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
 
         let tx_digest = TransactionDigest::random();
+        // The fork was recorded by binary "v1"; its expected effects came from certified
+        // checkpoint 3, so recovery under "v2" is permitted.
+        checkpoint_store.set_binary_version("v1");
         checkpoint_store
             .record_transaction_fork_detected(
                 tx_digest,
                 TransactionEffectsDigest::random(),
                 TransactionEffectsDigest::random(),
+                Some(3),
             )
             .unwrap();
 
         let r =
-            SuiNode::check_and_recover_forks(&checkpoint_store, &checkpoint_metrics, None, "v1")
+            SuiNode::check_and_recover_forks(&checkpoint_store, &checkpoint_metrics, None, "v2")
                 .await;
         assert!(r.is_ok());
         assert!(
@@ -3085,10 +3145,7 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert_eq!(
-            checkpoint_store.get_auto_recovery_attempt().unwrap(),
-            Some("v1".to_string())
-        );
+        assert_eq!(checkpoint_metrics.transaction_fork_auto_recovered.get(), 1);
     }
 
     // checkpoint_overrides clears only the checkpoint fork marker (when the forked seq is listed); it
@@ -3099,13 +3156,18 @@ mod tests {
         let seq = 9;
 
         checkpoint_store
-            .record_checkpoint_fork_detected(seq, CheckpointDigest::random())
+            .record_checkpoint_fork_detected(
+                seq,
+                CheckpointDigest::random(),
+                Some(CheckpointDigest::random()),
+            )
             .unwrap();
         checkpoint_store
             .record_transaction_fork_detected(
                 TransactionDigest::random(),
                 TransactionEffectsDigest::random(),
                 TransactionEffectsDigest::random(),
+                None,
             )
             .unwrap();
 
@@ -3159,6 +3221,7 @@ mod tests {
                 tx_digest,
                 TransactionEffectsDigest::random(),
                 TransactionEffectsDigest::random(),
+                None,
             )
             .unwrap();
 
@@ -3195,15 +3258,21 @@ mod tests {
         );
     }
 
-    // Under RecoverOncePerVersion, a checkpoint override clears the fork via the manual path without
-    // consuming the per-version one-shot (which would otherwise burn the node's one auto attempt).
+    // Under RecoverOncePerVersion, a checkpoint override clears the fork via the manual path
+    // even when the auto path would refuse (here: the fork was recorded by the currently running
+    // binary version and the sequence is not certified).
     #[tokio::test]
-    async fn test_override_does_not_consume_one_shot() {
+    async fn test_override_clears_fork_auto_recovery_refuses() {
         let checkpoint_store = CheckpointStore::new_for_tests();
         let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
         let seq = 5;
+        checkpoint_store.set_binary_version("v1");
         checkpoint_store
-            .record_checkpoint_fork_detected(seq, CheckpointDigest::random())
+            .record_checkpoint_fork_detected(
+                seq,
+                CheckpointDigest::random(),
+                Some(CheckpointDigest::random()),
+            )
             .unwrap();
 
         let mut checkpoint_overrides = BTreeMap::new();
@@ -3218,49 +3287,76 @@ mod tests {
             .await
             .unwrap();
 
-        // The manual override cleared the marker...
         assert!(
             checkpoint_store
                 .get_checkpoint_fork_detected()
-                .unwrap()
-                .is_none()
-        );
-        // ...and the auto path left the one-shot untouched (no marker remained to act on).
-        assert!(
-            checkpoint_store
-                .get_auto_recovery_attempt()
                 .unwrap()
                 .is_none()
         );
     }
 
-    // After the one-shot is exhausted on one binary version (marker still set, attempt recorded), a
-    // node started on a new binary version recovers via the full check_and_recover_forks dispatch.
+    // A self-divergence checkpoint fork (the builder re-derived its own previous checkpoint
+    // differently; no certified digest in the marker) is never auto-recovered, even under a new
+    // binary version, because neither result is proven canonical. It requires operator
+    // overrides.
     #[tokio::test]
-    async fn test_new_version_recovers_after_exhaustion() {
+    async fn test_self_divergence_checkpoint_fork_blocks_recovery() {
         let checkpoint_store = CheckpointStore::new_for_tests();
         let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
-        let seq = 5;
-
-        // Exhausted "v1": the fork marker is still present and "v1" already used its attempt.
+        let seq = 17;
+        checkpoint_store.set_binary_version("v1");
         checkpoint_store
-            .record_checkpoint_fork_detected(seq, CheckpointDigest::random())
+            .record_checkpoint_fork_detected(seq, CheckpointDigest::random(), None)
             .unwrap();
-        checkpoint_store.record_auto_recovery_attempt("v1").unwrap();
 
-        // A new binary version recovers (default behavior, no explicit config).
-        SuiNode::check_and_recover_forks(&checkpoint_store, &checkpoint_metrics, None, "v2")
-            .await
-            .unwrap();
+        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v2").unwrap();
+
         assert!(
             checkpoint_store
                 .get_checkpoint_fork_detected()
                 .unwrap()
-                .is_none()
+                .is_some()
         );
         assert_eq!(
-            checkpoint_store.get_auto_recovery_attempt().unwrap(),
-            Some("v2".to_string())
+            checkpoint_metrics
+                .fork_auto_recovery_blocked_uncertified
+                .get(),
+            1
+        );
+        assert_eq!(checkpoint_metrics.checkpoint_fork_auto_recovered.get(), 0);
+    }
+
+    // A transaction fork whose expected effects did not come from a certified checkpoint (i.e.
+    // they came from this validator's own previously signed effects) is never auto-recovered,
+    // even on a new binary version.
+    #[tokio::test]
+    async fn test_uncertified_transaction_fork_blocks_recovery() {
+        let checkpoint_store = CheckpointStore::new_for_tests();
+        let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
+        checkpoint_store.set_binary_version("v1");
+        checkpoint_store
+            .record_transaction_fork_detected(
+                TransactionDigest::random(),
+                TransactionEffectsDigest::random(),
+                TransactionEffectsDigest::random(),
+                None,
+            )
+            .unwrap();
+
+        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v2").unwrap();
+        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v3").unwrap();
+
+        assert!(
+            checkpoint_store
+                .get_transaction_fork_detected()
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            checkpoint_metrics
+                .fork_auto_recovery_blocked_uncertified
+                .get(),
+            1
         );
     }
 }
