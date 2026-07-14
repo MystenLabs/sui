@@ -365,6 +365,7 @@ where
         Arc::new(throughput_calculator),
         backpressure_manager.subscribe(),
         authority.traffic_controller.clone(),
+        authority.transaction_deny_config_manager().clone(),
         last_consensus_stats,
     );
 

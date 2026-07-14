@@ -2957,7 +2957,9 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::UpdateTransactionDenyConfig(_),
                 ..
             }) => {
-                // Handled in SuiTxValidator; ignored at commit processing.
+                // Validity is enforced in SuiTxValidator; author authentication and
+                // generation checks happen in TransactionDenyConfigManager::apply_updates
+                // when the commit handler applies the update.
             }
             SequencedConsensusTransactionKind::System(_) => {}
         }

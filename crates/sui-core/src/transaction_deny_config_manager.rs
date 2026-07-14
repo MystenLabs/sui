@@ -383,6 +383,10 @@ impl TransactionDenyConfigManager {
         let tx = ConsensusTransaction::new_update_transaction_deny_config(msg.clone());
         info!(?tx, "Updating transaction deny config vote");
         consensus_adapter.submit(tx, None, epoch_store, None, None)?;
+        // Apply locally right away: validators do not verify their own blocks, so the
+        // verification-time path in SuiTxValidator never sees this message, and waiting
+        // for the commit handler to apply it would leave our own vote inactive until
+        // the message is sequenced.
         self.apply_updates(self.self_authority, vec![msg]);
         Ok(generation)
     }

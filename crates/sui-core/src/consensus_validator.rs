@@ -217,11 +217,10 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    /// Applies deny-config updates carried in a fully-validated block. Updates take
-    /// effect at block verification rather than commit processing; every path that
-    /// can bring a block into the DAG verifies it, so every committed update is eventually
-    /// applied. Own broadcasts never pass through here — see
-    /// `TransactionDenyConfigManager::submit_broadcast`.
+    /// Applies deny-config updates carried in a fully-validated block. Applying at block
+    /// verification takes effect sooner than waiting for commit processing, but is not
+    /// guaranteed to happen for every block. The consensus commit handler applies
+    /// committed updates as a backstop, deduplicated by generation.
     fn apply_deny_config_updates(
         &self,
         block_ref: &BlockRef,
