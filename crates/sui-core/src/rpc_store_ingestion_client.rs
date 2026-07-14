@@ -59,8 +59,18 @@ where
             .get_lowest_available_checkpoint()
             .map_err(|e| CheckpointError::Fetch(e.into()))?;
         if checkpoint < lowest {
+            // The pruning gate holds the perpetual floor at or below every
+            // embedded pipeline's committed watermark, so this firing means a
+            // checkpoint was pruned out from under a pipeline that still
+            // needs it -- a permanently unserveable request the framework
+            // will retry forever, stalling that pipeline. This log line is
+            // the stall's primary signal; keep it specific.
             tracing::error!(
-                "Indexer requested checkpont below the perpetual store's pruning watermark"
+                checkpoint,
+                lowest_available = lowest,
+                "the embedded rpc-store indexer requested a checkpoint below \
+                 the perpetual store's pruning floor; the requesting pipeline \
+                 cannot make progress",
             );
         }
 
