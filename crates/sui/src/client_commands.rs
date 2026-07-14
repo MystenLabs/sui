@@ -1369,13 +1369,6 @@ impl SuiClientCommands {
 
                 let is_sui = coin_type_tag == sui_type_tag;
 
-                let TypeTag::Struct(coin_struct_tag) = &coin_type_tag else {
-                    bail!("coin type must be a struct type, got {coin_type_tag}");
-                };
-                let balance_info = client.get_balance(signer, coin_struct_tag).await?;
-                let coin_balance = balance_info.coin_balance();
-                let address_balance = balance_info.address_balance();
-
                 if all_coins {
                     return send_all_coins(
                         context,
@@ -1387,6 +1380,13 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
+
+                let TypeTag::Struct(coin_struct_tag) = &coin_type_tag else {
+                    bail!("coin type must be a struct type, got {coin_type_tag}");
+                };
+                let balance_info = client.get_balance(signer, coin_struct_tag).await?;
+                let coin_balance = balance_info.coin_balance();
+                let address_balance = balance_info.address_balance();
 
                 let (amount, use_address_balance) = if let Some(amount) = amount {
                     let use_address_balance = if stateless {
@@ -3437,28 +3437,6 @@ async fn max_gas_payment_objects(client: &Client) -> Result<usize, anyhow::Error
         })
 }
 
-/// Every `Coin<T>` object owned by `owner`, paired with its value.
-async fn owned_coins(
-    client: &Client,
-    owner: SuiAddress,
-    coin_type_tag: &TypeTag,
-) -> Result<Vec<(ObjectRef, u64)>, anyhow::Error> {
-    let objects: Vec<Object> = client
-        .list_owned_objects(owner, Some(Coin::type_(coin_type_tag.clone())))
-        .try_collect()
-        .await?;
-
-    objects
-        .iter()
-        .map(|object| {
-            let coin = object
-                .as_coin_maybe()
-                .ok_or_else(|| anyhow!("Object {} is not a Coin<{coin_type_tag}>", object.id()))?;
-            Ok((object.compute_object_reference(), coin.value()))
-        })
-        .collect()
-}
-
 /// Send every `Coin<T>` object owned by `signer` to `recipient`'s address balance. The signer's
 /// own address balance is left untouched: only their coin objects are drained.
 async fn send_all_coins(
@@ -3471,108 +3449,57 @@ async fn send_all_coins(
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let client = context.grpc_client()?;
     let sui_type_tag = TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid");
-    let is_sui = coin_type_tag == sui_type_tag;
+    ensure!(
+        coin_type_tag == sui_type_tag,
+        "--all-coins is only supported for SUI. Use --amount with --stateless to send another \
+         coin type from your address balance."
+    );
+    // The coins being sent are also what pays for gas, which a sponsor's gas coin cannot do: it is
+    // the sponsor's money that would end up with the recipient.
+    ensure!(
+        gas_data.gas_sponsor.is_none(),
+        "--all-coins cannot be used with a gas sponsor, because the coins being sent are the ones \
+         paying for gas."
+    );
 
-    let mut coins = owned_coins(&client, signer, &coin_type_tag).await?;
+    let coins: Vec<Object> = client
+        .list_owned_objects(signer, Some(Coin::type_(coin_type_tag.clone())))
+        .try_collect()
+        .await?;
     ensure!(!coins.is_empty(), "No coins available to send");
 
-    if is_sui {
-        // The whole (smashed) gas coin is handed to the recipient. Everything the signer owns has
-        // to fit in a single gas payment, so if they hold more coins than that, drain as many as
-        // will fit and let them run the command again for the rest.
-        let max_payment = max_gas_payment_objects(&client).await?;
-        if coins.len() > max_payment {
-            let remaining = coins.len() - max_payment;
-            coins.truncate(max_payment);
-            eprintln!(
-                "Warning: a gas payment holds at most {max_payment} coins, so {remaining} of your \
-                 coins will not be sent. Run the command again to send the rest."
-            );
-        }
+    let mut coin_refs: Vec<ObjectRef> =
+        coins.iter().map(|c| c.compute_object_reference()).collect();
 
-        let coin_refs: Vec<ObjectRef> = coins.iter().map(|(obj_ref, _)| *obj_ref).collect();
-        let coin_total: u64 = coins.iter().map(|(_, value)| value).sum();
-
-        // Moving the gas coin into `coin::send_funds` by value is understood by the execution
-        // layer: the gas coin is consumed and the unused gas budget is refunded into the
-        // recipient's address balance rather than left behind in a coin.
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let recipient_arg = builder.pure(recipient)?;
-        builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            Identifier::from_str("coin")?,
-            Identifier::from_str("send_funds")?,
-            vec![coin_type_tag.clone()],
-            vec![Argument::GasCoin, recipient_arg],
+    // Every coin has to fit in a single gas payment, so when the signer holds more than that, drain
+    // as many as will fit and let them run the command again for the rest.
+    let max_payment = max_gas_payment_objects(&client).await?;
+    if coin_refs.len() > max_payment {
+        let remaining = coin_refs.len() - max_payment;
+        coin_refs.truncate(max_payment);
+        eprintln!(
+            "Warning: a gas payment holds at most {max_payment} coins, so {remaining} of your \
+             coins will not be sent. Run the command again to send the rest."
         );
-        let tx_kind = TransactionKind::programmable(builder.finish());
-
-        let gas_price = match gas_data.gas_price {
-            Some(gas_price) => gas_price,
-            None => context.get_reference_gas_price().await?,
-        };
-        let gas_budget = match gas_data.gas_budget {
-            Some(gas_budget) => gas_budget,
-            None => {
-                estimate_gas_budget(
-                    context,
-                    signer,
-                    tx_kind.clone(),
-                    gas_price,
-                    vec![],
-                    gas_data.gas_sponsor,
-                )
-                .await?
-            }
-        };
-
-        // The coins pay for gas themselves, so they have to cover the budget. When they can't,
-        // fall through to the shape below, which keeps the gas coin out of the transaction and so
-        // lets the fullnode pay for gas from the signer's address balance instead. A sponsored
-        // transaction also takes that shape: there the gas coin belongs to the sponsor, and it is
-        // the signer's coins we are sending.
-        if coin_total >= gas_budget && gas_data.gas_sponsor.is_none() {
-            return dry_run_or_execute_or_serialize(
-                signer,
-                tx_kind,
-                context,
-                coin_refs,
-                GasDataArgs {
-                    gas_budget: Some(gas_budget),
-                    gas_price: Some(gas_price),
-                    gas_sponsor: gas_data.gas_sponsor,
-                },
-                processing,
-            )
-            .await;
-        }
     }
 
-    // Take the coins as inputs, merge them, and send the merged coin. This never touches the gas
-    // coin, so the fullnode funds gas from the signer's address balance (or, for a non-SUI coin
-    // type, from their SUI coins).
+    // Hand the whole (smashed) gas coin to the recipient. Moving the gas coin into
+    // `coin::send_funds` by value is understood by the execution layer: it consumes the gas coin
+    // and refunds the unused gas budget into the recipient's address balance, so no dust is left
+    // behind. Passing the coins as an explicit gas payment also keeps the fullnode from performing
+    // gas selection, which would otherwise pull in the signer's address balance as well.
     let mut builder = ProgrammableTransactionBuilder::new();
-    let coin_args = coins
-        .iter()
-        .map(|(obj_ref, _)| builder.obj(ObjectArg::ImmOrOwnedObject(*obj_ref)))
-        .collect::<Result<Vec<_>, _>>()?;
-    let (merged, rest) = coin_args
-        .split_first()
-        .expect("coins is non-empty, so there is at least one argument");
-    if !rest.is_empty() {
-        builder.command(Command::MergeCoins(*merged, rest.to_vec()));
-    }
     let recipient_arg = builder.pure(recipient)?;
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::from_str("coin")?,
         Identifier::from_str("send_funds")?,
         vec![coin_type_tag],
-        vec![*merged, recipient_arg],
+        vec![Argument::GasCoin, recipient_arg],
     );
     let tx_kind = TransactionKind::programmable(builder.finish());
 
-    dry_run_or_execute_or_serialize(signer, tx_kind, context, vec![], gas_data, processing).await
+    dry_run_or_execute_or_serialize(signer, tx_kind, context, coin_refs, gas_data, processing).await
 }
 
 /// Ask the fullnode to pick the gas payment for a transaction, and return it along with the
@@ -3614,7 +3541,7 @@ async fn select_gas_with_fullnode(
     Ok((
         gas_data.payment.clone(),
         gas_data.budget,
-        resolved.expiration().clone(),
+        *resolved.expiration(),
     ))
 }
 

@@ -3634,8 +3634,11 @@ async fn publish_with_gas(
 ) -> Result<sui_rpc_api::client::ExecutedTransaction, anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
     build_config.install_dir = None;
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("dummy_modules_publish");
+
+    // The package needs an environment matching the cluster it is published to.
+    let chain_id = context.cache_chain_id().await?;
+    let (temp_dir, package_path) =
+        create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
 
     let result = SuiClientCommands::Publish(PublishArgs {
         package_path,
@@ -3654,6 +3657,7 @@ async fn publish_with_gas(
     let SuiClientCommandResult::TransactionBlock(response) = result else {
         panic!("Publish did not return a transaction block");
     };
+    temp_dir.close()?;
     Ok(response)
 }
 
