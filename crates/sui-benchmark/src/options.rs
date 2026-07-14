@@ -197,7 +197,7 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         composite: Vec<u32>,
         // relative weight of transactions that race distinct transactions over the same gas object
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [20])]
         gas_double_spend: Vec<u32>,
         // Target address(es) for deposit load test. When set, runs the
         // addr_bal_deposit workload exclusively: every transaction withdraws
@@ -220,7 +220,7 @@ pub enum RunSpec {
         // counter. The way total number of counters to
         // create is computed roughly as:
         // total_shared_counters = max(1, qps * (1.0 - hotness/100.0))
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [50])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [100])]
         shared_counter_hotness_factor: Vec<u32>,
         // The number of shared counters this stress client will create and use.
         // This parameter takes precedence over `shared_counter_hotness_factor`, meaning that when this
@@ -250,7 +250,7 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [2])]
         num_contested_objects: Vec<u64>,
         // Number of distinct transactions to submit concurrently with the same gas object.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [2])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [4])]
         gas_double_spend_copies: Vec<usize>,
         // How the conflicting copies are submitted: "direct" submits each copy independently,
         // "soft-bundle" packs all copies into a single soft bundle.
@@ -268,19 +268,19 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
         in_flight_ratio: Vec<u64>,
         // Probability that a logical transaction is submitted to multiple validators.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.8])]
         amplification_probability: Vec<f64>,
         // Number of validators to submit to when amplification_probability triggers.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [8])]
         amplification_validators_per_tx: Vec<usize>,
         // Probability that each selected validator receives multiple copies.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.5])]
         duplicate_probability: Vec<f64>,
         // Number of copies sent to each selected validator when duplicate_probability triggers.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [4])]
         duplicate_copies_per_validator: Vec<usize>,
         // Validator selection strategy for duplicate/amplified submissions.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [ValidatorSelection::Random])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [ValidatorSelection::HighestPerformance])]
         validator_selection: Vec<ValidatorSelection>,
 
         // Setting the duration of each benchmark. Benchmarks will run in sequence.
