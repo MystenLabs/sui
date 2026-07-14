@@ -607,6 +607,133 @@ impl ValidatorService {
             .collect::<SuiResult<Vec<ObjectID>>>()
     }
 
+    /// Builds the submission result for a transaction that consensus has already processed this
+    /// epoch (or that was executed via checkpoint state sync). Its consensus outcome is already
+    /// determined, so prefer a concrete, terminal result over the generic, retriable
+    /// `TransactionProcessing` suppression: a processed-but-unexecuted digest is commonly a
+    /// dropped owned-object conflict loser, and surfacing the terminal error lets the client stop
+    /// retrying instead of polling for effects that will never come.
+    ///
+    /// Called both from the upfront `is_consensus_message_processed` check and when the consensus
+    /// adapter reports the digest as processed during submission (a transaction processed after
+    /// the upfront check ran). The two paths are mutually exclusive per transaction, so metrics
+    /// recorded here do not double-count.
+    async fn already_processed_submission_result(
+        &self,
+        state: &AuthorityState,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        metrics: &ValidatorServiceMetrics,
+        req_type: &str,
+        verified_tx: &VerifiedTransaction,
+        processing_status: &str,
+    ) -> SuiResult<SubmitTxResult> {
+        let tx_digest = *verified_tx.digest();
+
+        // The transaction may have executed, e.g. via checkpoint state sync or while this
+        // request was being handled. Return the effects directly when they can still be
+        // reconstructed.
+        if let Some(effects) = state
+            .get_transaction_cache_reader()
+            .get_executed_effects(&tx_digest)
+        {
+            let effects_digest = effects.digest();
+            if let Ok(executed_data) = self.complete_executed_data(effects).await {
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: processed transaction already executed"
+                );
+                return Ok(SubmitTxResult::Executed {
+                    effects_digest,
+                    details: Some(executed_data),
+                });
+            }
+        }
+
+        // First check the epoch owned-object lock table with the same conflict
+        // logic the consensus handler uses post-consensus. Locks are never
+        // released within an epoch, so this reports the conflict even before the
+        // winner executes, while the loser's input versions still validate as
+        // live.
+        if let Ok(input_objects) = verified_tx.data().transaction_data().input_objects() {
+            let immutable_object_ids = self
+                .collect_immutable_object_ids(verified_tx, state)
+                .await?;
+            let owned_object_refs: Vec<_> = input_objects
+                .iter()
+                .filter_map(|obj| match obj {
+                    InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                        if !immutable_object_ids.contains(&obj_ref.0) =>
+                    {
+                        Some(*obj_ref)
+                    }
+                    _ => None,
+                })
+                .collect();
+            let existing_locks = epoch_store.get_owned_object_locks_map(&owned_object_refs)?;
+            if let Err(error) = epoch_store.try_acquire_owned_object_locks_post_consensus(
+                &owned_object_refs,
+                tx_digest,
+                &HashMap::new(),
+                &existing_locks,
+            ) {
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: processed transaction rejected on lock conflict: {error}"
+                );
+                metrics
+                    .submission_rejected_transactions
+                    .with_label_values(&[error.to_variant_name()])
+                    .inc();
+                return Ok(SubmitTxResult::Rejected { error });
+            }
+        }
+        // Then revalidate against live state, which surfaces the terminal
+        // stale-version error once the conflict winner has executed.
+        if let Err(error) = state.handle_vote_transaction(epoch_store, verified_tx.clone()) {
+            // The transaction may have executed while being validated (e.g. it was
+            // deferred rather than dropped).
+            if let Some(effects) = state
+                .get_transaction_cache_reader()
+                .get_executed_effects(&tx_digest)
+            {
+                let effects_digest = effects.digest();
+                if let Ok(executed_data) = self.complete_executed_data(effects).await {
+                    return Ok(SubmitTxResult::Executed {
+                        effects_digest,
+                        details: Some(executed_data),
+                    });
+                }
+            }
+            debug!(
+                ?tx_digest,
+                "handle_submit_transaction: processed transaction rejected on revalidation: {error}"
+            );
+            metrics
+                .submission_rejected_transactions
+                .with_label_values(&[error.to_variant_name()])
+                .inc();
+            return Ok(SubmitTxResult::Rejected { error });
+        }
+        // Validation passed, so this processed digest may still be executable.
+        // Return retriable TransactionProcessing rather than resubmitting it to consensus.
+        // A later client retry can observe effects or a concrete terminal validation error.
+        metrics
+            .submission_suppressed_already_processed
+            .with_label_values(&[req_type])
+            .inc();
+        debug!(
+            ?tx_digest,
+            "handle_submit_transaction: consensus message already processed"
+        );
+        Ok(SubmitTxResult::Rejected {
+            error: SuiErrorKind::TransactionProcessing {
+                digest: tx_digest,
+                status: processing_status.to_string(),
+            }
+            .into(),
+        })
+    }
+
     #[instrument(
         name = "ValidatorService::handle_submit_transaction",
         level = "error",
@@ -751,6 +878,9 @@ impl ValidatorService {
 
         // Transaction digests.
         let mut tx_digests = Vec::with_capacity(request.transactions.len());
+        // Verified transactions submitted to consensus, retained so a transaction that consensus
+        // processes concurrently with the submission can be revalidated for a concrete result.
+        let mut submitted_txs = Vec::with_capacity(request.transactions.len());
         // Transactions to submit to consensus.
         let mut consensus_transactions = Vec::with_capacity(request.transactions.len());
         // Indexes of transactions above in the request transactions.
@@ -975,105 +1105,16 @@ impl ValidatorService {
                 ConsensusTransactionKey::Certificate(tx_digest),
             );
             if epoch_store.is_consensus_message_processed(&consensus_key)? {
-                // Prefer a concrete, non-retriable error over the generic, retriable
-                // TransactionProcessing suppression. A processed-but-unexecuted digest is
-                // commonly a dropped owned-object conflict loser; surfacing the terminal
-                // error lets the client stop retrying instead of polling for effects that
-                // will never come.
-                //
-                // First check the epoch owned-object lock table with the same conflict
-                // logic the consensus handler uses post-consensus. Locks are never
-                // released within an epoch, so this reports the conflict even before the
-                // winner executes, while the loser's input versions still validate as
-                // live.
-                if let Ok(input_objects) = verified_transaction
-                    .tx()
-                    .data()
-                    .transaction_data()
-                    .input_objects()
-                {
-                    let immutable_object_ids = self
-                        .collect_immutable_object_ids(verified_transaction.tx(), state)
-                        .await?;
-                    let owned_object_refs: Vec<_> = input_objects
-                        .iter()
-                        .filter_map(|obj| match obj {
-                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
-                                if !immutable_object_ids.contains(&obj_ref.0) =>
-                            {
-                                Some(*obj_ref)
-                            }
-                            _ => None,
-                        })
-                        .collect();
-                    let existing_locks =
-                        epoch_store.get_owned_object_locks_map(&owned_object_refs)?;
-                    if let Err(error) = epoch_store.try_acquire_owned_object_locks_post_consensus(
-                        &owned_object_refs,
-                        tx_digest,
-                        &HashMap::new(),
-                        &existing_locks,
-                    ) {
-                        debug!(
-                            ?tx_digest,
-                            "handle_submit_transaction: processed transaction rejected on lock conflict: {error}"
-                        );
-                        metrics
-                            .submission_rejected_transactions
-                            .with_label_values(&[error.to_variant_name()])
-                            .inc();
-                        results[idx] = Some(SubmitTxResult::Rejected { error });
-                        continue;
-                    }
-                }
-                // Then revalidate against live state, which surfaces the terminal
-                // stale-version error once the conflict winner has executed.
-                if let Err(error) =
-                    state.handle_vote_transaction(&epoch_store, verified_transaction.tx().clone())
-                {
-                    // The transaction may have executed while being validated (e.g. it was
-                    // deferred rather than dropped).
-                    if let Some(effects) = state
-                        .get_transaction_cache_reader()
-                        .get_executed_effects(&tx_digest)
-                    {
-                        let effects_digest = effects.digest();
-                        if let Ok(executed_data) = self.complete_executed_data(effects).await {
-                            results[idx] = Some(SubmitTxResult::Executed {
-                                effects_digest,
-                                details: Some(executed_data),
-                            });
-                            continue;
-                        }
-                    }
-                    debug!(
-                        ?tx_digest,
-                        "handle_submit_transaction: processed transaction rejected on revalidation: {error}"
-                    );
-                    metrics
-                        .submission_rejected_transactions
-                        .with_label_values(&[error.to_variant_name()])
-                        .inc();
-                    results[idx] = Some(SubmitTxResult::Rejected { error });
-                    continue;
-                }
-                // Validation passed, so this processed digest may still be executable.
-                // Return retriable TransactionProcessing rather than resubmitting it to consensus.
-                // A later client retry can observe effects or a concrete terminal validation error.
-                metrics
-                    .submission_suppressed_already_processed
-                    .with_label_values(&[req_type])
-                    .inc();
-                results[idx] = Some(SubmitTxResult::Rejected {
-                    error: SuiErrorKind::TransactionProcessing {
-                        digest: tx_digest,
-                        status: "consensus message processed".to_string(),
-                    }
-                    .into(),
-                });
-                debug!(
-                    ?tx_digest,
-                    "handle_submit_transaction: consensus message already processed"
+                results[idx] = Some(
+                    self.already_processed_submission_result(
+                        state,
+                        &epoch_store,
+                        metrics,
+                        req_type,
+                        verified_transaction.tx(),
+                        "consensus message processed",
+                    )
+                    .await?,
                 );
                 continue;
             }
@@ -1174,6 +1215,7 @@ impl ValidatorService {
                 ));
             }
 
+            let submitted_tx = verified_transaction.tx().clone();
             let (tx, aliases) = verified_transaction.into_inner();
             if epoch_store.protocol_config().address_aliases() {
                 if epoch_store
@@ -1213,6 +1255,7 @@ impl ValidatorService {
 
             transaction_indexes.push(idx);
             tx_digests.push(tx_digest);
+            submitted_txs.push(submitted_tx);
             total_size_bytes += tx_size;
         }
 
@@ -1286,23 +1329,19 @@ impl ValidatorService {
                 .collect()
         };
 
-        // Map each submission group back to the (result index, digest) of the transactions it
-        // contains, so a per-group outcome — consensus positions, or an "already processing"
-        // error — can be recorded against each individual transaction. Soft bundles submit as a
-        // single group; individual transactions submit one group each.
+        // Map each submission group back to the (result index, digest, verified transaction) of
+        // the transactions it contains, so a per-group outcome — consensus positions, or an
+        // "already processing" error — can be recorded against each individual transaction. Soft
+        // bundles submit as a single group; individual transactions submit one group each.
+        let tx_meta = transaction_indexes
+            .into_iter()
+            .zip_eq(tx_digests)
+            .zip_eq(submitted_txs)
+            .map(|((idx, tx_digest), submitted_tx)| (idx, tx_digest, submitted_tx));
         let group_tx_meta = if is_soft_bundle_request {
-            vec![
-                transaction_indexes
-                    .into_iter()
-                    .zip_eq(tx_digests)
-                    .collect::<Vec<_>>(),
-            ]
+            vec![tx_meta.collect::<Vec<_>>()]
         } else {
-            transaction_indexes
-                .into_iter()
-                .zip_eq(tx_digests)
-                .map(|pair| vec![pair])
-                .collect::<Vec<_>>()
+            tx_meta.map(|meta| vec![meta]).collect::<Vec<_>>()
         };
 
         // Collect one result per submission group WITHOUT short-circuiting. An
@@ -1373,7 +1412,7 @@ impl ValidatorService {
             for (group_result, txns_meta) in group_results.into_iter().zip_debug_eq(group_tx_meta) {
                 match group_result {
                     Ok(consensus_positions) => {
-                        for ((idx, tx_digest), consensus_position) in
+                        for ((idx, tx_digest, _), consensus_position) in
                             txns_meta.into_iter().zip_debug_eq(consensus_positions)
                         {
                             debug!(
@@ -1384,34 +1423,36 @@ impl ValidatorService {
                             results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
                         }
                     }
-                    // The transaction(s) in this group are already being processed by consensus.
-                    // Report per-tx as a retriable rejection rather than failing the whole request.
+                    // The transaction(s) in this group are already being processed by consensus:
+                    // the digest was recorded as consensus-processed after the upfront
+                    // `is_consensus_message_processed` check ran but before the adapter submitted,
+                    // so the consensus outcome is already determined. Run the same
+                    // already-processed handling as the upfront check to surface a concrete
+                    // terminal result when there is one (e.g. the lock conflict that dropped the
+                    // transaction), rather than the generic retriable `TransactionProcessing`.
+                    // This also ensures the per-tx result carries the correct digest.
                     Err(err) => {
                         let SuiErrorKind::TransactionProcessing { status, .. } =
                             err.as_inner().clone()
                         else {
                             return Err(err);
                         };
-                        // For TransactionProcessing error, ensure the per txn result has the correct digest.
-                        for (idx, tx_digest) in txns_meta {
+                        for (idx, tx_digest, submitted_tx) in txns_meta {
                             debug!(
                                 ?tx_digest,
                                 "handle_submit_transaction: transaction already processing: {err}"
                             );
-                            // Same suppression the upfront `is_consensus_message_processed` check
-                            // records, just detected during submission instead of before it. The
-                            // two paths are mutually exclusive, so this does not double-count.
-                            metrics
-                                .submission_suppressed_already_processed
-                                .with_label_values(&[req_type])
-                                .inc();
-                            results[idx] = Some(SubmitTxResult::Rejected {
-                                error: SuiErrorKind::TransactionProcessing {
-                                    digest: tx_digest,
-                                    status: status.clone(),
-                                }
-                                .into(),
-                            });
+                            results[idx] = Some(
+                                self.already_processed_submission_result(
+                                    state,
+                                    &epoch_store,
+                                    metrics,
+                                    req_type,
+                                    &submitted_tx,
+                                    &status,
+                                )
+                                .await?,
+                            );
                         }
                     }
                 }

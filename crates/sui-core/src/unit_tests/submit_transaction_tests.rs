@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -14,11 +14,14 @@ use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, random_object_ref};
 use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
-use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
+use sui_types::messages_consensus::{
+    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
+};
 use sui_types::messages_grpc::{
     RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SubmitTxType,
 };
@@ -29,11 +32,13 @@ use sui_types::transaction::{
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_per_epoch_store::consensus_quarantine::ConsensusCommitOutput;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::consensus_adapter::{ConsensusAdapter, ConsensusClient};
+use crate::consensus_handler::SequencedConsensusTransactionKey;
 use crate::consensus_test_utils::{
     make_consensus_adapter_for_test, make_consensus_adapter_with_client_for_test,
 };
@@ -1369,4 +1374,79 @@ async fn test_soft_bundle_with_recently_processed_duplicate_rejects_only_that_in
         SubmitTxResult::Submitted { .. } => {}
         other => panic!("expected tx2 to be submitted, got: {other:?}"),
     }
+}
+
+// Regression test for the race between the upfront `is_consensus_message_processed` check and
+// the consensus adapter's own processed check: a transaction that consensus processes after the
+// upfront check ran but before the adapter submitted used to be reported as a generic retriable
+// `TransactionProcessing`, even when consensus had already dropped it as an owned-object
+// conflict loser. The server now re-runs the already-processed handling on the adapter's report
+// and surfaces the concrete terminal lock conflict instead.
+#[tokio::test]
+async fn test_processed_during_submission_returns_lock_conflict() {
+    let consensus_client = BlockingConsensusClient::new();
+    let mut first_submit_seen = consensus_client.subscribe_first_submit();
+    let test_context = TestContext::new_with_consensus_client(consensus_client.clone()).await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+
+    // The submission passes the upfront processed/validation checks, then blocks inside the
+    // consensus client.
+    let submit_client = test_context.client.clone();
+    let request = test_context.build_submit_request(transaction);
+    let submit_task =
+        tokio::spawn(async move { submit_client.submit_transaction(request, None).await });
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !*first_submit_seen.borrow() {
+            first_submit_seen
+                .changed()
+                .await
+                .expect("blocking consensus client should remain alive");
+        }
+    })
+    .await
+    .expect("submission should reach consensus client");
+
+    // While the submission is blocked, consensus output (e.g. driven by another validator's
+    // submission of the same transaction) marks the digest processed and records the gas
+    // object's lock for a conflicting transaction: this transaction lost an owned-object
+    // conflict and was dropped. Locks and the processed mark become visible atomically, as in
+    // the consensus commit handler.
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    let conflicting_digest = TransactionDigest::random();
+    let consensus_key =
+        SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(tx_digest));
+    let mut output = ConsensusCommitOutput::default();
+    output.record_consensus_message_processed(consensus_key.clone());
+    output.set_owned_object_locks(HashMap::from([(
+        test_context.gas_object_ref,
+        conflicting_digest,
+    )]));
+    output.set_default_commit_stats_for_testing();
+    epoch_store.push_consensus_output_for_tests(output);
+    // Wake the consensus adapter's processed waiter, which cancels the blocked submission and
+    // reports the transaction as already processing.
+    epoch_store.process_notifications(std::iter::once(&consensus_key));
+
+    let response = submit_task.await.unwrap().unwrap();
+    assert_eq!(response.results.len(), 1);
+    match &response.results[0] {
+        SubmitTxResult::Rejected { error } => match error.as_inner() {
+            SuiErrorKind::ObjectLockConflict {
+                obj_ref,
+                pending_transaction,
+            } => {
+                assert_eq!(*obj_ref, test_context.gas_object_ref);
+                assert_eq!(*pending_transaction, conflicting_digest);
+            }
+            other => panic!("expected ObjectLockConflict, got: {other:?}"),
+        },
+        other => panic!("expected the dropped transaction to be rejected, got: {other:?}"),
+    }
+
+    // The transaction was submitted to consensus once; the concrete result came from the
+    // processed-state re-check, not a resubmission.
+    assert_eq!(consensus_client.submit_count(), 1);
 }

@@ -9,7 +9,7 @@ use std::{
 use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
     base_types::AuthorityName,
-    error::ErrorCategory,
+    error::{ErrorCategory, SuiErrorKind},
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
 };
 use tokio::time::timeout;
@@ -25,6 +25,7 @@ use crate::{
             AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
             aggregate_request_errors,
         },
+        is_transaction_processing_rejection,
         request_retrier::RequestRetrier,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
@@ -282,26 +283,23 @@ impl TransactionSubmitter {
         //   score.
         // Rejections naming a different digest are malformed and stay retriable.
         if let SubmitTxResult::Rejected { error } = &result {
-            match error.as_inner() {
-                sui_types::error::SuiErrorKind::TransactionProcessing { digest, .. }
-                    if Some(*digest) == request.tx_digest() =>
-                {
-                    // No fresh submission was accepted, so record neither success nor failure.
-                    return Ok(result);
-                }
-                sui_types::error::SuiErrorKind::TransactionSubmitted { digest }
-                    if Some(*digest) == request.tx_digest() => {}
-                _ => {
-                    if is_validator_error(error.categorize()) {
-                        client_monitor.record_interaction_result(OperationFeedback {
-                            authority_name: validator,
-                            display_name,
-                            operation: OperationType::Submit,
-                            ping_type: request.ping_type,
-                            result: Err(()),
-                        });
-                    }
-                }
+            if is_transaction_processing_rejection(error, request.tx_digest()) {
+                // No fresh submission was accepted, so record neither success nor failure.
+                return Ok(result);
+            }
+            let own_submission_dedup = matches!(
+                error.as_inner(),
+                SuiErrorKind::TransactionSubmitted { digest }
+                    if Some(*digest) == request.tx_digest()
+            );
+            if !own_submission_dedup && is_validator_error(error.categorize()) {
+                client_monitor.record_interaction_result(OperationFeedback {
+                    authority_name: validator,
+                    display_name,
+                    operation: OperationType::Submit,
+                    ping_type: request.ping_type,
+                    result: Err(()),
+                });
             }
             return Err(TransactionRequestError::RejectedAtValidator(error.clone()));
         }

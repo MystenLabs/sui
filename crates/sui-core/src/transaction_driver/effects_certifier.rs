@@ -40,6 +40,7 @@ use crate::{
             AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
             aggregate_request_errors,
         },
+        is_transaction_processing_rejection,
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
     },
@@ -82,7 +83,8 @@ impl EffectsCertifier {
         tx_type: TxType,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
-        // Guaranteed to be not the Rejected variant.
+        // Either not the Rejected variant, or a `TransactionProcessing` rejection for this
+        // transaction, which is handled by waiting for the finalized outcome by digest.
         submit_txn_result: SubmitTxResult,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
@@ -104,10 +106,7 @@ impl EffectsCertifier {
                 None => (None, None),
             },
             SubmitTxResult::Rejected { error } => {
-                if matches!(
-                    error.as_inner(),
-                    SuiErrorKind::TransactionProcessing { digest, .. } if Some(*digest) == tx_digest
-                ) {
+                if is_transaction_processing_rejection(&error, tx_digest) {
                     // Already being processed by consensus: no consensus position to track, so
                     // wait for the finalized outcome by digest — same path as an `Executed`
                     // response with no inline effects.

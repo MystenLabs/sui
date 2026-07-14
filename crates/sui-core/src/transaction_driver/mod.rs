@@ -28,7 +28,8 @@ use rand::Rng;
 use sui_config::NodeConfig;
 use sui_types::{
     committee::EpochId,
-    error::{ErrorCategory, UserInputError},
+    digests::TransactionDigest,
+    error::{ErrorCategory, SuiError, SuiErrorKind, UserInputError},
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
     transaction::TransactionDataAPI as _,
 };
@@ -69,6 +70,20 @@ pub struct SubmitTransactionOptions {
     /// When submitting a transaction, the validators in the blocked validator list cannot be used to submit the transaction to.
     /// When the blocked validator list is empty, no restrictions are applied.
     pub blocked_validators: Vec<String>,
+}
+
+/// Whether `error` is a `TransactionProcessing` rejection for this exact transaction, meaning
+/// the digest is already durably in flight at the validator (sequenced by consensus, or executed
+/// via a checkpoint). Its outcome should then be awaited by digest instead of resubmitting.
+/// Rejections naming a different digest do not count and stay retriable.
+pub(crate) fn is_transaction_processing_rejection(
+    error: &SuiError,
+    tx_digest: Option<TransactionDigest>,
+) -> bool {
+    matches!(
+        error.as_inner(),
+        SuiErrorKind::TransactionProcessing { digest, .. } if Some(*digest) == tx_digest
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -337,11 +352,7 @@ where
         // returns it as a result (not a retriable error) and the certifier waits for the finalized
         // outcome by digest. Any other `Rejected` should have come back as a submission error.
         if let SubmitTxResult::Rejected { error } = &submit_txn_result
-            && !matches!(
-                error.as_inner(),
-                sui_types::error::SuiErrorKind::TransactionProcessing { digest, .. }
-                    if Some(*digest) == tx_digest
-            )
+            && !is_transaction_processing_rejection(error, tx_digest)
         {
             return Err(TransactionDriverError::ClientInternal {
                 error: format!(
