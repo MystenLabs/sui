@@ -56,6 +56,7 @@ pub mod transaction_driver;
 mod transaction_input_loader;
 pub mod transaction_orchestrator;
 mod transaction_outputs;
+pub mod transaction_pool;
 mod transaction_signing_filter;
 pub mod validator_client_monitor;
 

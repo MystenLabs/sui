@@ -416,6 +416,10 @@ pub struct AuthorityPerEpochStore {
     /// A cache which tracks recently finalized transactions.
     pub(crate) finalized_transactions_cache: FinalizedTransactionsCache,
 
+    /// Settle-callback hook for the pull-based transaction pool, when enabled. Weak so
+    /// the epoch store doesn't keep the pool (which holds this store) alive.
+    transaction_pool: OnceCell<std::sync::Weak<crate::transaction_pool::SuiTransactionPool>>,
+
     /// The node's role for this epoch, derived from committee membership and
     /// the configured sync mode. Computed once at construction.
     node_role: NodeRole,
@@ -1007,7 +1011,10 @@ impl AuthorityPerEpochStore {
         let finalized_transactions_cache =
             FinalizedTransactionsCache::new(randomize_cache_capacity_in_tests(100_000));
 
+        let transaction_pool = OnceCell::new();
+
         let s = Arc::new(Self {
+            transaction_pool,
             name,
             committee: committee.clone(),
             protocol_config,
@@ -2024,6 +2031,9 @@ impl AuthorityPerEpochStore {
         for digest in digests {
             self.executed_transactions_to_checkpoint_notify_read
                 .notify(digest, &sequence);
+        }
+        if let Some(pool) = self.transaction_pool() {
+            pool.note_executed_in_checkpoint(digests);
         }
 
         Ok(())
@@ -3049,8 +3059,16 @@ impl AuthorityPerEpochStore {
         &'a self,
         notifications: impl Iterator<Item = &'a SequencedConsensusTransactionKey>,
     ) {
-        for key in notifications {
-            self.consensus_notify_read.notify(key, &());
+        if let Some(pool) = self.transaction_pool() {
+            let keys: Vec<_> = notifications.collect();
+            for key in &keys {
+                self.consensus_notify_read.notify(key, &());
+            }
+            pool.note_processed(keys.into_iter());
+        } else {
+            for key in notifications {
+                self.consensus_notify_read.notify(key, &());
+            }
         }
     }
 
@@ -3319,8 +3337,24 @@ impl AuthorityPerEpochStore {
         &self,
         updates: Vec<(ConsensusPosition, ConsensusTxStatus)>,
     ) {
+        if let Some(pool) = self.transaction_pool() {
+            pool.note_statuses(&updates);
+        }
         self.consensus_tx_status_cache
             .set_transaction_statuses(updates);
+    }
+
+    /// Registers the pull-based transaction pool for settle callbacks (processed keys,
+    /// per-position statuses, checkpoint-executed digests). Called once at epoch start
+    /// when the transaction pool is enabled.
+    pub fn set_transaction_pool(&self, pool: &Arc<crate::transaction_pool::SuiTransactionPool>) {
+        if self.transaction_pool.set(Arc::downgrade(pool)).is_err() {
+            mysten_common::debug_fatal!("transaction pool already registered for this epoch");
+        }
+    }
+
+    fn transaction_pool(&self) -> Option<Arc<crate::transaction_pool::SuiTransactionPool>> {
+        self.transaction_pool.get().and_then(|weak| weak.upgrade())
     }
 
     pub(crate) fn set_rejection_vote_reason(&self, position: ConsensusPosition, reason: &SuiError) {

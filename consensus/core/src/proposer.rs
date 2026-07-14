@@ -20,7 +20,7 @@ use crate::{
     leader_schedule_v3::NextCommitLeaderSchedule,
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    transaction::TransactionConsumer,
+    transaction::TransactionPool,
     transaction_vote_tracker::TransactionVoteTracker,
     universal_committer::UniversalCommitter,
 };
@@ -70,7 +70,7 @@ pub(crate) trait Proposer: Send + Sync {
 /// Validator proposal engine - full block proposal implementation
 pub(crate) struct ValidatorProposer {
     context: Arc<Context>,
-    transaction_consumer: TransactionConsumer,
+    transaction_pool: Arc<dyn TransactionPool>,
     transaction_vote_tracker: TransactionVoteTracker,
     propagation_delay: Round,
     last_included_ancestors: Vec<Option<BlockRef>>,
@@ -86,7 +86,7 @@ impl ValidatorProposer {
     pub(crate) fn new(
         dag_state: Arc<RwLock<DagState>>,
         context: Arc<Context>,
-        transaction_consumer: TransactionConsumer,
+        transaction_pool: Arc<dyn TransactionPool>,
         transaction_vote_tracker: TransactionVoteTracker,
         block_signer: ProtocolKeyPair,
         last_known_proposed_round: Option<Round>,
@@ -97,7 +97,7 @@ impl ValidatorProposer {
         let last_included_ancestors = vec![None; context.committee.size()];
         Self {
             context,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker,
             propagation_delay: 0,
             last_included_ancestors,
@@ -510,9 +510,14 @@ impl Proposer for ValidatorProposer {
             }
         });
 
-        // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
-        // the inclusion of transactions. Just let this be done in the end of the method.
-        let (transactions, ack_transactions, _limit_reached) = self.transaction_consumer.next();
+        // Consume the next transactions to be included. Do not drop the ack yet as this would
+        // return the transactions to the pool. Just let this be done in the end of the method.
+        let (transactions, ack_transactions, _limit_reached) = self.transaction_pool.take(
+            self.context.protocol_config.max_num_transactions_in_block() as usize,
+            self.context
+                .protocol_config
+                .max_transactions_in_block_bytes() as usize,
+        );
         self.context
             .metrics
             .node_metrics
@@ -716,8 +721,7 @@ impl Proposer for ValidatorProposer {
     }
 
     fn notify_own_blocks_committed(&self, block_refs: Vec<BlockRef>, gc_round: Round) {
-        self.transaction_consumer
-            .notify_own_blocks_status(block_refs, gc_round);
+        self.transaction_pool.notify_committed(block_refs, gc_round);
     }
 
     #[cfg(test)]

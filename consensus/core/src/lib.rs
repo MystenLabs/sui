@@ -72,7 +72,8 @@ pub use context::Clock;
 pub use metrics::Metrics;
 pub use network::RandomnessSignatureHandler;
 pub use transaction::{
-    BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
+    BlockStatus, ClientError, LimitReached, TransactionClient, TransactionPool,
+    TransactionVerifier, ValidationError,
 };
 
 // Exported API for benchmarking

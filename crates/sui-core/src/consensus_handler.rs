@@ -79,7 +79,7 @@ use crate::{
         CheckpointHeight, CheckpointRoots, CheckpointService, CheckpointServiceNotify,
         PendingCheckpoint, PendingCheckpointInfo,
     },
-    consensus_adapter::ConsensusAdapter,
+    consensus_adapter::SubmitToConsensus,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction},
     epoch::{
@@ -105,7 +105,7 @@ pub struct ConsensusHandlerInitializer {
     state: Arc<AuthorityState>,
     checkpoint_service: Arc<CheckpointService>,
     epoch_store: Arc<AuthorityPerEpochStore>,
-    consensus_adapter: Arc<ConsensusAdapter>,
+    consensus_adapter: Arc<dyn SubmitToConsensus>,
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
     backpressure_manager: Arc<BackpressureManager>,
     congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
@@ -117,7 +117,7 @@ impl ConsensusHandlerInitializer {
         state: Arc<AuthorityState>,
         checkpoint_service: Arc<CheckpointService>,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        consensus_adapter: Arc<ConsensusAdapter>,
+        consensus_adapter: Arc<dyn SubmitToConsensus>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_manager: Arc<BackpressureManager>,
         congestion_log_config: Option<CongestionLogConfig>,
@@ -159,7 +159,7 @@ impl ConsensusHandlerInitializer {
             state: state.clone(),
             checkpoint_service,
             epoch_store: state.epoch_store_for_testing().clone(),
-            consensus_adapter,
+            consensus_adapter: Arc::new(consensus_adapter),
             throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
                 None,
                 state.metrics.clone(),
@@ -803,8 +803,8 @@ pub struct ConsensusHandler<C> {
     metrics: Arc<AuthorityMetrics>,
     /// Lru cache to quickly discard transactions processed by consensus
     processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
-    /// Consensus adapter for submitting transactions to consensus
-    consensus_adapter: Arc<ConsensusAdapter>,
+    /// For submitting transactions (e.g. EndOfPublish) to consensus
+    consensus_adapter: Arc<dyn SubmitToConsensus>,
 
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
@@ -829,7 +829,7 @@ impl<C> ConsensusHandler<C> {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
         settlement_scheduler: SettlementScheduler,
-        consensus_adapter: Arc<ConsensusAdapter>,
+        consensus_adapter: Arc<dyn SubmitToConsensus>,
         cache_reader: Arc<dyn ObjectCacheRead>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -919,7 +919,7 @@ impl<C> ConsensusHandler<C> {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
         execution_scheduler_sender: ExecutionSchedulerSender,
-        consensus_adapter: Arc<ConsensusAdapter>,
+        consensus_adapter: Arc<dyn SubmitToConsensus>,
         cache_reader: Arc<dyn ObjectCacheRead>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -3027,9 +3027,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         let end_of_publish = ConsensusTransaction::new_end_of_publish(self.epoch_store.name);
-        if let Err(err) =
-            self.consensus_adapter
-                .submit(end_of_publish, None, &self.epoch_store, None, None)
+        if let Err(err) = self
+            .consensus_adapter
+            .submit_to_consensus(&[end_of_publish], &self.epoch_store)
         {
             warn!(
                 "Error when sending EndOfPublish message from ConsensusHandler: {:?}",
@@ -3599,7 +3599,7 @@ mod tests {
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
             settlement_scheduler,
-            consensus_adapter,
+            Arc::new(consensus_adapter),
             state.get_object_cache_reader().clone(),
             consensus_committee.clone(),
             metrics,
@@ -4185,7 +4185,7 @@ mod tests {
             epoch_store.clone(),
             Arc::new(CheckpointServiceNoop {}),
             settlement_scheduler,
-            consensus_adapter,
+            Arc::new(consensus_adapter),
             state.get_object_cache_reader().clone(),
             consensus_committee.clone(),
             metrics,
@@ -4311,7 +4311,7 @@ mod tests {
             epoch_store.clone(),
             Arc::new(CheckpointServiceNoop {}),
             settlement_scheduler,
-            consensus_adapter,
+            Arc::new(consensus_adapter),
             state.get_object_cache_reader().clone(),
             consensus_committee.clone(),
             metrics,

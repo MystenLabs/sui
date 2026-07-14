@@ -392,7 +392,7 @@ mod test {
         leader_schedule::LeaderSchedule,
         round_tracker::RoundTracker,
         storage::{Store, WriteBatch, mem_store::MemStore},
-        transaction::{TransactionClient, TransactionConsumer},
+        transaction::{TransactionClient, TransactionConsumer, TransactionConsumerPool},
         transaction_vote_tracker::TransactionVoteTracker,
     };
 
@@ -405,7 +405,9 @@ mod test {
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let transaction_consumer = Arc::new(TransactionConsumerPool::new(
+            TransactionConsumer::new(tx_receiver, context.clone()),
+        ));
         let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
@@ -494,7 +496,9 @@ mod test {
 
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let transaction_consumer = Arc::new(TransactionConsumerPool::new(
+            TransactionConsumer::new(tx_receiver, context.clone()),
+        ));
         let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),

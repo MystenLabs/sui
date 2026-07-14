@@ -67,6 +67,7 @@ use tracing::{debug, error, info, instrument};
 
 use crate::admission_queue::{AdmissionQueueContext, AdmissionQueueManager};
 use crate::gasless_rate_limiter::GaslessRateLimiter;
+use crate::transaction_pool::TransactionPoolContext;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusOverloadChecker},
@@ -411,6 +412,8 @@ impl ValidatorServiceMetrics {
 
 /// Where `handle_submit_transaction` routes a request.
 enum AdmissionQueueSubmitMode {
+    /// The pull-based transaction pool is enabled: every submission goes through it.
+    Pool,
     /// System has capacity: submit directly to consensus, skipping the queue.
     Bypass,
     /// System is overloaded: admit via the priority queue.
@@ -430,6 +433,7 @@ pub struct ValidatorService {
     client_id_source: Option<ClientIdSource>,
     gasless_limiter: GaslessRateLimiter,
     admission_queue: Option<AdmissionQueueContext>,
+    transaction_pool: Option<TransactionPoolContext>,
     /// Digests submitted within the last `recent_submission_window` (value: when recorded), to
     /// drop duplicate resubmissions before they reach consensus.
     recently_submitted: Cache<TransactionDigest, Instant>,
@@ -450,6 +454,7 @@ impl ValidatorService {
         validator_metrics: Arc<ValidatorServiceMetrics>,
         client_id_source: Option<ClientIdSource>,
         admission_queue: Option<AdmissionQueueContext>,
+        transaction_pool: Option<TransactionPoolContext>,
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
         let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
@@ -462,6 +467,7 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter,
             admission_queue,
+            transaction_pool,
             recently_submitted: Self::new_recently_submitted_cache(recent_submission_window),
             recent_submission_window,
             inflight_transactions: Arc::new(Mutex::new(HashSet::new())),
@@ -500,6 +506,7 @@ impl ValidatorService {
             client_id_source: None,
             gasless_limiter,
             admission_queue,
+            transaction_pool: None,
             recently_submitted: Self::new_recently_submitted_cache(recent_submission_window),
             recent_submission_window,
             inflight_transactions: Arc::new(Mutex::new(HashSet::new())),
@@ -625,6 +632,7 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter: _,
             admission_queue: _,
+            transaction_pool: _,
             recently_submitted: _,
             recent_submission_window: _,
             inflight_transactions: _,
@@ -1328,6 +1336,47 @@ impl ValidatorService {
                 });
                 future::join_all(futures).await
             }
+            AdmissionQueueSubmitMode::Pool => {
+                let pool = self
+                    .transaction_pool
+                    .as_ref()
+                    .expect("Pool mode implies transaction_pool is Some");
+                let mut receivers = Vec::with_capacity(tx_groups.len());
+                for txns in tx_groups {
+                    let gas_price = Self::extract_gas_price(&txns);
+                    let result = pool.submit_for_positions(
+                        gas_price,
+                        txns,
+                        &epoch_store,
+                        submitter_client_addr,
+                    );
+                    match result {
+                        Ok((rx, newly_inserted)) => {
+                            if !newly_inserted {
+                                // Duplicate of an in-flight submission; flag the request as
+                                // spam. The per-tx result is still Submitted, so this is
+                                // tracked separately.
+                                duplicate_at_admission = true;
+                            }
+                            receivers.push(Ok(rx));
+                        }
+                        // Delivered as the group result: TransactionProcessing is handled
+                        // per-tx below, any other error fails the whole request.
+                        Err(err) => receivers.push(Err(err)),
+                    }
+                }
+                future::join_all(receivers.into_iter().map(|r| async move {
+                    match r {
+                        Ok(rx) => rx.await.unwrap_or_else(|_| {
+                            Err(SuiError::from(SuiErrorKind::FailedToSubmitToConsensus(
+                                "position channel dropped".to_string(),
+                            )))
+                        }),
+                        Err(err) => Err(err),
+                    }
+                }))
+                .await
+            }
             AdmissionQueueSubmitMode::Queue => {
                 let aq = self
                     .admission_queue
@@ -1499,6 +1548,10 @@ impl ValidatorService {
     }
 
     fn classify_submit_mode(&self, is_ping_request: bool) -> AdmissionQueueSubmitMode {
+        if self.transaction_pool.is_some() {
+            return AdmissionQueueSubmitMode::Pool;
+        }
+
         let Some(aq) = &self.admission_queue else {
             return AdmissionQueueSubmitMode::Disabled;
         };
