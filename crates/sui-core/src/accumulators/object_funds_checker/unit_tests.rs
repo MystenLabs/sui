@@ -399,7 +399,7 @@ async fn test_should_commit_early_exits() {
         &tx,
         &TestEffectsBuilder::new(tx.data()).build(),
         &withdraws,
-        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
             vec![],
             Some(SequenceNumber::from_u64(0))
         )),
@@ -419,7 +419,7 @@ async fn test_should_commit_early_exits() {
                 )))
                 .build(),
             &withdraws,
-            &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+            &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
                 vec![],
                 Some(SequenceNumber::from_u64(0))
             )),
@@ -482,7 +482,7 @@ async fn test_should_commit_ignores_zero_net_withdraws() {
         &tx,
         &effects,
         &running_max_withdraws,
-        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
             vec![],
             Some(SequenceNumber::from_u64(0))
         )),

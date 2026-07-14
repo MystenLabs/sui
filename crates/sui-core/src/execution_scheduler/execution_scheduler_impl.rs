@@ -221,7 +221,7 @@ impl ExecutionScheduler {
         // (which create/update accumulator account objects) execute before coin reservation
         // transactions that depend on those objects.
         if tx_data.kind().has_coin_reservations()
-            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version
+            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version()
             && let Some(initial_shared_version) =
                 (**epoch_store.epoch_start_config()).accumulator_root_obj_initial_shared_version()
         {
@@ -364,7 +364,7 @@ impl ExecutionScheduler {
             assert!(!tx_withdraws.is_empty());
             let accumulator_version = env
                 .assigned_versions
-                .accumulator_version
+                .accumulator_version()
                 .expect("accumulator_version must be set when there are withdraws");
             if let Some(prev_version) = prev_version {
                 // Transactions must be in order.
@@ -967,28 +967,28 @@ mod test {
             vec![
                 (
                     transaction_read_0.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
                         tx_read_0_assigned_versions,
                         None,
                     )),
                 ),
                 (
                     transaction_read_1.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
                         tx_read_1_assigned_versions,
                         None,
                     )),
                 ),
                 (
                     transaction_default.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
                         tx_default_assigned_versions,
                         None,
                     )),
                 ),
                 (
                     transaction_read_2.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
                         tx_read_2_assigned_versions,
                         None,
                     )),
@@ -1494,8 +1494,10 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 cancelled_transaction.clone(),
-                ExecutionEnv::new()
-                    .with_assigned_versions(AssignedVersions::new(assigned_versions, None)),
+                ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
+                    assigned_versions,
+                    None,
+                )),
             )],
             &state.epoch_store_for_testing(),
         );
