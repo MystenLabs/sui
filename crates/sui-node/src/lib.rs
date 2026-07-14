@@ -473,6 +473,11 @@ impl SuiNode {
         registry_service: RegistryService,
         server_version: ServerVersion,
     ) -> Result<Arc<SuiNode>> {
+        // Fail fast on config errors before starting any node components.
+        if let Some(prober_config) = &config.address_prober {
+            prober_config.validate()?;
+        }
+
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
@@ -971,9 +976,6 @@ impl SuiNode {
             None
         };
 
-        if let Some(prober_config) = &config.address_prober {
-            prober_config.validate()?;
-        }
         let address_prober = if Self::address_prober_enabled(&config) {
             let handle = address_prober::Builder::new()
                 .config(config.address_prober.clone().unwrap_or_default())
