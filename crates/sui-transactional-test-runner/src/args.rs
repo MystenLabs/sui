@@ -466,7 +466,7 @@ pub enum SuiExtraValueArgs {
     Owned(FakeID, Option<SequenceNumber>),
     Shared(SharedObjectMutability, FakeID, Option<SequenceNumber>),
     Withdraw(u64, ParsedType),
-    AllowanceWithdraw(u64, ParsedType, ParsedAddress, FakeID, Option<SequenceNumber>),
+    AllowanceWithdraw(u64, ParsedType, ParsedAddress, FakeID),
 }
 
 #[derive(Clone)]
@@ -484,7 +484,6 @@ pub enum SuiValue {
         move_core_types::language_storage::TypeTag,
         SuiAddress,
         FakeID,
-        Option<SequenceNumber>,
     ),
 }
 
@@ -590,6 +589,10 @@ impl SuiExtraValueArgs {
         parser.advance(ValueToken::Comma)?;
         Self::skip_whitespace(parser);
         let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "object")?;
+        ensure!(
+            version.is_none(),
+            "allowance_withdraw does not take an object version"
+        );
         parser.advance(ValueToken::RParen)?;
 
         Ok(SuiExtraValueArgs::AllowanceWithdraw(
@@ -597,7 +600,6 @@ impl SuiExtraValueArgs {
             parsed_type,
             funder,
             fake_id,
-            version,
         ))
     }
 
@@ -717,7 +719,7 @@ impl SuiValue {
             SuiValue::Withdraw(_, _) => {
                 panic!("unexpected nested Sui withdraw reservation in args")
             }
-            SuiValue::AllowanceWithdraw(_, _, _, _, _) => {
+            SuiValue::AllowanceWithdraw(_, _, _, _) => {
                 panic!("unexpected nested Sui allowance withdraw reservation in args")
             }
         }
@@ -735,7 +737,7 @@ impl SuiValue {
             SuiValue::Withdraw(_, _) => {
                 panic!("unexpected nested Sui withdraw reservation in args")
             }
-            SuiValue::AllowanceWithdraw(_, _, _, _, _) => {
+            SuiValue::AllowanceWithdraw(_, _, _, _) => {
                 panic!("unexpected nested Sui allowance withdraw reservation in args")
             }
         }
@@ -877,7 +879,7 @@ impl SuiValue {
                     amount, inner_type,
                 ))
             }
-            SuiValue::AllowanceWithdraw(amount, type_tag, funder, fake_id, version) => {
+            SuiValue::AllowanceWithdraw(amount, type_tag, funder, fake_id) => {
                 let inner_type =
                     Balance::maybe_get_balance_type_param(&type_tag).ok_or_else(|| {
                         anyhow::anyhow!(
@@ -885,7 +887,7 @@ impl SuiValue {
                             type_tag
                         )
                     })?;
-                let allowance = Self::resolve_object(fake_id, version, test_adapter)?.id();
+                let allowance = Self::resolve_object(fake_id, None, test_adapter)?.id();
                 CallArg::FundsWithdrawal(FundsWithdrawalArg::balance_from_allowance(
                     amount, inner_type, funder, allowance,
                 ))
@@ -974,12 +976,10 @@ impl ParsableValue for SuiExtraValueArgs {
                 let type_tag = parsed_type.into_type_tag(mapping)?;
                 Ok(SuiValue::Withdraw(amount, type_tag))
             }
-            SuiExtraValueArgs::AllowanceWithdraw(amount, parsed_type, funder, id, version) => {
+            SuiExtraValueArgs::AllowanceWithdraw(amount, parsed_type, funder, id) => {
                 let type_tag = parsed_type.into_type_tag(mapping)?;
                 let funder: SuiAddress = funder.into_account_address(&|s| mapping(s))?.into();
-                Ok(SuiValue::AllowanceWithdraw(
-                    amount, type_tag, funder, id, version,
-                ))
+                Ok(SuiValue::AllowanceWithdraw(amount, type_tag, funder, id))
             }
         }
     }

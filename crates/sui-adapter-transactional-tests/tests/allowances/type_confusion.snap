@@ -29,12 +29,12 @@ task 3, line 19:
 Checkpoint created: 1
 
 task 4, lines 21-23:
-//# programmable --sender A --inputs b"txn_test" @B vector[1000u256] vector[] vector[] vector[] vector[]
+//# programmable --sender A --inputs b"txn_test" @B vector[1000u256] vector[] vector[99999999999999] vector[] vector[]
 // A issues an allowance to B: 1000 lifetime cap, no window, no rate limit.
 //> 0: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6));
 created: object(4,0), object(4,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 6460000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, line 25:
 //# view-object 4,0
@@ -65,7 +65,9 @@ Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
         vec: vector[],
     },
     expiration_timestamp_ms: std::option::Option<u64> {
-        vec: vector[],
+        vec: vector[
+            99999999999999u64,
+        ],
     },
     rate_limit: std::option::Option<sui::allowance::RateLimit> {
         vec: vector[],
@@ -107,7 +109,7 @@ task 7, lines 29-32:
 mutated: object(0,1), object(4,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 400), (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 400)
-gas summary: computation_cost: 1000000, storage_cost: 4104000,  storage_rebate: 4062960, non_refundable_storage_fee: 41040
+gas summary: computation_cost: 1000000, storage_cost: 4164800,  storage_rebate: 4123152, non_refundable_storage_fee: 41648
 
 task 8, lines 34-35:
 //# view-object 4,0
@@ -138,7 +140,9 @@ Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
         vec: vector[],
     },
     expiration_timestamp_ms: std::option::Option<u64> {
-        vec: vector[],
+        vec: vector[
+            99999999999999u64,
+        ],
     },
     rate_limit: std::option::Option<sui::allowance::RateLimit> {
         vec: vector[],
@@ -206,7 +210,7 @@ task 15, lines 61-64:
 //> 1: TransferObjects([Result(0)], Input(3));
 created: object(15,0)
 mutated: object(0,1), object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 4062960, non_refundable_storage_fee: 41040
+gas summary: computation_cost: 1000000, storage_cost: 5152800,  storage_rebate: 4123152, non_refundable_storage_fee: 41648
 
 task 16, lines 66-67:
 //# view-object 4,0
@@ -237,7 +241,9 @@ Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
         vec: vector[],
     },
     expiration_timestamp_ms: std::option::Option<u64> {
-        vec: vector[],
+        vec: vector[
+            99999999999999u64,
+        ],
     },
     rate_limit: std::option::Option<sui::allowance::RateLimit> {
         vec: vector[],
