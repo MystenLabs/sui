@@ -3,8 +3,6 @@
 
 module type_params::m3;
 
-use sui::transfer;
-
 public fun transfer_object<T: key + store>(o: T, recipient: address) {
     transfer::public_transfer(o, recipient);
 }

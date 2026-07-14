@@ -8,10 +8,7 @@ use sui::authenticator_state::AuthenticatorState;
 use sui::clock::Clock;
 use sui::dynamic_object_field as ofield;
 use sui::event;
-use sui::object::{Self, UID, ID};
 use sui::random::Random;
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
 
 public struct Object has key, store {
     id: UID,

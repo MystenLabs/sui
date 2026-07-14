@@ -4,9 +4,7 @@
 module tto::M1;
 
 use sui::dynamic_object_field;
-use sui::object::{Self, UID};
-use sui::transfer::{Self, Receiving};
-use sui::tx_context::{Self, TxContext};
+use sui::transfer::Receiving;
 
 public struct A has key, store {
     id: UID,

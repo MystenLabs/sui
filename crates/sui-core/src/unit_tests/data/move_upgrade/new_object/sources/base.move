@@ -3,8 +3,6 @@
 
 module base_addr::base;
 
-use sui::object::UID;
-
 public struct A<T> {
     f1: bool,
     f2: T,

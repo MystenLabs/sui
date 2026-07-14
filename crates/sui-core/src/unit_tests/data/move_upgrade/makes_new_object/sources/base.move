@@ -4,9 +4,6 @@
 module base_addr::base;
 
 use sui::event;
-use sui::object::{Self, UID};
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
 
 public struct A<T> {
     f1: bool,

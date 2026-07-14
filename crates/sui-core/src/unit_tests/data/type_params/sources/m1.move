@@ -3,9 +3,6 @@
 
 module type_params::m1;
 
-use sui::object::{Self, UID};
-use sui::transfer;
-use sui::tx_context::TxContext;
 use type_params::m2;
 
 public struct Object has key, store {

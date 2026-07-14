@@ -3,11 +3,7 @@
 
 module coin_deny_list_v1::regulated_coin;
 
-use std::option;
 use sui::coin;
-use sui::object::UID;
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
 
 public struct REGULATED_COIN has drop {}
 

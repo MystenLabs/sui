@@ -4,10 +4,7 @@
 module entry_point_types::entry_point_types;
 
 use std::ascii;
-use std::option::Option;
 use std::string;
-use std::vector;
-use sui::tx_context::TxContext;
 
 public fun ascii_arg(s: ascii::String, len: u64, _: &mut TxContext) {
     assert!(s.length() == len, 0);

@@ -4,12 +4,8 @@
 /// A module to test coin index.
 module fungible_tokens::managed;
 
-use std::option;
 use sui::coin::{Self, Coin, TreasuryCap};
-use sui::object::{Self, UID};
 use sui::table_vec::{Self, TableVec};
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
 
 public struct PublicRedEnvelope has key, store {
     id: UID,

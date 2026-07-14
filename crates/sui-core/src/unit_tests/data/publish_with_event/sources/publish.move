@@ -5,7 +5,6 @@ module examples::publish_with_event;
 
 use std::ascii::{Self, String};
 use sui::event;
-use sui::tx_context::TxContext;
 
 public struct PublishEvent has copy, drop {
     foo: String,

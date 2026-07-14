@@ -3,10 +3,6 @@
 
 module type_params::m2;
 
-use sui::object::{Self, UID};
-use sui::transfer;
-use sui::tx_context::TxContext;
-
 public struct AnotherObject has key, store {
     id: UID,
     value: u64,

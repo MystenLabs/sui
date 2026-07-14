@@ -4,9 +4,6 @@
 module base_addr::base;
 
 use base_addr::friend_module::{Self, X, Z};
-use sui::object::{Self, UID};
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
 
 public struct A has drop, store {
     v: u16,

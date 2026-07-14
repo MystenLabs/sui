@@ -3,11 +3,6 @@
 
 module entry_point_vector::entry_point_vector;
 
-use std::vector;
-use sui::object::{Self, UID};
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
-
 public struct Obj has key, store {
     id: UID,
     value: u64,

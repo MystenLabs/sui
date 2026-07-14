@@ -4,9 +4,7 @@
 module tto::M2;
 
 use sui::dynamic_field as df;
-use sui::object::{Self, UID};
-use sui::transfer::{Self, Receiving};
-use sui::tx_context::{Self, TxContext};
+use sui::transfer::Receiving;
 
 public struct A has key, store {
     id: UID,

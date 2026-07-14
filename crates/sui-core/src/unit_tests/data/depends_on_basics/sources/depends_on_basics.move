@@ -6,7 +6,6 @@
 module depends::depends_on_basics;
 
 use examples::object_basics;
-use sui::tx_context::TxContext;
 
 public fun delegate(ctx: &mut TxContext) {
     object_basics::share(ctx);
