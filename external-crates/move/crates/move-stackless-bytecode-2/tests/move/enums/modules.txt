@@ -1,5 +1,0 @@
-action
-colors
-directions
-exp
-temperature
