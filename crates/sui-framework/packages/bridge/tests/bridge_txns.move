@@ -15,7 +15,7 @@ use bridge::bridge_env::{
     eth_id,
     limit_exceeded,
     register_test_token,
-    test_token_id
+    test_token_id,
 };
 use bridge::chain_ids;
 use bridge::crypto::ecdsa_pub_key_to_eth_address;
