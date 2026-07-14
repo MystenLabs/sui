@@ -27,6 +27,7 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
 
@@ -636,19 +637,34 @@ impl TransactionContents {
     }
 
     pub fn raw_transaction(&self) -> anyhow::Result<Vec<u8>> {
+        // Returns serialized `SenderSignedData`, not `TransactionData`, for
+        // backwards compatibility. `Pg` stores it in that form already; the
+        // other variants keep the data and signatures separate, so re-wrap.
         match self {
             Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
             Self::Bigtable(kv) => {
                 let tx_data = kv
                     .transaction_data
                     .as_ref()
-                    .context("transaction_data missing from bigtable data")?;
-                bcs::to_bytes(tx_data).context("Failed to serialize transaction")
+                    .context("transaction_data missing from bigtable data")?
+                    .clone();
+                let signatures = kv
+                    .signatures
+                    .clone()
+                    .context("signatures missing from bigtable data")?;
+                bcs::to_bytes(&SenderSignedData::new(tx_data, signatures))
+                    .context("Failed to serialize transaction")
             }
-            Self::LedgerGrpc(txn) => bcs::to_bytes(txn.transaction_data.as_ref())
-                .context("Failed to serialize transaction"),
-            Self::ExecutedTransaction(tx) => bcs::to_bytes(tx.transaction_data.as_ref())
-                .context("Failed to serialize transaction"),
+            Self::LedgerGrpc(txn) => bcs::to_bytes(&SenderSignedData::new(
+                txn.transaction_data.as_ref().clone(),
+                txn.signatures.clone(),
+            ))
+            .context("Failed to serialize transaction"),
+            Self::ExecutedTransaction(tx) => bcs::to_bytes(&SenderSignedData::new(
+                tx.transaction_data.as_ref().clone(),
+                tx.signatures.clone(),
+            ))
+            .context("Failed to serialize transaction"),
         }
     }
 

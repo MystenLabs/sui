@@ -37,6 +37,7 @@ use sui_types::event::Event;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
 
@@ -61,11 +62,12 @@ pub(super) async fn transaction(
         .and_then(|ts| sui_rpc::proto::proto_to_timestamp_ms(ts).ok());
 
     if options.show_input {
-        result.transaction = Some(input(ctx, tx_data.clone(), tx_signatures).await?);
+        result.transaction = Some(input(ctx, tx_data.clone(), tx_signatures.clone()).await?);
     }
 
     if options.show_raw_input {
-        result.raw_transaction = raw_input(&tx_data)?;
+        let data = SenderSignedData::new(tx_data.clone(), tx_signatures);
+        result.raw_transaction = raw_input(&data)?;
     }
 
     if options.show_raw_effects {
@@ -177,9 +179,10 @@ async fn input(
     })
 }
 
-/// Serialize transaction data to raw BCS bytes.
-fn raw_input(tx_data: &TransactionData) -> Result<Vec<u8>, RpcError<Error>> {
-    Ok(bcs::to_bytes(tx_data).context("Failed to serialize transaction")?)
+/// Serialize the fully-signed transaction to raw BCS bytes. This is serialized
+/// `SenderSignedData`, not `TransactionData`, for backwards compatibility.
+fn raw_input(data: &SenderSignedData) -> Result<Vec<u8>, RpcError<Error>> {
+    Ok(bcs::to_bytes(data).context("Failed to serialize transaction")?)
 }
 
 /// Extract the raw effects BCS bytes from the gRPC response.

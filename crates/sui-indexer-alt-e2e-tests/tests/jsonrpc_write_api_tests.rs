@@ -33,7 +33,10 @@ use sui_pg_db::temp::get_available_port;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::TypeTag;
+use sui_types::crypto::ToFromBytes as _;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::signature::GenericSignature;
+use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
@@ -315,7 +318,16 @@ async fn test_execute_transfer_correctness() {
     );
 
     // -- raw input --
-    assert!(!result["rawTransaction"].as_str().unwrap().is_empty());
+    // `rawTransaction` is serialized `SenderSignedData`, not `TransactionData`,
+    // for backwards compatibility.
+    let raw_transaction = Base64::decode(result["rawTransaction"].as_str().unwrap()).unwrap();
+    let actual: SenderSignedData = bcs::from_bytes(&raw_transaction).unwrap();
+    let tx_data: TransactionData = bcs::from_bytes(&Base64::decode(&tx_bytes).unwrap()).unwrap();
+    let tx_signatures = sigs
+        .iter()
+        .map(|sig| GenericSignature::from_bytes(&Base64::decode(sig).unwrap()).unwrap())
+        .collect();
+    assert_eq!(actual, SenderSignedData::new(tx_data, tx_signatures));
 
     // -- effects --
     let effects = &result["effects"];
