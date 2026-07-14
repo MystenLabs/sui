@@ -161,6 +161,7 @@ pub(crate) async fn list_checkpoints(
                 BitmapIndexSpec::tx(),
                 direction,
                 scan_budget,
+                ctx.bitmap_skip_policy(),
                 ctx.bitmap_scan_observer(),
             );
             // Stage A2: resolve tx_seq -> cp_seq, streaming each cp as soon as the

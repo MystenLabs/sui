@@ -152,6 +152,7 @@ pub(crate) async fn list_events(
                 BitmapIndexSpec::event(),
                 options.scan_direction(),
                 scan_budget,
+                ctx.bitmap_skip_policy(),
                 ctx.bitmap_scan_observer(),
             )
             .map_ok(|m| {

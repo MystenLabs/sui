@@ -1466,6 +1466,26 @@ mod tests {
     }
 
     #[test]
+    fn iter_rev_seek_inside_bounded_range_respects_upper_bound() {
+        let (_dir, db, schema) = open();
+        for k in 0..=10u64 {
+            seed(&db, "items", &U64Be(k), &U64Be(k));
+        }
+        let mut iter = schema.items.iter_rev(U64Be(4)..U64Be(8)).unwrap();
+
+        iter.seek(9u64.to_be_bytes());
+        let (k, _) = iter.next().unwrap().unwrap();
+        assert_eq!(k, U64Be(7));
+
+        iter.seek(5u64.to_be_bytes());
+        let (k, _) = iter.next().unwrap().unwrap();
+        assert_eq!(k, U64Be(5));
+
+        iter.seek(3u64.to_be_bytes());
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
     fn iter_seek_past_upper_bound_yields_nothing() {
         // Mirrors alt's "overflow" case.
         let (_dir, db, schema) = open();

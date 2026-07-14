@@ -40,6 +40,7 @@ use prometheus::register_histogram_vec_with_registry;
 use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
+use sui_inverted_index::SkipPolicy;
 use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
@@ -324,6 +325,7 @@ impl BigTableClient {
         spec: BitmapIndexSpec,
         direction: ScanDirection,
         budget: u64,
+        policy: SkipPolicy,
         on_metrics: F,
     ) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>>
     where
@@ -337,6 +339,7 @@ impl BigTableClient {
             spec.bucket_size,
             direction,
             budget,
+            policy,
             on_metrics,
         )
     }

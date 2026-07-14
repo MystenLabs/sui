@@ -139,6 +139,7 @@ pub(crate) async fn list_transactions(
                 BitmapIndexSpec::tx(),
                 options.scan_direction(),
                 scan_budget,
+                ctx.bitmap_skip_policy(),
                 ctx.bitmap_scan_observer(),
             );
             let seq_stream = take_items(seq_stream, limit_items);

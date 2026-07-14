@@ -151,6 +151,7 @@ fn bitmap_query_stream(
         spec.bucket_size,
         direction,
         u64::MAX,
+        sui_inverted_index::SkipPolicy::DRAIN_ONLY,
         |_| {},
     );
     use futures::TryStreamExt;

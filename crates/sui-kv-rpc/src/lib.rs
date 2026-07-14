@@ -74,6 +74,8 @@ pub(crate) struct KvRpcMetrics {
     response_render_latency_ms: HistogramVec,
     stream_item_yield_wait_ms: HistogramVec,
     bitmap_buckets_evaluated: HistogramVec,
+    bitmap_buckets_discarded: HistogramVec,
+    bitmap_leaf_seeks: HistogramVec,
 }
 
 impl KvRpcMetrics {
@@ -106,6 +108,22 @@ impl KvRpcMetrics {
                 registry,
             )
             .unwrap(),
+            bitmap_buckets_discarded: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_buckets_discarded",
+                "Charged dead bucket rows discarded while bitmap leaves catch up across provably unmatchable gaps.",
+                &["method"],
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            bitmap_leaf_seeks: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_leaf_seeks",
+                "Bitmap leaf scans abandoned and reopened beyond provably unmatchable gaps.",
+                &["method"],
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
         })
     }
 
@@ -125,6 +143,17 @@ impl KvRpcMetrics {
         self.bitmap_buckets_evaluated
             .with_label_values(&[method])
             .observe(buckets as f64);
+    }
+    fn observe_bitmap_buckets_discarded(&self, method: &'static str, buckets: u64) {
+        self.bitmap_buckets_discarded
+            .with_label_values(&[method])
+            .observe(buckets as f64);
+    }
+
+    fn observe_bitmap_leaf_seeks(&self, method: &'static str, seeks: u64) {
+        self.bitmap_leaf_seeks
+            .with_label_values(&[method])
+            .observe(seeks as f64);
     }
 }
 
