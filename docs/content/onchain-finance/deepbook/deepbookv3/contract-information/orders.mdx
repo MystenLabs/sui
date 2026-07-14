@@ -184,7 +184,7 @@ Similar to modify, `cancel_order` does not return anything. DeepBookV3 emits `Or
 <details>
 <summary>Cancel multiple orders</summary>
 
-Cancel multiple orders within a vector. The orders must be owned by the `balance_manager`. The orders are removed from the book and the `balance_manager` open orders. If any order fails to cancel, no orders will be cancelled (atomic operation).
+Cancel multiple orders within a vector. The orders must be owned by the `balance_manager`. The orders are removed from the book and the `balance_manager` open orders. If any order fails to cancel, the system cancels none of them (atomic operation).
 
 <ImportContent
 	source="packages/deepbook/sources/pool.move"
@@ -250,7 +250,7 @@ Withdraw settled amounts to the `balance_manager` without requiring a `TradeProo
 <details>
 <summary>`OrderFilled`</summary>
 
-Emitted when a maker order is filled.
+The system emits this event when a taker fills a maker order.
 
 <ImportContent
 	source="packages/deepbook/sources/book/order_info.move"
@@ -265,7 +265,7 @@ Emitted when a maker order is filled.
 <details>
 <summary>`OrderCanceled`</summary>
 
-Emitted when a maker order is canceled.
+The system emits this event when you cancel a maker order.
 
 <ImportContent
 	source="packages/deepbook/sources/book/order.move"
@@ -280,7 +280,7 @@ Emitted when a maker order is canceled.
 <details>
 <summary>`OrderModified`</summary>
 
-Emitted when a maker order is modified.
+The system emits this event when you modify a maker order.
 
 <ImportContent
 	source="packages/deepbook/sources/book/order.move"
@@ -295,7 +295,7 @@ Emitted when a maker order is modified.
 <details>
 <summary>`OrderPlaced`</summary>
 
-Emitted when a maker order is placed into the order book.
+The system emits this event when you place a maker order into the order book.
 
 <ImportContent
 	source="packages/deepbook/sources/book/order_info.move"

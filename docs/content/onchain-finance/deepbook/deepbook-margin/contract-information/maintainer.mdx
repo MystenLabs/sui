@@ -12,7 +12,7 @@ keywords:
   ]
 ---
 
-The maintainer module provides functions for managing margin pools, configuring interest rates, and controlling which DeepBook pools can access margin lending. These functions are restricted to maintainers with the appropriate capabilities.
+The maintainer module provides functions for managing margin pools, configuring interest rates, and controlling which DeepBook pools can access margin lending. Only maintainers with the appropriate capabilities can call these functions.
 
 ## API
 
@@ -84,7 +84,7 @@ Withdraw accumulated maintainer and protocol fees from the margin pool.
 <details>
 <summary>`MaintainerCapUpdated`</summary>
 
-Emitted when a maintainer capability is updated.
+The system emits this event when you update a maintainer capability.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_registry.move"
@@ -99,7 +99,7 @@ Emitted when a maintainer capability is updated.
 <details>
 <summary>`PauseCapUpdated`</summary>
 
-Emitted when a pause capability is updated.
+The system emits this event when you update a pause capability.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_registry.move"
@@ -114,7 +114,7 @@ Emitted when a pause capability is updated.
 <details>
 <summary>`DeepbookPoolRegistered`</summary>
 
-Emitted when a DeepBook pool is registered in the margin registry.
+The system emits this event when you register a DeepBook pool in the margin registry.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_registry.move"
@@ -129,7 +129,7 @@ Emitted when a DeepBook pool is registered in the margin registry.
 <details>
 <summary>`DeepbookPoolUpdatedRegistry`</summary>
 
-Emitted when a DeepBook pool's enabled status is updated in the registry.
+The system emits this event when you update a DeepBook pool's enabled status in the registry.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_registry.move"
@@ -144,7 +144,7 @@ Emitted when a DeepBook pool's enabled status is updated in the registry.
 <details>
 <summary>`DeepbookPoolConfigUpdated`</summary>
 
-Emitted when a DeepBook pool's configuration is updated in the registry.
+The system emits this event when you update a DeepBook pool's configuration in the registry.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_registry.move"

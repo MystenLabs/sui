@@ -23,6 +23,11 @@ export default function Home() {
       to: "/getting-started",
     },
     {
+      title: "Sui Agent Skills",
+      description: "Equip AI coding agents with Sui-specific skills and context.",
+      to: "/skills",
+    },
+    {
       title: "Develop",
       description:
         "Write and upgrade Move packages, work with objects, and query onchain data.",
@@ -46,18 +51,13 @@ export default function Home() {
         "Look up the CLI, SDKs, Move framework, and network API references.",
       to: "/references",
     },
-    {
-      title: "Sui Agent Skills",
-      description: "Equip AI coding agents with Sui-specific skills and context.",
-      to: "/skills",
-    },
   ];
 
   const useCases = [
     {
       title: "DeepBook",
       description:
-        "Trade on Sui's onchain central limit order book — spot, margin, and prediction markets.",
+        "Trade on Sui's onchain central limit order book across spot, margin, and prediction markets.",
       to: "/onchain-finance/deepbook",
     },
     {
@@ -67,10 +67,16 @@ export default function Home() {
       to: "/sui-stack/walrus",
     },
     {
-      title: "SuiPlay0X1",
+      title: "zkLogin",
       description:
-        "Integrate wallets and onchain features for the SuiPlay0X1 gaming handheld.",
-      to: "/sui-stack/suiplay0x1",
+        "Onboard users with their existing Web2 logins, no seed phrase required.",
+      to: "/sui-stack/zklogin-integration/zklogin",
+    },
+    {
+      title: "Digital Assets",
+      description:
+        "Build NFTs and composable digital collectibles with the object model.",
+      to: "/getting-started/examples/lootbox-ctf",
     },
   ];
 
@@ -86,9 +92,10 @@ export default function Home() {
       to: "/operators/validator",
     },
     {
-      title: "Bridge Node Configuration",
-      description: "Configure and run a node for the Sui Bridge.",
-      to: "/operators/bridge-node-configuration",
+      title: "Data Management",
+      description:
+        "Set up archival storage and indexing services for onchain data.",
+      to: "/operators/data-management",
     },
   ];
 

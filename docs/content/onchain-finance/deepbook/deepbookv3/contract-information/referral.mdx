@@ -19,9 +19,9 @@ The DeepBook referral system allows users to earn fees by referring traders to t
 
 ## How referrals work
 
-1. **Mint a referral:** Anyone can mint a `DeepBookPoolReferral` for a specific pool with a specified multiplier. The referral is permanently tied to the pool it was minted from and can only earn fees from trades in that pool.
+1. **Mint a referral:** Anyone can mint a `DeepBookPoolReferral` for a specific pool with a specified multiplier. The referral permanently ties to the pool you minted it from and can only earn fees from trades in that pool.
 2. **Set referral:** Traders associate their `BalanceManager` with a pool-specific referral using a `TradeCap`. Each `BalanceManager` can be associated with different referrals from different pools simultaneously.
-3. **Earn fees:** When taker orders are executed by the balance manager in that pool, referral fees are automatically allocated based on the multiplier. Maker orders do not generate referral fees.
+3. **Earn fees:** When the balance manager executes taker orders in that pool, the system automatically allocates referral fees based on the multiplier. Maker orders do not generate referral fees.
 4. **Claim rewards:** Referrers can claim their accumulated fees in base, quote, and DEEP tokens.
 
 ## API
@@ -31,7 +31,7 @@ The following are the referral-related functions that DeepBook exposes.
 <details>
 <summary>Mint a referral</summary>
 
-Mint a new `DeepBookPoolReferral` object for a specific pool with a specified multiplier. The multiplier determines the portion of trading fees allocated to the referrer. The multiplier must be a multiple of 0.1 (such as 0.1, 0.2, or 0.3) and cannot exceed 2.0. Returns the ID of the created referral.
+Mint a new `DeepBookPoolReferral` object for a specific pool with a given multiplier. The multiplier determines the portion of trading fees allocated to the referrer. The multiplier must be a multiple of 0.1 (such as 0.1, 0.2, or 0.3) and cannot exceed 2.0. Returns the ID of the created referral.
 
 <ImportContent
 	source="packages/deepbook/sources/pool.move"
@@ -63,7 +63,7 @@ Update the multiplier for an existing pool referral. Only the referral owner can
 <details>
 <summary>Claim referral rewards</summary>
 
-Claim accumulated referral fees for a pool referral. Only the referral owner can claim rewards. Returns three `Coin` objects representing the accumulated fees in base asset, quote asset, and DEEP tokens.
+Claim your accumulated referral fees for a pool referral. Only you, as the referral owner, can claim rewards. Returns three `Coin` objects representing the accumulated fees in base asset, quote asset, and DEEP tokens.
 
 <ImportContent
 	source="packages/deepbook/sources/pool.move"
@@ -115,7 +115,7 @@ These functions are available on the `BalanceManager` to associate or disassocia
 <details>
 <summary>Set referral</summary>
 
-Associate a `BalanceManager` with a pool-specific referral. Requires a `TradeCap` to authorize the operation. Once set, all trades executed by this balance manager in the referral's pool will generate referral fees according to the referral's multiplier. Any previously set referral for the same pool is replaced.
+Associate a `BalanceManager` with a pool-specific referral. Requires a `TradeCap` to authorize the operation. Once set, all trades that this balance manager executes in the referral's pool generate referral fees according to the referral's multiplier. This replaces any previously set referral for the same pool.
 
 <ImportContent
 	source="packages/deepbook/sources/balance_manager.move"
@@ -131,7 +131,7 @@ Associate a `BalanceManager` with a pool-specific referral. Requires a `TradeCap
 <details>
 <summary>Unset referral</summary>
 
-Remove the referral association from a `BalanceManager` for a specific pool. Requires a `TradeCap` to authorize the operation. After unsetting, trades in that pool will no longer generate referral fees.
+Remove the referral association from a `BalanceManager` for a specific pool. Requires a `TradeCap` to authorize the operation. After unsetting, trades in that pool no longer generate referral fees.
 
 <ImportContent
 	source="packages/deepbook/sources/balance_manager.move"
@@ -197,7 +197,7 @@ Get the pool ID associated with a pool referral object.
 <details>
 <summary>`DeepBookReferralCreatedEvent`</summary>
 
-Emitted when a new referral is minted.
+The system emits this event when you mint a new referral.
 
 <ImportContent
 	source="packages/deepbook/sources/balance_manager.move"
@@ -212,7 +212,7 @@ Emitted when a new referral is minted.
 <details>
 <summary>`DeepBookReferralSetEvent`</summary>
 
-Emitted when a referral is set or unset on a balance manager.
+The system emits this event when you set or unset a referral on a balance manager.
 
 <ImportContent
 	source="packages/deepbook/sources/balance_manager.move"
@@ -227,7 +227,7 @@ Emitted when a referral is set or unset on a balance manager.
 <details>
 <summary>`ReferralClaimed`</summary>
 
-Emitted when a referral owner claims their accumulated fees.
+The system emits this event when the referral owner claims accumulated fees.
 
 <ImportContent
 	source="packages/deepbook/sources/pool.move"
@@ -242,7 +242,7 @@ Emitted when a referral owner claims their accumulated fees.
 <details>
 <summary>`ReferralFeeEvent`</summary>
 
-Emitted when referral fees are allocated during trade execution.
+The system emits this event when it allocates referral fees during trade execution.
 
 <ImportContent
 	source="packages/deepbook/sources/pool.move"
