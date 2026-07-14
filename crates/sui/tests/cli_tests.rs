@@ -3589,6 +3589,290 @@ async fn test_send_funds_sui() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// The `Coin<SUI>` objects owned by `address`.
+async fn sui_coins(client: &Client, address: SuiAddress) -> Result<Vec<Object>, anyhow::Error> {
+    Ok(client
+        .get_owned_objects(address, Some(GasCoin::type_()), None, None)
+        .await?
+        .items)
+}
+
+/// Deposit `amount` MIST from `context`'s active address into `recipient`'s address balance.
+async fn fund_address_balance(
+    context: &mut WalletContext,
+    recipient: SuiAddress,
+    amount: u64,
+    rgp: u64,
+) -> Result<(), anyhow::Error> {
+    let result = SuiClientCommands::SendFunds {
+        to: KeyIdentity::Address(recipient),
+        amount: Some(amount),
+        all_coins: false,
+        coin_type: None,
+        stateless: false,
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(response.effects.status().is_ok());
+    Ok(())
+}
+
+/// Publish a package from `context`'s active address, letting gas selection do its thing unless
+/// `gas` names coins to pay with explicitly.
+async fn publish_with_gas(
+    context: &mut WalletContext,
+    gas: Vec<ObjectID>,
+) -> Result<sui_rpc_api::client::ExecutedTransaction, anyhow::Error> {
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.install_dir = None;
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_publish");
+
+    let result = SuiClientCommands::Publish(PublishArgs {
+        package_path,
+        build_config,
+        skip_dependency_verification: false,
+        verify_deps: false,
+        with_unpublished_dependencies: false,
+        payment: PaymentArgs { gas },
+        // No budget: exercise estimation as well as selection.
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs::default(),
+    })
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("Publish did not return a transaction block");
+    };
+    Ok(response)
+}
+
+/// `send-funds --all-coins` drains every coin object the sender owns into the recipient's address
+/// balance, and leaves the sender's own address balance alone.
+#[sim_test]
+async fn test_send_funds_all_coins() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let recipient = &recipients[0];
+    let recipient_address = addresses[0];
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    // Give the sender an address balance too, so we can tell that `--all-coins` leaves it alone.
+    let kept_in_address_balance = 1_000_000_000u64;
+    fund_address_balance(context, sender, kept_in_address_balance, rgp).await?;
+
+    let coins_before = client.get_balance(sender, &GAS::type_()).await?;
+    assert!(coins_before.coin_balance() > 0);
+    assert_eq!(coins_before.address_balance(), kept_in_address_balance);
+
+    let result = SuiClientCommands::SendFunds {
+        to: recipient.clone(),
+        amount: None,
+        all_coins: true,
+        coin_type: None,
+        stateless: false,
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(
+        response.effects.status().is_ok(),
+        "send-funds --all-coins failed: {:?}",
+        response.effects.status()
+    );
+
+    // Every coin the sender owned is gone, and their address balance is untouched.
+    let sender_after = client.get_balance(sender, &GAS::type_()).await?;
+    assert_eq!(sender_after.coin_balance(), 0);
+    assert_eq!(sender_after.address_balance(), kept_in_address_balance);
+    assert!(sui_coins(&client, sender).await?.is_empty());
+
+    // The recipient received the coins, less the gas actually charged, in their address balance.
+    let recipient_after = client.get_balance(recipient_address, &GAS::type_()).await?;
+    let gas_used = response.effects.gas_cost_summary().net_gas_usage();
+    assert_eq!(
+        recipient_after.address_balance() as i64,
+        coins_before.coin_balance() as i64 - gas_used
+    );
+    assert_eq!(recipient_after.coin_balance(), 0);
+
+    Ok(())
+}
+
+/// An address holding only an address balance — no coins at all — can still publish: the fullnode
+/// funds gas from that balance and the transaction carries no gas payment.
+#[sim_test]
+async fn test_publish_with_address_balance_only() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let context = &mut test_cluster.wallet;
+    let client = context.grpc_client()?;
+
+    // A brand new address owns no objects. Fund only its address balance.
+    let result = SuiClientCommands::NewAddress {
+        key_scheme: SignatureScheme::ED25519,
+        alias: None,
+        derivation_path: None,
+        word_length: None,
+    }
+    .execute(context)
+    .await?;
+    let SuiClientCommandResult::NewAddress(new_address) = result else {
+        panic!("NewAddress did not return an address");
+    };
+    let publisher = new_address.address;
+
+    let funded = 5_000_000_000u64;
+    fund_address_balance(context, publisher, funded, rgp).await?;
+
+    let before = client.get_balance(publisher, &GAS::type_()).await?;
+    assert_eq!(before.coin_balance(), 0);
+    assert_eq!(before.address_balance(), funded);
+
+    context.config.active_address = Some(publisher);
+    let response = publish_with_gas(context, vec![]).await?;
+    assert!(
+        response.effects.status().is_ok(),
+        "publish from address balance failed: {:?}",
+        response.effects.status()
+    );
+
+    // Gas came from the address balance: no gas payment, and the balance paid for it.
+    assert!(response.transaction.gas_data().payment.is_empty());
+    let after = client.get_balance(publisher, &GAS::type_()).await?;
+    assert_eq!(after.coin_balance(), 0);
+    assert_eq!(
+        after.address_balance() as i64,
+        funded as i64 - response.effects.gas_cost_summary().net_gas_usage()
+    );
+
+    Ok(())
+}
+
+/// When an address has both coins and an address balance, a publish (which never touches the gas
+/// coin) is funded from the address balance, leaving the coins alone.
+#[sim_test]
+async fn test_publish_with_coins_and_address_balance() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let publisher = test_cluster.get_address_1();
+    let context = &mut test_cluster.wallet;
+    let client = context.grpc_client()?;
+
+    let funded = 5_000_000_000u64;
+    fund_address_balance(context, publisher, funded, rgp).await?;
+
+    let coins_before = sui_coins(&client, publisher).await?;
+    let before = client.get_balance(publisher, &GAS::type_()).await?;
+    assert!(!coins_before.is_empty());
+    assert_eq!(before.address_balance(), funded);
+
+    context.config.active_address = Some(publisher);
+    let response = publish_with_gas(context, vec![]).await?;
+    assert!(
+        response.effects.status().is_ok(),
+        "publish with coins and address balance failed: {:?}",
+        response.effects.status()
+    );
+
+    // The address balance covers the budget, so it pays, and the coins are left as they were.
+    assert!(response.transaction.gas_data().payment.is_empty());
+    let after = client.get_balance(publisher, &GAS::type_()).await?;
+    assert_eq!(after.coin_balance(), before.coin_balance());
+    assert_eq!(sui_coins(&client, publisher).await?.len(), coins_before.len());
+    assert!(after.address_balance() < funded);
+
+    Ok(())
+}
+
+/// With no address balance, gas selection falls back to the sender's coins — all of them, which
+/// the validator smashes into a single coin.
+#[sim_test]
+async fn test_publish_with_coins_only() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let publisher = test_cluster.get_address_1();
+    let context = &mut test_cluster.wallet;
+    let client = context.grpc_client()?;
+
+    let coins_before = sui_coins(&client, publisher).await?;
+    assert!(coins_before.len() > 1, "expected several coins to smash");
+    let before = client.get_balance(publisher, &GAS::type_()).await?;
+    assert_eq!(before.address_balance(), 0);
+
+    context.config.active_address = Some(publisher);
+    let response = publish_with_gas(context, vec![]).await?;
+    assert!(
+        response.effects.status().is_ok(),
+        "publish with coins only failed: {:?}",
+        response.effects.status()
+    );
+
+    // All the coins were selected as payment and smashed into one.
+    assert_eq!(
+        response.transaction.gas_data().payment.len(),
+        coins_before.len()
+    );
+    assert_eq!(sui_coins(&client, publisher).await?.len(), 1);
+    let after = client.get_balance(publisher, &GAS::type_()).await?;
+    assert_eq!(after.address_balance(), 0);
+    assert_eq!(
+        after.coin_balance() as i64,
+        before.coin_balance() as i64 - response.effects.gas_cost_summary().net_gas_usage()
+    );
+
+    Ok(())
+}
+
+/// Naming a gas coin explicitly opts out of gas selection entirely: that coin pays, and the
+/// sender's other coins are untouched.
+#[sim_test]
+async fn test_publish_with_explicit_gas_coin() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let publisher = test_cluster.get_address_1();
+    let context = &mut test_cluster.wallet;
+    let client = context.grpc_client()?;
+
+    // Give the publisher an address balance as well, to show the named coin still wins.
+    fund_address_balance(context, publisher, 5_000_000_000, rgp).await?;
+
+    let coins_before = sui_coins(&client, publisher).await?;
+    let gas_coin = coins_before.first().unwrap().id();
+
+    context.config.active_address = Some(publisher);
+    let response = publish_with_gas(context, vec![gas_coin]).await?;
+    assert!(
+        response.effects.status().is_ok(),
+        "publish with an explicit gas coin failed: {:?}",
+        response.effects.status()
+    );
+
+    // Exactly the named coin paid, and nothing else was consumed or smashed.
+    let payment = &response.transaction.gas_data().payment;
+    assert_eq!(payment.len(), 1);
+    assert_eq!(payment[0].0, gas_coin);
+    assert_eq!(response.effects.gas_object().unwrap().0.0, gas_coin);
+    assert_eq!(sui_coins(&client, publisher).await?.len(), coins_before.len());
+
+    Ok(())
+}
+
 #[sim_test]
 async fn test_transfer() -> Result<(), anyhow::Error> {
     let (mut test_cluster, client, rgp, objects, recipients, addresses) =
