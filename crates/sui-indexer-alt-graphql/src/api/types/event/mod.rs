@@ -309,6 +309,7 @@ mod tests {
     fn equality_ignores_checkpoint_hint() {
         assert_eq!(legacy_cursor(2, 3), EventToken::cursor(0, 2, 3));
         assert_eq!(EventToken::cursor(7, 2, 3), EventToken::cursor(0, 2, 3));
+        assert_eq!(legacy_cursor(2, 3), EventToken::cursor(100, 2, 3));
         assert_ne!(legacy_cursor(2, 4), EventToken::cursor(0, 2, 3));
     }
 
