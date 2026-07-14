@@ -10,7 +10,7 @@ At a high level, the DeepBookV3 design follows the following flow, which revolve
 - `PoolRegistry`: Used only during pool creation, it makes sure that duplicate pools are not created and maintains package versioning.
 - `BalanceManager`: Used to source a user's funds when placing orders. A single `BalanceManager` can be used between all pools. See [BalanceManager](/onchain-finance/deepbook/deepbookv3/contract-information/balance-manager) to learn more.
 
-<p class="flex justify-center">![1](./images/DBv3Architecture.png)</p>
+<p class="flex justify-center">![1](./images/architecture_deepbook-shared-objects_v1.svg)</p>
 
 ## Pool shared object {#pool}
 
@@ -22,7 +22,7 @@ All public facing functions take in the `Pool` shared object as a mutable or imm
 
 Logic is isolated between components and each component builds on top of the previous one. By maintaining a book, then state, then vault relationship, DeepBookV3 can provide data availability guarantees, improve code readability, and help make maintaining and upgrading the protocol easier. 
 
-<p class="flex justify-center">![Pool Modules](./images/pool.png)</p>
+<p class="flex justify-center">![Pool Modules](./images/architecture_deepbook-pool-modules_v1.svg)</p>
 
 ### Book
 
@@ -69,7 +69,7 @@ Users can also vote on live proposals. When a proposal exceeds the quorum, the n
 
 The following diagram helps visualize the governance lifecycle.
 
-<p class="flex justify-center">![DeepBookV3 Governance Timeline](./images/governance.png)</p>
+<p class="flex justify-center">![DeepBookV3 Governance Timeline](./images/flowchart_deepbook-governance-lifecycle_v1.svg)</p>
 
 #### History
 
@@ -124,7 +124,7 @@ Nodes in the B+ Tree are stored as individual dynamic fields hanging off the `Bi
 
 The following diagram of the lifecycle of an order placement action helps visualize the book, then state, then vault flow.
 
-<p class="flex justify-center">![Place limit order flow](./images/placeorder.png)</p>
+<p class="flex justify-center">![Place limit order flow](./images/sequence_deepbook-place-limit-order_v1.svg)</p>
 
 ### Pool
 

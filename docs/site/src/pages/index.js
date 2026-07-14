@@ -19,33 +19,36 @@ export default function Home() {
     {
       title: "Getting Started",
       description:
-        "Install Sui, set up your environment, and build your first app.",
+        "Install the Sui toolchain, set up a wallet, and publish your first Move package.",
       to: "/getting-started",
     },
     {
       title: "Develop",
       description:
-        "Write Move packages, work with objects, and access onchain data.",
+        "Write and upgrade Move packages, work with objects, and query onchain data.",
       to: "/develop",
     },
     {
       title: "Onchain Finance",
-      description: "Tokens, stablecoins, payments, and NFTs.",
+      description:
+        "Issue tokens and stablecoins, tokenize assets, and build payments and NFTs.",
       to: "/onchain-finance",
     },
     {
       title: "Sui Stack",
-      description: "Onchain primitives like Nautilus, zkLogin, and Seal.",
+      description:
+        "Compose onchain primitives like zkLogin, Nautilus, and Seal into your app.",
       to: "/sui-stack",
     },
     {
       title: "References",
-      description: "CLI, SDKs, framework, and API reference.",
+      description:
+        "Look up the CLI, SDKs, Move framework, and network API references.",
       to: "/references",
     },
     {
       title: "Sui Agent Skills",
-      description: "Sui skills for AI coding agents.",
+      description: "Equip AI coding agents with Sui-specific skills and context.",
       to: "/skills",
     },
   ];
@@ -53,17 +56,20 @@ export default function Home() {
   const useCases = [
     {
       title: "DeepBook",
-      description: "Sui's onchain central limit order book for spot and margin.",
+      description:
+        "Trade on Sui's onchain central limit order book — spot, margin, and prediction markets.",
       to: "/onchain-finance/deepbook",
     },
     {
       title: "Walrus",
-      description: "Decentralized storage for app data and media.",
+      description:
+        "Store and serve media, blobs, and app data on decentralized storage.",
       to: "/sui-stack/walrus",
     },
     {
       title: "SuiPlay0X1",
-      description: "Build games for the SuiPlay0X1 handheld.",
+      description:
+        "Integrate wallets and onchain features for the SuiPlay0X1 gaming handheld.",
       to: "/sui-stack/suiplay0x1",
     },
   ];
@@ -71,17 +77,17 @@ export default function Home() {
   const nodeOperators = [
     {
       title: "Run a Sui Full Node",
-      description: "Set up and run a Sui full node.",
+      description: "Run a full node to sync the network and serve onchain data.",
       to: "/operators/full-node/sui-full-node",
     },
     {
       title: "Validators",
-      description: "Operate and maintain a Sui validator.",
+      description: "Set up and operate a validator to help secure the network.",
       to: "/operators/validator",
     },
     {
       title: "Bridge Node Configuration",
-      description: "Configure a node for Sui Bridge.",
+      description: "Configure and run a node for the Sui Bridge.",
       to: "/operators/bridge-node-configuration",
     },
   ];
