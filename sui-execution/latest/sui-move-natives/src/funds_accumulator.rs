@@ -15,7 +15,8 @@ use move_vm_runtime::{
     natives::functions::{NativeContext, NativeResult},
 };
 use smallvec::smallvec;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::storage::ObjectFundsSufficiency;
 
 use crate::{
     NativesCostTable,
@@ -24,6 +25,7 @@ use crate::{
 
 const E_OVERFLOW: u64 = 0;
 const E_ADDRESS_BALANCE_NOT_ENABLED: u64 = 1;
+const E_OBJECT_FUNDS_INSUFFICIENT: u64 = 2;
 
 pub fn add_to_accumulator_address(
     context: &mut NativeContext,
@@ -133,4 +135,40 @@ pub fn withdraw_from_accumulator_address(
     // TODO this will need to look at the layout of T when this is not guaranteed to be a Balance
     let withdrawn = Value::struct_(Struct::pack(vec![Value::u64(amount)]));
     Ok(NativeResult::ok(context.gas_used(), smallvec![withdrawn]))
+}
+
+pub fn check_sufficient_object_funds(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    let ty_tag = context.type_to_type_tag(&safe_unwrap!(ty_args.pop()))?;
+
+    let limit = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<U256>());
+    let owner: SuiAddress =
+        safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
+
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+
+    if !obj_runtime
+        .protocol_config
+        .check_object_funds_withdraw_in_execution()
+    {
+        return Ok(NativeResult::ok(context.gas_used(), smallvec![]));
+    }
+
+    // The `?` also propagates the system-object-unavailable retry unwind (minted by the temporary
+    // store together with its retry request) through the outer `PartialVMResult` channel — a
+    // node-local condition, deliberately not a `NativeResult` abort, which would be a deterministic
+    // Move-level outcome. Insufficiency, by contrast, is such an outcome, so it aborts normally.
+    match obj_runtime.check_object_funds_sufficiency(owner, &ty_tag, limit)? {
+        ObjectFundsSufficiency::Sufficient => Ok(NativeResult::ok(context.gas_used(), smallvec![])),
+        ObjectFundsSufficiency::Insufficient => Ok(NativeResult::err(
+            context.gas_used(),
+            E_OBJECT_FUNDS_INSUFFICIENT,
+        )),
+    }
 }

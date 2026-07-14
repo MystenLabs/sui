@@ -120,7 +120,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
-    fn input_consensus_objects(&self) -> Vec<InputConsensusObject> {
+    fn accessed_consensus_objects(&self) -> Vec<InputConsensusObject> {
         self.changed_objects
             .iter()
             .filter_map(|(id, change)| match &change.input_state {
@@ -582,16 +582,16 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
 }
 
 impl TransactionEffectsV2 {
-    /// Derive the unchanged consensus objects of a transaction from its shared inputs and the
-    /// per-epoch config objects it read, given the set of objects it changed. Callers compute
-    /// this before constructing the effects and pass the result to [`Self::new`], so additional
-    /// unchanged consensus objects can be appended before construction if needed.
+    /// Derive the unchanged consensus objects of a transaction from its shared inputs, the
+    /// per-epoch config objects it read, and the system objects it read during execution, given
+    /// the set of objects it changed.
     pub fn compute_unchanged_consensus_objects(
         shared_objects: Vec<SharedInput>,
         loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
         changed_objects: &BTreeMap<ObjectID, EffectsObjectChange>,
+        loaded_system_objects: BTreeMap<ObjectID, VersionDigest>,
     ) -> Vec<(ObjectID, UnchangedConsensusKind)> {
-        shared_objects
+        let mut unchanged_consensus_objects: Vec<_> = shared_objects
             .into_iter()
             .filter_map(|shared_input| match shared_input {
                 SharedInput::Existing((id, version, digest)) => {
@@ -630,7 +630,24 @@ impl TransactionEffectsV2 {
                     .into_iter()
                     .map(|id| (id, UnchangedConsensusKind::PerEpochConfig)),
             )
-            .collect()
+            .collect();
+
+        // Record system objects read during execution (e.g. the accumulator root) as read-only
+        // consensus objects, so the read can be reproduced on replay. Skip any that already appear
+        // as a changed object or as an unchanged consensus object — those versions are already
+        // recorded.
+        let already_recorded: BTreeSet<ObjectID> = changed_objects
+            .keys()
+            .chain(unchanged_consensus_objects.iter().map(|(id, _)| id))
+            .copied()
+            .collect();
+        for (id, version_digest) in loaded_system_objects {
+            if !already_recorded.contains(&id) {
+                unchanged_consensus_objects
+                    .push((id, UnchangedConsensusKind::ReadOnlyRoot(version_digest)));
+            }
+        }
+        unchanged_consensus_objects
     }
 
     pub fn new(

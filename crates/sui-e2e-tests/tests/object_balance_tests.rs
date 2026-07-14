@@ -16,6 +16,7 @@ async fn test_object_balance_withdraw_stress() {
         cfg.set_create_root_accumulator_object_for_testing(true);
         cfg.set_enable_accumulators_for_testing(true);
         cfg.set_enable_object_funds_withdraw_for_testing(true);
+        cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
         cfg
     });
 

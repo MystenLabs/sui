@@ -3,6 +3,7 @@
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::language_storage::TypeTag;
 use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
@@ -11,7 +12,7 @@ use std::{
 };
 use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SequenceNumber},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
     error::VMMemoryLimitExceededSubStatusCode,
     execution::DynamicallyLoadedObjectMetadata,
@@ -433,6 +434,16 @@ impl<'a> ChildObjectStore<'a> {
             config_setting_cache: BTreeMap::new(),
             is_metered,
         }
+    }
+
+    pub(super) fn object_available_balance(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+    ) -> PartialVMResult<u128> {
+        // Pure pass-through: the resolver's error may be the system-object-unavailable retry
+        // unwind, whose status code is load-bearing — it must reach the VM unmodified.
+        self.inner.resolver.object_available_balance(owner, type_)
     }
 
     pub(super) fn receive_object(

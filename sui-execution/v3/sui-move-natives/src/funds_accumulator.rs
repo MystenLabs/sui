@@ -150,3 +150,16 @@ pub fn withdraw_from_accumulator_address(
     let withdrawn = Value::struct_(Struct::pack(vec![Value::u64(amount)]));
     Ok(NativeResult::ok(context.gas_used(), smallvec![withdrawn]))
 }
+
+/// The in-execution funds check is gated by `check_object_funds_withdraw_in_execution`, which is
+/// never enabled at protocol versions that run this execution version. Registered only so the
+/// framework module declaring the native still links; always a no-op success.
+pub fn check_sufficient_object_funds(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
+}

@@ -428,6 +428,10 @@ impl CheckpointExecutor {
 
         finish_stage!(pipeline_handle, BuildDbBatch);
 
+        // GC the object-funds checker's unsettled-withdraw entries for the versions this checkpoint
+        // settled. Done here, at commit, rather than when the barrier settle tx executes: the
+        // barrier can execute concurrently with other transactions in the checkpoint that still read
+        // those entries, whereas by commit every transaction in the checkpoint has executed.
         let object_funds_checker = self.state.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref() {
             object_funds_checker.commit_effects(batch.0.iter().map(|o| &o.effects));

@@ -10,7 +10,7 @@ use mysten_common::{assert_reachable, debug_fatal};
 use parking_lot::RwLock;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    accumulator_root::AccumulatorObjId,
+    accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
     base_types::SequenceNumber,
     effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
@@ -72,6 +72,22 @@ struct Inner {
     unsettled_accounts: BTreeMap<SequenceNumber, BTreeSet<AccumulatorObjId>>,
 }
 
+impl UnsettledObjectFundsRead for ObjectFundsChecker {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        self.inner
+            .read()
+            .unsettled_withdraws
+            .get(account)
+            .and_then(|withdraws| withdraws.get(&accumulator_version))
+            .copied()
+            .unwrap_or_default()
+    }
+}
+
 impl ObjectFundsChecker {
     pub fn new(
         starting_accumulator_version: SequenceNumber,
@@ -85,6 +101,132 @@ impl ObjectFundsChecker {
             inner: RwLock::new(Inner::default()),
             metrics,
         }
+    }
+
+    /// Records the object-funds withdrawals of a transaction that executed successfully under the
+    /// in-execution funds check, so subsequent transactions in the same consensus commit see them as
+    /// unsettled. This is the recording half of `should_commit_object_funds_withdraws`/`try_withdraw`
+    /// without the sufficiency check, which the Move VM already performed during execution. Entries
+    /// are garbage-collected by `commit_effects` once the accumulator version settles.
+    pub fn record_object_funds_withdraws(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        effects: &TransactionEffects,
+        accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        accumulator_version: SequenceNumber,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if accumulator_running_max_withdraws.is_empty() {
+            return;
+        }
+        // Address-reservation withdraws are settled separately; only object withdraws (those without
+        // a funds reservation) are tracked here, mirroring `should_commit_object_funds_withdraws`.
+        let address_funds_reservations: BTreeSet<_> = certificate
+            .transaction_data()
+            .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier())
+            .into_keys()
+            .collect();
+        let object_running_max_withdraws: BTreeMap<_, _> = accumulator_running_max_withdraws
+            .iter()
+            .filter(|(account, _)| !address_funds_reservations.contains(*account))
+            .map(|(account, amount)| (*account, *amount))
+            .collect();
+        // Record the same amount the post-execution checker would: net withdraws (what settlement
+        // deducts) under `record_net_unsettled_object_withdraws`, else the running max.
+        let updates = self.compute_unsettled_withdraw_updates(
+            effects,
+            &address_funds_reservations,
+            &object_running_max_withdraws,
+            epoch_store,
+        );
+        self.record_unsettled_withdraws(updates.iter(), accumulator_version);
+    }
+
+    /// The per-account amounts to record as unsettled withdraws: net withdraws from the effects
+    /// (what settlement will actually deduct) when `record_net_unsettled_object_withdraws` is
+    /// enabled, otherwise the running max. Address-reservation accounts are excluded (settled
+    /// separately). Shared by the post-execution checker (`should_commit_object_funds_withdraws`)
+    /// and the in-execution recording path (`record_object_funds_withdraws`) so both record
+    /// identically.
+    fn compute_unsettled_withdraw_updates(
+        &self,
+        effects: &TransactionEffects,
+        address_funds_reservations: &BTreeSet<AccumulatorObjId>,
+        object_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> BTreeMap<AccumulatorObjId, u128> {
+        if !epoch_store
+            .protocol_config()
+            .record_net_unsettled_object_withdraws()
+        {
+            return object_running_max_withdraws.clone();
+        }
+        let updates: BTreeMap<_, _> = effects
+            .accumulator_events()
+            .into_iter()
+            .filter(|event| !address_funds_reservations.contains(&event.accumulator_obj))
+            .filter_map(|event| {
+                event
+                    .write
+                    .get_fund_withdraw_amount()
+                    // A zero-amount withdraw emits a single Split(0) accumulator event, which
+                    // survives effects folding as a Split (the fold's Merge tie-break only applies
+                    // when an account has multiple writes). It contributes nothing to the running
+                    // max nor to settlement, so recording it would be a no-op; skip it.
+                    .filter(|amount| *amount > 0)
+                    .map(|amount| (event.accumulator_obj, amount))
+            })
+            .collect();
+        // A positive net withdraw in effects implies a positive peak, so the account must have a
+        // running max entry that the net cannot exceed. Recording more than what the sufficiency
+        // check covered could break the funds >= unsettled_withdraw invariant in try_withdraw.
+        debug_assert!(
+            updates.iter().all(|(obj_id, net)| {
+                object_running_max_withdraws
+                    .get(obj_id)
+                    .is_some_and(|max| net <= max)
+            }),
+            "net withdraw exceeds running max: updates={:?} running_max={:?}",
+            updates,
+            object_running_max_withdraws,
+        );
+        updates
+    }
+
+    /// Records object withdraws as unsettled at `accumulator_version`, so later transactions in the
+    /// same consensus commit (which read the same version) account for them on top of the settled
+    /// balance. Shared by the recording-only path (`record_object_funds_withdraws`) and the checking
+    /// path (`try_withdraw`).
+    fn record_unsettled_withdraws<'a>(
+        &self,
+        withdraws: impl Iterator<Item = (&'a AccumulatorObjId, &'a u128)>,
+        accumulator_version: SequenceNumber,
+    ) {
+        let mut inner = self.inner.write();
+        for (account, amount) in withdraws {
+            let entry = inner
+                .unsettled_withdraws
+                .entry(*account)
+                .or_default()
+                .entry(accumulator_version)
+                .or_default();
+            *entry = entry.checked_add(*amount).unwrap();
+            inner
+                .unsettled_accounts
+                .entry(accumulator_version)
+                .or_default()
+                .insert(*account);
+        }
+        self.update_unsettled_metrics(&inner);
+    }
+
+    fn update_unsettled_metrics(&self, inner: &Inner) {
+        self.metrics
+            .unsettled_accounts
+            .set(inner.unsettled_withdraws.len() as i64);
+        self.metrics
+            .unsettled_versions
+            .set(inner.unsettled_accounts.len() as i64);
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
@@ -129,52 +271,15 @@ impl ObjectFundsChecker {
             debug_fatal!("accumulator_version must be set for a tx with object withdraws");
             return false;
         };
-        // The sufficiency check must use the running max withdraws (the peak withdraw
-        // exposure at any point during execution), but the amount that settlement will
-        // actually deduct from each account is the net amount recorded in the effects.
-        // E.g. a tx that withdraws 10 and deposits 10 back has a running max of 10 but
-        // nets to 0. Recording the running max as unsettled would over-count against
-        // other withdraws in the same consensus commit.
-        let unsettled_withdraw_updates = if epoch_store
-            .protocol_config()
-            .record_net_unsettled_object_withdraws()
-        {
-            let updates: BTreeMap<_, _> = effects
-                .accumulator_events()
-                .into_iter()
-                .filter(|event| !address_funds_reservations.contains(&event.accumulator_obj))
-                .filter_map(|event| {
-                    event
-                        .write
-                        .get_fund_withdraw_amount()
-                        // A zero-amount withdraw emits a single Split(0) accumulator event,
-                        // which survives effects folding as a Split (the fold's Merge
-                        // tie-break only applies when an account has multiple writes).
-                        // It contributes nothing to the running max nor to settlement,
-                        // so recording it would be a no-op; skip it.
-                        .filter(|amount| *amount > 0)
-                        .map(|amount| (event.accumulator_obj, amount))
-                })
-                .collect();
-            // A positive net withdraw in effects implies a positive peak, so the account
-            // must have a running max entry that the net cannot exceed. Recording more
-            // than what the sufficiency check covered could break the
-            // funds >= unsettled_withdraw invariant in try_withdraw.
-            debug_assert!(
-                updates.iter().all(|(obj_id, net)| {
-                    object_running_max_withdraws
-                        .get(obj_id)
-                        .is_some_and(|max| net <= max)
-                }),
-                "net withdraw exceeds running max: tx={:?} updates={:?} running_max={:?}",
-                certificate.digest(),
-                updates,
-                object_running_max_withdraws,
-            );
-            updates
-        } else {
-            object_running_max_withdraws.clone()
-        };
+        // The sufficiency check must use the running max withdraws (the peak withdraw exposure at
+        // any point during execution), but the amount that settlement will actually deduct is the
+        // net amount recorded in the effects.
+        let unsettled_withdraw_updates = self.compute_unsettled_withdraw_updates(
+            effects,
+            &address_funds_reservations,
+            &object_running_max_withdraws,
+            epoch_store,
+        );
         match self.check_object_funds(
             object_running_max_withdraws,
             unsettled_withdraw_updates,
@@ -342,32 +447,16 @@ impl ObjectFundsChecker {
                 return false;
             }
         }
-        let mut inner = self.inner.write();
-        for (obj_id, amount) in unsettled_withdraw_updates {
-            let entry = inner
-                .unsettled_withdraws
-                .entry(*obj_id)
-                .or_default()
-                .entry(accumulator_version)
-                .or_default();
-            debug!(?obj_id, ?amount, ?entry, "Updating unsettled withdraws");
-            *entry = entry.checked_add(*amount).unwrap();
-
-            inner
-                .unsettled_accounts
-                .entry(accumulator_version)
-                .or_default()
-                .insert(*obj_id);
-        }
-        self.metrics
-            .unsettled_accounts
-            .set(inner.unsettled_withdraws.len() as i64);
-        self.metrics
-            .unsettled_versions
-            .set(inner.unsettled_accounts.len() as i64);
+        self.record_unsettled_withdraws(unsettled_withdraw_updates.iter(), accumulator_version);
         true
     }
 
+    /// Advances the last-settled accumulator version, unblocking in-execution checks that were
+    /// waiting for this version to settle. This runs when the barrier settle tx *executes*, which
+    /// may be concurrent with other transactions in the same checkpoint — so it only advances the
+    /// watch (safe: it just enables reads of the now-settled balance) and does not garbage-collect
+    /// unsettled entries. GC happens later, at checkpoint commit (`commit_effects`), once every
+    /// transaction that could still read those entries has executed.
     pub fn settle_accumulator_version(&self, next_accumulator_version: SequenceNumber) {
         // unwrap is safe because a receiver is always alive as part of self.
         self.last_settled_version_sender
@@ -378,6 +467,11 @@ impl ObjectFundsChecker {
             .set(next_accumulator_version.value() as i64);
     }
 
+    /// Garbage-collects the unsettled-withdraw entries for the accumulator versions that the given
+    /// committed effects settled. Called from the checkpoint executor at commit time, when every
+    /// transaction in the checkpoint has executed, so no in-execution check can still read them.
+    /// This is a memory optimization, not required for correctness: each transaction reads unsettled
+    /// withdraws at its own required version, which is not GC'd until it settles.
     pub fn commit_effects<'a>(
         &self,
         committed_effects: impl Iterator<Item = &'a TransactionEffects>,
@@ -404,8 +498,7 @@ impl ObjectFundsChecker {
                 .remove(&accumulator_version)
                 .unwrap_or_default();
             for account in accounts {
-                let withdraws = inner.unsettled_withdraws.get_mut(&account);
-                if let Some(withdraws) = withdraws {
+                if let Some(withdraws) = inner.unsettled_withdraws.get_mut(&account) {
                     withdraws.remove(&accumulator_version);
                     if withdraws.is_empty() {
                         inner.unsettled_withdraws.remove(&account);
@@ -413,12 +506,7 @@ impl ObjectFundsChecker {
                 }
             }
         }
-        self.metrics
-            .unsettled_accounts
-            .set(inner.unsettled_withdraws.len() as i64);
-        self.metrics
-            .unsettled_versions
-            .set(inner.unsettled_accounts.len() as i64);
+        self.update_unsettled_metrics(&inner);
     }
 
     #[cfg(test)]
