@@ -711,9 +711,10 @@ struct FeatureFlags {
     // Controls whether consensus handler should record consensus determined shared object version
     // assignments in consensus commit prologue transaction.
     // The purpose of doing this is to enable replaying transaction without transaction effects.
-    // V2 also records initial shared versions for consensus objects.
     #[serde(skip_serializing_if = "is_false")]
     record_consensus_determined_version_assignments_in_prologue: bool,
+    // V2 also records initial shared versions for consensus objects.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     record_consensus_determined_version_assignments_in_prologue_v2: bool,
 
@@ -827,6 +828,7 @@ struct FeatureFlags {
     minimize_child_object_mutations: bool,
 
     // If true, record the additional state digest in the consensus commit prologue.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     record_additional_state_digest_in_prologue: bool,
 
@@ -947,6 +949,7 @@ struct FeatureFlags {
     allow_private_accumulator_entrypoints: bool,
 
     // If true, include indirect state in the additional consensus digest.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     additional_consensus_digest_indirect_state: bool,
 
@@ -1040,6 +1043,7 @@ struct FeatureFlags {
     consensus_skip_gced_accept_votes: bool,
 
     // If true, include cancelled randomness txns in the consensus commit prologue.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     include_cancelled_randomness_txns_in_prologue: bool,
 
@@ -1049,7 +1053,7 @@ struct FeatureFlags {
     address_aliases: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
-    // TODO: remove old code and deprecate once in mainnet.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     fix_checkpoint_signature_mapping: bool,
 
@@ -1111,6 +1115,7 @@ struct FeatureFlags {
     gasless_transaction_drop_safety: bool,
 
     // When split-checkpoints enabled, merge randomness and non-randomness schedulables together.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     merge_randomness_into_checkpoint: bool,
 

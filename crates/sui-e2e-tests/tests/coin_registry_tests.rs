@@ -23,6 +23,9 @@ async fn test_create_coin_registry_object() {
             config.set_use_mfp_txns_in_load_initial_object_debts_for_testing(true);
             config.set_authority_capabilities_v2_for_testing(true);
             config.set_split_checkpoints_in_consensus_handler_for_testing(true);
+            config.set_include_cancelled_randomness_txns_in_prologue_for_testing(true);
+            config.set_fix_checkpoint_signature_mapping_for_testing(true);
+            config.set_merge_randomness_into_checkpoint_for_testing(true);
             config
         });
 
