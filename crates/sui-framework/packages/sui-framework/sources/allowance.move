@@ -49,6 +49,8 @@ const ENameTooLong: vector<u8> = b"Name exceeds the 128-byte limit";
 const EZeroLifetimeCap: vector<u8> = b"Lifetime cap must be greater than zero";
 #[error(code = 16)]
 const EBadTimeWindow: vector<u8> = b"Expiration must be after the start time";
+#[error(code = 17)]
+const ENoExpiration: vector<u8> = b"Allowance must have an expiration or a rate limit";
 
 const MAX_NAME_LENGTH: u64 = 128;
 
@@ -92,13 +94,16 @@ public struct AllowanceCap<phantom T> has key {
     allowance: ID,
 }
 
-/// A tumbling per-window cap: at most `limit` per `period_ms`, resetting each
-/// window.
-public struct RateLimit has copy, drop, store {
-    period_ms: u64,
-    limit: u256,
-    spent: u256,
-    window_start_ms: u64,
+/// A tumbling cap: at most `limit` per `period_ms`, the window restarting at
+/// the first spend after it elapses. An enum to leave layout room for future
+/// kinds (public because the compiler does not support internal enums yet).
+public enum RateLimit has copy, drop, store {
+    FixedWindow {
+        period_ms: u64,
+        limit: u256,
+        spent: u256,
+        window_start_ms: u64,
+    },
 }
 
 /// App authorization for the `_as_app` endpoints. A separate type so the
@@ -247,14 +252,16 @@ fun consume<T: store>(
 
     self.current_spend = self.current_spend + amount;
 
-    self.rate_limit.do_mut!(|rl| {
-        // Tumbling window: reset once the period has elapsed.
-        if (now >= rl.window_start_ms + rl.period_ms) {
-            rl.window_start_ms = now;
-            rl.spent = 0;
-        };
-        assert!(rl.spent + amount <= rl.limit, EExceedsRateLimit);
-        rl.spent = rl.spent + amount;
+    self.rate_limit.do_mut!(|rl| match (rl) {
+        RateLimit::FixedWindow { period_ms, limit, spent, window_start_ms } => {
+            // Tumbling window: reset once the period has elapsed.
+            if (now >= *window_start_ms + *period_ms) {
+                *window_start_ms = now;
+                *spent = 0;
+            };
+            assert!(*spent + amount <= *limit, EExceedsRateLimit);
+            *spent = *spent + amount;
+        },
     });
 
     inner
@@ -269,7 +276,7 @@ fun build_rate_limit(period_ms: Option<u64>, amount: Option<u256>): Option<RateL
     let limit = *amount.borrow();
     // A zero period resets the window on every spend; a zero amount spends nothing.
     assert!(period_ms > 0 && limit > 0, EBadRateLimit);
-    option::some(RateLimit {
+    option::some(RateLimit::FixedWindow {
         period_ms,
         limit,
         spent: 0,
@@ -289,6 +296,8 @@ fun share_new<T>(
 ) {
     // we do not allow unlimited allowances (TODO: Do we?)
     assert!(lifetime_cap.is_some() || rate_limit.is_some(), ENoLimit);
+    // Either a hard end date or bounded drain velocity.
+    assert!(expiration_timestamp_ms.is_some() || rate_limit.is_some(), ENoExpiration);
     assert!(name.length() <= MAX_NAME_LENGTH, ENameTooLong);
     lifetime_cap.do_ref!(|cap| assert!(*cap > 0, EZeroLifetimeCap));
 

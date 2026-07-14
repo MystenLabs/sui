@@ -10,12 +10,11 @@ use sui_simulator::has_mainnet_protocol_config_override;
 use sui_types::{
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
     effects::TransactionEffectsAPI,
+    execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus},
     gas_coin::GAS,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{
-        FundsWithdrawalArg, ObjectArg, SharedObjectMutability, TransactionData,
-    },
+    transaction::{FundsWithdrawalArg, ObjectArg, SharedObjectMutability, TransactionData},
 };
 use test_cluster::addr_balance_test_env::TestEnvBuilder;
 
@@ -52,7 +51,7 @@ async fn test_allowance_issue_and_spend() {
         builder.pure(spender).unwrap(),
         builder.pure(Some(U256::from(SPEND))).unwrap(), // lifetime_cap
         builder.pure(None::<u64>).unwrap(),             // start_timestamp_ms
-        builder.pure(None::<u64>).unwrap(),             // expiration_timestamp_ms
+        builder.pure(Some(u64::MAX)).unwrap(),          // expiration_timestamp_ms
         builder.pure(None::<u64>).unwrap(),             // rate_period_ms
         builder.pure(None::<U256>).unwrap(),            // rate_amount
     ];
@@ -154,5 +153,181 @@ async fn test_allowance_issue_and_spend() {
         .expect("the spender receives the redeemed coin");
 
     // Reconfiguration runs the conservation checks over the accumulator.
+    test_env.trigger_reconfiguration().await;
+}
+
+/// The mid-flight race: a spend is admitted while the allowance is alive, and
+/// the revoke sequences ahead of it in the same consensus position. The spend
+/// then executes against a deleted shared object and fails closed: gas is
+/// charged, nothing is debited.
+#[sim_test]
+async fn test_allowance_revoked_mid_flight() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let funder = test_env.get_sender(0);
+    let (spender, spender_gas) = test_env.get_sender_and_gas(1);
+
+    test_env.fund_one_address_balance(funder, FUND).await;
+    test_env.verify_accumulator_exists(funder, FUND);
+
+    // Issue an allowance to the spender, capped at SPEND.
+    let (_, funder_gas) = test_env.get_sender_and_gas(0);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let args = vec![
+        builder.pure("mid-flight".to_string()).unwrap(),
+        builder.pure(spender).unwrap(),
+        builder.pure(Some(U256::from(SPEND))).unwrap(),
+        builder.pure(None::<u64>).unwrap(),
+        builder.pure(Some(u64::MAX)).unwrap(),
+        builder.pure(None::<u64>).unwrap(),
+        builder.pure(None::<U256>).unwrap(),
+    ];
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("new").unwrap(),
+        vec![balance_sui_type()],
+        args,
+    );
+    let tx = TransactionData::new_programmable(
+        funder,
+        vec![funder_gas],
+        builder.finish(),
+        10_000_000,
+        test_env.rgp,
+    );
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "issuance failed: {:?}",
+        effects.status()
+    );
+    let (allowance_ref, allowance_owner) = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Shared { .. }))
+        .cloned()
+        .expect("the allowance is created as a shared object");
+    let Owner::Shared {
+        initial_shared_version,
+    } = allowance_owner
+    else {
+        unreachable!()
+    };
+    let allowance_id = allowance_ref.0;
+    let (cap_ref, _) = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(a) if *a == funder))
+        .cloned()
+        .expect("the revocation cap goes to the funder");
+    let funder_gas = effects.gas_object().expect("issuance paid gas").0;
+
+    // The funder's revoke, deleting the allowance and the cap.
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let allowance_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: allowance_id,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let cap_arg = builder.obj(ObjectArg::ImmOrOwnedObject(cap_ref)).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("revoke").unwrap(),
+        vec![balance_sui_type()],
+        vec![allowance_arg, cap_arg],
+    );
+    let revoke_tx = TransactionData::new_programmable(
+        funder,
+        vec![funder_gas],
+        builder.finish(),
+        10_000_000,
+        test_env.rgp,
+    );
+
+    // The spender's spend, exactly as in the happy path.
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let allowance_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: allowance_id,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let withdraw_arg = builder
+        .funds_withdrawal(FundsWithdrawalArg::balance_from_allowance(
+            SPEND,
+            GAS::type_tag(),
+            funder,
+            allowance_id,
+        ))
+        .unwrap();
+    let clock_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutability: SharedObjectMutability::Immutable,
+        })
+        .unwrap();
+    let spent_balance = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("spend_balance").unwrap(),
+        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![allowance_arg, withdraw_arg, clock_arg],
+    );
+    let coin = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin").unwrap(),
+        Identifier::new("from_balance").unwrap(),
+        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![spent_balance],
+    );
+    builder.transfer_arg(spender, coin);
+    let spend_tx = TransactionData::new_programmable(
+        spender,
+        vec![spender_gas],
+        builder.finish(),
+        10_000_000,
+        test_env.rgp,
+    );
+
+    // One soft bundle admits both while the allowance is alive, then consensus
+    // sequences them in submission order (same gas price): revoke, then spend.
+    let results = test_env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&[revoke_tx, spend_tx])
+        .await
+        .unwrap();
+    let (_, revoke_effects) = &results[0];
+    let (_, spend_effects) = &results[1];
+
+    assert!(
+        revoke_effects.status().is_ok(),
+        "revoke failed: {:?}",
+        revoke_effects.status()
+    );
+    assert!(
+        revoke_effects.deleted().iter().any(|r| r.0 == allowance_id),
+        "revoke deletes the allowance"
+    );
+
+    match spend_effects.status() {
+        ExecutionStatus::Failure(ExecutionFailure {
+            error: ExecutionFailureStatus::InputObjectDeleted,
+            ..
+        }) => (),
+        other => panic!("expected InputObjectDeleted, got {other:?}"),
+    }
+
+    // Nothing was debited; only gas moved.
+    test_env.verify_accumulator_exists(funder, FUND);
+
     test_env.trigger_reconfiguration().await;
 }

@@ -34,13 +34,17 @@ pub struct MoveTypeName {
     pub name: String,
 }
 
-/// BCS mirror of the Move struct `sui::allowance::RateLimit`.
+/// BCS mirror of the Move enum `sui::allowance::RateLimit`. A variant added
+/// on the Move side without a mirror here fails deserialization, so signing
+/// fails closed until both sides ship together.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct RateLimit {
-    pub period_ms: u64,
-    pub limit: U256,
-    pub spent: U256,
-    pub window_start_ms: u64,
+pub enum RateLimit {
+    FixedWindow {
+        period_ms: u64,
+        limit: U256,
+        spent: U256,
+        window_start_ms: u64,
+    },
 }
 
 /// BCS mirror of the Move struct `sui::allowance::Allowance<T>`.
@@ -94,7 +98,9 @@ pub fn parse_allowance_object(object: &Object) -> UserInputResult<ResolvedAllowa
     let invalid = |error: String| UserInputError::InvalidWithdrawReservation { error };
     let id = object.id();
     let Some(move_obj) = object.data.try_as_move() else {
-        return Err(invalid(format!("object {id} is not a Move object")));
+        return Err(invalid(format!(
+            "declared allowance {id} is not a Move object"
+        )));
     };
     let tag = move_obj.type_().clone().into();
     if !Allowance::is_allowance(&tag) {
@@ -112,10 +118,13 @@ pub fn parse_allowance_object(object: &Object) -> UserInputResult<ResolvedAllowa
         .into_iter()
         .next()
         .expect("checked by is_allowance");
-    let lifetime_remaining = allowance
-        .lifetime_cap
-        .map(|cap| cap.checked_sub(allowance.current_spend).unwrap_or(U256::zero()));
-    let rate_limit_amount = allowance.rate_limit.as_ref().map(|rl| rl.limit);
+    let lifetime_remaining = allowance.lifetime_cap.map(|cap| {
+        cap.checked_sub(allowance.current_spend)
+            .unwrap_or(U256::zero())
+    });
+    let rate_limit_amount = allowance.rate_limit.as_ref().map(|rl| match rl {
+        RateLimit::FixedWindow { limit, .. } => *limit,
+    });
     // The tightest limit present; issuance guarantees at least one.
     let spend_limit = lifetime_remaining
         .into_iter()

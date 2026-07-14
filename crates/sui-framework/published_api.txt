@@ -1957,11 +1957,11 @@ Allowance
 AllowanceCap
 	public struct
 	0x2::allowance
-RateLimit
-	public struct
-	0x2::allowance
 Permit
 	public struct
+	0x2::allowance
+RateLimit
+	public enum
 	0x2::allowance
 permit
 	public fun

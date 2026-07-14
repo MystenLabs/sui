@@ -44,7 +44,8 @@ macro fun test_tx($sender: address, $body: |&mut Scenario, &mut Clock|) {
 // === Issuance builder ===
 
 /// Readable issuance: `new_allowance().lifetime_cap(1000).create<Balance<TEST>>(ctx)`.
-/// Spender defaults to SPENDER; everything else defaults to unset.
+/// Spender defaults to SPENDER, expiry to far-future (the expiration
+/// invariant); everything else defaults to unset.
 public struct AllowanceBuilder has drop {
     name: String,
     spender: address,
@@ -61,7 +62,7 @@ fun new_allowance(): AllowanceBuilder {
         spender: SPENDER,
         cap: option::none(),
         start_ms: option::none(),
-        expiry_ms: option::none(),
+        expiry_ms: option::some(std::u64::max_value!()),
         rate_period_ms: option::none(),
         rate_amount: option::none(),
     }
@@ -395,6 +396,40 @@ fun test_name_too_long_rejected() {
 fun test_no_limit_rejected() {
     test_tx!(FUNDER, |scenario, _clock| {
         new_allowance().create<Balance<TEST>>(scenario.ctx());
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::ENoExpiration)]
+fun test_cap_only_without_expiration_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        allowance::new<Balance<TEST>>(
+            b"test allowance".to_string(),
+            SPENDER,
+            option::some(1000),
+            option::none(),
+            option::none(),
+            option::none(),
+            option::none(),
+            scenario.ctx(),
+        );
+    });
+}
+
+#[test]
+fun test_rate_only_without_expiration_ok() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        // Bounded velocity stands in for an end date.
+        allowance::new<Balance<TEST>>(
+            b"test allowance".to_string(),
+            SPENDER,
+            option::none(),
+            option::none(),
+            option::none(),
+            option::some(100),
+            option::some(500),
+            scenario.ctx(),
+        );
     });
 }
 

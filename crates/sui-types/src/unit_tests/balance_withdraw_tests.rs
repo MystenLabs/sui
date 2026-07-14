@@ -590,7 +590,9 @@ fn test_validate_allowance_withdrawals() {
         sender,
         balance_gas_type_tag(),
     );
-    let err = tx.validate_allowance_withdrawals(&wrong_funder).unwrap_err();
+    let err = tx
+        .validate_allowance_withdrawals(&wrong_funder)
+        .unwrap_err();
     assert!(err.to_string().contains("funder"), "{err}");
 
     let wrong_spender = allowance_input_objects(
@@ -673,7 +675,7 @@ fn test_allowance_spend_limit() {
         balance_gas_type_tag(),
         None,
         U256::zero(),
-        Some(RateLimit {
+        Some(RateLimit::FixedWindow {
             period_ms: 1000,
             limit: U256::from(50u64),
             spent: U256::from(49u64),
@@ -692,7 +694,7 @@ fn test_allowance_spend_limit() {
         balance_gas_type_tag(),
         Some(U256::from(100u64)),
         U256::from(70u64),
-        Some(RateLimit {
+        Some(RateLimit::FixedWindow {
             period_ms: 1000,
             limit: U256::from(50u64),
             spent: U256::zero(),
@@ -714,8 +716,13 @@ fn test_allowance_spend_limit() {
         U256::zero(),
         None,
     );
-    let err = tx(&[1]).validate_allowance_withdrawals(&no_limit).unwrap_err();
-    assert!(err.to_string().contains("no lifetime cap or rate limit"), "{err}");
+    let err = tx(&[1])
+        .validate_allowance_withdrawals(&no_limit)
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("no lifetime cap or rate limit"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -737,4 +744,3 @@ fn test_allowance_requires_feature_flag() {
         "{err}"
     );
 }
-

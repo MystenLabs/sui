@@ -13,8 +13,8 @@ redeem in one step, so limits are never consumed without funds moving.
 -  [Struct `AllowanceWithdrawal`](#sui_allowance_AllowanceWithdrawal)
 -  [Struct `Allowance`](#sui_allowance_Allowance)
 -  [Struct `AllowanceCap`](#sui_allowance_AllowanceCap)
--  [Struct `RateLimit`](#sui_allowance_RateLimit)
 -  [Struct `Permit`](#sui_allowance_Permit)
+-  [Enum `RateLimit`](#sui_allowance_RateLimit)
 -  [Constants](#@Constants_0)
 -  [Function `permit`](#sui_allowance_permit)
 -  [Function `new`](#sui_allowance_new)
@@ -206,49 +206,6 @@ Also used for discoverability (funder -> allowances)
 
 </details>
 
-<a name="sui_allowance_RateLimit"></a>
-
-## Struct `RateLimit`
-
-A tumbling per-window cap: at most <code>limit</code> per <code>period_ms</code>, resetting each
-window.
-
-
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/allowance.md#sui_allowance_RateLimit">RateLimit</a> <b>has</b> <b>copy</b>, drop, store
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>period_ms: u64</code>
-</dt>
-<dd>
-</dd>
-<dt>
-<code>limit: u256</code>
-</dt>
-<dd>
-</dd>
-<dt>
-<code>spent: u256</code>
-</dt>
-<dd>
-</dd>
-<dt>
-<code>window_start_ms: u64</code>
-</dt>
-<dd>
-</dd>
-</dl>
-
-
-</details>
-
 <a name="sui_allowance_Permit"></a>
 
 ## Struct `Permit`
@@ -267,6 +224,71 @@ allowance API has its own authorization type instead of <code>internal::Permit</
 
 
 <dl>
+</dl>
+
+
+</details>
+
+<a name="sui_allowance_RateLimit"></a>
+
+## Enum `RateLimit`
+
+A tumbling cap: at most <code>limit</code> per <code>period_ms</code>, the window restarting at
+the first spend after it elapses. An enum to leave layout room for future
+kinds (public because the compiler does not support internal enums yet).
+
+
+<pre><code><b>public</b> <b>enum</b> <a href="../sui/allowance.md#sui_allowance_RateLimit">RateLimit</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Variants</summary>
+
+
+<dl>
+<dt>
+Variant <code>FixedWindow</code>
+</dt>
+<dd>
+</dd>
+
+<dl>
+<dt>
+<code>period_ms: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<dl>
+<dt>
+<code>limit: u256</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<dl>
+<dt>
+<code>spent: u256</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<dl>
+<dt>
+<code>window_start_ms: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
 </dl>
 
 
@@ -433,6 +455,16 @@ allowance API has its own authorization type instead of <code>internal::Permit</
 
 <pre><code>#[error]
 <b>const</b> <a href="../sui/allowance.md#sui_allowance_EBadTimeWindow">EBadTimeWindow</a>: vector&lt;u8&gt; = b"Expiration must be after the start time";
+</code></pre>
+
+
+
+<a name="sui_allowance_ENoExpiration"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/allowance.md#sui_allowance_ENoExpiration">ENoExpiration</a>: vector&lt;u8&gt; = b"<a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a> must have an expiration or a rate limit";
 </code></pre>
 
 
@@ -768,14 +800,16 @@ callers' responsibility.
         <b>assert</b>!(self.current_spend + amount &lt;= *lifetime_cap, <a href="../sui/allowance.md#sui_allowance_EExceedsLifetimeCap">EExceedsLifetimeCap</a>);
     });
     self.current_spend = self.current_spend + amount;
-    self.rate_limit.do_mut!(|rl| {
-        // Tumbling window: reset once the period <b>has</b> elapsed.
-        <b>if</b> (now &gt;= rl.window_start_ms + rl.period_ms) {
-            rl.window_start_ms = now;
-            rl.spent = 0;
-        };
-        <b>assert</b>!(rl.spent + amount &lt;= rl.limit, <a href="../sui/allowance.md#sui_allowance_EExceedsRateLimit">EExceedsRateLimit</a>);
-        rl.spent = rl.spent + amount;
+    self.rate_limit.do_mut!(|rl| match (rl) {
+        RateLimit::FixedWindow { period_ms, limit, spent, window_start_ms } =&gt; {
+            // Tumbling window: reset once the period <b>has</b> elapsed.
+            <b>if</b> (now &gt;= *window_start_ms + *period_ms) {
+                *window_start_ms = now;
+                *spent = 0;
+            };
+            <b>assert</b>!(*spent + amount &lt;= *limit, <a href="../sui/allowance.md#sui_allowance_EExceedsRateLimit">EExceedsRateLimit</a>);
+            *spent = *spent + amount;
+        },
     });
     inner
 }
@@ -808,7 +842,7 @@ Both <code>Some</code> (a limit) or both <code>None</code> (no limit); a mismatc
     <b>let</b> limit = *amount.<a href="../sui/borrow.md#sui_borrow">borrow</a>();
     // A zero period resets the window on every spend; a zero amount spends nothing.
     <b>assert</b>!(period_ms &gt; 0 && limit &gt; 0, <a href="../sui/allowance.md#sui_allowance_EBadRateLimit">EBadRateLimit</a>);
-    option::some(<a href="../sui/allowance.md#sui_allowance_RateLimit">RateLimit</a> {
+    option::some(RateLimit::FixedWindow {
         period_ms,
         limit,
         spent: 0,
@@ -848,13 +882,12 @@ Both <code>Some</code> (a limit) or both <code>None</code> (no limit); a mismatc
 ) {
     // we do not allow unlimited allowances (TODO: Do we?)
     <b>assert</b>!(lifetime_cap.is_some() || rate_limit.is_some(), <a href="../sui/allowance.md#sui_allowance_ENoLimit">ENoLimit</a>);
+    // Either a hard end date or bounded drain velocity.
+    <b>assert</b>!(expiration_timestamp_ms.is_some() || rate_limit.is_some(), <a href="../sui/allowance.md#sui_allowance_ENoExpiration">ENoExpiration</a>);
     <b>assert</b>!(name.length() &lt;= <a href="../sui/allowance.md#sui_allowance_MAX_NAME_LENGTH">MAX_NAME_LENGTH</a>, <a href="../sui/allowance.md#sui_allowance_ENameTooLong">ENameTooLong</a>);
     lifetime_cap.do_ref!(|cap| <b>assert</b>!(*cap &gt; 0, <a href="../sui/allowance.md#sui_allowance_EZeroLifetimeCap">EZeroLifetimeCap</a>));
     <b>if</b> (start_timestamp_ms.is_some() && expiration_timestamp_ms.is_some()) {
-        <b>assert</b>!(
-            *start_timestamp_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>() &lt; *expiration_timestamp_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>(),
-            <a href="../sui/allowance.md#sui_allowance_EBadTimeWindow">EBadTimeWindow</a>,
-        );
+        <b>assert</b>!(*start_timestamp_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>() &lt; *expiration_timestamp_ms.<a href="../sui/borrow.md#sui_borrow">borrow</a>(), <a href="../sui/allowance.md#sui_allowance_EBadTimeWindow">EBadTimeWindow</a>);
     };
     <b>let</b> <a href="../sui/allowance.md#sui_allowance">allowance</a> = <a href="../sui/allowance.md#sui_allowance_Allowance">Allowance</a>&lt;T&gt; {
         id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),

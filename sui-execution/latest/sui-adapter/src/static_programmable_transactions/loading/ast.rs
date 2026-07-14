@@ -92,7 +92,10 @@ pub enum WithdrawalSource {
     /// Sender or sponsor: the owner is the debited account.
     Direct { owner: AccountAddress },
     /// Allowance: the funder is debited; the created withdrawal is bound to the allowance id.
-    Allowance { funder: AccountAddress, id: ObjectID },
+    Allowance {
+        funder: AccountAddress,
+        id: ObjectID,
+    },
 }
 
 impl WithdrawalSource {
