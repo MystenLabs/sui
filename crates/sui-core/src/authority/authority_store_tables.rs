@@ -78,8 +78,7 @@ pub struct AuthorityPerpetualTables {
     /// finds a correctly maintained table. The table (and its writes) will be removed
     /// entirely in a follow-up once this version is deployed everywhere.
     #[rename = "owned_object_transaction_locks"]
-    pub(crate) deprecated_live_owned_object_markers:
-        DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
+    pub(crate) live_owned_object_markers: DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through

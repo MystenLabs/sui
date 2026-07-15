@@ -674,7 +674,7 @@ impl AuthorityStore {
                     )?;
                     if !object.is_child_object() {
                         Self::initialize_live_object_markers(
-                            &perpetual_db.deprecated_live_owned_object_markers,
+                            &perpetual_db.live_owned_object_markers,
                             &mut batch,
                             &[object.compute_object_reference()],
                             true, // is_force_reset
@@ -865,7 +865,7 @@ impl AuthorityStore {
         is_force_reset: bool,
     ) -> SuiResult {
         AuthorityStore::initialize_live_object_markers(
-            &self.perpetual_tables.deprecated_live_owned_object_markers,
+            &self.perpetual_tables.live_owned_object_markers,
             write_batch,
             objects,
             is_force_reset,
@@ -919,7 +919,7 @@ impl AuthorityStore {
     ) -> SuiResult {
         trace!(?objects, "delete_locks");
         write_batch.delete_batch(
-            &self.perpetual_tables.deprecated_live_owned_object_markers,
+            &self.perpetual_tables.live_owned_object_markers,
             objects.iter(),
         )?;
         Ok(())
@@ -1573,8 +1573,10 @@ impl ModuleResolver for ResolverWrapper {
     }
 }
 
+#[cfg(test)]
 pub type SuiLockResult = SuiResult<ObjectLockStatus>;
 
+#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum ObjectLockStatus {
     Initialized,
@@ -1593,4 +1595,5 @@ pub struct LockDetailsV1Deprecated {
     pub tx_digest: TransactionDigest,
 }
 
+#[cfg(test)]
 pub type LockDetailsDeprecated = LockDetailsV1Deprecated;
