@@ -1308,6 +1308,79 @@ mod tests {
         // Both outputs drained.
         assert_eq!(quarantine.output_queue_len_for_testing(), 0);
     }
+
+    // Regression test: transaction T defers in commit C1 (locks in C1's output and the
+    // deferred-locks map) and is reloaded for scheduling in a later commit C2. C1 can
+    // flush before C2; T's conflict coverage must survive that window even though the
+    // flat quarantine map drops C1's entries at C1's flush — the deferred-locks entry
+    // lives until C2 flushes, by which point T is executed and the objects table covers
+    // its consumed inputs.
+    #[tokio::test]
+    async fn test_deferred_lock_coverage_survives_deferring_commit_flush() {
+        use sui_types::base_types::ObjectDigest;
+
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let metrics = epoch_store.metrics.clone();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, metrics);
+
+        let t_digest = TransactionDigest::random();
+        let lock_ref: ObjectRef = (
+            ObjectID::random(),
+            SequenceNumber::from_u64(1),
+            ObjectDigest::random(),
+        );
+
+        // C1: T is finalized and deferred - locks acquired into the output, refs into
+        // the deferred-locks map (as the deferral bookkeeping does).
+        let mut c1 = make_output(1, 1, true);
+        c1.set_owned_object_locks([(lock_ref, t_digest)].into_iter().collect());
+        epoch_store
+            .consensus_output_cache
+            .deferred_transaction_locks
+            .lock()
+            .insert(t_digest, vec![lock_ref]);
+        quarantine.push_consensus_output(c1, &epoch_store).unwrap();
+
+        assert_eq!(
+            quarantine.get_owned_object_lock_in_memory(&lock_ref),
+            Some(t_digest)
+        );
+
+        // C2: reloads T for scheduling (T does not re-defer).
+        let mut c2 = make_output(2, 2, true);
+        c2.set_finalized_reloaded_deferred_txns(vec![t_digest]);
+        quarantine.push_consensus_output(c2, &epoch_store).unwrap();
+
+        // Flush C1 only.
+        let pc = epoch_store.protocol_config();
+        quarantine.insert_builder_summary(1, make_builder_summary(1, 1, pc));
+        let mut batch = epoch_store.db_batch_for_test();
+        quarantine
+            .update_highest_executed_checkpoint(1, &epoch_store, &mut batch)
+            .unwrap();
+        batch.write().unwrap();
+        assert_eq!(quarantine.output_queue_len_for_testing(), 1);
+
+        // The flat map dropped C1's entry, but the deferred-locks map still covers T.
+        assert_eq!(quarantine.get_owned_object_lock_in_memory(&lock_ref), None);
+        assert_eq!(
+            epoch_store.get_deferred_transaction_lock(&lock_ref),
+            Some(t_digest)
+        );
+
+        // Flush C2: T is executed by then (flush gate), so the deferred entry is
+        // released and the objects table takes over.
+        quarantine.insert_builder_summary(2, make_builder_summary(2, 2, pc));
+        let mut batch = epoch_store.db_batch_for_test();
+        quarantine
+            .update_highest_executed_checkpoint(2, &epoch_store, &mut batch)
+            .unwrap();
+        batch.write().unwrap();
+        assert_eq!(quarantine.output_queue_len_for_testing(), 0);
+        assert_eq!(epoch_store.get_deferred_transaction_lock(&lock_ref), None);
+    }
 }
 
 #[cfg(test)]
