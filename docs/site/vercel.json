@@ -51,6 +51,61 @@
       "permanent": true
     },
     {
+      "source": "/standards/deepbook",
+      "destination": "/onchain-finance/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/deepbookv3-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/:path*",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-indexer",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbookv3-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/deepbook-margin",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-indexer",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/:path*",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/deepbook-margin-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/:path*",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv2",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv2/:path*",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
       "source": "/standards/coin",
       "destination": "/onchain-finance/fungible-tokens/coin",
       "permanent": true
