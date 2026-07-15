@@ -11,7 +11,7 @@ use std::{
 
 use crate::lexer::*;
 use move_command_line_common::files::FileHash;
-use move_core_types::{account_address::AccountAddress, u256};
+use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue, u256};
 use move_ir_types::{ast::*, location::*};
 use move_symbol_pool::Symbol;
 
@@ -214,6 +214,27 @@ fn parse_var(tokens: &mut Lexer) -> Result<Var, ParseError<Loc, anyhow::Error>> 
     let var = parse_var_(tokens)?;
     let end_loc = tokens.previous_end_loc();
     Ok(spanned(tokens.file_hash(), start_loc, end_loc, var))
+}
+
+/// A name beginning with an uppercase letter denotes a constant. Local
+/// variables and parameters must not begin with an uppercase letter.
+fn is_constant_name(name: &str) -> bool {
+    name.starts_with(|c: char| c.is_ascii_uppercase())
+}
+
+/// Parse a variable that introduces a local binding (a `let`, parameter, or
+/// unpack binding), which must not begin with an uppercase letter.
+fn parse_binding_var(tokens: &mut Lexer) -> Result<Var, ParseError<Loc, anyhow::Error>> {
+    let var = parse_var(tokens)?;
+    if is_constant_name(var.value.0.as_str()) {
+        return Err(ParseError::InvalidToken {
+            location: var.loc,
+            message: "local and parameter names must not begin with an uppercase letter \
+                      (that is reserved for constants)"
+                .to_string(),
+        });
+    }
+    Ok(var)
 }
 
 // Field: Field = {
@@ -525,6 +546,16 @@ fn parse_borrow_field_(
             Tok::ColonColon => parse_unary_exp(tokens)?,
             _ => {
                 let var = parse_var(tokens)?;
+                if is_constant_name(var.value.0.as_str()) {
+                    return Err(ParseError::InvalidToken {
+                        location: var.loc,
+                        message: if mutable {
+                            "constants cannot be mutably borrowed".to_string()
+                        } else {
+                            "borrowing constants is not yet supported".to_string()
+                        },
+                    });
+                }
                 return Ok(Exp_::BorrowLocal(mutable, var));
             }
         }
@@ -712,22 +743,46 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
             tokens.advance()?;
             let v = parse_var(tokens)?;
             consume_token(tokens, Tok::RParen)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "constants cannot be moved; use copy(...) to load a constant"
+                        .to_string(),
+                });
+            }
             Ok(Exp_::Move(v))
         }
         Tok::Copy => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
             consume_token(tokens, Tok::RParen)?;
-            Ok(Exp_::Copy(v))
+            // `copy(C)` (uppercase) loads a named constant; `copy(c)` copies a local.
+            Ok(if is_constant_name(v.value.0.as_str()) {
+                Exp_::Constant(ConstantName(v.value.0))
+            } else {
+                Exp_::Copy(v)
+            })
         }
         Tok::AmpMut => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "constants cannot be mutably borrowed".to_string(),
+                });
+            }
             Ok(Exp_::BorrowLocal(true, v))
         }
         Tok::Amp => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "borrowing constants is not yet supported".to_string(),
+                });
+            }
             Ok(Exp_::BorrowLocal(false, v))
         }
         Tok::AccountAddressValue
@@ -927,6 +982,12 @@ fn parse_lvalue_(tokens: &mut Lexer) -> Result<LValue_, ParseError<Loc, anyhow::
     match tokens.peek() {
         Tok::NameValue => {
             let l = parse_var(tokens)?;
+            if is_constant_name(l.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: l.loc,
+                    message: "cannot assign to a constant".to_string(),
+                });
+            }
             Ok(LValue_::Var(l))
         }
         Tok::Star => {
@@ -963,7 +1024,7 @@ fn parse_field_bindings(
     let f = parse_field(tokens)?;
     if tokens.peek() == Tok::Colon {
         tokens.advance()?; // consume the colon
-        let v = parse_var(tokens)?;
+        let v = parse_binding_var(tokens)?;
         Ok((f, v))
     } else {
         Ok((
@@ -1328,7 +1389,7 @@ fn parse_block(tokens: &mut Lexer) -> Result<Block, ParseError<Loc, anyhow::Erro
 
 fn parse_declaration(tokens: &mut Lexer) -> Result<(Var, Type), ParseError<Loc, anyhow::Error>> {
     consume_token(tokens, Tok::Let)?;
-    let v = parse_var(tokens)?;
+    let v = parse_binding_var(tokens)?;
     consume_token(tokens, Tok::Colon)?;
     let t = parse_type(tokens)?;
     consume_token(tokens, Tok::Semicolon)?;
@@ -1615,7 +1676,7 @@ fn parse_name_and_type_actuals(
 // }
 
 fn parse_arg_decl(tokens: &mut Lexer) -> Result<(Var, Type), ParseError<Loc, anyhow::Error>> {
-    let v = parse_var(tokens)?;
+    let v = parse_binding_var(tokens)?;
     consume_token(tokens, Tok::Colon)?;
     let t = parse_type(tokens)?;
     Ok((v, t))
@@ -1995,6 +2056,107 @@ fn parse_variant_decl(
     ))
 }
 
+// ConstantDecl: Constant = {
+//     "const" <name: Name> ":" <ty: Type> "=" <value: ConstantValue> ";"
+// }
+// Constants take no module-member modifiers. The declared type is not checked
+// against the value here — that is the bytecode verifier's job.
+fn parse_constant_decl(
+    tokens: &mut Lexer,
+    modifiers: Modifiers,
+) -> Result<Constant, ParseError<Loc, anyhow::Error>> {
+    let Modifiers {
+        visibility,
+        native,
+        entry,
+    } = modifiers;
+    if let Some((vis, loc)) = visibility {
+        let modifier = match vis {
+            FunctionVisibility::Public => "public",
+            FunctionVisibility::Friend => "public(friend)",
+            FunctionVisibility::Internal => unreachable!("not a parseable visibility"),
+        };
+        check_no_modifier(Some(loc), modifier, "constant")?;
+    };
+    check_no_modifier(native, "native", "constant")?;
+    check_no_modifier(entry, "entry", "constant")?;
+
+    consume_token(tokens, Tok::Const)?;
+    let name_loc = current_token_loc(tokens);
+    let name = ConstantName(parse_name(tokens)?);
+    if !is_constant_name(name.0.as_str()) {
+        return Err(ParseError::InvalidToken {
+            location: name_loc,
+            message: "constant names must begin with an uppercase letter".to_string(),
+        });
+    }
+    consume_token(tokens, Tok::Colon)?;
+    let signature = parse_type(tokens)?;
+    consume_token(tokens, Tok::Equal)?;
+    let value = parse_constant_value(tokens)?;
+    consume_token(tokens, Tok::Semicolon)?;
+    Ok(Constant {
+        name,
+        signature,
+        value,
+        is_error_constant: false,
+    })
+}
+
+// ConstantValue: MoveValue = {
+//     <i: U8 | U16 | U32 | U64 | U128 | U256>  // integer literals require a suffix
+//     "true" | "false"
+//     <a: AccountAddress>
+//     <b: ByteArray>                           // h"..", lowered to vector<u8>
+//     "vector" "(" <elems: Comma<ConstantValue>> ")"
+// }
+// Each value is self-describing, so the parsed `MoveValue` is independent of the constant's
+// declared type.
+fn parse_constant_value(tokens: &mut Lexer) -> Result<MoveValue, ParseError<Loc, anyhow::Error>> {
+    // `vector(elem, ...)` — element values are self-describing; there is no
+    // element-type annotation.
+    if tokens.peek() == Tok::NameValue && tokens.content() == "vector" {
+        tokens.advance()?; // consume `vector`
+        consume_token(tokens, Tok::LParen)?;
+        let elems = parse_comma_list(tokens, &[Tok::RParen], parse_constant_value, true)?;
+        consume_token(tokens, Tok::RParen)?;
+        return Ok(MoveValue::Vector(elems));
+    }
+    // `@addr` — named or literal address, mirroring address expressions.
+    if tokens.peek() == Tok::At {
+        tokens.advance()?;
+        return Ok(MoveValue::Address(parse_account_address(tokens)?));
+    }
+    // A bare integer (no suffix) lexes as `U64Value`; constant values must be
+    // self-describing, so require an explicit suffix.
+    if tokens.peek() == Tok::U64Value && !tokens.content().ends_with("u64") {
+        return Err(ParseError::InvalidToken {
+            location: current_token_loc(tokens),
+            message: "integer constant value requires a type suffix (e.g. 7u64)".to_string(),
+        });
+    }
+    // Reuse the expression literal parser for scalars and byte arrays so the
+    // numeric parsing (and its overflow behavior) is shared with expressions.
+    let val = parse_copyable_val(tokens)?;
+    Ok(copyable_val_to_move_value(val.value))
+}
+
+fn copyable_val_to_move_value(val: CopyableVal_) -> MoveValue {
+    match val {
+        CopyableVal_::Address(a) => MoveValue::Address(a),
+        CopyableVal_::U8(i) => MoveValue::U8(i),
+        CopyableVal_::U16(i) => MoveValue::U16(i),
+        CopyableVal_::U32(i) => MoveValue::U32(i),
+        CopyableVal_::U64(i) => MoveValue::U64(i),
+        CopyableVal_::U128(i) => MoveValue::U128(i),
+        CopyableVal_::U256(i) => MoveValue::U256(i),
+        CopyableVal_::Bool(b) => MoveValue::Bool(b),
+        CopyableVal_::ByteArray(bytes) => {
+            MoveValue::Vector(bytes.into_iter().map(MoveValue::U8).collect())
+        }
+    }
+}
+
 // ModuleIdent: ModuleIdent = {
 //     <a: AccountAddress> "::" <m: ModuleName> => ModuleIdent::new(m, a),
 // }
@@ -2088,6 +2250,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
 
     let mut structs: Vec<StructDefinition> = vec![];
     let mut enums: Vec<EnumDefinition> = vec![];
+    let mut constants: Vec<Constant> = vec![];
     let mut functions: Vec<(FunctionName, Function)> = vec![];
     while tokens.peek() != Tok::RBrace {
         let decl_start_loc = tokens.start_loc();
@@ -2100,6 +2263,9 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
             Tok::Enum => {
                 enums.push(parse_enum_decl(tokens, decl_start_loc, modifiers)?);
             }
+            Tok::Const => {
+                constants.push(parse_constant_decl(tokens, modifiers)?);
+            }
             // `fun` is detected by content (matching the existing `entry`
             // pattern); only function decls start with that keyword.
             Tok::NameValue if tokens.content() == "fun" => {
@@ -2108,7 +2274,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
             _ => {
                 return Err(ParseError::InvalidToken {
                     location: current_token_loc(tokens),
-                    message: "expected 'struct', 'enum', or 'fun' declaration".to_string(),
+                    message: "expected 'const', 'struct', 'enum', or 'fun' declaration".to_string(),
                 });
             }
         }
@@ -2127,7 +2293,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
         vec![],
         structs,
         enums,
-        vec![],
+        constants,
         functions,
     ))
 }

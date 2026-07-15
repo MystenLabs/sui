@@ -1,0 +1,5 @@
+//# print-bytecode
+// Integer constant values must carry an explicit type suffix.
+mvir 0x42::M {
+    const BAD: u64 = 42;
+}

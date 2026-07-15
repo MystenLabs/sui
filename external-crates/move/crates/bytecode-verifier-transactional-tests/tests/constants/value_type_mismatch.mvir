@@ -1,0 +1,47 @@
+//# publish
+// u64-typed constant with a u8 value (too few bytes).
+mvir 0x42::a {
+    const C: u64 = 7u8;
+}
+
+//# publish
+// u8-typed constant with a u64 value (trailing bytes).
+mvir 0x42::b {
+    const C: u8 = 7u64;
+}
+
+//# publish
+// bool-typed constant whose byte is neither 0 nor 1.
+mvir 0x42::c {
+    const C: bool = 7u8;
+}
+
+//# publish
+// address-typed constant with an integer value (wrong width).
+mvir 0x42::d {
+    const C: address = 7u64;
+}
+
+//# publish
+// u64-typed constant with a bool value.
+mvir 0x42::e {
+    const C: u64 = true;
+}
+
+//# publish
+// vector<u8> with a u64 element (element width mismatch).
+mvir 0x42::f {
+    const C: vector<u8> = vector(1u64);
+}
+
+//# publish
+// Heterogeneous vector literal against a homogeneous vector<u8> type.
+mvir 0x42::g {
+    const C: vector<u8> = vector(1u8, 2u64);
+}
+
+//# publish
+// Shape mismatch: vector<vector<u8>> declared, flat u8 element given.
+mvir 0x42::h {
+    const C: vector<vector<u8>> = vector(1u8);
+}
