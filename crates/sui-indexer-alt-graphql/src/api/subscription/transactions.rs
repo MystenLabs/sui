@@ -29,8 +29,9 @@
 //! # Empty pages
 //!
 //! Filters can be sparse: a scanned page may cover a range of checkpoints while matching no
-//! transaction. Every page still reports how far it scanned (`checkpoint_hi`) as a coverage marker,
-//! separate from any matches, so the handoff can still advance and Phase 1 can terminate across
+//! transaction. Every page still reports how far it scanned (the boundary derived from its last
+//! cursor) as a coverage marker, separate from any matches, so the handoff can still advance and
+//! Phase 1 can terminate across
 //! stretches that matched nothing. Without it, a sparse subscription would never see its coverage
 //! reach the handoff, and the backfill would never hand off to live.
 //!
@@ -204,7 +205,13 @@ fn scan_transactions(
                 reader.list_transactions(build_list_request(&position, &proto_filter))
             })
             .await?;
-            let checkpoint_hi = page.checkpoint_hi();
+            // The last cursor sits at checkpoint `C`, but `C` may still hold unscanned matches, so
+            // coverage is vouched only through `C - 1`; `None` means no claim.
+            let boundary = page
+                .last_cursor()
+                .map(|cursor| CursorToken::decode(cursor).context("Invalid scan cursor"))
+                .transpose()?
+                .and_then(|token| token.position.checkpoint().checked_sub(1));
             let has_more = page.has_more();
             let next_cursor = page.last_cursor().cloned();
 
@@ -213,7 +220,7 @@ fn scan_transactions(
                 yield Ok(Scanned { checkpoint, edge: Some(edge) });
             }
             // Emit a coverage marker so the handoff can advance through pages with no match.
-            if let Some(checkpoint) = checkpoint_hi {
+            if let Some(checkpoint) = boundary {
                 yield Ok(Scanned { checkpoint, edge: None });
             }
 

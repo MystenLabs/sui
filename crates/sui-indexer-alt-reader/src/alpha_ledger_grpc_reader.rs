@@ -44,30 +44,14 @@ pub struct StreamPage<T> {
     pub items: Vec<PageItem<T>>,
     first_wm_cursor: Option<Bytes>,
     last_wm_cursor: Option<Bytes>,
-    /// Highest checkpoint the server fully scanned this page (max `checkpoint_hi` over its
-    /// watermarks). Reports how far the scan reached, not where the last match was, so it can run
-    /// ahead of the last matched item through non-matching checkpoints.
-    ///
-    /// E.g. matches in cp 101 and 102, then 103-104 scanned with no matches before the page ends:
-    /// `checkpoint_hi` = 104.
-    checkpoint_hi: Option<u64>,
     pub end_reason: Option<proto::QueryEndReason>,
 }
 
 #[derive(Debug)]
 enum FrameKind<T> {
-    Item {
-        payload: T,
-        cursor: Bytes,
-        checkpoint_hi: Option<u64>,
-    },
-    Watermark {
-        cursor: Option<Bytes>,
-        checkpoint_hi: Option<u64>,
-    },
-    End {
-        reason: proto::QueryEndReason,
-    },
+    Item { payload: T, cursor: Bytes },
+    Watermark { cursor: Option<Bytes> },
+    End { reason: proto::QueryEndReason },
     Unknown,
 }
 
@@ -160,38 +144,16 @@ impl<T> StreamPage<T> {
             .or_else(|| self.items.last().map(|item| &item.cursor))
     }
 
-    /// Highest checkpoint fully scanned this page (see the field doc). `None` means the page reported
-    /// no scan progress (genesis, or a caught-up short-circuit); callers treat it as "no coverage to
-    /// add this page".
-    pub fn checkpoint_hi(&self) -> Option<u64> {
-        self.checkpoint_hi
-    }
-
-    /// Remember the latest `checkpoint_hi` a frame reported. The server emits it non-decreasing, so
-    /// the latest non-`None` value is the highest; `None` frames (genesis) are ignored.
-    fn record_checkpoint_hi(&mut self, checkpoint_hi: Option<u64>) {
-        self.checkpoint_hi = checkpoint_hi.or(self.checkpoint_hi);
-    }
-
     /// Fold one frame into the page.
     ///
     /// Returns `true` when the frame is `QueryEnd`.
     fn apply(&mut self, frame: FrameKind<T>) -> bool {
         match frame {
-            FrameKind::Item {
-                payload,
-                cursor,
-                checkpoint_hi,
-            } => {
-                self.record_checkpoint_hi(checkpoint_hi);
+            FrameKind::Item { payload, cursor } => {
                 self.last_wm_cursor = None;
                 self.items.push(PageItem { payload, cursor });
             }
-            FrameKind::Watermark {
-                cursor,
-                checkpoint_hi,
-            } => {
-                self.record_checkpoint_hi(checkpoint_hi);
+            FrameKind::Watermark { cursor } => {
                 self.last_wm_cursor = cursor.clone();
                 if self.items.is_empty() && self.first_wm_cursor.is_none() {
                     self.first_wm_cursor = cursor.clone();
@@ -218,7 +180,6 @@ impl<T> Default for StreamPage<T> {
             items: Vec::new(),
             first_wm_cursor: None,
             last_wm_cursor: None,
-            checkpoint_hi: None,
             end_reason: None,
         }
     }
@@ -235,22 +196,16 @@ impl TryFrom<proto::ListTransactionsResponse> for FrameKind<ExecutedTransaction>
         };
         Ok(match response {
             Response::Item(item) => {
-                let watermark = item.watermark;
-                let checkpoint_hi = watermark.as_ref().and_then(|w| w.checkpoint);
-                let cursor = watermark
+                let cursor = item
+                    .watermark
                     .and_then(|w| w.cursor)
                     .context("Item frame missing watermark.cursor")?;
                 let payload = item
                     .transaction
                     .context("Item frame missing transaction payload")?;
-                FrameKind::Item {
-                    payload,
-                    cursor,
-                    checkpoint_hi,
-                }
+                FrameKind::Item { payload, cursor }
             }
             Response::Watermark(watermark) => FrameKind::Watermark {
-                checkpoint_hi: watermark.checkpoint,
                 cursor: watermark.cursor,
             },
             Response::End(end) => FrameKind::End {

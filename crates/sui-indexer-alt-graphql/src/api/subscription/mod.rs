@@ -43,6 +43,11 @@ pub(crate) enum Error {
 
     #[error("Invalid `after` cursor: {0}")]
     InvalidCursor(String),
+
+    #[error(
+        "Filtering by checkpoint (`afterCheckpoint`, `atCheckpoint`, `beforeCheckpoint`) is not supported for subscriptions"
+    )]
+    CheckpointBoundsUnsupported,
 }
 
 #[derive(Default)]
@@ -134,6 +139,15 @@ impl Subscription {
         let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
         let filter = filter.unwrap_or_default();
+
+        // A subscription streams forward from its resume point, so filter-level checkpoint bounds
+        // have no meaning; reject them rather than silently dropping them.
+        if filter.after_checkpoint.is_some()
+            || filter.at_checkpoint.is_some()
+            || filter.before_checkpoint.is_some()
+        {
+            return Err(bad_user_input(Error::CheckpointBoundsUnsupported));
+        }
 
         // Decode `after` here so a bad cursor surfaces as `BadUserInput`. Re-encode to the server's
         // opaque bytes, the form the scan resumes from.
