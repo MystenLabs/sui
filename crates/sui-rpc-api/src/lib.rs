@@ -233,6 +233,7 @@ impl RpcService {
             }
 
             let mut services = grpc::Services::new()
+                .timeout(self.config.grpc_timeout())
                 // V2
                 .add_service(ledger_service)
                 .add_service(transaction_execution_service)
