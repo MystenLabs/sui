@@ -163,7 +163,7 @@ pub async fn initialize(
     //    is wired into `RpcService` in `run` so subscribers can register.
     let registry = Registry::new();
     let (checkpoint_sender, subscription_handle) =
-        SubscriptionService::build(&registry, None, None, None);
+        SubscriptionService::build(&registry, None, None, None, None);
 
     Ok((
         Context::new(simulacrum, chain_identifier, checkpoint_sender),
