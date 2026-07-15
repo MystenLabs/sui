@@ -3766,6 +3766,12 @@ verify_bulletproofs_with_dst_ristretto255_internal
 Permit
 	public struct
 	0x2::scratch
+BorrowMarker
+	public struct
+	0x2::scratch
+BorrowMarkerKey
+	public struct
+	0x2::scratch
 permit
 	public fun
 	0x2::scratch
@@ -3792,6 +3798,15 @@ remove_opt
 	0x2::scratch
 replace
 	public fun
+	0x2::scratch
+begin_borrow
+	public fun
+	0x2::scratch
+end_borrow
+	public fun
+	0x2::scratch
+borrow_marker
+	fun
 	0x2::scratch
 hash_type_and_key
 	fun

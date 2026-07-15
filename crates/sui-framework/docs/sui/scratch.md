@@ -15,6 +15,8 @@ All access (mutable and immutable) is controlled through the module that defines
 
 
 -  [Struct `Permit`](#sui_scratch_Permit)
+-  [Struct `BorrowMarker`](#sui_scratch_BorrowMarker)
+-  [Struct `BorrowMarkerKey`](#sui_scratch_BorrowMarkerKey)
 -  [Constants](#@Constants_0)
 -  [Function `permit`](#sui_scratch_permit)
 -  [Function `add`](#sui_scratch_add)
@@ -25,6 +27,12 @@ All access (mutable and immutable) is controlled through the module that defines
 -  [Function `read_opt`](#sui_scratch_read_opt)
 -  [Function `remove_opt`](#sui_scratch_remove_opt)
 -  [Function `replace`](#sui_scratch_replace)
+-  [Function `begin_borrow`](#sui_scratch_begin_borrow)
+-  [Function `end_borrow`](#sui_scratch_end_borrow)
+-  [Macro function `get_do`](#sui_scratch_get_do)
+-  [Macro function `get_mut_do`](#sui_scratch_get_mut_do)
+-  [Macro function `get_fold`](#sui_scratch_get_fold)
+-  [Macro function `get_mut_fold`](#sui_scratch_get_mut_fold)
 -  [Macro function `internal_add`](#sui_scratch_internal_add)
 -  [Macro function `internal_read`](#sui_scratch_internal_read)
 -  [Macro function `internal_remove`](#sui_scratch_internal_remove)
@@ -33,6 +41,11 @@ All access (mutable and immutable) is controlled through the module that defines
 -  [Macro function `internal_read_opt`](#sui_scratch_internal_read_opt)
 -  [Macro function `internal_remove_opt`](#sui_scratch_internal_remove_opt)
 -  [Macro function `internal_replace`](#sui_scratch_internal_replace)
+-  [Macro function `internal_get_do`](#sui_scratch_internal_get_do)
+-  [Macro function `internal_get_mut_do`](#sui_scratch_internal_get_mut_do)
+-  [Macro function `internal_get_fold`](#sui_scratch_internal_get_fold)
+-  [Macro function `internal_get_mut_fold`](#sui_scratch_internal_get_mut_fold)
+-  [Function `borrow_marker`](#sui_scratch_borrow_marker)
 -  [Function `hash_type_and_key`](#sui_scratch_hash_type_and_key)
 -  [Function `add_impl`](#sui_scratch_add_impl)
 -  [Function `read_impl`](#sui_scratch_read_impl)
@@ -66,6 +79,57 @@ all access to scratch entries.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;<b>phantom</b> K: <b>copy</b>, drop&gt; <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+</dl>
+
+
+</details>
+
+<a name="sui_scratch_BorrowMarker"></a>
+
+## Struct `BorrowMarker`
+
+Occupies a key's slot while <code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code>, <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code>, or their mutable variants have the value
+removed, so nothing can add to or read the slot while the value is being "borrowed". Each one
+carries a transaction-unique id to encapsulate borrow-style usage.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>0: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_scratch_BorrowMarkerKey"></a>
+
+## Struct `BorrowMarkerKey`
+
+Key for the scratch entry that holds the monotonic counter backing <code><a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a></code>.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/scratch.md#sui_scratch_BorrowMarkerKey">BorrowMarkerKey</a> <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -121,6 +185,16 @@ The scratch store has an entry for this key, but the value type does not match.
 
 
 <pre><code><b>const</b> <a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_scratch_EBorrowMarkerMismatch"></a>
+
+A borrow-style macro found a different <code><a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a></code> than it left in the slot.
+
+
+<pre><code><b>const</b> <a href="../sui/scratch.md#sui_scratch_EBorrowMarkerMismatch">EBorrowMarkerMismatch</a>: u64 = 3;
 </code></pre>
 
 
@@ -379,6 +453,252 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEn
 
 </details>
 
+<a name="sui_scratch_begin_borrow"></a>
+
+## Function `begin_borrow`
+
+Not intended for direct usage. Instead, call <code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code>, <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code>, or their mutable variants,
+which handle the borrow-style usage of the value.
+Begins a "borrow" of <code>key</code>: removes and returns its value, leaving a unique <code><a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a></code> in
+the slot so nothing can add to or read it until <code><a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a></code> restores the value. Returns the
+value and the marker, which must be passed to <code><a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a></code>.
+While it is not verified that the same value is restored, the intended usage is guaranteed
+by the borrow-style macros (<code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code>, <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code>, and their mutable variants).
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryDoesNotExist">EEntryDoesNotExist</a></code> if there is no entry for <code>key</code>.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>V</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K): (V, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a>&lt;K: <b>copy</b> + drop, V: drop&gt;(
+    ctx: &<b>mut</b> TxContext,
+    <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
+    key: K,
+): (V, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>) {
+    <b>let</b> value = <a href="../sui/scratch.md#sui_scratch_remove">remove</a>&lt;K, V&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key);
+    <b>let</b> marker = <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>(ctx);
+    <a href="../sui/scratch.md#sui_scratch_add">add</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, marker);
+    (value, marker)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_end_borrow"></a>
+
+## Function `end_borrow`
+
+Not intended for direct usage. Instead, call <code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code>, <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code>, or their mutable variants,
+which handle the borrow-style usage of the value.
+Ends a "borrow" begun by <code><a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a></code>: removes the <code><a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a></code> from <code>key</code>'s slot and
+restores <code>value</code>.
+While it is not verified that the same value is restored, the intended usage is guaranteed
+by the borrow-style macros (<code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code>, <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code>, and their mutable variants).
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EBorrowMarkerMismatch">EBorrowMarkerMismatch</a></code> unless the slot still holds <code>marker</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K, value: V, marker: <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a>&lt;K: <b>copy</b> + drop, V: drop&gt;(
+    ctx: &<b>mut</b> TxContext,
+    <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
+    key: K,
+    value: V,
+    marker: <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>,
+) {
+    <b>assert</b>!(<a href="../sui/scratch.md#sui_scratch_remove">remove</a>&lt;K, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key) == marker, <a href="../sui/scratch.md#sui_scratch_EBorrowMarkerMismatch">EBorrowMarkerMismatch</a>);
+    <a href="../sui/scratch.md#sui_scratch_add">add</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, value);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_get_do"></a>
+
+## Macro function `get_do`
+
+If an entry exists for <code>key</code>, calls <code>$f</code> on an immutable reference to its value; otherwise does
+nothing.
+Note that the value is not actually borrowed, but a placeholder is used while value is
+temporarily removed for the duration of the <code>$f</code> operation. As such, the function may abort
+if the <code>$key</code> is accessed during the <code>$f</code> operation.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_get_do">get_do</a>&lt;$K: <b>copy</b>, drop, $V: drop, $R: drop&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;$K&gt;, $key: $K, $f: |&$V| -&gt; $R)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_get_do">get_do</a>&lt;$K: <b>copy</b> + drop, $V: drop, $R: drop&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;,
+    $key: $K,
+    $f: |&$V| -&gt; $R,
+) {
+    <b>let</b> ctx = $ctx;
+    <b>let</b> <a href="../sui/scratch.md#sui_scratch_permit">permit</a> = $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>;
+    <b>let</b> key = $key;
+    <b>if</b> (!<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <b>return</b>;
+    <b>let</b> (value, marker) = <a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a>&lt;$K, $V&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key);
+    $f(&value);
+    <a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, value, marker);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_get_mut_do"></a>
+
+## Macro function `get_mut_do`
+
+If an entry exists for <code>key</code>, calls <code>$f</code> on a mutable reference to its value; otherwise does
+nothing.
+Note that the value is not actually borrowed, but a placeholder is used while value is
+temporarily removed for the duration of the <code>$f</code> operation. As such, the function may abort
+if the <code>$key</code> is accessed during the <code>$f</code> operation.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_get_mut_do">get_mut_do</a>&lt;$K: <b>copy</b>, drop, $V: drop, $R: drop&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;$K&gt;, $key: $K, $f: |&<b>mut</b> $V| -&gt; $R)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_get_mut_do">get_mut_do</a>&lt;$K: <b>copy</b> + drop, $V: drop, $R: drop&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;,
+    $key: $K,
+    $f: |&<b>mut</b> $V| -&gt; $R,
+) {
+    <b>let</b> ctx = $ctx;
+    <b>let</b> <a href="../sui/scratch.md#sui_scratch_permit">permit</a> = $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>;
+    <b>let</b> key = $key;
+    <b>if</b> (!<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <b>return</b>;
+    <b>let</b> (<b>mut</b> value, marker) = <a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a>&lt;$K, $V&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key);
+    $f(&<b>mut</b> value);
+    <a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, value, marker);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_get_fold"></a>
+
+## Macro function `get_fold`
+
+If an entry exists for <code>key</code>, applies <code>$some</code> to an immutable reference to its value and returns
+the result; otherwise returns <code>$none</code>.
+Note that the value is not actually borrowed, but a placeholder is used while value is
+temporarily removed for the duration of the <code>$some</code> operation. As such, the function may abort
+if the <code>$key</code> is accessed during the <code>$some</code> operation.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a>&lt;$K: <b>copy</b>, drop, $V: drop, $R&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;$K&gt;, $key: $K, $none: $R, $some: |&$V| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a>&lt;$K: <b>copy</b> + drop, $V: drop, $R&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;,
+    $key: $K,
+    $none: $R,
+    $some: |&$V| -&gt; $R,
+): $R {
+    <b>let</b> ctx = $ctx;
+    <b>let</b> <a href="../sui/scratch.md#sui_scratch_permit">permit</a> = $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>;
+    <b>let</b> key = $key;
+    <b>if</b> (!<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <b>return</b> ($none);
+    <b>let</b> (value, marker) = <a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a>&lt;$K, $V&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key);
+    <b>let</b> r = $some(&value);
+    <a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, value, marker);
+    r
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_get_mut_fold"></a>
+
+## Macro function `get_mut_fold`
+
+If an entry exists for <code>key</code>, applies <code>$some</code> to a mutable reference to its value and returns
+the result; otherwise returns <code>$none</code>.
+Note that the value is not actually borrowed, but a placeholder is used while value is
+temporarily removed for the duration of the <code>$some</code> operation. As such, the function may abort
+if the <code>$key</code> is accessed during the <code>$some</code> operation.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_get_mut_fold">get_mut_fold</a>&lt;$K: <b>copy</b>, drop, $V: drop, $R&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;$K&gt;, $key: $K, $none: $R, $some: |&<b>mut</b> $V| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_get_mut_fold">get_mut_fold</a>&lt;$K: <b>copy</b> + drop, $V: drop, $R&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;,
+    $key: $K,
+    $none: $R,
+    $some: |&<b>mut</b> $V| -&gt; $R,
+): $R {
+    <b>let</b> ctx = $ctx;
+    <b>let</b> <a href="../sui/scratch.md#sui_scratch_permit">permit</a> = $<a href="../sui/scratch.md#sui_scratch_permit">permit</a>;
+    <b>let</b> key = $key;
+    <b>if</b> (!<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <b>return</b> ($none);
+    <b>let</b> (<b>mut</b> value, marker) = <a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a>&lt;$K, $V&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key);
+    <b>let</b> r = $some(&<b>mut</b> value);
+    <a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, value, marker);
+    r
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_scratch_internal_add"></a>
 
 ## Macro function `internal_add`
@@ -598,6 +918,158 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEn
     $value: $VNew,
 ): Option&lt;$VOld&gt; {
     <a href="../sui/scratch.md#sui_scratch_replace">replace</a>&lt;$K, $VNew, $VOld&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key, $value)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_internal_get_do"></a>
+
+## Macro function `internal_get_do`
+
+A wrapper for <code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code> that constructs the <code><a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;</code> directly.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_get_do">internal_get_do</a>&lt;$K: <b>copy</b>, drop, $V: drop, $R: drop&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $key: $K, $f: |&$V| -&gt; $R)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_get_do">internal_get_do</a>&lt;$K: <b>copy</b> + drop, $V: drop, $R: drop&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $key: $K,
+    $f: |&$V| -&gt; $R,
+) {
+    <a href="../sui/scratch.md#sui_scratch_get_do">get_do</a>!&lt;$K, $V, $R&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key, $f)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_internal_get_mut_do"></a>
+
+## Macro function `internal_get_mut_do`
+
+A wrapper for <code><a href="../sui/scratch.md#sui_scratch_get_mut_do">get_mut_do</a></code> that constructs the <code><a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;</code> directly.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_get_mut_do">internal_get_mut_do</a>&lt;$K: <b>copy</b>, drop, $V: drop, $R: drop&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $key: $K, $f: |&<b>mut</b> $V| -&gt; $R)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_get_mut_do">internal_get_mut_do</a>&lt;$K: <b>copy</b> + drop, $V: drop, $R: drop&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $key: $K,
+    $f: |&<b>mut</b> $V| -&gt; $R,
+) {
+    <a href="../sui/scratch.md#sui_scratch_get_mut_do">get_mut_do</a>!&lt;$K, $V, $R&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key, $f)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_internal_get_fold"></a>
+
+## Macro function `internal_get_fold`
+
+A wrapper for <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code> that constructs the <code><a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;</code> directly.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_get_fold">internal_get_fold</a>&lt;$K: <b>copy</b>, drop, $V: drop, $R&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $key: $K, $none: $R, $some: |&$V| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_get_fold">internal_get_fold</a>&lt;$K: <b>copy</b> + drop, $V: drop, $R&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $key: $K,
+    $none: $R,
+    $some: |&$V| -&gt; $R,
+): $R {
+    <a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a>!&lt;$K, $V, $R&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key, $none, $some)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_internal_get_mut_fold"></a>
+
+## Macro function `internal_get_mut_fold`
+
+A wrapper for <code><a href="../sui/scratch.md#sui_scratch_get_mut_fold">get_mut_fold</a></code> that constructs the <code><a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;$K&gt;</code> directly.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>$V</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_get_mut_fold">internal_get_mut_fold</a>&lt;$K: <b>copy</b>, drop, $V: drop, $R&gt;($ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, $key: $K, $none: $R, $some: |&<b>mut</b> $V| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_internal_get_mut_fold">internal_get_mut_fold</a>&lt;$K: <b>copy</b> + drop, $V: drop, $R&gt;(
+    $ctx: &<b>mut</b> TxContext,
+    $key: $K,
+    $none: $R,
+    $some: |&<b>mut</b> $V| -&gt; $R,
+): $R {
+    <a href="../sui/scratch.md#sui_scratch_get_mut_fold">get_mut_fold</a>!&lt;$K, $V, $R&gt;($ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;$K&gt;()), $key, $none, $some)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_borrow_marker"></a>
+
+## Function `borrow_marker`
+
+Returns a fresh <code><a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a></code>, unique within the transaction, from a monotonic counter kept in
+its own scratch entry.
+
+
+<pre><code><b>fun</b> <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>(ctx: &<b>mut</b> TxContext): <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a> {
+    <b>let</b> <a href="../sui/scratch.md#sui_scratch_permit">permit</a> = <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;<a href="../sui/scratch.md#sui_scratch_BorrowMarkerKey">BorrowMarkerKey</a>&gt;());
+    <b>let</b> key = <a href="../sui/scratch.md#sui_scratch_BorrowMarkerKey">BorrowMarkerKey</a>();
+    <b>let</b> n = <b>if</b> (<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <a href="../sui/scratch.md#sui_scratch_remove">remove</a>&lt;<a href="../sui/scratch.md#sui_scratch_BorrowMarkerKey">BorrowMarkerKey</a>, u64&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key) <b>else</b> 0;
+    <a href="../sui/scratch.md#sui_scratch_add">add</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, n + 1);
+    <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>(n)
 }
 </code></pre>
 
