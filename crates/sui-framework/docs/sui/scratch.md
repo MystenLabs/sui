@@ -97,12 +97,12 @@ all access to scratch entries.
 
 ## Struct `BorrowMarker`
 
-Occupies a key's slot while <code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code>, <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code>, or their mutable variants have the value
-removed, so nothing can add to or read the slot while the value is being "borrowed". Each one
-carries a transaction-unique id to encapsulate borrow-style usage.
+Occupies a key's slot while <code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code>, <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code>, or their mutable variants have the value of
+type <code>V</code> removed, so nothing can add to or read the slot while the value is being "borrowed".
+Each one carries a transaction-unique id, so a marker cannot be forged to match one in use.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a> <b>has</b> <b>copy</b>, drop
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;<b>phantom</b> V: drop&gt; <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -468,7 +468,7 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryDoesNotExist">EEn
 Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not of type <code>V</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K): (V, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_begin_borrow">begin_borrow</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K): (V, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>&lt;V&gt;)
 </code></pre>
 
 
@@ -481,9 +481,9 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEn
     ctx: &<b>mut</b> TxContext,
     <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
     key: K,
-): (V, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>) {
+): (V, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;V&gt;) {
     <b>let</b> value = <a href="../sui/scratch.md#sui_scratch_remove">remove</a>&lt;K, V&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key);
-    <b>let</b> marker = <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>(ctx);
+    <b>let</b> marker = <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>&lt;V&gt;(ctx);
     <a href="../sui/scratch.md#sui_scratch_add">add</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, marker);
     (value, marker)
 }
@@ -503,10 +503,12 @@ Ends a "borrow" begun by <code><a href="../sui/scratch.md#sui_scratch_begin_borr
 restores <code>value</code>.
 While it is not verified that the same value is restored, the intended usage is guaranteed
 by the borrow-style macros (<code><a href="../sui/scratch.md#sui_scratch_get_do">get_do</a></code>, <code><a href="../sui/scratch.md#sui_scratch_get_fold">get_fold</a></code>, and their mutable variants).
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryDoesNotExist">EEntryDoesNotExist</a></code> if the borrow was already ended.
+Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEntryTypeMismatch</a></code> if the entry exists, but its value is not a <code><a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;V&gt;</code>.
 Aborts with <code><a href="../sui/scratch.md#sui_scratch_EBorrowMarkerMismatch">EBorrowMarkerMismatch</a></code> unless the slot still holds <code>marker</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K, value: V, marker: <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_end_borrow">end_borrow</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">sui::scratch::Permit</a>&lt;K&gt;, key: K, value: V, marker: <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>&lt;V&gt;)
 </code></pre>
 
 
@@ -520,9 +522,9 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EBorrowMarkerMismatch">
     <a href="../sui/scratch.md#sui_scratch_permit">permit</a>: <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt;,
     key: K,
     value: V,
-    marker: <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>,
+    marker: <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;V&gt;,
 ) {
-    <b>assert</b>!(<a href="../sui/scratch.md#sui_scratch_remove">remove</a>&lt;K, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key) == marker, <a href="../sui/scratch.md#sui_scratch_EBorrowMarkerMismatch">EBorrowMarkerMismatch</a>);
+    <b>assert</b>!(<a href="../sui/scratch.md#sui_scratch_remove">remove</a>&lt;K, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;V&gt;&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key) == marker, <a href="../sui/scratch.md#sui_scratch_EBorrowMarkerMismatch">EBorrowMarkerMismatch</a>);
     <a href="../sui/scratch.md#sui_scratch_add">add</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, value);
 }
 </code></pre>
@@ -1051,11 +1053,11 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEn
 
 ## Function `borrow_marker`
 
-Returns a fresh <code><a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a></code>, unique within the transaction, from a monotonic counter kept in
-its own scratch entry.
+Returns a fresh <code><a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;V&gt;</code>, unique within the transaction, from a monotonic counter kept
+in its own scratch entry.
 
 
-<pre><code><b>fun</b> <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>
+<pre><code><b>fun</b> <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>&lt;V: drop&gt;(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/scratch.md#sui_scratch_BorrowMarker">sui::scratch::BorrowMarker</a>&lt;V&gt;
 </code></pre>
 
 
@@ -1064,7 +1066,7 @@ its own scratch entry.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>(ctx: &<b>mut</b> TxContext): <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a> {
+<pre><code><b>fun</b> <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>&lt;V: drop&gt;(ctx: &<b>mut</b> TxContext): <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;V&gt; {
     <b>let</b> <a href="../sui/scratch.md#sui_scratch_permit">permit</a> = <a href="../sui/scratch.md#sui_scratch_permit">permit</a>(internal::permit&lt;<a href="../sui/scratch.md#sui_scratch_BorrowMarkerKey">BorrowMarkerKey</a>&gt;());
     <b>let</b> key = <a href="../sui/scratch.md#sui_scratch_BorrowMarkerKey">BorrowMarkerKey</a>();
     <b>let</b> n = <b>if</b> (<a href="../sui/scratch.md#sui_scratch_exists">exists</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key)) <a href="../sui/scratch.md#sui_scratch_remove">remove</a>&lt;<a href="../sui/scratch.md#sui_scratch_BorrowMarkerKey">BorrowMarkerKey</a>, u64&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key) <b>else</b> 0;
