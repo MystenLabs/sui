@@ -14747,7 +14747,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.3.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=05018477066df865513f8a771d898ed6a1ded4b1#05018477066df865513f8a771d898ed6a1ded4b1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=64c2cf0cb13ef2caae58f4f91d2d2e3dab01bc46#64c2cf0cb13ef2caae58f4f91d2d2e3dab01bc46"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -16743,7 +16743,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=05018477066df865513f8a771d898ed6a1ded4b1#05018477066df865513f8a771d898ed6a1ded4b1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=64c2cf0cb13ef2caae58f4f91d2d2e3dab01bc46#64c2cf0cb13ef2caae58f4f91d2d2e3dab01bc46"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16976,7 +16976,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=05018477066df865513f8a771d898ed6a1ded4b1#05018477066df865513f8a771d898ed6a1ded4b1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=64c2cf0cb13ef2caae58f4f91d2d2e3dab01bc46#64c2cf0cb13ef2caae58f4f91d2d2e3dab01bc46"
 dependencies = [
  "base64ct",
  "bcs",
