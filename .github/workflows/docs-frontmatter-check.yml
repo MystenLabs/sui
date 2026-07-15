@@ -1,0 +1,133 @@
+name: Docs Frontmatter Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'docs/content/**/*.mdx'
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  check-frontmatter:
+    name: Check docs frontmatter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed MDX files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only --diff-filter=ACM origin/${{ github.base_ref }}...HEAD -- 'docs/content/**/*.mdx' | grep -v 'snippets/' | grep -v 'sui-graphql/' || true)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          COUNT=$(echo "$FILES" | grep -c '.mdx$' || echo 0)
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+
+      - name: Check frontmatter
+        if: steps.changed.outputs.count != '0'
+        id: check
+        run: |
+          MISSING_GOAL=""
+          MISSING_FM=""
+          TOTAL=0
+          ISSUES=0
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            [ ! -f "$file" ] && continue
+            TOTAL=$((TOTAL + 1))
+
+            # Extract frontmatter block
+            FM=$(sed -n '/^---$/,/^---$/p' "$file" | head -100)
+
+            # Check for title
+            if ! echo "$FM" | grep -q '^title:'; then
+              MISSING_FM="$MISSING_FM\n- \`$file\`: missing \`title\`"
+              ISSUES=$((ISSUES + 1))
+            fi
+
+            # Check for description
+            if ! echo "$FM" | grep -q '^description:'; then
+              MISSING_FM="$MISSING_FM\n- \`$file\`: missing \`description\`"
+              ISSUES=$((ISSUES + 1))
+            fi
+
+            # Check for keywords
+            if ! echo "$FM" | grep -q '^keywords:'; then
+              MISSING_FM="$MISSING_FM\n- \`$file\`: missing \`keywords\`"
+              ISSUES=$((ISSUES + 1))
+            fi
+
+            # Check for goal
+            if ! echo "$FM" | grep -q '^goal:'; then
+              MISSING_GOAL="$MISSING_GOAL\n- \`$file\`"
+              ISSUES=$((ISSUES + 1))
+            fi
+
+          done <<< "${{ steps.changed.outputs.files }}"
+
+          # Build output
+          BODY=""
+
+          if [ -n "$MISSING_FM" ]; then
+            BODY="${BODY}### Missing required frontmatter\n\nThese pages are missing \`title\`, \`description\`, or \`keywords\`:\n${MISSING_FM}\n\n"
+          fi
+
+          if [ -n "$MISSING_GOAL" ]; then
+            BODY="${BODY}### Missing goal frontmatter\n\nThese pages don't have a \`goal:\` block. Run this to auto-generate:\n\n\`\`\`sh\ncd docs/site && node scripts/generate-goals.mjs --apply\n\`\`\`\n\nThen review the generated goals and adjust if needed.\n\nPages:\n${MISSING_GOAL}\n\n"
+          fi
+
+          if [ -z "$BODY" ]; then
+            BODY="All ${TOTAL} changed docs pages have complete frontmatter. :white_check_mark:"
+          else
+            BODY="**${ISSUES} frontmatter issue(s)** found across ${TOTAL} changed docs page(s).\n\n${BODY}"
+          fi
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "has_issues=$( [ $ISSUES -gt 0 ] && echo true || echo false )" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        if: steps.changed.outputs.count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- docs-frontmatter-check -->';
+            const body = `${marker}\n## Docs frontmatter check\n\n${process.env.BODY}`;
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              }
+            );
+            const existing = comments.find(c => c.body?.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+        env:
+          BODY: ${{ steps.check.outputs.body }}
