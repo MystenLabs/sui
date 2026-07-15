@@ -1030,7 +1030,7 @@ struct FeatureFlags {
     // generic instantiation, so PTB arity and auto-injection checks are the
     // safety mechanism there.
     #[serde(skip_serializing_if = "is_false")]
-    check_tx_context_restrictions: bool,
+    framework_tx_context_mut_restrictions: bool,
 
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -4548,7 +4548,7 @@ impl ProtocolConfig {
                 }
                 131 => {
                     cfg.feature_flags.share_transaction_deny_config_in_consensus = true;
-                    cfg.feature_flags.check_tx_context_restrictions = true;
+                    cfg.feature_flags.framework_tx_context_mut_restrictions = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4660,7 +4660,7 @@ impl ProtocolConfig {
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
             switch_to_regex_reference_safety: false,
-            check_tx_context_restrictions: self.check_tx_context_restrictions(),
+            framework_tx_context_mut_restrictions: self.framework_tx_context_mut_restrictions(),
             disallow_jump_orphans: self.disallow_jump_orphans(),
         }
     }

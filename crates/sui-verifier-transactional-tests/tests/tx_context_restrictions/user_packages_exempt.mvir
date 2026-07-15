@@ -11,7 +11,7 @@
 // tests; the rule is exercised against the real system packages at framework
 // build time via `sui-move-build`'s bytecode verification.
 
-//# init --check-tx-context-restrictions
+//# init --framework-tx-context-mut-restrictions
 
 // `&mut TxContext` only, `&mut u64` return.
 //# publish

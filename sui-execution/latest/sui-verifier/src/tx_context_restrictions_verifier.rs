@@ -7,8 +7,8 @@
 //! > return list, its parameter list must also contain at least one `&mut U`
 //! > for some `U != TxContext`.
 //!
-//! Gated on `VerifierConfig::check_tx_context_restrictions`, populated from
-//! `ProtocolConfig::check_tx_context_restrictions()`. Activates at protocol
+//! Gated on `VerifierConfig::framework_tx_context_mut_restrictions`, populated from
+//! `ProtocolConfig::framework_tx_context_mut_restrictions()`. Activates at protocol
 //! version 130.
 //!
 //! The rule applies only to system packages: it is a checksum on our own
@@ -43,7 +43,7 @@ pub fn verify_module(
     module: &CompiledModule,
     verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
-    if !verifier_config.check_tx_context_restrictions {
+    if !verifier_config.framework_tx_context_mut_restrictions {
         return Ok(());
     }
     if !is_system_package(*module.self_id().address()) {
