@@ -1928,26 +1928,6 @@ impl ObjectCacheRead for WritebackCache {
         Ok(obj.compute_object_reference())
     }
 
-    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        for obj_ref in owned_object_refs {
-            let Some(obj) = self.get_object_impl("object_is_live", &obj_ref.0) else {
-                return Err(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: None,
-                }
-                .into());
-            };
-            if obj.compute_object_reference() != *obj_ref {
-                return Err(UserInputError::ObjectVersionUnavailableForConsumption {
-                    provided_obj_ref: *obj_ref,
-                    current_version: obj.version(),
-                }
-                .into());
-            }
-        }
-        Ok(())
-    }
-
     fn get_highest_pruned_checkpoint(&self) -> Option<CheckpointSequenceNumber> {
         self.store
             .perpetual_tables
