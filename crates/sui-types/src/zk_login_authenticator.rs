@@ -13,7 +13,7 @@ use crate::{
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::{JWK, OIDCProvider};
-use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use fastcrypto_zkp::bn254::zk_login_api::{ZkLoginCircuitMode, ZkLoginEnv};
 use fastcrypto_zkp::bn254::{zk_login::ZkLoginInputs, zk_login_api::verify_zk_login};
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
@@ -45,26 +45,40 @@ struct ZkLoginCachingParams {
     inputs: ZkLoginInputs,
     max_epoch: EpochId,
     extended_pk_bytes: Vec<u8>,
+    zklogin_circuit_mode: u64,
+}
+
+/// Map the protocol config circuit mode flag to the fastcrypto circuit mode:
+/// 0 = v1 circuit only, 1 = v2 circuit with fallback to v1 (migration mode), 2 = v2 circuit only.
+/// The flag comes from protocol config, so any other value is a config bug.
+pub fn zklogin_circuit_mode_from_flag(flag: u64) -> ZkLoginCircuitMode {
+    match flag {
+        0 => ZkLoginCircuitMode::V1Only,
+        1 => ZkLoginCircuitMode::Both,
+        2 => ZkLoginCircuitMode::V2Only,
+        _ => panic!("invalid zklogin circuit mode flag: {flag}"),
+    }
 }
 
 impl ZkLoginAuthenticator {
     /// The caching key for zklogin signature, it is the hash of bcs bytes of
-    /// ZkLoginInputs || max_epoch || flagged_pk_bytes. If any of these fields
-    /// change, zklogin signature is re-verified without using the caching result.
-    fn get_caching_params(&self) -> ZkLoginCachingParams {
+    /// ZkLoginInputs || max_epoch || flagged_pk_bytes || zklogin_circuit_mode. If any of these
+    /// fields change, zklogin signature is re-verified without using the caching result.
+    fn get_caching_params(&self, zklogin_circuit_mode: u64) -> ZkLoginCachingParams {
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
         extended_pk_bytes.extend(self.user_signature.public_key_bytes());
         ZkLoginCachingParams {
             inputs: self.inputs.clone(),
             max_epoch: self.max_epoch,
             extended_pk_bytes,
+            zklogin_circuit_mode,
         }
     }
 
-    pub fn hash_inputs(&self) -> ZKLoginInputsDigest {
+    pub fn hash_inputs(&self, zklogin_circuit_mode: u64) -> ZKLoginInputsDigest {
         use fastcrypto::hash::HashFunction;
         let mut hasher = DefaultHash::default();
-        bcs::serialize_into(&mut hasher, &self.get_caching_params())
+        bcs::serialize_into(&mut hasher, &self.get_caching_params(zklogin_circuit_mode))
             .expect("serde should not fail");
         ZKLoginInputsDigest::new(hasher.finalize().into())
     }
@@ -200,7 +214,8 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             SignatureScheme::ZkLoginAuthenticator,
         )?;
 
-        if zklogin_inputs_cache.is_cached(&self.hash_inputs()) {
+        let zklogin_circuit_mode = aux_verify_data.zklogin_circuit_mode;
+        if zklogin_inputs_cache.is_cached(&self.hash_inputs(zklogin_circuit_mode)) {
             // If the zklogin inputs hits the cache, we don't need to verify the zklogin
             // again that contains the heavy computation.
             Ok(())
@@ -210,7 +225,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
             extended_pk_bytes.extend(self.user_signature.public_key_bytes());
             let res = verify_zklogin_inputs_wrapper(
-                self.get_caching_params(),
+                self.get_caching_params(zklogin_circuit_mode),
                 &aux_verify_data.oidc_provider_jwks,
                 &aux_verify_data.zk_login_env,
             )
@@ -223,7 +238,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             match res {
                 Ok(_) => {
                     // If it's verified ok, we cache the digest.
-                    zklogin_inputs_cache.cache_digest(self.hash_inputs());
+                    zklogin_inputs_cache.cache_digest(self.hash_inputs(zklogin_circuit_mode));
                     Ok(())
                 }
                 Err(e) => Err(e),
@@ -243,6 +258,7 @@ fn verify_zklogin_inputs_wrapper(
         &params.extended_pk_bytes,
         all_jwk,
         env,
+        zklogin_circuit_mode_from_flag(params.zklogin_circuit_mode),
     )
     .map_err(|e| {
         SuiErrorKind::InvalidSignature {

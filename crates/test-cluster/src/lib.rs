@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{StreamExt, future::join_all};
+use fastcrypto_zkp::bn254::zk_login::JwkId;
+use futures::future::join_all;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::fatal;
@@ -18,7 +19,6 @@ use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CO
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, TransactionFilter};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
@@ -60,7 +60,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
-use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{Transaction, TransactionData};
 use tokio::sync::broadcast;
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
@@ -532,40 +532,40 @@ impl TestCluster {
         }
     }
 
+    /// Wait until the on-chain authenticator state contains any active JWK.
     pub async fn wait_for_authenticator_state_update(&self) {
-        timeout(
-            Duration::from_secs(60),
-            self.fullnode_handle.sui_node.with_async(|node| async move {
-                let state = node.state();
-                let mut txns = state.subscription_handler.subscribe_transactions(
-                    TransactionFilter::ChangedObject(ObjectID::from_hex_literal("0x7").unwrap()),
-                );
+        self.wait_for_authenticator_state_update_for_providers(&[])
+            .await;
+    }
 
-                // Check if the state was already updated before subscribe_transactions was called
-                // above (after trigger_reconfiguration completes, the AuthenticatorStateUpdate
-                // transaction may have already been committed).
-                let has_active_jwks = get_authenticator_state(state.get_object_store())
-                    .ok()
-                    .flatten()
-                    .is_some_and(|state| !state.active_jwks.is_empty());
-                if has_active_jwks {
+    /// Wait until the on-chain authenticator state contains all the given JWK ids.
+    pub async fn wait_for_authenticator_state_update_for_providers(&self, jwk_ids: &[JwkId]) {
+        timeout(Duration::from_secs(60), async {
+            loop {
+                let active: Vec<JwkId> = self.fullnode_handle.sui_node.with(|node| {
+                    get_authenticator_state(node.state().get_object_store())
+                        .ok()
+                        .flatten()
+                        .map(|state| {
+                            state
+                                .active_jwks
+                                .iter()
+                                .map(|active| active.jwk_id.clone())
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                });
+                let ready = if jwk_ids.is_empty() {
+                    !active.is_empty()
+                } else {
+                    jwk_ids.iter().all(|id| active.contains(id))
+                };
+                if ready {
                     return;
                 }
-
-                while let Some(tx) = txns.next().await {
-                    let digest = *tx.transaction_digest();
-                    let tx = state
-                        .get_transaction_cache_reader()
-                        .get_transaction_block(&digest)
-                        .unwrap();
-                    match &tx.data().intent_message().value.kind() {
-                        TransactionKind::EndOfEpochTransaction(_) => (),
-                        TransactionKind::AuthenticatorStateUpdate(_) => break,
-                        _ => panic!("{:?}", tx),
-                    }
-                }
-            }),
-        )
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        })
         .await
         .expect("Timed out waiting for authenticator state update");
     }

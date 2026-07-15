@@ -930,6 +930,7 @@ impl AuthorityPerEpochStore {
             signature_verifier_metrics,
             supported_providers,
             zklogin_env,
+            protocol_config.zklogin_circuit_mode(),
             protocol_config.verify_legacy_zklogin_address(),
             protocol_config.accept_zklogin_in_multisig(),
             protocol_config.accept_passkey_in_multisig(),

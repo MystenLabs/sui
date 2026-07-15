@@ -619,10 +619,10 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a26cabb3aabc86e6453bc8aef8f59022bf9fd702" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a26cabb3aabc86e6453bc8aef8f59022bf9fd702" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a26cabb3aabc86e6453bc8aef8f59022bf9fd702", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a26cabb3aabc86e6453bc8aef8f59022bf9fd702", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528", features = [
   "experimental",
 ] }
 passkey-types = { version = "0.4.0" }
