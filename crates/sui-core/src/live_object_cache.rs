@@ -22,8 +22,12 @@
 //! falls back to an authoritative read of latest-object state (see
 //! `docs/objects_locking.md` §3.5/§3.6a).
 //!
-//! Entries are process-lifetime and epoch-agnostic (version bounds stay valid
-//! across epoch boundaries and are naturally empty after a restart).
+//! Entries do not survive restarts (in-memory) and are cleared at epoch
+//! reconfiguration: observations can include executed-but-not-finalized state,
+//! which end-of-epoch clearing discards, invalidating the lower-bound property
+//! for bounds recorded from it. Within an epoch (and across intra-epoch
+//! restarts) the property holds - replayed commits re-execute, so state only
+//! advances.
 
 use moka::sync::SegmentedCache as MokaCache;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -117,6 +121,13 @@ impl LiveObjectCache {
 
     pub fn get(&self, id: &ObjectID) -> Option<VersionLowerBound> {
         self.entries.get(id)
+    }
+
+    /// Drop all bounds. MUST be called at epoch reconfiguration: end-of-epoch state
+    /// clearing discards executed-but-not-finalized transaction outputs, so bounds
+    /// recorded from that state are no longer lower bounds of durable latest versions.
+    pub fn clear(&self) {
+        self.entries.invalidate_all();
     }
 }
 
