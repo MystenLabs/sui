@@ -673,6 +673,15 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     }
 }
 
+impl BackingPackageStore for PersistedStoreInnerReadOnlyWrapper {
+    fn get_package_object(
+        &self,
+        package_id: &ObjectID,
+    ) -> sui_types::error::SuiResult<Option<PackageObject>> {
+        load_package_object_from_object_store(self, package_id)
+    }
+}
+
 impl RuntimeObjectResolver for PersistedStoreInnerReadOnlyWrapper {
     fn read_child_object(
         &self,
