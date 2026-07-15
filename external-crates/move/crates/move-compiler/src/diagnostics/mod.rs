@@ -85,7 +85,6 @@ struct JsonDiagnostic {
     line: usize,
     column: usize,
     level: String,
-    rendered_code: String,
     category: u8,
     code: u8,
     msg: String,
@@ -821,7 +820,6 @@ impl Diagnostic {
             line: bloc.start.user_line(),
             column: bloc.start.column_offset(),
             level: format!("{:?}", info.severity()),
-            rendered_code: info.render().0,
             category: info.category(),
             code: info.code(),
             msg: info.message().to_string(),
@@ -1136,54 +1134,5 @@ impl From<Option<Diagnostic>> for Diagnostics {
 impl<C: DiagnosticCode> From<C> for DiagnosticInfo {
     fn from(value: C) -> Self {
         value.into_info()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::diagnostics::codes::custom;
-    use move_symbol_pool::Symbol;
-    use std::collections::HashMap;
-
-    const CORE_LINT_PREFIX: &str = "Lint ";
-    const SUI_LINT_PREFIX: &str = "Sui Lint ";
-
-    fn lint_info(prefix: &'static str, message: &'static str) -> DiagnosticInfo {
-        custom(prefix, Severity::Warning, 4, 2, message)
-    }
-
-    fn diagnostic(info: DiagnosticInfo, loc: Loc) -> Diagnostic {
-        Diagnostic::new(
-            info,
-            (loc, "diagnostic"),
-            std::iter::empty::<(Loc, String)>(),
-            std::iter::empty::<String>(),
-        )
-    }
-
-    #[test]
-    fn json_diagnostic_preserves_lint_prefix() {
-        let source = "x";
-        let file_hash = FileHash::new(source);
-        let loc = Loc::new(file_hash, 0, 1);
-        let mapped_files = MappedFiles::new(HashMap::from([(
-            file_hash,
-            (Symbol::from("test.move"), Arc::<str>::from(source)),
-        )]));
-
-        let core_json =
-            diagnostic(lint_info(CORE_LINT_PREFIX, "Core lint"), loc).to_json(&mapped_files);
-        let sui_json =
-            diagnostic(lint_info(SUI_LINT_PREFIX, "Sui lint"), loc).to_json(&mapped_files);
-
-        assert_eq!(core_json.rendered_code, "Lint W04002");
-        assert_eq!(sui_json.rendered_code, "Sui Lint W04002");
-        assert_eq!(sui_json.category, 4);
-        assert_eq!(sui_json.code, 2);
-        assert_eq!(
-            serde_json::to_value(sui_json).unwrap()["rendered_code"],
-            "Sui Lint W04002",
-        );
     }
 }

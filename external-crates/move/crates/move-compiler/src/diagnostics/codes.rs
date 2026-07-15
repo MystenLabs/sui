@@ -413,28 +413,27 @@ codes!(
 //**************************************************************************************************
 
 impl DiagnosticInfo {
-    pub fn render(&self) -> (/* code */ String, /* message */ &'static str) {
-        let sev_prefix = match self.severity {
+    pub fn render(self) -> (/* code */ String, /* message */ &'static str) {
+        let Self {
+            severity,
+            category,
+            code,
+            external_prefix,
+            message,
+        } = self;
+        let sev_prefix = match severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
             Severity::Warning => "W",
             Severity::Note => "I",
             Severity::Bug => "ICE",
         };
-        debug_assert!(self.category <= 99);
-        let string_code = if let Some(ext) = self.external_prefix {
-            format!(
-                "{ext}{sev_prefix}{category:02}{code:03}",
-                category = self.category,
-                code = self.code,
-            )
+        debug_assert!(category <= 99);
+        let string_code = if let Some(ext) = external_prefix {
+            format!("{ext}{sev_prefix}{category:02}{code:03}")
         } else {
-            format!(
-                "{sev_prefix}{category:02}{code:03}",
-                category = self.category,
-                code = self.code,
-            )
+            format!("{sev_prefix}{category:02}{code:03}")
         };
-        (string_code, self.message)
+        (string_code, message)
     }
 
     pub(crate) fn set_severity(mut self, severity: Severity) -> Self {
