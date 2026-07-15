@@ -83,6 +83,7 @@ impl Committee {
     /// from the nominal total stake computed above. We will scale `f` and `c`
     /// from the nominal value to the largest possible values where intersection
     /// properties still hold. Then the thresholds are computed with scaled `f` and `c`.
+    #[allow(clippy::int_plus_one)] // Avoid clippy warning about `+ 1` in threshold asserts.
     pub fn new_v3(
         epoch: Epoch,
         authorities: Vec<Authority>,

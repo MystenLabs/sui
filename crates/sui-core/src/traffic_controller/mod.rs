@@ -1002,11 +1002,9 @@ impl TrafficSim {
             metrics.abs_time_to_first_block
         );
         // Useful for ensuring that TTL is respected
-        let avg_time_blocked = if metrics.num_blocklist_adds > 0 {
-            metrics.total_time_blocked.as_millis() as u64 / metrics.num_blocklist_adds
-        } else {
-            0
-        };
+        let avg_time_blocked = (metrics.total_time_blocked.as_millis() as u64)
+            .checked_div(metrics.num_blocklist_adds)
+            .unwrap_or(0);
         println!(
             "Average time blocked (ttl): {:?}",
             Duration::from_millis(avg_time_blocked)
