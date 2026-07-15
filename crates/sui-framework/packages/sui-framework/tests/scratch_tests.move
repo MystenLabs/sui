@@ -236,7 +236,7 @@ fun get_do_basic() {
     let mut ctx = tx_context::dummy();
 
     // absent
-    ctx.scratch_internal_get_do!(Marker(), |_v: &u64|  abort 0);
+    ctx.scratch_internal_get_do!(Marker(), |_v: &u64| assert!(false));
 
     // present
     ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
@@ -260,6 +260,8 @@ fun get_do_borrow_protection() {
     ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
     ctx.scratch_internal_get_do!(Marker(), |_v: &u64| {
         // add fails due to borrow protection, even though the value was temporarily removed
+        // TODO(regex) Remove once we have the regex borrow checker
+        let mut ctx = tx_context::dummy();
         ctx.scratch_internal_add!<Marker, bool>(Marker(), true);
         ctx.scratch_internal_remove!<Marker, bool>(Marker());
     });
@@ -270,7 +272,7 @@ fun get_mut_do_basic() {
     let mut ctx = tx_context::dummy();
 
     // absent
-    ctx.scratch_internal_get_mut_do!(Marker(), |_v: &mut u64| abort 0);
+    ctx.scratch_internal_get_mut_do!(Marker(), |v: &mut u64| { assert!(false); *v = 0 });
     assert!(!ctx.scratch_internal_exists!<Marker>(Marker()));
 
     // present
@@ -291,10 +293,13 @@ fun get_mut_do_type_mismatch() {
 fun get_mut_do_borrow_protection() {
     let mut ctx = tx_context::dummy();
     ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
-    ctx.scratch_internal_get_mut_do!(Marker(), |_v: &mut u64| {
+    ctx.scratch_internal_get_mut_do!(Marker(), |v: &mut u64| {
         // add fails due to borrow protection, even though the value was temporarily removed
+        // TODO(regex) Remove once we have the regex borrow checker
+        let mut ctx = tx_context::dummy();
         ctx.scratch_internal_add!<Marker, bool>(Marker(), true);
         ctx.scratch_internal_remove!<Marker, bool>(Marker());
+        *v = 0;
     });
 }
 
@@ -303,11 +308,14 @@ fun get_fold_basic() {
     let mut ctx = tx_context::dummy();
 
     // absent
-    assert_eq!(ctx.scratch_internal_get_fold!(Marker(), 7u64, |_v: &u64| abort 0), 7);
+    assert_eq!(ctx.scratch_internal_get_fold!(Marker(), 7u64, |_v: &u64| { assert!(false); 0 }), 7);
 
     // present
     ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
-    assert_eq!(ctx.scratch_internal_get_fold!(Marker(), abort 0, |v: &u64| *v + 1), 43);
+    assert_eq!(
+        ctx.scratch_internal_get_fold!(Marker(), { assert!(false); 0 }, |v: &u64| *v + 1),
+        43,
+    );
 }
 
 #[test, expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
@@ -323,6 +331,8 @@ fun get_fold_borrow_protection() {
     ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
     ctx.scratch_internal_get_fold!(Marker(), 0, |v: &u64| {
         // add fails due to borrow protection, even though the value was temporarily removed
+        // TODO(regex) Remove once we have the regex borrow checker
+        let mut ctx = tx_context::dummy();
         ctx.scratch_internal_add!<Marker, bool>(Marker(), true);
         ctx.scratch_internal_remove!<Marker, bool>(Marker());
         *v
@@ -334,12 +344,16 @@ fun get_mut_fold_basic() {
     let mut ctx = tx_context::dummy();
 
     // absent
-    let d = ctx.scratch_internal_get_mut_fold!(Marker(), 99u64, |_v: &mut u64| abort 0);
+    let d = ctx.scratch_internal_get_mut_fold!(
+        Marker(),
+        99u64,
+        |v: &mut u64| { assert!(false); *v = 0; 0 },
+    );
     assert_eq!(d, 99);
 
     // present
     ctx.scratch_internal_add!<Marker, u64>(Marker(), 10);
-    let old = ctx.scratch_internal_get_mut_fold!(Marker(), abort 0, |v: &mut u64| {
+    let old = ctx.scratch_internal_get_mut_fold!(Marker(), { assert!(false); 0 }, |v: &mut u64| {
         let old = *v;
         *v = *v + 5;
         old
@@ -362,11 +376,14 @@ fun get_mut_fold_type_mismatch() {
 fun get_mut_fold_borrow_protection() {
     let mut ctx = tx_context::dummy();
     ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
-    ctx.scratch_internal_get_mut_fold!(Marker(), 0, |v: &mut u64| {
+    ctx.scratch_internal_get_mut_fold!(Marker(), 0u64, |v: &mut u64| {
         // add fails due to borrow protection, even though the value was temporarily removed
+        // TODO(regex) Remove once we have the regex borrow checker
+        let mut ctx = tx_context::dummy();
         ctx.scratch_internal_add!<Marker, bool>(Marker(), true);
         ctx.scratch_internal_remove!<Marker, bool>(Marker());
-        *v
+        *v = 0;
+        0
     });
 }
 
