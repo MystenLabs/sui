@@ -89,6 +89,17 @@ pub trait EpochStore {
     fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error>;
 }
 
+/// A store that can answer questions about the current (latest) state of the chain.
+/// Implemented by stores backed by a live endpoint; purely local stores (file system,
+/// in-memory) cannot answer these queries. Read-through compositions delegate to their
+/// backing (secondary) store so answers are never served from a stale cache.
+pub trait LiveDataStore {
+    /// Return the latest checkpoint sequence number known to the backing endpoint.
+    fn latest_checkpoint(&self) -> Result<u64, Error>;
+    /// Return the `EpochData` of the current (latest) epoch.
+    fn latest_epoch_info(&self) -> Result<EpochData, Error>;
+}
+
 /// Query for an object.
 /// Specifies an `ObjectID` and the "rule" to retrieve it.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

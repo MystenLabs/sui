@@ -6,10 +6,10 @@
 //! The RPC calls are implemented in `gql_queries.rs`.
 
 use crate::{
-    EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore, StoreSummary, TransactionInfo,
-    TransactionStore, VersionQuery, gql_queries, node::Node,
+    EpochData, EpochStore, LiveDataStore, ObjectKey, ObjectStore, SetupStore, StoreSummary,
+    TransactionInfo, TransactionStore, VersionQuery, gql_queries, node::Node,
 };
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Error, Result, anyhow};
 use cynic::{GraphQlResponse, Operation};
 use mysten_common::ZipDebugEqIteratorExt;
 use reqwest::header::USER_AGENT;
@@ -131,7 +131,7 @@ impl EpochStore for DataStore {
             self.metrics.epoch_hit.fetch_add(1, Ordering::Relaxed);
             return Ok(Some(epoch_data.clone()));
         }
-        match block_on!(self.epoch(epoch)) {
+        match block_on!(self.epoch(Some(epoch))) {
             Ok(Some(epoch_data)) => {
                 self.epoch_map
                     .write()
@@ -170,6 +170,23 @@ impl EpochStore for DataStore {
                 Err(e)
             }
         }
+    }
+}
+
+impl LiveDataStore for DataStore {
+    fn latest_checkpoint(&self) -> Result<u64, Error> {
+        block_on!(gql_queries::checkpoint_query::query(self))
+    }
+
+    fn latest_epoch_info(&self) -> Result<EpochData, Error> {
+        let epoch_data = block_on!(self.epoch(None))?
+            .ok_or_else(|| anyhow!("Cannot find epoch info for the latest epoch"))?;
+        // Cache by id so subsequent `epoch_info`/`protocol_config` calls hit the map.
+        self.epoch_map
+            .write()
+            .unwrap()
+            .insert(epoch_data.epoch_id, epoch_data.clone());
+        Ok(epoch_data)
     }
 }
 
@@ -324,8 +341,8 @@ impl DataStore {
         data
     }
 
-    async fn epoch(&self, epoch_id: u64) -> Result<Option<EpochData>, Error> {
-        let _span = debug_span!("gql_epoch_query", epoch = epoch_id).entered();
+    async fn epoch(&self, epoch_id: Option<u64>) -> Result<Option<EpochData>, Error> {
+        let _span = debug_span!("gql_epoch_query", epoch = ?epoch_id).entered();
         debug!(op = "epoch_query", phase = "start", "epoch query");
         let t0 = Instant::now();
         let data = gql_queries::epoch_query::query(epoch_id, self).await;

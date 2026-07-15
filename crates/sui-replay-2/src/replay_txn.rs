@@ -9,6 +9,9 @@
 //! `get_effects_ids`.
 //! `get_input_objects_for_replay` is used by the `execution.rs` module but could be moved
 //! in this module and saved in the `ReplayTransaction` instance.
+//! The object loading helpers (`get_packages`, `get_input_ids`, `load_objects`,
+//! `load_packages`) and `resolve_input_objects` are also used by the `dry_run` module,
+//! which loads objects from transaction data alone (no effects).
 
 use crate::{
     artifacts::{Artifact, ArtifactManager, MoveCallInfo, ReplayCacheSummary},
@@ -22,7 +25,7 @@ use std::time::Instant;
 use sui_data_store::{
     EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
 };
-use sui_types::{TypeTag, base_types::SequenceNumber};
+use sui_types::TypeTag;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
@@ -192,7 +195,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
 
     // Save the replay cache summary
     let cache_summary = ReplayCacheSummary::from_cache(
-        context_and_effects.expected_effects.executed_epoch(),
+        context_and_effects.epoch,
         context_and_effects.checkpoint,
         network.clone(),
         context_and_effects.protocol_version,
@@ -233,16 +236,16 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
 
     verify_txn_and_save_effects(
         artifact_manager,
-        &context_and_effects.expected_effects,
+        context_and_effects.expected_effects.as_ref(),
         &context_and_effects.execution_effects,
     )?;
 
     Ok(exec_ms)
 }
 
-fn verify_txn_and_save_effects(
+pub(crate) fn verify_txn_and_save_effects(
     artifact_manager: &ArtifactManager<'_>,
-    expected_effects: &TransactionEffects,
+    expected_effects: Option<&TransactionEffects>,
     effects: &TransactionEffects,
 ) -> Result<()> {
     // If replayed effects are different from the expected ones
@@ -251,7 +254,11 @@ fn verify_txn_and_save_effects(
     // If replayed and expected effects are the same, save the replayed effects
     // and try removing the forked effects (if any) so that the output just shows
     // the replayed effects rather than (now spurious) effects diff.
-    if effects != expected_effects {
+    // With no expected effects to compare against (dry-run), save the computed
+    // effects directly.
+    if let Some(expected_effects) = expected_effects
+        && effects != expected_effects
+    {
         error!(
             tx_digest = %effects.transaction_digest(),
             "Transaction effects do not match expected effects for transaction {}; saving forked effects",
@@ -353,97 +360,105 @@ impl ReplayTransaction {
     // This is currently called from `execute_transaction_to_effects` but it could
     // be computed for a `ReplayTransaction` and cached.
     pub fn get_input_objects_for_replay(&self) -> Result<InputObjects, anyhow::Error> {
-        let _deleted_shared_info_map: BTreeMap<ObjectID, (TransactionDigest, SequenceNumber)> =
-            BTreeMap::new();
-        let mut resolved_input_objs = vec![];
-        let input_objects_kind = self.txn_data.input_objects().context(format!(
-            "Failed to get input objects from transaction {}",
-            self.digest,
-        ))?;
-        for kind in input_objects_kind.iter() {
-            match kind {
-                InputObjectKind::MovePackage(pkg_id) => {
-                    self
-                        .object_cache
-                        .get(pkg_id)
-                        .map(|pkgs| {
-                            debug_assert!(
-                                pkgs.len() == 1,
-                                "Expected only one version for package {}",
-                                pkg_id
-                            );
-                            let (_version, pkg) = pkgs.iter().next().unwrap();
-                            resolved_input_objs.push(ObjectReadResult {
-                                input_object_kind: *kind,
-                                object: ObjectReadResultKind::Object(pkg.clone()),
-                            })
+        resolve_input_objects(&self.txn_data, &self.object_cache, &self.digest)
+    }
+}
+
+// Resolve the input objects declared by the transaction data against the object cache.
+// The cache must have been loaded beforehand: owned objects at the versions pinned in
+// the transaction data, and shared objects at the version the transaction should
+// execute against (from effects for replay, latest for dry-run).
+pub(crate) fn resolve_input_objects(
+    txn_data: &TransactionData,
+    object_cache: &BTreeMap<ObjectID, BTreeMap<ObjectVersion, Object>>,
+    digest: &TransactionDigest,
+) -> Result<InputObjects, anyhow::Error> {
+    let mut resolved_input_objs = vec![];
+    let input_objects_kind = txn_data.input_objects().context(format!(
+        "Failed to get input objects from transaction {}",
+        digest,
+    ))?;
+    for kind in input_objects_kind.iter() {
+        match kind {
+            InputObjectKind::MovePackage(pkg_id) => {
+                object_cache
+                    .get(pkg_id)
+                    .map(|pkgs| {
+                        debug_assert!(
+                            pkgs.len() == 1,
+                            "Expected only one version for package {}",
+                            pkg_id
+                        );
+                        let (_version, pkg) = pkgs.iter().next().unwrap();
+                        resolved_input_objs.push(ObjectReadResult {
+                            input_object_kind: *kind,
+                            object: ObjectReadResultKind::Object(pkg.clone()),
                         })
+                    })
+                    .ok_or_else(|| anyhow::anyhow!(
+                        format!(
+                            "Package {} not found in transaction cache. Should have been loaded already",
+                            pkg_id,
+                        )
+                    ))?;
+            }
+            InputObjectKind::ImmOrOwnedMoveObject((obj_id, version, _digest)) => {
+                let object = object_cache
+                    .get(obj_id)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        format!(
+                            "Object id {}[{}] not found in transaction cache. Should have been loaded already",
+                            obj_id, version,
+                        )
+                    ))?
+                    .get(&version.value())
+                    .ok_or_else(|| anyhow::anyhow!(
+                        format!(
+                            "Object version {}[{}] not found in transaction cache. Should have been loaded already",
+                            obj_id, version,
+                        )
+                    ))?;
+                let input_object_kind =
+                    InputObjectKind::ImmOrOwnedMoveObject(object.compute_object_reference());
+                resolved_input_objs.push(ObjectReadResult {
+                    input_object_kind,
+                    object: ObjectReadResultKind::Object(object.clone()),
+                });
+            }
+            InputObjectKind::SharedMoveObject {
+                id,
+                initial_shared_version,
+                mutability,
+            } => {
+                let input_object_kind = InputObjectKind::SharedMoveObject {
+                    id: *id,
+                    initial_shared_version: *initial_shared_version,
+                    mutability: *mutability,
+                };
+                let versions =
+                    object_cache
+                        .get(id)
                         .ok_or_else(|| anyhow::anyhow!(
                             format!(
-                                "Package {} not found in transaction cache. Should have been loaded already",
-                                pkg_id,
+                                "Shared Object id {} not found in transaction cache. Should have been loaded already",
+                                id,
                             )
                         ))?;
-                }
-                InputObjectKind::ImmOrOwnedMoveObject((obj_id, version, _digest)) => {
-                    let object = self
-                        .object_cache
-                        .get(obj_id)
-                        .ok_or_else(|| anyhow::anyhow!(
-                            format!(
-                                "Object id {}[{}] not found in transaction cache. Should have been loaded already",
-                                obj_id, version,
-                            )
-                        ))?
-                        .get(&version.value())
-                        .ok_or_else(|| anyhow::anyhow!(
-                            format!(
-                                "Object version {}[{}] not found in transaction cache. Should have been loaded already",
-                                obj_id, version,
-                            )
-                        ))?;
-                    let input_object_kind =
-                        InputObjectKind::ImmOrOwnedMoveObject(object.compute_object_reference());
-                    resolved_input_objs.push(ObjectReadResult {
-                        input_object_kind,
-                        object: ObjectReadResultKind::Object(object.clone()),
-                    });
-                }
-                InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version,
-                    mutability,
-                } => {
-                    let input_object_kind = InputObjectKind::SharedMoveObject {
-                        id: *id,
-                        initial_shared_version: *initial_shared_version,
-                        mutability: *mutability,
-                    };
-                    let versions =
-                        self.object_cache
-                            .get(id)
-                            .ok_or_else(|| anyhow::anyhow!(
-                                format!(
-                                    "Shared Object id {} not found in transaction cache. Should have been loaded already",
-                                    id,
-                                )
-                            ))?;
-                    debug_assert!(
-                        versions.len() == 1,
-                        "Expected only one version for shared object {}",
-                        id
-                    );
-                    let (_version, obj) = versions.iter().next().unwrap();
-                    resolved_input_objs.push(ObjectReadResult {
-                        input_object_kind,
-                        object: ObjectReadResultKind::Object(obj.clone()),
-                    });
-                }
+                debug_assert!(
+                    versions.len() == 1,
+                    "Expected only one version for shared object {}",
+                    id
+                );
+                let (_version, obj) = versions.iter().next().unwrap();
+                resolved_input_objs.push(ObjectReadResult {
+                    input_object_kind,
+                    object: ObjectReadResultKind::Object(obj.clone()),
+                });
             }
         }
-        trace!("resolved input objects: {:#?}", resolved_input_objs);
-        Ok(InputObjects::new(resolved_input_objs))
     }
+    trace!("resolved input objects: {:#?}", resolved_input_objs);
+    Ok(InputObjects::new(resolved_input_objs))
 }
 
 // Load the objects and packages used by the transaction.
@@ -486,7 +501,7 @@ fn load_transaction_objects(
 // For move calls is the package of the call.
 // For vector commands the packages of the type parameter.
 // For publish and upgrade commands, the packages of the dependencies.
-fn get_packages(txn_data: &TransactionData) -> Result<BTreeSet<ObjectID>, Error> {
+pub(crate) fn get_packages(txn_data: &TransactionData) -> Result<BTreeSet<ObjectID>, Error> {
     let mut packages = BTreeSet::new();
     if let TransactionKind::ProgrammableTransaction(ptb) = txn_data.kind() {
         for cmd in &ptb.commands {
@@ -528,7 +543,7 @@ fn get_packages(txn_data: &TransactionData) -> Result<BTreeSet<ObjectID>, Error>
 // version to Object.
 // Returns also the packages of the type parameters instantiated (e.g. `SUI` in `Coin<SUI>`).
 #[allow(clippy::type_complexity)]
-fn load_objects(
+pub(crate) fn load_objects(
     object_keys: &[ObjectKey],
     object_store: &dyn ObjectStore,
 ) -> Result<
@@ -566,7 +581,7 @@ fn load_objects(
 // REVIEW: depending on what we do for system packages, we may not need to
 // query by checkpoint.
 // Non system package are immutable and may be queried with no version info.
-fn load_packages(
+pub(crate) fn load_packages(
     packages: &BTreeSet<ObjectID>,
     checkpoint: u64,
     object_store: &dyn ObjectStore,
@@ -623,7 +638,7 @@ fn get_txn_object_keys(
 // That includes:
 // - the gas coins
 // -- all `CallArg::Object` to PTBs
-fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<ObjectKey>, Error> {
+pub(crate) fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<ObjectKey>, Error> {
     // grab all coins
     let mut object_keys: BTreeSet<ObjectKey> = txn_data
         .gas_data()

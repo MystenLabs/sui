@@ -222,6 +222,7 @@ impl PTB {
             serialize_signed_transaction: program_metadata.serialize_signed_set,
             sender: program_metadata.sender.map(|x| x.value.into_inner().into()),
             skip_signing: false,
+            trace: program_metadata.trace_set,
         };
 
         let gas_payment = client.transaction_builder().input_refs(&gas).await?;
@@ -242,6 +243,11 @@ impl PTB {
             | SuiClientCommandResult::SerializedUnsignedTransaction(_)
             | SuiClientCommandResult::SerializedSignedTransaction(_) => {
                 println!("{transaction_response}");
+                return Ok(());
+            }
+            // Local dry-run with tracing prints its own output (effects, gas report,
+            // and artifact location).
+            SuiClientCommandResult::NoOutput => {
                 return Ok(());
             }
             SuiClientCommandResult::TransactionBlock(response) => response,
@@ -366,6 +372,19 @@ pub fn ptb_description() -> clap::Command {
         .arg(arg!(
             --"dev-inspect"
             "Perform a dev-inspect of the PTB instead of executing it."
+        ))
+        .arg(arg!(
+            --"trace"
+            "When used with --dry-run, execute the PTB locally against the latest chain \
+            state and save a Move trace along with replay artifacts, instead of calling \
+            the dry-run RPC. [Experimental]"
+        )
+        .long_help(
+            "When used with --dry-run, execute the PTB locally against the latest chain \
+            state and save a Move trace along with replay artifacts (under \
+            <cur_dir>/.replay/<digest>), instead of calling the dry-run RPC. The trace \
+            can be opened with the Move Trace Debugger to step through the PTB's \
+            execution. Requires a binary built with the `tracing` feature. [Experimental]"
         ))
         .arg(arg!(
             --"gas-coin" <ID> ...

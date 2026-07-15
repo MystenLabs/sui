@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    EpochData, EpochStore, ObjectKey, ObjectStore, ReadDataStore, ReadWriteDataStore, SetupStore,
-    StoreSummary, TransactionInfo, TransactionStore,
+    EpochData, EpochStore, LiveDataStore, ObjectKey, ObjectStore, ReadDataStore,
+    ReadWriteDataStore, SetupStore, StoreSummary, TransactionInfo, TransactionStore,
 };
 use anyhow::{Error, Result};
 use mysten_common::ZipDebugEqIteratorExt;
@@ -78,6 +78,26 @@ where
             Some(config) => Ok(Some(config)),
             None => self.secondary.protocol_config(epoch),
         }
+    }
+}
+
+impl<P, S> LiveDataStore for ReadThroughStore<P, S>
+where
+    P: ReadWriteDataStore,
+    S: ReadDataStore + LiveDataStore,
+{
+    // Latest-state queries must always come from the backing (secondary) store:
+    // the primary is a cache and may be stale.
+    fn latest_checkpoint(&self) -> Result<u64, Error> {
+        self.secondary.latest_checkpoint()
+    }
+
+    fn latest_epoch_info(&self) -> Result<EpochData, Error> {
+        let epoch_data = self.secondary.latest_epoch_info()?;
+        // Cache by id so subsequent `epoch_info`/`protocol_config` calls hit the primary.
+        self.primary
+            .write_epoch_info(epoch_data.epoch_id, epoch_data.clone())?;
+        Ok(epoch_data)
     }
 }
 

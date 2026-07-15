@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Execution module for replay.
+//! Execution module for replay and dry-run.
 //! The call to the executor `execute_transaction_to_effects` is here
 //! and the logic to call it is pretty straightforward.
 //! `execute_transaction_to_effects` requires info from the `EpochStore`
 //! (epoch, protocol config, epoch start timestamp, rgp), from the `TransactionStore`
 //! as in transaction data and effects, and from the `ObjectStore` for dynamic loads
 //! (e.g. dynamic fields).
+//! The executor invocation itself lives in the shared core `execute_to_effects`,
+//! called with an `ExecutionContext` assembled either from an executed transaction
+//! (`execute_transaction_to_effects`, replay) or from transaction data alone
+//! (`dry_run` module).
 //! This module also contains the traits used by execution to talk to
 //! the store (BackingPackageStore, ObjectStore, ChildObjectResolver)
 
@@ -20,7 +24,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
 };
-use sui_data_store::{EpochStore, ObjectKey, ObjectStore, VersionQuery};
+use sui_data_store::{EpochData, EpochStore, ObjectKey, ObjectStore, VersionQuery};
 use sui_execution::Executor;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
@@ -35,7 +39,7 @@ use sui_types::{
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
-    transaction::{CheckedInputObjects, TransactionData, TransactionDataAPI},
+    transaction::{CheckedInputObjects, InputObjects, TransactionData, TransactionDataAPI},
 };
 use tracing::{debug, debug_span, trace};
 
@@ -53,13 +57,37 @@ pub struct ReplayExecutor {
 pub struct TxnContextAndEffects {
     pub txn_data: TransactionData,             // original transaction data
     pub execution_effects: TransactionEffects, // effects of the replay execution
-    pub expected_effects: TransactionEffects,  // expected effects as found in the transaction data
-    pub gas_status: SuiGasStatus,              // gas status of the replay execution
+    // Expected effects as found on chain. `None` when the transaction was never
+    // executed on chain (dry-run) and there is nothing to compare against.
+    pub expected_effects: Option<TransactionEffects>,
+    pub gas_status: SuiGasStatus, // gas status of the replay execution
     pub object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>, // object cache
-    pub inner_store: InnerTemporaryStore,      // temporary store used during execution
-    pub checkpoint: u64,                       // checkpoint where the transaction was included
-    pub protocol_version: u64,                 // protocol version used for execution
+    pub inner_store: InnerTemporaryStore, // temporary store used during execution
+    pub epoch: u64,               // epoch used for execution
+    pub checkpoint: u64,          // checkpoint used for object queries
+    pub protocol_version: u64,    // protocol version used for execution
 }
+
+// All the inputs needed to execute a transaction, independent of whether they were
+// reconstructed from an executed transaction (replay) or assembled from transaction
+// data alone (dry-run).
+pub(crate) struct ExecutionContext {
+    pub digest: TransactionDigest,
+    pub txn_data: TransactionData,
+    // On-chain effects for replay, `None` for dry-run.
+    pub expected_effects: Option<TransactionEffects>,
+    pub input_objects: InputObjects,
+    pub executor: ReplayExecutor,
+    pub object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
+    pub epoch_data: EpochData,
+    // For replay, the checkpoint the transaction executed in; for dry-run, the latest
+    // checkpoint, pinning all unversioned object queries to a consistent snapshot.
+    pub checkpoint: u64,
+}
+
+// Result of an execution: the transaction result and all the data touched
+// and changed during execution.
+pub(crate) type ExecutionResultAndContext = (Result<(), ExecutionError>, TxnContextAndEffects);
 
 // Entry point. Executes a transaction.
 // Return all the information that can be used by a client
@@ -77,14 +105,8 @@ pub fn execute_transaction_to_effects(
     ),
     Error,
 > {
-    debug!(op = "execute_tx", phase = "start", "execution");
-    // TODO: Hook up...
-    let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
-
     let epoch = txn.epoch();
-    let digest = txn.digest();
     let checkpoint = txn.checkpoint();
-    let _span = debug_span!("execute_tx", %digest, epoch, checkpoint).entered();
     let input_objects = txn.get_input_objects_for_replay()?;
     let ReplayTransaction {
         digest,
@@ -94,11 +116,49 @@ pub fn execute_transaction_to_effects(
         executor,
         object_cache,
     } = txn;
-
-    let protocol_config = &executor.protocol_config;
     let epoch_data = epoch_store
         .epoch_info(epoch)?
         .ok_or_else(|| anyhow!(format!("Epoch {} not found", epoch)))?;
+    execute_to_effects(
+        ExecutionContext {
+            digest,
+            txn_data,
+            expected_effects: Some(expected_effects),
+            input_objects,
+            executor,
+            object_cache,
+            epoch_data,
+            checkpoint,
+        },
+        object_store,
+        trace_builder_opt,
+    )
+}
+
+// Shared execution core used by both replay and dry-run.
+pub(crate) fn execute_to_effects(
+    context: ExecutionContext,
+    object_store: &dyn ObjectStore,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+) -> Result<ExecutionResultAndContext, Error> {
+    debug!(op = "execute_tx", phase = "start", "execution");
+    // TODO: Hook up...
+    let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
+
+    let ExecutionContext {
+        digest,
+        txn_data,
+        expected_effects,
+        input_objects,
+        executor,
+        object_cache,
+        epoch_data,
+        checkpoint,
+    } = context;
+    let epoch = epoch_data.epoch_id;
+    let _span = debug_span!("execute_tx", %digest, epoch, checkpoint).entered();
+
+    let protocol_config = &executor.protocol_config;
     let epoch_start_timestamp = epoch_data.start_timestamp;
     let gas_status = if txn_data.kind().is_system_tx() {
         SuiGasStatus::new_unmetered()
@@ -183,6 +243,7 @@ pub fn execute_transaction_to_effects(
             gas_status,
             object_cache,
             inner_store,
+            epoch,
             checkpoint,
             protocol_version: protocol_config.version.as_u64(),
         },
@@ -190,6 +251,10 @@ pub fn execute_transaction_to_effects(
 }
 
 impl ReplayExecutor {
+    pub fn protocol_config(&self) -> &ProtocolConfig {
+        &self.protocol_config
+    }
+
     pub fn new(protocol_config: ProtocolConfig) -> Result<Self, Error> {
         let silent = true; // disable Move debug API
         let executor = sui_execution::executor(&protocol_config, silent)
