@@ -21,6 +21,10 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -34,6 +38,10 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: Package versioning
     stage: Ship
+questions:
+  - What is Package Versioning in Sui?
+  - How does package versioning work on Sui?
+answer: Versioning provides the ability to upgrade packages on the Sui network.
 ---
 
 [Move packages](/develop/publish-upgrade-packages) are versioned and stored onchain, but follow a different scheme because they are immutable from inception. Package transaction inputs are referenced by ID alone. They are always loaded at their latest version.

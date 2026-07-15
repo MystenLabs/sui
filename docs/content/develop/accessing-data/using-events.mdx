@@ -34,6 +34,10 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -51,6 +55,11 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: Event querying
     stage: Verify & Secure
+questions:
+  - How do I emit events on Sui?
+answer: >-
+  Use events to notify onchain assets of activity your smart contracts initiate
+  and query events from other packages to trigger logic based on emitted events.
 ---
 
 Move code can interact with objects stored on Sui. Some applications track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates. 

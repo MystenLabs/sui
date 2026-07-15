@@ -32,11 +32,20 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: Pool querying
     stage: DeFi Primitives
+questions:
+  - How do I query the pool on Sui?
+answer: >-
+  A Pool is a shared object that represents a unique market pair, such as
+  SUI/USDC.
 ---
 
 The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBookV3 Design](/onchain-finance/deepbook/deepbookv3/design#pool) to learn more about the structure of pools.

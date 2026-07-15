@@ -24,6 +24,18 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Checkpoint Verification in Sui?
+  - How does checkpoint verification work on Sui?
+  - How do I verify checkpoints?
+answer: >-
+  On the Sui network, checkpoints define the history of the blockchain.
+  Checkpoint verification is how full nodes and other clients guarantee their
+  state is exactly the same as the Sui network.
 ---
 
 Unlike traditional blockchains that create blocks before execution, Sui creates checkpoints after transaction execution to provide a certified record of chain history. Checkpoints contain the cryptographic hash of the previous checkpoint, a list of all the transaction digests and the corresponding transaction effects digests that are included in the checkpoint and a set of signatures from a [quorum](/develop/sui-architecture/consensus#quorums) (more than 2/3) of the validators that formed the committee at the time the checkpoint was created.

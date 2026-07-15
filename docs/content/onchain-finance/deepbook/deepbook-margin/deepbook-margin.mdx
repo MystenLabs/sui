@@ -24,11 +24,21 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: Margin trading overview
     stage: Margin
+questions:
+  - What is DeepBook Margin in Sui?
+  - How does deepbook margin work on Sui?
+answer: >-
+  Leveraged trading capabilities for DeepBookV3, enabling users to trade with
+  borrowed funds and increase their buying power.
 ---
 
 DeepBook Margin extends the trading capabilities of DeepBookV3 by enabling leveraged trading positions. With margin trading, users can borrow funds to increase their buying power.

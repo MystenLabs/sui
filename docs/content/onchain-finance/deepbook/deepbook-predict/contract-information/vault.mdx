@@ -24,6 +24,16 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Vault in Sui?
+  - How does vault work on Sui?
+answer: >-
+  Learn about the DeepBook Predict vault, PLP shares, vault value, exposure
+  tracking, and liquidity reads.
 ---
 
 The Predict vault holds accepted quote assets and takes the opposite side of every trade. `predict.move` owns pricing and trading orchestration; `vault.move` is the state machine for balances, exposure, mark-to-market liability, max payout, and settled-oracle compaction.

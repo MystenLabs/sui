@@ -32,6 +32,17 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Object Versioning in Sui?
+  - How does object versioning work on Sui?
+answer: >-
+  Sui provides `Table` and `Bag` collections built using dynamic fields, but
+  with additional support to count the number of entries they contain to protect
+  against accidental deletion when non-empty.
 ---
 
 Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.

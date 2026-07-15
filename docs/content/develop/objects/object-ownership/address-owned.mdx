@@ -28,6 +28,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -41,6 +45,15 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: Address-owned objects
     stage: Environment
+questions:
+  - What is Address-Owned Objects in Sui?
+  - How does address-owned objects work on Sui?
+  - How do I create address-owned objects?
+  - How do I test address-owned objects?
+answer: >-
+  Address-owned objects are owned by a Sui 32-byte address, which can either be
+  an account address or an object ID. Learn how to create and access these
+  objects.
 ---
 
 Address-owned objects are owned by a 32-byte address. 32-byte addresses are either an account address derived from a particular signature scheme or an object ID. An address-owned object is only accessible to its owner. You can transfer objects that you own to different addresses.

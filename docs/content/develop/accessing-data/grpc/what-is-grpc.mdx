@@ -26,6 +26,17 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is gRPC?
+  - What is gRPC in Sui?
+  - How does grpc work on Sui?
+answer: >-
+  Learn about gRPC and how it provides fast, type-safe access to Sui network
+  data.
 ---
 
 The [Sui Full Node gRPC API](/references/fullnode-protocol) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Designed for power users, indexers, explorers, and decentralized apps, this API enables access to Sui data with high performance and low latency.

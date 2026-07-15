@@ -22,6 +22,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -43,6 +47,10 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: Security best practices
     stage: Ship
+questions:
+  - What is Security Best Practices in Sui?
+  - How does security best practices work on Sui?
+answer: Overview of security best practices on Sui.
 ---
 
 This page describes a few recommended security best practices when developing applications on Sui. These recommendations are not comprehensive for all application types, use cases, or architectures. Do your own research and have production applications audited thoroughly.

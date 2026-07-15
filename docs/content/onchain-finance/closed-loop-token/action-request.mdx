@@ -33,6 +33,17 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Action Request in Sui?
+  - How does action request work on Sui?
+  - How do I create a custom request?
+answer: >-
+  Tokens do not allow transfers, conversions, or spends by default. To allow
+  these actions, use an `ActionRequest`.
 ---
 
 The main difference between tokens and coins is that tokens do not allow transfers, conversions, or spends by default. There is an authorization mechanism, however, that allows these actions. This mechanism is called an `ActionRequest`. You can choose to allow or disallow any of the actions independently (see the [Request confirmation](#request-confirmation) section).

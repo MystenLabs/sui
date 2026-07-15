@@ -23,11 +23,20 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: Stablecoin integration
     stage: Tokens
+questions:
+  - How do I integrate with stablecoins on Sui?
+answer: >-
+  Learn how to integrate stablecoins on Sui, including how they maintain value
+  stability and their common use cases in trading, lending, and store of value.
 ---
 
 Stablecoins are a type of cryptocurrency designed to maintain a stable value relative to a fiat currency or a basket of assets. They are widely used for trading, lending, and as a store of value.

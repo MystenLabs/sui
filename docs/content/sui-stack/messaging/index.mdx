@@ -22,6 +22,15 @@ goal:
         - title
         - description
       label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Messaging SDK in Sui?
+answer: >-
+  Build end-to-end encrypted group messaging on Sui using Seal threshold
+  encryption, a Walrus-backed relayer, and onchain permission management.
 ---
 
 The Messaging SDK provides end-to-end encrypted, permissioned group messaging on Sui. Messages are encrypted client-side with AES-256-GCM, keys are managed through Seal threshold encryption, and ciphertext is archived to Walrus for decentralized persistence. Onchain Move contracts manage group membership, granular permissions, and versioned encryption keys.

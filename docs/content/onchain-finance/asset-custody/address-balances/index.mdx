@@ -21,11 +21,20 @@ goal:
         - title
         - description
       label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: Address balances
     stage: Wallets & Funding
+questions:
+  - What is Address Balances in Sui?
+answer: >-
+  Address balances introduce a canonical balance system for fungible assets tied
+  to Sui addresses.
 ---
 
 Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This replaces the UTXO-style `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.

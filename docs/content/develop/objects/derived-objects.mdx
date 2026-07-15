@@ -27,6 +27,17 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Derived Objects in Sui?
+  - How does derived objects work on Sui?
+answer: >-
+  Derived objects enable deterministic object addresses, Transfer-to-Object
+  capabilities, guaranteed uniqueness, and native parallelization for building
+  scalable composable systems on Sui.
 ---
 
 Sui objects get a unique ID assigned to them upon creation. However, a derived object has a claimed ID created through the mapping of a parent object to a key. The parent object's unique onchain ID maps to an individual key, ensuring the derived object's claimed ID is both deterministic and unique. You can compute derived object IDs using the parent ID and key, both onchain and offchain, even before creating the object on the network.

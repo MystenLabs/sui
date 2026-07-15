@@ -29,6 +29,10 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -38,6 +42,12 @@ builder_paths:
     path_name: Agentic Payments
     step: Gas mechanics
     stage: Authorization
+questions:
+  - What is Gas Fees in Sui?
+  - How does gas fees work on Sui?
+answer: >-
+  A Sui transaction must pay for both the computational cost of execution and
+  the long-term cost of storing the objects a transaction creates or mutates.
 ---
 
 A Sui transaction must pay for both the computational cost of execution and the long-term cost of storing the objects a transaction creates or mutates. 

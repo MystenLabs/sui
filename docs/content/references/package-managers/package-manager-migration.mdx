@@ -24,6 +24,16 @@ goal:
       label: Has required frontmatter fields
     - min_words: 100
       label: Needs more reference content
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Package Management Migration in Sui?
+  - How do I publish on devnet and localnet?
+answer: >-
+  Learn how to migrate from the previous package management system to the new,
+  optimized system.
 ---
 
 Version 1.63 of the Sui CLI introduced a major overhaul of the package management system. This document describes the changes between the old and new systems and gives guidance on migrating your packages. See [the package management user guide](/develop/manage-packages/move-package-management) for full details on the new system.

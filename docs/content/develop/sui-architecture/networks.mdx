@@ -27,6 +27,18 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Networks in Sui?
+  - How does networks work on Sui?
+  - How do I testnet?
+answer: >-
+  Sui operates multiple networks including Mainnet for production, Testnet for
+  staging, Devnet for developing new features, and Localnet for local
+  development.
 ---
 
 Sui has several networks available, each serving a different purpose. Each network is comprised of nodes. Nodes provide resources to the network and participate in activities such as validating onchain transactions through a process called [consensus](/develop/sui-architecture/consensus). There are 2 types of nodes on each Sui network:

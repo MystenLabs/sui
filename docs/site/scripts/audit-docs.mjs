@@ -268,6 +268,10 @@ function runBaseChecks(filePath, raw, data, body, docPaths) {
   if (missingImages.length > 0) issues.push(`${missingImages.length} missing image(s)`);
   if (wordCount < 100) issues.push(`Very short page (${wordCount} words)`);
 
+  // GEO/AEO readiness
+  const hasQuestions = Array.isArray(data.questions) && data.questions.length > 0;
+  const hasAnswer = typeof data.answer === 'string' && data.answer.trim().length > 0;
+
   return {
     frontmatter,
     lastModified: lastModified ? lastModified.toISOString().slice(0, 10) : null,
@@ -279,6 +283,7 @@ function runBaseChecks(filePath, raw, data, body, docPaths) {
     todos,
     missingImages,
     issues,
+    geo: { hasQuestions, questionCount: hasQuestions ? data.questions.length : 0, hasAnswer },
   };
 }
 
@@ -359,6 +364,43 @@ function evaluateGoalRequires(goal, body, data, headings) {
       const wc = countWords(body);
       result.pass = wc >= req.min_words;
       result.detail = `${wc} words, need >= ${req.min_words}`;
+    } else if (req.has_questions !== undefined) {
+      const has = Array.isArray(data.questions) && data.questions.length > 0;
+      result.pass = req.has_questions ? has : !has;
+      result.detail = has ? `${data.questions.length} question(s)` : 'no questions field';
+    } else if (req.has_answer !== undefined) {
+      const has = typeof data.answer === 'string' && data.answer.trim().length > 0;
+      result.pass = req.has_answer ? has : !has;
+      result.detail = has ? `${data.answer.trim().length} chars` : 'no answer field';
+    } else if (req.answer_in_intro !== undefined) {
+      // Check that the first N words before the first heading contain a direct statement
+      const introMatch = body.match(/^([\s\S]*?)(?=^##?\s)/m);
+      const intro = introMatch ? introMatch[1] : body.slice(0, 1000);
+      const introWords = (intro.match(/[a-zA-Z0-9]+/g) || []).length;
+      const minWords = typeof req.answer_in_intro === 'number' ? req.answer_in_intro : 30;
+      result.pass = introWords >= minWords;
+      result.detail = `${introWords} words before first heading, need >= ${minWords}`;
+    } else if (req.question_headings !== undefined) {
+      // Check if headings use question format (What/How/Why/When/Where/Can/Do/Is)
+      const questionRe = /^(what|how|why|when|where|can|do|is|are|should|which)\b/i;
+      const qHeadings = headings.filter(h => questionRe.test(h.text));
+      const min = typeof req.question_headings === 'number' ? req.question_headings : 1;
+      result.pass = qHeadings.length >= min;
+      result.detail = `${qHeadings.length} question-style heading(s), need >= ${min}`;
+    } else if (req.steps_present !== undefined) {
+      // Check for numbered list items (1. 2. 3. etc.)
+      const steps = (body.match(/^\d+\.\s/gm) || []).length;
+      const min = typeof req.steps_present === 'number' ? req.steps_present : 3;
+      result.pass = steps >= min;
+      result.detail = `${steps} numbered step(s), need >= ${min}`;
+    } else if (req.code_explanation_ratio !== undefined) {
+      // Ratio of explanation words to total content (including code)
+      const totalWords = (body.match(/[a-zA-Z0-9]+/g) || []).length;
+      const explanationWords = countWords(body); // strips code blocks
+      const ratio = totalWords > 0 ? explanationWords / totalWords : 1;
+      const minRatio = typeof req.code_explanation_ratio === 'number' ? req.code_explanation_ratio : 0.4;
+      result.pass = ratio >= minRatio;
+      result.detail = `ratio ${ratio.toFixed(2)}, need >= ${minRatio}`;
     }
 
     results.push(result);
@@ -526,6 +568,12 @@ function main() {
       pagesPassingGoal: pageResults.filter(p => p.goal?.allPass).length,
       pagesFailingGoal: pageResults.filter(p => p.goal && !p.goal.allPass).length,
       duplicateTitles: Object.keys(duplicateTitles).length > 0 ? duplicateTitles : null,
+      geo: {
+        pagesWithQuestions: pageResults.filter(p => p.base.geo?.hasQuestions).length,
+        pagesWithAnswer: pageResults.filter(p => p.base.geo?.hasAnswer).length,
+        pagesWithBoth: pageResults.filter(p => p.base.geo?.hasQuestions && p.base.geo?.hasAnswer).length,
+        pagesWithNeither: pageResults.filter(p => !p.base.geo?.hasQuestions && !p.base.geo?.hasAnswer).length,
+      },
     },
     pages: onlyFailures
       ? pageResults.filter(p => p.base.issues.length > 0 || (p.goal && !p.goal.allPass))
@@ -547,6 +595,13 @@ function main() {
     console.error(`Pages with goal:   ${output.summary.pagesWithGoal}`);
     console.error(`  Passing:         ${output.summary.pagesPassingGoal}`);
     console.error(`  Failing:         ${output.summary.pagesFailingGoal}`);
+
+    const geo = output.summary.geo;
+    console.error(`GEO/AEO readiness:`);
+    console.error(`  With questions:  ${geo.pagesWithQuestions}`);
+    console.error(`  With answer:     ${geo.pagesWithAnswer}`);
+    console.error(`  With both:       ${geo.pagesWithBoth}`);
+    console.error(`  With neither:    ${geo.pagesWithNeither}`);
 
     if (output.summary.duplicateTitles) {
       console.error(`\nDuplicate titles:`);

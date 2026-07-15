@@ -30,6 +30,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -52,6 +56,15 @@ builder_paths:
 builder_paths_source:
   dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
   snapshot: '2026-07-10'
+questions:
+  - What is Upgrading Packages in Sui?
+  - How does upgrading packages work on Sui?
+  - How do I upgrade considerations?
+  - How do I upgrade requirements?
+  - How do I upgrade?
+answer: >-
+  Sui provides a method of upgrading your packages while still retaining their
+  immutable properties.
 ---
 
 <AgentPrompt

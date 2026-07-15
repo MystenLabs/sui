@@ -26,6 +26,17 @@ goal:
       label: Has required frontmatter fields
     - min_words: 100
       label: Needs more reference content
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui Framework in Sui?
+  - How do I build documentation locally?
+answer: >-
+  The Sui framework libraries include Move modules that provide the logic for
+  Sui and its standards. A Rust process creates the documentation for the
+  modules directly from comments in the code.
 ---
 
 The documentation in this section is created from the Rust `cargo doc` process. The process builds the content from comments in the source code.

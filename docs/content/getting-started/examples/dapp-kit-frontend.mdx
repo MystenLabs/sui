@@ -56,6 +56,10 @@ goal:
     - headings:
         - pattern: Key code|Code highlight|Walkthrough
       label: Has code explanation section
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -70,6 +74,13 @@ builder_paths:
 builder_paths_source:
   dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
   snapshot: '2026-07-10'
+questions:
+  - How do I build a dapp kit on Sui?
+  - What is the dapp kit pattern in Sui?
+answer: >-
+  Build a React frontend that connects a wallet, mints an NFT through a Move
+  contract, queries owned objects, and refreshes the UI automatically using Sui
+  dApp Kit and React Query.
 ---
 
 [dApp Kit](https://sdk.mystenlabs.com/dapp-kit) provides a React starter template that provides scaffolding for wallet connection, transaction building, onchain queries, and cache invalidation. In this example, the app connects to a deployed Hero NFT contract, mints an NFT with a single button click, and displays all owned heroes by filtering objects by type. This example does not include Move code, as it focuses entirely on the TypeScript frontend patterns.

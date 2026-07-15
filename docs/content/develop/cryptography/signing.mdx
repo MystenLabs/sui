@@ -35,6 +35,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -48,6 +52,12 @@ builder_paths:
     path_name: Agentic Payments
     step: Signature verification
     stage: Authorization
+questions:
+  - How do I signature verification in move on Sui?
+  - How do I sign with cli and submit to onchain move method?
+answer: >-
+  Sui supports verification within Move smart contracts through several
+  signature schemes.
 ---
 
 Move contracts in Sui support verifications for several signature schemes onchain. Not all signatures supported in onchain verification are supported as user signature verification. See [Sui Signatures](/develop/transactions/transaction-auth/auth-overview) for valid signature schemes for transaction authorization.

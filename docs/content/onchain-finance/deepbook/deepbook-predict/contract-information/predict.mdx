@@ -25,6 +25,16 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Predict in Sui?
+  - How does predict work on Sui?
+answer: >-
+  Learn about the Predict shared object, public trading functions, liquidity
+  functions, configuration reads, and emitted events.
 ---
 
 The `Predict` shared object is the main protocol entry point. It coordinates user actions across manager balances, oracle state, pricing config, risk config, and vault accounting.

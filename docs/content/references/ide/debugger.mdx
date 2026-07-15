@@ -35,6 +35,16 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Move Trace Debugger in Sui?
+  - How do I install?
+answer: >-
+  Debug Move execution traces directly in VS Code to understand how your code
+  executes.
 ---
 
 The [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension for Visual Studio Code provides a familiar [debugging interface](https://code.visualstudio.com/docs/debugtest/debugging) for Move unit tests and onchain transactions, including [PTB](/develop/transactions/ptbs/prog-txn-blocks) debugging support. You can inspect the state of PTB commands, step through code execution, track local variable values, and set line breakpoints for Move code, either in unit tests or in onchain Move calls.

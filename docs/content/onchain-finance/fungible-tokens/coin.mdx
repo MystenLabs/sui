@@ -36,6 +36,10 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -49,6 +53,12 @@ builder_paths:
 builder_paths_source:
   dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
   snapshot: '2026-07-10'
+questions:
+  - What is Coin Standard in Sui?
+  - How does coin standard work on Sui?
+answer: >-
+  The Coin standard enables you to create a broad range of fungible tokens on
+  the Sui network to satisfy a number of use cases.
 ---
 
 :::tip

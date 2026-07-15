@@ -31,11 +31,21 @@ goal:
     - pattern: 'import|require|use '
       min: 1
       label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: DeepBook SDK overview
     stage: DeFi Primitives
+questions:
+  - How do I use the DeepBookV3 SDK SDK?
+  - How do I install?
+answer: >-
+  Use the DeepBook TypeScript SDK to interact directly with the DeepBook
+  package.
 ---
 
 The DeepBookV3 TypeScript SDK abstracts away the transaction calls, allowing for direct interactions with the `DeepBook` package.

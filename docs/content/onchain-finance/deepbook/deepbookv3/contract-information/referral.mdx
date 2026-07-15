@@ -23,11 +23,19 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: Referral system
     stage: DeFi Primitives
+questions:
+  - What is Referrals in Sui?
+  - How does referrals work on Sui?
+answer: Learn about the DeepBook referral system and how to earn referral fees.
 ---
 
 The DeepBook referral system allows users to earn fees by referring traders to the platform. Referrers can mint a `DeepBookPoolReferral` object for a specific pool, and traders can associate their `BalanceManager` with a referral. When traders with an associated referral execute trades, a portion of their trading fees is allocated to the referrer based on the referral multiplier.

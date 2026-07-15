@@ -36,6 +36,19 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Token Policy in Sui?
+  - How does token policy work on Sui?
+  - How do I create and share?
+  - How do I add rules?
+answer: >-
+  A `TokenPolicy` is a shared object that defines a token's allowed actions and
+  conditions. Wallets and other financial services often use `TokenPolicy`
+  objects.
 ---
 
 `TokenPolicy` is a shared object that a token owner can create using the `TreasuryCap`. Having a publicly available `TokenPolicy` enables onchain discovery of allowed actions and their conditions. This is useful for wallets and other services that want to provide a better user experience for token holders.

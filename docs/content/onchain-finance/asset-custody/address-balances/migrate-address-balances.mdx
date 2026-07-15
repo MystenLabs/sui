@@ -5,16 +5,14 @@ description: >-
   What changes with address balances on Sui and what action to take for existing
   integrations.
 keywords:
-  [
-    address balances,
-    migration,
-    coin objects,
-    balance queries,
-    checkpoint data,
-    backward compatibility,
-    compatibility coin reservations,
-    SIP-58,
-  ]
+  - address balances
+  - migration
+  - coin objects
+  - balance queries
+  - checkpoint data
+  - backward compatibility
+  - compatibility coin reservations
+  - SIP-58
 goal:
   description: >-
     Reader understands what changes with address balances on Sui and what action
@@ -33,6 +31,16 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Migrating from Coin to Address Balances in Sui?
+  - How does migrating from coin to address balances work on Sui?
+answer: >-
+  What changes with address balances on Sui and what action to take for existing
+  integrations.
 ---
 
 Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This supplements the `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.

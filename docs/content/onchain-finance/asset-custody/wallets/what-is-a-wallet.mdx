@@ -30,11 +30,22 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: What is a wallet
     stage: Wallets & Funding
+questions:
+  - What Is a Wallet?
+  - What is a Wallet in Sui?
+  - How does a wallet work on Sui?
+answer: >-
+  Learn what Sui wallets are, how they work, and which wallet types and options
+  are available on Sui.
 ---
 
 A wallet stores the cryptographic keys that prove ownership of your onchain assets and signs the transactions you submit to the Sui network.

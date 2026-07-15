@@ -27,11 +27,21 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: Margin risks
     stage: Margin
+questions:
+  - What is Margin Risks in Sui?
+  - How does margin risks work on Sui?
+answer: >-
+  Understand the risks of margin trading on DeepBook, including liquidation,
+  interest rate fluctuations, and how to protect your positions.
 ---
 
 Margin trading amplifies both gains and losses. Before using DeepBook Margin, you should understand the risks involved. This guide explains the key risks and provides concrete examples to help you make informed decisions.

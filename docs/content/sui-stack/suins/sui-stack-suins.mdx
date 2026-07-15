@@ -32,11 +32,23 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: SuiNS integration
     stage: Payment Flow
+questions:
+  - What is Domain Names with SuiNS in Sui?
+  - How does domain names with suins work on Sui?
+  - How do I address types?
+answer: >-
+  Integrate Sui Name Service (SuiNS) into your app using onchain or offchain
+  resolution, reverse lookup, subnames, and the Enoki subname API, by walking
+  through Sui Messenger.
 ---
 
 import Tabs from '@theme/Tabs';

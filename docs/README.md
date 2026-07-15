@@ -74,8 +74,38 @@ goal:
 | `has_images` | boolean | Page has (or doesn't have) images |
 | `has_frontmatter` | Array of field names | Specified frontmatter fields are present |
 | `min_words` | number | Page has at least this many words (outside code blocks) |
+| `has_questions` | boolean | Page has `questions:` frontmatter for AI search |
+| `has_answer` | boolean | Page has `answer:` frontmatter for AI citation |
+| `answer_in_intro` | number (min words) | First paragraph has enough words to serve as a direct answer |
+| `question_headings` | number (min count) | Headings use question format (What/How/Why) |
+| `steps_present` | number (min count) | Page has numbered steps for procedural content |
+| `code_explanation_ratio` | number (min ratio) | Ratio of explanation to code is above threshold |
 
 Goals are evaluated by the audit pipeline. The label appears in failure reports, so write it to describe what's wrong (e.g., "Needs more content depth" not "Sufficient content depth").
+
+### GEO/AEO frontmatter
+
+Pages have `questions:` and `answer:` fields for Generative Engine Optimization (GEO) and Answer Engine Optimization (AEO). These help AI-powered search engines (Perplexity, ChatGPT, Google AI Overviews) surface and cite the page correctly.
+
+```yaml
+questions:
+  - How do I install the Sui CLI?
+  - What is suiup?
+  - How do I verify my Sui installation?
+answer: >-
+  Run `curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh`
+  to install suiup, then `suiup install sui@testnet` for the Testnet toolchain.
+  Verify with `sui --version`.
+```
+
+- **`questions`**: 2-5 questions this page answers. AI engines match user queries against these.
+- **`answer`**: 1-2 sentence direct answer to the page's primary question. This is what an AI would cite verbatim.
+
+Generate these for new pages:
+
+```sh
+cd docs/site && node scripts/generate-geo.mjs --apply
+```
 
 ### Builder path frontmatter
 
@@ -176,6 +206,7 @@ Key scripts in `docs/site/scripts/`:
 |--------|---------|
 | `audit-docs.mjs` | Deterministic docs audit pipeline |
 | `generate-goals.mjs` | Generate goal frontmatter by page archetype |
+| `generate-geo.mjs` | Generate questions + answer frontmatter for GEO/AEO |
 | `add-builder-paths.mjs` | Map pages to builder paths with eval status |
 | `refine-goals.mjs` | Batch refinement of goal descriptions and checks |
 | `build-and-check.sh` | Full build + link checking (called by `pnpm build`) |

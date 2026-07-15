@@ -23,6 +23,14 @@ goal:
     - pattern: 'sui '
       min: 2
       label: Shows CLI command usage
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui External Signers CLI in Sui?
+  - How do I installation?
+answer: Use external signers like Ledger and Yubikey with the Sui CLI.
 ---
 
 The Sui CLI supports external signers through implementations found in the [Rust Signers repository](https://github.com/MystenLabs/rust-signers). These integration tools allow you to sign transactions using hardware devices, enhancing security by keeping private keys off your local machine.

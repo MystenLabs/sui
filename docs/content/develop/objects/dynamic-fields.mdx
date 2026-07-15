@@ -27,6 +27,10 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: agentic-payments
     path_name: Agentic Payments
@@ -40,6 +44,13 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: Dynamic fields for versioning
     stage: Agent Write
+questions:
+  - What is Dynamic Fields in Sui?
+  - How does dynamic fields work on Sui?
+  - How do I add dynamic fields?
+answer: >-
+  Dynamic fields and dynamic object fields on Sui are added and removed
+  dynamically, affect gas only when accessed, and store heterogeneous values.
 ---
 
 There are various ways to use object fields to store primitive data and other objects, such as wrapping, but there are a few limitations to these:

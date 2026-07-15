@@ -27,6 +27,15 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I query historical data with archival service on Sui?
+  - How do I query the service?
+  - How do I run your own instance?
+answer: Query historical Sui network data through the Archival Service gRPC API.
 ---
 
 The Archival Service provides access to historical Sui network data through the same [`LedgerService`](/references/fullnode-protocol) gRPC API available on full nodes. Use it as an explicit gRPC endpoint when a full node has pruned the data you need, or as a dedicated source for historical queries. Full node gRPC endpoints do not automatically fall back to Archival Service endpoints.

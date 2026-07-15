@@ -28,6 +28,18 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Permissioned Assets Actions in Sui?
+  - How does permissioned assets actions work on Sui?
+  - How do I create accounts?
+  - How do I transfer a balance?
+answer: >-
+  Learn how to move assets through the Permissioned Asset Standard (PAS) on Sui
+  using Accounts, Requests, and Policies.
 ---
 
 The Permissioned Asset Standard (PAS) is a permissioned asset framework on Sui. Assets of different types live under **Accounts** (one per address, independent of types) and can only move between Accounts through hot potato requests that must be approved and resolved in the same programmable transaction block (PTB).

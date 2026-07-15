@@ -1,8 +1,24 @@
 ---
 title: Soft Bundles
 sidebar_label: Soft Bundles
-description: Submit a sequence of transactions from different signers so that Sui orders and executes them together with high probability, using the Soft Bundle API introduced in SIP-19.
-keywords: [soft bundle, SIP-19, MEV, transaction bundling, gRPC]
+description: >-
+  Submit a sequence of transactions from different signers so that Sui orders
+  and executes them together with high probability, using the Soft Bundle API
+  introduced in SIP-19.
+keywords:
+  - soft bundle
+  - SIP-19
+  - MEV
+  - transaction bundling
+  - gRPC
+questions:
+  - What is Soft Bundles in Sui?
+  - How does soft bundles work on Sui?
+  - How do I submit a soft bundle?
+answer: >-
+  Submit a sequence of transactions from different signers so that Sui orders
+  and executes them together with high probability, using the Soft Bundle API
+  introduced in SIP-19.
 ---
 
 A soft bundle is a group of transactions, possibly from different signers, that Sui orders and executes together with high probability. The Soft Bundle API serves cases that a single [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) cannot, such as sequencing transactions that have different signers and allowing a subset of the bundle to revert independently.

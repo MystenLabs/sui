@@ -27,6 +27,10 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: agentic-payments
     path_name: Agentic Payments
@@ -36,6 +40,12 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: PTB inputs and results
     stage: Agent Write
+questions:
+  - What is Inputs and Results in Sui?
+  - How does inputs and results work on Sui?
+answer: >-
+  Programmable transaction blocks accept two types of inputs (objects and pure
+  values) and produce results that subsequent commands can use.
 ---
 
 <AgentPrompt

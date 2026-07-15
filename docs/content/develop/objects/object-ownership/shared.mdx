@@ -25,11 +25,22 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: Shared objects
     stage: Move Contract
+questions:
+  - What is Shared Objects in Sui?
+  - How does shared objects work on Sui?
+  - How do I create shared objects?
+answer: >-
+  Anyone can access shared objects on the Sui network, so care must be taken to
+  secure access, if needed.
 ---
 
 A shared object is a public, mutable object that is accessible to anyone on the network. They are designed such that multiple users or smart contracts can interact with the same object concurrently.

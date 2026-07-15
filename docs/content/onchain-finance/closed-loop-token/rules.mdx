@@ -33,6 +33,16 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Rules in Sui?
+  - How does rules work on Sui?
+answer: >-
+  Rule modules create programmable restrictions that apply to any action within
+  a `TokenPolicy`.
 ---
 
 Rules are programmable restrictions that you can apply to any action in the [`TokenPolicy`](/onchain-finance/closed-loop-token/token-policy). They are the tool of compliance, regulation, and enforcement of certain business logic in the closed-loop system.

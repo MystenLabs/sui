@@ -26,11 +26,22 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: Passkey authentication
     stage: Auth
+questions:
+  - What is Passkey in Sui?
+  - How does passkey work on Sui?
+answer: >-
+  Sui supports the passkey signature scheme that enables you to sign in to apps
+  and sign transactions using a private key stored securely on a passkey
+  authenticator. It uses the WebAuthn standard.
 ---
 
 The passkey signature scheme provides a secure and user-friendly alternative for submitting transactions on Sui. It is built on the WebAuthn standard and allows you to authenticate and sign transactions using hardware security keys such as YubiKeys, mobile devices such as smartphones and tablets, and platform-based authenticators such as Face ID and Touch ID.

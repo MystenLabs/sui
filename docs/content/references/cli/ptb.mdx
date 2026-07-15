@@ -27,6 +27,15 @@ goal:
     - pattern: 'sui '
       min: 2
       label: Shows CLI command usage
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui Client PTB CLI in Sui?
+answer: >-
+  The Sui Client PTB CLI enables a user to construct a PTB and execute it from
+  the command line or a file.
 ---
 
 The `client ptb` command allows you to specify the transactions for execution in a programmable transaction block (PTB) directly from your CLI or through bash scripts.

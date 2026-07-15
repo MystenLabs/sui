@@ -24,6 +24,16 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Oracle in Sui?
+  - How does oracle work on Sui?
+answer: >-
+  Learn about OracleSVI lifecycle, price updates, SVI updates, settlement, and
+  oracle read functions in DeepBook Predict.
 ---
 
 `OracleSVI` is the market state for one underlying asset and one expiry. It stores spot and forward prices, SVI volatility surface parameters, activation state, the last update timestamp, and the settlement price after expiry.

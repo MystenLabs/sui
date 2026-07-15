@@ -24,6 +24,10 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -33,5 +37,11 @@ builder_paths:
     path_name: Agentic Payments
     step: Package deployment
     stage: Ship
+questions:
+  - What is Publishing Packages in Sui?
+  - How does publishing packages work on Sui?
+answer: >-
+  A Move package on Sui includes one or more modules that define the package's
+  interaction with onchain objects.
 ---
 

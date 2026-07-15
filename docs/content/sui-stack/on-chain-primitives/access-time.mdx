@@ -27,6 +27,16 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Access Onchain Time in Sui?
+  - How does access onchain time work on Sui?
+answer: >-
+  Access network-based time for your transactions. Sui provides a Clock module
+  to capture near-real time or epoch time in your Sui packages.
 ---
 
 If you need a near real-time measurement (within a few seconds) for your application, use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every consensus commit. If you do not need the current time, use the `epoch_timestamp_ms` function to refer to the timestamp of when the current epoch started.

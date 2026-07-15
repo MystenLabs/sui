@@ -23,6 +23,14 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Margin Pool in Sui?
+  - How does margin pool work on Sui?
+answer: Learn about margin pools and how they enable liquidity for leveraged trading.
 ---
 
 The `MarginPool` is a shared object that manages liquidity for a specific asset, enabling lenders to supply assets and margin traders to borrow them. Each margin pool tracks supply and borrow positions, accrues interest over time, and enforces risk parameters to maintain system health.

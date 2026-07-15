@@ -34,11 +34,22 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: zkLogin wallets
     stage: Wallets & Funding
+questions:
+  - What is zkLogin Wallets in Sui?
+  - How does zklogin wallets work on Sui?
+answer: >-
+  Learn how zkLogin wallets work on Sui, explore examples like Enoki and the
+  Playtron wallet, and integrate zkLogin into your app using the Sui TypeScript
+  SDK.
 ---
 
 zkLogin wallets derive a Sui address from an OAuth credential rather than a traditional private key or recovery passphrase. The user signs in with a provider they already use (Google, Apple, Twitch, and others), and the wallet generates a Sui address tied to that credential. No seed phrase is created, and no persistent private key is stored by the OAuth provider. [zkLogin is a primitive native to Sui](/sui-stack/zklogin-integration/zklogin), designed to remove the key management burden for users who are new to onchain applications.

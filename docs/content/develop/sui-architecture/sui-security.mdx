@@ -26,6 +26,17 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Security in Sui?
+  - How does security work on Sui?
+answer: >-
+  Assets on Sui, including coins and tokens, are types of objects, and can only
+  be used by their owners unless otherwise defined according to predefined logic
+  in a smart contract.
 ---
 
 Sui is designed to provide high security guarantees to asset owners. Assets on Sui, including coins and tokens, are types of [objects](/develop/sui-architecture/object-model), and can only be used by their owners unless otherwise defined according to predefined logic in a smart contract. Every smart contract can be audited, and the network can process them correctly even if some [validators](/develop/sui-architecture/consensus) do not follow the protocol correctly. This is known as fault tolerance.

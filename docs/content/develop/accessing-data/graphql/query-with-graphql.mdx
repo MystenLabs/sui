@@ -31,6 +31,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -44,6 +48,11 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: GraphQL queries
     stage: Ship
+questions:
+  - How do I query data with graphql rpc on Sui?
+answer: >-
+  Practical guide to making queries of the Sui RPC using the GraphQL service,
+  with examples for common tasks.
 ---
 
 <AgentPrompt

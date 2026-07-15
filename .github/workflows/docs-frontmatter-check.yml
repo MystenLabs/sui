@@ -36,8 +36,10 @@ jobs:
         run: |
           MISSING_GOAL=""
           MISSING_FM=""
+          MISSING_GEO=""
           TOTAL=0
           ISSUES=0
+          GEO_ISSUES=0
 
           while IFS= read -r file; do
             [ -z "$file" ] && continue
@@ -71,6 +73,16 @@ jobs:
               ISSUES=$((ISSUES + 1))
             fi
 
+            # Check for GEO/AEO fields
+            if ! echo "$FM" | grep -q '^questions:'; then
+              MISSING_GEO="$MISSING_GEO\n- \`$file\`: missing \`questions\`"
+              GEO_ISSUES=$((GEO_ISSUES + 1))
+            fi
+            if ! echo "$FM" | grep -q '^answer:'; then
+              MISSING_GEO="$MISSING_GEO\n- \`$file\`: missing \`answer\`"
+              GEO_ISSUES=$((GEO_ISSUES + 1))
+            fi
+
           done <<< "${{ steps.changed.outputs.files }}"
 
           # Build output
@@ -84,10 +96,15 @@ jobs:
             BODY="${BODY}### Missing goal frontmatter\n\nThese pages don't have a \`goal:\` block. Run this to auto-generate:\n\n\`\`\`sh\ncd docs/site && node scripts/generate-goals.mjs --apply\n\`\`\`\n\nThen review the generated goals and adjust if needed.\n\nPages:\n${MISSING_GOAL}\n\n"
           fi
 
+          if [ -n "$MISSING_GEO" ]; then
+            BODY="${BODY}### Missing GEO/AEO frontmatter\n\nThese pages are missing \`questions\` or \`answer\` fields for AI search visibility. Run this to auto-generate:\n\n\`\`\`sh\ncd docs/site && node scripts/generate-geo.mjs --apply\n\`\`\`\n\nPages:\n${MISSING_GEO}\n\n"
+          fi
+
+          ALL_ISSUES=$((ISSUES + GEO_ISSUES))
           if [ -z "$BODY" ]; then
             BODY="All ${TOTAL} changed docs pages have complete frontmatter. :white_check_mark:"
           else
-            BODY="**${ISSUES} frontmatter issue(s)** found across ${TOTAL} changed docs page(s).\n\n${BODY}"
+            BODY="**${ALL_ISSUES} frontmatter issue(s)** found across ${TOTAL} changed docs page(s).\n\n${BODY}"
           fi
 
           echo "body<<EOF" >> $GITHUB_OUTPUT

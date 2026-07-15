@@ -21,6 +21,14 @@ goal:
     - pattern: 'sui '
       min: 2
       label: Shows CLI command usage
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui CLI Completions in Sui?
+  - How do I install completions?
+answer: Generate shell completion scripts for the Sui CLI.
 ---
 
 The Sui CLI `completion` command generates shell completion scripts for the `sui` command. Install the generated script for your shell to complete Sui commands, subcommands, flags, and values from your command line.

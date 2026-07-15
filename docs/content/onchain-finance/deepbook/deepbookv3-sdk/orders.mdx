@@ -37,11 +37,18 @@ goal:
     - pattern: 'import|require|use '
       min: 1
       label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: 'SDK: Orders'
     stage: DeFi SDK
+questions:
+  - How do I use the Orders SDK SDK?
+answer: Learn how to use the DeepBookV3 SDK to leverage orders against pools.
 ---
 
 Placing orders is a main function of any DeepBook integration. Before you can place orders, though, you must first set up a balance manager. See [DeepBookV3 SDK](/onchain-finance/deepbook/deepbookv3-sdk) for information on setting up a balance manager.

@@ -28,6 +28,16 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I query balances and assets on Sui?
+  - How do I query pas balances?
+answer: >-
+  How to read PAS-managed balances for a wallet address using the PAS SDK and
+  standard Sui APIs.
 ---
 
 The Permissioned Asset Standard (PAS) does not expose dedicated read APIs in the SDK. This is by design. PAS stores assets in standard Sui objects with deterministic addresses, so you query them using the same RPC methods you use for any other address-owned data (for example, balance queries and owned object queries).

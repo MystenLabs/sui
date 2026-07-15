@@ -29,6 +29,15 @@ goal:
     - pattern: 'sui '
       min: 2
       label: Shows CLI command usage
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui Move CLI in Sui?
+answer: >-
+  The Sui CLI move command provides commands for working with Move source code
+  directly from a terminal or console.
 ---
 
 The Sui CLI `move` command provides several commands for working with Move source code. A typical usage of `sui move` is to compile and test the Move code, or to generate a new Move project by using `sui move new project_name`, which creates the needed directories and the `Move.toml` file.

@@ -26,11 +26,19 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: Swap mechanics
     stage: DeFi Primitives
+questions:
+  - What is Swaps in Sui?
+  - How does swaps work on Sui?
+answer: Use DeepBookV3 to execute token swaps.
 ---
 
 DeepBook provides a swap-like interface commonly seen in automatic market makers (AMMs). Unlike the order functions, you can call `swap_exact_amount` without a `BalanceManager`. You call it directly with `Coin` objects instead. When swapping from base to quote, `base_in` must have a positive value while `quote_in` must be zero. When swapping from quote to base, `quote_in` must be positive and `base_in` zero. Some `deep_in` amount is required to pay for trading fees. You can overestimate this amount, because the call returns the unused DEEP tokens at the end.

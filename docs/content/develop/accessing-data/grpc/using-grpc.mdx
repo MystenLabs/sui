@@ -29,6 +29,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -42,6 +46,11 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: gRPC queries
     stage: Ship
+questions:
+  - How do I query data with grpc on Sui?
+answer: >-
+  Learn how to use gRPC clients for the Sui network with grpcurl, Buf CLI, and
+  popular programming languages.
 ---
 
 <AgentPrompt

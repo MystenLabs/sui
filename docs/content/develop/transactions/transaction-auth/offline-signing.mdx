@@ -33,6 +33,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -42,6 +46,14 @@ builder_paths:
     path_name: Agentic Payments
     step: Offline signing
     stage: Authorization
+questions:
+  - What is Offline Signing in Sui?
+  - How does offline signing work on Sui?
+  - 'How do I sign the serialized data #sign?'
+answer: >-
+  Offline signing can be used to sign a Sui transaction when a device is not
+  connected to a Sui network, or if the signing wallet uses a different
+  programming language than that of the transaction being.
 ---
 
 Offline signing is the process of signing transactions using a device that is not connected to a Sui network or using a wallet implemented in a different programming language that doesn't rely on Sui Keystore. To implement offline signing:

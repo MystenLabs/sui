@@ -35,11 +35,21 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: Order constraints
     stage: DeFi Primitives
+questions:
+  - What is Orders in Sui?
+  - How does orders work on Sui?
+answer: >-
+  Use DeepBookV3 to create limit and market orders, modify orders, or cancel
+  orders.
 ---
 
 Users can create limit or market orders, modify orders, and cancel orders. The `BalanceManager` must have the necessary funds to process orders. DeepBookV3 has four order options and three self matching options. If you set the `pay_with_deep` flag to `true`, trading fees are paid with the DEEP token. If you set the `pay_with_deep` flag to `false`, trading fees are paid with the input token.

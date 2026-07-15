@@ -29,6 +29,16 @@ goal:
       label: Has required frontmatter fields
     - min_words: 200
       label: Has enough content to explain the pattern
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is In-Game Currencies in Sui?
+  - How does in-game currencies work on Sui?
+answer: >-
+  Use the Sui Closed-Loop Token standard to create assets that you can use as
+  currency within a game application.
 ---
 
 Using the Sui [Closed-Loop Token](/onchain-finance/closed-loop-token) standard, you can create in-game currencies. These might be in the form of in-game assets such as gems and diamonds that you can grant to players for their actions or make available for purchase. You mint the currency on Sui, but players can only use the currency within the economy of the game itself. You typically mint them in predefined amounts to maintain scarcity and the game economy.

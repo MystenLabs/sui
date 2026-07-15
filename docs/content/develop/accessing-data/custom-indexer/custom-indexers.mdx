@@ -26,6 +26,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -39,6 +43,14 @@ builder_paths:
     path_name: Walrus General Data Storage
     step: Custom indexer framework
     stage: Ship
+questions:
+  - What Are Custom Indexers?
+  - What is Custom Indexers in Sui?
+  - How does custom indexers work on Sui?
+  - How do I build custom indexers?
+answer: >-
+  The `sui-indexer-alt-framework` is a powerful Rust framework for building
+  high-performance, custom blockchain indexers on Sui.
 ---
 
 Sui generates rich, complex data, including transactions, events, object changes, and more. While Sui provides standard APIs to access this data, many applications need customized data processing for workflows like tracking specific events, aggregating analytics, building dashboards, or creating specialized databases. Custom indexers let you extract, transform, and store the specific blockchain data you need. Instead of querying Sui APIs repeatedly or building complex filtering logic, you process the raw blockchain data once and store it in your preferred format and storage layer.

@@ -28,6 +28,16 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I deploy a tokenized asset on Sui?
+  - How do I publish?
+answer: >-
+  Publish the asset_tokenization and template packages on Sui and interact with
+  your tokenized asset using the CLI and TypeScript scripts.
 ---
 
 This guide covers how to publish the [asset tokenization](/onchain-finance/tokenized-assets/asset-tokenization) packages and interact with your tokenized asset.

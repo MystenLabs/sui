@@ -38,11 +38,22 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: Currency standard
     stage: Tokens
+questions:
+  - What is Currency Standard in Sui?
+  - How does currency standard work on Sui?
+answer: >-
+  The Sui Currency Standard enables you to create a broad range of fungible
+  tokens on the Sui network using either the legacy coin creation or the
+  centralized coin registry system.
 ---
 
 :::tip

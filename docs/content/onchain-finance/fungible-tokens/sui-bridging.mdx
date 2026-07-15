@@ -34,6 +34,17 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Bridging Tokens in Sui?
+  - How does bridging tokens work on Sui?
+answer: >-
+  Moving tokens from one blockchain to another is called bridging. To bridge
+  tokens from another blockchain to Sui, you can use the Sui Bridge, Wormhole
+  Connect, Wormhole Portal Bridge, or ZetaChain.
 ---
 
 Bridging is the process of moving tokens from one blockchain to another. When you use a bridge to move tokens between incompatible blockchains, the tokens are wrapped and converted to a derivative token for the target blockchain. You can transfer tokens from other blockchains to Sui, or transfer SUI tokens to other blockchains.

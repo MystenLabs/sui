@@ -28,11 +28,20 @@ goal:
     - pattern: 'import|require|use '
       min: 1
       label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: 'Margin SDK: Maintainer'
     stage: Margin
+questions:
+  - How do I use the Maintainer SDK SDK?
+answer: >-
+  Learn how to use the DeepBook Margin SDK to manage margin pools and system
+  configuration.
 ---
 
 The Maintainer SDK provides administrative functions for managing margin pools, configuring interest rates, and controlling which DeepBook pools can access margin lending. These functions are restricted to maintainers with the appropriate capabilities.

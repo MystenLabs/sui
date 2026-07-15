@@ -28,11 +28,21 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: walrus-agentic
     path_name: Walrus Agentic Data Storage
     step: Content hashing
     stage: Agent Write
+questions:
+  - What is Hashing in Sui?
+  - How does hashing work on Sui?
+answer: >-
+  Sui supports SHA2-256, SHA3-256, Keccak256, and Blake2b-256 cryptographic hash
+  functions.
 ---
 
 A cryptographic hash function is a widely used cryptographic primitive that maps an arbitrary length input to a fixed length output, the hash value. The hash function is designed to be a one-way function, which means that it is infeasible to invert the function to find the input data from a given hash value, and to be collision resistant, which means that it is infeasible to find two different inputs that map to the same hash value.

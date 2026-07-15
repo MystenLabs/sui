@@ -40,6 +40,17 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Weather Oracle with Nautilus in Sui?
+  - How does weather oracle with nautilus work on Sui?
+answer: >-
+  Build a verified weather oracle on Sui using Nautilus, where a Trusted
+  Execution Environment fetches weather data, signs it cryptographically, and
+  the Move contract mints an NFT only after verifying.
 ---
 
 This example demonstrates a verified oracle system that fetches real-world weather data inside a Trusted Execution Environment (TEE), signs the result cryptographically, and submits it to a Move contract that mints a `WeatherNFT` only after verifying the signature. 

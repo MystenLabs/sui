@@ -22,6 +22,15 @@ goal:
     - pattern: '```'
       min: 1
       label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I validator deployment and configuration for Sui?
+  - How do I deployment?
+  - How do I connectivity?
+answer: 'Learn how to set up, configure, and manage a Sui validator node.'
 ---
 
 Validators on Sui run specialized validator nodes that can execute more tasks than full nodes. Validators handle staking, gas price reference, and tallying rules.

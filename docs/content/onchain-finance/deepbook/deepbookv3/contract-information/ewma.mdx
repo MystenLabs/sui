@@ -28,6 +28,17 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is EWMA Gas Price Penalty in Sui?
+  - How does ewma gas price penalty work on Sui?
+  - When does the penalty apply?
+answer: >-
+  Learn about the DeepBook EWMA (Exponentially Weighted Moving Average) gas
+  price penalty system.
 ---
 
 DeepBook implements an exponentially weighted moving average (EWMA) system to dynamically adjust taker fees based on network gas prices. This feature helps prevent toxic takers from using high gas prices to prioritize their transactions and pick off stale maker orders.

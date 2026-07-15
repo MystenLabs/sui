@@ -19,6 +19,15 @@ goal:
         - title
         - description
       label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Seal in Sui?
+answer: >-
+  Encrypt data and enforce onchain access control using Seal, a decentralized
+  secrets management service built on Sui.
 ---
 
 Seal is a decentralized secrets management service that provides threshold encryption with onchain access control. You define who can decrypt in Move, and Seal key servers enforce those policies before releasing decryption keys.

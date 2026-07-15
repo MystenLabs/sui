@@ -21,6 +21,10 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -30,6 +34,13 @@ builder_paths:
     path_name: Agentic Payments
     step: Payment intents
     stage: Money Movement
+questions:
+  - What is Payment Intents in Sui?
+  - How does payment intents work on Sui?
+  - How do I additional examples?
+answer: >-
+  Use programmable transaction blocks to compile multi-step payment workflows
+  into a single atomic transaction.
 ---
 
 A **payment intent** is a single atomic transaction that bundles multiple, heterogeneous payment operations. Rather than signing a separate transaction for each onchain action, you compose multiple operations into one batch: swaps, deposits, transfers, and balance reads. A payment intent is a form of [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks). All operations execute as a unit. If any operation fails, the entire batch reverts and no state changes onchain.

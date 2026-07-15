@@ -45,6 +45,16 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Solitaire in Sui?
+  - How does solitaire work on Sui?
+answer: >-
+  Play solitaire onchain where every card shuffle uses Sui's Random module and
+  every move is a sponsored transaction verified on the blockchain.
 ---
 
 This example deploys a solitaire game fully onchain. Every card shuffle uses Sui's `Random` module for verifiable randomness, every move is an onchain transaction sponsored through Enoki so players pay no gas, and the full game state (deck, columns, piles) lives in a single `Game` object on the blockchain. 

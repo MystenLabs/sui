@@ -26,11 +26,21 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: Flash loans
     stage: DeFi Primitives
+questions:
+  - What is Flash Loans in Sui?
+  - How does flash loans work on Sui?
+answer: >-
+  Use DeepBookV3 to perform flash loans, uncollateralized loans that are
+  borrowed and repaid within the same programmable transaction block.
 ---
 
 Flash loans by definition are uncollateralized loans that you borrow and repay within the same programmable transaction block. Users can borrow flash loans in the base or quote asset from any DeepBookV3 pool. Flash loans return a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned.

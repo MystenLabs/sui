@@ -36,6 +36,16 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Custom Object Transfer Rules in Sui?
+  - How does custom object transfer rules work on Sui?
+answer: >-
+  Custom transfer rules enable you to define a set of rules that must be met
+  before Sui considers a transfer operation valid.
 ---
 
 Every Sui [object](/develop/sui-architecture/object-model) must have the `key` ability. The `store` ability, on the other hand, is an optional ability you can add to Sui objects. Objects with the `store` ability are transferable by anyone using the [`transfer::public_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_transfer) function and can be [wrapped](/develop/objects/object-ownership/wrapped) in other objects.

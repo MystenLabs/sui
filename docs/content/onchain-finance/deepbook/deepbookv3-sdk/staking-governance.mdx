@@ -30,11 +30,18 @@ goal:
     - pattern: 'import|require|use '
       min: 1
       label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: 'SDK: Staking & governance'
     stage: DeFi SDK
+questions:
+  - How do I use the Staking and Governance SDK SDK?
+answer: Learn how to use the DeepBookV3 SDK to interact with staking and governance.
 ---
 
 Examples of interacting with staking and governance. These functions typically require a `balanceManagerKey`, `poolKey`, or both. For details on these keys, see [DeepBookV3 SDK](/onchain-finance/deepbook/deepbookv3-sdk#keys). The SDK includes some default keys that you can view in the `constants.ts` file. 

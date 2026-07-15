@@ -51,6 +51,17 @@ goal:
     - headings:
         - pattern: Key code|Code highlight|Walkthrough
       label: Has code explanation section
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I build a derived objects on Sui?
+  - What is the derived objects pattern in Sui?
+answer: >-
+  Create deterministic Sui objects whose IDs you can predict offchain before the
+  objects exist, using four derivation strategies in Move and the TypeScript
+  SDK.
 ---
 
 Derived objects are Sui objects with deterministic IDs computed from a parent object and a key. You can predict a derived object's ID offchain before the transaction that creates it runs, which enables indexer-free lookups, batch queries, and state verification.

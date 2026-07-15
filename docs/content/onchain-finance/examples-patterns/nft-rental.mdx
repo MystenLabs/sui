@@ -21,6 +21,16 @@ goal:
       label: Has required frontmatter fields
     - min_words: 200
       label: Has enough content to explain the pattern
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is NFT Rentals in Sui?
+  - How does nft rentals work on Sui?
+answer: >-
+  An example that enables users to rent NFTs according to the rules of a
+  provided policy instead of owning them outright.
 ---
 
 Renting non-fungible tokens (NFTs) is a mechanism that allows individuals to temporarily use the benefits of an NFT without ownership or possession. This implementation uses the [Kiosk Apps standard](/onchain-finance/kiosk/kiosk-apps) to establish an infrastructure for rental transactions. This approach aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.

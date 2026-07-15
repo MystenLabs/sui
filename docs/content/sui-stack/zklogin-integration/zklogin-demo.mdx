@@ -44,6 +44,17 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is zkLogin Authentication in Sui?
+  - How does zklogin authentication work on Sui?
+answer: >-
+  Build a React application that authenticates users with OAuth providers and
+  derives Sui wallet addresses using zero-knowledge proofs, enabling
+  passwordless blockchain access.
 ---
 
 This example demonstrates how to integrate [zkLogin](/sui-stack/zklogin-integration/zklogin) into a React application so users can authenticate with familiar OAuth providers (Google, Apple) and interact with the Sui blockchain without managing private keys.

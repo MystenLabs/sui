@@ -31,11 +31,18 @@ goal:
     - pattern: 'import|require|use '
       min: 1
       label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
     step: 'SDK: Swaps'
     stage: DeFi SDK
+questions:
+  - How do I use the Swaps SDK?
+answer: Learn how to use the DeepBookV3 SDK to interact with a swap-like interface.
 ---
 
 DeepBookV3 provides a swap-like interface commonly seen in automatic market makers (AMMs). The DeepBookV3 SDK provides functions to leverage the features of this interface. See [Swaps](/onchain-finance/deepbook/deepbookv3/contract-information/swaps) in the API section for more details.

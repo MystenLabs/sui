@@ -30,11 +30,22 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: Regulated tokens
     stage: Tokens
+questions:
+  - What is Regulated Currencies in Sui?
+  - How does regulated currencies work on Sui?
+  - How do I create regulated currency?
+answer: >-
+  Create regulated currencies on Sui using the Coin Registry system with deny
+  list capabilities for access control.
 ---
 
 Regulated currencies are assets with access control managed through a **deny list**. A deny list identifies addresses that cannot send or receive that asset. For example, stablecoins are a type of regulated currency.

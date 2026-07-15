@@ -30,6 +30,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -39,6 +43,12 @@ builder_paths:
     path_name: Agentic Payments
     step: Multisig for agent security
     stage: Authorization
+questions:
+  - What is Multisig Authentication in Sui?
+  - How does multisig authentication work on Sui?
+answer: >-
+  Guide on how to create a multisig transaction and then submit it against a
+  local network using the Sui CLI.
 ---
 
 Sui supports multi-signature (multisig) transactions, which require multiple keys for authorization rather than a single key signature. Sui supports `k` out of `n` multisig transactions, where `k` is the threshold and `n` is the total weight of all participating parties. The maximum number of parties is 10. To learn more about supported single key signatures, see [Signatures](/develop/transactions/transaction-auth/auth-overview).

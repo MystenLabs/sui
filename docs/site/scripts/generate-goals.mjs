@@ -157,6 +157,14 @@ function generateGoal(archetype, relPath, data, body) {
   }
 }
 
+// Append GEO/AEO checks to any generated goal (called after archetype-specific generation)
+function appendGeoChecks(goal) {
+  if (!goal || !goal.requires) return goal;
+  goal.requires.push({ has_questions: true, label: 'Needs questions for AI search visibility' });
+  goal.requires.push({ has_answer: true, label: 'Needs answer summary for AI citation' });
+  return goal;
+}
+
 function generateOnboardingGoal(title, body, headings, codeBlocks, h2s, relPath) {
   const requires = [];
 
@@ -458,7 +466,7 @@ function main() {
       continue;
     }
 
-    const goal = generateGoal(archetype, relPath, data, body);
+    const goal = appendGeoChecks(generateGoal(archetype, relPath, data, body));
     if (!goal) {
       skipped++;
       continue;

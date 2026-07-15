@@ -25,6 +25,10 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
@@ -38,6 +42,12 @@ builder_paths:
     path_name: Walrus Agentic Data Storage
     step: Transaction lifecycle
     stage: Ship
+questions:
+  - What is Life of a Transaction in Sui?
+  - How does life of a transaction work on Sui?
+answer: >-
+  The life of a transaction on the Sui network has some differences compared to
+  those from other blockchains.
 ---
 
 At a high level, the following diagram outlines the life cycle of a transaction on the Sui blockchain. All transactions are sequenced by Sui's [Mysticeti DAG consensus](/develop/sui-architecture/consensus).

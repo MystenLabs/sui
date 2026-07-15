@@ -46,6 +46,17 @@ goal:
     - pattern: '\]\(/[^)]+\)'
       min: 2
       label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Secure Messaging Chat App in Sui?
+  - How does secure messaging chat app work on Sui?
+  - How do I run the example?
+answer: >-
+  Build an end-to-end encrypted group messaging app on Sui using Seal threshold
+  encryption, a Walrus-backed relayer, and onchain permission management.
 ---
 
 This example builds an end-to-end encrypted group chat app on Sui. The client encrypts messages with AES-256-GCM before they leave the browser, routes them through an offchain relayer that never sees plaintext, and archives them to Walrus for decentralized persistence. Onchain Move contracts manage group membership, 7 granular permission types, and versioned encryption keys through Seal threshold encryption.

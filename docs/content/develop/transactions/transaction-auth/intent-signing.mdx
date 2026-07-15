@@ -32,11 +32,23 @@ goal:
     - pattern: '```'
       min: 1
       label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
 builder_paths:
   - path_id: p2p-payments
     path_name: P2P Payments / Neomoney
     step: Intent signing
     stage: Signing
+questions:
+  - What is Intent Signing in Sui?
+  - How does intent signing work on Sui?
+  - How do I user signature?
+  - How do I verify signatures in move?
+answer: >-
+  Intent signing provides a compact domain separator to data signed by both user
+  and authority signatures.
 ---
 
 An intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message rather than the message itself.
