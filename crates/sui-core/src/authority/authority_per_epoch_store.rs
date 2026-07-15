@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use dashmap::DashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -21,9 +20,9 @@ use itertools::Itertools;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
+use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{debug_fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
@@ -351,11 +350,6 @@ pub struct AuthorityPerEpochStore {
 
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
-    /// In-memory cache of signed effects digests. Populated from disk at startup, updated on
-    /// insert, and pruned on checkpoint finalization. Avoids disk reads on the hot execution path
-    /// where the vast majority of lookups return None.
-    signed_effects_digests_cache: DashMap<TransactionDigest, TransactionEffectsDigest>,
-
     /// Cancellation token used to signal epoch termination to all in-flight tasks.
     epoch_alive_token: CancellationToken,
 
@@ -435,18 +429,12 @@ pub struct AuthorityEpochTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
 
-    /// Signatures over transaction effects that we have signed and returned to users.
-    /// We store this to avoid re-signing the same effects twice.
-    /// Note that this may contain signatures for effects from previous epochs, in the case
-    /// that a user requests a signature for effects from a previous epoch. However, the
-    /// signature is still epoch-specific and so is stored in the epoch store.
+    #[allow(dead_code)]
+    #[deprecated(note = "column family retained only for backward compatibility")]
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
-    /// When we sign a TransactionEffects, we must record the digest of the effects in order
-    /// to detect and prevent equivocation when re-executing a transaction that may not have been
-    /// committed to disk.
-    /// Entries are removed from this table after the transaction in question has been committed
-    /// to disk.
+    #[allow(dead_code)]
+    #[deprecated(note = "column family retained only for backward compatibility")]
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
     /// Next available shared object versions for each shared object.
@@ -870,12 +858,6 @@ impl AuthorityPerEpochStore {
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
 
-        let signed_effects_digests_cache = DashMap::new();
-        for item in tables.signed_effects_digests.safe_iter() {
-            let (tx_digest, effects_digest) = item?;
-            signed_effects_digests_cache.insert(tx_digest, effects_digest);
-        }
-
         let epoch_alive_token = CancellationToken::new();
 
         assert_eq!(
@@ -1035,7 +1017,6 @@ impl AuthorityPerEpochStore {
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
-            signed_effects_digests_cache,
             end_of_publish: Mutex::new(end_of_publish),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             version_assignment_mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
@@ -1720,25 +1701,6 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    pub fn insert_effects_digest_and_signature(
-        &self,
-        tx_digest: &TransactionDigest,
-        effects_digest: &TransactionEffectsDigest,
-        effects_signature: &AuthoritySignInfo,
-    ) -> SuiResult {
-        let tables = self.tables()?;
-        let mut batch = tables.effects_signatures.batch();
-        batch.insert_batch(&tables.effects_signatures, [(tx_digest, effects_signature)])?;
-        batch.insert_batch(
-            &tables.signed_effects_digests,
-            [(tx_digest, effects_digest)],
-        )?;
-        batch.write()?;
-        self.signed_effects_digests_cache
-            .insert(*tx_digest, *effects_digest);
-        Ok(())
-    }
-
     pub fn transactions_executed_in_cur_epoch(
         &self,
         digests: &[TransactionDigest],
@@ -1763,36 +1725,6 @@ impl AuthorityPerEpochStore {
                     .expect("db error")
             },
         ))
-    }
-
-    pub fn get_effects_signature(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<AuthoritySignInfo>> {
-        let tables = self.tables()?;
-        Ok(tables.effects_signatures.get(tx_digest)?)
-    }
-
-    pub fn get_signed_effects_digest(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<TransactionEffectsDigest>> {
-        let cached = self.signed_effects_digests_cache.get(tx_digest).map(|r| *r);
-        if in_test_configuration() {
-            let from_db = self.tables()?.signed_effects_digests.get(tx_digest)?;
-            if cached != from_db {
-                // Cache and DB writes are not atomic, so retry after a brief delay
-                // to allow eventual consistency before panicking.
-                std::thread::sleep(std::time::Duration::from_secs(1));
-                let from_db = self.tables()?.signed_effects_digests.get(tx_digest)?;
-                let cached = self.signed_effects_digests_cache.get(tx_digest).map(|r| *r);
-                assert_eq!(
-                    cached, from_db,
-                    "signed_effects_digests cache inconsistency for {tx_digest}"
-                );
-            }
-        }
-        Ok(cached)
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
@@ -1982,21 +1914,13 @@ impl AuthorityPerEpochStore {
             Err(e) if matches!(e.as_inner(), SuiErrorKind::EpochEnded(_)) => return Ok(()),
             Err(e) => return Err(e),
         };
-        let mut batch = tables.signed_effects_digests.batch();
-
-        // Now that the transaction effects are committed, we will never re-execute, so we
-        // don't need to worry about equivocating.
-        batch.delete_batch(&tables.signed_effects_digests, digests)?;
+        let mut batch = tables.last_consensus_stats.batch();
 
         let seq = *checkpoint.sequence_number();
 
         let mut quarantine = self.consensus_quarantine.write();
         quarantine.update_highest_executed_checkpoint(seq, self, &mut batch)?;
         batch.write()?;
-
-        for digest in digests {
-            self.signed_effects_digests_cache.remove(digest);
-        }
 
         self.consensus_output_cache
             .remove_executed_in_epoch(digests);
