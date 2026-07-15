@@ -8,6 +8,7 @@ on:
 
 permissions:
   pull-requests: write
+  issues: write
   contents: read
 
 jobs:
@@ -112,8 +113,18 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           echo "has_issues=$( [ $ISSUES -gt 0 ] && echo true || echo false )" >> $GITHUB_OUTPUT
 
+      - name: Write job summary
+        if: steps.changed.outputs.count != '0'
+        run: |
+          echo "## Docs frontmatter check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo -e "$BODY" >> $GITHUB_STEP_SUMMARY
+        env:
+          BODY: ${{ steps.check.outputs.body }}
+
       - name: Comment on PR
         if: steps.changed.outputs.count != '0'
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |

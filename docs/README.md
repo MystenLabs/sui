@@ -139,9 +139,9 @@ The docs audit runs deterministic checks across all pages. Three layers:
 
 ```sh
 cd docs/site
-pnpm audit              # JSON to stdout
-pnpm audit:summary      # human-readable summary to stderr
-pnpm audit:failures     # only failing pages + summary
+pnpm docs:audit              # JSON to stdout
+pnpm docs:audit:summary      # human-readable summary to stderr
+pnpm docs:audit:failures     # only failing pages + summary
 ```
 
 ### Generating goals for new pages

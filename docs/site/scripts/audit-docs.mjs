@@ -19,7 +19,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import matter from 'gray-matter';
 
@@ -81,8 +81,8 @@ function getHeadings(body) {
 
 function getGitLastModified(filePath) {
   try {
-    const ts = execSync(
-      `git log -1 --format=%at -- "${filePath}"`,
+    const ts = execFileSync(
+      'git', ['log', '-1', '--format=%at', '--', filePath],
       { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     ).trim();
     if (!ts) return null;
