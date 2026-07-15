@@ -29,7 +29,6 @@ use crate::handlers::BitmapBatch;
 use crate::handlers::BitmapIndexHandler;
 use crate::handlers::BitmapIndexProcessor;
 use crate::handlers::BitmapIndexValue;
-use crate::rate_limiter::CompositeRateLimiter;
 use crate::store::BigTableStore;
 use crate::tables;
 use crate::tables::event_bitmap_index;
@@ -104,12 +103,7 @@ fn register_test_committer_with(
 ) -> Service {
     store
         .runtime_builder()
-        .with_bitmap_committer::<TestProcessor>(
-            write_chunk_size,
-            write_concurrency,
-            Arc::new(CompositeRateLimiter::noop()),
-            None,
-        )
+        .with_bitmap_committer::<TestProcessor>(write_chunk_size, write_concurrency, None, None)
         .into_service()
 }
 

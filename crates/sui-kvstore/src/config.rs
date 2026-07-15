@@ -40,8 +40,6 @@ pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
     pub committer: CommitterLayer,
     pub pipeline: PipelineLayer,
-    /// Global rate limit (rows per second) shared across all pipelines.
-    pub total_max_rows_per_second: Option<u64>,
     /// Default per-pipeline rate limit (rows per second).
     /// Individual pipelines can override via their `ConcurrentLayer`.
     pub max_rows_per_second: Option<u64>,

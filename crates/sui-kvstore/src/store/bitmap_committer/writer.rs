@@ -21,7 +21,7 @@ use tracing::warn;
 use crate::bigtable::client::BigTableClient;
 use crate::bigtable::client::PartialWriteError;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
-use crate::rate_limiter::CompositeRateLimiter;
+use crate::rate_limiter::RateLimiter;
 use crate::tables;
 
 use super::BitmapIndexMetrics;
@@ -54,7 +54,7 @@ pub(super) struct Writer {
     pub(super) table: &'static str,
     pub(super) column: &'static str,
     pub(super) client: BigTableClient,
-    pub(super) rate_limiter: Arc<CompositeRateLimiter>,
+    pub(super) rate_limiter: Option<Arc<RateLimiter>>,
     pub(super) write_rx: mpsc::Receiver<Batch>,
     pub(super) generation_tx: mpsc::Sender<generation::Event>,
     pub(super) write_chunk_size: usize,
@@ -78,7 +78,7 @@ struct WriteContext {
     table: &'static str,
     column: &'static str,
     client: BigTableClient,
-    rate_limiter: Arc<CompositeRateLimiter>,
+    rate_limiter: Option<Arc<RateLimiter>>,
     generation_tx: mpsc::Sender<generation::Event>,
     rows_written: Arc<AtomicU64>,
     metrics: Arc<BitmapIndexMetrics>,
@@ -190,7 +190,9 @@ impl WriteContext {
     }
 
     async fn attempt_write_chunk(&self, chunk: Chunk) -> Attempt {
-        self.rate_limiter.acquire(chunk.rows.len()).await;
+        if let Some(rl) = &self.rate_limiter {
+            rl.acquire(chunk.rows.len()).await;
+        }
         let entries = make_entries(&chunk.rows, self.column);
 
         let write_start = Instant::now();

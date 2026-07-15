@@ -51,6 +51,7 @@ use crate::bigtable::proto::bigtable::v2::PingAndWarmRequest;
 use crate::bigtable::proto::bigtable::v2::PingAndWarmResponse;
 use crate::bigtable::proto::bigtable::v2::PrepareQueryRequest;
 use crate::bigtable::proto::bigtable::v2::PrepareQueryResponse;
+use crate::bigtable::proto::bigtable::v2::RateLimitInfo;
 use crate::bigtable::proto::bigtable::v2::ReadChangeStreamRequest;
 use crate::bigtable::proto::bigtable::v2::ReadChangeStreamResponse;
 use crate::bigtable::proto::bigtable::v2::ReadModifyWriteRowRequest;
@@ -205,6 +206,9 @@ struct MockState {
     read_rows_calls: Vec<ReadRowsCall>,
     /// Order in which `ReadRows` emits matching rows.
     read_rows_response_order: ReadRowsResponseOrder,
+    /// Optional `rate_limit_info` hint returned on every MutateRows response.
+    /// `None` (default) means responses omit the hint entirely.
+    rate_limit_info: Option<RateLimitInfo>,
 }
 
 /// Mock BigTable server with injectable failures and call recording.
@@ -238,6 +242,24 @@ impl MockBigtableServer {
     /// normally.
     pub fn fail_next_n_check_and_mutate(&self, n: usize) {
         self.check_and_mutate_failures.store(n, Ordering::Relaxed);
+    }
+
+    /// Set the `rate_limit_info` hint returned on every subsequent MutateRows
+    /// response. `factor` scales the client's target QPS; `period_secs` is the
+    /// minimum interval before the next adjustment takes effect.
+    pub async fn set_rate_limit_info(&self, factor: f64, period_secs: i64) {
+        self.state.lock().await.rate_limit_info = Some(RateLimitInfo {
+            period: Some(prost_types::Duration {
+                seconds: period_secs,
+                nanos: 0,
+            }),
+            factor,
+        });
+    }
+
+    /// Clear the `rate_limit_info` hint so subsequent MutateRows responses omit it.
+    pub async fn clear_rate_limit_info(&self) {
+        self.state.lock().await.rate_limit_info = None;
     }
 
     pub async fn pause_next_mutate_rows(&self) -> MutateRowsGate {
@@ -616,7 +638,7 @@ impl Bigtable for MockBigtableServer {
 
         let response = MutateRowsResponse {
             entries,
-            rate_limit_info: None,
+            rate_limit_info: state.rate_limit_info,
         };
 
         // Return as a single-item stream

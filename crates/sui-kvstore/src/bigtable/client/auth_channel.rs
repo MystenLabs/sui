@@ -16,6 +16,8 @@ use http::Response;
 use tonic::body::Body;
 use tonic::codegen::Service;
 
+const FEATURE_FLAGS: &str = "CAEoAQ==";
+
 /// Auth middleware that injects credentials onto any inner `Service`.
 #[derive(Clone)]
 pub(crate) struct AuthChannel<S> {
@@ -90,11 +92,37 @@ where
                     HeaderValue::from_str(format!("Bearer {}", token_string.as_str()).as_str())?;
                 request.headers_mut().insert("authorization", header);
             }
-            // enable reverse scan
-            let header = HeaderValue::from_static("CAE=");
+            // Advertise client-supported BigTable features via base64 FeatureFlags:
+            //   field 1 (reverse_scans)          -> tag byte 0x08, value 0x01
+            //   field 5 (mutate_rows_rate_limit2) -> tag byte 0x28, value 0x01
+            // "CAEoAQ==" decodes to [0x08, 0x01, 0x28, 0x01]. Field 5 opts into
+            // MutateRows server-side flow control WITH partial retries enabled.
+            // Field 3 (mutate_rows_rate_limit) is deliberately omitted: it disables
+            // partial retries, which write_entries relies on (PartialWriteError).
+            let header = HeaderValue::from_static(FEATURE_FLAGS);
             request.headers_mut().insert("bigtable-features", header);
 
             ready_inner.call(request).await.map_err(Into::into)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use base64::Engine;
+    use base64::engine::general_purpose::STANDARD;
+
+    use super::FEATURE_FLAGS;
+
+    #[test]
+    fn feature_flags_header_decodes_to_reverse_scan_and_rate_limit2() {
+        let decoded = STANDARD.decode(FEATURE_FLAGS).unwrap();
+
+        // FeatureFlags bytes:
+        //   0x08 = tag for field 1 (reverse_scans), 0x01 = true.
+        //   0x28 = tag for field 5 (mutate_rows_rate_limit2), 0x01 = true.
+        // Field 3 (mutate_rows_rate_limit) is intentionally not set because it
+        // disables partial retries.
+        assert_eq!(decoded, [0x08, 0x01, 0x28, 0x01]);
     }
 }

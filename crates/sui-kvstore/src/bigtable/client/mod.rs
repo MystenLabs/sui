@@ -4,6 +4,7 @@
 mod auth_channel;
 pub mod bitmap_query;
 mod channel_pool;
+mod write_limiter;
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -38,6 +39,7 @@ use auth_channel::AuthChannel;
 use channel_pool::ChannelPool;
 use channel_pool::ChannelPrimer;
 pub use channel_pool::PoolConfig;
+use write_limiter::WriteRateLimiter;
 
 use crate::CheckpointData;
 use crate::EpochData;
@@ -138,6 +140,7 @@ pub struct BigTableClient {
     client: BigtableInternalClient<AuthChannel<ChannelPool>>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
+    write_limiter: Arc<WriteRateLimiter>,
     app_profile_id: Option<String>,
 }
 
@@ -166,6 +169,7 @@ impl BigTableClient {
             client: BigtableInternalClient::new(auth_channel),
             client_name: client_name.to_string(),
             metrics: None,
+            write_limiter: WriteRateLimiter::new(None, client_name.to_string()),
             app_profile_id: None,
         })
     }
@@ -244,11 +248,14 @@ impl BigTableClient {
         let client = BigtableInternalClient::new(auth_channel).max_decoding_message_size(
             max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
         );
+        let metrics = registry.map(KvMetrics::new);
+        let write_limiter = WriteRateLimiter::new(metrics.clone(), client_name.clone());
         Ok(Self {
             table_prefix,
             client,
             client_name,
-            metrics: registry.map(KvMetrics::new),
+            metrics,
+            write_limiter,
             app_profile_id,
         })
     }
@@ -642,6 +649,14 @@ impl BigTableClient {
         if entries.is_empty() {
             return Ok(());
         }
+        let throttle_start = Instant::now();
+        self.write_limiter.acquire().await;
+        if let Some(metrics) = &self.metrics {
+            metrics
+                .kv_write_throttle_latency_ms
+                .with_label_values(&[&self.client_name])
+                .observe(throttle_start.elapsed().as_millis() as f64);
+        }
 
         let row_keys: Vec<Bytes> = entries.iter().map(|e| e.row_key.clone()).collect();
 
@@ -653,20 +668,37 @@ impl BigTableClient {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
-        let mut response = self.client.clone().mutate_rows(request).await?.into_inner();
+        let mut response = match self.client.clone().mutate_rows(request).await {
+            Ok(response) => response.into_inner(),
+            Err(status) => {
+                self.write_limiter.on_error(&status);
+                return Err(status.into());
+            }
+        };
         let mut failed_keys: Vec<MutationError> = Vec::new();
 
-        while let Some(part) = response.message().await? {
-            for entry in part.entries {
-                if let Some(status) = entry.status
-                    && status.code != 0
-                    && let Some(key) = row_keys.get(entry.index as usize)
-                {
-                    failed_keys.push(MutationError {
-                        key: key.clone(),
-                        code: status.code,
-                        message: status.message,
-                    });
+        loop {
+            match response.message().await {
+                Ok(Some(part)) => {
+                    self.write_limiter
+                        .on_response_part(part.rate_limit_info.as_ref());
+                    for entry in part.entries {
+                        if let Some(status) = entry.status
+                            && status.code != 0
+                            && let Some(key) = row_keys.get(entry.index as usize)
+                        {
+                            failed_keys.push(MutationError {
+                                key: key.clone(),
+                                code: status.code,
+                                message: status.message,
+                            });
+                        }
+                    }
+                }
+                Ok(None) => break,
+                Err(status) => {
+                    self.write_limiter.on_error(&status);
+                    return Err(status.into());
                 }
             }
         }
@@ -2451,5 +2483,44 @@ mod tests {
             tx_read_calls(&mock).await.is_empty(),
             "empty digest list must not issue a transactions ReadRows"
         );
+    }
+
+    #[tokio::test]
+    async fn write_entries_applies_and_clears_server_rate_limit_hints() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        mock.set_rate_limit_info(1.3, 1).await;
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
+            .await
+            .unwrap();
+        let entries = vec![tables::make_entry(
+            b"row0".to_vec(),
+            [("col", Bytes::from_static(b"value"))],
+            None,
+        )];
+
+        client
+            .write_entries("test_table", entries.clone())
+            .await
+            .unwrap();
+        client
+            .write_entries("test_table", entries.clone())
+            .await
+            .unwrap();
+
+        assert!(client.write_limiter.is_enabled());
+        assert!(
+            client.write_limiter.current_qps() > 10.0,
+            "server hint should raise qps above the default"
+        );
+
+        mock.clear_rate_limit_info().await;
+        // Disabling is inherently time-based: hintless responses only disable
+        // once `now` has passed the negotiated period, whose minimum is 1s.
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        client.write_entries("test_table", entries).await.unwrap();
+
+        assert!(!client.write_limiter.is_enabled());
     }
 }

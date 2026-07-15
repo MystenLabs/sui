@@ -24,7 +24,6 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 
-use crate::rate_limiter::CompositeRateLimiter;
 use crate::rate_limiter::RateLimiter;
 use sui_protocol_config::Chain;
 use sui_types::balance_change::BalanceChange;
@@ -412,22 +411,13 @@ impl BigTableIndexer {
         )
         .await?;
 
-        let global = config.total_max_rows_per_second.map(RateLimiter::new);
         let base_rps = config.max_rows_per_second;
 
         fn build_rate_limiter(
             layer_rps: Option<u64>,
             base_rps: Option<u64>,
-            global: &Option<Arc<RateLimiter>>,
-        ) -> Arc<CompositeRateLimiter> {
-            let mut limiters = Vec::new();
-            if let Some(rps) = layer_rps.or(base_rps) {
-                limiters.push(RateLimiter::new(rps));
-            }
-            if let Some(g) = global {
-                limiters.push(g.clone());
-            }
-            Arc::new(CompositeRateLimiter::new(limiters))
+        ) -> Option<Arc<RateLimiter>> {
+            layer_rps.or(base_rps).map(RateLimiter::new)
         }
 
         let base = ConcurrentConfig {
@@ -441,7 +431,6 @@ impl BigTableIndexer {
             let tx_bitmap_rate_limiter = build_rate_limiter(
                 pipeline.transaction_bitmap_index.max_rows_per_second,
                 base_rps,
-                &global,
             );
             store_runtime_builder = store_runtime_builder
                 .with_bitmap_committer::<TransactionBitmapProcessor>(
@@ -469,7 +458,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     CheckpointsPipeline,
                     &pipeline.checkpoints,
-                    build_rate_limiter(pipeline.checkpoints.max_rows_per_second, base_rps, &global),
+                    build_rate_limiter(pipeline.checkpoints.max_rows_per_second, base_rps),
                 ),
                 pipeline.checkpoints.finish(base.clone()),
             )
@@ -482,7 +471,6 @@ impl BigTableIndexer {
                     build_rate_limiter(
                         pipeline.checkpoints_by_digest.max_rows_per_second,
                         base_rps,
-                        &global,
                     ),
                 ),
                 pipeline.checkpoints_by_digest.finish(base.clone()),
@@ -493,11 +481,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     TransactionsPipeline,
                     &pipeline.transactions,
-                    build_rate_limiter(
-                        pipeline.transactions.max_rows_per_second,
-                        base_rps,
-                        &global,
-                    ),
+                    build_rate_limiter(pipeline.transactions.max_rows_per_second, base_rps),
                 ),
                 pipeline.transactions.finish(base.clone()),
             )
@@ -507,7 +491,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     ObjectsPipeline,
                     &pipeline.objects,
-                    build_rate_limiter(pipeline.objects.max_rows_per_second, base_rps, &global),
+                    build_rate_limiter(pipeline.objects.max_rows_per_second, base_rps),
                 ),
                 pipeline.objects.finish(base.clone()),
             )
@@ -517,7 +501,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     EpochStartPipeline,
                     &pipeline.epoch_start,
-                    build_rate_limiter(pipeline.epoch_start.max_rows_per_second, base_rps, &global),
+                    build_rate_limiter(pipeline.epoch_start.max_rows_per_second, base_rps),
                 ),
                 pipeline.epoch_start.finish(base.clone()),
             )
@@ -527,7 +511,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     EpochEndPipeline,
                     &pipeline.epoch_end,
-                    build_rate_limiter(pipeline.epoch_end.max_rows_per_second, base_rps, &global),
+                    build_rate_limiter(pipeline.epoch_end.max_rows_per_second, base_rps),
                 ),
                 pipeline.epoch_end.finish(base.clone()),
             )
@@ -537,11 +521,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     ProtocolConfigsPipeline(chain),
                     &pipeline.protocol_configs,
-                    build_rate_limiter(
-                        pipeline.protocol_configs.max_rows_per_second,
-                        base_rps,
-                        &global,
-                    ),
+                    build_rate_limiter(pipeline.protocol_configs.max_rows_per_second, base_rps),
                 ),
                 pipeline.protocol_configs.finish(base.clone()),
             )
@@ -551,7 +531,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     PackagesPipeline,
                     &pipeline.packages,
-                    build_rate_limiter(pipeline.packages.max_rows_per_second, base_rps, &global),
+                    build_rate_limiter(pipeline.packages.max_rows_per_second, base_rps),
                 ),
                 pipeline.packages.finish(base.clone()),
             )
@@ -561,11 +541,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     PackagesByIdPipeline,
                     &pipeline.packages_by_id,
-                    build_rate_limiter(
-                        pipeline.packages_by_id.max_rows_per_second,
-                        base_rps,
-                        &global,
-                    ),
+                    build_rate_limiter(pipeline.packages_by_id.max_rows_per_second, base_rps),
                 ),
                 pipeline.packages_by_id.finish(base.clone()),
             )
@@ -578,7 +554,6 @@ impl BigTableIndexer {
                     build_rate_limiter(
                         pipeline.packages_by_checkpoint.max_rows_per_second,
                         base_rps,
-                        &global,
                     ),
                 ),
                 pipeline.packages_by_checkpoint.finish(base.clone()),
@@ -589,11 +564,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     SystemPackagesPipeline,
                     &pipeline.system_packages,
-                    build_rate_limiter(
-                        pipeline.system_packages.max_rows_per_second,
-                        base_rps,
-                        &global,
-                    ),
+                    build_rate_limiter(pipeline.system_packages.max_rows_per_second, base_rps),
                 ),
                 pipeline.system_packages.finish(base.clone()),
             )
@@ -604,22 +575,15 @@ impl BigTableIndexer {
                     BigTableHandler::new(
                         TxSeqDigestPipeline,
                         &pipeline.tx_seq_digest,
-                        build_rate_limiter(
-                            pipeline.tx_seq_digest.max_rows_per_second,
-                            base_rps,
-                            &global,
-                        ),
+                        build_rate_limiter(pipeline.tx_seq_digest.max_rows_per_second, base_rps),
                     ),
                     pipeline.tx_seq_digest.finish(base.clone()),
                 )
                 .await?;
         }
         if alpha_pipelines.contains(&EVENT_BITMAP_INDEX_PIPELINE) {
-            let ev_bitmap_rate_limiter = build_rate_limiter(
-                pipeline.event_bitmap_index.max_rows_per_second,
-                base_rps,
-                &global,
-            );
+            let ev_bitmap_rate_limiter =
+                build_rate_limiter(pipeline.event_bitmap_index.max_rows_per_second, base_rps);
             store_runtime_builder = store_runtime_builder
                 .with_bitmap_committer::<EventBitmapProcessor>(
                     pipeline.event_bitmap_index.max_rows_or_default(),

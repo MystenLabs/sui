@@ -67,7 +67,7 @@ use crate::WatermarkV1;
 use crate::bigtable::client::BigTableClient;
 use crate::handlers::BitmapBatch;
 use crate::handlers::BitmapIndexProcessor;
-use crate::rate_limiter::CompositeRateLimiter;
+use crate::rate_limiter::RateLimiter;
 use crate::tables::watermarks::col;
 use crate::tables::watermarks::decode_v0;
 use crate::tables::watermarks::decode_v1;
@@ -279,7 +279,7 @@ impl BigTableStoreRuntimeBuilder {
         mut self,
         write_chunk_size: usize,
         write_concurrency: usize,
-        rate_limiter: Arc<CompositeRateLimiter>,
+        rate_limiter: Option<Arc<RateLimiter>>,
         registry: Option<&Registry>,
     ) -> Self
     where

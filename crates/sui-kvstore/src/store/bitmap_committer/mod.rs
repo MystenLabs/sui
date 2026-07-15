@@ -88,7 +88,7 @@ use tracing::warn;
 
 use crate::bigtable::client::BigTableClient;
 use crate::handlers::BitmapIndexValue;
-use crate::rate_limiter::CompositeRateLimiter;
+use crate::rate_limiter::RateLimiter;
 use crate::store::BitmapInitialWatermarks;
 
 pub(crate) use metrics::BitmapIndexMetrics;
@@ -220,7 +220,7 @@ pub(crate) struct BitmapCommitter {
     pub is_sealed: fn(u64, CommitterWatermark) -> bool,
     pub initial_watermarks: BitmapInitialWatermarks,
     pub client: BigTableClient,
-    pub rate_limiter: Arc<CompositeRateLimiter>,
+    pub rate_limiter: Option<Arc<RateLimiter>>,
     pub write_chunk_size: usize,
     pub write_concurrency: usize,
     pub metrics: Arc<BitmapIndexMetrics>,

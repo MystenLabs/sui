@@ -13,12 +13,6 @@ pub(crate) struct RateLimiter {
     burst: NonZeroU32,
 }
 
-/// A composed rate limiter that acquires tokens from one or more underlying limiters.
-/// Used to enforce both per-pipeline and global rate limits with a single `acquire` call.
-pub(crate) struct CompositeRateLimiter {
-    limiters: Vec<Arc<RateLimiter>>,
-}
-
 impl RateLimiter {
     pub(crate) fn new(max_rows_per_second: u64) -> Arc<Self> {
         let burst =
@@ -30,7 +24,7 @@ impl RateLimiter {
         })
     }
 
-    async fn acquire(&self, count: usize) {
+    pub(crate) async fn acquire(&self, count: usize) {
         let burst = self.burst.get();
         let mut remaining = count as u32;
         while remaining > 0 {
@@ -41,23 +35,5 @@ impl RateLimiter {
                 .expect("take <= burst, so this cannot fail");
             remaining -= take;
         }
-    }
-}
-
-impl CompositeRateLimiter {
-    pub(crate) fn new(limiters: Vec<Arc<RateLimiter>>) -> Self {
-        Self { limiters }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn noop() -> Self {
-        Self {
-            limiters: Vec::new(),
-        }
-    }
-
-    /// Acquire `count` tokens from every underlying limiter concurrently.
-    pub(crate) async fn acquire(&self, count: usize) {
-        futures::future::join_all(self.limiters.iter().map(|l| l.acquire(count))).await;
     }
 }
