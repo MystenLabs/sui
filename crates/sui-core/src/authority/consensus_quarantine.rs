@@ -209,6 +209,12 @@ impl ConsensusCommitOutput {
             .extend(deferral_keys.iter().cloned());
     }
 
+    /// Discards deferrals staged by this commit so they are never persisted. Used when the
+    /// epoch close deadline abandons all deferred transactions.
+    pub fn clear_deferred_transactions(&mut self) {
+        self.deferred_txns.clear();
+    }
+
     pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpoint) {
         self.pending_checkpoints.push(checkpoint);
     }

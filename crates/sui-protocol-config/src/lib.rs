@@ -366,6 +366,7 @@ const MAINNET_USDB: &str =
 //              from transaction effects instead of running-max withdraw amounts.
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
+//              Add an epoch close deadline failsafe for deferred transactions.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1988,6 +1989,12 @@ pub struct ProtocolConfig {
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 
+    /// Time after the scheduled epoch end (`next_reconfiguration_timestamp_ms`) at which epoch
+    /// close stops waiting for deferred transactions to drain: the epoch is closed even if
+    /// deferred transactions remain unscheduled. They are abandoned and can be resubmitted in the
+    /// next epoch. When unset, epoch close waits indefinitely.
+    epoch_close_deadline_ms: Option<u64>,
+
     /// DEPRECATED. Do not use.
     max_txn_cost_overage_per_object_in_commit: Option<u64>,
 
@@ -2888,6 +2895,8 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            epoch_close_deadline_ms: None,
 
             max_txn_cost_overage_per_object_in_commit: None,
 
@@ -4505,6 +4514,7 @@ impl ProtocolConfig {
                 130 => {
                     cfg.feature_flags.record_net_unsettled_object_withdraws = true;
                     cfg.feature_flags.enable_init_on_upgrade = true;
+                    cfg.epoch_close_deadline_ms = Some(120_000);
                     cfg.scratch_add_cost_base = Some(13);
                     cfg.scratch_read_cost_base = Some(13);
                     cfg.scratch_read_value_cost = Some(1);
