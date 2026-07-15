@@ -311,18 +311,23 @@ impl SuiTxValidator {
 
         if !claimed_immutable_ids.is_empty() {
             assert_reachable!("transaction has immutable input object claims");
-            let owned_object_refs: HashSet<ObjectRef> = inner_tx
-                .data()
-                .transaction_data()
-                .input_objects()?
-                .iter()
-                .filter_map(|obj| match obj {
-                    InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
-                    _ => None,
-                })
-                .collect();
-            self.verify_immutable_object_claims(&claimed_immutable_ids, owned_object_refs)?;
         }
+        // Runs even when nothing is claimed: an immutable input with an empty claims list
+        // must be vote-rejected (ImmutableObjectNotClaimed). Post-consensus conflict
+        // detection derives lock sets from these claims, so an under-claiming transaction
+        // must never reach quorum. The objects were just read by
+        // validate_owned_object_versions, so this re-read is cache-hot.
+        let owned_object_refs: HashSet<ObjectRef> = inner_tx
+            .data()
+            .transaction_data()
+            .input_objects()?
+            .iter()
+            .filter_map(|obj| match obj {
+                InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
+                _ => None,
+            })
+            .collect();
+        self.verify_immutable_object_claims(&claimed_immutable_ids, owned_object_refs)?;
 
         Ok(())
     }
@@ -366,6 +371,11 @@ impl SuiTxValidator {
             let input_ref = input_refs_by_id.get(object_id).unwrap();
             match obj_opt {
                 Some(o) => {
+                    // Warm the live-object cache for post-consensus conflict detection.
+                    // Rejected votes warm too - the observed version is a valid lower
+                    // bound either way. Absent objects are deliberately not recorded:
+                    // this read cannot distinguish deletion tombstones from true absence.
+                    self.authority_state.live_object_cache().record_object(&o);
                     // The object read here might drift from the one read earlier in validate_owned_object_versions(),
                     // so re-check if input reference still matches actual object.
                     let actual_ref = o.compute_object_reference();

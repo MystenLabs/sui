@@ -18,6 +18,7 @@ use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::gasless_rate_limiter::ConsensusGaslessCounter;
 use crate::jsonrpc_index::CoinIndexKey2;
+use crate::live_object_cache::LiveObjectCache;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
@@ -337,6 +338,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_dropped_transactions: IntCounterVec,
+    pub consensus_owned_object_lock_resolutions: IntCounterVec,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
     pub accumulator_deposits: IntCounter,
@@ -701,6 +703,15 @@ impl AuthorityMetrics {
                 &["reason"],
                 registry,
             ).unwrap(),
+            consensus_owned_object_lock_resolutions: register_int_counter_vec_with_registry!(
+                "consensus_owned_object_lock_resolutions",
+                "Owned-object lock state resolutions in the consensus handler, by source. \
+                 quarantine/deferred/cache resolve from consensus in-memory state; \
+                 objects_db is an authoritative latest-object read (in-memory object \
+                 cache first, then DB); backstop is a residual lock-table point read",
+                &["source"],
+                registry,
+            ).unwrap(),
             consensus_handler_max_object_costs: register_int_gauge_vec_with_registry!(
                 "consensus_handler_max_congestion_control_object_costs",
                 "Max object costs for congestion control in the current consensus commit",
@@ -996,6 +1007,10 @@ pub struct AuthorityState {
 
     /// Consumed by gasless tx rate limiter.
     pub(crate) consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
+
+    /// Lower bounds on latest object versions, warmed by vote-time validation and
+    /// consumed by post-consensus owned-object conflict detection.
+    live_object_cache: Arc<LiveObjectCache>,
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
@@ -3760,6 +3775,7 @@ impl AuthorityState {
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
+            live_object_cache: Arc::new(LiveObjectCache::new()),
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
@@ -3833,6 +3849,10 @@ impl AuthorityState {
     // TODO: Consolidate our traits to reduce the number of methods here.
     pub fn get_object_cache_reader(&self) -> &Arc<dyn ObjectCacheRead> {
         &self.execution_cache_trait_pointers.object_cache_reader
+    }
+
+    pub fn live_object_cache(&self) -> &Arc<LiveObjectCache> {
+        &self.live_object_cache
     }
 
     pub fn get_transaction_cache_reader(&self) -> &Arc<dyn TransactionCacheRead> {

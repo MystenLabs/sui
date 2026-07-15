@@ -492,8 +492,10 @@ async fn test_submit_transaction_consensus_message_processed() {
 
 // Test that resubmitting a consensus-processed transaction whose owned inputs are no
 // longer live (e.g. a dropped owned-object conflict loser after the winner executed)
-// returns the concrete, non-retriable validation error instead of the generic,
-// retriable TransactionProcessing suppression.
+// returns a concrete, non-retriable error instead of the generic, retriable
+// TransactionProcessing suppression. The conflict resolution derives "consumed since
+// claim" from the objects table and names the winner from the live object's
+// previous_transaction.
 #[tokio::test]
 async fn test_submit_transaction_consensus_message_processed_with_stale_inputs() {
     let test_context = TestContext::new().await;
@@ -543,11 +545,10 @@ async fn test_submit_transaction_consensus_message_processed_with_stale_inputs()
             assert!(
                 matches!(
                     error.as_inner(),
-                    SuiErrorKind::UserInputError {
-                        error: UserInputError::ObjectVersionUnavailableForConsumption { .. }
-                    }
+                    SuiErrorKind::ObjectLockConflict { pending_transaction, .. }
+                        if *pending_transaction == *winner.digest()
                 ),
-                "expected stale-version rejection, got: {error}"
+                "expected lock-conflict rejection naming the winner, got: {error}"
             );
         }
         other => panic!("Expected Rejected response, got {other:?}"),
