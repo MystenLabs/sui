@@ -35,7 +35,10 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
-use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader, RuntimeObjectResolver};
+use sui_types::storage::{
+    BackingPackageStore, ObjectStore, PackageObject, ReadStore, RpcStateReader,
+    RuntimeObjectResolver,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
@@ -722,6 +725,12 @@ impl<T, V: store::SimulatorStore> ObjectStore for Simulacrum<T, V> {
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         self.store.get_object_by_key(object_id, version)
+    }
+}
+
+impl<T, V: store::SimulatorStore> BackingPackageStore for Simulacrum<T, V> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        self.store.get_package_object(package_id)
     }
 }
 

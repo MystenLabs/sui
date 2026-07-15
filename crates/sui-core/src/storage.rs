@@ -42,6 +42,7 @@ use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::WriteStore;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
+use sui_types::storage::{BackingPackageStore, PackageObject};
 use sui_types::storage::{ObjectKey, OverlayBackingPackageStore, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 use tap::TapFallible;
@@ -531,6 +532,15 @@ impl ReadStore for RestReadStore {
     }
 }
 
+impl BackingPackageStore for RestReadStore {
+    fn get_package_object(&self, _package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        Err(SuiErrorKind::UnsupportedFeatureError {
+            error: "RestReadStore does not support loading package objects".to_string(),
+        }
+        .into())
+    }
+}
+
 impl RuntimeObjectResolver for RestReadStore {
     fn read_child_object(
         &self,
@@ -785,6 +795,15 @@ impl ReadStore for RpcStoreReadStore {
         digest: &TransactionDigest,
     ) -> Option<CheckpointSequenceNumber> {
         self.rocks.get_transaction_checkpoint(digest)
+    }
+}
+
+impl BackingPackageStore for RpcStoreReadStore {
+    fn get_package_object(&self, _package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        Err(SuiErrorKind::UnsupportedFeatureError {
+            error: "RpcStoreReadStore does not support loading package objects".to_string(),
+        }
+        .into())
     }
 }
 

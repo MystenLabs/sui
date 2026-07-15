@@ -187,7 +187,7 @@ impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
-pub trait RuntimeObjectResolver {
+pub trait RuntimeObjectResolver: BackingPackageStore {
     /// `child` must have an `ObjectOwner` ownership equal to `owner`.
     fn read_child_object(
         &self,
