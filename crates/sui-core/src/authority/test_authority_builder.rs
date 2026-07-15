@@ -18,6 +18,7 @@ use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
 use crate::jsonrpc_index::IndexStore;
+use crate::live_object_cache::LiveObjectCache;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
@@ -329,6 +330,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             0,
             Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
             None,
+            Arc::new(LiveObjectCache::new()),
         )
         .expect("failed to create authority per epoch store");
 

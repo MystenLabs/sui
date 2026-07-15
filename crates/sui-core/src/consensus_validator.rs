@@ -211,6 +211,31 @@ impl SuiTxValidator {
             let tx_digest = *tx.tx().digest();
             if let Err(error) = self.vote_transaction(epoch_store, tx) {
                 debug!(?tx_digest, "Voting to reject transaction: {error}");
+                // A not-found input is usually pipelined: created by a transaction that
+                // has not executed locally yet. Warm the live-object cache with an
+                // authoritative (tombstone-aware) observation so the commit handler can
+                // resolve the ref from memory if the transaction still gets finalized
+                // by validators that were further ahead.
+                if let SuiErrorKind::UserInputError {
+                    error: UserInputError::ObjectNotFound { object_id, .. },
+                } = error.as_inner()
+                {
+                    let live_object_cache = self.authority_state.live_object_cache();
+                    match self
+                        .authority_state
+                        .get_object_cache_reader()
+                        .get_latest_object_ref_or_tombstone(*object_id)
+                    {
+                        Some(latest_ref) => live_object_cache.record(
+                            *object_id,
+                            crate::live_object_cache::VersionLowerBound::Version {
+                                version: latest_ref.1,
+                                immutable: false,
+                            },
+                        ),
+                        None => live_object_cache.record_absent(*object_id),
+                    }
+                }
                 self.metrics
                     .transaction_reject_votes
                     .with_label_values(&[error.to_variant_name()])

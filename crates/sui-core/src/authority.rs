@@ -3789,7 +3789,9 @@ impl AuthorityState {
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
-            live_object_cache: Arc::new(LiveObjectCache::new()),
+            // Shared with the epoch store (and its successors), which bumps consumed
+            // bounds when the quarantine flushes lock entries.
+            live_object_cache: epoch_store.live_object_cache().clone(),
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,

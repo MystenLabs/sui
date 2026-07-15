@@ -30,7 +30,7 @@
 //! advances.
 
 use moka::sync::SegmentedCache as MokaCache;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::object::Object;
 
 /// A lower bound on the latest version of an object, from an authoritative
@@ -117,6 +117,24 @@ impl LiveObjectCache {
     /// returns `None` for a deleted object must not be recorded as absent.
     pub fn record_absent(&self, id: ObjectID) {
         self.record(id, VersionLowerBound::KnownAbsent);
+    }
+
+    /// Record that `obj_ref` was consumed: its holder executed, so the latest
+    /// version is at least one past the consumed version. Called when the
+    /// quarantine (or the deferred-locks map) drops a flushed commit's lock
+    /// refs — the flush gate guarantees the holder executed — and MUST be
+    /// called before the corresponding in-memory lock entry is removed, so
+    /// that any conflict resolution that misses the memory layers observes
+    /// the bump. This ordering is what makes a cached bound at or below a
+    /// claimed version a decisive "unclaimed" verdict.
+    pub fn record_consumed(&self, obj_ref: &ObjectRef) {
+        self.record(
+            obj_ref.0,
+            VersionLowerBound::Version {
+                version: obj_ref.1.next(),
+                immutable: false,
+            },
+        );
     }
 
     pub fn get(&self, id: &ObjectID) -> Option<VersionLowerBound> {
