@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint WS1011]: unnecessary `entry` on a `public` function
+warning[Sui Lint W01011]: unnecessary `entry` on a `public` function
   ┌─ tests/sui_mode/linter/warn_lint_public_entry.move:5:12
   │
 4 │     #[warn(lint(public_entry))]

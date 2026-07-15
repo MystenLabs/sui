@@ -8,7 +8,7 @@ use crate::{
     cfgir::visitor::{same_value_exp, simple_visitor},
     diag,
     hlir::ast as H,
-    linters::CoreLintCode,
+    linters::StyleCodes,
     parser::ast::BinOp_,
 };
 
@@ -39,7 +39,7 @@ simple_visitor!(
             let lhs_msg = "This expression";
             let rhs_msg = "Will always evaluate to the same value as this expression";
             self.reporter.add_diag(diag!(
-                CoreLintCode::EqualOperands.diag_info(),
+                StyleCodes::EqualOperands.diag_info(),
                 (e.exp.loc, msg),
                 (lhs.exp.loc, lhs_msg),
                 (rhs.exp.loc, rhs_msg)

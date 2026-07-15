@@ -5,7 +5,7 @@
 
 use crate::{
     diag, ice,
-    linters::CoreLintCode,
+    linters::StyleCodes,
     typing::{
         ast::{self as T, UnannotatedExp_},
         visitor::simple_visitor,
@@ -25,7 +25,7 @@ simple_visitor!(
                 // TODO probably too noisy for now, we would need more information about
                 // blocks were added by the programmer
                 // self.env.add_diag(diag!(
-                //     CoreLintCode::UnnecessaryBlock.diag_info(),
+                //     StyleCodes::UnnecessaryBlock.diag_info(),
                 //     (e.exp.loc, "Unnecessary block expression '{}')"
                 //     (e.exp.loc, if_msg),
                 // ));
@@ -36,7 +36,7 @@ simple_visitor!(
                     if i != last && stmt.value.is_unit(&self.reporter) {
                         let msg = "Unnecessary unit in sequence '();'. Consider removing";
                         self.add_diag(diag!(
-                            CoreLintCode::UnnecessaryUnit.diag_info(),
+                            StyleCodes::UnnecessaryUnit.diag_info(),
                             (stmt.loc, msg),
                         ));
                     }
@@ -54,7 +54,7 @@ simple_visitor!(
             let u_msg = "Unnecessary unit '()'";
             let if_msg = "Consider negating the 'if' condition and simplifying";
             let mut diag = diag!(
-                CoreLintCode::UnnecessaryUnit.diag_info(),
+                StyleCodes::UnnecessaryUnit.diag_info(),
                 (e_true.exp.loc, u_msg),
                 (e_cond.exp.loc, if_msg),
             );
@@ -68,7 +68,7 @@ simple_visitor!(
             let if_msg = "An 'if' without an 'else' has an implicit 'else ()'. \
                             Consider removing the 'else' branch";
             let mut diag = diag!(
-                CoreLintCode::UnnecessaryUnit.diag_info(),
+                StyleCodes::UnnecessaryUnit.diag_info(),
                 (e_false.exp.loc, u_msg),
                 (e.exp.loc, if_msg),
             );

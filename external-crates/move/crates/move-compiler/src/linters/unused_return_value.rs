@@ -24,7 +24,7 @@ use crate::{
         },
         translate::{DisplayVar, display_var},
     },
-    linters::CoreLintCode,
+    linters::StyleCodes,
     parser::ast::Ability_,
     sui_mode::{SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME},
 };
@@ -317,7 +317,7 @@ fn unused_return_value_warning(call_site: CallSite) -> Diagnostic {
     } = call_site;
     let msg = "Unused return value. This function takes no '&mut' arguments, \
                so its result is the only observable effect of the call";
-    let mut d = diag!(CoreLintCode::UnusedReturnValue.diag_info(), (loc, msg));
+    let mut d = diag!(StyleCodes::UnusedReturnValue.diag_info(), (loc, msg));
     if tx_context_exempted {
         d.add_note(
             "'TxContext' is not considered a mutable reference input for the purposes of this lint.",

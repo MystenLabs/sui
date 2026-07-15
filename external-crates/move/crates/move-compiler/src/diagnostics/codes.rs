@@ -24,15 +24,13 @@ pub type ExternalPrefix = Option<&'static str>;
 /// within a category.
 pub const DIAGNOSTIC_FILTER_WILDCARD: u8 = u8::MAX;
 
-/// The ID for a diagnostic, consisting of an optional prefix, an optional code tag (a letter
-/// rendered between the severity and the category, e.g. the `S` in `Lint WS2001`), a category,
-/// and a code. Also used as a filter key with [`ANY`] wildcards for category/code.
+/// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.
+/// Also used as a filter key with [`ANY`] wildcards for category/code.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct DiagnosticsID {
     pub prefix: ExternalPrefix,
     pub category: u8,
     pub code: u8,
-    pub tag: &'static str,
 }
 
 impl DiagnosticsID {
@@ -41,7 +39,6 @@ impl DiagnosticsID {
             prefix,
             category,
             code,
-            tag: "",
         }
     }
 
@@ -50,7 +47,6 @@ impl DiagnosticsID {
             prefix,
             category,
             code: DIAGNOSTIC_FILTER_WILDCARD,
-            tag: "",
         }
     }
 
@@ -59,13 +55,7 @@ impl DiagnosticsID {
             prefix,
             category: DIAGNOSTIC_FILTER_WILDCARD,
             code: DIAGNOSTIC_FILTER_WILDCARD,
-            tag: "",
         }
-    }
-
-    pub const fn with_code_tag(mut self, tag: &'static str) -> Self {
-        self.tag = tag;
-        self
     }
 }
 
@@ -75,7 +65,6 @@ pub struct DiagnosticInfo {
     category: u8,
     code: u8,
     external_prefix: ExternalPrefix,
-    code_tag: &'static str,
     message: &'static str,
 }
 
@@ -95,7 +84,6 @@ pub(crate) trait DiagnosticCode: Copy {
             category,
             code,
             external_prefix: None,
-            code_tag: "",
             message,
         }
     }
@@ -107,11 +95,8 @@ pub(crate) trait DiagnosticCode: Copy {
 
 /// A custom DiagnosticInfo.
 /// The diagnostic will get rendered as
-/// `"[{external_prefix}{severity}{code_tag}{category}{code}] {message}"`. Untagged diagnostic
-/// categories use two digits to preserve existing codes; tagged diagnostic categories use one
-/// digit to keep the overall code length unchanged.
-/// Note, this will panic if `category > 99`, or when adding a code tag to a category greater than
-/// `9`.
+/// `"[{external_prefix}{severity}{category}{code}] {message}"`.
+/// Note, this will panic if `category > 99`
 pub const fn custom(
     external_prefix: &'static str,
     severity: Severity,
@@ -125,7 +110,6 @@ pub const fn custom(
         category,
         code,
         external_prefix: Some(external_prefix),
-        code_tag: "",
         message,
     }
 }
@@ -436,36 +420,21 @@ impl DiagnosticInfo {
             Severity::Note => "I",
             Severity::Bug => "ICE",
         };
-        let category_width = if self.code_tag.is_empty() {
-            debug_assert!(self.category <= 99);
-            2
-        } else {
-            debug_assert!(self.category <= 9);
-            1
-        };
+        debug_assert!(self.category <= 99);
         let string_code = if let Some(ext) = self.external_prefix {
             format!(
-                "{ext}{sev_prefix}{tag}{category:0category_width$}{code:03}",
-                tag = self.code_tag,
+                "{ext}{sev_prefix}{category:02}{code:03}",
                 category = self.category,
                 code = self.code,
             )
         } else {
             format!(
-                "{sev_prefix}{tag}{category:0category_width$}{code:03}",
-                tag = self.code_tag,
+                "{sev_prefix}{category:02}{code:03}",
                 category = self.category,
                 code = self.code,
             )
         };
         (string_code, self.message)
-    }
-
-    pub const fn with_code_tag(mut self, tag: &'static str) -> Self {
-        assert!(tag.len() <= 1);
-        assert!(tag.is_empty() || self.category <= 9);
-        self.code_tag = tag;
-        self
     }
 
     pub(crate) fn set_severity(mut self, severity: Severity) -> Self {
@@ -490,7 +459,6 @@ impl DiagnosticInfo {
             prefix: self.external_prefix,
             category: self.category,
             code: self.code,
-            tag: self.code_tag,
         }
     }
 

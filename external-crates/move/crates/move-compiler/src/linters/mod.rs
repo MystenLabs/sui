@@ -7,7 +7,6 @@ use crate::{
     cfgir::visitor::{AbstractInterpreterVisitor, CFGIRVisitor},
     command_line::compiler::Visitor,
     diagnostics::{codes::DiagnosticsID, filter::FilterName},
-    editions::Flavor,
     typing::visitor::TypingVisitor,
 };
 
@@ -46,26 +45,12 @@ pub enum LinterDiagnosticCategory {
     Style,
 }
 
-pub(crate) const fn lint_category_code(category: LinterDiagnosticCategory) -> u8 {
-    let category = category as u8;
-    assert!(category <= 9);
-    category
-}
-
-/// Each flavor's lints carry the flavor's letter in their rendered code, e.g. Sui's `Lint WS2001`.
-pub(crate) const fn lint_code_tag(flavor: Flavor) -> &'static str {
-    match flavor {
-        Flavor::Core => "",
-        Flavor::Sui => "S",
-    }
-}
-
 /// Declares a lint code enum and its `(category, code, filter_name)` table for one lint source.
 /// Codes are positional and published — append-only, never reorder or insert.
 macro_rules! lints {
     (
         $enum_name:ident,
-        $code_tag:expr,
+        $warning_prefix:expr,
         $filters_const:ident,
         $(
             ($lint_name:ident, $category:ident, $filter_name:expr, $code_msg:expr)
@@ -87,9 +72,7 @@ macro_rules! lints {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
                     $(Self::$lint_name => (
-                        $crate::linters::lint_category_code(
-                            $crate::linters::LinterDiagnosticCategory::$category,
-                        ),
+                        $crate::linters::LinterDiagnosticCategory::$category as u8,
                         code,
                         $code_msg,
                     ),)*
@@ -102,9 +85,7 @@ macro_rules! lints {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
                     $(Self::$lint_name => (
-                        $crate::linters::lint_category_code(
-                            $crate::linters::LinterDiagnosticCategory::$category,
-                        ),
+                        $crate::linters::LinterDiagnosticCategory::$category as u8,
                         code,
                         $filter_name,
                     ),)*
@@ -114,13 +95,12 @@ macro_rules! lints {
             pub(crate) const fn diag_info(&self) -> $crate::diagnostics::codes::DiagnosticInfo {
                 let (category, code, msg) = self.category_code_and_message();
                 $crate::diagnostics::codes::custom(
-                    $crate::linters::LINT_WARNING_PREFIX,
+                    $warning_prefix,
                     $crate::diagnostics::codes::Severity::Warning,
                     category,
                     code,
                     msg,
                 )
-                .with_code_tag($code_tag)
             }
         }
 
@@ -134,8 +114,8 @@ macro_rules! lints {
 pub(crate) use lints;
 
 lints!(
-    CoreLintCode,
-    lint_code_tag(Flavor::Core),
+    StyleCodes,
+    LINT_WARNING_PREFIX,
     CORE_LINT_WARNING_FILTERS,
     (
         ConstantNaming,
@@ -216,22 +196,17 @@ pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub(crate) fn filters_from_table(
-    code_tag: &'static str,
+    warning_prefix: &'static str,
     table: &[(u8, u8, &'static str)],
 ) -> Vec<(FilterName, Vec<DiagnosticsID>)> {
-    // The `all` wildcard spans code tags, so both lint sources register the same id for it;
-    // `add_custom_known_filters` dedups the second registration.
     let mut filters = vec![(
         Symbol::from(crate::diagnostics::filter::FILTER_ALL),
-        vec![DiagnosticsID::all(Some(LINT_WARNING_PREFIX))],
+        vec![DiagnosticsID::all(Some(warning_prefix))],
     )];
     filters.extend(table.iter().map(|(category, code, filter_name)| {
         (
             Symbol::from(*filter_name),
-            vec![
-                DiagnosticsID::exact(Some(LINT_WARNING_PREFIX), *category, *code)
-                    .with_code_tag(code_tag),
-            ],
+            vec![DiagnosticsID::exact(Some(warning_prefix), *category, *code)],
         )
     }));
     filters
@@ -240,7 +215,7 @@ pub(crate) fn filters_from_table(
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
-        filters_from_table(lint_code_tag(Flavor::Core), CORE_LINT_WARNING_FILTERS),
+        filters_from_table(LINT_WARNING_PREFIX, CORE_LINT_WARNING_FILTERS),
     )
 }
 
@@ -274,7 +249,6 @@ mod tests {
     // A failure means a table edit renumbered existing lints — append instead.
     #[test]
     fn core_lint_code_assignments_are_stable() {
-        assert_eq!(lint_code_tag(Flavor::Core), "");
         let expected: &[(u8, u8, &str)] = &[
             (4, 1, "constant_naming"),
             (4, 2, "while_true"),

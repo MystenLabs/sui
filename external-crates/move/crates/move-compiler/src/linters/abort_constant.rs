@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::PreCompiledProgramInfo;
 use crate::diagnostics::DiagnosticReporter;
 use crate::diagnostics::filter::FilterScope;
-use crate::linters::CoreLintCode;
+use crate::linters::StyleCodes;
 use crate::{
     cfgir::{
         ast as G,
@@ -91,7 +91,7 @@ impl Context<'_> {
 
         if !is_constant {
             let mut diag = diag!(
-                CoreLintCode::AbortWithoutConstant.diag_info(),
+                StyleCodes::AbortWithoutConstant.diag_info(),
                 (loc, "Prefer using a named constant.")
             );
 

@@ -702,7 +702,7 @@ impl Diagnostics {
         inner.filtered_source_diagnostics.iter().for_each(|d| {
             if d.info.external_prefix() == Some(prefix) {
                 filtered_diags_num += 1;
-                unique.insert(d.info.id());
+                unique.insert((d.info.category(), d.info.code()));
             }
         });
         (filtered_diags_num, unique.len())
@@ -1146,10 +1146,11 @@ mod tests {
     use move_symbol_pool::Symbol;
     use std::collections::HashMap;
 
-    const LINT_PREFIX: &str = "Lint ";
+    const CORE_LINT_PREFIX: &str = "Lint ";
+    const SUI_LINT_PREFIX: &str = "Sui Lint ";
 
-    fn lint_info(tag: &'static str, message: &'static str) -> DiagnosticInfo {
-        custom(LINT_PREFIX, Severity::Warning, 4, 2, message).with_code_tag(tag)
+    fn lint_info(prefix: &'static str, message: &'static str) -> DiagnosticInfo {
+        custom(prefix, Severity::Warning, 4, 2, message)
     }
 
     fn diagnostic(info: DiagnosticInfo, loc: Loc) -> Diagnostic {
@@ -1162,7 +1163,7 @@ mod tests {
     }
 
     #[test]
-    fn json_diagnostic_preserves_rendered_code_tag() {
+    fn json_diagnostic_preserves_lint_prefix() {
         let source = "x";
         let file_hash = FileHash::new(source);
         let loc = Loc::new(file_hash, 0, 1);
@@ -1171,29 +1172,18 @@ mod tests {
             (Symbol::from("test.move"), Arc::<str>::from(source)),
         )]));
 
-        let core_json = diagnostic(lint_info("", "Core lint"), loc).to_json(&mapped_files);
-        let sui_json = diagnostic(lint_info("S", "Sui lint"), loc).to_json(&mapped_files);
+        let core_json =
+            diagnostic(lint_info(CORE_LINT_PREFIX, "Core lint"), loc).to_json(&mapped_files);
+        let sui_json =
+            diagnostic(lint_info(SUI_LINT_PREFIX, "Sui lint"), loc).to_json(&mapped_files);
 
         assert_eq!(core_json.rendered_code, "Lint W04002");
-        assert_eq!(sui_json.rendered_code, "Lint WS4002");
-        assert_eq!(core_json.rendered_code.len(), sui_json.rendered_code.len());
+        assert_eq!(sui_json.rendered_code, "Sui Lint W04002");
         assert_eq!(sui_json.category, 4);
         assert_eq!(sui_json.code, 2);
         assert_eq!(
             serde_json::to_value(sui_json).unwrap()["rendered_code"],
-            "Lint WS4002",
-        );
-    }
-
-    #[test]
-    fn filtered_lint_count_distinguishes_code_tags() {
-        let mut diagnostics = Diagnostics::new();
-        diagnostics.add_source_filtered(diagnostic(lint_info("", "Core lint"), Loc::invalid()));
-        diagnostics.add_source_filtered(diagnostic(lint_info("S", "Sui lint"), Loc::invalid()));
-
-        assert_eq!(
-            diagnostics.filtered_source_diags_with_prefix(LINT_PREFIX),
-            (2, 2),
+            "Sui Lint W04002",
         );
     }
 }

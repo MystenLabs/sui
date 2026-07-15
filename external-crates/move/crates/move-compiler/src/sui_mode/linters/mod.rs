@@ -5,10 +5,9 @@ use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::Visitor,
     diagnostics::{codes::DiagnosticsID, filter::FilterName},
-    editions::Flavor,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{ALLOW_ATTR_CATEGORY, LintLevel, filters_from_table, lint_code_tag, lints},
+    linters::{ALLOW_ATTR_CATEGORY, LintLevel, filters_from_table, lints},
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
@@ -70,11 +69,12 @@ pub const RANDOM_STRUCT_NAME: &str = "Random";
 pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
+pub const SUI_LINT_WARNING_PREFIX: &str = "Sui Lint ";
 
 // Append-only: codes are positional and published (see `lints!`).
 lints!(
     SuiLintCode,
-    lint_code_tag(Flavor::Sui),
+    SUI_LINT_WARNING_PREFIX,
     SUI_LINT_WARNING_FILTERS,
     (
         ShareOwned,
@@ -159,7 +159,7 @@ lints!(
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
-        filters_from_table(lint_code_tag(Flavor::Sui), SUI_LINT_WARNING_FILTERS),
+        filters_from_table(SUI_LINT_WARNING_PREFIX, SUI_LINT_WARNING_FILTERS),
     )
 }
 
@@ -211,7 +211,6 @@ mod tests {
     // A failure means a table edit renumbered existing lints — append instead.
     #[test]
     fn sui_lint_code_assignments_are_stable() {
-        assert_eq!(lint_code_tag(Flavor::Sui), "S");
         let expected: &[(u8, u8, &str)] = &[
             (2, 1, "share_owned"),
             (4, 2, "self_transfer"),

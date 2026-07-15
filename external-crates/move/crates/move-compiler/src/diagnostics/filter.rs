@@ -121,8 +121,8 @@ impl std::fmt::Display for FilterKind {
 enum FilterTarget {
     /// Matches a single diagnostic by its exact code ID.
     Diagnostic(DiagnosticsID),
-    /// Matches all diagnostics in a category, scoped to a prefix and code tag.
-    Category(ExternalPrefix, &'static str, u8),
+    /// Matches all diagnostics in a category, scoped to a prefix.
+    Category(ExternalPrefix, u8),
     /// Matches all diagnostics with the given prefix. `None` matches unprefixed diagnostics
     /// only — this is what user-facing `#[allow(all)]` maps to.
     Prefix(ExternalPrefix),
@@ -135,9 +135,7 @@ impl From<DiagnosticsID> for FilterTarget {
         use crate::diagnostics::codes::DIAGNOSTIC_FILTER_WILDCARD;
         match (id.category, id.code) {
             (DIAGNOSTIC_FILTER_WILDCARD, _) => FilterTarget::Prefix(id.prefix),
-            (_, DIAGNOSTIC_FILTER_WILDCARD) => {
-                FilterTarget::Category(id.prefix, id.tag, id.category)
-            }
+            (_, DIAGNOSTIC_FILTER_WILDCARD) => FilterTarget::Category(id.prefix, id.category),
             _ => FilterTarget::Diagnostic(id),
         }
     }
@@ -431,9 +429,7 @@ impl FilterScope {
         self.0.filter_entries.iter().map(|(target, kind)| {
             let id = match target {
                 FilterTarget::Diagnostic(id) => *id,
-                FilterTarget::Category(prefix, tag, cat) => {
-                    DiagnosticsID::category(*prefix, *cat).with_code_tag(tag)
-                }
+                FilterTarget::Category(prefix, cat) => DiagnosticsID::category(*prefix, *cat),
                 FilterTarget::Prefix(prefix) => DiagnosticsID::all(*prefix),
                 FilterTarget::AllForDependency => DiagnosticsID::all(None),
             };
@@ -534,7 +530,7 @@ impl FilterStack {
     fn resolve(&self, key: DiagnosticsID) -> Option<Resolved<'_>> {
         let candidates = [
             FilterTarget::Diagnostic(key),
-            FilterTarget::Category(key.prefix, key.tag, key.category),
+            FilterTarget::Category(key.prefix, key.category),
             FilterTarget::Prefix(key.prefix),
             FilterTarget::AllForDependency,
         ];

@@ -5,7 +5,7 @@
 use move_proc_macros::growing_stack;
 
 use crate::expansion::ast::Value;
-use crate::linters::CoreLintCode;
+use crate::linters::StyleCodes;
 use crate::{
     diag,
     expansion::ast::Value_,
@@ -37,7 +37,7 @@ simple_visitor!(
                     the condition directly, i.e. '{negation}cond'",
                 );
                 self.add_diag(diag!(
-                    CoreLintCode::UnnecessaryConditional.diag_info(),
+                    StyleCodes::UnnecessaryConditional.diag_info(),
                     (exp.exp.loc, msg)
                 ));
             }
@@ -45,7 +45,7 @@ simple_visitor!(
                 let msg = "Detected a redundant conditional expression 'if (..) v else v', where each \
                     branch results in the same value 'v'. Consider using the value directly";
                 self.add_diag(diag!(
-                    CoreLintCode::UnnecessaryConditional.diag_info(),
+                    StyleCodes::UnnecessaryConditional.diag_info(),
                     (exp.exp.loc, msg),
                     (vtrue.loc, "This value"),
                     (vfalse.loc, "is the same as this value"),
@@ -64,7 +64,7 @@ simple_visitor!(
         //                 if_bool, else_bool
         //             );
         //             let diag = diag!(
-        //                 CoreLintCode::UnnecessaryConditional.diag_info(),
+        //                 StyleCodes::UnnecessaryConditional.diag_info(),
         //                 (exp.exp.loc, msg)
         //             );
 

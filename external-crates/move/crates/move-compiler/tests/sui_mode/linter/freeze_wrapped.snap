@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint WS2005]: attempting to freeze wrapped objects
+warning[Sui Lint W02005]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:42:40
    │
 15 │         inner: Inner,
@@ -16,7 +16,7 @@ warning[Lint WS2005]: attempting to freeze wrapped objects
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint WS2005]: attempting to freeze wrapped objects
+warning[Sui Lint W02005]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:46:40
    │
  9 │     struct Inner has key, store {
@@ -30,7 +30,7 @@ warning[Lint WS2005]: attempting to freeze wrapped objects
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint WS2005]: attempting to freeze wrapped objects
+warning[Sui Lint W02005]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:51:40
    │
 15 │         inner: Inner,
@@ -41,7 +41,7 @@ warning[Lint WS2005]: attempting to freeze wrapped objects
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint WS2005]: attempting to freeze wrapped objects
+warning[Sui Lint W02005]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:55:40
    │
 29 │         inner: T,
@@ -52,7 +52,7 @@ warning[Lint WS2005]: attempting to freeze wrapped objects
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint WS2005]: attempting to freeze wrapped objects
+warning[Sui Lint W02005]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:59:40
    │
 32 │     struct S2<T: key + store> has store {
@@ -66,7 +66,7 @@ warning[Lint WS2005]: attempting to freeze wrapped objects
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint WS2005]: attempting to freeze wrapped objects
+warning[Sui Lint W02005]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:63:40
    │
 15 │         inner: Inner,
@@ -77,7 +77,7 @@ warning[Lint WS2005]: attempting to freeze wrapped objects
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint WS2005]: attempting to freeze wrapped objects
+warning[Sui Lint W02005]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:63:73
    │
 15 │         inner: Inner,

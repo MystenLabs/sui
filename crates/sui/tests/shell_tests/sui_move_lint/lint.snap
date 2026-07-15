@@ -19,7 +19,7 @@ INCLUDING DEPENDENCY Sui
 BUILDING example
 
 ----- stderr -----
-warning[Lint WS4002]: non-composable transfer to sender
+warning[Sui Lint W04002]: non-composable transfer to sender
    ┌─ ./sources/example.move:15:5
    │
 14 │ public fun mint(ctx: &mut TxContext) {

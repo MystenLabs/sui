@@ -7,7 +7,7 @@
 use crate::{
     diag,
     expansion::ast::Value_,
-    linters::CoreLintCode,
+    linters::StyleCodes,
     typing::{
         ast::{self as T, UnannotatedExp_},
         visitor::simple_visitor,
@@ -25,10 +25,7 @@ simple_visitor!(
         };
 
         let msg = "'while (true)' can be always replaced with 'loop'";
-        let mut diag = diag!(
-            CoreLintCode::WhileTrueToLoop.diag_info(),
-            (exp.exp.loc, msg)
-        );
+        let mut diag = diag!(StyleCodes::WhileTrueToLoop.diag_info(), (exp.exp.loc, msg));
         diag.add_note(
             "A 'loop' is more useful in these cases. Unlike 'while', 'loop' can have a \
             'break' with a value, e.g. 'let x = loop { break 42 };'",
