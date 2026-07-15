@@ -2857,12 +2857,30 @@ async fn build_http_servers(
 
     router = router.merge(rpc_router).layer(layers);
 
+    // On top of sui-http's hardened defaults (bounded concurrent streams;
+    // transport keepalives stay disabled by default), bound connection
+    // lifetime: GOAWAY at the configured age and force-close after the grace
+    // period. The hard close is the only server-side mechanism that reclaims
+    // streams wedged behind HTTP/2 flow-control windows that a stalled peer
+    // never reopens, and connection age also bounds how long a vanished peer
+    // can pin connection state, which keepalives would otherwise detect.
+    let server_config = {
+        let rpc_config = config.rpc().cloned().unwrap_or_default();
+        let mut server_config = sui_http::Config::default()
+            .max_connection_age_grace(rpc_config.max_connection_age_grace());
+        if let Some(age) = rpc_config.max_connection_age() {
+            server_config = server_config.max_connection_age(age);
+        }
+        server_config
+    };
+
     let https = if let Some((tls_config, https_address)) = config
         .rpc()
         .and_then(|config| config.tls_config().map(|tls| (tls, config.https_address())))
     {
         let tls_server_config = https_rustls_config(tls_config.cert(), tls_config.key())?;
         let https = sui_http::Builder::new()
+            .config(server_config.clone())
             .tls_config(tls_server_config)
             .serve(https_address, router.clone())
             .map_err(|e| anyhow::anyhow!(e))?;
@@ -2879,6 +2897,7 @@ async fn build_http_servers(
     };
 
     let http = sui_http::Builder::new()
+        .config(server_config)
         .serve(&config.json_rpc_address, router)
         .map_err(|e| anyhow::anyhow!(e))?;
 
