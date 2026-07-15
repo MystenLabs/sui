@@ -122,6 +122,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_check_block_refs_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
+    pub(crate) priority_submission_backpressure: IntCounter,
     pub(crate) core_skipped_proposals: IntCounterVec,
     pub(crate) handler_received_block_missing_ancestors: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
@@ -355,6 +356,11 @@ impl NodeMetrics {
             core_lock_enqueued: register_int_counter_with_registry!(
                 "core_lock_enqueued",
                 "Number of enqueued core requests",
+                registry,
+            ).unwrap(),
+            priority_submission_backpressure: register_int_counter_with_registry!(
+                "priority_submission_backpressure",
+                "Number of high-priority submissions that found the reserved priority input channel full and had to wait for capacity",
                 registry,
             ).unwrap(),
             core_skipped_proposals: register_int_counter_vec_with_registry!(
