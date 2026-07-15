@@ -129,10 +129,12 @@ function generateQuestions(title, description, headings, relPath) {
       break;
     case 'example':
       questions.push(`How do I build a ${topicLower} on Sui?`);
-      questions.push(`What is the ${topicLower} pattern in Sui?`);
+      // Avoid "pattern pattern"
+      const patternName = topicLower.replace(/\s+pattern$/i, '');
+      questions.push(`What is the ${patternName} pattern in Sui?`);
       break;
     case 'migration': {
-      const platform = topicName.replace(/->|→/g, '').replace(/\s+to\s+Sui/i, '').trim();
+      const platform = topicName.replace(/->|→/g, ' ').replace(/\s+to\s+Sui/i, '').replace(/\s+Sui$/i, '').trim();
       questions.push(`How does Sui compare to ${platform}?`);
       questions.push(`How do I migrate from ${platform} to Sui?`);
       break;
@@ -140,9 +142,12 @@ function generateQuestions(title, description, headings, relPath) {
     case 'operator':
       questions.push(`How do I ${actionForm} for Sui?`);
       break;
-    case 'sdk':
-      questions.push(`How do I use the ${topicName} SDK?`);
+    case 'sdk': {
+      // Avoid "SDK SDK" by stripping trailing SDK from name
+      const sdkName = topicName.replace(/\s+SDK$/i, '');
+      questions.push(`How do I use the ${sdkName} SDK?`);
       break;
+    }
     case 'reference':
       questions.push(`What is ${topicName} in Sui?`);
       break;
