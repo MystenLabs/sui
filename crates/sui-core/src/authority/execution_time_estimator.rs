@@ -2195,7 +2195,7 @@ mod tests {
             }
 
             let mut final_observations = estimator.get_observations();
-            final_observations.sort_by(|a, b| a.0.to_string().cmp(&b.0.to_string()));
+            final_observations.sort_by_key(|a| a.0.to_string());
 
             let test_transactions = generate_test_transactions(version);
             let mut transaction_estimates = Vec::new();
