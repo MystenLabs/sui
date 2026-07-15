@@ -20,6 +20,7 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
+  zklogin_circuit_mode: 1
   consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true

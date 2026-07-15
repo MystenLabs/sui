@@ -38,9 +38,10 @@ use prometheus::HistogramVec;
 use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
 use sui_inverted_index::BitmapQuery;
-use sui_inverted_index::BitmapScanError;
-use sui_inverted_index::BitmapScanResult;
 use sui_inverted_index::ScanDirection;
+use sui_inverted_index::ScanStop;
+use sui_inverted_index::SkipPolicy;
+use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
@@ -96,7 +97,7 @@ impl Metrics {
             .unwrap(),
             permits_peak: register_histogram_vec_with_registry!(
                 "kv_rpc_bigtable_permits_peak",
-                "Peak in-use BigTable limiter permits observed during a single v2alpha request.",
+                "Peak in-use BigTable limiter permits observed during a single list request.",
                 &["method"],
                 vec![1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0],
                 registry,
@@ -104,7 +105,7 @@ impl Metrics {
             .unwrap(),
             ops_total: register_histogram_vec_with_registry!(
                 "kv_rpc_bigtable_ops_total",
-                "Total BigTable limiter acquisitions issued by a single v2alpha request.",
+                "Total BigTable limiter acquisitions issued by a single list request.",
                 &["method"],
                 prometheus::exponential_buckets(1.0, 2.0, 14).unwrap(),
                 registry,
@@ -324,11 +325,9 @@ impl BigTableClient {
         spec: BitmapIndexSpec,
         direction: ScanDirection,
         budget: u64,
+        policy: SkipPolicy,
         on_metrics: F,
-    ) -> BoxStream<
-        'static,
-        sui_inverted_index::BitmapScanResult<sui_inverted_index::Watermarked<u64>>,
-    >
+    ) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>>
     where
         F: FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static,
     {
@@ -340,6 +339,7 @@ impl BigTableClient {
             spec.bucket_size,
             direction,
             budget,
+            policy,
             on_metrics,
         )
     }
@@ -350,13 +350,22 @@ impl BigTableClient {
             .map_err(|_| RpcError::new(tonic::Code::Internal, "request concurrency limiter closed"))
     }
 
-    async fn tx_seq_checkpoint(&self, tx_seq: u64) -> Result<Option<u64>, RpcError> {
-        let pairs = self.resolve_tx_checkpoints(&[tx_seq]).await?;
-        Ok(pairs.into_iter().next().map(|(_, cp)| cp))
+    async fn tx_seq_checkpoint(&self, tx_seq: u64) -> Result<u64, RpcError> {
+        self.resolve_tx_checkpoints(&[tx_seq])
+            .await?
+            .into_iter()
+            .next()
+            .map(|(_, cp)| cp)
+            .ok_or_else(|| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("missing checkpoint mapping for transaction sequence number {tx_seq}"),
+                )
+            })
     }
 
     /// Build a resolver closure for tx-bitmap watermarks (identity
-    /// decode). Hand directly to [`crate::pipeline::resolve_watermarks`].
+    /// decode). Hand directly to [`crate::pipeline::resolve_scan_watermarks`].
     pub(crate) fn tx_wm_resolver(
         &self,
         direction: ScanDirection,
@@ -376,13 +385,14 @@ impl BigTableClient {
                 client
                     .tx_seq_checkpoint(lookup_tx_seq)
                     .await
-                    .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))
+                    .map(Some)
+                    .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
     }
 
     /// Build a resolver closure for event-bitmap watermarks. Hand directly to
-    /// [`crate::pipeline::resolve_watermarks`].
+    /// [`crate::pipeline::resolve_scan_watermarks`].
     pub(crate) fn event_wm_resolver(
         &self,
         direction: ScanDirection,
@@ -406,7 +416,8 @@ impl BigTableClient {
                 client
                     .tx_seq_checkpoint(lookup_tx_seq)
                     .await
-                    .map_err(|e| BitmapScanError::Source(anyhow::Error::new(e)))
+                    .map(Some)
+                    .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
     }
@@ -415,7 +426,7 @@ impl BigTableClient {
 /// Future returned by resolver closures from
 /// [`BigTableClient::tx_wm_resolver`] and [`BigTableClient::event_wm_resolver`].
 pub(crate) type WmResolverFut =
-    std::pin::Pin<Box<dyn Future<Output = BitmapScanResult<Option<u64>>> + Send>>;
+    std::pin::Pin<Box<dyn Future<Output = Result<Option<u64>, ScanStop>> + Send>>;
 
 struct LimitedPermit {
     _permit: OwnedSemaphorePermit,

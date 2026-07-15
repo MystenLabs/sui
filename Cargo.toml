@@ -126,7 +126,6 @@ members = [
     "crates/sui-framework-tests",
     "crates/sui-futures",
     "crates/sui-genesis-builder",
-    "crates/sui-http",
     "crates/sui-indexer-alt",
     "crates/sui-indexer-alt-consistent-api",
     "crates/sui-indexer-alt-consistent-store",
@@ -620,10 +619,10 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c6010b9080b00e29d039a48c08898d90c2c1cbdd" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c6010b9080b00e29d039a48c08898d90c2c1cbdd" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c6010b9080b00e29d039a48c08898d90c2c1cbdd", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c6010b9080b00e29d039a48c08898d90c2c1cbdd", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528", features = [
   "experimental",
 ] }
 passkey-types = { version = "0.4.0" }
@@ -640,15 +639,15 @@ p384 = { version = "0.13.0", default-features = false, features = [
 ciborium = "0.2"
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4ea1f4573f08c2c75317fcb205b823de" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4ea1f4573f08c2c75317fcb205b823de" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4ea1f4573f08c2c75317fcb205b823de" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4ea1f4573f08c2c75317fcb205b823de" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c34e7a65b5983600937f965553fa373593c149d4", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c34e7a65b5983600937f965553fa373593c149d4", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c34e7a65b5983600937f965553fa373593c149d4", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "05018477066df865513f8a771d898ed6a1ded4b1", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "05018477066df865513f8a771d898ed6a1ded4b1", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "05018477066df865513f8a771d898ed6a1ded4b1", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -686,7 +685,7 @@ sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
-sui-http = { path = "crates/sui-http" }
+sui-http = "0.2.0"
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
 sui-indexer-alt-consistent-api = { path = "crates/sui-indexer-alt-consistent-api" }
 sui-indexer-alt-consistent-store = { path = "crates/sui-indexer-alt-consistent-store" }

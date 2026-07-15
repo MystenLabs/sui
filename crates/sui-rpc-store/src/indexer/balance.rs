@@ -15,6 +15,16 @@
 //! side) and parses the effects' accumulator writes (for the
 //! *address* side), so the pipeline doesn't need to walk objects
 //! itself.
+//!
+//! Balances are an address-level aggregate: the helper's coin side
+//! counts only `AddressOwner` and `ConsensusAddressOwner` coins
+//! (combined per address), matching [`Balance::restore`]'s owner
+//! filter below -- the two must agree, or a store restored from a
+//! live snapshot would diverge from one built by tip indexing.
+//! This is the same rule `sui-indexer-alt-consistent-store`'s
+//! `balances` handler documents; object-owned coins stay
+//! discoverable through `object_by_owner` under their parent, they
+//! are just not a balance.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -226,6 +236,40 @@ mod tests {
         // restored alongside the coin, so the address half stays
         // zero. A test that exercises the address half lives below.
         assert_eq!(balance.address, 0);
+    }
+
+    /// A coin held by an object (dynamic field, transfer-to-object)
+    /// contributes no balance row -- mirroring the tip pipeline, whose
+    /// `derive_detailed_balance_changes_2` coin side counts only
+    /// address-held coins. If either side ever drifts, restored and
+    /// tip-built stores diverge.
+    #[test]
+    fn restore_skips_object_owned_coins() {
+        use sui_types::object::Owner;
+
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        let parent = ObjectID::from_single_byte(0x42);
+        let mut coin = Object::with_id_owner_gas_for_testing(
+            ObjectID::from_single_byte(6),
+            SuiAddress::ZERO,
+            42,
+        );
+        coin.owner = Owner::ObjectOwner(parent.into());
+        let coin_type = coin.coin_type_maybe().unwrap();
+
+        let mut batch = db.batch();
+        Balance.restore(&schema, &coin, &mut batch).unwrap();
+        batch.commit().unwrap();
+
+        assert!(
+            schema
+                .get_balance(parent.into(), coin_type)
+                .unwrap()
+                .is_none(),
+            "an object-owned coin must not credit the parent's id as a balance",
+        );
     }
 
     #[test]

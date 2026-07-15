@@ -464,6 +464,15 @@ impl ConsensusManager {
         self.authority.load().as_ref().map(|a| a.0.store())
     }
 
+    pub fn address_overrides_snapshot(
+        &self,
+    ) -> BTreeMap<
+        ConsensusNetworkPublicKey,
+        BTreeMap<sui_network::endpoint_manager::AddressSource, Vec<Multiaddr>>,
+    > {
+        self.address_overrides.lock().map.clone()
+    }
+
     fn get_store_path(&self, epoch: EpochId) -> PathBuf {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));

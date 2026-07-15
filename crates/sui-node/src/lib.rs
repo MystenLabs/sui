@@ -160,6 +160,7 @@ use typed_store::rocks::default_db_options;
 
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
+pub mod address_prober;
 pub mod admin;
 pub mod db_shell;
 mod handle;
@@ -175,6 +176,7 @@ pub struct ValidatorComponents {
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     admission_queue: Option<AdmissionQueueContext>,
 }
+
 pub struct P2pComponents {
     p2p_network: Network,
     known_peers: HashMap<PeerId, String>,
@@ -275,6 +277,9 @@ pub struct SuiNode {
 
     /// EndpointManager for updating peer network addresses.
     endpoint_manager: EndpointManager,
+
+    /// Handle to the discovery-shared address prober (`None` when disabled).
+    address_prober: Option<address_prober::Handle>,
 
     backpressure_manager: Arc<BackpressureManager>,
 
@@ -468,6 +473,11 @@ impl SuiNode {
         registry_service: RegistryService,
         server_version: ServerVersion,
     ) -> Result<Arc<SuiNode>> {
+        // Fail fast on config errors before starting any node components.
+        if let Some(prober_config) = &config.address_prober {
+            prober_config.validate()?;
+        }
+
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
@@ -951,6 +961,31 @@ impl SuiNode {
             None
         };
 
+        let address_prober = if Self::address_prober_enabled(&config) {
+            let handle = address_prober::Builder::new()
+                .config(config.address_prober.clone().unwrap_or_default())
+                .with_metrics(&prometheus_registry)
+                .build()
+                .start(
+                    p2p_network.clone(),
+                    discovery_handle.sender(),
+                    consensus_config::NetworkKeyPair::new(config.network_key_pair().copy()),
+                );
+            // Seed the current epoch if we are starting as a validator.
+            if node_role.is_validator()
+                && let Some(components) = &validator_components
+            {
+                handle.update_epoch(
+                    epoch_store.epoch(),
+                    epoch_store.epoch_start_state().get_consensus_committee(),
+                    components.consensus_manager.clone(),
+                );
+            }
+            Some(handle)
+        } else {
+            None
+        };
+
         // setup shutdown channel
         let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
 
@@ -973,6 +1008,7 @@ impl SuiNode {
             end_of_epoch_channel,
             endpoint_manager,
             backpressure_manager,
+            address_prober,
 
             _db_checkpoint_handle: db_checkpoint_handle,
 
@@ -1419,6 +1455,37 @@ impl SuiNode {
         .await
     }
 
+    fn address_prober_enabled(config: &NodeConfig) -> bool {
+        let prober_enabled = config
+            .address_prober
+            .as_ref()
+            .map(|c| c.enabled())
+            .unwrap_or(true);
+        let v3_enabled = config
+            .p2p_config
+            .discovery
+            .as_ref()
+            .is_some_and(|d| d.use_get_known_peers_v3());
+        prober_enabled && v3_enabled
+    }
+
+    fn update_address_prober_epoch(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        consensus_manager: &Arc<ConsensusManager>,
+    ) {
+        if !epoch_store.is_validator() {
+            return;
+        }
+        if let Some(handle) = &self.address_prober {
+            handle.update_epoch(
+                epoch_store.epoch(),
+                epoch_store.epoch_start_state().get_consensus_committee(),
+                consensus_manager.clone(),
+            );
+        }
+    }
+
     async fn start_epoch_specific_validator_components(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
@@ -1651,7 +1718,6 @@ impl SuiNode {
                 consensus_adapter.clone(),
                 Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
                 overload_config.admission_queue_capacity_fraction,
-                overload_config.admission_queue_bypass_fraction,
                 overload_config.admission_queue_failover_timeout,
                 inflight_slot_freed_notify,
             ));
@@ -1719,6 +1785,16 @@ impl SuiNode {
         &self,
     ) -> &mysten_network::anemo_connection_monitor::ConnectionMonitorHandle {
         &self._connection_monitor_handle
+    }
+
+    #[cfg(any(test, msim))]
+    pub fn address_prober_metrics_for_testing(
+        &self,
+    ) -> std::sync::Arc<address_prober::AddressProberMetrics> {
+        self.address_prober
+            .as_ref()
+            .expect("address prober should be running in tests")
+            .metrics_for_testing()
     }
 
     pub fn node_role(&self) -> NodeRole {
@@ -1963,6 +2039,10 @@ impl SuiNode {
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
 
+                if let Some(handle) = &self.address_prober {
+                    handle.leave_committee();
+                }
+
                 info!("Epoch store finished reconfiguration.");
 
                 // No other components should be holding a strong reference to state hasher
@@ -1981,30 +2061,33 @@ impl SuiNode {
 
                 if new_role.runs_consensus() {
                     info!("Restarting consensus as {new_role}");
-                    Some(
-                        Self::start_epoch_specific_validator_components(
-                            &self.config,
-                            self.state.clone(),
-                            consensus_adapter,
-                            self.checkpoint_store.clone(),
-                            new_epoch_store.clone(),
-                            self.state_sync_handle.clone(),
-                            self.randomness_handle.clone(),
-                            self.randomness_receiver_handle.clone(),
-                            consensus_manager,
-                            consensus_store_pruner,
-                            weak_hasher,
-                            self.backpressure_manager.clone(),
-                            validator_server_handle,
-                            validator_overload_monitor_handle,
-                            checkpoint_metrics,
-                            self.metrics.clone(),
-                            sui_tx_validator_metrics,
-                            admission_queue,
-                            new_role,
-                        )
-                        .await?,
+                    let components = Self::start_epoch_specific_validator_components(
+                        &self.config,
+                        self.state.clone(),
+                        consensus_adapter,
+                        self.checkpoint_store.clone(),
+                        new_epoch_store.clone(),
+                        self.state_sync_handle.clone(),
+                        self.randomness_handle.clone(),
+                        self.randomness_receiver_handle.clone(),
+                        consensus_manager,
+                        consensus_store_pruner,
+                        weak_hasher,
+                        self.backpressure_manager.clone(),
+                        validator_server_handle,
+                        validator_overload_monitor_handle,
+                        checkpoint_metrics,
+                        self.metrics.clone(),
+                        sui_tx_validator_metrics,
+                        admission_queue,
+                        new_role,
                     )
+                    .await?;
+                    self.update_address_prober_epoch(
+                        &new_epoch_store,
+                        &components.consensus_manager,
+                    );
+                    Some(components)
                 } else {
                     info!(
                         "This node has new role {new_role} and no longer runs consensus after reconfiguration"
@@ -2059,6 +2142,10 @@ impl SuiNode {
                             .set_consensus_address_updater(components.consensus_manager.clone());
                     }
 
+                    self.update_address_prober_epoch(
+                        &new_epoch_store,
+                        &components.consensus_manager,
+                    );
                     Some(components)
                 } else {
                     None
@@ -2167,6 +2254,13 @@ impl SuiNode {
 
     pub fn endpoint_manager(&self) -> &EndpointManager {
         &self.endpoint_manager
+    }
+
+    pub async fn address_prober_report(&self) -> Option<address_prober::ProbeReport> {
+        match &self.address_prober {
+            Some(handle) => handle.probe_report().await,
+            None => None,
+        }
     }
 
     /// Get a short prefix of a digest for metric labels
@@ -2696,8 +2790,23 @@ async fn build_http_servers(
     // index so a client that waits for a checkpoint can immediately read its
     // indexed state (matching the legacy synchronously-committed index).
     let indexed_checkpoint = embedded_rpc_store.map(|embedded| embedded.indexed_checkpoint_fn());
+    let subscription_watermark_interval = config
+        .rpc
+        .as_ref()
+        .and_then(|rpc| rpc.subscription_watermark_interval);
+    let subscription_max_subscribers = config
+        .rpc
+        .as_ref()
+        .and_then(|rpc| rpc.subscription_max_subscribers);
+    let subscription_shards = config.rpc.as_ref().and_then(|rpc| rpc.subscription_shards);
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
-        SubscriptionService::build(prometheus_registry, indexed_checkpoint);
+        SubscriptionService::build(
+            prometheus_registry,
+            indexed_checkpoint,
+            subscription_watermark_interval,
+            subscription_max_subscribers,
+            subscription_shards,
+        );
     let rpc_router = {
         // Serve the index read paths from the embedded rpc-store when it
         // is enabled. Raw chain data comes from the perpetual / checkpoint
@@ -2752,9 +2861,10 @@ async fn build_http_servers(
         .rpc()
         .and_then(|config| config.tls_config().map(|tls| (tls, config.https_address())))
     {
+        let tls_server_config = https_rustls_config(tls_config.cert(), tls_config.key())?;
         let https = sui_http::Builder::new()
-            .tls_single_cert(tls_config.cert(), tls_config.key())
-            .and_then(|builder| builder.serve(https_address, router.clone()))
+            .tls_config(tls_server_config)
+            .serve(https_address, router.clone())
             .map_err(|e| anyhow::anyhow!(e))?;
 
         info!(
@@ -2785,6 +2895,33 @@ async fn build_http_servers(
         },
         Some(subscription_service_checkpoint_sender),
     ))
+}
+
+/// Builds the HTTPS RPC server's rustls config from PEM files, pinning the
+/// ring crypto provider.
+///
+/// `sui_http::Builder::tls_single_cert` resolves the provider from rustls
+/// crate features and panics at runtime when more than one provider feature is
+/// enabled in the final binary (e.g. `aws-lc-rs` is pulled in through
+/// `aws-config` in the `sui` CLI), so the provider is pinned explicitly here
+/// instead.
+fn https_rustls_config(cert: &str, key: &str) -> Result<sui_http::rustls::ServerConfig> {
+    use sui_http::rustls;
+    use sui_http::rustls::pki_types::pem::PemObject;
+
+    let certs = rustls::pki_types::CertificateDer::pem_file_iter(cert)
+        .with_context(|| format!("failed to read TLS certificate chain from {cert}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .with_context(|| format!("failed to parse TLS certificate chain from {cert}"))?;
+    let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(key)
+        .with_context(|| format!("failed to read TLS private key from {key}"))?;
+    let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_protocol_versions(rustls::DEFAULT_VERSIONS)?
+    .with_no_client_auth()
+    .with_single_cert(certs, private_key)?;
+    Ok(config)
 }
 
 #[derive(Default)]

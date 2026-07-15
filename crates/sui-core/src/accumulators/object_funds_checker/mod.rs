@@ -124,7 +124,8 @@ impl ObjectFundsChecker {
         // for the epoch, and every production path that produces such a tx also
         // assigns an accumulator version. The `None` paths (accumulator-disabled
         // epoch, end-of-epoch tx) never produce withdraws and so never reach here.
-        let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version else {
+        let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version()
+        else {
             debug_fatal!("accumulator_version must be set for a tx with object withdraws");
             return false;
         };

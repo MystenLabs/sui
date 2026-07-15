@@ -4,7 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
-import { list, printTrailingComment } from '../../utilities';
+import { inlineTrailingComment, list } from '../../utilities';
 import { printBreakableBlock } from './block';
 const { group, lineSuffix } = doc.builders;
 
@@ -33,7 +33,7 @@ function printVectorExpression(path: AstPath<Node>, options: MoveOptions, print:
     let trailingComment: Doc = '';
 
     if (trailing?.type === 'line_comment') {
-        trailingComment = printTrailingComment(path, false);
+        trailingComment = inlineTrailingComment(path);
         path.node.disableTrailingComment();
     }
 
@@ -65,7 +65,6 @@ function printVectorExpression(path: AstPath<Node>, options: MoveOptions, print:
     return [
         'vector<',
         // do not break the type in vector literal
-        // indent(softline),
         group(path.call(print, 'nonFormattingChildren', 0), { shouldBreak: false }),
         '>',
         group(

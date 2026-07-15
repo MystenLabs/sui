@@ -215,7 +215,6 @@ pub struct ValidatorServiceMetrics {
     x_forwarded_for_num_hops: Gauge,
     pub gasless_rate_limited_count: IntCounter,
     pub gasless_submission_outcomes: IntCounterVec,
-    admission_queue_direct_bypasses: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -394,12 +393,6 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            admission_queue_direct_bypasses: register_int_counter_with_registry!(
-                "validator_service_admission_queue_direct_bypasses",
-                "Number of transactions that bypassed the queue (system not overloaded)",
-                registry,
-            )
-            .unwrap(),
         }
     }
 
@@ -411,14 +404,13 @@ impl ValidatorServiceMetrics {
 
 /// Where `handle_submit_transaction` routes a request.
 enum AdmissionQueueSubmitMode {
-    /// System has capacity: submit directly to consensus, skipping the queue.
-    Bypass,
-    /// System is overloaded: admit via the priority queue.
+    /// Admit via the gas-price priority queue.
     Queue,
-    /// Queue is not available — either turned off by config or temporarily
-    /// disabled by failover. Submit directly to consensus, but reject
-    /// individual txs when consensus is saturated (pre-queue behavior).
-    Disabled,
+    /// Submit directly to consensus, bypassing the queue — used when the queue
+    /// is turned off by config, temporarily disabled by failover, or for a ping
+    /// request. Individual txs are rejected when consensus is saturated
+    /// (pre-queue behavior).
+    Direct,
 }
 
 #[derive(Clone)]
@@ -869,9 +861,9 @@ impl ValidatorService {
                 continue;
             }
 
-            // Use the pre-queue per-tx consensus overload reject when the
-            // queue is disabled or in failover.
-            if matches!(submit_mode, AdmissionQueueSubmitMode::Disabled)
+            // Use the pre-queue per-tx consensus overload reject on the direct
+            // submission path (queue off, failover, or ping).
+            if matches!(submit_mode, AdmissionQueueSubmitMode::Direct)
                 && let Err(error) = self.consensus_adapter.check_consensus_overload()
             {
                 state.update_overload_metrics("consensus");
@@ -1310,10 +1302,7 @@ impl ValidatorService {
         // any other error fails the whole request, after all groups have settled.
         // Soft bundles submit as a single group; individual transactions submit one group each.
         let group_results = match submit_mode {
-            AdmissionQueueSubmitMode::Bypass | AdmissionQueueSubmitMode::Disabled => {
-                if matches!(submit_mode, AdmissionQueueSubmitMode::Bypass) {
-                    self.metrics.admission_queue_direct_bypasses.inc();
-                }
+            AdmissionQueueSubmitMode::Direct => {
                 let futures = tx_groups.into_iter().map(|txns| {
                     debug!(
                         "handle_submit_transaction: submitting consensus transactions ({}): {}",
@@ -1500,22 +1489,19 @@ impl ValidatorService {
 
     fn classify_submit_mode(&self, is_ping_request: bool) -> AdmissionQueueSubmitMode {
         let Some(aq) = &self.admission_queue else {
-            return AdmissionQueueSubmitMode::Disabled;
+            return AdmissionQueueSubmitMode::Direct;
         };
 
+        // Ping requests carry no transactions and must not wait behind queued
+        // work; submit them directly to consensus.
         if is_ping_request {
-            return AdmissionQueueSubmitMode::Bypass;
+            return AdmissionQueueSubmitMode::Direct;
         }
 
-        let inflight = usize::try_from(self.consensus_adapter.num_inflight_transactions()).unwrap();
-        if inflight < aq.bypass_threshold() {
-            return AdmissionQueueSubmitMode::Bypass;
-        }
-
-        // Failover is consulted only on the overloaded path so the hot path
-        // avoids the ArcSwap load.
+        // If the queue actor is stuck, fall back to direct submission with the
+        // pre-queue saturation reject until it resumes making progress.
         if aq.load().failover_tripped() {
-            return AdmissionQueueSubmitMode::Disabled;
+            return AdmissionQueueSubmitMode::Direct;
         }
 
         AdmissionQueueSubmitMode::Queue

@@ -3,7 +3,7 @@
 
 //! Adapter that exposes [`RpcStoreSchema`] through the trait stack
 //! `sui-rpc-api` consumes — [`ObjectStore`], [`ReadStore`],
-//! [`ChildObjectResolver`], [`RpcStateReader`], and [`RpcIndexes`].
+//! [`RuntimeObjectResolver`], [`RpcStateReader`], and [`RpcIndexes`].
 //!
 //! The adapter type, [`RpcStoreReader`], is generic over a
 //! [`Reader`] so a single struct serves both tip reads (`R = Db`)
@@ -15,7 +15,7 @@
 //!
 //! [`ObjectStore`]: sui_types::storage::ObjectStore
 //! [`ReadStore`]: sui_types::storage::ReadStore
-//! [`ChildObjectResolver`]: sui_types::storage::ChildObjectResolver
+//! [`RuntimeObjectResolver`]: sui_types::storage::RuntimeObjectResolver
 //! [`RpcStateReader`]: sui_types::storage::RpcStateReader
 //! [`RpcIndexes`]: sui_types::storage::RpcIndexes
 //! [`Reader`]: sui_consistent_store::reader::Reader
@@ -63,6 +63,16 @@ pub struct RpcStoreReader<R: Reader = Db> {
 
     /// Typed handles to every CF the read paths exercise.
     schema: Arc<RpcStoreSchema<R>>,
+
+    /// The pipelines registered on this deployment, whose watermarks
+    /// bound the reported indexed tip
+    /// (`get_highest_indexed_checkpoint_seq_number`). Kept explicit
+    /// rather than derived from the watermark CF's rows so a stale
+    /// row left behind by a pipeline that is no longer registered
+    /// cannot pin the reported tip, and so a registered pipeline
+    /// that has not committed yet correctly reads as "nothing fully
+    /// indexed".
+    pipelines: Arc<[&'static str]>,
 }
 
 impl<R: Reader> RpcStoreReader<R> {
@@ -72,8 +82,35 @@ impl<R: Reader> RpcStoreReader<R> {
     /// Holding both separately is cheap (each is `Arc`-backed) and
     /// avoids a `schema.epochs.reader().db()` style detour inside
     /// hot read paths.
+    ///
+    /// The registered pipeline set defaults to the embedded
+    /// fullnode's cohorts ([`LIVE_COHORT`] + [`HISTORY_COHORT`]) —
+    /// the only in-tree deployment. A deployment that registers a
+    /// different set (e.g. a standalone node running the raw
+    /// chain-data pipelines) must override it via
+    /// [`Self::with_pipelines`] so the indexed-tip bound covers
+    /// exactly what it serves.
+    ///
+    /// [`LIVE_COHORT`]: crate::LIVE_COHORT
+    /// [`HISTORY_COHORT`]: crate::HISTORY_COHORT
     pub fn new(db: Db, schema: Arc<RpcStoreSchema<R>>) -> Self {
-        Self { db, schema }
+        let pipelines = crate::LIVE_COHORT
+            .iter()
+            .chain(crate::HISTORY_COHORT)
+            .copied()
+            .collect();
+        Self {
+            db,
+            schema,
+            pipelines,
+        }
+    }
+
+    /// Override the registered pipeline set whose watermarks bound
+    /// the reported indexed tip. See [`Self::new`] for the default.
+    pub fn with_pipelines(mut self, pipelines: impl IntoIterator<Item = &'static str>) -> Self {
+        self.pipelines = pipelines.into_iter().collect();
+        self
     }
 
     /// Borrow the underlying [`Db`] handle. Used by trait impls
@@ -104,10 +141,23 @@ impl<R: Reader> RpcStoreReader<R> {
     ) -> sui_types::storage::error::Result<
         Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
     > {
+        self.min_committed(crate::LIVE_COHORT.iter().copied())
+    }
+
+    /// The highest checkpoint every pipeline in `pipelines` has
+    /// committed (`min(checkpoint_hi_inclusive)`), or `None` if any of
+    /// them has no watermark yet. Private, but reachable from the
+    /// sibling trait-impl modules (children of this module).
+    fn min_committed(
+        &self,
+        pipelines: impl IntoIterator<Item = &'static str>,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
+    > {
         let framework = self.db().framework();
         let mut min_hi: Option<u64> = None;
-        for name in crate::LIVE_COHORT {
-            let key = sui_consistent_store::PipelineTaskKey::new(*name);
+        for name in pipelines {
+            let key = sui_consistent_store::PipelineTaskKey::new(name);
             let Some(watermark) = framework
                 .watermarks
                 .get(&key)
@@ -134,6 +184,7 @@ impl RpcStoreReader<Db> {
         RpcStoreReader {
             db: self.db.clone(),
             schema: Arc::new(self.schema.at(snap)),
+            pipelines: self.pipelines.clone(),
         }
     }
 }
@@ -143,6 +194,7 @@ impl<R: Reader> Clone for RpcStoreReader<R> {
         Self {
             db: self.db.clone(),
             schema: self.schema.clone(),
+            pipelines: self.pipelines.clone(),
         }
     }
 }

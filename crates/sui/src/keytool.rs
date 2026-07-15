@@ -1311,6 +1311,7 @@ impl KeyToolCommand {
                             parsed,
                             vec![],
                             env,
+                            1, // migration mode, try v2 then v1
                             true,
                             true,
                             true,

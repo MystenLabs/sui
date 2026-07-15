@@ -59,8 +59,9 @@ export enum UseDeclaration {
     FriendAccess = 'friend_access',
     UseFun = 'use_fun',
 
-    // all of the nodes below are implemented in `import-grouping.ts`
-    // hence should never be printed directly.
+    // the nodes below are consumed by `imports-grouping.ts` when grouping is
+    // enabled; they are printed directly for annotated imports, imports with
+    // comments, uses inside function bodies, and `autoGroupImports: 'none'`.
 
     UseModule = 'use_module',
     UseMember = 'use_member',
@@ -156,15 +157,31 @@ export function printUseMember(path: AstPath<Node>, options: MoveOptions, print:
 
     const children = path.map(print, 'nonFormattingChildren');
 
-    return group([
-        children[0]!,
-        '::{',
-        indent(softline),
-        indent(join([',', line], children.slice(1))),
-        ifBreak(','), // trailing comma
-        softline,
-        '}',
-    ]);
+    return group(
+        [
+            children[0]!,
+            '::{',
+            indent(softline),
+            indent(join([',', line], children.slice(1))),
+            ifBreak(','), // trailing comma
+            softline,
+            '}',
+        ],
+        // comments inside the braces only render correctly on separate lines
+        { shouldBreak: membersContainComments(path.node) },
+    );
+}
+
+/**
+ * Whether any member inside the braces (or a stray comment child) carries a
+ * comment. The first non-formatting child (the module identifier) is printed
+ * before the braces and is excluded.
+ */
+function membersContainComments(node: Node): boolean {
+    return (
+        node.nonFormattingChildren.slice(1).some((child) => child.containsComments) ||
+        node.namedChildren.some((child) => child.isComment)
+    );
 }
 
 /**
@@ -199,15 +216,19 @@ export function printUseModuleMembers(
     print: printFn,
 ): Doc {
     const children = path.map(print, 'nonFormattingChildren');
-    return group([
-        children[0]!,
-        '::{',
-        indent(softline),
-        indent(join([',', line], children.slice(1))),
-        ifBreak(','), // trailing comma
-        softline,
-        '}',
-    ]);
+    return group(
+        [
+            children[0]!,
+            '::{',
+            indent(softline),
+            indent(join([',', line], children.slice(1))),
+            ifBreak(','), // trailing comma
+            softline,
+            '}',
+        ],
+        // comments inside the braces only render correctly on separate lines
+        { shouldBreak: membersContainComments(path.node) },
+    );
 }
 
 /**

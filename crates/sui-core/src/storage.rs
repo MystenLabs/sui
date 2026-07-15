@@ -29,7 +29,6 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
-use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::LedgerBitmapBucketIterator;
@@ -39,6 +38,7 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
+use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::WriteStore;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
@@ -531,7 +531,7 @@ impl ReadStore for RestReadStore {
     }
 }
 
-impl ChildObjectResolver for RestReadStore {
+impl RuntimeObjectResolver for RestReadStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
@@ -676,7 +676,17 @@ impl ReadStore for RpcStoreReadStore {
                         "live-indexed checkpoint {indexed} missing from the checkpoint store"
                     ))
                 }),
-            _ => Ok(latest),
+            Some(_) => Ok(latest),
+            // Fail closed: no live watermark means the index surface is
+            // empty -- a fresh node whose indexer has not committed its
+            // first checkpoint yet. Reporting the executed tip here would
+            // advertise checkpoints whose indexed state is not readable,
+            // the exact inconsistency the bound above exists to prevent.
+            // The window closes with the live cohort's first commit,
+            // moments after startup.
+            None => Err(StorageError::missing(
+                "the embedded rpc-store's live index has no committed checkpoint yet",
+            )),
         }
     }
 
@@ -778,7 +788,7 @@ impl ReadStore for RpcStoreReadStore {
     }
 }
 
-impl ChildObjectResolver for RpcStoreReadStore {
+impl RuntimeObjectResolver for RpcStoreReadStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,

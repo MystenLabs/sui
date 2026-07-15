@@ -43,9 +43,6 @@ mod pipeline;
 mod render;
 mod resolve;
 mod v2;
-mod v2alpha;
-
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer as KvLedgerServiceServer;
 
 use bigtable_client::Metrics as BigTableLimiterMetrics;
 pub use config::KvRpcConfig;
@@ -77,6 +74,8 @@ pub(crate) struct KvRpcMetrics {
     response_render_latency_ms: HistogramVec,
     stream_item_yield_wait_ms: HistogramVec,
     bitmap_buckets_evaluated: HistogramVec,
+    bitmap_buckets_discarded: HistogramVec,
+    bitmap_leaf_seeks: HistogramVec,
 }
 
 impl KvRpcMetrics {
@@ -85,7 +84,7 @@ impl KvRpcMetrics {
             bigtable_limiter: BigTableLimiterMetrics::new(registry),
             response_render_latency_ms: register_histogram_vec_with_registry!(
                 "kv_rpc_response_render_latency_ms",
-                "Wall time spent rendering one v2alpha response item.",
+                "Wall time spent rendering one list response item.",
                 &["method"],
                 prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
                 registry,
@@ -93,7 +92,7 @@ impl KvRpcMetrics {
             .unwrap(),
             stream_item_yield_wait_ms: register_histogram_vec_with_registry!(
                 "kv_rpc_stream_item_yield_wait_ms",
-                "Wall time from yielding one v2alpha response item until the stream is polled again.",
+                "Wall time from yielding one list response item until the stream is polled again.",
                 &["method"],
                 prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
                 registry,
@@ -105,6 +104,22 @@ impl KvRpcMetrics {
                 &["method"],
                 // Exponential 1..2048: many requests evaluate few buckets
                 // (small or empty scans), a tail saturates at the default 1k cap.
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            bitmap_buckets_discarded: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_buckets_discarded",
+                "Charged dead bucket rows discarded while bitmap leaves catch up across provably unmatchable gaps.",
+                &["method"],
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            bitmap_leaf_seeks: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_leaf_seeks",
+                "Bitmap leaf scans abandoned and reopened beyond provably unmatchable gaps.",
+                &["method"],
                 prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
                 registry,
             )
@@ -129,6 +144,17 @@ impl KvRpcMetrics {
             .with_label_values(&[method])
             .observe(buckets as f64);
     }
+    fn observe_bitmap_buckets_discarded(&self, method: &'static str, buckets: u64) {
+        self.bitmap_buckets_discarded
+            .with_label_values(&[method])
+            .observe(buckets as f64);
+    }
+
+    fn observe_bitmap_leaf_seeks(&self, method: &'static str, seeks: u64) {
+        self.bitmap_leaf_seeks
+            .with_label_values(&[method])
+            .observe(seeks as f64);
+    }
 }
 
 #[derive(Clone)]
@@ -143,6 +169,11 @@ pub struct KvRpcServer {
     pub(crate) ledger_history: LedgerHistoryConfig,
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) stages: StagesConfig,
+    // The list RPCs are part of the stable v2 LedgerService, but serving them
+    // requires the experimental query indexing pipelines. Instances without
+    // them reject list requests with `Unimplemented`, matching the behavior
+    // from when the RPCs lived in a separately registered v2alpha service.
+    query_apis_enabled: bool,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -282,6 +313,7 @@ impl KvRpcServer {
             ledger_history,
             request_bigtable_concurrency,
             stages,
+            query_apis_enabled: false,
         };
 
         let server_clone = server.clone();
@@ -308,14 +340,24 @@ impl KvRpcServer {
         Ok(server)
     }
 
+    pub(crate) fn check_query_apis_enabled(&self) -> Result<(), tonic::Status> {
+        if self.query_apis_enabled {
+            Ok(())
+        } else {
+            Err(tonic::Status::unimplemented(
+                "the List APIs are not enabled on this instance",
+            ))
+        }
+    }
+
     /// Start this server as a tonic gRPC service on the given address.
     /// Returns a `Service` handle for lifecycle management.
     pub async fn start_service(
-        self,
+        mut self,
         listen_address: SocketAddr,
         config: ServerConfig,
     ) -> anyhow::Result<sui_futures::service::Service> {
-        use mysten_network::callback::CallbackLayer;
+        use sui_http::middleware::callback::CallbackLayer;
         use sui_rpc_api::{
             RpcMetrics, RpcMetricsMakeCallbackHandler, grpc_method_paths_from_file_descriptor_sets,
         };
@@ -330,15 +372,12 @@ impl KvRpcServer {
         // backs a gRPC service mounted below. Consumed by both the
         // reflection services and the metrics allowlist so they cannot drift
         // out of sync.
-        let enable_experimental_query_apis = config.enable_experimental_query_apis;
-        let mut file_descriptor_sets: Vec<&'static [u8]> = vec![
+        self.query_apis_enabled = config.enable_experimental_query_apis;
+        let file_descriptor_sets: Vec<&'static [u8]> = vec![
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
             sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
         ];
-        if enable_experimental_query_apis {
-            file_descriptor_sets.push(sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET);
-        }
 
         let registry = config.metrics_registry.unwrap_or_default();
         let grpc_method_allowlist = Arc::new(grpc_method_paths_from_file_descriptor_sets(
@@ -351,11 +390,7 @@ impl KvRpcServer {
                     grpc_method_allowlist,
                 ),
             ))
-            .add_service(LedgerServiceServer::new(self.clone()));
-
-        if enable_experimental_query_apis {
-            router = router.add_service(KvLedgerServiceServer::new(self));
-        }
+            .add_service(LedgerServiceServer::new(self));
 
         if config.enable_reflection {
             let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();

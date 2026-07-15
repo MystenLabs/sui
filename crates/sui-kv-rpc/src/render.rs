@@ -4,7 +4,7 @@
 //! Shared proto-rendering layer: turns resolved BigTable data
 //! (`CheckpointData`/`TransactionData` + object maps) into the `sui.rpc.v2`
 //! proto messages, honoring a `FieldMaskTree`. Used by both the v2 point-get
-//! handlers and the v2alpha list handlers so rendering is identical across
+//! handlers and the list handlers so rendering is identical across
 //! them.
 
 use std::collections::HashMap;

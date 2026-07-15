@@ -52,8 +52,7 @@ impl Default for SubmissionAmplification {
 }
 
 impl SubmissionAmplification {
-    // Default values shared between the stress CLI options and simtests, so both
-    // exercise the same duplicate/amplified submission behavior out of the box.
+    // Default values for the enabled configuration returned by `default_enabled()`.
     pub const DEFAULT_AMPLIFICATION_PROBABILITY: f64 = 0.05;
     pub const DEFAULT_AMPLIFICATION_VALIDATORS_PER_TX: usize = 3;
     pub const DEFAULT_DUPLICATE_PROBABILITY: f64 = 0.02;

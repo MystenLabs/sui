@@ -23,14 +23,12 @@ use mysten_metrics::{
     monitored_mpsc::{self, UnboundedReceiver},
     monitored_scope, spawn_monitored_task,
 };
-use nonempty::NonEmpty;
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_config::node::CongestionLogConfig;
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
-    SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
         AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectID, ObjectRef,
@@ -356,46 +354,6 @@ mod additional_consensus_state {
             ConsensusCommitDigest::new(self.consensus_commit_ref.digest.into_inner())
         }
 
-        fn consensus_commit_prologue_transaction(
-            &self,
-            epoch: u64,
-        ) -> VerifiedExecutableTransaction {
-            let transaction = VerifiedTransaction::new_consensus_commit_prologue(
-                epoch,
-                self.round,
-                self.timestamp,
-            );
-            VerifiedExecutableTransaction::new_system(transaction, epoch)
-        }
-
-        fn consensus_commit_prologue_v2_transaction(
-            &self,
-            epoch: u64,
-        ) -> VerifiedExecutableTransaction {
-            let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
-                epoch,
-                self.round,
-                self.timestamp,
-                self.consensus_commit_digest(),
-            );
-            VerifiedExecutableTransaction::new_system(transaction, epoch)
-        }
-
-        fn consensus_commit_prologue_v3_transaction(
-            &self,
-            epoch: u64,
-            consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
-        ) -> VerifiedExecutableTransaction {
-            let transaction = VerifiedTransaction::new_consensus_commit_prologue_v3(
-                epoch,
-                self.round,
-                self.timestamp,
-                self.consensus_commit_digest(),
-                consensus_determined_version_assignments,
-            );
-            VerifiedExecutableTransaction::new_system(transaction, epoch)
-        }
-
         fn consensus_commit_prologue_v4_transaction(
             &self,
             epoch: u64,
@@ -416,62 +374,24 @@ mod additional_consensus_state {
         pub fn create_consensus_commit_prologue_transaction(
             &self,
             epoch: u64,
-            protocol_config: &ProtocolConfig,
             cancelled_txn_version_assignment: Vec<(
                 TransactionDigest,
                 Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
             )>,
-            commit_info: &ConsensusCommitInfo,
             indirect_state_observer: IndirectStateObserver,
         ) -> VerifiedExecutableTransaction {
-            let version_assignments = if protocol_config
-                .record_consensus_determined_version_assignments_in_prologue_v2()
-            {
-                Some(
-                    ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
-                        cancelled_txn_version_assignment,
-                    ),
-                )
-            } else if protocol_config.record_consensus_determined_version_assignments_in_prologue()
-            {
-                Some(
-                    ConsensusDeterminedVersionAssignments::CancelledTransactions(
-                        cancelled_txn_version_assignment
-                            .into_iter()
-                            .map(|(tx_digest, versions)| {
-                                (
-                                    tx_digest,
-                                    versions.into_iter().map(|(id, v)| (id.0, v)).collect(),
-                                )
-                            })
-                            .collect(),
-                    ),
-                )
-            } else {
-                None
-            };
+            let version_assignments =
+                ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
+                    cancelled_txn_version_assignment,
+                );
+            let additional_state_digest =
+                indirect_state_observer.fold_with(self.additional_state_digest());
 
-            if protocol_config.record_additional_state_digest_in_prologue() {
-                let additional_state_digest =
-                    if protocol_config.additional_consensus_digest_indirect_state() {
-                        let d1 = commit_info.additional_state_digest();
-                        indirect_state_observer.fold_with(d1)
-                    } else {
-                        commit_info.additional_state_digest()
-                    };
-
-                self.consensus_commit_prologue_v4_transaction(
-                    epoch,
-                    version_assignments.unwrap(),
-                    additional_state_digest,
-                )
-            } else if let Some(version_assignments) = version_assignments {
-                self.consensus_commit_prologue_v3_transaction(epoch, version_assignments)
-            } else if protocol_config.include_consensus_digest_in_prologue() {
-                self.consensus_commit_prologue_v2_transaction(epoch)
-            } else {
-                self.consensus_commit_prologue_transaction(epoch)
-            }
+            self.consensus_commit_prologue_v4_transaction(
+                epoch,
+                version_assignments,
+                additional_state_digest,
+            )
         }
     }
 
@@ -824,6 +744,32 @@ pub struct ConsensusHandler<C> {
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 
+fn assert_supported_protocol_config(protocol_config: &ProtocolConfig) {
+    assert!(
+        matches!(
+            protocol_config.per_object_congestion_control_mode(),
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+        ),
+        "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
+    );
+    assert!(
+        protocol_config.split_checkpoints_in_consensus_handler(),
+        "support for splitting checkpoints outside of consensus handler has been removed"
+    );
+    assert!(protocol_config.ignore_execution_time_observations_after_certs_closed());
+    assert!(protocol_config.record_time_estimate_processed());
+    assert!(protocol_config.prepend_prologue_tx_in_consensus_commit_in_checkpoints());
+    assert!(protocol_config.consensus_checkpoint_signature_key_includes_digest());
+    assert!(protocol_config.authority_capabilities_v2());
+    assert!(protocol_config.cancel_for_failed_dkg_early());
+    assert!(protocol_config.record_consensus_determined_version_assignments_in_prologue_v2());
+    assert!(protocol_config.record_additional_state_digest_in_prologue());
+    assert!(protocol_config.additional_consensus_digest_indirect_state());
+    assert!(protocol_config.include_cancelled_randomness_txns_in_prologue());
+    assert!(protocol_config.fix_checkpoint_signature_mapping());
+    assert!(protocol_config.merge_randomness_into_checkpoint());
+}
+
 impl<C> ConsensusHandler<C> {
     pub(crate) fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
@@ -839,22 +785,7 @@ impl<C> ConsensusHandler<C> {
         congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
         consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
     ) -> Self {
-        assert!(
-            matches!(
-                epoch_store
-                    .protocol_config()
-                    .per_object_congestion_control_mode(),
-                PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
-            ),
-            "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
-        );
-
-        assert!(
-            epoch_store
-                .protocol_config()
-                .split_checkpoints_in_consensus_handler(),
-            "support for splitting checkpoints outside of consensus handler has been removed"
-        );
+        assert_supported_protocol_config(epoch_store.protocol_config());
 
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
@@ -928,6 +859,8 @@ impl<C> ConsensusHandler<C> {
         traffic_controller: Option<Arc<TrafficController>>,
         last_consensus_stats: ExecutionIndicesWithStatsV2,
     ) -> Self {
+        assert_supported_protocol_config(epoch_store.protocol_config());
+
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
@@ -1089,18 +1022,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         consensus_commit: impl ConsensusCommitAPI,
         transactions: ParsedConsensusTransactions,
     ) {
-        {
-            let protocol_config = self.epoch_store.protocol_config();
-
-            // Assert all protocol config settings for which we don't support old behavior.
-            assert!(protocol_config.ignore_execution_time_observations_after_certs_closed());
-            assert!(protocol_config.record_time_estimate_processed());
-            assert!(protocol_config.prepend_prologue_tx_in_consensus_commit_in_checkpoints());
-            assert!(protocol_config.consensus_checkpoint_signature_key_includes_digest());
-            assert!(protocol_config.authority_capabilities_v2());
-            assert!(protocol_config.cancel_for_failed_dkg_early());
-        }
-
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
         //   backpressure threshold.
@@ -1683,41 +1604,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ));
         }
 
-        if protocol_config.merge_randomness_into_checkpoint() {
-            // We don't want to block checkpoint formation for non-randomness schedulables
-            // on randomness state update. Therefore, we include randomness chunks in the
-            // subsequent checkpoint. First we flush the queue, then enqueue randomness
-            // for merging into the subsequent commit.
-            pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, final_round));
+        // We don't want to block checkpoint formation for non-randomness schedulables
+        // on randomness state update. Therefore, we include randomness chunks in the
+        // subsequent checkpoint. First we flush the queue, then enqueue randomness
+        // for merging into the subsequent commit.
+        pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, final_round));
 
-            if should_write_random_checkpoint {
-                for chunk in chunked_randomness_schedulables {
-                    pending_checkpoints.extend(checkpoint_queue.push_chunk(
-                        chunk.into(),
-                        &assigned_versions,
-                        commit_info.timestamp,
-                        commit_info.consensus_commit_ref,
-                        commit_info.rejected_transactions_digest,
-                    ));
-                }
-                if final_round {
-                    pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, true));
-                }
+        if should_write_random_checkpoint {
+            for chunk in chunked_randomness_schedulables {
+                pending_checkpoints.extend(checkpoint_queue.push_chunk(
+                    chunk.into(),
+                    &assigned_versions,
+                    commit_info.timestamp,
+                    commit_info.consensus_commit_ref,
+                    commit_info.rejected_transactions_digest,
+                ));
             }
-        } else {
-            let force = final_round || should_write_random_checkpoint;
-            pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, force));
-
-            if should_write_random_checkpoint {
-                for chunk in chunked_randomness_schedulables {
-                    pending_checkpoints.extend(checkpoint_queue.push_chunk(
-                        chunk.into(),
-                        &assigned_versions,
-                        commit_info.timestamp,
-                        commit_info.consensus_commit_ref,
-                        commit_info.rejected_transactions_digest,
-                    ));
-                }
+            if final_round {
                 pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, true));
             }
         }
@@ -1762,21 +1665,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let mut cancelled_txn_version_assignment = Vec::new();
 
-        let protocol_config = self.epoch_store.protocol_config();
-
         for (txn_key, assigned_versions) in assigned_versions.0.iter() {
             let Some(d) = txn_key.as_digest() else {
                 continue;
             };
-
-            if !protocol_config.include_cancelled_randomness_txns_in_prologue()
-                && assigned_versions
-                    .shared_object_versions
-                    .iter()
-                    .any(|((id, _), _)| *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
-            {
-                continue;
-            }
 
             if assigned_versions
                 .shared_object_versions
@@ -1801,9 +1693,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let transaction = commit_info.create_consensus_commit_prologue_transaction(
             self.epoch_store.epoch(),
-            self.epoch_store.protocol_config(),
             cancelled_txn_version_assignment,
-            commit_info,
             state.indirect_state_observer.take().unwrap(),
         );
         Some(VerifiedExecutableTransactionWithAliases::no_aliases(
@@ -2901,26 +2791,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // === User transactions ===
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
                             // Extract the aliases claim (required) from the claims
-                            let used_alias_versions = if self
-                                .epoch_store
-                                .protocol_config()
-                                .fix_checkpoint_signature_mapping()
-                            {
-                                tx.aliases()
-                            } else {
-                                // Convert V1 to V2 format using dummy signature indices
-                                // which will be ignored with `fix_checkpoint_signature_mapping`
-                                // disabled.
-                                tx.aliases_v1().map(|a| {
-                                    NonEmpty::from_vec(
-                                        a.into_iter()
-                                            .enumerate()
-                                            .map(|(idx, (_, seq))| (idx as u8, seq))
-                                            .collect(),
-                                    )
-                                    .unwrap()
-                                })
-                            };
+                            let used_alias_versions = tx.aliases();
                             let inner_tx = tx.into_tx();
                             // Safe because transactions are certified by consensus.
                             let tx = VerifiedTransaction::new_unchecked(inner_tx);

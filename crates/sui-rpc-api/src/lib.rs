@@ -4,9 +4,9 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use mysten_network::callback::CallbackLayer;
 use reader::StateReader;
 use subscription::SubscriptionServiceHandle;
+use sui_http::middleware::callback::CallbackLayer;
 use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
@@ -176,11 +176,6 @@ impl RpcService {
                     self.clone(),
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let ledger_service_v2alpha =
-                sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer::new(
-                    self.clone(),
-                )
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
             let proof_service_v2alpha =
                 sui_rpc::proto::sui::rpc::v2alpha::proof_service_server::ProofServiceServer::new(
                     self.clone(),
@@ -228,7 +223,6 @@ impl RpcService {
                 service_name(&signature_verification_service),
                 service_name(&move_package_service),
                 service_name(&name_service),
-                service_name(&ledger_service_v2alpha),
                 service_name(&proof_service_v2alpha),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
@@ -247,7 +241,6 @@ impl RpcService {
                 .add_service(move_package_service)
                 .add_service(name_service)
                 // V2alpha
-                .add_service(ledger_service_v2alpha)
                 .add_service(proof_service_v2alpha)
                 // Reflection
                 .add_service(reflection_v1)

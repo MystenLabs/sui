@@ -39,4 +39,6 @@ sui-json.workspace = true
 sui-package-resolver.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 insta.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }

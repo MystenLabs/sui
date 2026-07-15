@@ -175,8 +175,10 @@ impl TestEnv {
 
     fn execution_env(&self) -> ExecutionEnv {
         let accumulator_version = self.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).1;
-        ExecutionEnv::new()
-            .with_assigned_versions(AssignedVersions::new(vec![], Some(accumulator_version)))
+        ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
+            vec![],
+            Some(accumulator_version),
+        ))
     }
 
     /// Executes at the current accumulator version, expecting success.
@@ -236,8 +238,10 @@ async fn test_object_withdraw_basic_flow() {
         .authority
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new()
-                .with_assigned_versions(AssignedVersions::new(vec![], Some(accumulator_version))),
+            ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
+                vec![],
+                Some(accumulator_version),
+            )),
             &env.epoch_store,
         )
         .unwrap()
@@ -270,7 +274,7 @@ async fn test_object_withdraw_multiple_withdraws() {
             // Fastpath execution
             .try_execute_immediately(
                 &cert,
-                ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+                ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
                     vec![],
                     Some(accumulator_version),
                 )),
@@ -309,7 +313,7 @@ async fn test_object_withdraw_multiple_withdraws() {
             // Fastpath execution
             .try_execute_immediately(
                 &cert,
-                ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+                ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
                     vec![],
                     Some(accumulator_version),
                 )),

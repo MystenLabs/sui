@@ -4,19 +4,20 @@
 use axum::http;
 use std::{borrow::Cow, collections::HashSet, sync::Arc, time::Instant};
 
-use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
     HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use prost::Message;
+use sui_http::middleware::callback::{MakeCallbackHandler, ResponseHandler};
 
 #[derive(Clone)]
 pub struct RpcMetrics {
     inflight_requests: IntGaugeVec,
     num_requests: IntCounterVec,
     request_latency: HistogramVec,
+    request_handler_latency: HistogramVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -42,7 +43,18 @@ impl RpcMetrics {
             .unwrap(),
             request_latency: register_histogram_vec_with_registry!(
                 "rpc_request_latency",
-                "Latency of RPC requests per route",
+                "Latency of RPC requests per route, measured from receipt of the request \
+                 until the response body finished streaming back to the client",
+                &["path"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            request_handler_latency: register_histogram_vec_with_registry!(
+                "rpc_request_handler_latency",
+                "Latency of RPC requests per route, measured from receipt of the request \
+                 until the request handler produced a response, excluding the time spent \
+                 streaming the response body back to the client",
                 &["path"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -127,9 +139,13 @@ impl RpcMetricsMakeCallbackHandler {
 }
 
 impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
-    type Handler = RpcMetricsCallbackHandler;
+    type RequestHandler = ();
+    type ResponseHandler = RpcMetricsCallbackHandler;
 
-    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
+    fn make_handler(
+        &self,
+        request: &http::request::Parts,
+    ) -> (Self::RequestHandler, Self::ResponseHandler) {
         let start = Instant::now();
         let metrics = self.metrics.clone();
 
@@ -154,12 +170,15 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
             .with_label_values(&[path.as_ref()])
             .inc();
 
-        RpcMetricsCallbackHandler {
-            metrics,
-            path,
-            start,
-            counted_response: false,
-        }
+        (
+            (),
+            RpcMetricsCallbackHandler {
+                metrics,
+                path,
+                start,
+                counted_response: false,
+            },
+        )
     }
 }
 
@@ -203,6 +222,14 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
     fn on_response(&mut self, response: &http::response::Parts) {
         const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
 
+        // Unlike `request_latency` (observed in `Drop`, after the response
+        // body finished streaming), this fires as soon as the handler
+        // produced a response, so it excludes client-side network latency.
+        self.metrics
+            .request_handler_latency
+            .with_label_values(&[self.path.as_ref()])
+            .observe(self.start.elapsed().as_secs_f64());
+
         let status = if response
             .headers
             .get(&http::header::CONTENT_TYPE)
@@ -228,7 +255,10 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
         self.counted_response = true;
     }
 
-    fn on_error<E>(&mut self, _error: &E) {
+    fn on_service_error<E>(&mut self, _error: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
         // Do nothing if the whole service errored
         //
         // in Axum this isn't possible since all services are required to have an error type of
@@ -384,15 +414,15 @@ mod tests {
     #[test]
     fn known_grpc_method_without_matched_path_uses_uri_path_label() {
         let mut allowlist = HashSet::new();
-        allowlist.insert("/sui.rpc.v2alpha.LedgerService/ListTransactions".to_owned());
+        allowlist.insert("/sui.rpc.v2.LedgerService/ListTransactions".to_owned());
 
         let label = compute_metric_label(
             true,
-            "/sui.rpc.v2alpha.LedgerService/ListTransactions",
+            "/sui.rpc.v2.LedgerService/ListTransactions",
             None,
             &allowlist,
         );
-        assert_eq!(label, "/sui.rpc.v2alpha.LedgerService/ListTransactions");
+        assert_eq!(label, "/sui.rpc.v2.LedgerService/ListTransactions");
     }
 
     #[test]
@@ -436,5 +466,73 @@ mod tests {
         assert!(!is_grpc_content_type(&http::HeaderValue::from_static(
             "application/json"
         )));
+    }
+
+    /// Builds a handler for a request with no matched path, so all metric
+    /// observations land on the "unknown" label.
+    fn make_test_handler(metrics: &Arc<RpcMetrics>) -> RpcMetricsCallbackHandler {
+        let make = RpcMetricsMakeCallbackHandler::new(metrics.clone());
+        let (parts, _) = http::Request::new(()).into_parts();
+        let ((), handler) = make.make_handler(&parts);
+        handler
+    }
+
+    // The handler latency is observed as soon as the handler produces a
+    // response, while the total request latency is only observed once the
+    // handler is dropped (i.e. the response body finished streaming).
+    #[test]
+    fn handler_latency_observed_on_response_and_total_latency_on_drop() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let mut handler = make_test_handler(&metrics);
+
+        let handler_latency = metrics
+            .request_handler_latency
+            .with_label_values(&["unknown"]);
+        let total_latency = metrics.request_latency.with_label_values(&["unknown"]);
+
+        assert_eq!(handler_latency.get_sample_count(), 0);
+
+        let (parts, _) = http::Response::new(()).into_parts();
+        handler.on_response(&parts);
+
+        assert_eq!(handler_latency.get_sample_count(), 1);
+        assert_eq!(total_latency.get_sample_count(), 0);
+
+        drop(handler);
+
+        assert_eq!(handler_latency.get_sample_count(), 1);
+        assert_eq!(total_latency.get_sample_count(), 1);
+    }
+
+    // A request canceled before the handler produces a response records the
+    // total latency and the canceled count, but no handler latency.
+    #[test]
+    fn handler_latency_not_observed_for_canceled_requests() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let handler = make_test_handler(&metrics);
+
+        drop(handler);
+
+        assert_eq!(
+            metrics
+                .request_handler_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .request_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&["unknown", "canceled"])
+                .get(),
+            1
+        );
     }
 }
