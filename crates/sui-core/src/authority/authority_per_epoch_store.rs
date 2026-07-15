@@ -1912,12 +1912,19 @@ impl AuthorityPerEpochStore {
                     .into());
                 }
                 Some(LockResolution::ConsumedSinceClaim) => {
-                    let executed = *already_executed.get_or_insert_with(|| {
-                        self.transactions_executed_in_cur_epoch(&[tx_digest])
-                            // A read failure here cannot be resolved deterministically;
-                            // fail loudly instead of guessing.
-                            .expect("cannot read executed transactions")[0]
-                    });
+                    let executed = match already_executed {
+                        Some(executed) => executed,
+                        None => {
+                            // Propagated on failure (e.g. EpochEnded racing this check
+                            // on the submission path); a verdict cannot be derived from
+                            // a failed read. The consensus handler treats non-conflict
+                            // errors as fatal (it must not guess either way).
+                            let executed =
+                                self.transactions_executed_in_cur_epoch(&[tx_digest])?[0];
+                            already_executed = Some(executed);
+                            executed
+                        }
+                    };
                     if !executed {
                         // Winner digest is best-effort error enrichment: the transaction
                         // that produced the current live version (which for multi-hop

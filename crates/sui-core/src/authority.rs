@@ -708,7 +708,7 @@ impl AuthorityMetrics {
                 "Owned-object lock state resolutions in the consensus handler, by source. \
                  quarantine/deferred/cache resolve from consensus in-memory state; \
                  objects_db is an authoritative latest-object read (in-memory object \
-                 cache first, then DB); backstop is a residual lock-table point read",
+                 cache first, then DB)",
                 &["source"],
                 registry,
             ).unwrap(),
@@ -953,6 +953,16 @@ impl ForkRecoveryState {
 }
 
 pub type PostProcessingOutput = (StagedBatch, IndexStoreCacheUpdates);
+
+/// Outcome of a successful `handle_vote_transaction`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoteTransactionResult {
+    /// Inputs were validated against live state.
+    Validated,
+    /// Accepted because the transaction is already finalized/executed this epoch. Its
+    /// inputs were consumed by its own execution, so no input-based validation applies.
+    AlreadyFinalized,
+}
 
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
@@ -1220,7 +1230,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<()> {
+    ) -> SuiResult<VoteTransactionResult> {
         debug!("handle_vote_transaction");
 
         let _metrics_guard = self
@@ -1248,7 +1258,10 @@ impl AuthorityState {
             || epoch_store.transactions_executed_in_cur_epoch(&[tx_digest])?[0]
         {
             assert_reachable!("transaction recently executed");
-            return Ok(());
+            // No input validation applies: the transaction's own execution consumed its
+            // inputs, so they are (correctly) no longer live. Callers must skip
+            // input-based checks (e.g. immutable-claims verification) for this result.
+            return Ok(VoteTransactionResult::AlreadyFinalized);
         }
 
         if self
@@ -1273,7 +1286,8 @@ impl AuthorityState {
         // in the consensus handler. Validation still runs to prevent spam transactions with
         // invalid object versions, and is necessary to handle recently created objects.
         self.get_cache_writer()
-            .validate_owned_object_versions(&owned_objects)
+            .validate_owned_object_versions(&owned_objects)?;
+        Ok(VoteTransactionResult::Validated)
     }
 
     /// Used for early client validation check for transactions before submission to server.
@@ -4104,6 +4118,12 @@ impl AuthorityState {
 
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
+        // clear_state_end_of_epoch discards executed-but-not-finalized transaction
+        // outputs, so latest-version observations made during the old epoch are no
+        // longer lower bounds — a bound recorded from discarded execution state could
+        // exceed the reverted durable version and produce a spurious "consumed since
+        // claim" conflict verdict in the new epoch.
+        self.live_object_cache.clear();
         self.check_system_consistency(cur_epoch_store, state_hasher, expensive_safety_check_config);
         self.maybe_reaccumulate_state_hash(
             cur_epoch_store,

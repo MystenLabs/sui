@@ -16,7 +16,8 @@ use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use lru::LruCache;
 use mysten_common::{
-    assert_reachable, assert_sometimes, debug_fatal, random_util::randomize_cache_capacity_in_tests,
+    assert_reachable, assert_sometimes, debug_fatal, fatal,
+    random_util::randomize_cache_capacity_in_tests,
 };
 use mysten_metrics::{
     monitored_future,
@@ -36,6 +37,7 @@ use sui_types::{
     },
     crypto::RandomnessRound,
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest, Digest},
+    error::SuiErrorKind,
     executable_transaction::{
         TrustedExecutableTransaction, VerifiedExecutableTransaction,
         VerifiedExecutableTransactionWithAliases,
@@ -1072,11 +1074,6 @@ struct CommitHandlerState {
     // Lock refs of each finalized user transaction of this commit; deferral bookkeeping
     // moves a deferred transaction's refs into the deferred-locks map.
     finalized_lock_sets: HashMap<TransactionDigest, Vec<ObjectRef>>,
-    // Lock refs captured from the deferred-locks map when their transactions were
-    // reloaded this commit. Re-deferred transactions move theirs back into the
-    // deferred-locks map; the rest (scheduled or cancelled) re-acquire into
-    // `owned_object_locks` so coverage is continuous until they execute.
-    reloaded_deferred_lock_refs: HashMap<TransactionDigest, Vec<ObjectRef>>,
 }
 
 impl CommitHandlerState {
@@ -1090,7 +1087,6 @@ impl CommitHandlerState {
             occurrence_counts: HashMap::new(),
             owned_object_locks: HashMap::new(),
             finalized_lock_sets: HashMap::new(),
-            reloaded_deferred_lock_refs: HashMap::new(),
         }
     }
 
@@ -1321,8 +1317,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             user_transactions,
         );
 
-        // Buffer owned object locks for batch write, now that reloaded deferred
-        // transactions have re-acquired theirs.
+        // Buffer owned object locks into the output.
         let owned_object_locks = std::mem::take(&mut state.owned_object_locks);
         if !owned_object_locks.is_empty() {
             state.output.set_owned_object_locks(owned_object_locks);
@@ -1621,6 +1616,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         let mut total_deferred_txns = 0;
+        let mut redeferred_digests = HashSet::new();
         {
             let mut deferred_transactions = self
                 .epoch_store
@@ -1634,39 +1630,40 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .lock();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
-                // Move each deferred transaction's lock refs into the deferred-locks
-                // map: from this commit's acquisitions (fresh deferral) or from the
-                // refs captured at reload (re-deferral).
                 for tx in &txns {
                     let digest = *tx.tx().digest();
-                    let refs = state
-                        .finalized_lock_sets
-                        .remove(&digest)
-                        .or_else(|| state.reloaded_deferred_lock_refs.remove(&digest))
-                        .unwrap_or_else(|| {
-                            debug_fatal!(
-                                "deferred transaction {:?} has no recorded lock refs",
-                                digest
-                            );
-                            // Conservative superset: all ImmOrOwned inputs. Can only
-                            // over-cover refs the transaction claimed as immutable.
-                            tx.tx()
-                                .transaction_data()
-                                .input_objects()
-                                .map(|kinds| {
-                                    kinds
-                                        .iter()
-                                        .filter_map(|kind| match kind {
-                                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => {
-                                                Some(*obj_ref)
-                                            }
-                                            _ => None,
-                                        })
-                                        .collect()
-                                })
-                                .unwrap_or_default()
-                        });
-                    deferred_locks.insert(digest, refs);
+                    redeferred_digests.insert(digest);
+                    // Fresh deferrals move this commit's acquired lock refs into the
+                    // deferred-locks map. Re-deferrals already have their entry (it is
+                    // only removed when the commit that schedules the transaction
+                    // flushes).
+                    if let Some(refs) = state.finalized_lock_sets.remove(&digest) {
+                        deferred_locks.insert(digest, refs);
+                    } else if !deferred_locks.contains_tx(&digest) {
+                        debug_fatal!(
+                            "deferred transaction {:?} has no recorded lock refs",
+                            digest
+                        );
+                        // Conservative superset: all ImmOrOwned inputs. Can only
+                        // over-cover refs the transaction claimed as immutable.
+                        let refs = tx
+                            .tx()
+                            .transaction_data()
+                            .input_objects()
+                            .map(|kinds| {
+                                kinds
+                                    .iter()
+                                    .filter_map(|kind| match kind {
+                                        InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => {
+                                            Some(*obj_ref)
+                                        }
+                                        _ => None,
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        deferred_locks.insert(digest, refs);
+                    }
                 }
                 deferred_transactions.insert(key, txns.clone());
                 state.output.defer_transactions(key, txns);
@@ -1674,14 +1671,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         // Reloaded deferred transactions that did not re-defer are being scheduled (or
-        // cancelled, which still executes). Re-acquire their locks into this commit's
-        // output so in-memory coverage is continuous from deferred-locks map to
-        // quarantine to (post-flush) the objects table. Re-writing the same key/value
-        // into the lock table is idempotent.
-        for (digest, refs) in std::mem::take(&mut state.reloaded_deferred_lock_refs) {
-            for obj_ref in refs {
-                state.owned_object_locks.insert(obj_ref, digest);
-            }
+        // cancelled, which still executes). Their deferred-locks entries stay in place
+        // until this commit flushes - the flush gate guarantees they are executed by
+        // then, at which point the objects table covers their consumed inputs.
+        let finalized_reloaded: Vec<TransactionDigest> = previously_deferred_tx_digests
+            .keys()
+            .filter(|digest| !redeferred_digests.contains(*digest))
+            .copied()
+            .collect();
+        if !finalized_reloaded.is_empty() {
+            state
+                .output
+                .set_finalized_reloaded_deferred_txns(finalized_reloaded);
         }
 
         self.metrics
@@ -2200,28 +2201,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         } else {
             vec![]
         };
-
-        // Capture the reloaded transactions' lock refs out of the deferred-locks map.
-        // Whether each transaction re-defers (refs go back into the map) or gets
-        // scheduled/cancelled (refs re-acquire into this commit's locks) is decided in
-        // collect_transactions_to_schedule.
-        {
-            let mut deferred_locks = self
-                .epoch_store
-                .consensus_output_cache
-                .deferred_transaction_locks
-                .lock();
-            for digest in previously_deferred_tx_digests.keys() {
-                if let Some(refs) = deferred_locks.remove_tx(digest) {
-                    state.reloaded_deferred_lock_refs.insert(*digest, refs);
-                } else {
-                    debug_fatal!(
-                        "reloaded deferred transaction {:?} missing from deferred-locks map",
-                        digest
-                    );
-                }
-            }
-        }
 
         (
             deferred_txs,
@@ -3000,6 +2979,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             num_finalized_user_transactions[author] += 1;
                         }
                         Err(e) => {
+                            // Only a lock conflict is a deterministic drop verdict. Any
+                            // other error is a failed read - the verdict cannot be
+                            // derived, and guessing either way risks a fork.
+                            if !matches!(e.as_inner(), SuiErrorKind::ObjectLockConflict { .. }) {
+                                fatal!(
+                                    "cannot resolve owned-object locks for {:?}: {e}",
+                                    tx.digest()
+                                );
+                            }
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
                             self.metrics
                                 .consensus_handler_dropped_transactions
