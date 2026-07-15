@@ -69,6 +69,10 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription_watermark_interval: Option<u32>,
 
+    /// Maximum number of concurrent RPC subscriptions. Defaults to 1024.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_max_subscribers: Option<usize>,
+
     /// Number of parallel shard tasks that evaluate subscription filters and
     /// deliver updates. Each subscriber lives on one shard; per-checkpoint
     /// filter evaluation parallelizes across shards. Defaults to the host's

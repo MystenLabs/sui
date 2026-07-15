@@ -22,7 +22,7 @@ mod matcher;
 const CHECKPOINT_MAILBOX_SIZE: usize = 1024;
 const MAILBOX_SIZE: usize = 128;
 const SUBSCRIPTION_CHANNEL_SIZE: usize = 256;
-const MAX_SUBSCRIBERS: usize = 1024;
+const DEFAULT_MAX_SUBSCRIBERS: usize = 1024;
 /// Bound on each shard task's mailbox (registrations, checkpoint fan-out,
 /// and lag teardowns from the dispatcher).
 const SHARD_MAILBOX_SIZE: usize = 64;
@@ -295,6 +295,8 @@ pub struct SubscriptionService {
     /// Filtered-subscriber counts per key space, shared with the shards;
     /// gates per-checkpoint key extraction.
     counters: Arc<SubscriberCounts>,
+    /// Global admission limit across all shards.
+    max_subscribers: usize,
 
     // When set, delivery of a checkpoint waits until the index has committed
     // it (see [`IndexedCheckpointFn`]). `None` preserves the immediate-delivery
@@ -305,12 +307,14 @@ pub struct SubscriptionService {
 }
 
 impl SubscriptionService {
-    /// `None` defaults `watermark_interval` to 25 checkpoints and `shards` to
-    /// the host's available parallelism, with a minimum of one.
+    /// `None` defaults `watermark_interval` to 25 checkpoints,
+    /// `max_subscribers` to 1024, and `shards` to the host's available
+    /// parallelism, with a minimum of one shard.
     pub fn build(
         registry: &prometheus::Registry,
         indexed_checkpoint: Option<IndexedCheckpointFn>,
         watermark_interval: Option<u32>,
+        max_subscribers: Option<usize>,
         shards: Option<u32>,
     ) -> (
         broadcast::Sender<Arc<Checkpoint>>,
@@ -321,6 +325,7 @@ impl SubscriptionService {
         let (subscription_request_sender, mailbox) = mpsc::channel(MAILBOX_SIZE);
 
         let counters = Arc::new(SubscriberCounts::default());
+        let max_subscribers = max_subscribers.unwrap_or(DEFAULT_MAX_SUBSCRIBERS);
         let watermark_interval = watermark_interval
             .unwrap_or(DEFAULT_WATERMARK_INTERVAL)
             .max(1);
@@ -348,6 +353,7 @@ impl SubscriptionService {
                 shards: shard_senders,
                 next_shard: 0,
                 counters,
+                max_subscribers,
                 indexed_checkpoint,
                 metrics,
             }
@@ -510,10 +516,10 @@ impl SubscriptionService {
         // can have at one time. `counters.total` is incremented here at
         // admission and decremented by the shards on departure/clear, so it
         // counts live + in-flight subscribers across every shard.
-        if self.counters.total.load(Ordering::Relaxed) >= MAX_SUBSCRIBERS {
+        if self.counters.total.load(Ordering::Relaxed) >= self.max_subscribers {
             trace!(
                 "failed to register new subscriber: hit maximum number of subscribers {}",
-                MAX_SUBSCRIBERS
+                self.max_subscribers
             );
             // Dropping the oneshot makes `register_subscription` return
             // `None` -> `Status::unavailable`.
@@ -607,6 +613,7 @@ mod tests {
             shards: shard_senders,
             next_shard: 0,
             counters,
+            max_subscribers: DEFAULT_MAX_SUBSCRIBERS,
             indexed_checkpoint,
             metrics,
         };
@@ -902,26 +909,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cap_is_enforced_globally_across_shards() {
+    async fn configured_cap_is_enforced_globally_across_shards() {
         let (mut service, mut shards) = test_service(2);
-        let mut receivers = Vec::with_capacity(MAX_SUBSCRIBERS);
-        for i in 0..MAX_SUBSCRIBERS {
-            // Keep each 64-slot shard mailbox from filling: the dispatcher's
-            // bounded send would otherwise block with no spawned shard task.
-            if i % 32 == 0 {
-                drain(&mut shards);
-            }
+        let max_subscribers = 3;
+        service.max_subscribers = max_subscribers;
+        let mut receivers = Vec::with_capacity(max_subscribers);
+        for _ in 0..max_subscribers {
             receivers.push(register(&mut service, unfiltered()).await.unwrap());
         }
         drain(&mut shards);
         assert_eq!(
             service.counters.total.load(Ordering::Relaxed),
-            MAX_SUBSCRIBERS
+            max_subscribers
         );
         // The gauge mirrors the admission count for observability.
         assert_eq!(
             service.metrics.inflight_subscribers.get(),
-            MAX_SUBSCRIBERS as i64
+            max_subscribers as i64
         );
         assert!(!shards[0].matcher.is_empty());
         assert!(!shards[1].matcher.is_empty());

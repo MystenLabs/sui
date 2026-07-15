@@ -2794,12 +2794,17 @@ async fn build_http_servers(
         .rpc
         .as_ref()
         .and_then(|rpc| rpc.subscription_watermark_interval);
+    let subscription_max_subscribers = config
+        .rpc
+        .as_ref()
+        .and_then(|rpc| rpc.subscription_max_subscribers);
     let subscription_shards = config.rpc.as_ref().and_then(|rpc| rpc.subscription_shards);
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
         SubscriptionService::build(
             prometheus_registry,
             indexed_checkpoint,
             subscription_watermark_interval,
+            subscription_max_subscribers,
             subscription_shards,
         );
     let rpc_router = {
