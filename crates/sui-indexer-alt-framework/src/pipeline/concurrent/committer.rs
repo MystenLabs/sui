@@ -15,9 +15,9 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+use crate::config::ConcurrencyConfig;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
-use crate::pipeline::CommitterConfig;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::BatchedRows;
 use crate::pipeline::concurrent::Handler;
@@ -30,8 +30,8 @@ const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 /// The committer task is responsible for writing batches of rows to the database. It receives
-/// batches on `rx` and writes them out to the `db` concurrently (`config.write_concurrency`
-/// controls the degree of fan-out).
+/// batches on `rx` and writes them out to the `db` concurrently using the fixed or adaptive
+/// writer concurrency specified by `concurrency`.
 ///
 /// The writing of each batch will be repeatedly retried on an exponential back-off until it
 /// succeeds. Once the write succeeds, the [WatermarkPart]s for that batch are sent on `tx` to the
@@ -40,7 +40,7 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// This task will shutdown if its receiver or sender channels are closed.
 pub(super) fn committer<H: Handler>(
     handler: Arc<H>,
-    config: CommitterConfig,
+    concurrency: ConcurrencyConfig,
     rx: mpsc::Receiver<BatchedRows<H>>,
     tx: mpsc::Sender<Vec<WatermarkPart>>,
     db: H::Store,
@@ -54,9 +54,10 @@ pub(super) fn committer<H: Handler>(
             &metrics.latest_partially_committed_checkpoint,
         );
 
+        let report_metrics = metrics.clone();
         match ReceiverStream::new(rx)
-            .try_for_each_spawned(
-                config.write_concurrency,
+            .try_for_each_send_spawned(
+                concurrency.into(),
                 |BatchedRows {
                      batch,
                      batch_len,
@@ -64,7 +65,6 @@ pub(super) fn committer<H: Handler>(
                  }| {
                     let batch = Arc::new(batch);
                     let handler = handler.clone();
-                    let tx = tx.clone();
                     let db = db.clone();
                     let metrics = metrics.clone();
                     let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
@@ -186,13 +186,19 @@ pub(super) fn committer<H: Handler>(
                         // not produce any permanent errors, but if it does, we need to shutdown
                         // the pipeline).
                         backoff::future::retry(backoff, commit).await?;
-                        if tx.send(watermark).await.is_err() {
-                            info!(pipeline = H::NAME, "Watermark closed channel");
-                            return Err(Break::<anyhow::Error>::Break);
-                        }
-
-                        Ok(())
+                        Ok::<_, Break<anyhow::Error>>(watermark)
                     }
+                },
+                tx,
+                move |stats| {
+                    report_metrics
+                        .committer_concurrency_limit
+                        .with_label_values(&[H::NAME])
+                        .set(stats.limit as i64);
+                    report_metrics
+                        .committer_concurrency_inflight
+                        .with_label_values(&[H::NAME])
+                        .set(stats.inflight as i64);
                 },
             )
             .await
@@ -232,6 +238,7 @@ mod tests {
     use crate::mocks::store::ConnectionFailure;
     use crate::mocks::store::FallibleMockConnection;
     use crate::mocks::store::FallibleMockStore;
+    use crate::pipeline::CommitterConfig;
     use crate::pipeline::Processor;
     use crate::pipeline::WatermarkPart;
     use crate::pipeline::concurrent::BatchStatus;
@@ -328,7 +335,7 @@ mod tests {
     /// # Arguments
     /// * `store` - The mock store to use for testing
     async fn setup_test(store: FallibleMockStore) -> TestSetup {
-        let config = CommitterConfig::default();
+        let write_concurrency = CommitterConfig::default().write_concurrency;
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         let (batch_tx, batch_rx) = mpsc::channel::<BatchedRows<DataPipeline>>(10);
@@ -338,7 +345,7 @@ mod tests {
         let handler = Arc::new(DataPipeline);
         let committer = committer(
             handler,
-            config,
+            write_concurrency,
             batch_rx,
             watermark_tx,
             store_clone,
@@ -351,6 +358,85 @@ mod tests {
             watermark_rx,
             committer,
         }
+    }
+
+    #[tokio::test]
+    async fn test_adaptive_concurrency_delivers_all_watermarks() {
+        const BATCH_COUNT: u64 = 5;
+
+        let store = FallibleMockStore::default();
+        let metrics = IndexerMetrics::new(None, &Default::default());
+        let (batch_tx, batch_rx) = mpsc::channel::<BatchedRows<DataPipeline>>(10);
+        let (watermark_tx, mut watermark_rx) = mpsc::channel(10);
+
+        let committer = committer(
+            Arc::new(DataPipeline),
+            ConcurrencyConfig::Adaptive {
+                initial: 2,
+                min: 1,
+                max: 8,
+                dead_band: None,
+            },
+            batch_rx,
+            watermark_tx,
+            store.clone(),
+            metrics,
+        );
+
+        for checkpoint in 1..=BATCH_COUNT {
+            let tx_hi = checkpoint * 10 + 2;
+            let batch = BatchedRows::from_vec(
+                vec![StoredData {
+                    cp_sequence_number: checkpoint,
+                    tx_sequence_numbers: vec![checkpoint * 10 + 1, tx_hi],
+                    ..Default::default()
+                }],
+                vec![WatermarkPart {
+                    watermark: CommitterWatermark {
+                        epoch_hi_inclusive: 0,
+                        checkpoint_hi_inclusive: checkpoint,
+                        tx_hi,
+                        timestamp_ms_hi_inclusive: checkpoint * 1_000,
+                    },
+                    batch_rows: 1,
+                    total_rows: 1,
+                }],
+            );
+
+            batch_tx.send(batch).await.unwrap();
+        }
+        drop(batch_tx);
+
+        let mut delivered_checkpoints = tokio::time::timeout(Duration::from_secs(5), async move {
+            let mut checkpoints = Vec::new();
+            while let Some(watermark_parts) = watermark_rx.recv().await {
+                checkpoints.extend(
+                    watermark_parts
+                        .into_iter()
+                        .map(|part| part.watermark.checkpoint_hi_inclusive),
+                );
+            }
+            checkpoints
+        })
+        .await
+        .expect("adaptive committer should finish after the batch channel closes");
+
+        delivered_checkpoints.sort_unstable();
+        assert_eq!(delivered_checkpoints, (1..=BATCH_COUNT).collect::<Vec<_>>());
+
+        {
+            let data = store.data.get(DataPipeline::NAME).unwrap();
+            assert_eq!(data.len(), BATCH_COUNT as usize);
+            for checkpoint in 1..=BATCH_COUNT {
+                let tx_hi = checkpoint * 10 + 2;
+                assert_eq!(
+                    data.get(&checkpoint).unwrap().value(),
+                    &vec![checkpoint * 10 + 1, tx_hi],
+                );
+            }
+        }
+
+        committer.shutdown().await.unwrap();
     }
 
     #[tokio::test]

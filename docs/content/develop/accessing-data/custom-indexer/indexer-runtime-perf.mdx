@@ -79,9 +79,10 @@ let ingestion_config = IngestionConfig {
         initial: 1,
         min: 1,
         max: 500,
+        dead_band: None,
     },
     // Or use fixed concurrency:
-    // ingest_concurrency: ConcurrencyConfig::Fixed { value: 200 },
+    // ingest_concurrency: ConcurrencyConfig::fixed(200),
 
     // Retry interval for missing checkpoints in ms (default: 200)
     retry_interval_ms: 100,
@@ -98,6 +99,7 @@ let ingestion_config = IngestionConfig {
 
     // Timeout for streaming operations (peek/next) in ms (default: 5000)
     streaming_statement_timeout_ms: 10000,
+    ..Default::default(),
 };
 ```
 

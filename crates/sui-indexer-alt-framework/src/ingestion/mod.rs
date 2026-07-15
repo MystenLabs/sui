@@ -64,8 +64,8 @@ pub struct ClientArgs {
 #[serde(default)]
 pub struct IngestionConfig {
     /// Concurrency control for checkpoint ingestion. A plain integer gives fixed concurrency;
-    /// an object with `initial`, `min`, and `max` fields enables adaptive concurrency that adjusts
-    /// based on subscriber channel fill fraction.
+    /// `{ kind = "adaptive", initial, min, max }` enables adaptive concurrency that adjusts based
+    /// on subscriber channel fill fraction.
     pub ingest_concurrency: IngestConcurrencyConfig,
 
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.

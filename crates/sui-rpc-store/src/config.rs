@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 
 /// Top-level configuration for the `sui-rpc-store` indexer
@@ -196,7 +197,7 @@ pub struct PipelineLayer {
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
-    pub write_concurrency: Option<usize>,
+    pub write_concurrency: Option<ConcurrencyConfig>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
 }
@@ -456,18 +457,18 @@ mod tests {
     #[test]
     fn committer_layer_overrides_base() {
         let base = CommitterConfig {
-            write_concurrency: 4,
+            write_concurrency: ConcurrencyConfig::fixed(4),
             collect_interval_ms: 200,
             watermark_interval_ms: 200,
             ..Default::default()
         };
         let layer = CommitterLayer {
-            write_concurrency: Some(8),
+            write_concurrency: Some(ConcurrencyConfig::fixed(8)),
             collect_interval_ms: None,
             watermark_interval_ms: Some(500),
         };
         let merged = layer.finish(base);
-        assert_eq!(merged.write_concurrency, 8);
+        assert_eq!(merged.write_concurrency, ConcurrencyConfig::fixed(8));
         // Unset fields inherit from `base`.
         assert_eq!(merged.collect_interval_ms, 200);
         assert_eq!(merged.watermark_interval_ms, 500);

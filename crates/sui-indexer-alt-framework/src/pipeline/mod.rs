@@ -23,8 +23,8 @@ const WARN_PENDING_WATERMARKS: usize = 10000;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CommitterConfig {
-    /// Number of concurrent writers per pipeline.
-    pub write_concurrency: usize,
+    /// Writer concurrency for each pipeline.
+    pub write_concurrency: ConcurrencyConfig,
 
     /// The collector will check for pending data at least this often, in milliseconds.
     pub collect_interval_ms: u64,
@@ -174,7 +174,7 @@ impl WatermarkPart {
 impl Default for CommitterConfig {
     fn default() -> Self {
         Self {
-            write_concurrency: 5,
+            write_concurrency: ConcurrencyConfig::fixed(5),
             collect_interval_ms: 500,
             watermark_interval_ms: 500,
             watermark_interval_jitter_ms: 0,
@@ -199,6 +199,14 @@ mod tests {
         async fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![1, 2, 3])
         }
+    }
+
+    #[test]
+    fn committer_default_write_concurrency_remains_fixed() {
+        assert_eq!(
+            CommitterConfig::default().write_concurrency,
+            ConcurrencyConfig::fixed(5)
+        );
     }
 
     #[test]

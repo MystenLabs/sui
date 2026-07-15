@@ -101,7 +101,7 @@ pub struct PipelineIngestionLayer {
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
-    pub write_concurrency: Option<usize>,
+    pub write_concurrency: Option<ConcurrencyConfig>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
 }
@@ -174,7 +174,7 @@ impl IndexerConfig {
                 committer: CommitterLayer {
                     collect_interval_ms: Some(50),
                     watermark_interval_ms: Some(50),
-                    write_concurrency: Some(1),
+                    write_concurrency: Some(ConcurrencyConfig::fixed(1)),
                 },
                 pruner: PrunerLayer {
                     interval_ms: Some(50),
@@ -578,7 +578,7 @@ mod tests {
         let this = PipelineLayer {
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
-                    write_concurrency: Some(10),
+                    write_concurrency: Some(ConcurrencyConfig::fixed(10)),
                     collect_interval_ms: Some(1000),
                     watermark_interval_ms: None,
                 }),
@@ -587,7 +587,7 @@ mod tests {
             }),
             ev_emit_mod: Some(ConcurrentLayer {
                 committer: Some(CommitterLayer {
-                    write_concurrency: Some(5),
+                    write_concurrency: Some(ConcurrencyConfig::fixed(5)),
                     collect_interval_ms: Some(500),
                     watermark_interval_ms: None,
                 }),
@@ -599,7 +599,7 @@ mod tests {
         let that = PipelineLayer {
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
-                    write_concurrency: Some(5),
+                    write_concurrency: Some(ConcurrencyConfig::fixed(5)),
                     collect_interval_ms: None,
                     watermark_interval_ms: Some(500),
                 }),
@@ -618,7 +618,7 @@ mod tests {
             PipelineLayer {
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
-                        write_concurrency: Some(5),
+                        write_concurrency: Some(ConcurrencyConfig::Fixed { value: 5 }),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
                         ..
@@ -628,7 +628,7 @@ mod tests {
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
-                        write_concurrency: Some(5),
+                        write_concurrency: Some(ConcurrencyConfig::Fixed { value: 5 }),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
                         ..
@@ -645,7 +645,7 @@ mod tests {
             PipelineLayer {
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
-                        write_concurrency: Some(10),
+                        write_concurrency: Some(ConcurrencyConfig::Fixed { value: 10 }),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
                         ..
@@ -655,7 +655,7 @@ mod tests {
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
-                        write_concurrency: Some(5),
+                        write_concurrency: Some(ConcurrencyConfig::Fixed { value: 5 }),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
                         ..
@@ -722,7 +722,7 @@ mod tests {
 
         let base = ConcurrentConfig {
             committer: CommitterConfig {
-                write_concurrency: 5,
+                write_concurrency: ConcurrencyConfig::fixed(5),
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
@@ -735,7 +735,7 @@ mod tests {
             layer.finish(base).unwrap(),
             ConcurrentConfig {
                 committer: CommitterConfig {
-                    write_concurrency: 5,
+                    write_concurrency: ConcurrencyConfig::Fixed { value: 5 },
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
                     ..
@@ -756,7 +756,7 @@ mod tests {
 
         let base = ConcurrentConfig {
             committer: CommitterConfig {
-                write_concurrency: 5,
+                write_concurrency: ConcurrencyConfig::fixed(5),
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
@@ -769,7 +769,7 @@ mod tests {
             layer.finish(base).unwrap(),
             ConcurrentConfig {
                 committer: CommitterConfig {
-                    write_concurrency: 5,
+                    write_concurrency: ConcurrencyConfig::Fixed { value: 5 },
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
                     ..
@@ -793,7 +793,7 @@ mod tests {
 
         let base = ConcurrentConfig {
             committer: CommitterConfig {
-                write_concurrency: 5,
+                write_concurrency: ConcurrencyConfig::fixed(5),
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
@@ -812,7 +812,7 @@ mod tests {
             layer.finish(base).unwrap(),
             ConcurrentConfig {
                 committer: CommitterConfig {
-                    write_concurrency: 5,
+                    write_concurrency: ConcurrencyConfig::Fixed { value: 5 },
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
                     ..
@@ -841,6 +841,85 @@ mod tests {
         assert!(
             err.to_string().contains("i_dont_exist"),
             "Unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn numeric_concurrency_parses_for_ingestion_and_committing() {
+        let config: IndexerConfig = toml::from_str(
+            r#"
+            [ingestion]
+            ingest-concurrency = 20
+
+            [committer]
+            write-concurrency = 10
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.ingestion.ingest_concurrency,
+            Some(ConcurrencyConfig::fixed(20))
+        );
+        assert_eq!(
+            config.committer.write_concurrency,
+            Some(ConcurrencyConfig::fixed(10))
+        );
+    }
+
+    #[test]
+    fn tagged_fixed_concurrency_parses_for_ingestion_and_committing() {
+        let config: IndexerConfig = toml::from_str(
+            r#"
+            [ingestion]
+            ingest-concurrency = { kind = "fixed", value = 20 }
+
+            [committer]
+            write-concurrency = { kind = "fixed", value = 10 }
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.ingestion.ingest_concurrency,
+            Some(ConcurrencyConfig::fixed(20))
+        );
+        assert_eq!(
+            config.committer.write_concurrency,
+            Some(ConcurrencyConfig::fixed(10))
+        );
+    }
+
+    #[test]
+    fn adaptive_concurrency_parses_for_ingestion_and_committing() {
+        let config: IndexerConfig = toml::from_str(
+            r#"
+            [ingestion]
+            ingest-concurrency = { kind = "adaptive", initial = 20, min = 2, max = 200 }
+
+            [committer]
+            write-concurrency = { kind = "adaptive", initial = 10, min = 1, max = 100 }
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.ingestion.ingest_concurrency,
+            Some(ConcurrencyConfig::Adaptive {
+                initial: 20,
+                min: 2,
+                max: 200,
+                dead_band: None,
+            })
+        );
+        assert_eq!(
+            config.committer.write_concurrency,
+            Some(ConcurrencyConfig::Adaptive {
+                initial: 10,
+                min: 1,
+                max: 100,
+                dead_band: None,
+            })
         );
     }
 
