@@ -70,6 +70,14 @@ pub(crate) struct ConsensusCommitOutput {
     next_shared_object_versions: Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
 
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>,
+
+    // Previously-deferred transactions reloaded by this commit that did not re-defer
+    // (scheduled or cancelled - both execute). Their deferred-locks map entries are
+    // removed when this commit flushes: the flush gate guarantees they are executed by
+    // then, so the objects table takes over conflict coverage with no gap. (Removing at
+    // reload would open a window - reload until flush - where the locks are in no
+    // in-memory layer and the transaction may not have executed yet.)
+    finalized_reloaded_deferred_txns: Vec<TransactionDigest>,
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
     // checkpoint state
@@ -209,6 +217,11 @@ impl ConsensusCommitOutput {
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
         self.deleted_deferred_txns
             .extend(deferral_keys.iter().cloned());
+    }
+
+    pub fn set_finalized_reloaded_deferred_txns(&mut self, digests: Vec<TransactionDigest>) {
+        assert!(self.finalized_reloaded_deferred_txns.is_empty());
+        self.finalized_reloaded_deferred_txns = digests;
     }
 
     pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpoint) {
@@ -404,10 +417,12 @@ impl ConsensusCommitOutput {
 /// Deferred transactions are the one class of finalized transactions whose locks the
 /// objects table cannot reproduce: they hold locks from their first appearance but have
 /// not executed, so their inputs are still at the claimed versions. This map keeps those
-/// locks in memory so post-consensus conflict detection does not need the durable lock
-/// table for them. Maintained by the consensus handler alongside `deferred_transactions`:
-/// entries are inserted on deferral and removed on reload (at which point the reloaded
-/// transaction re-acquires into the current commit's locks or re-defers).
+/// locks in memory so post-consensus conflict detection does not need a durable lock
+/// table for them. Entries are inserted by the consensus handler on deferral and removed
+/// when the commit that reloaded the transaction for scheduling *flushes* (by which
+/// point the transaction is executed and the objects table takes over coverage) —
+/// mirroring the lifetime of the durable deferred-transactions table entry, whose
+/// deletion is part of that same flush.
 #[derive(Default)]
 pub(crate) struct DeferredTransactionLocks {
     by_ref: HashMap<ObjectRef, TransactionDigest>,
@@ -434,6 +449,10 @@ impl DeferredTransactionLocks {
 
     pub fn get(&self, obj_ref: &ObjectRef) -> Option<TransactionDigest> {
         self.by_ref.get(obj_ref).copied()
+    }
+
+    pub fn contains_tx(&self, digest: &TransactionDigest) -> bool {
+        self.by_tx.contains_key(digest)
     }
 }
 
@@ -473,8 +492,8 @@ impl ConsensusOutputCache {
         // versions (it holds their locks and has not executed - and its commit was flushed,
         // so all producing transactions have been executed locally), which makes
         // immutability decidable per ref. A byzantine under-claim can make this a subset of
-        // the originally-acquired set for immutable refs only; the lock-table backstop in
-        // conflict resolution covers exactly that case.
+        // the originally-acquired set for immutable refs only - quorum-unreachable once
+        // strict vote-time claims verification is universal.
         let mut deferred_transaction_locks = DeferredTransactionLocks::default();
         for transactions in deferred_transactions.values() {
             for tx in transactions {
@@ -743,6 +762,18 @@ impl ConsensusOutputQuarantine {
                 self.remove_processed_consensus_messages(&output);
                 self.remove_congestion_control_debts(&output);
                 self.remove_owned_object_locks(&output);
+                // Reloaded deferred transactions covered by this commit are executed by
+                // now (the flush gate requires their checkpoints executed), so the
+                // objects table covers their consumed inputs from here on.
+                if !output.finalized_reloaded_deferred_txns.is_empty() {
+                    let mut deferred_locks = epoch_store
+                        .consensus_output_cache
+                        .deferred_transaction_locks
+                        .lock();
+                    for digest in &output.finalized_reloaded_deferred_txns {
+                        deferred_locks.remove_tx(digest);
+                    }
+                }
                 output.write_to_batch(epoch_store, batch)?;
             }
         }

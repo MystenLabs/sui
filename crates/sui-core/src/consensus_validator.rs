@@ -31,7 +31,9 @@ use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
+    authority::{
+        AuthorityState, VoteTransactionResult, authority_per_epoch_store::AuthorityPerEpochStore,
+    },
     checkpoints::CheckpointServiceNotify,
 };
 
@@ -306,8 +308,16 @@ impl SuiTxValidator {
         }
 
         let inner_tx = verified_tx.into_tx();
-        self.authority_state
+        let vote_result = self
+            .authority_state
             .handle_vote_transaction(epoch_store, inner_tx.clone())?;
+
+        if vote_result == VoteTransactionResult::AlreadyFinalized {
+            // The transaction's own execution consumed its inputs, so input-based claims
+            // verification would spuriously reject a transaction that is already final.
+            // Duplicate sequencing is handled post-consensus by the same-digest carve-out.
+            return Ok(());
+        }
 
         if !claimed_immutable_ids.is_empty() {
             assert_reachable!("transaction has immutable input object claims");
