@@ -776,19 +776,45 @@ impl ConsensusOutputQuarantine {
                 self.remove_shared_object_next_versions(&output);
                 self.remove_processed_consensus_messages(&output);
                 self.remove_congestion_control_debts(&output);
-                self.remove_owned_object_locks(&output);
-                // Reloaded deferred transactions covered by this commit are executed by
-                // now (the flush gate requires their checkpoints executed), so the
-                // objects table covers their consumed inputs from here on.
-                if !output.finalized_reloaded_deferred_txns.is_empty() {
+                // Lock refs dropped by this flush belong to executed transactions (the
+                // flush gate requires the commit's checkpoints executed), so their
+                // consumed version-bounds are recorded in the live-object cache BEFORE
+                // the in-memory lock entries disappear. Any conflict resolution that
+                // misses the memory layers therefore sees the bumps - this ordering is
+                // what makes cached bounds decisive verdicts and keeps steady-state
+                // resolution off the DB. (This runs under the quarantine write lock, so
+                // for quarantined locks the bumps are visible to any reader that
+                // observes the removal.)
+                //
+                // Exception: refs of transactions that this commit DEFERRED have not
+                // executed - their entries in the deferred-locks map shield them from
+                // resolution, and their bumps happen at the flush of the commit that
+                // eventually schedules them (below).
+                let live_object_cache = epoch_store.live_object_cache();
+                {
                     let mut deferred_locks = epoch_store
                         .consensus_output_cache
                         .deferred_transaction_locks
                         .lock();
+                    for obj_ref in output.owned_object_locks.keys() {
+                        if deferred_locks.get(obj_ref).is_none() {
+                            live_object_cache.record_consumed(obj_ref);
+                        }
+                    }
+                    // Reloaded deferred transactions covered by this commit are
+                    // executed by now as well; bump their refs and release their
+                    // deferred-locks entries. Both happen inside the map's critical
+                    // section, so readers observe either the entry or the bump - never
+                    // neither.
                     for digest in &output.finalized_reloaded_deferred_txns {
-                        deferred_locks.remove_tx(digest);
+                        if let Some(refs) = deferred_locks.remove_tx(digest) {
+                            for obj_ref in &refs {
+                                live_object_cache.record_consumed(obj_ref);
+                            }
+                        }
                     }
                 }
+                self.remove_owned_object_locks(&output);
                 output.write_to_batch(epoch_store, batch)?;
             }
         }
@@ -1380,6 +1406,16 @@ mod tests {
         batch.write().unwrap();
         assert_eq!(quarantine.output_queue_len_for_testing(), 0);
         assert_eq!(epoch_store.get_deferred_transaction_lock(&lock_ref), None);
+
+        // The flush bumped the live-object cache bound past the consumed version, so
+        // conflict resolution derives "consumed" from memory.
+        assert_eq!(
+            epoch_store.live_object_cache().get(&lock_ref.0),
+            Some(crate::live_object_cache::VersionLowerBound::Version {
+                version: lock_ref.1.next(),
+                immutable: false,
+            })
+        );
     }
 }
 
