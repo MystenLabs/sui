@@ -16,6 +16,7 @@ use sui_types::{
     error::VMMemoryLimitExceededSubStatusCode,
     execution::DynamicallyLoadedObjectMetadata,
     metrics::ExecutionMetrics,
+    move_package::MovePackage,
     object::{Data, MoveObject, Object, Owner},
     storage::RuntimeObjectResolver,
 };
@@ -738,6 +739,16 @@ impl<'a> ChildObjectStore<'a> {
                 self.config_setting_cache.remove(&name_df_id);
             }
         }
+    }
+
+    pub(super) fn get_package_at_version(
+        &self,
+        package_id: ObjectID,
+        package_version: SequenceNumber,
+    ) -> Option<MovePackage> {
+        self.inner
+            .resolver
+            .get_package_at_version(&package_id, package_version)
     }
 
     pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {

@@ -35,6 +35,8 @@ Functions for operating on Move packages from within Move:
 -  [Function `make_immutable`](#sui_package_make_immutable)
 -  [Function `authorize_upgrade`](#sui_package_authorize_upgrade)
 -  [Function `commit_upgrade`](#sui_package_commit_upgrade)
+-  [Function `original_package_id`](#sui_package_original_package_id)
+-  [Function `original_package_id_impl`](#sui_package_original_package_id_impl)
 -  [Function `restrict`](#sui_package_restrict)
 
 
@@ -287,6 +289,28 @@ Trying to commit an upgrade to the wrong <code><a href="../sui/package.md#sui_pa
 
 
 <pre><code><b>const</b> <a href="../sui/package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="sui_package_EUpgradeInProgress"></a>
+
+Trying to read the current package ID from the <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>
+while an upgrade is in progress.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_EUpgradeInProgress">EUpgradeInProgress</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="sui_package_EInvalidPackageVersion"></a>
+
+Invalid package version in the <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>, or there was a mismatch
+between the package ID and version supplied (in the native).
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_EInvalidPackageVersion">EInvalidPackageVersion</a>: u64 = 6;
 </code></pre>
 
 
@@ -944,6 +968,58 @@ the upgrade.
     cap.<a href="../sui/package.md#sui_package">package</a> = <a href="../sui/package.md#sui_package">package</a>;
     cap.<a href="../sui/package.md#sui_package_version">version</a> = cap.<a href="../sui/package.md#sui_package_version">version</a> + 1;
 }
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_original_package_id"></a>
+
+## Function `original_package_id`
+
+The original (first-version) ID of the package that this cap authorizes upgrades for.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_original_package_id">original_package_id</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_original_package_id">original_package_id</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>): ID {
+    <b>let</b> latest = cap.<a href="../sui/package.md#sui_package_upgrade_package">upgrade_package</a>();
+    <b>assert</b>!(latest.to_address() != @0x0, <a href="../sui/package.md#sui_package_EUpgradeInProgress">EUpgradeInProgress</a>);
+    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package_version">version</a> &gt; 0, <a href="../sui/package.md#sui_package_EInvalidPackageVersion">EInvalidPackageVersion</a>);
+    <a href="../sui/object.md#sui_object_id_from_address">object::id_from_address</a>(<a href="../sui/package.md#sui_package_original_package_id_impl">original_package_id_impl</a>(latest.to_address(), cap.<a href="../sui/package.md#sui_package_version">version</a>))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_original_package_id_impl"></a>
+
+## Function `original_package_id_impl`
+
+Returns the original package id for the given package storage id and version.
+The package_id supplied must have the exact <code><a href="../sui/package.md#sui_package_version">version</a></code> otherwise
+
+
+<pre><code><b>fun</b> <a href="../sui/package.md#sui_package_original_package_id_impl">original_package_id_impl</a>(package_id: <b>address</b>, <a href="../sui/package.md#sui_package_version">version</a>: u64): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/package.md#sui_package_original_package_id_impl">original_package_id_impl</a>(package_id: <b>address</b>, <a href="../sui/package.md#sui_package_version">version</a>: u64): <b>address</b>;
 </code></pre>
 
 

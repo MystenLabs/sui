@@ -208,6 +208,31 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>>;
+
+    /// Get's the package at the given version. Returns `Some(package)` only if the `package_id` is
+    /// a `MovePackage` with the given `package_version`. Returns `None` in all other cases.
+    ///
+    /// Since the has the _possibility_ of doing unsequenced reads of object IDs it is important
+    /// here that:
+    /// * If the package object does not exist; or
+    /// * If the package object exists but is not a Move package; or
+    /// * If the package object exists and is a Move package, but the version is not the supplied version.
+    /// All return the same error.
+    ///
+    /// To be extra careful, we simply return `None` in all cases unless the object is a package
+    /// with the exact version supplied, and let the caller decide how to handle it.
+    fn get_package_at_version(
+        &self,
+        package_id: &ObjectID,
+        package_version: SequenceNumber,
+    ) -> Option<MovePackage> {
+        let package_obj = self.get_package_object(package_id).ok().flatten()?;
+        if package_obj.move_package().version() == package_version {
+            Some(package_obj.move_package().clone())
+        } else {
+            None
+        }
+    }
 }
 
 pub struct DenyListResult {
