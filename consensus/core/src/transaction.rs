@@ -297,6 +297,7 @@ pub enum ClientError {
 }
 
 impl TransactionClient {
+    /// Returns the client and the receivers for normal and priority transactions, in that order.
     pub(crate) fn new(
         context: Arc<Context>,
     ) -> (
@@ -311,6 +312,7 @@ impl TransactionClient {
         )
     }
 
+    /// Returns the client and the receivers for normal and priority transactions, in that order.
     fn new_with_max_pending_transactions(
         context: Arc<Context>,
         max_pending_transactions: usize,
