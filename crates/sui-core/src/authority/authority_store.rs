@@ -17,6 +17,7 @@ use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
+#[cfg(test)]
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
@@ -1470,6 +1471,7 @@ pub enum ObjectLockStatus {
     LockedAtDifferentVersion { locked_ref: ObjectRef },
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LockDetailsV1Deprecated {
     pub epoch: EpochId,

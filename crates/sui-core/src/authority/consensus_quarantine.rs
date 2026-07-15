@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityEpochTables, EncG, ExecutionIndicesWithStatsV2, LockDetails, LockDetailsWrapper, PkG,
+    AuthorityEpochTables, EncG, ExecutionIndicesWithStatsV2, LockDetails, PkG,
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
@@ -306,15 +306,6 @@ impl ConsensusCommitOutput {
 
         if let Some(next_versions) = self.next_shared_object_versions {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
-        }
-
-        if !self.owned_object_locks.is_empty() {
-            batch.insert_batch(
-                &tables.owned_object_locked_transactions,
-                self.owned_object_locks
-                    .into_iter()
-                    .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
-            )?;
         }
 
         batch.delete_batch(
@@ -896,30 +887,6 @@ impl ConsensusOutputQuarantine {
         obj_ref: &ObjectRef,
     ) -> Option<LockDetails> {
         self.owned_object_locks.get(obj_ref).copied()
-    }
-
-    /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
-    pub(super) fn get_owned_object_locks(
-        &self,
-        tables: &AuthorityEpochTables,
-        obj_refs: &[ObjectRef],
-    ) -> SuiResult<Vec<Option<LockDetails>>> {
-        Ok(do_fallback_lookup(
-            obj_refs,
-            |obj_ref| {
-                if let Some(lock) = self.owned_object_locks.get(obj_ref) {
-                    CacheResult::Hit(Some(*lock))
-                } else {
-                    CacheResult::Miss
-                }
-            },
-            |obj_refs| {
-                tables
-                    .multi_get_locked_transactions(obj_refs)
-                    .expect("db error")
-            },
-        ))
     }
 
     pub(super) fn get_highest_pending_checkpoint_height(&self) -> Option<CheckpointHeight> {

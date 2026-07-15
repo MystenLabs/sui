@@ -79,12 +79,8 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::rocks::{DBBatch, DBMap, MetricConf};
-#[cfg(not(tidehunter))]
-use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options, read_size_from_env};
 use typed_store::rocksdb::Options;
 
-#[cfg(not(tidehunter))]
-use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::consensus_tx_status_cache::{ConsensusTxStatus, ConsensusTxStatusCache};
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use super::execution_time_estimator::{ConsensusObservations, ExecutionTimeEstimator};
@@ -431,10 +427,6 @@ pub struct AuthorityPerEpochStore {
 #[derive(DBMapUtils)]
 #[cfg_attr(tidehunter, tidehunter)]
 pub struct AuthorityEpochTables {
-    /// Map from ObjectRef to transaction locking that object
-    #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
-    owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
-
     /// Signatures over transaction effects that we have signed and returned to users.
     /// We store this to avoid re-signing the same effects twice.
     /// Note that this may contain signatures for effects from previous epochs, in the case
@@ -547,17 +539,6 @@ pub struct AuthorityEpochTables {
     pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
 }
 
-#[cfg(not(tidehunter))]
-fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    DBOptions {
-        options: default_db_options()
-            .optimize_for_write_throughput()
-            .optimize_for_read(read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024))
-            .options,
-        rw_options: ReadWriteOptions::default().set_ignore_range_deletions(false),
-    }
-}
-
 impl AuthorityEpochTables {
     #[cfg(not(tidehunter))]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
@@ -591,20 +572,10 @@ impl AuthorityEpochTables {
         let builder_checkpoint_summary_v2_config = KeySpaceConfig::new()
             .disable_unload()
             .with_value_cache_size(default_value_cache_size());
-        let object_ref_indexing = KeyIndexing::Hash;
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
         let sequence_key = KeyType::from_prefix_bits(6 * 8 + 4);
         let configs = vec![
-            (
-                "owned_object_locked_transactions".to_string(),
-                ThConfig::new_with_config_indexing(
-                    object_ref_indexing,
-                    mutexes * 8,
-                    uniform_key,
-                    bloom_config.clone(),
-                ),
-            ),
             (
                 "effects_signatures".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
@@ -802,25 +773,6 @@ impl AuthorityEpochTables {
         Ok(self
             .last_consensus_stats_v2
             .get(&LAST_CONSENSUS_STATS_ADDR)?)
-    }
-
-    pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
-        Ok(self
-            .owned_object_locked_transactions
-            .get(obj_ref)?
-            .map(|l| l.migrate().into_inner()))
-    }
-
-    pub fn multi_get_locked_transactions(
-        &self,
-        owned_input_objects: &[ObjectRef],
-    ) -> SuiResult<Vec<Option<LockDetails>>> {
-        Ok(self
-            .owned_object_locked_transactions
-            .multi_get(owned_input_objects)?
-            .into_iter()
-            .map(|l| l.map(|l| l.migrate().into_inner()))
-            .collect())
     }
 
     fn get_all_deferred_transactions(
@@ -1652,29 +1604,12 @@ impl AuthorityPerEpochStore {
     }
 
     #[cfg(test)]
-    pub fn delete_object_locks_for_test(&self, objects: &[ObjectRef]) {
-        for object in objects {
-            self.tables()
-                .expect("test should not cross epoch boundary")
-                .owned_object_locked_transactions
-                .remove(object)
-                .unwrap();
-        }
-    }
-
-    #[cfg(test)]
     pub fn insert_object_locks_for_test(&self, locks: &[(ObjectRef, TransactionDigest)]) {
-        // Simulates a finalized-but-unexecuted lock holder. Written both to the durable
-        // table (the pre-objects-table representation) and to the deferred-locks map
-        // (where the in-memory resolution finds locks whose holder has not executed and
-        // whose commit is no longer quarantined).
+        // Simulates a finalized-but-unexecuted lock holder via the deferred-locks map,
+        // where conflict resolution finds locks whose holder has not executed and whose
+        // commit is no longer quarantined.
         let mut by_digest: HashMap<TransactionDigest, Vec<ObjectRef>> = HashMap::new();
         for (object, digest) in locks {
-            self.tables()
-                .expect("test should not cross epoch boundary")
-                .owned_object_locked_transactions
-                .insert(object, &LockDetailsWrapper::from(*digest))
-                .unwrap();
             by_digest.entry(*digest).or_default().push(*object);
         }
         let mut deferred_locks = self
@@ -1808,19 +1743,9 @@ impl AuthorityPerEpochStore {
         Ok(cached)
     }
 
-    /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
-    pub fn get_owned_object_locks(
-        &self,
-        obj_refs: &[ObjectRef],
-    ) -> SuiResult<Vec<Option<LockDetails>>> {
-        let tables = self.tables()?;
-        self.consensus_quarantine
-            .read()
-            .get_owned_object_locks(&tables, obj_refs)
-    }
-
     /// Lock held on `obj_ref` by a commit that is still quarantined (not yet flushed).
+    /// Locks of flushed commits are derivable from the objects table (their holders are
+    /// durably executed) and from the deferred-locks map.
     pub fn get_owned_object_lock_in_memory(&self, obj_ref: &ObjectRef) -> Option<LockDetails> {
         self.consensus_quarantine
             .read()
@@ -1831,35 +1756,6 @@ impl AuthorityPerEpochStore {
     pub fn get_deferred_transaction_lock(&self, obj_ref: &ObjectRef) -> Option<TransactionDigest> {
         self.consensus_output_cache
             .get_deferred_transaction_lock(obj_ref)
-    }
-
-    /// Direct epoch-DB read of the lock table, bypassing the quarantine. Used only as the
-    /// backstop for refs whose object is immutable at the claimed version (see
-    /// docs/objects_locking.md §3.6a); the quarantine layer has already been consulted
-    /// for these refs.
-    pub fn multi_get_owned_object_locks_from_db(
-        &self,
-        obj_refs: &[ObjectRef],
-    ) -> SuiResult<Vec<Option<LockDetails>>> {
-        self.tables()?.multi_get_locked_transactions(obj_refs)
-    }
-
-    /// Batched read of existing owned-object locks, returned as a map containing only
-    /// the refs that are currently locked. The consensus commit handler prefetches the
-    /// cross-commit lock state (constant for the duration of a commit) once with this,
-    /// rather than reading per transaction inside
-    /// `try_acquire_owned_object_locks_post_consensus`.
-    pub fn get_owned_object_locks_map(
-        &self,
-        obj_refs: &[ObjectRef],
-    ) -> SuiResult<HashMap<ObjectRef, LockDetails>> {
-        let locks = self.get_owned_object_locks(obj_refs)?;
-        Ok(obj_refs
-            .iter()
-            .cloned()
-            .zip_eq(locks)
-            .filter_map(|(obj_ref, lock)| lock.map(|lock| (obj_ref, lock)))
-            .collect())
     }
 
     /// Attempts to acquire owned object locks for a transaction post-consensus.
@@ -1943,41 +1839,6 @@ impl AuthorityPerEpochStore {
             .iter()
             .map(|obj_ref| (*obj_ref, tx_digest))
             .collect())
-    }
-
-    /// The pre-objects-table lock acquisition check, over lock state read from the
-    /// quarantine + epoch DB (`get_owned_object_locks_map`). Kept for differential
-    /// validation of the objects-table-based resolution: debug builds run both and
-    /// assert the verdicts match.
-    #[cfg(debug_assertions)]
-    pub fn try_acquire_owned_object_locks_post_consensus_table_based(
-        &self,
-        owned_object_refs: &[ObjectRef],
-        tx_digest: TransactionDigest,
-        current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
-        existing_locks: &HashMap<ObjectRef, LockDetails>,
-    ) -> SuiResult<()> {
-        for obj_ref in owned_object_refs {
-            if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
-                && *locked_tx_digest != tx_digest
-            {
-                return Err(SuiErrorKind::ObjectLockConflict {
-                    obj_ref: *obj_ref,
-                    pending_transaction: *locked_tx_digest,
-                }
-                .into());
-            }
-            if let Some(locked_tx_digest) = existing_locks.get(obj_ref)
-                && *locked_tx_digest != tx_digest
-            {
-                return Err(SuiErrorKind::ObjectLockConflict {
-                    obj_ref: *obj_ref,
-                    pending_transaction: *locked_tx_digest,
-                }
-                .into());
-            }
-        }
-        Ok(())
     }
 
     /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
@@ -3530,40 +3391,6 @@ impl ExecutionComponents {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LockDetailsWrapper {
-    V1(TransactionDigest),
-}
-
-impl LockDetailsWrapper {
-    pub fn migrate(self) -> Self {
-        // TODO: when there are multiple versions, we must iteratively migrate from version N to
-        // N+1 until we arrive at the latest version
-        self
-    }
-
-    // Always returns the most recent version. Older versions are migrated to the latest version at
-    // read time, so there is never a need to access older versions.
-    pub fn inner(&self) -> &LockDetails {
-        match self {
-            Self::V1(v1) => v1,
-
-            // can remove #[allow] when there are multiple versions
-            #[allow(unreachable_patterns)]
-            _ => panic!("lock details should have been migrated to latest version at read time"),
-        }
-    }
-    pub fn into_inner(self) -> LockDetails {
-        match self {
-            Self::V1(v1) => v1,
-
-            // can remove #[allow] when there are multiple versions
-            #[allow(unreachable_patterns)]
-            _ => panic!("lock details should have been migrated to latest version at read time"),
-        }
-    }
-}
-
 pub type LockDetails = TransactionDigest;
 
 /// Resolved cross-commit claim state of an owned object ref, produced by
@@ -3578,11 +3405,4 @@ pub enum LockResolution {
     /// consumed earlier in this epoch by some finalized, executed transaction (whose
     /// digest the objects table does not record).
     ConsumedSinceClaim,
-}
-
-impl From<LockDetails> for LockDetailsWrapper {
-    fn from(details: LockDetails) -> Self {
-        // always use latest version.
-        LockDetailsWrapper::V1(details)
-    }
 }

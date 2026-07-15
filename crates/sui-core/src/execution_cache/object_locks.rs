@@ -28,7 +28,9 @@ impl ObjectLocks {
         obj_ref: &ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<TransactionDigest>> {
-        epoch_store.tables()?.get_locked_transaction(obj_ref)
+        Ok(epoch_store
+            .get_owned_object_lock_in_memory(obj_ref)
+            .or_else(|| epoch_store.get_deferred_transaction_lock(obj_ref)))
     }
 
     pub(crate) fn clear(&self) {

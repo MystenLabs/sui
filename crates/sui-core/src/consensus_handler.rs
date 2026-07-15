@@ -104,20 +104,18 @@ struct FilteredConsensusOutput {
 }
 
 /// Per-source counters from resolving owned-object lock state, recorded into metrics by
-/// the consensus handler ("remaining lookups" observability: `objects_db` and `backstop`
-/// are the residual DB reads; everything else is memory).
+/// the consensus handler ("remaining lookups" observability: `objects_db` counts
+/// authoritative latest-object reads; everything else is consensus in-memory state).
 #[derive(Default)]
 pub struct LockResolutionStats {
     pub quarantine: u64,
     pub deferred: u64,
     pub cache: u64,
     pub objects_db: u64,
-    pub backstop: u64,
 }
 
 /// Resolves the cross-commit claim state of owned object refs for post-consensus
-/// conflict detection, without reading the owned-object lock table (except the narrow
-/// immutable backstop). Layers, per ref (see docs/objects_locking.md Part 3):
+/// conflict detection. Layers, per ref (see docs/objects_locking.md Part 3):
 ///
 /// 1. Quarantined (un-flushed) commit locks - in memory.
 /// 2. Deferred-transaction locks - in memory (finalized but unexecuted, so invisible to
@@ -128,12 +126,10 @@ pub struct LockResolutionStats {
 ///    object cache when hot): latest version above the claimed version ⇒ consumed by an
 ///    earlier finalized transaction of this epoch; at or below it (or absent) ⇒
 ///    unclaimed. Locks of flushed commits are covered because flushed transactions are
-///    durably executed and execution always bumps every locked ref.
-/// 5. Lock-table backstop, only for refs whose object is immutable at exactly the
-///    claimed version: an immutable ref can be locked (byzantine under-claiming of
-///    immutable inputs) but never bumps, so the objects table cannot see the lock. The
-///    table is still written, making this exact. Never hit by honest traffic - claimed
-///    immutable inputs are excluded from lock sets before resolution.
+///    durably executed and execution always bumps every locked ref - with one carve-out:
+///    a lock on a ref that is immutable at its claimed version never bumps. Such locks
+///    require an under-claimed immutable input, which strict vote-time claims
+///    verification makes quorum-unreachable; safe once that verification is universal.
 ///
 /// Refs absent from the returned map are unclaimed. Read errors are fail-stop: a
 /// validator that cannot resolve deterministically must not guess.
@@ -145,7 +141,6 @@ pub(crate) fn resolve_owned_object_lock_states(
 ) -> (HashMap<ObjectRef, LockResolution>, LockResolutionStats) {
     let mut stats = LockResolutionStats::default();
     let mut resolutions = HashMap::new();
-    let mut backstop_refs = Vec::new();
 
     for obj_ref in obj_refs {
         if let Some(lock) = epoch_store.get_owned_object_lock_in_memory(obj_ref) {
@@ -181,13 +176,11 @@ pub(crate) fn resolve_owned_object_lock_states(
                 let latest_version = object.version();
                 if latest_version > claimed_version {
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
-                } else if latest_version == claimed_version && object.is_immutable() {
-                    backstop_refs.push(*obj_ref);
                 }
-                // Live at or below the claimed version and not immutable-at-claim:
-                // unclaimed (below ⇒ a pipelined input whose producer has not executed
-                // locally yet; the producer's finalization precedes the claimant's votes,
-                // so any lock on this ref would still be quarantined and caught above).
+                // Live at or below the claimed version: unclaimed (below ⇒ a pipelined
+                // input whose producer has not executed locally yet; the producer's
+                // finalization precedes the claimant's votes, so any lock on this ref
+                // would still be quarantined and caught above).
             }
             None => {
                 // Deleted (tombstone) or never existed - disambiguate.
@@ -213,18 +206,6 @@ pub(crate) fn resolve_owned_object_lock_states(
                         live_object_cache.record_absent(obj_ref.0);
                     }
                 }
-            }
-        }
-    }
-
-    if !backstop_refs.is_empty() {
-        stats.backstop += backstop_refs.len() as u64;
-        let locks = epoch_store
-            .multi_get_owned_object_locks_from_db(&backstop_refs)
-            .expect("cannot read owned object lock table");
-        for (obj_ref, lock) in itertools::zip_eq(backstop_refs, locks) {
-            if let Some(lock) = lock {
-                resolutions.insert(obj_ref, LockResolution::LockedBy(lock));
             }
         }
     }
@@ -2625,22 +2606,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ("deferred", resolution_stats.deferred),
             ("cache", resolution_stats.cache),
             ("objects_db", resolution_stats.objects_db),
-            ("backstop", resolution_stats.backstop),
         ] {
             self.metrics
                 .consensus_owned_object_lock_resolutions
                 .with_label_values(&[source])
                 .inc_by(count);
         }
-
-        // Differential validation of the objects-table-based resolution against the lock
-        // table (which is still fully written): both paths must produce identical
-        // verdicts for every transaction. Debug builds only (includes simtests).
-        #[cfg(debug_assertions)]
-        let table_locks = self
-            .epoch_store
-            .get_owned_object_locks_map(&prefetch_refs)
-            .unwrap_or_default();
 
         for (block, parsed_transactions) in block_transactions {
             let author = block.author.value();
@@ -2868,28 +2839,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             &existing_locks,
                             self.cache_reader.as_ref(),
                         );
-
-                    #[cfg(debug_assertions)]
-                    {
-                        let table_result = self
-                            .epoch_store
-                            .try_acquire_owned_object_locks_post_consensus_table_based(
-                                &owned_object_refs,
-                                *tx.digest(),
-                                &owned_object_locks,
-                                &table_locks,
-                            );
-                        assert_eq!(
-                            acquire_result.is_ok(),
-                            table_result.is_ok(),
-                            "owned-object conflict verdict diverged from lock table for tx {:?} \
-                             (objects-based: {:?}, table-based: {:?}, refs: {:?})",
-                            tx.digest(),
-                            acquire_result.as_ref().err(),
-                            table_result.as_ref().err(),
-                            owned_object_refs,
-                        );
-                    }
 
                     match acquire_result {
                         Ok(new_locks) => {
@@ -3997,10 +3946,10 @@ mod tests {
             NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
         ));
 
-        let locks = epoch_store
-            .get_owned_object_locks_map(&[owned_object_ref])
-            .unwrap();
-        assert_eq!(locks.get(&owned_object_ref), Some(&winner_digest));
+        assert_eq!(
+            epoch_store.get_owned_object_lock_in_memory(&owned_object_ref),
+            Some(winner_digest)
+        );
         assert!(
             epoch_store
                 .is_consensus_message_processed(&winner_key)
