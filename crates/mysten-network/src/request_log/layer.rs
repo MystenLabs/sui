@@ -37,11 +37,22 @@ impl GrpcRequestLogLayer {
     pub fn from_encoded_file_descriptor_sets<'a>(
         sets: impl IntoIterator<Item = &'a [u8]>,
     ) -> Result<Self, prost_reflect::DescriptorError> {
-        let mut pool = DescriptorPool::new();
-        for set in sets {
-            pool.decode_file_descriptor_set(set)?;
-        }
-        Ok(Self::new(pool))
+        // `DescriptorPool` indexes its symbol table with plain `std::collections::HashMap`s, seeded
+        // from `getrandom()`. Under `msim`, that syscall is only reliably intercepted (made
+        // deterministic) on macOS; on Linux it leaks real entropy into the simulated run, which
+        // desyncs the two-iteration determinism check the moment this pool is built at server
+        // startup. `nondeterministic!` moves the build onto an unintercepted thread so the leak is
+        // invisible to msim's tracked RNG log, the same fix used for `tempfile` and RocksDB
+        // elsewhere in this repo. Collect first so the closure moved onto that thread doesn't need
+        // a `Send` bound added to the public `impl IntoIterator` parameter.
+        let sets: Vec<&'a [u8]> = sets.into_iter().collect();
+        sui_macros::nondeterministic!({
+            let mut pool = DescriptorPool::new();
+            for set in sets {
+                pool.decode_file_descriptor_set(set)?;
+            }
+            Ok(Self::new(pool))
+        })
     }
 
     pub fn with_max_captured_message_size(mut self, bytes: usize) -> Self {

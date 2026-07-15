@@ -9681,6 +9681,7 @@ dependencies = [
  "serde",
  "snap",
  "sui-http",
+ "sui-macros",
  "sui-tls",
  "tokio",
  "tokio-rustls",
