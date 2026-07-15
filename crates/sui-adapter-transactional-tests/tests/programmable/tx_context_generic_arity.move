@@ -8,7 +8,7 @@
 // only applies to system packages, so this user package publishes fine;
 // the PTB arity check is the safety mechanism here.
 
-//# init --addresses test=0x0 --allow-references-in-ptbs
+//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 
 //# publish
 module test::m;

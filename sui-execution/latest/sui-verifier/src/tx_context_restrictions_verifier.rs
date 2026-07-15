@@ -9,7 +9,7 @@
 //!
 //! Gated on `VerifierConfig::framework_tx_context_mut_restrictions`, populated from
 //! `ProtocolConfig::framework_tx_context_mut_restrictions()`. Activates at protocol
-//! version 130.
+//! version 131.
 //!
 //! The rule applies only to system packages: it is a checksum on our own
 //! implementations, ensuring no framework function can hand back a mutable
