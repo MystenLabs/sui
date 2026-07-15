@@ -4597,6 +4597,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Assign(_, e)
         | N::Exp_::Loop(_, e)
         | N::Exp_::Give(_, _, e)
+        | N::Exp_::MacroExpansion(_, e)
         | N::Exp_::Annotate(e, _) => remove_unused_bindings_exp(context, used, e),
         N::Exp_::IfElse(econd, et, ef_opt) => {
             remove_unused_bindings_exp(context, used, econd);

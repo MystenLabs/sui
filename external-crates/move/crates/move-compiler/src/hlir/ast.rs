@@ -13,8 +13,8 @@ use crate::{
         FunctionName, TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
-        unique_map::UniqueMap,
+        Name, NumericalAddress, TName, ast_debug::*, macro_expansion::MacroExpansionInfo,
+        program_info::TypingProgramInfo, unique_map::UniqueMap,
     },
 };
 use move_ir_types::location::*;
@@ -234,7 +234,16 @@ pub enum Statement_ {
         name: BlockLabel,
         block: Block,
     },
+    /// Demarcates statements produced by a single macro expansion for
+    /// debugger support (see `N::Exp_::MacroExpansion`). Consumed during
+    /// CFG lowering, where the commands produced for `body` are stamped
+    /// with the expansion info.
+    MacroExpansion {
+        macro_info: MacroExpansionInfo,
+        body: Block,
+    },
 }
+
 pub type Statement = Spanned<Statement_>;
 
 pub type Block = VecDeque<Statement>;
@@ -1377,6 +1386,13 @@ impl AstDebug for Statement_ {
                 name.ast_debug(w);
                 w.write(": ");
                 w.block(|w| block.ast_debug(w))
+            }
+            S::MacroExpansion { macro_info, body } => {
+                w.write(format!(
+                    "macro-expansion {}: ",
+                    macro_info.kind.debug_name()
+                ));
+                w.block(|w| body.ast_debug(w))
             }
         }
     }

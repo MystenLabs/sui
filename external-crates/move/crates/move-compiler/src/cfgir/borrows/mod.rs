@@ -4,7 +4,10 @@
 
 mod state;
 
-use super::absint::*;
+use super::{
+    absint::*,
+    ast::{SyntaxCommand, ssp},
+};
 use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
@@ -85,7 +88,7 @@ impl TransferFunctions for BorrowSafety {
         pre: &mut Self::State,
         lbl: Label,
         idx: usize,
-        cmd: &Command,
+        cmd: &SyntaxCommand,
     ) -> Diagnostics {
         pre.start_command(lbl, idx);
         let mut context = Context::new(self, pre);
@@ -190,7 +193,8 @@ macro_rules! assert_non_ref {
 }
 
 #[growing_stack]
-fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
+fn command(context: &mut Context, ssp!(sloc, cmd_): &SyntaxCommand) {
+    let loc = &sloc.loc;
     use Command_ as C;
     match cmd_ {
         C::Assign(_, ls, e) => {

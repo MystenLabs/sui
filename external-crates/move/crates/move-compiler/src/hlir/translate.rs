@@ -1453,6 +1453,27 @@ fn value(
             let annotated_type = type_(&context.reporter, rhs_ty.as_ref());
             value(context, block, Some(&annotated_type), *base)
         }
+        E::MacroExpansion(macro_info, base) => {
+            // Statements produced by lowering the expansion go into a marked
+            // region, which CFG lowering stamps with the expansion info. The
+            // returned result expression is *not* part of the region: it
+            // compiles into the command its consumer eventually builds, and
+            // is thus attributed to the consumer's scope.
+            // TODO: argument frame disappears if the region comes out empty
+            // (should we introduce temp assignment to remediate this?)
+            let mut region = make_block!();
+            let base_exp = value(context, &mut region, expected_type, *base);
+            if !region.is_empty() {
+                block.push_back(sp(
+                    eloc,
+                    S::MacroExpansion {
+                        macro_info,
+                        body: region,
+                    },
+                ));
+            }
+            base_exp
+        }
 
         // -----------------------------------------------------------------------------------------
         // value-based expressions without subexpressions -- translate these directly
@@ -1954,6 +1975,23 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::UnresolvedError
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 
+        E::MacroExpansion(macro_info, base) => {
+            // Group the statements lowered for the expansion in an
+            // S::MacroExpansion region so CFG lowering stamps them with the
+            // expansion info (an empty region carries no information).
+            let mut region = make_block!();
+            statement(context, &mut region, *base);
+            if !region.is_empty() {
+                block.push_back(sp(
+                    eloc,
+                    S::MacroExpansion {
+                        macro_info,
+                        body: region,
+                    },
+                ));
+            }
+        }
+
         E::Value(_) | E::Unit { .. } => (),
 
         // -----------------------------------------------------------------------------------------
@@ -2128,6 +2166,7 @@ fn still_has_break(name: &BlockLabel, block: &Block) -> bool {
                 block,
             } => has_break_block(name, block),
             S::NamedBlock { name: _, block } => has_break_block(name, block),
+            S::MacroExpansion { body, .. } => has_break_block(name, body),
             hcmd!(C::Break(break_name)) => break_name == name,
             S::Command(_) => false,
             S::VariantMatch {

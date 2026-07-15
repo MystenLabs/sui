@@ -14,8 +14,8 @@ use crate::{
         FunctionName, MACRO_MODIFIER, NATIVE_MODIFIER, TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
-        stdlib_definitions::StdlibName, unique_map::UniqueMap, *,
+        ast_debug::*, known_attributes::SyntaxAttribute, macro_expansion::MacroExpansionInfo,
+        program_info::NamingProgramInfo, stdlib_definitions::StdlibName, unique_map::UniqueMap, *,
     },
 };
 use move_ir_types::location::*;
@@ -463,6 +463,12 @@ pub enum Exp_ {
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
     Lambda(Lambda),
+    /// Demarcates code produced by a single macro expansion (a macro body,
+    /// a lambda invocation, or a by-name argument substitution) for debugger
+    /// support. Introduced during macro expansion in typing, carried through
+    /// the ASTs, and consumed during CFG lowering, where the commands
+    /// produced for the inner expression are stamped with the expansion info.
+    MacroExpansion(MacroExpansionInfo, Box<Exp>),
 
     Assign(LValueList, Box<Exp>),
     FieldMutate(ExpDotted, Box<Exp>),
@@ -1882,6 +1888,10 @@ impl AstDebug for Exp_ {
             }
             E::Block(seq) => seq.ast_debug(w),
             E::Lambda(l) => l.ast_debug(w),
+            E::MacroExpansion(info, e) => {
+                w.write(format!("macro-expansion {}: ", info.kind.debug_name()));
+                e.ast_debug(w)
+            }
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));

@@ -53,6 +53,7 @@ mod count {
     use move_proc_macros::growing_stack;
 
     use crate::{
+        cfgir::ast::{SyntaxCommand, ssp},
         hlir::ast::{FunctionSignature, *},
         parser::ast::{BinOp, UnaryOp},
     };
@@ -114,7 +115,7 @@ mod count {
     }
 
     #[growing_stack]
-    pub fn command(context: &mut Context, sp!(_, cmd_): &Command) {
+    pub fn command(context: &mut Context, ssp!(_, cmd_): &SyntaxCommand) {
         use Command_ as C;
         match cmd_ {
             C::Assign(_, ls, e) => {
@@ -272,7 +273,10 @@ fn eliminate(cfg: &mut MutForwardCFG, ssa_temps: BTreeSet<Var>) {
 }
 
 mod eliminate {
-    use crate::hlir::ast::{self as H, *};
+    use crate::{
+        cfgir::ast::{SyntaxCommand, ssp},
+        hlir::ast::{self as H, *},
+    };
     use move_ir_types::location::*;
     use move_proc_macros::growing_stack;
     use std::collections::{BTreeMap, BTreeSet};
@@ -296,7 +300,7 @@ mod eliminate {
     }
 
     #[growing_stack]
-    pub fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
+    pub fn command(context: &mut Context, ssp!(_, cmd_): &mut SyntaxCommand) {
         use Command_ as C;
         match cmd_ {
             C::Assign(_, ls, e) => {

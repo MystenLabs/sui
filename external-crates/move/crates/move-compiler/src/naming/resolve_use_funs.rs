@@ -344,6 +344,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::Assign(_, e)
         | N::Exp_::Loop(_, e)
         | N::Exp_::Annotate(e, _)
+        | N::Exp_::MacroExpansion(_, e)
         | N::Exp_::Lambda(N::Lambda {
             parameters: _,
             return_type: _,

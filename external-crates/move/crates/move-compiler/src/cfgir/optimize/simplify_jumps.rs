@@ -5,11 +5,14 @@
 use move_proc_macros::growing_stack;
 
 use crate::{
-    cfgir::cfg::MutForwardCFG,
+    cfgir::{
+        ast::{SyntaxCommand, ssp},
+        cfg::MutForwardCFG,
+    },
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
-        Command, Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value, Value_, Var,
+        Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value, Value_, Var,
     },
     parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
@@ -36,7 +39,7 @@ pub fn optimize(
 }
 
 #[growing_stack]
-fn optimize_cmd(sp!(_, cmd_): &mut Command) -> bool {
+fn optimize_cmd(ssp!(_, cmd_): &mut SyntaxCommand) -> bool {
     use Command_ as C;
     use UnannotatedExp_ as E;
     use Value_ as V;

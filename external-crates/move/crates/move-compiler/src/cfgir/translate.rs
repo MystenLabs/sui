@@ -6,7 +6,10 @@ use crate::{
     PreCompiledProgramInfo,
     cfgir::{
         self,
-        ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
+        ast::{
+            self as G, BasicBlock, BasicBlocks, BlockInfo, SyntaxCommand, SyntaxInfo,
+            SyntaxInfoEntry, SyntaxLoc, SyntaxSpanned, ssp,
+        },
         cfg::{ImmForwardCFG, MutForwardCFG},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
@@ -59,6 +62,10 @@ struct Context<'env> {
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
     loop_bounds: BTreeMap<Label, G::LoopInfo>,
+    // Chain of syntactic contexts (macros, etc.) enclosing the code
+    // currently being lowered; maintained by `with_syntax_info` and stamped
+    // onto every command placed into a basic block via `respan_command`
+    syntax_info: Option<Arc<SyntaxInfo>>,
     debug: CFGIRDebugFlags,
 }
 
@@ -73,6 +80,7 @@ impl<'env> Context<'env> {
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
+            syntax_info: None,
             debug: CFGIRDebugFlags {
                 print_blocks: false,
                 print_optimized_blocks: false,
@@ -146,6 +154,27 @@ impl<'env> Context<'env> {
         assert!(self.named_blocks.is_empty());
         self.label_count = 0;
         self.loop_bounds = BTreeMap::new();
+    }
+
+    /// Runs `body` with `info` pushed onto the current chain of syntactic
+    /// contexts, restoring the previous chain afterwards. Since expansions
+    /// nest, the chain at any point during lowering is exactly the stack of
+    /// expansions the code being lowered came from.
+    fn with_syntax_info<T, F>(&mut self, info: SyntaxInfoEntry, body: F) -> T
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        let new_info = SyntaxInfo::new(info, self.syntax_info.clone());
+        let prev_info = self.syntax_info.replace(Arc::new(new_info));
+        let result = body(self);
+        self.syntax_info = prev_info;
+        result
+    }
+
+    /// Re-span a command with the current syntactic (e.g., macro expansion) context,
+    /// for placement into a basic block
+    fn respan_command(&self, sp!(loc, cmd_): H::Command) -> SyntaxCommand {
+        SyntaxSpanned::new(SyntaxLoc::new(loc, self.syntax_info.clone()), cmd_)
     }
 }
 
@@ -436,6 +465,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
             }
             S::Loop { block, .. } => dep_block(set, block),
             S::NamedBlock { block, .. } => dep_block(set, block),
+            S::MacroExpansion { body, .. } => dep_block(set, body),
         }
     }
 
@@ -577,13 +607,13 @@ fn constant_(
     }
     let mut optimized_block = blocks.remove(&start).unwrap();
     let return_cmd = optimized_block.pop_back().unwrap();
-    for sp!(cloc, cmd_) in &optimized_block {
+    for ssp!(csloc, cmd_) in &optimized_block {
         let e = match cmd_ {
             C::IgnoreAndPop { exp, .. } => exp,
             _ => {
                 context.add_diag(diag!(
                     CodeGeneration::UnfoldableConstant,
-                    (*cloc, CANNOT_FOLD)
+                    (csloc.loc, CANNOT_FOLD)
                 ));
                 continue;
             }
@@ -779,7 +809,18 @@ fn block(context: &mut Context, stmts: H::Block) -> BlockList {
 
 #[growing_stack]
 fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
-    let mut current_block: BasicBlock = VecDeque::new();
+    block_with_tail(context, stmts, VecDeque::new())
+}
+
+/// Lowers `stmts` onto the front of `current_block`, which holds the
+/// already-lowered continuation: the commands that follow `stmts` in the
+/// enclosing block (empty when lowering a whole block via `block_`).
+#[growing_stack]
+fn block_with_tail(
+    context: &mut Context,
+    stmts: H::Block,
+    mut current_block: BasicBlock,
+) -> (BasicBlock, BlockList) {
     let mut blocks = Vec::new();
 
     for stmt in stmts.into_iter().rev() {
@@ -859,14 +900,14 @@ fn statement(
             let false_label = context.new_label();
             let phi_label = context.new_label();
 
-            let test_block = VecDeque::from([sp(
+            let test_block = VecDeque::from([context.respan_command(sp(
                 sloc,
                 C::JumpIf {
                     cond: *test,
                     if_true: true_label,
                     if_false: false_label,
                 },
-            )]);
+            ))]);
 
             let (true_entry_block, true_blocks) = block_(
                 context,
@@ -918,14 +959,14 @@ fn statement(
 
             arm_blocks.push((phi_label, current_block));
 
-            let test_block = VecDeque::from([sp(
+            let test_block = VecDeque::from([context.respan_command(sp(
                 sloc,
                 C::VariantSwitch {
                     subject,
                     enum_name,
                     arms,
                 },
-            )]);
+            ))]);
 
             (test_block, arm_blocks)
         }
@@ -939,7 +980,8 @@ fn statement(
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::While);
             let body_label = context.new_label();
 
-            let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
+            let entry_block =
+                VecDeque::from([context.respan_command(make_jump(sloc, start_label, false))]);
 
             let (initial_test_block, test_blocks) = {
                 let test_jump = sp(
@@ -977,7 +1019,8 @@ fn statement(
         } => {
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::Loop);
 
-            let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
+            let entry_block =
+                VecDeque::from([context.respan_command(make_jump(sloc, start_label, false))]);
 
             let (body_entry_block, body_blocks) = block_(
                 context,
@@ -997,7 +1040,8 @@ fn statement(
         S::NamedBlock { name, block: body } => {
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::Named);
 
-            let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
+            let entry_block =
+                VecDeque::from([context.respan_command(make_jump(sloc, start_label, false))]);
 
             let (body_entry_block, body_blocks) =
                 block_(context, with_last(body, make_jump(sloc, end_label, false)));
@@ -1012,22 +1056,30 @@ fn statement(
 
             (entry_block, new_blocks)
         }
+        // The expansion region introduces no control flow of its own,
+        // so lower its statements in front of the current block (when also
+        // stamping them with the syntax info) since during CFGIR translation
+        // statements are processed in reverse order.
+        S::MacroExpansion { macro_info, body } => context
+            .with_syntax_info(SyntaxInfoEntry::MacroExpansion(macro_info), |context| {
+                block_with_tail(context, body, current_block)
+            }),
         S::Command(sp!(cloc, C::Break(name))) => {
             // Discard the current block because it's dead code.
             let break_jump = make_jump(cloc, context.named_block_end_label(&name), true);
-            (VecDeque::from([break_jump]), vec![])
+            (VecDeque::from([context.respan_command(break_jump)]), vec![])
         }
         S::Command(sp!(cloc, C::Continue(name))) => {
             // Discard the current block because it's dead code.
             let jump = make_jump(cloc, context.named_block_start_label(&name), true);
-            (VecDeque::from([jump]), vec![])
+            (VecDeque::from([context.respan_command(jump)]), vec![])
         }
         S::Command(cmd) if cmd.value.is_terminal() => {
             // Discard the current block because it's dead code.
-            (VecDeque::from([cmd]), vec![])
+            (VecDeque::from([context.respan_command(cmd)]), vec![])
         }
         S::Command(cmd) => {
-            current_block.push_front(cmd);
+            current_block.push_front(context.respan_command(cmd));
             (current_block, vec![])
         }
     }

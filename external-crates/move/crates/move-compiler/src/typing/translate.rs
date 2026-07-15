@@ -725,6 +725,10 @@ mod check_valid_constant {
                 sequence(context, seq);
                 return;
             }
+            E::MacroExpansion(_, er) => {
+                exp(context, er);
+                return;
+            }
             E::UnaryExp(_, er) => {
                 exp(context, er);
                 return;
@@ -1946,6 +1950,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             };
             context.maybe_exit_macro_argument(eloc, from_macro_argument);
             res
+        }
+        NE::MacroExpansion(info, ne) => {
+            let e = exp(context, ne);
+            let ty = e.ty.clone();
+            (ty, TE::MacroExpansion(info, e))
         }
         NE::Lambda(_) => {
             if context.check_feature(context.current_package(), FeatureGate::Lambda, eloc) {

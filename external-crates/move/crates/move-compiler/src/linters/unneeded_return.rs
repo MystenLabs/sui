@@ -76,6 +76,7 @@ fn tail(context: &mut Context, exp: &T::Exp) {
                 report_unneeded_return(context, exp.exp.loc);
             }
         }
+        T::UnannotatedExp_::MacroExpansion(_, e) => tail(context, e),
 
         // These cases we don't care about, because they are:
         // - loops
@@ -138,6 +139,7 @@ fn returnable_value(context: &mut Context, exp: &T::Exp) -> bool {
         | T::UnannotatedExp_::UnaryExp(_, exp)
         | T::UnannotatedExp_::TempBorrow(_, exp)
         | T::UnannotatedExp_::Cast(exp, _)
+        | T::UnannotatedExp_::MacroExpansion(_, exp)
         | T::UnannotatedExp_::Annotate(exp, _) => returnable_value(context, exp),
 
         T::UnannotatedExp_::Pack(_, _, _, _)

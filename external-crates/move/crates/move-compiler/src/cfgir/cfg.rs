@@ -4,11 +4,11 @@
 
 use crate::{
     cfgir::{
-        ast::{BasicBlock, BasicBlocks, BlockInfo, LoopEnd, LoopInfo},
+        ast::{BasicBlock, BasicBlocks, BlockInfo, LoopEnd, LoopInfo, SyntaxCommand},
         remove_no_ops,
     },
     diagnostics::Diagnostics,
-    hlir::ast::{Command, Command_, Label},
+    hlir::ast::{Command_, Label},
     shared::ast_debug::*,
 };
 use std::{
@@ -26,7 +26,7 @@ pub trait CFG {
     fn successors(&self, label: Label) -> &BTreeSet<Label>;
 
     fn predecessors(&self, label: Label) -> &BTreeSet<Label>;
-    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &Command)>;
+    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &SyntaxCommand)>;
     fn block_start(&self, label: Label) -> usize;
     fn block_end(&self, label: Label) -> usize;
     fn num_commands(&self, label: Label) -> usize;
@@ -243,7 +243,7 @@ impl<T: Deref<Target = BasicBlocks>> CFG for ForwardCFG<T> {
         self.predecessor_map.get(&label).unwrap()
     }
 
-    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &Command)> {
+    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &SyntaxCommand)> {
         self.block(label).iter().enumerate()
     }
 
@@ -642,7 +642,7 @@ impl<Blocks: Deref<Target = BasicBlocks>> CFG for ReverseCFG<'_, Blocks> {
         self.predecessor_map.get(&label).unwrap()
     }
 
-    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &Command)> {
+    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &SyntaxCommand)> {
         self.block(label).iter().enumerate().rev()
     }
 
