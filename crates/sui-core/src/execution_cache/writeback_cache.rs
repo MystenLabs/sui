@@ -40,13 +40,13 @@
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{
-    ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
-};
+use crate::authority::authority_store::ExecutionLockWriteGuard;
+#[cfg(test)]
+use crate::authority::authority_store::{LockDetailsDeprecated, ObjectLockStatus, SuiLockResult};
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
-use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
+use crate::fallback_fetch::do_fallback_lookup;
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 
@@ -76,7 +76,9 @@ use sui_types::base_types::{
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
+#[cfg(test)]
+use sui_types::error::SuiError;
+use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -784,21 +786,6 @@ impl WritebackCache {
                 CacheResult::Miss
             },
         )
-    }
-
-    fn get_object_by_id_cache_only(
-        &self,
-        request_type: &'static str,
-        object_id: &ObjectID,
-    ) -> CacheResult<(SequenceNumber, Object)> {
-        match self.get_object_entry_by_id_cache_only(request_type, object_id) {
-            CacheResult::Hit((version, entry)) => match entry {
-                ObjectEntry::Object(object) => CacheResult::Hit((version, object)),
-                ObjectEntry::Deleted | ObjectEntry::Wrapped => CacheResult::NegativeHit,
-            },
-            CacheResult::NegativeHit => CacheResult::NegativeHit,
-            CacheResult::Miss => CacheResult::Miss,
-        }
     }
 
     fn get_marker_value_cache_only(
@@ -1899,42 +1886,38 @@ impl ObjectCacheRead for WritebackCache {
         }
     }
 
+    #[cfg(test)]
     fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
         let cur_epoch = epoch_store.epoch();
-        match self.get_object_by_id_cache_only("lock", &obj_ref.0) {
-            CacheResult::Hit((_, obj)) => {
-                let actual_objref = obj.compute_object_reference();
-                if obj_ref != actual_objref {
-                    Ok(ObjectLockStatus::LockedAtDifferentVersion {
-                        locked_ref: actual_objref,
-                    })
-                } else {
-                    // requested object ref is live, check if there is a lock
-                    Ok(
-                        match self
-                            .object_locks
-                            .get_transaction_lock(&obj_ref, epoch_store)?
-                        {
-                            Some(tx_digest) => ObjectLockStatus::LockedToTx {
-                                locked_by_tx: LockDetailsDeprecated {
-                                    epoch: cur_epoch,
-                                    tx_digest,
-                                },
-                            },
-                            None => ObjectLockStatus::Initialized,
+        let Some(obj) = self.get_object_impl("lock", &obj_ref.0) else {
+            return Err(SuiError::from(UserInputError::ObjectNotFound {
+                object_id: obj_ref.0,
+                // even though we know the requested version, we leave it as None to indicate
+                // that the object does not exist at any version
+                version: None,
+            }));
+        };
+        let actual_objref = obj.compute_object_reference();
+        if obj_ref != actual_objref {
+            Ok(ObjectLockStatus::LockedAtDifferentVersion {
+                locked_ref: actual_objref,
+            })
+        } else {
+            // requested object ref is live, check if there is a lock
+            Ok(
+                match self
+                    .object_locks
+                    .get_transaction_lock(&obj_ref, epoch_store)?
+                {
+                    Some(tx_digest) => ObjectLockStatus::LockedToTx {
+                        locked_by_tx: LockDetailsDeprecated {
+                            epoch: cur_epoch,
+                            tx_digest,
                         },
-                    )
-                }
-            }
-            CacheResult::NegativeHit => {
-                Err(SuiError::from(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    // even though we know the requested version, we leave it as None to indicate
-                    // that the object does not exist at any version
-                    version: None,
-                }))
-            }
-            CacheResult::Miss => self.record_db_get("lock").get_lock(obj_ref, epoch_store),
+                    },
+                    None => ObjectLockStatus::Initialized,
+                },
+            )
         }
     }
 
@@ -1946,37 +1929,6 @@ impl ObjectCacheRead for WritebackCache {
             },
         )?;
         Ok(obj.compute_object_reference())
-    }
-
-    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        do_fallback_lookup_fallible(
-            owned_object_refs,
-            |obj_ref| match self.get_object_by_id_cache_only("object_is_live", &obj_ref.0) {
-                CacheResult::Hit((version, obj)) => {
-                    if obj.compute_object_reference() != *obj_ref {
-                        Err(UserInputError::ObjectVersionUnavailableForConsumption {
-                            provided_obj_ref: *obj_ref,
-                            current_version: version,
-                        }
-                        .into())
-                    } else {
-                        Ok(CacheResult::Hit(()))
-                    }
-                }
-                CacheResult::NegativeHit => Err(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: None,
-                }
-                .into()),
-                CacheResult::Miss => Ok(CacheResult::Miss),
-            },
-            |remaining| {
-                self.record_db_multi_get("object_is_live", remaining.len())
-                    .check_owned_objects_are_live(remaining)?;
-                Ok(vec![(); remaining.len()])
-            },
-        )?;
-        Ok(())
     }
 
     fn get_highest_pruned_checkpoint(&self) -> Option<CheckpointSequenceNumber> {
