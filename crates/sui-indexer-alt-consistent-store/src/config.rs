@@ -6,6 +6,7 @@ use std::num::NonZeroUsize;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework as framework;
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use tracing::warn;
 
@@ -78,7 +79,7 @@ pub struct PipelineLayer {
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
-    pub write_concurrency: Option<usize>,
+    pub write_concurrency: Option<ConcurrencyConfig>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
 }
@@ -114,7 +115,7 @@ impl ServiceConfig {
 
         for_test.committer.collect_interval_ms = Some(50);
         for_test.committer.watermark_interval_ms = Some(50);
-        for_test.committer.write_concurrency = Some(1);
+        for_test.committer.write_concurrency = Some(ConcurrencyConfig::fixed(1));
 
         for_test
     }

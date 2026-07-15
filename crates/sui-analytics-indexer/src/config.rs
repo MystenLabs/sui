@@ -90,7 +90,7 @@ pub enum OutputStoreConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommitterLayer {
-    pub write_concurrency: Option<usize>,
+    pub write_concurrency: Option<ConcurrencyConfig>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
 }

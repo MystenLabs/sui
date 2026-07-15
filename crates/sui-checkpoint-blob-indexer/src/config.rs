@@ -23,7 +23,7 @@ pub struct IndexerConfig {
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct CommitterLayer {
-    pub write_concurrency: Option<usize>,
+    pub write_concurrency: Option<ConcurrencyConfig>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,

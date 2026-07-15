@@ -270,6 +270,10 @@ pub(crate) fn pipeline<H: Handler>(
         max: num_cpus::get().max(1),
         dead_band: None,
     });
+    let write_concurrency = match committer_config.write_concurrency.clone() {
+        ConcurrencyConfig::Fixed { value } => ConcurrencyConfig::fixed(value.max(1)),
+        adaptive => adaptive,
+    };
     let min_eager_rows = min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
     let max_pending_rows = max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
     let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
@@ -314,7 +318,7 @@ pub(crate) fn pipeline<H: Handler>(
 
     let s_committer = committer::<H>(
         handler.clone(),
-        committer_config.clone(),
+        write_concurrency,
         committer_rx,
         committer_tx,
         store.clone(),
@@ -726,7 +730,7 @@ mod tests {
         let config = ConcurrentConfig {
             committer: CommitterConfig {
                 collect_interval_ms: 5_000, // Long interval to prevent timer-driven collection
-                write_concurrency: 1,
+                write_concurrency: ConcurrencyConfig::fixed(1),
                 ..Default::default()
             },
             fanout: Some(ConcurrencyConfig::Fixed { value: 2 }),
@@ -794,7 +798,7 @@ mod tests {
 
         let config = ConcurrentConfig {
             committer: CommitterConfig {
-                write_concurrency: 1, // Single committer for deterministic blocking
+                write_concurrency: ConcurrencyConfig::fixed(1), // Single committer for deterministic blocking
                 // MIN_EAGER_ROWS is 1000 and MAX_PENDING_ROWS is 4, so
                 // this test relies on the collect interval tip to force
                 // batch flushing.

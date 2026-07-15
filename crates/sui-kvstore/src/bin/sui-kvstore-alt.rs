@@ -8,13 +8,13 @@ use anyhow::Result;
 use clap::Parser;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
+use sui_kvstore::config::default_committer_config;
 use sui_kvstore::parse_alpha_pipeline_name;
 use sui_kvstore::set_write_legacy_data;
 use sui_protocol_config::Chain;
@@ -124,7 +124,7 @@ async fn main() -> Result<()> {
     let store = BigTableStore::new(client);
 
     let indexer_config = config.clone();
-    let committer = config.committer.finish(CommitterConfig::default());
+    let committer = config.committer.finish(default_committer_config());
     let bigtable_indexer = BigTableIndexer::new(
         store,
         args.indexer_args,

@@ -304,21 +304,23 @@ use sui_indexer_alt_framework::config::ConcurrencyConfig;
 let config = SequentialConfig {
     committer: CommitterConfig {
         // Not applicable to sequential pipelines
-        write_concurrency: 1,
+        write_concurrency: ConcurrencyConfig::fixed(1),
 
         // Batch collection frequency in ms (default: 500)
         collect_interval_ms: 1000,
+        ..Default::default(),
     },
 
     // Adaptive concurrency (default). Starts at 1 and scales up to num_cpus.
     fanout: None,
     // Or use fixed concurrency:
-    // fanout: Some(ConcurrencyConfig::Fixed { value: 20 }),
+    // fanout: Some(ConcurrencyConfig::fixed(20)),
     // Or customize adaptive bounds:
     // fanout: Some(ConcurrencyConfig::Adaptive {
     //     initial: 5,
     //     min: 1,
     //     max: 32,
+    //     dead_band: None,
     // }),
 
     min_eager_rows: None,
@@ -567,12 +569,13 @@ let config = ConcurrentConfig {
     // Adaptive concurrency (default). Starts at 1 and scales up to num_cpus.
     fanout: None,
     // Or use fixed concurrency:
-    // fanout: Some(ConcurrencyConfig::Fixed { value: 20 }),
+    // fanout: Some(ConcurrencyConfig::fixed(20)),
     // Or customize adaptive bounds:
     // fanout: Some(ConcurrencyConfig::Adaptive {
     //     initial: 5,
     //     min: 1,
     //     max: 32,
+    //     dead_band: None,
     // }),
     min_eager_rows: Some(100),
     max_pending_rows: Some(10000),
@@ -608,7 +611,7 @@ The `CommitterConfig` controls how data flows from collection to database commit
 let config = ConcurrentConfig {
     committer: CommitterConfig {
         // Number of parallel database writers (default: 5)
-        write_concurrency: 10,
+        write_concurrency: ConcurrencyConfig::fixed(10),
 
         // How often collector checks for batches in ms (default: 500)
         collect_interval_ms: 250,

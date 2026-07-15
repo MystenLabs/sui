@@ -290,7 +290,7 @@ These control how each pipeline flushes data to Bigtable. Set at the top level t
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `write-concurrency` | 5 | Number of concurrent write tasks per pipeline. Increase for high-throughput pipelines during backfill. |
+| `write-concurrency` | adaptive (initial 5, range 1–1024) | Integer for fixed concurrency, or an adaptive configuration table. |
 | `collect-interval-ms` | 500 | How often to flush buffered rows (ms). |
 | `watermark-interval-ms` | 500 | How often to update the pipeline watermark (ms). |
 
@@ -384,7 +384,7 @@ write-concurrency = 10
 write-concurrency = 10
 ```
 
-The default `write-concurrency` is 5, which is sufficient for the smaller pipelines. Only the high-throughput pipelines (`objects`, `transactions`, `checkpoints`, `checkpoints_by_digest`) need higher concurrency during backfill.
+The default adaptive writer concurrency starts at 5. Integer values select fixed concurrency, so the explicit values above reserve more concurrency for the highest-throughput pipelines (`objects`, `transactions`, `checkpoints`, `checkpoints_by_digest`). To opt in elsewhere, use an adaptive table such as `{ kind = "adaptive", initial = 5, min = 1, max = 100 }`.
 
 #### Checkpoint-range sharding
 

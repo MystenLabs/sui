@@ -20,6 +20,20 @@ use crate::bigtable::client::PoolConfig;
 /// Java client default.
 pub(crate) const DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH: usize = 100;
 
+pub fn default_committer_config() -> CommitterConfig {
+    let base = CommitterConfig::default();
+    let initial = base.write_concurrency.initial().max(1);
+    CommitterConfig {
+        write_concurrency: ConcurrencyConfig::Adaptive {
+            initial,
+            min: 1,
+            max: 1024.max(initial),
+            dead_band: None,
+        },
+        ..base
+    }
+}
+
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct IndexerConfig {
@@ -109,7 +123,7 @@ impl BigtablePoolLayer {
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct CommitterLayer {
-    pub write_concurrency: Option<usize>,
+    pub write_concurrency: Option<ConcurrencyConfig>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,
@@ -210,14 +224,9 @@ pub struct SequentialLayer {
 
     // sui-kvstore-specific config extensions
 
-    // Controls the concurrency of the bitmap flushes. The framework doesn't
-    // perform commits for sequential pipelines concurrently, but our store
-    // implementation doesn't actually write to the database on commit for
-    // the bitmap pipelines. The store buffers the bitmaps for the current
-    // working "bucket" ranges internally, merges in rows from each framework
-    // batch on commit (parallelized on background tasks), then finally flushes
-    // the updated bitmaps to bigtable concurrently. Same semantic as
-    // `ConcurrentLayer::write_concurrency`.
+    // Fixed concurrency for bitmap BigTable write RPCs. Framework sequential pipelines commit
+    // serially, but bitmap commits only merge rows into the store's in-memory bucket buffers.
+    // Background tasks flush those buffers to BigTable concurrently.
     pub write_concurrency: Option<usize>,
     /// Maximum rows per in-handler BigTable write RPC. Same semantic as
     /// `ConcurrentLayer::max_rows`.
@@ -332,5 +341,34 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
             min_cohort_boundary: config.min_cohort_boundary,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_committer_uses_adaptive_write_concurrency() {
+        assert_eq!(
+            default_committer_config().write_concurrency,
+            ConcurrencyConfig::Adaptive {
+                initial: 5,
+                min: 1,
+                max: 1024,
+                dead_band: None,
+            }
+        );
+    }
+
+    #[test]
+    fn committer_layer_preserves_explicit_fixed_write_concurrency() {
+        let config = CommitterLayer {
+            write_concurrency: Some(ConcurrencyConfig::fixed(42)),
+            ..Default::default()
+        }
+        .finish(default_committer_config());
+
+        assert_eq!(config.write_concurrency, ConcurrencyConfig::fixed(42));
     }
 }

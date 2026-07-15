@@ -141,6 +141,8 @@ pub struct IndexerMetrics {
 
     pub processor_concurrency_limit: IntGaugeVec,
     pub processor_concurrency_inflight: IntGaugeVec,
+    pub committer_concurrency_limit: IntGaugeVec,
+    pub committer_concurrency_inflight: IntGaugeVec,
 
     // Statistics related to individual ingestion pipelines.
     pub total_collector_checkpoints_received: IntCounterVec,
@@ -537,6 +539,20 @@ impl IndexerMetrics {
             processor_concurrency_inflight: register_int_gauge_vec_with_registry!(
                 name("processor_concurrency_inflight"),
                 "Current number of in-flight processor tasks for this pipeline",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_concurrency_limit: register_int_gauge_vec_with_registry!(
+                name("committer_concurrency_limit"),
+                "Current adaptive concurrency limit for this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_concurrency_inflight: register_int_gauge_vec_with_registry!(
+                name("committer_concurrency_inflight"),
+                "Current number of in-flight committer tasks for this pipeline",
                 &["pipeline"],
                 registry,
             )
