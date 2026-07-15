@@ -15,15 +15,13 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use fastcrypto::{encoding::Encoding, traits::ToFromBytes};
 use futures::{Stream, StreamExt as _, stream};
-use mysten_network::{Multiaddr, multiaddr::Protocol};
-use parking_lot::RwLock;
-use sui_http::{
-    ServerHandle,
-    middleware::{
-        callback::{CallbackLayer, MakeCallbackHandler, RequestBody, ResponseHandler},
-        grpc_timeout::GrpcTimeout,
-    },
+use mysten_network::{
+    Multiaddr,
+    callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
+    multiaddr::Protocol,
 };
+use parking_lot::RwLock;
+use sui_http::ServerHandle;
 use sui_tls::AllowPublicKeys;
 use tokio_stream::{Iter, iter};
 use tonic::{Request, Response, Streaming, codec::CompressionEncoding};
@@ -374,30 +372,13 @@ impl ValidatorNetworkClient for TonicValidatorClient {
 }
 
 // Tonic channel wrapped with layers.
-pub(crate) type Channel = sui_http::middleware::callback::Callback<
-    tower::util::MapRequest<
-        tower_http::trace::Trace<
-            tonic_rustls::Channel,
-            tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
-        >,
-        ReboxRequestFn,
+pub(crate) type Channel = mysten_network::callback::Callback<
+    tower_http::trace::Trace<
+        tonic_rustls::Channel,
+        tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
     >,
     MetricsCallbackMaker,
 >;
-
-/// The callback middleware hands the wrapped service a request body of type
-/// `RequestBody`, but `tonic_rustls::Channel` is monomorphic on
-/// `tonic::body::Body`, so the body must be reboxed before it reaches the
-/// channel. A fn pointer (rather than a closure) keeps `Channel` nameable as a
-/// type alias.
-pub(crate) type ReboxRequestFn =
-    fn(http::Request<RequestBody<tonic::body::Body, ()>>) -> http::Request<tonic::body::Body>;
-
-pub(crate) fn rebox_request(
-    request: http::Request<RequestBody<tonic::body::Body, ()>>,
-) -> http::Request<tonic::body::Body> {
-    request.map(tonic::body::Body::new)
-}
 
 /// Manages a pool of connections to peers to avoid constantly reconnecting,
 /// which can be expensive.
@@ -523,7 +504,6 @@ impl ChannelPool {
                 self.context.metrics.network_metrics.outbound.clone(),
                 self.context.parameters.tonic.excessive_message_size,
             )))
-            .map_request(rebox_request as ReboxRequestFn)
             .layer(
                 TraceLayer::new_for_grpc()
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
@@ -940,7 +920,9 @@ impl TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
+            .layer_fn(|service| {
+                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
+            });
 
         let consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
@@ -1069,7 +1051,9 @@ impl TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
+            .layer_fn(|service| {
+                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
+            });
 
         let observer_service = tonic::service::Routes::new(observer_service_server)
             .into_axum_router()
@@ -1317,14 +1301,10 @@ impl SizedResponse for http::response::Parts {
 }
 
 impl MakeCallbackHandler for MetricsCallbackMaker {
-    type RequestHandler = ();
-    type ResponseHandler = MetricsResponseCallback;
+    type Handler = MetricsResponseCallback;
 
-    fn make_handler(
-        &self,
-        request: &http::request::Parts,
-    ) -> (Self::RequestHandler, Self::ResponseHandler) {
-        ((), self.handle_request(request))
+    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
+        self.handle_request(request)
     }
 }
 
@@ -1333,10 +1313,7 @@ impl ResponseHandler for MetricsResponseCallback {
         MetricsResponseCallback::on_response(self, response)
     }
 
-    fn on_service_error<E>(&mut self, err: &E)
-    where
-        E: std::fmt::Display + 'static,
-    {
+    fn on_error<E>(&mut self, err: &E) {
         MetricsResponseCallback::on_error(self, err)
     }
 }

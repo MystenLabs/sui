@@ -4,9 +4,9 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use mysten_network::callback::CallbackLayer;
 use reader::StateReader;
 use subscription::SubscriptionServiceHandle;
-use sui_http::middleware::callback::CallbackLayer;
 use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;

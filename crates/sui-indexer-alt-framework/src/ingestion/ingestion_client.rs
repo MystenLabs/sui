@@ -11,6 +11,7 @@ use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
 use clap::ArgGroup;
+use mysten_network::callback::CallbackLayer;
 use object_store::ClientOptions;
 use object_store::ObjectStore;
 use object_store::aws::AmazonS3Builder;
@@ -23,7 +24,6 @@ use reqwest::header::HeaderMap;
 use reqwest::header::HeaderName;
 use reqwest::header::HeaderValue;
 use sui_futures::future::with_slow_future_monitor;
-use sui_http::middleware::callback::CallbackLayer;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
 use sui_types::digests::ChainIdentifier;
@@ -278,13 +278,9 @@ impl IngestionClient {
         password: Option<String>,
         metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
-        let byte_count_layer = tower::ServiceBuilder::new()
-            .layer(CallbackLayer::new(ByteCountMakeCallbackHandler::new(
-                metrics.total_ingested_bytes.clone(),
-            )))
-            // Rebox the callback middleware's wrapped request body back into the
-            // body type that the underlying tonic channel is monomorphic on.
-            .map_request(|request: http::Request<_>| request.map(tonic::body::Body::new));
+        let byte_count_layer = CallbackLayer::new(ByteCountMakeCallbackHandler::new(
+            metrics.total_ingested_bytes.clone(),
+        ));
         let client = Client::new(url.to_string())?
             .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
             .request_layer(byte_count_layer);

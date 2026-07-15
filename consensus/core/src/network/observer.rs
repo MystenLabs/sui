@@ -8,9 +8,8 @@ use bytes::Bytes;
 use consensus_config::{NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use futures::{Stream, StreamExt as _};
-use mysten_network::Multiaddr;
+use mysten_network::{Multiaddr, callback::CallbackLayer};
 use parking_lot::RwLock;
-use sui_http::middleware::callback::CallbackLayer;
 use tokio_stream::Iter;
 use tonic::{Request, Response};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
@@ -24,8 +23,7 @@ use crate::{
         metrics_layer::MetricsCallbackMaker,
         to_host_port_str,
         tonic_network::{
-            Channel, MAX_FETCH_RESPONSE_BYTES, ReboxRequestFn, chunk_blocks,
-            max_fetch_blocks_response_bytes, rebox_request,
+            Channel, MAX_FETCH_RESPONSE_BYTES, chunk_blocks, max_fetch_blocks_response_bytes,
         },
         tonic_tls::certificate_server_name,
     },
@@ -207,7 +205,6 @@ impl ChannelPool {
                 self.context.metrics.network_metrics.outbound.clone(),
                 self.context.parameters.tonic.excessive_message_size,
             )))
-            .map_request(rebox_request as ReboxRequestFn)
             .layer(
                 TraceLayer::new_for_grpc()
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
