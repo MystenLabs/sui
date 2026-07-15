@@ -410,6 +410,9 @@ pub struct Lambda {
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
+    /// The original argument span for a lambda forwarded between macro calls.
+    /// Populated on its first binding and used only for expansion provenance.
+    pub macro_expansion_loc: Option<Loc>,
     // Collected during macro expansion. These additional annotations can come from `Annotate` or
     // more subtly by passing a lambda from one macro to another.
     // Conceptually we could handle this by eta-expanding the lambda
@@ -463,11 +466,9 @@ pub enum Exp_ {
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
     Lambda(Lambda),
-    /// Demarcates code produced by a single macro expansion (a macro body,
-    /// a lambda invocation, or a by-name argument substitution) for debugger
-    /// support. Introduced during macro expansion in typing, carried through
-    /// the ASTs, and consumed during CFG lowering, where the commands
-    /// produced for the inner expression are stamped with the expansion info.
+    /// Marks an expression introduced by one macro-body, lambda, or by-name
+    /// argument expansion. Introduced during macro expansion in typing and
+    /// preserved until HLIR lowering converts it into a syntax context.
     MacroExpansion(MacroExpansionInfo, Box<Exp>),
 
     Assign(LValueList, Box<Exp>),
@@ -1999,6 +2000,7 @@ impl AstDebug for Lambda {
             return_label,
             use_fun_color,
             body: e,
+            macro_expansion_loc: _,
             extra_annotations,
         } = self;
         return_label.ast_debug(w);

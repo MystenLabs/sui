@@ -63,8 +63,8 @@ struct Context<'env> {
     // Used for populating block_info
     loop_bounds: BTreeMap<Label, G::LoopInfo>,
     // Chain of syntactic contexts (macros, etc.) enclosing the code
-    // currently being lowered; maintained by `with_syntax_info` and stamped
-    // onto every command placed into a basic block via `respan_command`
+    // currently being lowered; maintained by `with_syntax_info` and used by
+    // `respan_command` to associate each command with its origin.
     syntax_info: Option<Arc<SyntaxInfo>>,
     debug: CFGIRDebugFlags,
 }
@@ -156,25 +156,107 @@ impl<'env> Context<'env> {
         self.loop_bounds = BTreeMap::new();
     }
 
-    /// Runs `body` with `info` pushed onto the current chain of syntactic
-    /// contexts, restoring the previous chain afterwards. Since expansions
-    /// nest, the chain at any point during lowering is exactly the stack of
-    /// expansions the code being lowered came from.
-    fn with_syntax_info<T, F>(&mut self, info: SyntaxInfoEntry, body: F) -> T
+    /// Runs `body` with `info` installed as the current syntactic context,
+    /// restoring the previous one afterwards. The chain itself is built
+    /// during HLIR lowering (so that statement- and expression-level uses
+    /// share one identity per expansion); since expansions nest, its `prev`
+    /// must equal the context in place here (checked in debug builds).
+    fn with_syntax_info<T, F>(&mut self, info: Arc<SyntaxInfo>, body: F) -> T
     where
         F: FnOnce(&mut Self) -> T,
     {
-        let new_info = SyntaxInfo::new(info, self.syntax_info.clone());
-        let prev_info = self.syntax_info.replace(Arc::new(new_info));
+        debug_assert!(
+            match (&info.prev, &self.syntax_info) {
+                (None, None) => true,
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                _ => false,
+            },
+            "ICE macro expansion chain inconsistent with the lowering context"
+        );
+        let prev_info = self.syntax_info.replace(info);
         let result = body(self);
         self.syntax_info = prev_info;
         result
     }
 
-    /// Re-span a command with the current syntactic (e.g., macro expansion) context,
-    /// for placement into a basic block
+    /// Chooses the context for applying an assignment's left-hand side. This
+    /// can bind a variable (`let y = ...`), destructure a value, or discard it
+    /// (`let _ = ...`). The RHS keeps the context stored on its expression.
+    ///
+    /// ```move
+    /// macro fun add1($x: u64): u64 { let y = $x; y + 1 }
+    /// fun test(v: u64) { let z = add1!(v); }
+    /// ```
+    ///
+    /// While lowering this code, an assignment can target three kinds of
+    /// locations:
+    ///
+    /// ```text
+    /// (1) a compiler temporary located at `v`, if argument evaluation needs one
+    /// (2) `y`, located in the body of `add1`
+    /// (3) a compiler result temporary located at the call `add1!(v)`
+    /// ```
+    ///
+    /// There is no explicit tag distinguishing these cases. HLIR's location
+    /// conventions let us identify them:
+    ///
+    /// * In (1), `bind_exp` gives the temporary the RHS expression's location.
+    ///   The RHS `Argument` range therefore contains the lvalue location, and
+    ///   the assignment uses the RHS context.
+    /// * In (2), `y` retains its declaration location inside the macro body.
+    ///   The current `MacroBody` range contains it, so the assignment uses that
+    ///   context.
+    /// * In (3), the result temporary receives the macro call's location,
+    ///   outside `add1`'s body. Searching the current context chain therefore
+    ///   reaches the caller's context, or none for ordinary user code.
+    ///
+    /// This choice is recorded while translating HLIR, where the assignment's
+    /// original RHS is still present. CFG optimizations may later replace that
+    /// RHS with an expression from another macro invocation; the assignment
+    /// must still remain associated with the invocation that created it.
+    fn assignment_lvalue_syntax_info(
+        &self,
+        lvalues: &[H::LValue],
+        rhs: &H::Exp,
+    ) -> Option<Arc<SyntaxInfo>> {
+        let Some(sp!(lvalue_loc, _)) = lvalues.first() else {
+            // An empty lvalue list has no assignment targets to attribute.
+            return self.syntax_info.clone();
+        };
+        // All targets in one Assign come from the same source assignment and
+        // therefore share a context; the first location is representative.
+
+        // Case (1): a temporary used to evaluate a by-name argument.
+        let rhs_info = &rhs.exp.sloc.syntax_info;
+        if let Some(info) = rhs_info {
+            let SyntaxInfoEntry::MacroExpansion(mei) = &info.info;
+            if mei.expansion_location.contains(lvalue_loc) {
+                return rhs_info.clone();
+            }
+        }
+
+        // Cases (2) and (3): find the innermost current expansion containing
+        // the lvalue, falling back to ordinary user code if there is none.
+        let mut current = self.syntax_info.clone();
+        while let Some(info) = &current {
+            let SyntaxInfoEntry::MacroExpansion(mei) = &info.info;
+            if mei.expansion_location.contains(lvalue_loc) {
+                return current;
+            }
+            current = info.prev.clone();
+        }
+        None
+    }
+
+    /// Attach the command's syntactic context before placing it in a basic block.
     fn respan_command(&self, sp!(loc, cmd_): H::Command) -> SyntaxCommand {
-        SyntaxSpanned::new(SyntaxLoc::new(loc, self.syntax_info.clone()), cmd_)
+        let syntax_info = match &cmd_ {
+            H::Command_::Assign(_, lvalues, rhs) => {
+                self.assignment_lvalue_syntax_info(lvalues, rhs)
+            }
+            _ => self.syntax_info.clone(),
+        };
+        SyntaxSpanned::new(SyntaxLoc::new(loc, syntax_info), cmd_)
     }
 }
 
@@ -511,7 +593,7 @@ fn constant(
     );
     let value = match final_value {
         Some(H::Exp {
-            exp: sp!(_, H::UnannotatedExp_::Value(value)),
+            exp: ssp!(_, _, H::UnannotatedExp_::Value(value)),
             ..
         }) => {
             constant_values
@@ -635,7 +717,7 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
         E::Value(_) => (),
         _ => context.add_diag(diag!(
             CodeGeneration::UnfoldableConstant,
-            (e.exp.loc, CANNOT_FOLD)
+            (e.exp.loc(), CANNOT_FOLD)
         )),
     }
 }
@@ -1060,10 +1142,9 @@ fn statement(
         // so lower its statements in front of the current block (when also
         // stamping them with the syntax info) since during CFGIR translation
         // statements are processed in reverse order.
-        S::MacroExpansion { macro_info, body } => context
-            .with_syntax_info(SyntaxInfoEntry::MacroExpansion(macro_info), |context| {
-                block_with_tail(context, body, current_block)
-            }),
+        S::MacroExpansion { info, body } => context.with_syntax_info(info, |context| {
+            block_with_tail(context, body, current_block)
+        }),
         S::Command(sp!(cloc, C::Break(name))) => {
             // Discard the current block because it's dead code.
             let break_jump = make_jump(cloc, context.named_block_end_label(&name), true);

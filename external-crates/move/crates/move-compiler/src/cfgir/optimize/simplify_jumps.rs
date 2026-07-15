@@ -47,7 +47,7 @@ fn optimize_cmd(ssp!(_, cmd_): &mut SyntaxCommand) -> bool {
         C::JumpIf {
             cond:
                 Exp {
-                    exp: sp!(_, E::Value(sp!(_, V::Bool(cond)))),
+                    exp: ssp!(_, _, E::Value(sp!(_, V::Bool(cond)))),
                     ..
                 },
             if_true,

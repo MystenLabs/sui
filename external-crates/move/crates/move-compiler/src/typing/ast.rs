@@ -213,8 +213,8 @@ pub enum UnannotatedExp_ {
     },
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
-    /// Demarcates code produced by a single macro expansion for debugger
-    /// support; see `N::Exp_::MacroExpansion`.
+    /// Typed form of `N::Exp_::MacroExpansion`, consumed during HLIR lowering
+    /// to construct syntax contexts for generated statements and expressions.
     MacroExpansion(MacroExpansionInfo, Box<Exp>),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),

@@ -18,10 +18,11 @@ pub enum MacroExpansionKind {
     Argument,
 }
 
-/// Describes a single macro expansion for debugger support: what kind of
-/// expansion it is, where it was triggered, and where the expanded code
-/// comes from. Created during macro expansion in typing and carried through
-/// the ASTs until CFG lowering stamps it onto the commands it produced.
+/// Describes one macro expansion boundary: what kind of expansion it is,
+/// where it was triggered, and where the expanded code came from.
+/// Created during macro expansion in typing and carried through the
+/// naming and typing ASTs. HLIR lowering uses it to build the syntax
+/// contexts attached to expressions and CFGIR commands.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MacroExpansionInfo {
     pub kind: MacroExpansionKind,

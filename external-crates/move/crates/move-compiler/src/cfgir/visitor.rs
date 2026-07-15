@@ -722,7 +722,7 @@ pub trait SimpleAbsInt: Sized {
         if let Some(vs) = self.exp_custom(context, state, parent_e) {
             return vs;
         }
-        let eloc = &parent_e.exp.loc;
+        let eloc = &parent_e.exp.loc();
         match &parent_e.exp.value {
             E::Move { var, .. } => {
                 let locals = state.locals_mut();

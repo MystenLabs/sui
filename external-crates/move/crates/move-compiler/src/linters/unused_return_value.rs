@@ -166,7 +166,7 @@ impl SimpleAbsInt for UnusedReturnValueAI {
         if state.locals().contains_key(var) {
             state
                 .locals_mut()
-                .insert(*var, LocalState::Available(e.exp.loc, Value::Other));
+                .insert(*var, LocalState::Available(e.exp.loc(), Value::Other));
         }
         None
     }

@@ -16,7 +16,6 @@ use crate::{
     hlir::ast::{self as H, *},
     shared::unique_map::UniqueMap,
 };
-use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use state::*;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -486,7 +485,10 @@ fn pop_ref(sloc: SyntaxLoc, var: Var, ty: SingleType) -> SyntaxCommand {
         annotation: MoveOpAnnotation::InferredLastUsage,
         var,
     };
-    let move_e = H::exp(Type_::single(ty), sp(sloc.loc, move_e_));
+    let move_e = H::exp(
+        Type_::single(ty),
+        ssp(sloc.loc, sloc.syntax_info.clone(), move_e_),
+    );
     let pop_ = C::IgnoreAndPop {
         pop_num: 1,
         exp: move_e,

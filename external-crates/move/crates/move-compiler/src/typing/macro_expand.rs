@@ -25,7 +25,8 @@ use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-/// lambda, lambda's location, location of the lambda's function type, parameter types, result type
+/// Maps a lambda parameter to the lambda, its expression location, its
+/// function-type location, its parameter types, and its result type.
 type LambdaMap = BTreeMap<Var_, (N::Lambda, Loc, Loc, Vec<Type>, Type)>;
 type ArgMap = BTreeMap<Var_, (N::Exp, Type)>;
 struct ParamInfo {
@@ -310,11 +311,21 @@ fn bind_lambda(
     param_ty: Vec<Type>,
     result_ty: Type,
 ) -> Option<()> {
-    // The lambda expression's location includes the parameter list, while
-    // the lambda body's location starts at the body expression only.
-    let lambda_loc = arg.loc;
     match arg.value {
-        N::Exp_::Lambda(lambda) => {
+        N::Exp_::Lambda(mut lambda) => {
+            // Consider:
+            //   macro fun apply($f: |u64| -> u64): u64 { $f(1) }
+            //   macro fun forward($g: |u64| -> u64): u64 { apply!($g) }
+            //   forward!(|x| x + p)
+            // On the first binding, `macro_expansion_loc` is `None`, so
+            // `lambda_loc` is initialized from `arg.loc`, the location of
+            // `|x| x + p`. Storing it on the lambda lets its clone carry the
+            // location through `$g`. On the nested binding, `lambda_loc` is
+            // taken from the stored value instead of that binding's `arg.loc`
+            // (the location of `$g`). Neither binding changes `arg.loc`, which
+            // remains the diagnostic span for that occurrence.
+            let lambda_loc = lambda.macro_expansion_loc.unwrap_or(arg.loc);
+            lambda.macro_expansion_loc = Some(lambda_loc);
             lambdas.insert(param, (lambda, lambda_loc, tfunloc, param_ty, result_ty));
             Some(())
         }
@@ -697,6 +708,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             return_label,
             use_fun_color,
             body,
+            macro_expansion_loc: _,
             extra_annotations: _,
         }) => {
             ctx.add_block_label(*return_label);
@@ -1003,7 +1015,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         ///////
         N::Exp_::Var(sp!(_, v_)) if context.lambdas.contains_key(v_) => {
             context.mark_used(v_);
-            let (lambda, _lambda_loc, tfunloc, args, ret) = context.lambdas.get(v_).unwrap();
+            let (lambda, _, tfunloc, args, ret) = context.lambdas.get(v_).unwrap();
             let mut lambda = lambda.clone();
             lambda
                 .extra_annotations
@@ -1021,6 +1033,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     return_label,
                     use_fun_color,
                     body: mut lambda_body,
+                    macro_expansion_loc: _,
                     extra_annotations,
                 },
                 lambda_loc,

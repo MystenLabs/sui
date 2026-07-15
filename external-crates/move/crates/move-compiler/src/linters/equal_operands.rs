@@ -40,9 +40,9 @@ simple_visitor!(
             let rhs_msg = "Will always evaluate to the same value as this expression";
             self.reporter.add_diag(diag!(
                 StyleCodes::EqualOperands.diag_info(),
-                (e.exp.loc, msg),
-                (lhs.exp.loc, lhs_msg),
-                (rhs.exp.loc, rhs_msg)
+                (e.exp.loc(), msg),
+                (lhs.exp.loc(), lhs_msg),
+                (rhs.exp.loc(), rhs_msg)
             ));
         };
         false

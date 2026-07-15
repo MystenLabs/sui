@@ -146,7 +146,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 Some(v) => v,
                 None => return changed,
             };
-            *e_ = fold_unary_op(e.exp.loc, op, v);
+            *e_ = fold_unary_op(e.exp.sloc.loc, op, v);
             true
         }
 
@@ -162,7 +162,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let v2_opt = foldable_exp(e2);
             // TODO warn on operations that always fail
             if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
-                if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
+                if let Some(folded) = fold_binary_op(e.exp.sloc.loc, op, v1, v2) {
                     *e_ = folded;
                     true
                 } else {
@@ -184,7 +184,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 Some(v) => v,
                 None => return changed,
             };
-            match fold_cast(e.exp.loc, bt, v) {
+            match fold_cast(e.exp.loc(), bt, v) {
                 Some(folded) => {
                     *e_ = folded;
                     true
@@ -204,7 +204,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             }
             let mut vs = vec![];
             for earg in eargs {
-                let eloc = earg.exp.loc;
+                let eloc = earg.exp.loc();
                 if let Some(v) = foldable_exp(earg) {
                     vs.push(sp(eloc, v));
                 } else {
@@ -212,7 +212,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 }
             }
             debug_assert!(n == vs.len());
-            *e_ = evalue_(e.exp.loc, Value_::Vector(ty.clone(), vs));
+            *e_ = evalue_(e.exp.sloc.loc, Value_::Vector(ty.clone(), vs));
             true
         }
     }

@@ -458,22 +458,26 @@ mod eliminate {
                     }
                 }
                 if es.is_empty() {
-                    *e = unit(e.exp.loc)
+                    *e = unit_from(e)
                 }
             }
         }
     }
 
     fn remove_eliminated_single(context: &mut Context, v: Var, e: &mut Exp) {
-        let old = std::mem::replace(e, unit(e.exp.loc));
+        let unit = unit_from(e);
+        let old = std::mem::replace(e, unit);
         context.eliminated.insert(v, old);
     }
 
-    fn unit(loc: Loc) -> Exp {
+    /// A unit expression replacing `e`, at `e`'s location and syntactic context.
+    fn unit_from(e: &Exp) -> Exp {
+        let loc = e.exp.sloc.loc;
         H::exp(
             sp(loc, Type_::Unit),
-            sp(
+            ssp(
                 loc,
+                e.exp.sloc.syntax_info.clone(),
                 UnannotatedExp_::Unit {
                     case: UnitCase::Implicit,
                 },

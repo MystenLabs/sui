@@ -351,6 +351,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             return_label: _,
             use_fun_color: _,
             body: e,
+            macro_expansion_loc: _,
             extra_annotations: _,
         }) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef_opt) => {

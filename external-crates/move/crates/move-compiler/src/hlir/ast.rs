@@ -13,8 +13,11 @@ use crate::{
         FunctionName, TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NumericalAddress, TName, ast_debug::*, macro_expansion::MacroExpansionInfo,
-        program_info::TypingProgramInfo, unique_map::UniqueMap,
+        Name, NumericalAddress, TName,
+        ast_debug::*,
+        program_info::TypingProgramInfo,
+        syntax_info::{SyntaxInfo, SyntaxSpanned},
+        unique_map::UniqueMap,
     },
 };
 use move_ir_types::location::*;
@@ -234,12 +237,11 @@ pub enum Statement_ {
         name: BlockLabel,
         block: Block,
     },
-    /// Demarcates statements produced by a single macro expansion for
-    /// debugger support (see `N::Exp_::MacroExpansion`). Consumed during
-    /// CFG lowering, where the commands produced for `body` are stamped
-    /// with the expansion info.
+    /// Groups statements produced within one expansion. `info` is the complete
+    /// expansion context shared with expressions lowered from `body`. CFG
+    /// lowering attaches `info` to the commands generated from this region.
     MacroExpansion {
-        macro_info: MacroExpansionInfo,
+        info: Arc<SyntaxInfo>,
         body: Block,
     },
 }
@@ -427,7 +429,11 @@ pub enum UnannotatedExp_ {
 
     UnresolvedError,
 }
-pub type UnannotatedExp = Spanned<UnannotatedExp_>;
+/// HLIR expressions carry a [`SyntaxLoc`] so instructions emitted directly
+/// from an expression can retain both its source location and expansion
+/// context, even when the expression is moved into a command created under a
+/// different context.
+pub type UnannotatedExp = SyntaxSpanned<UnannotatedExp_>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Exp {
     pub ty: Type,
@@ -1387,11 +1393,8 @@ impl AstDebug for Statement_ {
                 w.write(": ");
                 w.block(|w| block.ast_debug(w))
             }
-            S::MacroExpansion { macro_info, body } => {
-                w.write(format!(
-                    "macro-expansion {}: ",
-                    macro_info.kind.debug_name()
-                ));
+            S::MacroExpansion { info, body } => {
+                w.write(format!("macro-expansion {}: ", info.debug_chain()));
                 w.block(|w| body.ast_debug(w))
             }
         }

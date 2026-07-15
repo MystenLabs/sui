@@ -1054,8 +1054,8 @@ fn command(
     code: &mut IR::BytecodeBlock,
     ssp!(sloc, cmd_): G::SyntaxCommand,
 ) {
-    // TODO(debugger): record `sloc.syntax_info` for the emitted instructions
-    // so it can be stored in the source map as macro frame information
+    // TODO(debugger): carry `sloc.syntax_info` alongside emitted instructions
+    // so bytecode source maps can record macro-frame attribution.
     let loc = sloc.loc;
     use H::Command_ as C;
     use IR::Bytecode_ as B;
@@ -1201,7 +1201,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
     use Value_ as V;
-    let sp!(loc, e_) = e.exp;
+    let ssp!(loc, _, e_) = e.exp;
     match e_ {
         E::Unreachable => panic!("ICE should not compile dead code"),
         E::UnresolvedError => panic!("ICE should not have reached compilation if there are errors"),

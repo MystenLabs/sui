@@ -61,6 +61,7 @@ pub mod program_info;
 pub mod remembering_unique_map;
 pub mod stdlib_definitions;
 pub mod string_utils;
+pub mod syntax_info;
 pub mod unique_map;
 pub mod unique_set;
 
