@@ -6,7 +6,7 @@ use super::{canonicalize_handles, context::*, optimize};
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
-        ast::{self as G, ssp},
+        ast::{self as G, SyntaxInfo, SyntaxInfoEntry, ssp},
         translate::move_value_from_value_,
     },
     compiled_unit::*,
@@ -17,6 +17,7 @@ use crate::{
         ast::{self as H, Value_, Var, Visibility},
         translate::{single_type as hlir_single_type, translate_var, type_},
     },
+    ice,
     naming::{
         ast::{self as N, BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
@@ -26,8 +27,8 @@ use crate::{
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
     shared::{
-        ide::IDEInfo, known_attributes::AttributeKind_, program_info::ModuleInfo,
-        unique_map::UniqueMap, *,
+        ide::IDEInfo, known_attributes::AttributeKind_, macro_expansion::MacroExpansionKind,
+        program_info::ModuleInfo, unique_map::UniqueMap, *,
     },
 };
 use move_binary_format::file_format as F;
@@ -340,6 +341,7 @@ fn module(
         | Address::NamedUnassigned(name) => Some(*name),
     };
     let addr_bytes = context.resolve_address(ident.value.address);
+    let function_syntax_info = std::mem::take(&mut context.function_syntax_info);
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
         datatype_declarations,
@@ -370,7 +372,7 @@ fn module(
         functions,
     };
     let deps: Vec<&F::CompiledModule> = vec![];
-    let (mut module, source_map) =
+    let (mut module, mut source_map) =
         match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
             Ok(res) => res,
             Err(e) => {
@@ -381,6 +383,8 @@ fn module(
                 return None;
             }
         };
+    populate_macro_frame_info(reporter, &mut source_map, &module, &function_syntax_info);
+    compact_macro_frame_maps(&mut source_map);
     canonicalize_handles::in_module(&mut module, &address_names(dependency_orderings.keys()));
     let function_infos = module_function_infos(&module, &source_map, &collected_function_infos);
     let module = NamedCompiledModule {
@@ -398,6 +402,160 @@ fn module(
         named_module: module,
         function_infos,
     })
+}
+
+/// After compilation, populate macro frame info on the source map by walking
+/// the chains of syntactic contexts recorded for each emitted instruction.
+/// Chains are interned by `Arc` pointer identity -- each expansion event is a
+/// distinct frame, even if two expansions look structurally identical.
+fn populate_macro_frame_info(
+    reporter: &DiagnosticReporter,
+    source_map: &mut SourceMap,
+    compiled_module: &F::CompiledModule,
+    function_syntax_info: &BTreeMap<Symbol, Vec<Option<Arc<SyntaxInfo>>>>,
+) {
+    use move_bytecode_source_map::source_map::{MacroFrameInfoEntry, MacroFrameKind};
+    use move_core_types::identifier::Identifier as MoveIdentifier;
+    use std::collections::HashMap as StdHashMap;
+
+    for (fdef_idx, fsm) in source_map.function_source_maps_mut() {
+        let func_idx = fdef_idx as usize;
+        if func_idx >= compiled_module.function_defs.len() {
+            continue;
+        }
+        let fdef = &compiled_module.function_defs[func_idx];
+        let fhandle = &compiled_module.function_handles[fdef.function.0 as usize];
+        let fname_str = compiled_module.identifiers[fhandle.name.0 as usize].as_str();
+        let fname_sym = Symbol::from(fname_str);
+
+        let Some(info_data) = function_syntax_info.get(&fname_sym) else {
+            continue;
+        };
+
+        // The per-instruction data is indexed by bytecode offset, which
+        // relies on the IR compiler emitting exactly one instruction per IR
+        // bytecode. If the counts ever diverge, drop this function's macro
+        // frame info -- missing debug info is better than misattributed
+        // frames.
+        let code_len = fdef.code.as_ref().map_or(0, |code| code.code.len());
+        if info_data.len() != code_len {
+            debug_assert!(
+                false,
+                "syntax info instruction count mismatch in {}: bytecode has {} instructions, info has {} entries",
+                fname_str,
+                code_len,
+                info_data.len(),
+            );
+            continue;
+        }
+
+        // Collect all unique SyntaxInfo nodes (by Arc pointer identity)
+        // including those reachable via `prev` chains.
+        let mut ptr_to_index: StdHashMap<*const SyntaxInfo, u32> = StdHashMap::new();
+        let mut ordered_nodes: Vec<Arc<SyntaxInfo>> = Vec::new();
+
+        fn register_node(
+            node: &Arc<SyntaxInfo>,
+            ptr_to_index: &mut StdHashMap<*const SyntaxInfo, u32>,
+            ordered_nodes: &mut Vec<Arc<SyntaxInfo>>,
+        ) {
+            let ptr = Arc::as_ptr(node);
+            if ptr_to_index.contains_key(&ptr) {
+                return;
+            }
+            // Register enclosing contexts first so that parent indices are
+            // always lower than their children's.
+            if let Some(ref prev) = node.prev {
+                register_node(prev, ptr_to_index, ordered_nodes);
+            }
+            let index = ordered_nodes.len() as u32;
+            ptr_to_index.insert(ptr, index);
+            ordered_nodes.push(Arc::clone(node));
+        }
+
+        for node in info_data.iter().flatten() {
+            register_node(node, &mut ptr_to_index, &mut ordered_nodes);
+        }
+
+        if ordered_nodes.is_empty() {
+            continue;
+        }
+
+        // Build the frame table. If any entry cannot be converted (which
+        // should be impossible), drop the whole function's info to keep the
+        // table and the offset map consistent.
+        let mut entries = Vec::with_capacity(ordered_nodes.len());
+        let mut entries_valid = true;
+        for node in &ordered_nodes {
+            let SyntaxInfoEntry::MacroExpansion(mei) = &node.info;
+            let kind = match &mei.kind {
+                MacroExpansionKind::MacroBody { module, function } => {
+                    let module_addr = module.value.address.into_addr_bytes().into_inner();
+                    match (
+                        MoveIdentifier::new(module.value.module_name().to_string()),
+                        MoveIdentifier::new(function.0.value.as_str()),
+                    ) {
+                        (Ok(module_name), Ok(function_name)) => MacroFrameKind::MacroBody {
+                            module_addr,
+                            module_name,
+                            function_name,
+                        },
+                        _ => {
+                            // Module and function names are valid identifiers
+                            // by construction, so this should be unreachable.
+                            reporter.add_diag(ice!((
+                                mei.invocation_location,
+                                format!(
+                                    "ICE macro name {}::{} is not a valid identifier",
+                                    module, function
+                                )
+                            )));
+                            entries_valid = false;
+                            break;
+                        }
+                    }
+                }
+                MacroExpansionKind::Lambda => MacroFrameKind::Lambda,
+                MacroExpansionKind::Argument => MacroFrameKind::Argument,
+            };
+            entries.push(MacroFrameInfoEntry {
+                kind,
+                source_loc: mei.expansion_location,
+                call_loc: mei.invocation_location,
+                parent_index: node
+                    .prev
+                    .as_ref()
+                    .map(|p| *ptr_to_index.get(&Arc::as_ptr(p)).unwrap()),
+            });
+        }
+        if !entries_valid {
+            continue;
+        }
+        fsm.macro_frame_info = entries;
+
+        // Record the frame index for every instruction offset; compacted to
+        // change points by `compact_macro_frame_maps` once all consumers of
+        // the full form have run.
+        fsm.macro_frame_map = info_data
+            .iter()
+            .enumerate()
+            .map(|(offset, info)| {
+                let index = info
+                    .as_ref()
+                    .map(|node| *ptr_to_index.get(&Arc::as_ptr(node)).unwrap());
+                (offset as F::CodeOffset, index)
+            })
+            .collect();
+    }
+}
+
+/// Compact the stored macro-frame maps into change-points-only segment maps.
+fn compact_macro_frame_maps(source_map: &mut SourceMap) {
+    for (_, fsm) in source_map.function_source_maps_mut() {
+        for (offset, frame_idx) in std::mem::take(&mut fsm.macro_frame_map) {
+            fsm.add_macro_frame_mapping(offset, frame_idx);
+        }
+    }
 }
 
 /// Generate a mapping from numerical address and module name to named address, for modules whose
@@ -864,16 +1022,19 @@ fn function_body(
     blocks.sort_by_key(|(lbl, _)| *lbl);
 
     let mut bytecode_blocks = Vec::new();
+    let mut block_syntax_info: optimize::BlockSyntaxInfo = Vec::new();
     for (idx, (lbl, basic_block)) in blocks.into_iter().enumerate() {
         // first idx should be the start label
         assert!(idx != 0 || lbl == start);
         assert!(idx == bytecode_blocks.len());
 
+        context.current_block_info = Vec::new();
         let mut code = IR::BytecodeBlock::new();
         for cmd in basic_block {
             command(context, &mut code, cmd);
         }
         bytecode_blocks.push((label(lbl), code));
+        block_syntax_info.push(std::mem::take(&mut context.current_block_info));
     }
 
     let loop_heads = block_info
@@ -881,7 +1042,26 @@ fn function_body(
         .filter(|(_lbl, info)| matches!(info, G::BlockInfo::LoopHead(_)))
         .map(|(lbl, _)| label(lbl))
         .collect();
-    optimize::code(f, &loop_heads, &mut locals, &mut bytecode_blocks);
+    optimize::code(
+        f,
+        &loop_heads,
+        &mut locals,
+        &mut bytecode_blocks,
+        &mut block_syntax_info,
+    );
+
+    let instruction_count = bytecode_blocks
+        .iter()
+        .map(|(_, block)| block.len())
+        .sum::<usize>();
+    let flat_info: Vec<Option<Arc<SyntaxInfo>>> = block_syntax_info.into_iter().flatten().collect();
+    debug_assert!(
+        instruction_count == flat_info.len(),
+        "syntax info instruction count mismatch: bytecode has {} instructions, info has {} entries",
+        instruction_count,
+        flat_info.len(),
+    );
+    context.function_syntax_info.insert(f.0.value, flat_info);
 
     (locals, bytecode_blocks)
 }
@@ -1049,14 +1229,20 @@ fn label(lbl: H::Label) -> IR::BlockLabel_ {
     IR::BlockLabel_(format!("{}", lbl).into())
 }
 
+/// Pushes an instruction, recording the current syntactic context for it in
+/// parallel (the source of the source map's macro frame info).
+fn push_instr(context: &mut Context, code: &mut IR::BytecodeBlock, instr: IR::Bytecode) {
+    code.push(instr);
+    context.current_block_info.push(context.syntax_info.clone());
+}
+
 fn command(
     context: &mut Context,
     code: &mut IR::BytecodeBlock,
     ssp!(sloc, cmd_): G::SyntaxCommand,
 ) {
-    // TODO(debugger): carry `sloc.syntax_info` alongside emitted instructions
-    // so bytecode source maps can record macro-frame attribution.
     let loc = sloc.loc;
+    context.syntax_info = sloc.syntax_info;
     use H::Command_ as C;
     use IR::Bytecode_ as B;
     match cmd_ {
@@ -1067,31 +1253,31 @@ fn command(
         C::Mutate(eref, ervalue) => {
             exp(context, code, *ervalue);
             exp(context, code, *eref);
-            code.push(sp(loc, B::WriteRef));
+            push_instr(context, code, sp(loc, B::WriteRef));
         }
         C::Abort(_, ecode) => {
             exp(context, code, ecode);
-            code.push(sp(loc, B::Abort));
+            push_instr(context, code, sp(loc, B::Abort));
         }
         C::Return { exp: e, .. } => {
             exp(context, code, e);
-            code.push(sp(loc, B::Ret));
+            push_instr(context, code, sp(loc, B::Ret));
         }
         C::IgnoreAndPop { pop_num, exp: e } => {
             exp(context, code, e);
             for _ in 0..pop_num {
-                code.push(sp(loc, B::Pop));
+                push_instr(context, code, sp(loc, B::Pop));
             }
         }
-        C::Jump { target, .. } => code.push(sp(loc, B::Branch(label(target)))),
+        C::Jump { target, .. } => push_instr(context, code, sp(loc, B::Branch(label(target)))),
         C::JumpIf {
             cond,
             if_true,
             if_false,
         } => {
             exp(context, code, cond);
-            code.push(sp(loc, B::BrFalse(label(if_false))));
-            code.push(sp(loc, B::Branch(label(if_true))));
+            push_instr(context, code, sp(loc, B::BrFalse(label(if_false))));
+            push_instr(context, code, sp(loc, B::Branch(label(if_true))));
         }
         C::VariantSwitch {
             subject,
@@ -1104,7 +1290,7 @@ fn command(
                 .into_iter()
                 .map(|(variant, arm_lbl)| (context.variant_name(variant), sp(loc, label(arm_lbl))))
                 .collect::<Vec<_>>();
-            code.push(sp(loc, B::VariantSwitch(name, arms)));
+            push_instr(context, code, sp(loc, B::VariantSwitch(name, arms)));
         }
         C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
@@ -1128,56 +1314,60 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
     use H::LValue_ as L;
     use IR::Bytecode_ as B;
     match l_ {
-        L::Ignore => code.push(sp(loc, B::Pop)),
+        L::Ignore => push_instr(context, code, sp(loc, B::Pop)),
         L::Var {
             var: v,
             unused_assignment,
             ty,
         } => {
             if unused_assignment && ty.value.abilities(loc).has_ability_(Ability_::Drop) {
-                code.push(sp(loc, B::Pop));
+                push_instr(context, code, sp(loc, B::Pop));
             } else {
-                code.push(sp(loc, B::StLoc(var(v))));
+                push_instr(context, code, sp(loc, B::StLoc(var(v))));
             }
         }
 
         L::Unpack(s, tys, field_ls) if field_ls.is_empty() => {
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            code.push(sp(loc, B::Unpack(n, base_types(context, tys))));
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Unpack(n, btys)));
             // Pop off false
-            code.push(sp(loc, B::Pop));
+            push_instr(context, code, sp(loc, B::Pop));
         }
 
         L::Unpack(s, tys, field_ls) => {
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            code.push(sp(loc, B::Unpack(n, base_types(context, tys))));
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Unpack(n, btys)));
 
             lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
         }
 
         L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, field_ls) if field_ls.is_empty() => {
             let n = context.enum_definition_name(context.current_module().unwrap(), e);
-            code.push(sp(
-                loc,
-                B::UnpackVariant(
-                    n,
-                    context.variant_name(v),
-                    base_types(context, tys),
-                    convert_unpack_type(unpack_type),
+            let vn = context.variant_name(v);
+            let btys = base_types(context, tys);
+            push_instr(
+                context,
+                code,
+                sp(
+                    loc,
+                    B::UnpackVariant(n, vn, btys, convert_unpack_type(unpack_type)),
                 ),
-            ));
+            );
         }
         L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, field_ls) => {
             let n = context.enum_definition_name(context.current_module().unwrap(), e);
-            code.push(sp(
-                loc,
-                B::UnpackVariant(
-                    n,
-                    context.variant_name(v),
-                    base_types(context, tys),
-                    convert_unpack_type(unpack_type),
+            let vn = context.variant_name(v);
+            let btys = base_types(context, tys);
+            push_instr(
+                context,
+                code,
+                sp(
+                    loc,
+                    B::UnpackVariant(n, vn, btys, convert_unpack_type(unpack_type)),
                 ),
-            ));
+            );
 
             lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
         }
@@ -1201,6 +1391,13 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
     use Value_ as V;
+    // Every expression carries the syntactic context of its origin; emit its
+    // instructions under it. This matters when a value is embedded in a
+    // command from another context: a macro argument's computation used
+    // inside the macro body, or a value moved across an expansion boundary
+    // by an optimization.
+    let saved_info = context.syntax_info.clone();
+    context.syntax_info = e.exp.sloc.syntax_info.clone();
     let ssp!(loc, _, e_) = e.exp;
     match e_ {
         E::Unreachable => panic!("ICE should not compile dead code"),
@@ -1228,14 +1425,17 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     B::LdConst(ty, move_value_from_value_(v_))
                 }
             };
-            code.push(sp(loc, ld_value));
+            push_instr(context, code, sp(loc, ld_value));
         }
         E::Move { var: v, .. } => {
-            code.push(sp(loc, B::MoveLoc(var(v))));
+            push_instr(context, code, sp(loc, B::MoveLoc(var(v))));
         }
-        E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
+        E::Copy { var: v, .. } => push_instr(context, code, sp(loc, B::CopyLoc(var(v)))),
 
-        E::Constant(c) => code.push(sp(loc, B::LdNamedConst(context.constant_name(c)))),
+        E::Constant(c) => {
+            let cn = context.constant_name(c);
+            push_instr(context, code, sp(loc, B::LdNamedConst(cn)))
+        }
 
         E::ErrorConstant {
             line_number_loc,
@@ -1252,14 +1452,19 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             // record the line number essentially.
             let line_number = std::cmp::min(line_no, u16::MAX as usize) as u16;
 
-            code.push(sp(
-                loc,
-                B::ErrorConstant {
-                    line_number,
-                    error_code,
-                    constant: error_constant.map(|n| context.constant_name(n)),
-                },
-            ));
+            let constant = error_constant.map(|n| context.constant_name(n));
+            push_instr(
+                context,
+                code,
+                sp(
+                    loc,
+                    B::ErrorConstant {
+                        line_number,
+                        error_code,
+                        constant,
+                    },
+                ),
+            );
         }
 
         E::ModuleCall(mcall) => {
@@ -1278,23 +1483,23 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::Freeze(er) => {
             exp(context, code, *er);
-            code.push(sp(loc, B::FreezeRef));
+            push_instr(context, code, sp(loc, B::FreezeRef));
         }
 
         E::Dereference(er) => {
             exp(context, code, *er);
-            code.push(sp(loc, B::ReadRef));
+            push_instr(context, code, sp(loc, B::ReadRef));
         }
 
         E::UnaryExp(op, er) => {
             exp(context, code, *er);
-            unary_op(code, op);
+            unary_op(context, code, op);
         }
 
         E::BinopExp(el, op, er) => {
             exp(context, code, *el);
             exp(context, code, *er);
-            binary_op(code, op);
+            binary_op(context, code, op);
         }
 
         E::Pack(s, tys, field_args) if field_args.is_empty() => {
@@ -1302,10 +1507,11 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             // empty structs have a dummy field of type 'bool' added
 
             // Push on fake field
-            code.push(sp(loc, B::LdFalse));
+            push_instr(context, code, sp(loc, B::LdFalse));
 
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            code.push(sp(loc, B::Pack(n, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Pack(n, btys)))
         }
 
         E::Pack(s, tys, field_args) => {
@@ -1313,14 +1519,16 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 exp(context, code, earg);
             }
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            code.push(sp(loc, B::Pack(n, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Pack(n, btys)))
         }
 
         E::PackVariant(e, v, tys, field_args) if field_args.is_empty() => {
             // unlike structs, empty fields _are_ allowed in the bytecode
             let e = context.enum_definition_name(context.current_module().unwrap(), e);
             let v = context.variant_name(v);
-            code.push(sp(loc, B::PackVariant(e, v, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::PackVariant(e, v, btys)))
         }
 
         E::PackVariant(e, v, tys, field_args) => {
@@ -1329,7 +1537,8 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             }
             let e = context.enum_definition_name(context.current_module().unwrap(), e);
             let v = context.variant_name(v);
-            code.push(sp(loc, B::PackVariant(e, v, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::PackVariant(e, v, btys)))
         }
 
         E::Vector(_, n, bt, args) => {
@@ -1337,7 +1546,11 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             for arg in args {
                 exp(context, code, arg);
             }
-            code.push(sp(loc, B::VecPack(ty, n.try_into().unwrap())))
+            push_instr(
+                context,
+                code,
+                sp(loc, B::VecPack(ty, n.try_into().unwrap())),
+            )
         }
 
         E::Multiple(es) => {
@@ -1354,7 +1567,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             } else {
                 B::ImmBorrowField(n, tys, field(f))
             };
-            code.push(sp(loc, instr));
+            push_instr(context, code, sp(loc, instr));
         }
 
         E::BorrowLocal(mut_, v) => {
@@ -1363,7 +1576,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             } else {
                 B::ImmBorrowLoc(var(v))
             };
-            code.push(sp(loc, instr));
+            push_instr(context, code, sp(loc, instr));
         }
 
         E::Cast(el, sp!(_, bt_)) => {
@@ -1380,9 +1593,10 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     panic!("ICE type checking failed. unexpected cast")
                 }
             };
-            code.push(sp(loc, instr));
+            push_instr(context, code, sp(loc, instr));
         }
     }
+    context.syntax_info = saved_info;
 }
 
 fn module_call(
@@ -1395,53 +1609,65 @@ fn module_call(
 ) {
     use IR::Bytecode_ as B;
     match fake_natives::resolve_builtin(&mident, &fname) {
-        Some(mk_bytecode) => code.push(sp(loc, mk_bytecode(base_types(context, tys)))),
+        Some(mk_bytecode) => {
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, mk_bytecode(btys)))
+        }
         _ => {
             let (m, n) = context.qualified_function_name(&mident, fname);
-            code.push(sp(loc, B::Call(m, n, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Call(m, n, btys)))
         }
     }
 }
 
-fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
+fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
     use IR::Bytecode_ as B;
     use UnaryOp_ as O;
-    code.push(sp(
-        loc,
-        match op_ {
-            O::Not => B::Not,
-        },
-    ));
+    push_instr(
+        context,
+        code,
+        sp(
+            loc,
+            match op_ {
+                O::Not => B::Not,
+            },
+        ),
+    );
 }
 
-fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
+fn binary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
     use BinOp_ as O;
     use IR::Bytecode_ as B;
-    code.push(sp(
-        loc,
-        match op_ {
-            O::Add => B::Add,
-            O::Sub => B::Sub,
-            O::Mul => B::Mul,
-            O::Mod => B::Mod,
-            O::Div => B::Div,
-            O::BitOr => B::BitOr,
-            O::BitAnd => B::BitAnd,
-            O::Xor => B::Xor,
-            O::Shl => B::Shl,
-            O::Shr => B::Shr,
+    push_instr(
+        context,
+        code,
+        sp(
+            loc,
+            match op_ {
+                O::Add => B::Add,
+                O::Sub => B::Sub,
+                O::Mul => B::Mul,
+                O::Mod => B::Mod,
+                O::Div => B::Div,
+                O::BitOr => B::BitOr,
+                O::BitAnd => B::BitAnd,
+                O::Xor => B::Xor,
+                O::Shl => B::Shl,
+                O::Shr => B::Shr,
 
-            O::And => B::And,
-            O::Or => B::Or,
+                O::And => B::And,
+                O::Or => B::Or,
 
-            O::Eq => B::Eq,
-            O::Neq => B::Neq,
+                O::Eq => B::Eq,
+                O::Neq => B::Neq,
 
-            O::Lt => B::Lt,
-            O::Gt => B::Gt,
+                O::Lt => B::Lt,
+                O::Gt => B::Gt,
 
-            O::Le => B::Le,
-            O::Ge => B::Ge,
-        },
-    ));
+                O::Le => B::Le,
+                O::Ge => B::Ge,
+            },
+        ),
+    );
 }
