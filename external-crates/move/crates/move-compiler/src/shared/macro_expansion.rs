@@ -4,6 +4,10 @@
 use crate::{expansion::ast::ModuleIdent, parser::ast::FunctionName};
 use move_ir_types::location::Loc;
 
+/// Compiler mode under which per-function diagnostics describing macro frame
+/// transitions are emitted (used by the `.macro_frames` compiler tests).
+pub const MACRO_FRAMES_MODE: &str = "macro-frames";
+
 /// The kind of expansion that produced a region of code.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MacroExpansionKind {

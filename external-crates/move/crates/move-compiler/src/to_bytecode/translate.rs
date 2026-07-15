@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{canonicalize_handles, context::*, optimize};
+use super::{canonicalize_handles, context::*, macro_frame_diagnostics, optimize};
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
@@ -27,8 +27,8 @@ use crate::{
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
     shared::{
-        ide::IDEInfo, known_attributes::AttributeKind_, macro_expansion::MacroExpansionKind,
-        program_info::ModuleInfo, unique_map::UniqueMap, *,
+        ide::IDEInfo, known_attributes::AttributeKind_, macro_expansion,
+        macro_expansion::MacroExpansionKind, program_info::ModuleInfo, unique_map::UniqueMap, *,
     },
 };
 use move_binary_format::file_format as F;
@@ -384,6 +384,17 @@ fn module(
             }
         };
     populate_macro_frame_info(reporter, &mut source_map, &module, &function_syntax_info);
+    if compilation_env
+        .modes()
+        .contains(&Symbol::from(macro_expansion::MACRO_FRAMES_MODE))
+    {
+        macro_frame_diagnostics::emit_macro_frame_diagnostics(
+            reporter,
+            &source_map,
+            &module,
+            compilation_env.mapped_files(),
+        );
+    }
     compact_macro_frame_maps(&mut source_map);
     canonicalize_handles::in_module(&mut module, &address_names(dependency_orderings.keys()));
     let function_infos = module_function_infos(&module, &source_map, &collected_function_infos);

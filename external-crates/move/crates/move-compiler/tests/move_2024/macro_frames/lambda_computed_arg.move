@@ -1,0 +1,20 @@
+// Tests lambda frame transitions when the lambda receives a computed expression
+module A::m {
+
+    // Lambda receives a simple local variable as argument.
+    macro fun apply_simple($f: |u64| -> u64): u64 {
+        let ret = 42;
+        $f(ret)
+    }
+
+    // Lambda receives a computed expression as argument.
+    macro fun apply_computed($f: |u64| -> u64): u64 {
+        let ret = 42;
+        $f(ret + ret)
+    }
+
+    public fun test(p: u64): u64 {
+        let a = apply_simple!(|x| x + p);
+        a + apply_computed!(|x| x + p)
+    }
+}

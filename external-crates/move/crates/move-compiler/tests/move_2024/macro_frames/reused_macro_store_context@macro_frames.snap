@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/reused_macro_store_context.move:13:17
+   │
+ 7 │         let y = $x;
+   │                 -- [1] Argument
+   ·
+13 │         let x = m!(v);
+   │                 ^^^^^ [0] MacroBody(0x41::m::m)
+14 │         m!(x)
+   │         ----- [2] MacroBody(0x41::m::m)
+   │
+   = Frame transitions (test):
+       13: `let x = m!(v);`
+           [] -> [0:MacroBody(m), 1:Argument]
+       7: `let y = $x;`
+           [0:MacroBody(m), 1:Argument] -> [0:MacroBody(m)]
+       7: `let y = $x;`
+           [0:MacroBody(m)] -> [2:MacroBody(m)]
+       14: `m!(x)`
+           [2:MacroBody(m)] -> []
