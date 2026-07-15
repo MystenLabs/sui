@@ -691,8 +691,13 @@ lower bound on latest versions**, not a snapshot of liveness:
     is immune (flushed ⇒ executed ⇒ bumped). A clear-side shortcut becomes sound by
     bumping the cached bound of every flushed lock ref to `version+1` at the moment the
     quarantine drops it (cache bump happens-before quarantine removal ⇒ any resolution
-    missing the quarantine sees the bump) — deliberately left out of PR 1 to keep its
-    correctness argument minimal; candidate follow-up alongside PR 2.
+    missing the quarantine sees the bump). **Implemented 2026-07-15** after the first
+    private-testnet run showed the handler saturated (filter at ~0.6 util, ~15k/s
+    authoritative reads): flush-time bumps in `commit_with_batch` (skipping refs still
+    held by the deferred-locks map — their holders haven't executed; they bump when the
+    scheduling commit flushes), decisive clear verdicts for bounds ≤ claimed and
+    KnownAbsent, vote-time authoritative warming of not-found inputs (the pipelined
+    case), and a single `get_latest_object_ref_or_tombstone` as the residual fallback.
   - Cache **miss** ⇒ authoritative read, same as above. `source=objects_db` in the
     resolution metric counts these authoritative reads.
 - Consequences: no invalidation protocol, LRU/TTL eviction is always safe (eviction just

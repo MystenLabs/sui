@@ -141,6 +141,7 @@ pub(crate) fn resolve_owned_object_lock_states(
     live_object_cache: &LiveObjectCache,
     obj_refs: &[ObjectRef],
 ) -> (HashMap<ObjectRef, LockResolution>, LockResolutionStats) {
+    let _scope = monitored_scope("ConsensusCommitHandler::resolve_owned_object_locks");
     let mut stats = LockResolutionStats::default();
     let mut resolutions = HashMap::new();
 
@@ -156,58 +157,49 @@ pub(crate) fn resolve_owned_object_lock_states(
             continue;
         }
         let claimed_version = obj_ref.1;
-        // The cache is decisive only in the consumed direction: it is a lower bound, so
-        // a bound above the claimed version proves consumption. A bound at or below the
-        // claimed version proves nothing - a consumer may have executed and had its
-        // commit flushed (leaving no in-memory trace) after the bound was recorded - so
-        // every potential-clear goes to the authoritative read below, which sees flushed
-        // consumption because flushed transactions are durably executed. (A clear-side
-        // shortcut requires bumping the bounds of flushed lock refs when the quarantine
-        // drops them; left for a follow-up.)
-        if let Some(VersionLowerBound::Version { version, .. }) = live_object_cache.get(&obj_ref.0)
-            && version > claimed_version
-        {
-            stats.cache += 1;
-            resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
-            continue;
-        }
-        stats.objects_db += 1;
-        match object_cache.get_object(&obj_ref.0) {
-            Some(object) => {
-                live_object_cache.record_object(&object);
-                let latest_version = object.version();
-                if latest_version > claimed_version {
+        // Cached bounds are decisive in both directions once the memory layers missed:
+        // above the claimed version ⇒ consumed (lower-bound property); at or below it
+        // (including known-absent, the pipelined case) ⇒ unclaimed. The clear direction
+        // is sound because every way a consumption can leave the memory layers bumps
+        // the bound first: quarantine/deferred flush bumps happen before entry removal
+        // (see commit_with_batch), executions flushed before a restart are visible to
+        // every post-restart warm (the cache is process-lifetime), and bounds recorded
+        // from discarded end-of-epoch state are cleared at reconfiguration.
+        match live_object_cache.get(&obj_ref.0) {
+            Some(VersionLowerBound::Version { version, .. }) => {
+                stats.cache += 1;
+                if version > claimed_version {
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
                 }
-                // Live at or below the claimed version: unclaimed (below ⇒ a pipelined
-                // input whose producer has not executed locally yet; the producer's
-                // finalization precedes the claimant's votes, so any lock on this ref
-                // would still be quarantined and caught above).
+                continue;
+            }
+            Some(VersionLowerBound::KnownAbsent) => {
+                stats.cache += 1;
+                continue;
+            }
+            None => (),
+        }
+        // Authoritative, tombstone-aware latest read (in-memory object cache first).
+        stats.objects_db += 1;
+        match object_cache.get_latest_object_ref_or_tombstone(obj_ref.0) {
+            Some(latest_ref) => {
+                live_object_cache.record(
+                    obj_ref.0,
+                    VersionLowerBound::Version {
+                        version: latest_ref.1,
+                        immutable: false,
+                    },
+                );
+                if latest_ref.1 > claimed_version {
+                    resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
+                }
+                // Latest at or below the claimed version: unclaimed (below ⇒ a
+                // pipelined input whose producer has not executed locally yet; the
+                // producer's finalization precedes the claimant's votes, so any lock on
+                // this ref would still be in the memory layers and caught above).
             }
             None => {
-                // Deleted (tombstone) or never existed - disambiguate.
-                match object_cache.get_latest_object_ref_or_tombstone(obj_ref.0) {
-                    Some(latest_ref) => {
-                        if !latest_ref.2.is_alive() {
-                            live_object_cache.record(
-                                obj_ref.0,
-                                VersionLowerBound::Version {
-                                    version: latest_ref.1,
-                                    immutable: false,
-                                },
-                            );
-                        }
-                        // A live ref here means the object appeared between the two
-                        // reads; both reads are valid observations, and version
-                        // monotonicity keeps the verdict below correct either way.
-                        if latest_ref.1 > claimed_version {
-                            resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
-                        }
-                    }
-                    None => {
-                        live_object_cache.record_absent(obj_ref.0);
-                    }
-                }
+                live_object_cache.record_absent(obj_ref.0);
             }
         }
     }
