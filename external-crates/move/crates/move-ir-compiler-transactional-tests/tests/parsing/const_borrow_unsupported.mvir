@@ -1,0 +1,19 @@
+//# print-bytecode
+// Borrowing a constant (`&C`) is not yet supported.
+mvir 0x42::M {
+    const C: u64 = 1u64;
+    public fun f(): &u64 {
+    label b0:
+        return &C;
+    }
+}
+
+//# print-bytecode
+// Mutably borrowing a constant (`&mut C`) is never valid.
+mvir 0x42::M {
+    const C: u64 = 1u64;
+    public fun f(): &mut u64 {
+    label b0:
+        return &mut C;
+    }
+}

@@ -1,0 +1,12 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 1-5:
+//# print-bytecode
+Error: References are not supported in constant type layouts
+
+task 1, lines 7-12:
+//# print-bytecode
+Error: Datatypes are not supported in constant type layouts

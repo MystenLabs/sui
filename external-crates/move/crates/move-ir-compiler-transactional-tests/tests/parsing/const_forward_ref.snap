@@ -1,0 +1,20 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 1-9:
+//# print-bytecode
+// Move bytecode v7
+module 42.M {
+
+public f(): u64 {
+B0:
+	0: LdConst[0](u64: 7)
+	1: Ret
+}
+
+Constants [
+	0 => u64: 7
+]
+}

@@ -4,7 +4,9 @@
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::authority_store::ExecutionLockWriteGuard;
+#[cfg(test)]
+use crate::authority::authority_store::SuiLockResult;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -338,14 +340,12 @@ pub trait ObjectCacheRead: Send + Sync {
         version: SequenceNumber,
     ) -> Option<Object>;
 
+    /// Test-only: production code no longer reads owned-object lock status by ref.
+    #[cfg(test)]
     fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult;
 
     // This method is considered "private" - only used by multi_get_objects_with_more_accurate_error_return
     fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
-
-    // Check that the given set of objects are live at the given version. This is used as a
-    // safety check before execution, and could potentially be deleted or changed to a debug_assert
-    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
     fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState>;
 

@@ -1,0 +1,28 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 1-17:
+//# print-bytecode
+// Move bytecode v7
+module 42.M {
+
+public load(): u64 {
+B0:
+	0: LdConst[1](u64: 42)
+	1: Ret
+}
+
+Constants [
+	0 => bool: true
+	1 => u64: 42
+	2 => u8: 7
+	3 => u256: 123
+	4 => address: 0x0000000000000000000000000000000000000000000000000000000000000042
+	5 => vector<u8>: 04deadbeef
+	6 => vector<u64>: 03010000000000000002000000000000000300000000000000
+	7 => vector<u8>: "" // interpreted as UTF8 string
+	8 => vector<vector<u8>>: 0201010102
+]
+}
