@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end tests for the checkpoint subscription gRPC. Spins up the full
-//! tonic stack (forking admin RPCs + the canonical sui-rpc-api streaming
-//! RPC), drives checkpoint-producing admin calls, and asserts subscribers
-//! see each checkpoint on the stream.
+//! End-to-end tests for gRPC subscriptions. Spins up the full tonic stack
+//! (forking admin RPCs + the canonical sui-rpc-api streaming RPC), publishes
+//! checkpoints through production channels, and asserts stream payloads and
+//! metrics.
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
@@ -13,6 +13,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::anyhow;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
 use prometheus::Registry;
 use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
@@ -21,13 +24,20 @@ use simulacrum::store::in_mem_store::KeyStore;
 use sui_protocol_config::Chain;
 use sui_rpc_api::RpcService;
 use sui_rpc_api::ServerVersion;
-use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
+use sui_rpc_api::proto::sui::rpc::v2;
 use sui_rpc_api::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
+use sui_rpc_api::proto::sui::rpc::v2::{
+    SubscribeCheckpointsRequest, SubscribeEventsRequest, SubscribeTransactionsRequest,
+};
 use sui_rpc_api::subscription::SubscriptionService;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::event::Event;
+use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
 use sui_types::storage::RpcStateReader;
+use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+use tokio::sync::broadcast;
 
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
@@ -46,6 +56,8 @@ use crate::store::DataStore;
 struct ServerHarness {
     server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,
+    registry: Registry,
+    checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
     // Held to keep the on-disk store alive for the lifetime of the server.
     _temp: tempfile::TempDir,
 }
@@ -84,7 +96,7 @@ impl ServerHarness {
         let (checkpoint_sender, subscription_handle) =
             SubscriptionService::build(&registry, None, None, None, None);
 
-        let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
+        let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender.clone()));
 
         let reader: Arc<dyn RpcStateReader> = Arc::new(data_store);
         let mut service = RpcService::new(reader);
@@ -116,6 +128,8 @@ impl ServerHarness {
                 return Ok(Self {
                     server_task,
                     grpc_endpoint,
+                    registry,
+                    checkpoint_sender,
                     _temp: temp,
                 });
             }
@@ -132,6 +146,56 @@ impl Drop for ServerHarness {
 }
 
 const STREAM_RECV_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn payload_message_count(registry: &Registry, item_type: &str) -> u64 {
+    registry
+        .gather()
+        .iter()
+        .find(|family| family.name() == "subscription_payload_messages")
+        .and_then(|family| {
+            family.get_metric().iter().find(|metric| {
+                metric
+                    .get_label()
+                    .iter()
+                    .any(|label| label.name() == "type" && label.value() == item_type)
+            })
+        })
+        .map(|metric| metric.counter.value() as u64)
+        .unwrap_or(0)
+}
+
+fn sender_tx_filter(address: SuiAddress) -> v2::TransactionFilter {
+    let mut sender = v2::SenderFilter::default();
+    sender.address = Some(address.to_string());
+    let mut literal = v2::TransactionLiteral::default();
+    literal.predicate = Some(v2::transaction_literal::Predicate::Sender(sender));
+    let mut term = v2::TransactionTerm::default();
+    term.literals = vec![literal];
+    let mut filter = v2::TransactionFilter::default();
+    filter.terms = vec![term];
+    filter
+}
+
+fn checkpoint_with_events(sequence_number: u64) -> Arc<Checkpoint> {
+    let package = AccountAddress::random();
+    let event = |name: &str| Event {
+        package_id: ObjectID::from(package),
+        transaction_module: Identifier::new("emitter").unwrap(),
+        sender: TestCheckpointBuilder::derive_address(0),
+        type_: StructTag {
+            address: package,
+            module: Identifier::new("mod_t").unwrap(),
+            name: Identifier::new(name).unwrap(),
+            type_params: vec![],
+        },
+        contents: vec![],
+    };
+    let mut builder = TestCheckpointBuilder::new(sequence_number)
+        .start_transaction(0)
+        .with_events(vec![event("EventA"), event("EventB")])
+        .finish_transaction();
+    Arc::new(builder.build_checkpoint())
+}
 
 #[tokio::test]
 async fn subscription_streams_checkpoints_after_advance() -> Result<()> {
@@ -283,6 +347,79 @@ async fn advance_clock_creates_and_streams_checkpoint() -> Result<()> {
         checkpoint_sequence_number
     );
     assert_eq!(status.timestamp_ms, clock.timestamp_ms);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn subscription_payload_metric_counts_each_emitted_item() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+    let mut subscriptions =
+        SubscriptionServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let mut checkpoints = subscriptions
+        .subscribe_checkpoints(SubscribeCheckpointsRequest::default())
+        .await?
+        .into_inner();
+    let mut transactions = subscriptions
+        .subscribe_transactions(SubscribeTransactionsRequest::default())
+        .await?
+        .into_inner();
+    let mut events = subscriptions
+        .subscribe_events(SubscribeEventsRequest::default())
+        .await?
+        .into_inner();
+
+    harness
+        .checkpoint_sender
+        .send(checkpoint_with_events(1))
+        .map_err(|_| anyhow!("subscription service checkpoint channel closed"))?;
+
+    let checkpoint = tokio::time::timeout(STREAM_RECV_TIMEOUT, checkpoints.message())
+        .await??
+        .ok_or_else(|| anyhow!("checkpoint subscription closed before payload"))?;
+    assert!(checkpoint.checkpoint.is_some());
+
+    let transaction = tokio::time::timeout(STREAM_RECV_TIMEOUT, transactions.message())
+        .await??
+        .ok_or_else(|| anyhow!("transaction subscription closed before payload"))?;
+    assert!(transaction.transaction.is_some());
+
+    for _ in 0..2 {
+        let event = tokio::time::timeout(STREAM_RECV_TIMEOUT, events.message())
+            .await??
+            .ok_or_else(|| anyhow!("event subscription closed before payload"))?;
+        assert!(event.event.is_some());
+    }
+
+    assert_eq!(payload_message_count(&harness.registry, "checkpoint"), 1);
+    assert_eq!(payload_message_count(&harness.registry, "transaction"), 1);
+    assert_eq!(payload_message_count(&harness.registry, "event"), 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn subscription_payload_metric_excludes_progress_frames() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+    let mut subscriptions =
+        SubscriptionServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let mut request = SubscribeCheckpointsRequest::default();
+    request.filter = Some(sender_tx_filter(TestCheckpointBuilder::derive_address(1)));
+    let mut checkpoints = subscriptions
+        .subscribe_checkpoints(request)
+        .await?
+        .into_inner();
+
+    harness
+        .checkpoint_sender
+        .send(checkpoint_with_events(1))
+        .map_err(|_| anyhow!("subscription service checkpoint channel closed"))?;
+
+    let progress = tokio::time::timeout(STREAM_RECV_TIMEOUT, checkpoints.message())
+        .await??
+        .ok_or_else(|| anyhow!("checkpoint subscription closed before progress frame"))?;
+    assert!(progress.checkpoint.is_none());
+    assert_eq!(payload_message_count(&harness.registry, "checkpoint"), 0);
 
     Ok(())
 }

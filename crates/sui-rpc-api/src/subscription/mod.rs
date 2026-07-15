@@ -63,6 +63,16 @@ pub enum SubscriptionKind {
     Events,
 }
 
+impl SubscriptionKind {
+    fn metric_label(self) -> &'static str {
+        match self {
+            Self::Checkpoints => "checkpoint",
+            Self::Transactions => "transaction",
+            Self::Events => "event",
+        }
+    }
+}
+
 /// What a subscriber asked for. `query: None` = unfiltered (stream
 /// everything).
 pub struct SubscriptionSpec {
@@ -164,6 +174,7 @@ struct SubscriptionRequest {
 #[derive(Clone)]
 pub struct SubscriptionServiceHandle {
     sender: mpsc::Sender<SubscriptionRequest>,
+    metrics: SubscriptionMetrics,
 }
 
 impl SubscriptionServiceHandle {
@@ -176,6 +187,12 @@ impl SubscriptionServiceHandle {
         self.sender.send(request).await.ok()?;
 
         receiver.await.ok()
+    }
+
+    pub(crate) fn payload_message_counter(&self, kind: SubscriptionKind) -> prometheus::IntCounter {
+        self.metrics
+            .payload_messages
+            .with_label_values(&[kind.metric_label()])
     }
 }
 
@@ -323,6 +340,10 @@ impl SubscriptionService {
         let metrics = SubscriptionMetrics::new(registry);
         let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(CHECKPOINT_MAILBOX_SIZE);
         let (subscription_request_sender, mailbox) = mpsc::channel(MAILBOX_SIZE);
+        let handle = SubscriptionServiceHandle {
+            sender: subscription_request_sender,
+            metrics: metrics.clone(),
+        };
 
         let counters = Arc::new(SubscriberCounts::default());
         let max_subscribers = max_subscribers.unwrap_or(DEFAULT_MAX_SUBSCRIBERS);
@@ -360,12 +381,7 @@ impl SubscriptionService {
             .start(),
         );
 
-        (
-            checkpoint_sender,
-            SubscriptionServiceHandle {
-                sender: subscription_request_sender,
-            },
-        )
+        (checkpoint_sender, handle)
     }
 
     async fn start(mut self) {
