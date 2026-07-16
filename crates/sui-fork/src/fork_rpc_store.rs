@@ -52,7 +52,6 @@ use sui_types::transaction::VerifiedTransaction;
 
 use crate::live_state::ForkLiveState;
 use crate::live_state::LiveState;
-use crate::live_state::RemovedObjectKind as LiveRemovedKind;
 
 /// Fork-aware access to the embedded `sui-rpc-store`.
 ///
@@ -111,7 +110,7 @@ impl ForkRpcStore {
                 Ok(self.status_at(id, version)?.map(|status| (version, status)))
             }
             Some(ForkLiveState::Removed { version, kind }) => {
-                Ok(Some((version, Status::Tombstone(tombstone_kind(kind)))))
+                Ok(Some((version, Status::Tombstone(kind))))
             }
             None => {
                 match self.highest_status_at_or_before(id, SequenceNumber::from_u64(u64::MAX))? {
@@ -324,7 +323,11 @@ impl ForkRpcStore {
         let mut batch = self.db.batch();
         self.stage_object_version(&mut batch, object)?;
         self.stage_package_version(&mut batch, object)?;
-        batch.commit().context("failed to save live object")
+        batch.commit().context("failed to save live object")?;
+        if update_live_pointer {
+            self.live_state.set_live(object.id(), object.version())?;
+        }
+        Ok(())
     }
 
     /// Saves an address-owned seed object into current state and secondary indexes.
@@ -397,14 +400,15 @@ impl ForkRpcStore {
         let mut batch = self.db.batch();
         self.stage_object_version(&mut batch, object)?;
 
+        let mut make_current = false;
         match status {
             None => {
-                self.stage_live_pointer(&mut batch, object)?;
+                make_current = true;
                 self.stage_put_object_indexes(&mut batch, object, true)?;
             }
             Some((_, Status::Live(existing))) if existing.version() < object.version() => {
                 let existing_was_indexed = self.has_object_by_owner_index(&existing)?;
-                self.stage_live_pointer(&mut batch, object)?;
+                make_current = true;
                 self.stage_delete_object_indexes(&mut batch, &existing)?;
                 if existing_was_indexed {
                     self.stage_object_balance_delta(&mut batch, &existing, -1)?;
@@ -418,7 +422,13 @@ impl ForkRpcStore {
             Some((_, Status::Live(_))) | Some((_, Status::Tombstone(_))) => {}
         }
 
-        batch.commit().context("failed to save indexed live object")
+        batch
+            .commit()
+            .context("failed to save indexed live object")?;
+        if make_current {
+            self.live_state.set_live(object.id(), object.version())?;
+        }
+        Ok(())
     }
 
     /// Applies local execution writes and removals as one store update.
@@ -473,10 +483,6 @@ impl ForkRpcStore {
                 },
                 &objects::tombstone(removed.kind),
             )?;
-            batch.delete(
-                &self.schema.live_objects,
-                &live_objects::Key(removed.object_id),
-            )?;
         }
 
         for object in written_objects.values() {
@@ -484,11 +490,27 @@ impl ForkRpcStore {
             if terminal_deleted.contains(&object.id()) {
                 continue;
             }
-            self.stage_live_pointer(&mut batch, object)?;
             self.stage_put_object_indexes(&mut batch, object, true)?;
         }
 
-        batch.commit().context("failed to apply local object diff")
+        batch
+            .commit()
+            .context("failed to apply local object diff")?;
+
+        // Update the fork-owned live pointers after the rpc-store rows commit:
+        // surviving written objects become current, removals become tombstoned.
+        // Objects created and terminally deleted in the same result are kept as
+        // historical rows but never made current.
+        let written_live = written_objects
+            .values()
+            .filter(|object| !terminal_deleted.contains(&object.id()))
+            .map(|object| (object.id(), object.version()));
+        let removed_live = removed_objects
+            .iter()
+            .map(|removed| (removed.object_id, removed.version, removed.kind));
+        self.live_state
+            .apply_checkpoint(written_live, removed_live)?;
+        Ok(())
     }
 
     /// Reads the raw schema status row for one object version.
@@ -566,15 +588,6 @@ impl ForkRpcStore {
         object: &Object,
     ) -> anyhow::Result<()> {
         Objects.restore(self.schema.as_ref(), object, batch)
-    }
-
-    /// Stages the current live-object pointer using `sui-rpc-store`'s restore helper.
-    fn stage_live_pointer(
-        &self,
-        batch: &mut sui_consistent_store::Batch,
-        object: &Object,
-    ) -> anyhow::Result<()> {
-        LiveObjects.restore(self.schema.as_ref(), object, batch)
     }
 
     /// Returns whether the object currently has an owner-index row.
@@ -722,14 +735,14 @@ mod tests {
 
     fn fresh_store() -> (tempfile::TempDir, ForkRpcStore) {
         let dir = tempfile::tempdir().unwrap();
-        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
-        let store = ForkRpcStore::new(db, Arc::new(schema));
+        let store = reopen_store(&dir);
         (dir, store)
     }
 
     fn reopen_store(dir: &tempfile::TempDir) -> ForkRpcStore {
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
-        ForkRpcStore::new(db, Arc::new(schema))
+        let live_state = Arc::new(LiveState::open(dir.path()).unwrap());
+        ForkRpcStore::new(db, Arc::new(schema), live_state)
     }
 
     fn make_object(id: ObjectID, version: u64, owner: Owner) -> Object {
