@@ -14,11 +14,11 @@
 #
 # Stock grafana/k6 already ships the k6/net/grpc module (server-streaming +
 # grpc.Stream) proven sufficient in the streaming spike (testing_plan.md §2.5) --
-# no xk6 extension needed.
-#
-# The image is network-agnostic: it bakes EVERY net's request list, and the
-# deploy selects one via the REQ_FILE env (e.g. REQ_FILE=/data/load.testnet.jsonl).
-FROM grafana/k6:0.49.0
+# no xk6 extension needed. Pinned to 0.54.0: the first release where stream
+# params accept discardResponseMessage (load.k6.js DISCARD=1), which skips k6's
+# per-message protojson/JSON/goja conversion so capacity runs measure the server
+# rather than the client's decode stack.
+FROM grafana/k6:0.54.0
 
 COPY grpc-list-testing/loadtest-context/load.k6.js /scripts/load.k6.js
 COPY grpc-list-testing/loadtest-context/proto /proto

@@ -63,6 +63,14 @@ const PRE_VUS = Number(__ENV.PRE_ALLOCATED_VUS || __ENV.MAX_VUS || 200); // prea
 const NSHARDS = Number(__ENV.NSHARDS || 1); // multi-generator: total shard count (horizontal scale-out)
 const SHARD = Number(__ENV.SHARD || 0);     // this generator's shard index in [0, NSHARDS)
 const ONLY_RPC = __ENV.ONLY_RPC || ''; // restrict replay to one RPC (e.g. ListCheckpoints when tx/events are pruned past the corpus)
+// Client-drain isolator: DISCARD=1 sets discardResponseMessage on each stream
+// (requires k6 >= v0.54; the param does not exist in v0.49). k6 then skips its
+// per-message dynamicpb -> protojson -> encoding/json -> goja conversion and
+// drains at near-wire speed, so the run measures the SERVER, not k6's decode
+// stack. data/end events still fire (ttff_ms/page_ms/pages_ok intact) but the
+// payload is empty -> items_per_page is only meaningful with DISCARD=0.
+// Default OFF: keeps v0.49-image compatibility and the adoption-signal runs.
+const DISCARD = __ENV.DISCARD === '1';
 
 // One-page-per-iteration RPC map: each pre-gen line names its rpc.
 const METHODS = {
@@ -185,10 +193,12 @@ export default function () {
   let firstFrame = 0;
   let settled = false;                             // 2.6 gotcha: on('error')+on('end') both fire
 
-  const stream = new grpc.Stream(client, method);
+  const stream = DISCARD
+    ? new grpc.Stream(client, method, { discardResponseMessage: true })
+    : new grpc.Stream(client, method);
   stream.on('data', function (msg) {
     if (!firstFrame) { firstFrame = Date.now(); ttff.add(firstFrame - t0); }
-    if (msg && msg[PAYLOAD_FIELDS[rec.rpc]]) n += 1; // count payload before a shared-frame QueryEnd
+    if (!DISCARD && msg && msg[PAYLOAD_FIELDS[rec.rpc]]) n += 1; // count payload before a shared-frame QueryEnd (empty when DISCARD=1)
   });
   stream.on('error', function (e) {
     if (settled) return; settled = true;
@@ -205,7 +215,8 @@ export default function () {
   stream.on('end', function () {
     if (settled) return; settled = true;
     errRate.add(false); goodput.add(1);
-    items.add(n); pageMs.add(Date.now() - t0);
+    if (!DISCARD) items.add(n);                    // payload is discarded -> a 0 here would be a false "empty page"
+    pageMs.add(Date.now() - t0);
     // NB: do NOT client.close() on success -- the connection is reused across
     // iterations (connect-once above). Closing per-page storms the server with
     // reconnects and triggers `connection reset by peer`.
