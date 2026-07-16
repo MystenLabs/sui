@@ -12,8 +12,8 @@ use crate::{
         storage::{InMemoryStorage, StoredPackage},
         vm_test_adapter::VMTestAdapter,
     },
-    execution::{dispatch_tables::DepthFormula, values::Value},
-    jit::execution::ast::Type,
+    execution::values::Value,
+    jit::execution::ast::{MaxPlusFormula, Type},
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
     shared::{
@@ -204,7 +204,7 @@ impl Adapter {
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
-    ) -> DepthFormula {
+    ) -> MaxPlusFormula {
         let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
         let key = session
@@ -213,7 +213,7 @@ impl Adapter {
             .unwrap();
         session
             .virtual_tables
-            .calculate_depth_of_type(&key)
+            .datatype_value_depth_formula(&key)
             .expect("computing depth of datatype should succeed")
     }
 
@@ -349,7 +349,7 @@ fn test_depth() {
         (
             "A",
             "Box",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 1)],
                 constant: 1,
             },
@@ -357,7 +357,7 @@ fn test_depth() {
         (
             "A",
             "Box3",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 3)],
                 constant: 3,
             },
@@ -365,7 +365,7 @@ fn test_depth() {
         (
             "A",
             "Box7",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 7)],
                 constant: 7,
             },
@@ -373,7 +373,7 @@ fn test_depth() {
         (
             "A",
             "Box15",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 15)],
                 constant: 15,
             },
@@ -381,7 +381,7 @@ fn test_depth() {
         (
             "A",
             "Box31",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 31)],
                 constant: 31,
             },
@@ -389,7 +389,7 @@ fn test_depth() {
         (
             "A",
             "Box63",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 63)],
                 constant: 63,
             },
@@ -397,7 +397,7 @@ fn test_depth() {
         (
             "A",
             "Box127",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 127)],
                 constant: 127,
             },
@@ -405,7 +405,7 @@ fn test_depth() {
         (
             "A",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![],
                 constant: 3,
             },
@@ -413,7 +413,7 @@ fn test_depth() {
         (
             "B",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![],
                 constant: 2,
             },
@@ -421,7 +421,7 @@ fn test_depth() {
         (
             "C",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![],
                 constant: 2,
             },
@@ -429,7 +429,7 @@ fn test_depth() {
         (
             "D",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![],
                 constant: 3,
             },
@@ -437,7 +437,7 @@ fn test_depth() {
         (
             "E",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 2)],
                 constant: 3,
             },
@@ -445,7 +445,7 @@ fn test_depth() {
         (
             "F",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 1)],
                 constant: 2,
             },
@@ -453,7 +453,7 @@ fn test_depth() {
         (
             "G",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 5), (1, 3)],
                 constant: 6,
             },
@@ -461,7 +461,7 @@ fn test_depth() {
         (
             "H",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 2), (1, 4)],
                 constant: 5,
             },
@@ -469,7 +469,7 @@ fn test_depth() {
         (
             "I",
             "L",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 2)],
                 constant: 4,
             },
@@ -477,7 +477,7 @@ fn test_depth() {
         (
             "I",
             "G",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![],
                 constant: 3,
             },
@@ -485,7 +485,7 @@ fn test_depth() {
         (
             "I",
             "H",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 1)],
                 constant: 2,
             },
@@ -493,7 +493,7 @@ fn test_depth() {
         (
             "I",
             "E",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 2)],
                 constant: 3,
             },
@@ -501,7 +501,7 @@ fn test_depth() {
         (
             "I",
             "F",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 1)],
                 constant: 2,
             },
@@ -509,7 +509,7 @@ fn test_depth() {
         (
             "I",
             "S",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(0, 2), (1, 7)],
                 constant: 9,
             },
@@ -517,7 +517,7 @@ fn test_depth() {
         (
             "I",
             "LL",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![(1, 2)],
                 constant: 4,
             },
@@ -525,7 +525,7 @@ fn test_depth() {
         (
             "I",
             "N",
-            DepthFormula {
+            MaxPlusFormula {
                 terms: vec![],
                 constant: 2,
             },
