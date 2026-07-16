@@ -1414,6 +1414,26 @@ mod test {
                     .protocol_config
                     .max_transactions_in_block_bytes()
         );
+        assert_eq!(
+            fixture
+                .core
+                .context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_bytes
+                .get_sample_count(),
+            1
+        );
+        assert_eq!(
+            fixture
+                .core
+                .context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_bytes
+                .get_sample_sum(),
+            total as f64
+        );
 
         // genesis blocks should be referenced
         let all_genesis = genesis_blocks(&fixture.core.context);
@@ -1494,6 +1514,38 @@ mod test {
         let transaction_vote = transaction_votes.first().unwrap();
         assert_eq!(transaction_vote.block_ref, block_2.reference());
         assert_eq!(transaction_vote.rejects, vec![1, 4]);
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_blocks
+                .get_sample_count(),
+            2
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_blocks
+                .get_sample_sum(),
+            1.0
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_entries
+                .get_sample_count(),
+            2
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_entries
+                .get_sample_sum(),
+            2.0
+        );
 
         // Flush the DAG state to storage.
         dag_state.write().flush();
