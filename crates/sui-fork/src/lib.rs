@@ -7,7 +7,6 @@
 
 pub mod cli;
 pub(crate) mod context;
-pub(crate) mod filesystem;
 pub(crate) mod fork_rpc_store;
 mod gql;
 pub(crate) mod ingestion;
