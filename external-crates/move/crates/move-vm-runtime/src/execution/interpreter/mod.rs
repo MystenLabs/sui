@@ -20,7 +20,6 @@ use std::sync::Arc;
 use tracing::instrument;
 
 mod eval;
-pub(crate) mod helpers;
 pub mod locals;
 pub(crate) mod state;
 
@@ -74,6 +73,14 @@ pub(crate) fn run(
             });
             return_result.map(|values| values.into_iter().collect())
         } else {
+            // Compute all four size quantities of the entry-point type arguments once; every
+            // limit check against them during execution is pure arithmetic from here on.
+            let ty_args = vtables.make_type_arguments(ty_args).map_err(|e| {
+                e.at_code_offset(fun_ref.index(), 0)
+                    .finish(Location::Module(
+                        fun_ref.module_id(&vtables.interner).clone(),
+                    ))
+            })?;
             let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
                 e.at_code_offset(fun_ref.index(), 0)
                     .finish(Location::Module(
