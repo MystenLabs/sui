@@ -14,8 +14,9 @@ keywords:
   - UpgradeCap
   - suiup
 questions:
-  - How do I deploy Sui packages with github actions on Sui?
+  - How do I deploy sui packages with github actions?
   - How do I test every pull request?
+  - What is Deploy Sui Packages with GitHub Actions in Sui?
 answer: >-
   Build a production-safe CI/CD pipeline that tests every pull request,
   automates Testnet publishing, and gates Mainnet publishing and upgrades behind
@@ -24,6 +25,8 @@ answer: >-
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
+
+Build a production-safe CI/CD pipeline that tests every pull request, automates Testnet publishing, and gates Mainnet publishing and upgrades behind manual approval.
 
 This guide shows how to deploy Move packages through a continuous integration and continuous delivery (CI/CD) pipeline in GitHub Actions. The goal is a production-safe setup, not a single workflow that publishes from a branch. A safe pipeline separates low-risk automation from high-risk actions, keeps signing keys out of logs, and requires a human to approve anything that touches Mainnet.
 
