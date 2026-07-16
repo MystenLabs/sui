@@ -1,19 +1,31 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 3 tasks
+processed 5 tasks
 
-task 1, lines 13-22:
+task 1, lines 10-19:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 3724000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 24-28:
+task 2, lines 21-23:
 //# programmable
-// Result(0) is `&mut TxContext`. gen_mut_id<TxContext>'s single &mut T slot
-// is auto-injected, so passing Result(0) is one arg too many.
-//> 0: test::m::tx_context_mut_id();
-//> test::m::gen_mut_id<sui::tx_context::TxContext>(Result(0));
-Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::gen_mut_id', but found 2"), command: Some(1) } }
+// &mut T unifies to &mut TxContext; the slot is auto-injected
+//> test::m::gen_mut_id<sui::tx_context::TxContext>();
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 25-27:
+//# programmable
+// &T unifies to &TxContext; the slot is auto-injected
+//> test::m::gen_imm_id<sui::tx_context::TxContext>();
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 29-31:
+//# programmable --inputs 0
+// T = u64 is not TxContext: no injection, the argument is supplied normally
+//> test::m::gen_imm_id<u64>(Input(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
