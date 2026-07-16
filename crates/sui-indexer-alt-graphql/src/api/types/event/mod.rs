@@ -51,8 +51,10 @@ mod lookups;
 pub struct EventCursor {
     #[serde(rename = "t")]
     pub tx_sequence_number: u64,
+    /// `u32` matches the primary format's `event_index` bound: legitimate values are event array
+    /// indices, capped by `max_num_event_emit` in the protocol config.
     #[serde(rename = "e")]
-    pub ev_sequence_number: u64,
+    pub ev_sequence_number: u32,
 }
 
 /// Validated event cursor coordinates.
@@ -208,9 +210,7 @@ impl Event {
 
         page.paginate_results(
             events,
-            // The ev_sequence_number is an index into the transaction's events (built by
-            // `tx_events_paginated`), so it is protocol-bounded, far below u32::MAX.
-            |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number as u32),
+            |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number),
             |(_, e)| Ok(e),
         )
     }
@@ -229,9 +229,9 @@ impl EventToken {
 }
 
 impl CEvent {
-    pub(crate) fn ev_sequence_number(&self) -> u64 {
+    pub(crate) fn ev_sequence_number(&self) -> u32 {
         match self {
-            CEvent::Primary(c) => c.event_index as u64,
+            CEvent::Primary(c) => c.event_index,
             CEvent::Secondary(c) => c.ev_sequence_number,
         }
     }
@@ -309,7 +309,7 @@ mod tests {
     use fastcrypto::encoding::Encoding;
 
     /// Legacy pg-style cursor: a JSON-encoded `EventCursor`.
-    fn legacy_cursor(tx_sequence_number: u64, ev_sequence_number: u64) -> CEvent {
+    fn legacy_cursor(tx_sequence_number: u64, ev_sequence_number: u32) -> CEvent {
         CEvent::Secondary(JsonCursor::new(EventCursor {
             tx_sequence_number,
             ev_sequence_number,
@@ -333,6 +333,16 @@ mod tests {
         assert_eq!(EventToken::cursor(7, 2, 3), EventToken::cursor(0, 2, 3));
         assert_eq!(legacy_cursor(2, 3), EventToken::cursor(100, 2, 3));
         assert_ne!(legacy_cursor(2, 4), EventToken::cursor(0, 2, 3));
+    }
+
+    /// Legacy cursors carrying an event index beyond `u32` were never minted by a server
+    /// (indices are capped by `max_num_event_emit`) and must fail to parse rather than
+    /// limp through the window clamps.
+    #[test]
+    fn rejects_oversized_legacy_event_index() {
+        let bytes = format!(r#"{{"t":2,"e":{}}}"#, u64::MAX);
+        let encoded = B64::encode(bytes.as_bytes());
+        assert!(CEvent::decode_cursor(&encoded).is_err());
     }
 
     /// A token scoped to another endpoint must not decode as an event cursor.
