@@ -220,21 +220,13 @@ impl SuiTxValidator {
                     error: UserInputError::ObjectNotFound { object_id, .. },
                 } = error.as_inner()
                 {
-                    let live_object_cache = self.authority_state.live_object_cache();
-                    match self
+                    let latest_ref = self
                         .authority_state
                         .get_object_cache_reader()
-                        .get_latest_object_ref_or_tombstone(*object_id)
-                    {
-                        Some(latest_ref) => live_object_cache.record(
-                            *object_id,
-                            crate::live_object_cache::VersionLowerBound::Version {
-                                version: latest_ref.1,
-                                immutable: None,
-                            },
-                        ),
-                        None => live_object_cache.record_absent(*object_id),
-                    }
+                        .get_latest_object_ref_or_tombstone(*object_id);
+                    epoch_store
+                        .live_object_cache()
+                        .record_latest_lookup(*object_id, latest_ref.map(|r| r.1));
                 }
                 self.metrics
                     .transaction_reject_votes
@@ -410,7 +402,7 @@ impl SuiTxValidator {
                     // Rejected votes warm too - the observed version is a valid lower
                     // bound either way. Absent objects are deliberately not recorded:
                     // this read cannot distinguish deletion tombstones from true absence.
-                    self.authority_state.live_object_cache().record_object(&o);
+                    self.epoch_store.live_object_cache().record_object(&o);
                     // The object read here might drift from the one read earlier in validate_owned_object_versions(),
                     // so re-check if input reference still matches actual object.
                     let actual_ref = o.compute_object_reference();

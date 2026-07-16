@@ -89,7 +89,7 @@ use crate::{
     execution_cache::ObjectCacheRead,
     execution_scheduler::{SettlementBatchInfo, SettlementScheduler},
     gasless_rate_limiter::ConsensusGaslessCounter,
-    live_object_cache::{LiveObjectCache, VersionLowerBound},
+    live_object_cache::VersionLowerBound,
     post_consensus_tx_reorder::PostConsensusTxReorder,
     traffic_controller::{TrafficController, policies::TrafficTally},
 };
@@ -100,16 +100,13 @@ struct FilteredConsensusOutput {
     transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
     dropped_transaction_keys: Vec<ConsensusTransactionKey>,
-    /// Lock refs of each finalized user transaction, consumed by deferral bookkeeping
-    /// (a deferred transaction's refs move into the deferred-locks map).
-    finalized_lock_sets: HashMap<TransactionDigest, Vec<ObjectRef>>,
 }
 
 /// Per-source counters from resolving owned-object lock state, recorded into metrics by
 /// the consensus handler ("remaining lookups" observability: `objects_db` and `backstop`
 /// are the residual DB reads; everything else is memory).
 #[derive(Default)]
-pub struct LockResolutionStats {
+pub(crate) struct LockResolutionStats {
     pub quarantine: u64,
     pub deferred: u64,
     pub cache: u64,
@@ -149,10 +146,10 @@ pub struct LockResolutionStats {
 pub(crate) fn resolve_owned_object_lock_states(
     epoch_store: &AuthorityPerEpochStore,
     object_cache: &dyn ObjectCacheRead,
-    live_object_cache: &LiveObjectCache,
     obj_refs: &[ObjectRef],
 ) -> (HashMap<ObjectRef, LockResolution>, LockResolutionStats) {
     let _scope = monitored_scope("ConsensusCommitHandler::resolve_owned_object_locks");
+    let live_object_cache = epoch_store.live_object_cache();
     let mut stats = LockResolutionStats::default();
     let mut resolutions = HashMap::new();
     let mut backstop_refs = Vec::new();
@@ -421,7 +418,6 @@ impl ConsensusHandlerInitializer {
             self.state.traffic_controller.clone(),
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
-            self.state.live_object_cache().clone(),
         )
     }
 }
@@ -971,10 +967,6 @@ pub struct ConsensusHandler<C> {
 
     consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
-    /// Lower bounds on latest object versions, warmed by vote-time validation; consulted
-    /// by owned-object conflict resolution before reading the objects table.
-    live_object_cache: Arc<LiveObjectCache>,
-
     checkpoint_queue: Mutex<CheckpointQueue>,
 }
 
@@ -1020,7 +1012,6 @@ impl<C> ConsensusHandler<C> {
         traffic_controller: Option<Arc<TrafficController>>,
         congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
         consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
-        live_object_cache: Arc<LiveObjectCache>,
     ) -> Self {
         assert_supported_protocol_config(epoch_store.protocol_config());
 
@@ -1067,7 +1058,6 @@ impl<C> ConsensusHandler<C> {
             traffic_controller,
             congestion_logger,
             consensus_gasless_counter,
-            live_object_cache,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -1130,7 +1120,6 @@ impl<C> ConsensusHandler<C> {
             traffic_controller,
             congestion_logger: None,
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
-            live_object_cache: Arc::new(LiveObjectCache::new()),
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -1163,13 +1152,6 @@ struct CommitHandlerState {
     initial_reconfig_state: ReconfigState,
     // Occurrence counts for user transactions, used for unpaid amplification detection.
     occurrence_counts: HashMap<TransactionDigest, u32>,
-    // Owned-object locks acquired in this commit: the filter's acquisitions plus
-    // re-acquisitions by reloaded deferred transactions that get scheduled. Moved into
-    // `output` once scheduling decisions are final.
-    owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
-    // Lock refs of each finalized user transaction of this commit; deferral bookkeeping
-    // moves a deferred transaction's refs into the deferred-locks map.
-    finalized_lock_sets: HashMap<TransactionDigest, Vec<ObjectRef>>,
 }
 
 impl CommitHandlerState {
@@ -1181,8 +1163,6 @@ impl CommitHandlerState {
             indirect_state_observer: Some(IndirectStateObserver::new()),
             initial_reconfig_state: epoch_store.get_reconfig_state_read_lock_guard().clone(),
             occurrence_counts: HashMap::new(),
-            owned_object_locks: HashMap::new(),
-            finalized_lock_sets: HashMap::new(),
         }
     }
 
@@ -1344,17 +1324,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transactions,
             owned_object_locks,
             dropped_transaction_keys,
-            finalized_lock_sets,
         } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
             transactions,
         );
-        // Locks move into the output after scheduling decisions: reloaded deferred
-        // transactions that get scheduled re-acquire into this map during
-        // collect_transactions_to_schedule.
-        state.owned_object_locks = owned_object_locks;
-        state.finalized_lock_sets = finalized_lock_sets;
+        // Locks of reloaded deferred transactions are NOT re-acquired here: their
+        // deferred-locks map entries stay in place until this commit flushes, which is
+        // when the flush gate guarantees they are executed (see consensus_quarantine).
+        if !owned_object_locks.is_empty() {
+            state.output.set_owned_object_locks(owned_object_locks);
+        }
 
         // Still record the dropped transactions as consensus message processed.
         for key in dropped_transaction_keys {
@@ -1412,12 +1392,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             &commit_info,
             user_transactions,
         );
-
-        // Buffer owned object locks into the output.
-        let owned_object_locks = std::mem::take(&mut state.owned_object_locks);
-        if !owned_object_locks.is_empty() {
-            state.output.set_owned_object_locks(owned_object_locks);
-        }
 
         let (should_accept_tx, lock, final_round, abandoned_deferred_txns) =
             self.handle_close_epoch(&mut state, &commit_info, end_of_publish_transactions);
@@ -1714,6 +1688,28 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut total_deferred_txns = 0;
         let mut redeferred_digests = HashSet::new();
         {
+            // Fresh deferrals move this commit's acquired lock refs into the
+            // deferred-locks map. The refs are recovered by inverting the commit's lock
+            // map: a ref maps to a digest iff that transaction acquired it (first
+            // writer wins; only same-digest duplicates overwrite). Re-deferrals
+            // (reloaded transactions deferring again) already have their entry - it is
+            // only removed when the commit that schedules the transaction flushes.
+            // Note an empty lock set is legal (all owned inputs claimed immutable,
+            // address-balance gas), so fresh deferrals are pre-seeded with empty sets.
+            let mut fresh_lock_sets: HashMap<TransactionDigest, Vec<ObjectRef>> = deferred_txns
+                .values()
+                .flat_map(|txns| txns.iter().map(|tx| *tx.tx().digest()))
+                .filter(|digest| !previously_deferred_tx_digests.contains_key(digest))
+                .map(|digest| (digest, Vec::new()))
+                .collect();
+            if !fresh_lock_sets.is_empty() {
+                for (obj_ref, digest) in state.output.owned_object_locks() {
+                    if let Some(refs) = fresh_lock_sets.get_mut(digest) {
+                        refs.push(*obj_ref);
+                    }
+                }
+            }
+
             let mut deferred_transactions = self
                 .epoch_store
                 .consensus_output_cache
@@ -1729,36 +1725,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 for tx in &txns {
                     let digest = *tx.tx().digest();
                     redeferred_digests.insert(digest);
-                    // Fresh deferrals move this commit's acquired lock refs into the
-                    // deferred-locks map. Re-deferrals already have their entry (it is
-                    // only removed when the commit that schedules the transaction
-                    // flushes).
-                    if let Some(refs) = state.finalized_lock_sets.remove(&digest) {
+                    if let Some(refs) = fresh_lock_sets.remove(&digest) {
                         deferred_locks.insert(digest, refs);
-                    } else if !deferred_locks.contains_tx(&digest) {
-                        debug_fatal!(
-                            "deferred transaction {:?} has no recorded lock refs",
-                            digest
+                    } else {
+                        debug_assert!(
+                            deferred_locks.contains_tx(&digest),
+                            "re-deferred transaction {digest:?} has no deferred-locks entry"
                         );
-                        // Conservative superset: all ImmOrOwned inputs. Can only
-                        // over-cover refs the transaction claimed as immutable.
-                        let refs = tx
-                            .tx()
-                            .transaction_data()
-                            .input_objects()
-                            .map(|kinds| {
-                                kinds
-                                    .iter()
-                                    .filter_map(|kind| match kind {
-                                        InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => {
-                                            Some(*obj_ref)
-                                        }
-                                        _ => None,
-                                    })
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        deferred_locks.insert(digest, refs);
                     }
                 }
                 deferred_transactions.insert(key, txns.clone());
@@ -2761,7 +2734,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let _scope = monitored_scope("ConsensusCommitHandler::filter_consensus_txns");
         let mut transactions = Vec::new();
         let mut owned_object_locks = HashMap::new();
-        let mut finalized_lock_sets = HashMap::new();
         let mut dropped_transaction_keys = Vec::new();
         // Consensus transaction status updates are collected here and flushed in a
         // single batched write (one lock acquisition, notifications outside the lock)
@@ -2771,28 +2743,31 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
 
-        // Resolve the cross-commit owned-object claim state for the whole commit up
-        // front. This state is constant for the duration of a commit: new locks are only
-        // written at commit end, deferred-lock changes happen after filtering, and the
-        // objects-table verdicts are stable for refs the in-memory layers do not cover.
-        // Over-reading refs of transactions that are later filtered out is harmless.
-        let mut prefetch_refs: Vec<ObjectRef> = Vec::new();
+        // Compute each transaction's lock set once (reused by the per-transaction
+        // acquisition below) and resolve the cross-commit owned-object claim state for
+        // the whole commit up front. That state is constant for the duration of a
+        // commit: new locks are only written at commit end, deferred-lock changes
+        // happen after filtering, and the objects-table verdicts are stable for refs
+        // the in-memory layers do not cover. Over-reading refs of transactions that
+        // are later filtered out is harmless. Absence from the map means the
+        // transaction's input objects are invalid.
+        let mut lock_sets: HashMap<TransactionDigest, Vec<ObjectRef>> = HashMap::new();
         for (_block, parsed_transactions) in &block_transactions {
             for parsed in parsed_transactions {
                 if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
                     &parsed.transaction.kind
                     && let Some(refs) = owned_object_refs_to_lock(tx_with_claims)
                 {
-                    prefetch_refs.extend(refs);
+                    lock_sets.insert(*tx_with_claims.tx().digest(), refs);
                 }
             }
         }
+        let mut prefetch_refs: Vec<ObjectRef> = lock_sets.values().flatten().copied().collect();
         prefetch_refs.sort();
         prefetch_refs.dedup();
         let (existing_locks, resolution_stats) = resolve_owned_object_lock_states(
             &self.epoch_store,
             self.cache_reader.as_ref(),
-            &self.live_object_cache,
             &prefetch_refs,
         );
         for (source, count) in [
@@ -3015,7 +2990,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     &parsed.transaction.kind
                 {
                     let tx = tx_with_claims.tx();
-                    let Some(owned_object_refs) = owned_object_refs_to_lock(tx_with_claims) else {
+                    let Some(owned_object_refs) = lock_sets.get(tx.digest()) else {
                         // Invalid input object error is deterministic across all validators.
                         self.metrics
                             .consensus_handler_dropped_transactions
@@ -3037,7 +3012,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     let acquire_result = self
                         .epoch_store
                         .try_acquire_owned_object_locks_post_consensus(
-                            &owned_object_refs,
+                            owned_object_refs,
                             *tx.digest(),
                             &owned_object_locks,
                             &existing_locks,
@@ -3049,7 +3024,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         let table_result = self
                             .epoch_store
                             .try_acquire_owned_object_locks_post_consensus_table_based(
-                                &owned_object_refs,
+                                owned_object_refs,
                                 *tx.digest(),
                                 &owned_object_locks,
                                 &table_locks,
@@ -3067,9 +3042,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
 
                     match acquire_result {
-                        Ok(new_locks) => {
-                            owned_object_locks.extend(new_locks.into_iter());
-                            finalized_lock_sets.insert(*tx.digest(), owned_object_refs);
+                        Ok(()) => {
+                            owned_object_locks
+                                .extend(owned_object_refs.iter().map(|r| (*r, *tx.digest())));
                             // Lock acquisition succeeded - now set Finalized status
                             status_updates.push((position, ConsensusTxStatus::Finalized));
                             num_finalized_user_transactions[author] += 1;
@@ -3135,7 +3110,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transactions,
             owned_object_locks,
             dropped_transaction_keys,
-            finalized_lock_sets,
         }
     }
 
@@ -4191,7 +4165,6 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
-            state.live_object_cache().clone(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -4778,7 +4751,6 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
-            state.live_object_cache().clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
@@ -4905,7 +4877,6 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
-            state.live_object_cache().clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;

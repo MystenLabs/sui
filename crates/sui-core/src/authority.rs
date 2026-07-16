@@ -18,7 +18,6 @@ use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::gasless_rate_limiter::ConsensusGaslessCounter;
 use crate::jsonrpc_index::CoinIndexKey2;
-use crate::live_object_cache::LiveObjectCache;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
@@ -1017,10 +1016,6 @@ pub struct AuthorityState {
 
     /// Consumed by gasless tx rate limiter.
     pub(crate) consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
-
-    /// Lower bounds on latest object versions, warmed by vote-time validation and
-    /// consumed by post-consensus owned-object conflict detection.
-    live_object_cache: Arc<LiveObjectCache>,
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
@@ -3789,9 +3784,6 @@ impl AuthorityState {
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
-            // Shared with the epoch store (and its successors), which bumps consumed
-            // bounds when the quarantine flushes lock entries.
-            live_object_cache: epoch_store.live_object_cache().clone(),
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
@@ -3865,10 +3857,6 @@ impl AuthorityState {
     // TODO: Consolidate our traits to reduce the number of methods here.
     pub fn get_object_cache_reader(&self) -> &Arc<dyn ObjectCacheRead> {
         &self.execution_cache_trait_pointers.object_cache_reader
-    }
-
-    pub fn live_object_cache(&self) -> &Arc<LiveObjectCache> {
-        &self.live_object_cache
     }
 
     pub fn get_transaction_cache_reader(&self) -> &Arc<dyn TransactionCacheRead> {
@@ -4125,7 +4113,7 @@ impl AuthorityState {
         // longer lower bounds — a bound recorded from discarded execution state could
         // exceed the reverted durable version and produce a spurious "consumed since
         // claim" conflict verdict in the new epoch.
-        self.live_object_cache.clear();
+        cur_epoch_store.live_object_cache().clear();
         self.check_system_consistency(cur_epoch_store, state_hasher, expensive_safety_check_config);
         self.maybe_reaccumulate_state_hash(
             cur_epoch_store,

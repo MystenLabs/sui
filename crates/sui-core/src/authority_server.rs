@@ -1001,7 +1001,6 @@ impl ValidatorService {
                     let (existing_locks, _stats) = resolve_owned_object_lock_states(
                         &epoch_store,
                         state.get_object_cache_reader().as_ref(),
-                        state.live_object_cache(),
                         &owned_object_refs,
                     );
                     if let Err(error) = epoch_store.try_acquire_owned_object_locks_post_consensus(
