@@ -147,6 +147,24 @@ impl<T> StreamPage<T> {
             .or_else(|| self.items.last().map(|item| &item.cursor))
     }
 
+    /// Construct a page directly for cross-crate tests, bypassing the drain loop. The watermark
+    /// fields are private (their invariant is maintained by [`Self::apply`]); this is the only
+    /// sanctioned way to set them from outside the crate.
+    #[cfg(feature = "testing")]
+    pub fn for_test(
+        items: Vec<PageItem<T>>,
+        first_wm_cursor: Option<Bytes>,
+        last_wm_cursor: Option<Bytes>,
+        end_reason: Option<proto::QueryEndReason>,
+    ) -> Self {
+        Self {
+            items,
+            first_wm_cursor,
+            last_wm_cursor,
+            end_reason,
+        }
+    }
+
     /// Fold one frame into the page.
     ///
     /// Returns `true` when the frame is `QueryEnd`.
