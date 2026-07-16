@@ -422,19 +422,20 @@ pub enum SuiClientCommands {
         amount: Option<u64>,
 
         /// Send all coins of the specified type to the recipient's address balance.
-        /// Conflicts with --amount and --stateless.
-        #[clap(long, conflicts_with_all = ["amount", "stateless"])]
+        /// Conflicts with --amount and --from-address-balance.
+        #[clap(long, conflicts_with_all = ["amount", "from_address_balance"])]
         all_coins: bool,
 
         /// The coin type to send (e.g., "0x2::sui::SUI"). Defaults to SUI.
         #[clap(long, value_parser = parse_sui_type_tag)]
         coin_type: Option<TypeTag>,
 
-        /// If set, draws all funds (including gas payment) from the sender's address balances.
-        /// This creates a fully stateless transaction with no owned object inputs.
+        /// Draw the funds from the sender's address balance rather than from their coins. Without
+        /// this, coins are preferred and the address balance is only used if they cannot cover the
+        /// amount. Either way the recipient is paid into their address balance.
         /// Conflicts with --all-coins.
         #[clap(long, conflicts_with = "all_coins")]
-        stateless: bool,
+        from_address_balance: bool,
 
         #[clap(flatten)]
         gas_data: GasDataArgs,
@@ -1366,7 +1367,7 @@ impl SuiClientCommands {
                 amount,
                 all_coins,
                 coin_type,
-                stateless,
+                from_address_balance,
                 gas_data,
                 processing,
             } => {
@@ -1399,7 +1400,15 @@ impl SuiClientCommands {
                 let address_balance = balance_info.address_balance();
 
                 let (amount, use_address_balance) = if let Some(amount) = amount {
-                    let use_address_balance = if stateless {
+                    let use_address_balance = if from_address_balance {
+                        ensure!(
+                            address_balance >= amount,
+                            "Insufficient address balance to send {} MIST. \
+                            Address balance: {}, Coin balance: {}",
+                            amount,
+                            address_balance,
+                            coin_balance
+                        );
                         true
                     } else if coin_balance >= amount {
                         false
@@ -1445,27 +1454,23 @@ impl SuiClientCommands {
 
                     let tx_kind = TransactionKind::programmable(builder.finish());
 
-                    if stateless {
-                        dry_run_or_execute_or_serialize_with_address_balance_gas(
-                            signer, tx_kind, context, gas_data, processing,
-                        )
-                        .await?
-                    } else {
-                        dry_run_or_execute_or_serialize(
-                            signer,
-                            tx_kind,
-                            context,
-                            vec![],
-                            gas_data,
-                            processing,
-                        )
-                        .await?
-                    }
+                    // Gas is a separate concern from where the funds come from: the withdrawal
+                    // never touches the gas coin, so ordinary selection pays from the sender's
+                    // address balance whenever it can cover the budget, and their coins otherwise.
+                    dry_run_or_execute_or_serialize(
+                        signer,
+                        tx_kind,
+                        context,
+                        vec![],
+                        gas_data,
+                        processing,
+                    )
+                    .await?
                 } else {
                     ensure!(
                         is_sui,
                         "Non-SUI coin transfers using coins require explicit coin selection. \
-                        Use --stateless to transfer from address balance instead."
+                        Use --from-address-balance to transfer from your address balance instead."
                     );
                     let amount_arg = builder.pure(amount)?;
                     let coin_arg =
@@ -3610,51 +3615,6 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     gas_data: GasDataArgs,
     processing: TxProcessingArgs,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
-    dry_run_or_execute_or_serialize_impl(
-        signer,
-        tx_kind,
-        context,
-        gas_payment,
-        gas_data,
-        processing,
-        false,
-    )
-    .await
-}
-
-/// Dry run, execute, or serialize a transaction with address balance gas support.
-///
-/// When `use_address_balance_gas` is true, the transaction uses the sender's address balance
-/// for gas payment instead of selecting a gas coin. This requires adding a ValidDuring
-/// expiration for replay protection.
-pub(crate) async fn dry_run_or_execute_or_serialize_with_address_balance_gas(
-    signer: SuiAddress,
-    tx_kind: TransactionKind,
-    context: &mut WalletContext,
-    gas_data: GasDataArgs,
-    processing: TxProcessingArgs,
-) -> Result<SuiClientCommandResult, anyhow::Error> {
-    dry_run_or_execute_or_serialize_impl(
-        signer,
-        tx_kind,
-        context,
-        vec![],
-        gas_data,
-        processing,
-        true,
-    )
-    .await
-}
-
-async fn dry_run_or_execute_or_serialize_impl(
-    signer: SuiAddress,
-    tx_kind: TransactionKind,
-    context: &mut WalletContext,
-    gas_payment: Vec<ObjectRef>,
-    gas_data: GasDataArgs,
-    processing: TxProcessingArgs,
-    use_address_balance_gas: bool,
-) -> Result<SuiClientCommandResult, anyhow::Error> {
     let GasDataArgs {
         gas_budget,
         gas_price,
@@ -3736,20 +3696,7 @@ async fn dry_run_or_execute_or_serialize_impl(
 
     let gas_owner = gas_sponsor.unwrap_or(signer);
 
-    let (gas_payment, gas_budget, expiration) = if use_address_balance_gas {
-        let current_epoch = context.get_current_epoch().await?;
-        let chain_id = context.get_chain_identifier().await?;
-
-        let expiration = TransactionExpiration::ValidDuring {
-            min_epoch: Some(current_epoch),
-            max_epoch: Some(current_epoch.saturating_add(1)),
-            min_timestamp: None,
-            max_timestamp: None,
-            chain: chain_id,
-            nonce: rand::random(),
-        };
-        (vec![], gas_budget, expiration)
-    } else if !gas_payment.is_empty() {
+    let (gas_payment, gas_budget, expiration) = if !gas_payment.is_empty() {
         (gas_payment, gas_budget, TransactionExpiration::None)
     } else {
         select_gas_with_fullnode(&client, signer, &tx_kind, gas_owner, gas_budget, gas_price)

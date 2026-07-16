@@ -33,7 +33,8 @@ use sui_types::object::{Object, Owner};
 use sui_types::transaction::{
     CallArg, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData, TransactionDataAPI, TransactionKind,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData, TransactionDataAPI, TransactionExpiration,
+    TransactionKind,
 };
 use tokio::time::sleep;
 
@@ -3539,7 +3540,7 @@ async fn test_send_funds_sui() -> Result<(), anyhow::Error> {
         amount: Some(amount),
         all_coins: false,
         coin_type: None,
-        stateless: false,
+        from_address_balance: false,
         gas_data: GasDataArgs {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
             ..Default::default()
@@ -3612,7 +3613,7 @@ async fn fund_address_balance(
         amount: Some(amount),
         all_coins: false,
         coin_type: None,
-        stateless: false,
+        from_address_balance: false,
         gas_data: GasDataArgs {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
             ..Default::default()
@@ -3688,7 +3689,7 @@ async fn test_send_funds_all_coins() -> Result<(), anyhow::Error> {
         amount: None,
         all_coins: true,
         coin_type: None,
-        stateless: false,
+        from_address_balance: false,
         gas_data: GasDataArgs::default(),
         processing: TxProcessingArgs::default(),
     }
@@ -3843,7 +3844,7 @@ async fn test_send_funds_all_coins_non_sui() -> Result<(), anyhow::Error> {
         amount: None,
         all_coins: true,
         coin_type: Some(coin_type.clone()),
-        stateless: false,
+        from_address_balance: false,
         gas_data: GasDataArgs::default(),
         processing: TxProcessingArgs::default(),
     }
@@ -3905,7 +3906,7 @@ async fn test_send_funds_all_coins_non_sui_single_coin() -> Result<(), anyhow::E
         amount: None,
         all_coins: true,
         coin_type: Some(coin_type.clone()),
-        stateless: false,
+        from_address_balance: false,
         gas_data: GasDataArgs::default(),
         processing: TxProcessingArgs::default(),
     }
@@ -3955,7 +3956,7 @@ async fn test_send_funds_all_coins_sponsor() -> Result<(), anyhow::Error> {
         amount: None,
         all_coins: true,
         coin_type: Some(coin_type.clone()),
-        stateless: false,
+        from_address_balance: false,
         gas_data: GasDataArgs {
             gas_sponsor: Some(sponsor),
             ..Default::default()
@@ -3993,7 +3994,7 @@ async fn test_send_funds_all_coins_sponsor() -> Result<(), anyhow::Error> {
         amount: None,
         all_coins: true,
         coin_type: None,
-        stateless: false,
+        from_address_balance: false,
         gas_data: GasDataArgs {
             gas_sponsor: Some(sponsor),
             ..Default::default()
@@ -4006,6 +4007,279 @@ async fn test_send_funds_all_coins_sponsor() -> Result<(), anyhow::Error> {
     assert!(
         err.to_string()
             .contains("cannot be used with a gas sponsor"),
+        "unexpected error: {err}"
+    );
+
+    Ok(())
+}
+
+/// `--from-address-balance` takes the amount out of the sender's address balance even though they
+/// have coins that could cover it. Gas selection then finds that same balance can cover the budget,
+/// so nothing owned is touched at all and the transaction ends up with no owned object inputs.
+#[sim_test]
+async fn test_send_funds_from_address_balance_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let recipient = &recipients[0];
+    let recipient_address = addresses[0];
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let funded = 5_000_000_000u64;
+    fund_address_balance(context, sender, funded, rgp).await?;
+
+    let coins_before = sui_coins(&client, sender).await?;
+    let before = client.get_balance(sender, &GAS::type_()).await?;
+    assert!(!coins_before.is_empty());
+    assert_eq!(before.address_balance(), funded);
+
+    let amount = 1_000_000u64;
+    let result = SuiClientCommands::SendFunds {
+        to: recipient.clone(),
+        amount: Some(amount),
+        all_coins: false,
+        coin_type: None,
+        from_address_balance: true,
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(
+        response.effects.status().is_ok(),
+        "send-funds --from-address-balance failed: {:?}",
+        response.effects.status()
+    );
+
+    // The address balance covered gas as well, so the transaction carries no gas payment. Paying
+    // that way is epoch-scoped, so the fullnode gives it a ValidDuring expiration for replay
+    // protection.
+    assert!(response.transaction.gas_data().payment.is_empty());
+    assert!(matches!(
+        response.transaction.expiration(),
+        TransactionExpiration::ValidDuring { .. }
+    ));
+
+    // The sender's coins are untouched: both the amount and the gas came out of address balance.
+    let after = client.get_balance(sender, &GAS::type_()).await?;
+    assert_eq!(sui_coins(&client, sender).await?.len(), coins_before.len());
+    assert_eq!(after.coin_balance(), before.coin_balance());
+    let gas_used = response.effects.gas_cost_summary().net_gas_usage();
+    assert_eq!(
+        after.address_balance() as i64,
+        funded as i64 - amount as i64 - gas_used
+    );
+
+    let recipient_after = client.get_balance(recipient_address, &GAS::type_()).await?;
+    assert_eq!(recipient_after.address_balance(), amount);
+    assert_eq!(recipient_after.coin_balance(), 0);
+
+    Ok(())
+}
+
+/// `--from-address-balance` works for a non-SUI coin too: the amount comes from the sender's address
+/// balance of that type, and gas from their SUI address balance.
+#[sim_test]
+async fn test_send_funds_from_address_balance_non_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let recipient = &recipients[0];
+    let recipient_address = addresses[0];
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let minted = 10_000u64;
+    // These calls are boxed to keep the futures they build off this test's own stack frame: this
+    // test drives enough transactions to otherwise overflow the stack in debug builds.
+    let coin_type = Box::pin(publish_and_mint_trusted_coin(context, rgp, &[minted])).await?;
+    let TypeTag::Struct(coin_struct_tag) = &coin_type else {
+        panic!("TRUSTED_COIN must be a struct type");
+    };
+
+    // Drain the minted coins into the sender's own address balance, so that the transfer below has
+    // a balance of this type to draw on rather than coin objects.
+    let result = Box::pin(
+        SuiClientCommands::SendFunds {
+            to: KeyIdentity::Address(sender),
+            amount: None,
+            all_coins: true,
+            coin_type: Some(coin_type.clone()),
+            from_address_balance: false,
+            gas_data: GasDataArgs::default(),
+            processing: TxProcessingArgs::default(),
+        }
+        .execute(context),
+    )
+    .await?;
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(
+        response.effects.status().is_ok(),
+        "draining TRUSTED_COIN into the address balance failed: {:?}",
+        response.effects.status()
+    );
+    assert_eq!(
+        client
+            .get_balance(sender, coin_struct_tag)
+            .await?
+            .address_balance(),
+        minted
+    );
+
+    // Gas is always paid in SUI, so the sender needs a SUI address balance for it to come from.
+    Box::pin(fund_address_balance(context, sender, 5_000_000_000, rgp)).await?;
+    let coins_before = sui_coins(&client, sender).await?;
+
+    let amount = 4_000u64;
+    let result = Box::pin(
+        SuiClientCommands::SendFunds {
+            to: recipient.clone(),
+            amount: Some(amount),
+            all_coins: false,
+            coin_type: Some(coin_type.clone()),
+            from_address_balance: true,
+            gas_data: GasDataArgs::default(),
+            processing: TxProcessingArgs::default(),
+        }
+        .execute(context),
+    )
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(
+        response.effects.status().is_ok(),
+        "non-SUI send-funds --from-address-balance failed: {:?}",
+        response.effects.status()
+    );
+
+    assert!(response.transaction.gas_data().payment.is_empty());
+    assert_eq!(sui_coins(&client, sender).await?.len(), coins_before.len());
+    assert_eq!(
+        client
+            .get_balance(recipient_address, coin_struct_tag)
+            .await?
+            .address_balance(),
+        amount
+    );
+    assert_eq!(
+        client
+            .get_balance(sender, coin_struct_tag)
+            .await?
+            .address_balance(),
+        minted - amount
+    );
+
+    Ok(())
+}
+
+/// `--from-address-balance` is about where the funds come from, not about gas. Draining the whole
+/// address balance into the amount leaves nothing to pay gas with, so gas selection falls back to
+/// the sender's coins and the transfer still goes through.
+#[sim_test]
+async fn test_send_funds_from_address_balance_gas_falls_back_to_coins() -> Result<(), anyhow::Error>
+{
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let recipient = &recipients[0];
+    let recipient_address = addresses[0];
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    // Fund the address balance with exactly what is about to be sent, leaving nothing for gas.
+    let funded = 1_000_000u64;
+    fund_address_balance(context, sender, funded, rgp).await?;
+
+    let before = client.get_balance(sender, &GAS::type_()).await?;
+    assert!(
+        before.coin_balance() > 0,
+        "the sender needs coins to fall back to"
+    );
+    assert_eq!(before.address_balance(), funded);
+
+    let result = SuiClientCommands::SendFunds {
+        to: recipient.clone(),
+        amount: Some(funded),
+        all_coins: false,
+        coin_type: None,
+        from_address_balance: true,
+        // Pin the budget so this exercises gas payment rather than budget estimation.
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(
+        response.effects.status().is_ok(),
+        "send-funds --from-address-balance failed: {:?}",
+        response.effects.status()
+    );
+
+    // Gas came from a coin, so the transaction does carry a gas payment this time.
+    assert!(!response.transaction.gas_data().payment.is_empty());
+
+    // The whole address balance still went to the recipient; only gas came out of the coins.
+    let after = client.get_balance(sender, &GAS::type_()).await?;
+    assert_eq!(after.address_balance(), 0);
+    let gas_used = response.effects.gas_cost_summary().net_gas_usage();
+    assert_eq!(
+        after.coin_balance() as i64,
+        before.coin_balance() as i64 - gas_used
+    );
+
+    let recipient_after = client.get_balance(recipient_address, &GAS::type_()).await?;
+    assert_eq!(recipient_after.address_balance(), funded);
+
+    Ok(())
+}
+
+/// `--from-address-balance` fails up front when the address balance cannot cover the amount, rather
+/// than silently sending from coins instead.
+#[sim_test]
+async fn test_send_funds_from_address_balance_insufficient() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, _addresses) =
+        test_cluster_helper().await;
+    let recipient = &recipients[0];
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let funded = 1_000_000u64;
+    fund_address_balance(context, sender, funded, rgp).await?;
+
+    let before = client.get_balance(sender, &GAS::type_()).await?;
+    assert!(
+        before.coin_balance() > funded,
+        "the sender's coins must be able to cover what the address balance cannot"
+    );
+
+    let err = SuiClientCommands::SendFunds {
+        to: recipient.clone(),
+        amount: Some(funded + 1),
+        all_coins: false,
+        coin_type: None,
+        from_address_balance: true,
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("Insufficient address balance"),
         "unexpected error: {err}"
     );
 

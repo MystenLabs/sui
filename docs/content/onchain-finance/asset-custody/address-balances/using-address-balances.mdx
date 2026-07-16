@@ -59,10 +59,12 @@ sui client ptb \
 | `--to` | Recipient address. |
 | `--amount` | Amount to send in MIST. |
 | `--coin-type` | Coin type to send. Defaults to `0x2::sui::SUI`. |
-| `--all-coins` | Send all coin balance of the specified type. Cannot combine with `--stateless`. |
-| `--stateless` | Build a stateless transaction using address balance only (no owned object inputs). Uses `ValidDuring` expiration for replay protection. |
+| `--all-coins` | Send all coin balance of the specified type. Cannot combine with `--from-address-balance`. |
+| `--from-address-balance` | Draw the amount from the sender's address balance rather than their coins. |
 
-By default, the command selects coins first and falls back to address balance if coins are insufficient. With `--stateless`, it draws exclusively from the address balance.
+By default, the command selects coins first and falls back to address balance if coins are insufficient. With `--from-address-balance`, it draws exclusively from the address balance, and fails if that balance cannot cover the amount.
+
+Gas is chosen independently of this flag: it is paid from the sender's address balance whenever that balance covers the budget and the transaction does not use the gas coin, in which case the transaction carries no gas payment and gets a `ValidDuring` expiration for replay protection. Otherwise gas is paid from the sender's coins. So a `--from-address-balance` transfer is usually, but not always, free of owned object inputs.
 
 ### Move functions
 
