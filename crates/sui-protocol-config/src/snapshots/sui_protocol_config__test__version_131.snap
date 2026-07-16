@@ -175,6 +175,7 @@ feature_flags:
   early_return_receive_object_mismatched_type: true
   timestamp_based_epoch_close: true
   limit_groth16_pvk_inputs: true
+  share_transaction_deny_config_in_consensus: true
   granular_post_execution_checks: true
   early_exit_on_iffw: true
   enable_unified_linkage: true
@@ -494,6 +495,7 @@ consensus_max_num_transactions_in_block: 512
 consensus_voting_rounds: 40
 max_accumulated_txn_cost_per_object_in_narwhal_commit: 40
 max_deferral_rounds_for_congestion_control: 10
+epoch_close_deadline_ms: 120000
 max_txn_cost_overage_per_object_in_commit: 18446744073709551615
 allowed_txn_cost_overage_burst_per_object_in_commit: 370000000
 min_checkpoint_interval_ms: 200
