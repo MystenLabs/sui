@@ -2420,6 +2420,7 @@ mod test {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_split_checkpoints_in_consensus_handler_for_testing(true);
             config.set_merge_randomness_into_checkpoint_for_testing(true);
+            config.set_timestamp_based_epoch_close_for_testing(true);
             config
         });
 

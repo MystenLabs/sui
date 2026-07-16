@@ -1564,7 +1564,6 @@ impl SuiNode {
             state.clone(),
             checkpoint_service.clone(),
             epoch_store.clone(),
-            consensus_adapter.clone(),
             throughput_calculator,
             backpressure_manager,
             config.congestion_log.clone(),
@@ -1644,23 +1643,11 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
     ) -> Arc<CheckpointService> {
-        let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
-        let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
-
-        debug!(
-            "Starting checkpoint service with epoch start timestamp {}
-            and epoch duration {}",
-            epoch_start_timestamp_ms, epoch_duration_ms
-        );
-
         let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.is_validator() {
             Box::new(SubmitCheckpointToConsensus::new(
                 consensus_adapter,
                 state.secret.clone(),
                 config.protocol_public_key(),
-                epoch_start_timestamp_ms
-                    .checked_add(epoch_duration_ms)
-                    .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
                 checkpoint_metrics.clone(),
             ))
         } else {

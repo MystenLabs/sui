@@ -77,7 +77,6 @@ use crate::{
         CheckpointHeight, CheckpointRoots, CheckpointService, CheckpointServiceNotify,
         PendingCheckpoint, PendingCheckpointInfo,
     },
-    consensus_adapter::ConsensusAdapter,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction},
     epoch::{
@@ -103,7 +102,6 @@ pub struct ConsensusHandlerInitializer {
     state: Arc<AuthorityState>,
     checkpoint_service: Arc<CheckpointService>,
     epoch_store: Arc<AuthorityPerEpochStore>,
-    consensus_adapter: Arc<ConsensusAdapter>,
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
     backpressure_manager: Arc<BackpressureManager>,
     congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
@@ -115,7 +113,6 @@ impl ConsensusHandlerInitializer {
         state: Arc<AuthorityState>,
         checkpoint_service: Arc<CheckpointService>,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        consensus_adapter: Arc<ConsensusAdapter>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_manager: Arc<BackpressureManager>,
         congestion_log_config: Option<CongestionLogConfig>,
@@ -133,7 +130,6 @@ impl ConsensusHandlerInitializer {
             state,
             checkpoint_service,
             epoch_store,
-            consensus_adapter,
             throughput_calculator,
             backpressure_manager,
             congestion_logger,
@@ -146,18 +142,12 @@ impl ConsensusHandlerInitializer {
         state: Arc<AuthorityState>,
         checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
-        use crate::consensus_test_utils::make_consensus_adapter_for_test;
-        use std::collections::HashSet;
-
         let backpressure_manager = BackpressureManager::new_for_tests();
-        let consensus_adapter =
-            make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
         let consensus_gasless_counter = state.consensus_gasless_counter.clone();
         Self {
             state: state.clone(),
             checkpoint_service,
             epoch_store: state.epoch_store_for_testing().clone(),
-            consensus_adapter,
             throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
                 None,
                 state.metrics.clone(),
@@ -181,7 +171,6 @@ impl ConsensusHandlerInitializer {
             self.epoch_store.clone(),
             self.checkpoint_service.clone(),
             settlement_scheduler,
-            self.consensus_adapter.clone(),
             self.state.get_object_cache_reader().clone(),
             consensus_committee,
             self.state.metrics.clone(),
@@ -723,9 +712,6 @@ pub struct ConsensusHandler<C> {
     metrics: Arc<AuthorityMetrics>,
     /// Lru cache to quickly discard transactions processed by consensus
     processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
-    /// Consensus adapter for submitting transactions to consensus
-    consensus_adapter: Arc<ConsensusAdapter>,
-
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
 
@@ -768,6 +754,10 @@ fn assert_supported_protocol_config(protocol_config: &ProtocolConfig) {
     assert!(protocol_config.include_cancelled_randomness_txns_in_prologue());
     assert!(protocol_config.fix_checkpoint_signature_mapping());
     assert!(protocol_config.merge_randomness_into_checkpoint());
+    assert!(
+        protocol_config.timestamp_based_epoch_close(),
+        "support for non-timestamp-based epoch close has been removed"
+    );
 }
 
 impl<C> ConsensusHandler<C> {
@@ -775,7 +765,6 @@ impl<C> ConsensusHandler<C> {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
         settlement_scheduler: SettlementScheduler,
-        consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -821,7 +810,6 @@ impl<C> ConsensusHandler<C> {
             processed_cache: LruCache::new(
                 NonZeroUsize::new(randomize_cache_capacity_in_tests(PROCESSED_CACHE_CAP)).unwrap(),
             ),
-            consensus_adapter,
             throughput_calculator,
             additional_consensus_state: AdditionalConsensusState::new(
                 commit_rate_estimate_window_size,
@@ -850,7 +838,6 @@ impl<C> ConsensusHandler<C> {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
         execution_scheduler_sender: ExecutionSchedulerSender,
-        consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -883,7 +870,6 @@ impl<C> ConsensusHandler<C> {
             processed_cache: LruCache::new(
                 NonZeroUsize::new(randomize_cache_capacity_in_tests(PROCESSED_CACHE_CAP)).unwrap(),
             ),
-            consensus_adapter,
             throughput_calculator,
             additional_consensus_state: AdditionalConsensusState::new(
                 commit_rate_estimate_window_size,
@@ -1282,8 +1268,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         });
 
         fail_point!("crash");
-
-        self.send_end_of_publish_if_needed().await;
     }
 
     fn handle_close_epoch(
@@ -1297,31 +1281,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         bool,
         Option<AbandonedDeferredTxns>,
     ) {
-        let timestamp_based_epoch_close = self
+        let timestamp_triggered =
+            commit_info.timestamp >= self.epoch_store.next_reconfiguration_timestamp_ms();
+        let deadline_reached = self
             .epoch_store
             .protocol_config()
-            .timestamp_based_epoch_close();
-        let timestamp_triggered = timestamp_based_epoch_close
-            && commit_info.timestamp >= self.epoch_store.next_reconfiguration_timestamp_ms();
-        let deadline_reached = timestamp_based_epoch_close
-            && self
-                .epoch_store
-                .protocol_config()
-                .epoch_close_deadline_ms_as_option()
-                .is_some_and(|deadline_ms| {
-                    commit_info.timestamp
-                        >= self
-                            .epoch_store
-                            .next_reconfiguration_timestamp_ms()
-                            .saturating_add(deadline_ms)
-                });
-        if timestamp_triggered {
-            // close_user_certs() is only needed here when timestamp_based_epoch_close is enabled.
-            let reconfig_guard = self.epoch_store.get_reconfig_state_write_lock_guard();
-            if reconfig_guard.should_accept_user_certs() {
-                self.epoch_store.close_user_certs(reconfig_guard);
-            }
-        }
+            .epoch_close_deadline_ms_as_option()
+            .is_some_and(|deadline_ms| {
+                commit_info.timestamp
+                    >= self
+                        .epoch_store
+                        .next_reconfiguration_timestamp_ms()
+                        .saturating_add(deadline_ms)
+            });
         let collected_eop_quorum =
             self.process_end_of_publish_transactions(state, end_of_publish_transactions);
         if timestamp_triggered || collected_eop_quorum {
@@ -2274,8 +2246,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         false
     }
 
-    /// After we have collected 2f+1 EndOfPublish messages, we call this function every round until the epoch
-    /// ends.
+    /// Once the timestamp deadline is reached or 2f+1 EndOfPublish messages are collected, we call
+    /// this function every round until the epoch ends.
     fn advance_eop_state_machine(
         &self,
         state: &mut CommitHandlerState,
@@ -2287,6 +2259,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         let mut reconfig_state = self.epoch_store.get_reconfig_state_write_lock_guard();
         let start_state_is_reject_all_tx = reconfig_state.is_reject_all_tx();
+
+        // Record the close time only on the first entry into the state machine.
+        // A manual epoch close records it when closing user certs.
+        if reconfig_state.should_accept_user_certs() {
+            self.epoch_store.record_epoch_close_time_once();
+        }
 
         reconfig_state.close_all_certs();
 
@@ -2984,32 +2962,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         commit_handler_input
     }
-
-    async fn send_end_of_publish_if_needed(&self) {
-        if self
-            .epoch_store
-            .protocol_config()
-            .timestamp_based_epoch_close()
-        {
-            return;
-        }
-        if !self.epoch_store.should_send_end_of_publish() {
-            return;
-        }
-
-        let end_of_publish = ConsensusTransaction::new_end_of_publish(self.epoch_store.name);
-        if let Err(err) =
-            self.consensus_adapter
-                .submit(end_of_publish, None, &self.epoch_store, None, None)
-        {
-            warn!(
-                "Error when sending EndOfPublish message from ConsensusHandler: {:?}",
-                err
-            );
-        } else {
-            info!(epoch=?self.epoch_store.epoch(), "Sending EndOfPublish message to consensus");
-        }
-    }
 }
 
 /// Sends transactions to the execution scheduler in a separate task,
@@ -3475,8 +3427,6 @@ impl CommitIntervalObserver {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use consensus_core::{
         BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
     };
@@ -3510,10 +3460,7 @@ mod tests {
         },
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::test_user_transaction,
-        consensus_test_utils::{
-            TestConsensusCommit, make_consensus_adapter_for_test,
-            setup_consensus_handler_for_testing,
-        },
+        consensus_test_utils::{TestConsensusCommit, setup_consensus_handler_for_testing},
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
 
@@ -3802,8 +3749,6 @@ mod tests {
         let throughput_calculator = ConsensusThroughputCalculator::new(None, metrics.clone());
 
         let backpressure_manager = BackpressureManager::new_for_tests();
-        let consensus_adapter =
-            make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
         let settlement_scheduler = SettlementScheduler::new(
             state.execution_scheduler().as_ref().clone(),
             state.get_transaction_cache_reader().clone(),
@@ -3813,7 +3758,6 @@ mod tests {
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
             settlement_scheduler,
-            consensus_adapter,
             state.get_object_cache_reader().clone(),
             consensus_committee.clone(),
             metrics,
@@ -4388,8 +4332,6 @@ mod tests {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let throughput = ConsensusThroughputCalculator::new(None, metrics.clone());
         let backpressure = BackpressureManager::new_for_tests();
-        let consensus_adapter =
-            make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
         let settlement_scheduler = SettlementScheduler::new(
             state.execution_scheduler().as_ref().clone(),
             state.get_transaction_cache_reader().clone(),
@@ -4399,7 +4341,6 @@ mod tests {
             epoch_store.clone(),
             Arc::new(CheckpointServiceNoop {}),
             settlement_scheduler,
-            consensus_adapter,
             state.get_object_cache_reader().clone(),
             consensus_committee.clone(),
             metrics,
@@ -4514,8 +4455,6 @@ mod tests {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let throughput = ConsensusThroughputCalculator::new(None, metrics.clone());
         let backpressure = BackpressureManager::new_for_tests();
-        let consensus_adapter =
-            make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
         let settlement_scheduler = SettlementScheduler::new(
             state.execution_scheduler().as_ref().clone(),
             state.get_transaction_cache_reader().clone(),
@@ -4525,7 +4464,6 @@ mod tests {
             epoch_store.clone(),
             Arc::new(CheckpointServiceNoop {}),
             settlement_scheduler,
-            consensus_adapter,
             state.get_object_cache_reader().clone(),
             consensus_committee.clone(),
             metrics,
