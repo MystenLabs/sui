@@ -11,7 +11,7 @@ use crate::{
         },
         values::values_impl::{self as values, VMValueCast, Value},
     },
-    jit::execution::ast::{Function, InternedDisplay, Type},
+    jit::execution::ast::{Function, InternedDisplay, TypeArguments},
     shared::{
         TypeLimits,
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
@@ -78,7 +78,7 @@ pub(crate) struct CallFrame {
     pub(crate) pc: u16,
     pub(crate) function: VMPointer<Function>,
     pub(crate) stack_frame: StackFrame,
-    pub(crate) ty_args: Vec<Type>,
+    pub(crate) ty_args: TypeArguments,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -148,7 +148,7 @@ impl MachineState {
     pub fn push_call(
         &mut self,
         function: VMPointer<Function>,
-        ty_args: Vec<Type>,
+        ty_args: TypeArguments,
         args: Vec<Value>,
     ) -> VMResult<()> {
         self.call_stack
@@ -197,7 +197,7 @@ impl MachineState {
         debug_write!(buf, "{}", func.name(&vtables.interner));
         let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
-        for ty in ty_args {
+        for ty in ty_args.types() {
             ty_tags.push(vtables.type_to_type_tag(ty)?);
         }
         if !ty_tags.is_empty() {
@@ -407,7 +407,7 @@ impl CallStack {
     /// Create a new empty call stack.
     pub fn new(
         function: VMPointer<Function>,
-        ty_args: Vec<Type>,
+        ty_args: TypeArguments,
         args: Vec<Value>,
     ) -> PartialVMResult<Self> {
         let mut heap = MachineHeap::new();
@@ -434,7 +434,7 @@ impl CallStack {
         &mut self,
         interner: &IdentifierInterner,
         function: VMPointer<Function>,
-        ty_args: Vec<Type>,
+        ty_args: TypeArguments,
         args: Vec<Value>,
     ) -> VMResult<()> {
         let stack_frame = self
@@ -482,7 +482,7 @@ impl CallFrame {
         self.function.to_ref()
     }
 
-    pub(super) fn ty_args(&self) -> &[Type] {
+    pub(super) fn ty_args(&self) -> &TypeArguments {
         &self.ty_args
     }
 
