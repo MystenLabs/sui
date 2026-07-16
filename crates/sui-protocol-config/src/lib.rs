@@ -366,6 +366,8 @@ const MAINNET_USDB: &str =
 //              from transaction effects instead of running-max withdraw amounts.
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
+//              Step-by-step gas-charging pipeline (gas_model v15). Replaces the
+//              monolithic charge_gas with discrete steps.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4503,6 +4505,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_unified_linkage = true;
                 }
                 130 => {
+                    cfg.gas_model_version = Some(15);
                     cfg.feature_flags.record_net_unsettled_object_withdraws = true;
                     cfg.feature_flags.enable_init_on_upgrade = true;
                     cfg.scratch_add_cost_base = Some(13);
