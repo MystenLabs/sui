@@ -431,32 +431,22 @@ impl ForkRpcStore {
         Ok(())
     }
 
-    /// Applies local execution writes and removals as one store update.
+    /// Applies local execution object writes and removals to the raw `objects`
+    /// CF and the fork-owned live-state pointer.
     ///
-    /// Previous current index rows are removed before new rows are inserted.
-    /// When the same local execution result both deletes and writes an object,
-    /// the written object is stored as a historical row but is not made current.
-    /// A wrapped object can be followed by a current write from the same local
-    /// execution result.
+    /// Only raw object rows (live versions and tombstones) and live-state
+    /// pointers are written here. Secondary indexes (owner, type, balance,
+    /// package) for local execution are derived by the embedded indexer from the
+    /// sealed checkpoint — writing them synchronously here as well would
+    /// double-count the merge-based balance index. When the same result both
+    /// removes and writes an object (e.g. wrapped then written again), the write
+    /// wins and the object stays current; an object created and terminally
+    /// deleted in the same result is kept only as a historical row.
     pub(crate) fn apply_local_object_diff(
         &self,
         written_objects: &BTreeMap<ObjectID, Object>,
         removed_objects: &[ObjectRemoval],
     ) -> anyhow::Result<()> {
-        let mut previous_objects = BTreeMap::new();
-        for id in written_objects
-            .keys()
-            .copied()
-            .chain(removed_objects.iter().map(|removed| removed.object_id))
-        {
-            if previous_objects.contains_key(&id) {
-                continue;
-            }
-            if let Some((_, Status::Live(object))) = self.get_latest_object_status(id)? {
-                previous_objects.insert(id, object);
-            }
-        }
-
         let terminal_deleted: std::collections::BTreeSet<_> = removed_objects
             .iter()
             .filter_map(|removed| {
@@ -465,14 +455,6 @@ impl ForkRpcStore {
             .collect();
 
         let mut batch = self.db.batch();
-
-        for object in previous_objects.values() {
-            let existing_was_indexed = self.has_object_by_owner_index(object)?;
-            self.stage_delete_object_indexes(&mut batch, object)?;
-            if existing_was_indexed {
-                self.stage_object_balance_delta(&mut batch, object, -1)?;
-            }
-        }
 
         for removed in removed_objects {
             batch.put(
@@ -487,10 +469,6 @@ impl ForkRpcStore {
 
         for object in written_objects.values() {
             self.stage_object_version(&mut batch, object)?;
-            if terminal_deleted.contains(&object.id()) {
-                continue;
-            }
-            self.stage_put_object_indexes(&mut batch, object, true)?;
         }
 
         batch
@@ -833,53 +811,6 @@ mod tests {
     }
 
     #[test]
-    fn local_diff_moves_owner_and_type_indexes() {
-        let (_dir, store) = fresh_store();
-        let id = ObjectID::random();
-        let owner = SuiAddress::random_for_testing_only();
-        let recipient = SuiAddress::random_for_testing_only();
-        let object = make_object(id, 1, Owner::AddressOwner(owner));
-        let transferred = make_object(id, 2, Owner::AddressOwner(recipient));
-
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, object)]), &[])
-            .unwrap();
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, transferred.clone())]), &[])
-            .unwrap();
-
-        assert_eq!(
-            store
-                .schema
-                .iter_objects_owned_by_address(owner)
-                .unwrap()
-                .count(),
-            0,
-        );
-        let rows = store
-            .schema
-            .iter_objects_owned_by_address(recipient)
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].0.object_id, id);
-
-        let object_type: StructTag = transferred.type_().unwrap().clone().into();
-        let type_rows = store
-            .schema
-            .iter_objects_of_type(&sui_rpc_store::schema::type_filter::TypeFilter::Type(
-                object_type,
-            ))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert_eq!(type_rows.len(), 1);
-        assert_eq!(type_rows[0].0.object_id, id);
-        assert_eq!(GasCoin::try_from(&transferred).unwrap().value(), 1_000_000);
-    }
-
-    #[test]
     fn seed_save_indexes_existing_raw_live_object() {
         let (_dir, store) = fresh_store();
         let id = ObjectID::random();
@@ -931,65 +862,6 @@ mod tests {
             .expect("seed initialization should credit coin balance");
         assert_eq!(balance.coin_balance, 1_000_000);
         assert_eq!(balance.address_balance, 0);
-    }
-
-    #[test]
-    fn local_diff_moves_coin_balance_between_owners() {
-        let (_dir, store) = fresh_store();
-        let id = ObjectID::random();
-        let owner = SuiAddress::random_for_testing_only();
-        let recipient = SuiAddress::random_for_testing_only();
-        let coin_type = GAS::type_();
-        let object = make_object(id, 1, Owner::AddressOwner(owner));
-        let transferred = make_object(id, 2, Owner::AddressOwner(recipient));
-
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, object)]), &[])
-            .unwrap();
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, transferred)]), &[])
-            .unwrap();
-
-        let owner_balance = RpcIndexes::get_balance(store.reader(), &owner, &coin_type)
-            .unwrap()
-            .expect("sender balance row should remain until compaction");
-        assert_eq!(owner_balance.coin_balance, 0);
-        let recipient_balance = RpcIndexes::get_balance(store.reader(), &recipient, &coin_type)
-            .unwrap()
-            .expect("recipient balance should be credited");
-        assert_eq!(recipient_balance.coin_balance, 1_000_000);
-    }
-
-    #[test]
-    fn seed_save_does_not_resurrect_transferred_object() {
-        let (_dir, store) = fresh_store();
-        let id = ObjectID::random();
-        let owner = SuiAddress::random_for_testing_only();
-        let recipient = SuiAddress::random_for_testing_only();
-        let base = make_object(id, 1, Owner::AddressOwner(owner));
-        let transferred = make_object(id, 2, Owner::AddressOwner(recipient));
-
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, transferred)]), &[])
-            .unwrap();
-        store.save_address_owned_seed_object(&base).unwrap();
-
-        assert_eq!(
-            store
-                .schema
-                .iter_objects_owned_by_address(owner)
-                .unwrap()
-                .count(),
-            0,
-        );
-        let recipient_rows = store
-            .schema
-            .iter_objects_owned_by_address(recipient)
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert_eq!(recipient_rows.len(), 1);
-        assert_eq!(recipient_rows[0].0.object_id, id);
     }
 
     #[test]
