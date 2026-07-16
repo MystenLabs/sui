@@ -28,6 +28,7 @@ mod fallback_fetch;
 pub mod gasless_rate_limiter;
 pub mod global_state_hasher;
 pub mod jsonrpc_index;
+pub mod live_object_cache;
 pub mod metrics;
 pub mod mock_checkpoint_builder;
 pub mod mock_consensus;

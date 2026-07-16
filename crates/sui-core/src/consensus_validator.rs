@@ -31,7 +31,9 @@ use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
+    authority::{
+        AuthorityState, VoteTransactionResult, authority_per_epoch_store::AuthorityPerEpochStore,
+    },
     checkpoints::CheckpointServiceNotify,
 };
 
@@ -209,6 +211,31 @@ impl SuiTxValidator {
             let tx_digest = *tx.tx().digest();
             if let Err(error) = self.vote_transaction(epoch_store, tx) {
                 debug!(?tx_digest, "Voting to reject transaction: {error}");
+                // A not-found input is usually pipelined: created by a transaction that
+                // has not executed locally yet. Warm the live-object cache with an
+                // authoritative (tombstone-aware) observation so the commit handler can
+                // resolve the ref from memory if the transaction still gets finalized
+                // by validators that were further ahead.
+                if let SuiErrorKind::UserInputError {
+                    error: UserInputError::ObjectNotFound { object_id, .. },
+                } = error.as_inner()
+                {
+                    let live_object_cache = self.authority_state.live_object_cache();
+                    match self
+                        .authority_state
+                        .get_object_cache_reader()
+                        .get_latest_object_ref_or_tombstone(*object_id)
+                    {
+                        Some(latest_ref) => live_object_cache.record(
+                            *object_id,
+                            crate::live_object_cache::VersionLowerBound::Version {
+                                version: latest_ref.1,
+                                immutable: false,
+                            },
+                        ),
+                        None => live_object_cache.record_absent(*object_id),
+                    }
+                }
                 self.metrics
                     .transaction_reject_votes
                     .with_label_values(&[error.to_variant_name()])
@@ -306,23 +333,36 @@ impl SuiTxValidator {
         }
 
         let inner_tx = verified_tx.into_tx();
-        self.authority_state
+        let vote_result = self
+            .authority_state
             .handle_vote_transaction(epoch_store, inner_tx.clone())?;
+
+        if vote_result == VoteTransactionResult::AlreadyFinalized {
+            // The transaction's own execution consumed its inputs, so input-based claims
+            // verification would spuriously reject a transaction that is already final.
+            // Duplicate sequencing is handled post-consensus by the same-digest carve-out.
+            return Ok(());
+        }
 
         if !claimed_immutable_ids.is_empty() {
             assert_reachable!("transaction has immutable input object claims");
-            let owned_object_refs: HashSet<ObjectRef> = inner_tx
-                .data()
-                .transaction_data()
-                .input_objects()?
-                .iter()
-                .filter_map(|obj| match obj {
-                    InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
-                    _ => None,
-                })
-                .collect();
-            self.verify_immutable_object_claims(&claimed_immutable_ids, owned_object_refs)?;
         }
+        // Runs even when nothing is claimed: an immutable input with an empty claims list
+        // must be vote-rejected (ImmutableObjectNotClaimed). Post-consensus conflict
+        // detection derives lock sets from these claims, so an under-claiming transaction
+        // must never reach quorum. The objects were just read by
+        // validate_owned_object_versions, so this re-read is cache-hot.
+        let owned_object_refs: HashSet<ObjectRef> = inner_tx
+            .data()
+            .transaction_data()
+            .input_objects()?
+            .iter()
+            .filter_map(|obj| match obj {
+                InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
+                _ => None,
+            })
+            .collect();
+        self.verify_immutable_object_claims(&claimed_immutable_ids, owned_object_refs)?;
 
         Ok(())
     }
@@ -366,6 +406,11 @@ impl SuiTxValidator {
             let input_ref = input_refs_by_id.get(object_id).unwrap();
             match obj_opt {
                 Some(o) => {
+                    // Warm the live-object cache for post-consensus conflict detection.
+                    // Rejected votes warm too - the observed version is a valid lower
+                    // bound either way. Absent objects are deliberately not recorded:
+                    // this read cannot distinguish deletion tombstones from true absence.
+                    self.authority_state.live_object_cache().record_object(&o);
                     // The object read here might drift from the one read earlier in validate_owned_object_versions(),
                     // so re-check if input reference still matches actual object.
                     let actual_ref = o.compute_object_reference();

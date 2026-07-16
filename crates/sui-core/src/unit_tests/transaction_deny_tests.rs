@@ -96,7 +96,9 @@ fn get_accounts_and_coins(
 fn process_zklogin_tx(tx: Transaction, state: &Arc<AuthorityState>) -> SuiResult<()> {
     let epoch_store = state.epoch_store_for_testing();
     let verified_tx = VerifiedTransaction::new_from_verified(tx);
-    state.handle_vote_transaction(&epoch_store, verified_tx)
+    state
+        .handle_vote_transaction(&epoch_store, verified_tx)
+        .map(|_| ())
 }
 
 fn transfer_with_account(
@@ -127,7 +129,7 @@ fn transfer_with_account(
         .verify_transaction_require_no_aliases(tx)
         .unwrap()
         .into_tx();
-    state.handle_vote_transaction(&epoch_store, tx)
+    state.handle_vote_transaction(&epoch_store, tx).map(|_| ())
 }
 
 fn handle_move_call_transaction(
@@ -158,7 +160,7 @@ fn handle_move_call_transaction(
         .verify_transaction_require_no_aliases(tx)
         .unwrap()
         .into_tx();
-    state.handle_vote_transaction(&epoch_store, tx)
+    state.handle_vote_transaction(&epoch_store, tx).map(|_| ())
 }
 
 fn assert_denied<T: std::fmt::Debug>(result: &SuiResult<T>) {
@@ -203,7 +205,9 @@ fn submit_gasless_with_account(
     let tx = to_sender_signed_transaction(data, &sender_account.1);
     let epoch_store = state.epoch_store_for_testing();
     let verified_tx = VerifiedTransaction::new_from_verified(tx);
-    state.handle_vote_transaction(&epoch_store, verified_tx)
+    state
+        .handle_vote_transaction(&epoch_store, verified_tx)
+        .map(|_| ())
 }
 
 #[tokio::test]

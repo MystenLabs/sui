@@ -18,6 +18,7 @@ use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::gasless_rate_limiter::ConsensusGaslessCounter;
 use crate::jsonrpc_index::CoinIndexKey2;
+use crate::live_object_cache::LiveObjectCache;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
@@ -337,6 +338,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_dropped_transactions: IntCounterVec,
+    pub consensus_owned_object_lock_resolutions: IntCounterVec,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
     pub accumulator_deposits: IntCounter,
@@ -701,6 +703,15 @@ impl AuthorityMetrics {
                 &["reason"],
                 registry,
             ).unwrap(),
+            consensus_owned_object_lock_resolutions: register_int_counter_vec_with_registry!(
+                "consensus_owned_object_lock_resolutions",
+                "Owned-object lock state resolutions in the consensus handler, by source. \
+                 quarantine/deferred/cache resolve from consensus in-memory state; \
+                 objects_db is an authoritative latest-object read (in-memory object \
+                 cache first, then DB)",
+                &["source"],
+                registry,
+            ).unwrap(),
             consensus_handler_max_object_costs: register_int_gauge_vec_with_registry!(
                 "consensus_handler_max_congestion_control_object_costs",
                 "Max object costs for congestion control in the current consensus commit",
@@ -916,6 +927,16 @@ impl ForkRecoveryState {
 
 pub type PostProcessingOutput = (StagedBatch, IndexStoreCacheUpdates);
 
+/// Outcome of a successful `handle_vote_transaction`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoteTransactionResult {
+    /// Inputs were validated against live state.
+    Validated,
+    /// Accepted because the transaction is already finalized/executed this epoch. Its
+    /// inputs were consumed by its own execution, so no input-based validation applies.
+    AlreadyFinalized,
+}
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -969,6 +990,10 @@ pub struct AuthorityState {
 
     /// Consumed by gasless tx rate limiter.
     pub(crate) consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
+
+    /// Lower bounds on latest object versions, warmed by vote-time validation and
+    /// consumed by post-consensus owned-object conflict detection.
+    live_object_cache: Arc<LiveObjectCache>,
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
@@ -1178,7 +1203,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<()> {
+    ) -> SuiResult<VoteTransactionResult> {
         debug!("handle_vote_transaction");
 
         let _metrics_guard = self
@@ -1206,7 +1231,10 @@ impl AuthorityState {
             || epoch_store.transactions_executed_in_cur_epoch(&[tx_digest])?[0]
         {
             assert_reachable!("transaction recently executed");
-            return Ok(());
+            // No input validation applies: the transaction's own execution consumed its
+            // inputs, so they are (correctly) no longer live. Callers must skip
+            // input-based checks (e.g. immutable-claims verification) for this result.
+            return Ok(VoteTransactionResult::AlreadyFinalized);
         }
 
         if self
@@ -1231,7 +1259,8 @@ impl AuthorityState {
         // in the consensus handler. Validation still runs to prevent spam transactions with
         // invalid object versions, and is necessary to handle recently created objects.
         self.get_cache_writer()
-            .validate_owned_object_versions(&owned_objects)
+            .validate_owned_object_versions(&owned_objects)?;
+        Ok(VoteTransactionResult::Validated)
     }
 
     /// Used for early client validation check for transactions before submission to server.
@@ -3718,6 +3747,9 @@ impl AuthorityState {
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
+            // Shared with the epoch store (and its successors), which bumps consumed
+            // bounds when the quarantine flushes lock entries.
+            live_object_cache: epoch_store.live_object_cache().clone(),
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
@@ -3791,6 +3823,10 @@ impl AuthorityState {
     // TODO: Consolidate our traits to reduce the number of methods here.
     pub fn get_object_cache_reader(&self) -> &Arc<dyn ObjectCacheRead> {
         &self.execution_cache_trait_pointers.object_cache_reader
+    }
+
+    pub fn live_object_cache(&self) -> &Arc<LiveObjectCache> {
+        &self.live_object_cache
     }
 
     pub fn get_transaction_cache_reader(&self) -> &Arc<dyn TransactionCacheRead> {
@@ -4042,6 +4078,12 @@ impl AuthorityState {
 
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
+        // clear_state_end_of_epoch discards executed-but-not-finalized transaction
+        // outputs, so latest-version observations made during the old epoch are no
+        // longer lower bounds — a bound recorded from discarded execution state could
+        // exceed the reverted durable version and produce a spurious "consumed since
+        // claim" conflict verdict in the new epoch.
+        self.live_object_cache.clear();
         self.check_system_consistency(cur_epoch_store, state_hasher, expensive_safety_check_config);
         self.maybe_reaccumulate_state_hash(
             cur_epoch_store,
