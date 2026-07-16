@@ -73,6 +73,7 @@ sui-simulator.workspace = true
 [features]
 default = ["jemalloc"]
 jemalloc = ["tikv-jemallocator"]
+testing = []
 
 [dev-dependencies]
 tempfile.workspace = true

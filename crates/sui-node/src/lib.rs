@@ -1797,6 +1797,11 @@ impl SuiNode {
             .metrics_for_testing()
     }
 
+    #[cfg(feature = "testing")]
+    pub fn prometheus_metrics_for_testing(&self) -> Vec<prometheus::proto::MetricFamily> {
+        self.registry_service.default_registry().gather()
+    }
+
     pub fn node_role(&self) -> NodeRole {
         self.state.load_epoch_store_one_call_per_task().node_role()
     }
