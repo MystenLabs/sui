@@ -9,36 +9,34 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sui_pb"))
 
 import harness as H
-from sui.rpc.v2alpha import ledger_service_pb2 as ls
-from sui.rpc.v2alpha import query_options_pb2 as qo
+from sui.rpc.v2 import checkpoint_pb2, event_pb2, executed_transaction_pb2
+from sui.rpc.v2 import ledger_service_pb2 as ls
+from sui.rpc.v2 import query_options_pb2 as qo
 
 
 # --- response builders --------------------------------------------------------
 
-def tx_item(digest, cursor=None, hi=None, lo=None):
+def tx_item(digest, cursor, checkpoint=None, end=None):
     r = ls.ListTransactionsResponse()
-    r.item.transaction.digest = digest
-    if cursor is not None:
-        r.item.watermark.cursor = cursor
-    if hi is not None:
-        r.item.watermark.checkpoint_hi = hi
-    if lo is not None:
-        r.item.watermark.checkpoint_lo = lo
+    r.transaction.digest = digest
+    r.watermark.cursor = cursor
+    if checkpoint is not None:
+        r.watermark.checkpoint = checkpoint
+    if end is not None:
+        r.end.reason = end
     return r
 
 
-def tx_wm(cursor, hi=None, lo=None):
+def tx_wm(cursor, checkpoint=None):
     r = ls.ListTransactionsResponse()
     r.watermark.cursor = cursor
-    if hi is not None:
-        r.watermark.checkpoint_hi = hi
-    if lo is not None:
-        r.watermark.checkpoint_lo = lo
+    if checkpoint is not None:
+        r.watermark.checkpoint = checkpoint
     return r
 
 
-def tx_end(reason):
-    r = ls.ListTransactionsResponse()
+def tx_end(reason, cursor, checkpoint=None):
+    r = tx_wm(cursor, checkpoint)
     r.end.reason = reason
     return r
 
@@ -68,6 +66,21 @@ def desc_req():
     return r
 
 
+def test_direct_payload_identities():
+    transaction = executed_transaction_pb2.ExecutedTransaction(digest="tx")
+    checkpoint = checkpoint_pb2.Checkpoint(sequence_number=7)
+    event = event_pb2.Event(transaction_digest="tx", event_index=3)
+    assert H.identity("ListTransactions", transaction) == ("tx", "tx")
+    assert H.identity("ListCheckpoints", checkpoint) == ("cp", 7)
+    assert H.identity("ListEvents", event) == ("ev", "tx", 3)
+
+
+def test_event_identity_mask_replaces_request_mask():
+    rec = {"rpc": "ListEvents", "request": {"read_mask": "eventType"}}
+    request = H.base_request(rec, identity_mask=True)
+    assert tuple(request.read_mask.paths) == ("transaction_digest", "event_index")
+
+
 IL = qo.QUERY_END_REASON_ITEM_LIMIT
 CB = qo.QUERY_END_REASON_CHECKPOINT_BOUND
 SL = qo.QUERY_END_REASON_SCAN_LIMIT
@@ -76,62 +89,119 @@ LT = qo.QUERY_END_REASON_LEDGER_TIP
 
 # --- drain --------------------------------------------------------------------
 
-def test_drain_resumes_across_pages():
+def test_drain_counts_item_limit_payload_before_resume():
     send = FakeSend({
-        b"": [tx_item("A", b"c1", hi=10), tx_item("B", b"c2", hi=11),
-              tx_item("C", b"c3", hi=12), tx_end(IL)],
-        b"c3": [tx_item("D", b"c4", hi=13), tx_item("E", b"c5", hi=14), tx_end(CB)],
+        b"": [
+            tx_item("A", b"c1", checkpoint=10),
+            tx_item("B", b"c2", checkpoint=11),
+            tx_item("C", b"c3", checkpoint=12, end=IL),
+        ],
+        b"c3": [
+            tx_item("D", b"c4", checkpoint=13),
+            tx_item("E", b"c5", checkpoint=14, end=CB),
+        ],
     })
     r = H.drain(send, "ListTransactions", asc_req())
     assert r.error is None
     assert r.ids == [("tx", "A"), ("tx", "B"), ("tx", "C"), ("tx", "D"), ("tx", "E")]
-    assert len(r.pages) == 2
+    assert [page.count for page in r.pages] == [3, 2]
     assert r.terminal_reason == CB
     assert r.tiling_ok and r.watermark_ok
-    assert send.calls == [b"", b"c3"]  # resumed from last cursor
+    assert send.calls == [b"", b"c3"]
 
 
 def test_drain_detects_tiling_violation():
     send = FakeSend({
-        b"": [tx_item("A", b"c1", hi=1), tx_item("B", b"c2", hi=2), tx_end(IL)],
-        b"c2": [tx_item("B", b"c3", hi=3), tx_item("C", b"c4", hi=4), tx_end(CB)],  # B repeats
+        b"": [
+            tx_item("A", b"c1", checkpoint=1),
+            tx_item("B", b"c2", checkpoint=2, end=IL),
+        ],
+        b"c2": [
+            tx_item("B", b"c3", checkpoint=3),
+            tx_item("C", b"c4", checkpoint=4, end=CB),
+        ],
     })
     r = H.drain(send, "ListTransactions", asc_req())
     assert r.tiling_ok is False
-    assert r.ids == [("tx", "A"), ("tx", "B"), ("tx", "C")]  # dedup keeps first
+    assert r.ids == [("tx", "A"), ("tx", "B"), ("tx", "C")]
 
-
-def test_drain_detects_nonmonotonic_watermark():
+def test_drain_detects_ascending_watermark_regression():
     send = FakeSend({
-        b"": [tx_item("A", b"c1", hi=10), tx_item("B", b"c2", hi=5), tx_end(CB)],  # hi went back
+        b"": [
+            tx_item("A", b"c1", checkpoint=10),
+            tx_item("B", b"c2", checkpoint=5, end=CB),
+        ],
     })
     r = H.drain(send, "ListTransactions", asc_req())
     assert r.watermark_ok is False
 
 
-def test_drain_standalone_watermark_advances_cursor():
+def test_drain_detects_descending_watermark_regression():
+    good = FakeSend({
+        b"": [
+            tx_item("A", b"c1", checkpoint=10),
+            tx_item("B", b"c2", checkpoint=5, end=CB),
+        ],
+    })
+    assert H.drain(good, "ListTransactions", desc_req()).watermark_ok is True
+
+    bad = FakeSend({
+        b"": [
+            tx_item("A", b"c1", checkpoint=10),
+            tx_item("B", b"c2", checkpoint=15, end=CB),
+        ],
+    })
+    assert H.drain(bad, "ListTransactions", desc_req()).watermark_ok is False
+
+
+def test_terminal_watermark_advances_resume_cursor():
     send = FakeSend({
-        b"": [tx_wm(b"w1", hi=100), tx_end(SL)],   # no items, scan-progress only
-        b"w1": [tx_item("Z", b"w2", hi=200), tx_end(CB)],
+        b"": [tx_end(SL, b"w1", checkpoint=100)],
+        b"w1": [tx_item("Z", b"w2", checkpoint=200, end=CB)],
     })
     r = H.drain(send, "ListTransactions", asc_req())
     assert r.ids == [("tx", "Z")]
     assert send.calls == [b"", b"w1"]
 
 
-def test_drain_no_progress_breaks():
-    # resume reason but cursor never advances -> must not loop forever
-    send = FakeSend({b"": [tx_item("A", hi=1), tx_end(SL)]})  # no cursor
-    r = H.drain(send, "ListTransactions", asc_req())
-    assert r.error is None
+def test_drain_rejects_missing_watermark_cursor():
+    response = ls.ListTransactionsResponse()
+    response.transaction.digest = "A"
+    response.watermark.SetInParent()
+    response.end.reason = SL
+    r = H.drain(FakeSend({b"": [response]}), "ListTransactions", asc_req())
+    assert r.error == "watermark missing required cursor"
+    assert r.watermark_ok is False
     assert r.ids == [("tx", "A")]
-    assert len(r.pages) == 1
+
+
+def test_drain_rejects_resumable_page_without_cursor_progress():
+    send = FakeSend({
+        b"": [tx_end(SL, b"c1", checkpoint=1)],
+        b"c1": [tx_end(SL, b"c1", checkpoint=1)],
+    })
+    r = H.drain(send, "ListTransactions", asc_req())
+    assert r.error == "resumable QueryEnd did not advance watermark cursor"
+    assert send.calls == [b"", b"c1"]
+
+
+def test_drain_requires_watermark_on_every_frame():
+    missing = ls.ListTransactionsResponse()
+    missing.transaction.digest = "A"
+    send = FakeSend({b"": [missing, tx_end(CB, b"c1", checkpoint=1)]})
+    r = H.drain(send, "ListTransactions", asc_req())
+    assert r.ids == [("tx", "A")]
+    assert r.watermark_ok is False
+    assert r.error == "response frame missing required watermark"
 
 
 def test_drain_caps_at_max_drain():
     send = FakeSend({
-        b"": [tx_item("A", b"c1", hi=1), tx_item("B", b"c2", hi=2), tx_end(IL)],
-        b"c2": [tx_item("C", b"c3", hi=3), tx_end(CB)],
+        b"": [
+            tx_item("A", b"c1", checkpoint=1),
+            tx_item("B", b"c2", checkpoint=2, end=IL),
+        ],
+        b"c2": [tx_item("C", b"c3", checkpoint=3, end=CB)],
     })
     r = H.drain(send, "ListTransactions", asc_req(), max_drain=2)
     assert r.capped is True
@@ -139,7 +209,7 @@ def test_drain_caps_at_max_drain():
 
 
 def test_drain_single_page_mode():
-    send = FakeSend({b"": [tx_wm(b"c1", hi=5), tx_end(SL)]})
+    send = FakeSend({b"": [tx_end(SL, b"c1", checkpoint=5)]})
     r = H.drain(send, "ListTransactions", asc_req(), full=False)
     assert r.ids == []
     assert len(r.pages) == 1
@@ -157,7 +227,10 @@ def test_drain_propagates_fatal_error():
 def test_drain_retries_transient_then_succeeds(monkeypatch):
     monkeypatch.setattr(H.time, "sleep", lambda *_: None)  # no real backoff in tests
     calls = {"n": 0}
-    good = [tx_item("A", b"c1", hi=1), tx_item("B", b"c2", hi=2), tx_end(CB)]
+    good = [
+        tx_item("A", b"c1", checkpoint=1),
+        tx_item("B", b"c2", checkpoint=2, end=CB),
+    ]
 
     def flaky(req):
         calls["n"] += 1
@@ -178,20 +251,27 @@ def test_drain_resumes_on_truncation(monkeypatch):
     def send(req):
         calls["n"] += 1
         if calls["n"] == 1:
-            return iter([tx_item("A", b"c1", hi=1), tx_item("B", b"c2", hi=2)])  # no end frame
-        return iter([tx_item("C", b"c3", hi=3), tx_end(CB)])
+            return iter([tx_item("A", b"c1", checkpoint=1), tx_item("B", b"c2", checkpoint=2)])
+        return iter([tx_item("C", b"c3", checkpoint=3, end=CB)])
     r = H.drain(send, "ListTransactions", asc_req())
     assert r.error is None
     assert r.ids == [("tx", "A"), ("tx", "B"), ("tx", "C")]
     assert calls["n"] == 2  # resumed after the truncated first stream
 
 
-def test_drain_truncation_without_progress_errors():
-    # truncated with no cursor advance -> cannot resume -> error (not a silent short count)
+def test_drain_truncation_without_progress_errors(monkeypatch):
+    monkeypatch.setattr(H.time, "sleep", lambda *_: None)
+    calls = {"n": 0}
+
     def send(req):
-        return iter([tx_item("A", hi=1)])  # no cursor, no QueryEnd
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return iter([tx_item("A", b"c1", checkpoint=1)])
+        return iter([tx_item("B", b"c1", checkpoint=1)])
+
     r = H.drain(send, "ListTransactions", asc_req(), max_retries=2)
     assert r.error and "truncated" in r.error
+    assert calls["n"] == 2
 
 
 # --- oracle checks ------------------------------------------------------------
@@ -230,17 +310,16 @@ def test_exact_count_over_cap_skips():
 
 
 def test_limit_probe_first_page_only():
-    # small limit_items -> verify first page == limit + ITEM_LIMIT, not the full count
     rec = {"id": "c", "rpc": "ListTransactions",
-           "request": {"options": {"limit_items": 5}},
+           "request": {"options": {"limit": 5}},
            "oracle": {"kind": "exact_count", "expected_count": 47208,
                       "expected_end_reason": "QUERY_END_REASON_ITEM_LIMIT"}}
     good = _dr(["A", "B", "C", "D", "E"], pages=[H.PageMeta(5, IL)])
-    assert H.check_oracle(rec, {"c": good}, 1000)[0] == "PASS"   # 5 != 47208 but probe passes
+    assert H.check_oracle(rec, {"c": good}, 1000)[0] == "PASS"
     short = _dr(["A", "B"], pages=[H.PageMeta(2, IL)])
-    assert H.check_oracle(rec, {"c": short}, 1000)[0] == "FAIL"  # didn't honor limit
+    assert H.check_oracle(rec, {"c": short}, 1000)[0] == "FAIL"
     wrong = _dr(["A", "B", "C", "D", "E"], pages=[H.PageMeta(5, CB)])
-    assert H.check_oracle(rec, {"c": wrong}, 1000)[0] == "FAIL"  # wrong end_reason
+    assert H.check_oracle(rec, {"c": wrong}, 1000)[0] == "FAIL"
 
 
 def test_degenerate():

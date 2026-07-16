@@ -41,4 +41,23 @@ message Event {
 
   // JSON rendering of the event.
   optional google.protobuf.Value json = 6;
+
+  // The sequence number of the checkpoint that includes the transaction
+  // that emitted this event. Populated when the event is delivered on its
+  // own (for example via `LedgerService.ListEvents`); left unset when the
+  // event is carried inside its transaction's `events` list, where the
+  // enclosing `ExecutedTransaction` already provides this context.
+  optional uint64 checkpoint = 7;
+
+  // The digest of the transaction that emitted this event.
+  optional string transaction_digest = 8;
+
+  // Zero-based position of the emitting transaction within its containing
+  // checkpoint. For clients verifying authenticated event streams this
+  // index is part of the BCS-encoded `EventCommitment` leaf used to
+  // construct the per-checkpoint merkle root.
+  optional uint64 transaction_index = 9;
+
+  // Zero-based index of this event within its transaction's event list.
+  optional uint32 event_index = 10;
 }

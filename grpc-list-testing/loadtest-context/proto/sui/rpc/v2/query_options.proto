@@ -1,0 +1,125 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2;
+
+// Ordering for the returned result set.
+enum Ordering {
+  // Return results in increasing cursor order.
+  ORDERING_ASCENDING = 0;
+
+  // Return results in decreasing cursor order.
+  ORDERING_DESCENDING = 1;
+}
+
+// Cursor-bounded query options.
+//
+// `after` and `before` are canonical ledger-position bounds, not
+// ordering-relative cursors. `after` always excludes items at or below that
+// cursor, and `before` always excludes items at or above that cursor. Ordering
+// only controls the order of returned items within the resulting open interval.
+//
+// When a request also specifies a checkpoint range, cursor bounds and
+// checkpoint bounds compose by intersection: results come only from ledger
+// positions inside both. Checkpoint bounds are likewise canonical and
+// ordering-independent.
+//
+// For example, with `after = A`, `before = B`, `ordering = DESCENDING`, and
+// `limit = N`, the response contains up to N matching items in descending
+// order from the interval `(A, B)`. If the response ends with
+// `QUERY_END_REASON_ITEM_LIMIT`, resume by keeping `after = A` and setting
+// `before` to the last `Watermark.cursor` received. That cursor is the
+// lowest position reached in ledger order, so it becomes the next exclusive
+// upper bound.
+message QueryOptions {
+  // The maximum number of items to return. Each method applies its own default
+  // and maximum. QueryEnd does not count against this limit.
+  optional uint32 limit = 1;
+
+  // Opaque exclusive lower bound. Results must be strictly after this cursor in
+  // canonical ledger order.
+  optional bytes after = 2;
+
+  // Opaque exclusive upper bound. Results must be strictly before this cursor
+  // in canonical ledger order.
+  optional bytes before = 3;
+
+  // Ordering for returned results. Defaults to ASCENDING.
+  //
+  // Ordering only controls the order of results within the bounded interval;
+  // cursor bounds keep the same meaning for ascending and descending reads.
+  optional Ordering ordering = 4;
+}
+
+// Reason the server stopped this query response.
+enum QueryEndReason {
+  // The stop reason was not specified.
+  QUERY_END_REASON_UNKNOWN = 0;
+
+  // The response reached the requested item limit. The final matching item's
+  // frame carries `QueryEnd` and the final watermark. Resume from that frame's
+  // `Watermark.cursor` to continue reading the same effective interval.
+  QUERY_END_REASON_ITEM_LIMIT = 1;
+
+  // The response reached the server's per-request bucket-fetch budget for
+  // filtered scans before reaching the effective interval bound. The terminal
+  // frame carries no item. Its watermark cursor is the authoritative scan
+  // frontier from which to resume.
+  QUERY_END_REASON_SCAN_LIMIT = 2;
+
+  // The scan reached a requested checkpoint range bound. The terminal frame
+  // carries no item.
+  QUERY_END_REASON_CHECKPOINT_BOUND = 3;
+
+  // The scan reached an exclusive cursor bound. The terminal frame carries no
+  // item. Its watermark cursor represents that resolved bound without claiming
+  // that its containing checkpoint was fully covered.
+  QUERY_END_REASON_CURSOR_BOUND = 4;
+
+  // The scan reached the currently indexed ledger tip. The terminal frame
+  // carries no item.
+  QUERY_END_REASON_LEDGER_TIP = 5;
+}
+
+// Progress marker for a query scan. Carried on every response frame, whether or
+// not the frame delivers a matching item. Watermarks never regress in the
+// requested ordering, but consecutive frames may carry the same watermark when
+// additional work does not advance the safe resume frontier.
+message Watermark {
+  // Opaque cursor at this scan position. Set on every watermark. Use as
+  // `options.after` (ascending) or `options.before` (descending) on the next
+  // request to resume from here. The most recently received cursor is always
+  // the safe resume point.
+  optional bytes cursor = 1;
+
+  // The inclusive boundary checkpoint that the scan has fully covered within
+  // the request's effective interval, in the request's ordering direction: an
+  // ascending scan has emitted every matching item in the interval at
+  // checkpoints `<= checkpoint` (strictly greater ones may still hold
+  // matches); a descending scan has emitted every matching item in the
+  // interval at checkpoints `>= checkpoint`. This boundary never regresses in
+  // the scan direction, but it may repeat while the cursor advances.
+  //
+  // Unset until the scan's first checkpoint is fully covered. For example, a
+  // scan resumed from a cursor that lands mid-checkpoint leaves this unset
+  // until the next checkpoint boundary in the scan direction is fully covered.
+  // A watermark still has a valid resume cursor while this field is unset.
+  optional uint64 checkpoint = 2;
+}
+
+// Marker for the final frame of a successful query stream. Every successful
+// stream sets `QueryEnd` on exactly one frame, after which no further frames
+// are sent. That frame always carries the final watermark. For `ItemLimit`, it
+// also carries the final matching item; for every other reason it carries no
+// item. A ScanLimit terminal watermark may repeat the previous frame's cursor
+// when its authoritative scan frontier was already emitted; this does not
+// repeat an item.
+//
+// A stream that fails or is cancelled terminates with a gRPC status and does
+// not send `QueryEnd`.
+message QueryEnd {
+  // Reason this response stopped.
+  optional QueryEndReason reason = 1;
+}

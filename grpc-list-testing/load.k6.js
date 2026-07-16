@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 //
-// v2alpha List* LOAD script -- replays the hot-key-spread request list
+// Stable-v2 List* LOAD script -- replays the hot-key-spread request list
 // (load.<net>.jsonl from gen_load.py) under an open-loop arrival-rate ramp.
 //
 // Model A (testing_plan.md 2.6): ONE PAGE = ONE ITERATION, arrival-rate =
@@ -29,10 +29,8 @@
 //                target won't verify; internal one-off, skip is fine.
 //   PROTO_ROOT   single dir holding the merged proto tree (default /proto):
 //                sui/rpc/v2alpha/*, sui/rpc/v2/*, google/* under one root
-//                (the two source roots are merged at image-build time; they do
-//                not collide, so one import path suffices -- cf. §2.5's "two roots")
 //   PROTO_FILE   entry proto, relative to PROTO_ROOT
-//                (default sui/rpc/v2alpha/ledger_service.proto)
+//                (default sui/rpc/v2/ledger_service.proto)
 //   START_RPS,MAX_RPS,STEP_RPS,STEP_DUR,MAX_VUS   ramp knobs
 //
 // Run (per testing_plan.md 2.4: saturate ONE replica -> target a single pod IP,
@@ -52,11 +50,11 @@ const HOST = __ENV.HOST || 'localhost:19000';
 const REQ_FILE = __ENV.REQ_FILE || '/data/load.mainnet.jsonl';
 const PLAINTEXT = __ENV.PLAINTEXT === '1';
 const PROTO_ROOT = __ENV.PROTO_ROOT || '/proto';
-const PROTO_FILE = __ENV.PROTO_FILE || 'sui/rpc/v2alpha/ledger_service.proto';
+const PROTO_FILE = __ENV.PROTO_FILE || 'sui/rpc/v2/ledger_service.proto';
 const FLOOR = Number(__ENV.FLOOR || 0); // drop requests starting below a pruned target's retained window
 // Capacity-run knob: raise the client's max receive frame past the stock 4MB gRPC
-// default so a busy checkpoint's ~4.66MB CheckpointItem doesn't ResourceExhaust
-// mid-stream. UNSET = stock 4MB -- the ADOPTION-SIGNAL run (what an external builder
+// default so a busy checkpoint's ~4.66MB body doesn't ResourceExhaust mid-stream.
+// UNSET = stock 4MB -- the ADOPTION-SIGNAL run (what an external builder
 // on a default grpc-go/Java/Node client sees). Set MAX_RECV_MB=128 to match the
 // first-party Sui SDK (sui-rpc-api client uses 128MiB) and measure SERVER capacity.
 // Keep both runs: raised measures the server, stock measures real-client failure rate.
@@ -64,12 +62,18 @@ const MAX_RECV_MB = Number(__ENV.MAX_RECV_MB || 0);
 const PRE_VUS = Number(__ENV.PRE_ALLOCATED_VUS || __ENV.MAX_VUS || 200); // prealloc, decoupled from maxVUs cap
 const NSHARDS = Number(__ENV.NSHARDS || 1); // multi-generator: total shard count (horizontal scale-out)
 const SHARD = Number(__ENV.SHARD || 0);     // this generator's shard index in [0, NSHARDS)
+const ONLY_RPC = __ENV.ONLY_RPC || ''; // restrict replay to one RPC (e.g. ListCheckpoints when tx/events are pruned past the corpus)
 
 // One-page-per-iteration RPC map: each pre-gen line names its rpc.
 const METHODS = {
-  ListTransactions: 'sui.rpc.v2alpha.LedgerService/ListTransactions',
-  ListEvents: 'sui.rpc.v2alpha.LedgerService/ListEvents',
-  ListCheckpoints: 'sui.rpc.v2alpha.LedgerService/ListCheckpoints',
+  ListTransactions: 'sui.rpc.v2.LedgerService/ListTransactions',
+  ListEvents: 'sui.rpc.v2.LedgerService/ListEvents',
+  ListCheckpoints: 'sui.rpc.v2.LedgerService/ListCheckpoints',
+};
+const PAYLOAD_FIELDS = {
+  ListTransactions: 'transaction',
+  ListEvents: 'event',
+  ListCheckpoints: 'checkpoint',
 };
 
 // SharedArray: parsed ONCE, shared across all VUs (not re-parsed per VU).
@@ -78,6 +82,7 @@ const METHODS = {
 const reqs = new SharedArray('reqs', function () {
   let all = open(REQ_FILE).split('\n').filter((l) => l.length > 0).map((l) => JSON.parse(l));
   if (FLOOR) all = all.filter((r) => (r.request.start_checkpoint || 0) >= FLOOR);
+  if (ONLY_RPC) all = all.filter((r) => r.rpc === ONLY_RPC);
   // Multi-generator sharding: pod SHARD of NSHARDS keeps a disjoint 1/N slice of
   // the (pre-shuffled) list -> each pod replays a representative, NON-overlapping
   // subset, so N pods don't hammer identical keys in lockstep (synthetic hot spots).
@@ -183,7 +188,7 @@ export default function () {
   const stream = new grpc.Stream(client, method);
   stream.on('data', function (msg) {
     if (!firstFrame) { firstFrame = Date.now(); ttff.add(firstFrame - t0); }
-    if (msg && msg.item) n += 1;                   // count only item frames (skip watermark/end)
+    if (msg && msg[PAYLOAD_FIELDS[rec.rpc]]) n += 1; // count payload before a shared-frame QueryEnd
   });
   stream.on('error', function (e) {
     if (settled) return; settled = true;

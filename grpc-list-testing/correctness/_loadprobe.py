@@ -1,7 +1,7 @@
 import sys, os, json, random
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sui_pb"))
 import grpc
-from sui.rpc.v2alpha import ledger_service_pb2 as ls, ledger_service_pb2_grpc as lsg, query_options_pb2 as qo
+from sui.rpc.v2 import ledger_service_pb2 as ls, ledger_service_pb2_grpc as lsg
 from google.protobuf import json_format
 
 REQ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "load.mainnet.jsonl")
@@ -17,6 +17,11 @@ CTOR = {"ListTransactions": ls.ListTransactionsRequest,
 STUBM = {"ListTransactions": stub.ListTransactions,
          "ListEvents": stub.ListEvents,
          "ListCheckpoints": stub.ListCheckpoints}
+PAYLOAD_FIELDS = {
+    "ListTransactions": "transaction",
+    "ListEvents": "event",
+    "ListCheckpoints": "checkpoint",
+}
 
 nonempty = 0; empty = 0; errs = 0
 by_tier = {}
@@ -25,7 +30,7 @@ for rec in sample:
     n = 0
     try:
         for resp in STUBM[rec["rpc"]](req):
-            if resp.WhichOneof("response") == "item":
+            if resp.HasField(PAYLOAD_FIELDS[rec["rpc"]]):
                 n += 1
             if n >= 50:
                 break

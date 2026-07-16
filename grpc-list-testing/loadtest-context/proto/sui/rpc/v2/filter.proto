@@ -3,12 +3,12 @@
 
 syntax = "proto3";
 
-package sui.rpc.v2alpha;
+package sui.rpc.v2;
 
 // DNF filter for transactions: any term may match, and each term is an AND
 // of signed literals.
 // An absent filter matches everything. A present filter must have at least one
-// term, and every term must have at least one included literal.
+// term.
 message TransactionFilter {
   // Terms are ORed together.
   repeated TransactionTerm terms = 1;
@@ -20,51 +20,45 @@ message TransactionTerm {
   repeated TransactionLiteral literals = 1;
 }
 
-// One signed transaction predicate literal.
+// One signed transaction predicate literal: a predicate, optionally negated.
 message TransactionLiteral {
-  oneof polarity {
-    // The predicate must match.
-    TransactionPredicate include = 1;
+  // When true, the literal matches transactions that the predicate does *not*
+  // match.
+  bool negated = 1;
 
-    // The predicate must not match.
-    TransactionPredicate exclude = 2;
-  }
-}
-
-// One transaction-index predicate.
-message TransactionPredicate {
+  // The transaction-index predicate to match.
   oneof predicate {
     // Match transactions sent by the specified address.
-    SenderFilter sender = 1;
+    SenderFilter sender = 2;
 
     // Match transactions where the specified address's state moved as a side
     // effect: it owns an object after the txn, owned an object before the
     // txn that was mutated/transferred away/deleted/wrapped, or its
     // address-balance changed via an accumulator event.
-    AffectedAddressFilter affected_address = 2;
+    AffectedAddressFilter affected_address = 3;
 
     // Match transactions whose effects include a change for the specified
     // object.
-    AffectedObjectFilter affected_object = 3;
+    AffectedObjectFilter affected_object = 4;
 
     // Match transactions that made a Move call matching the specified filter.
-    MoveCallFilter move_call = 4;
+    MoveCallFilter move_call = 5;
 
     // Match transactions that emitted an event whose package/module fields
     // match the specified filter.
-    EmitModuleFilter emit_module = 5;
+    EmitModuleFilter emit_module = 6;
 
     // Match transactions that emitted an event with a type matching the
     // specified filter.
-    EventTypeFilter event_type = 6;
+    EventTypeFilter event_type = 7;
 
     // Match transactions that wrote to the specified authenticated event
     // stream head.
-    EventStreamHeadFilter event_stream_head = 7;
+    EventStreamHeadFilter event_stream_head = 8;
 
     // Match transactions that wrote a Move package — a first publish or an
     // upgrade, of any package.
-    PackageWriteFilter package_write = 8;
+    PackageWriteFilter package_write = 9;
   }
 }
 
@@ -72,8 +66,7 @@ message TransactionPredicate {
 // signed literals. Sender predicates match all events from matching
 // transactions; emit-module, event-type, and event-stream-head predicates match
 // individual event-space dimensions. An absent filter matches everything. A
-// present filter must have at least one term, and every term must have at least
-// one included literal.
+// present filter must have at least one term.
 message EventFilter {
   // Terms are ORed together.
   repeated EventTerm terms = 1;
@@ -85,31 +78,24 @@ message EventTerm {
   repeated EventLiteral literals = 1;
 }
 
-// One signed event predicate literal.
+// One signed event predicate literal: a predicate, optionally negated.
 message EventLiteral {
-  oneof polarity {
-    // The predicate must match.
-    EventPredicate include = 1;
+  // When true, the literal matches events that the predicate does *not* match.
+  bool negated = 1;
 
-    // The predicate must not match.
-    EventPredicate exclude = 2;
-  }
-}
-
-// One event-index predicate.
-message EventPredicate {
+  // The event-index predicate to match.
   oneof predicate {
     // Match events from transactions sent by the specified address.
-    SenderFilter sender = 1;
+    SenderFilter sender = 2;
 
     // Match events whose package/module fields match the specified filter.
-    EmitModuleFilter emit_module = 2;
+    EmitModuleFilter emit_module = 3;
 
     // Match events whose type matches the specified filter.
-    EventTypeFilter event_type = 3;
+    EventTypeFilter event_type = 4;
 
     // Match events committed to the specified authenticated event stream head.
-    EventStreamHeadFilter event_stream_head = 4;
+    EventStreamHeadFilter event_stream_head = 5;
   }
 }
 
@@ -166,7 +152,7 @@ message EmitModuleFilter {
 message EventTypeFilter {
   // Required. Move type string of the form
   // `address[::module[::Name[<type_params>]]]`.
-  optional string type = 1;
+  optional string event_type = 1;
 }
 
 // Match by authenticated event stream head.

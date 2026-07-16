@@ -9,11 +9,11 @@ import { Trend, Counter } from 'k6/metrics';
 const HOST = __ENV.HOST || 'localhost:8000';
 const PLAINTEXT = __ENV.PLAINTEXT === '1';
 const PROTO_ROOT = __ENV.PROTO_ROOT || '/proto';
-const PROTO_FILE = __ENV.PROTO_FILE || 'sui/rpc/v2alpha/ledger_service.proto';
+const PROTO_FILE = __ENV.PROTO_FILE || 'sui/rpc/v2/ledger_service.proto';
 const REQ_FILE = __ENV.REQ_FILE || '/data/load.testnet.jsonl';
 const ITERS = Number(__ENV.ITERS || 30);
 // See load.k6.js: UNSET = stock 4MB (adoption signal); MAX_RECV_MB=128 matches the
-// first-party Sui SDK to measure server capacity past the ~4.66MB CheckpointItem frame.
+// first-party Sui SDK to measure server capacity past a large checkpoint body.
 const MAX_RECV_MB = Number(__ENV.MAX_RECV_MB || 0);
 
 const HEAVY = /contents|transactions|objects|summary|signature/i;
@@ -48,7 +48,7 @@ export const options = {
 export function setup() {
   console.log(`WORST ListCheckpoints: tier=${worst.tier} dim=${worst.dim} ` +
     `read_mask="${worst.request.read_mask}" span=${span(worst)} ` +
-    `limit=${worst.request.options ? worst.request.options.limit_items : '?'}`);
+    `limit=${worst.request.options ? worst.request.options.limit : '?'}`);
   return {};
 }
 
@@ -69,8 +69,8 @@ export default function () {
   }
   const t0 = Date.now();
   let n = 0, first = 0, done = false;
-  const stream = new grpc.Stream(client, 'sui.rpc.v2alpha.LedgerService/ListCheckpoints');
-  stream.on('data', (msg) => { if (!first) { first = Date.now(); ttff.add(first - t0); } if (msg && msg.item) n += 1; });
+  const stream = new grpc.Stream(client, 'sui.rpc.v2.LedgerService/ListCheckpoints');
+  stream.on('data', (msg) => { if (!first) { first = Date.now(); ttff.add(first - t0); } if (msg && msg.checkpoint) n += 1; });
   stream.on('error', (e) => {
     if (done) return; done = true;
     errc.add(1); dur.add(Date.now() - t0);

@@ -1,0 +1,40 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# One-off, in-cluster latency benchmark for leapfrog_benchmark.py. Build the
+# correctness image from grpc-list-testing/ so generated sui_pb bindings and
+# this program are both present:
+#
+#   correctness/gen_stubs.sh
+#   docker build -f correctness/Dockerfile -t <REGISTRY>/ledger-correctness:<TAG> .
+#
+# Replace the placeholders, apply the Job, save its JSON summary, then delete
+# it. Run the same image and arguments against the before and after servers.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ledger-leapfrog-benchmark
+  namespace: <KV_RPC_NAMESPACE>
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 7200
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: benchmark
+          image: <REGISTRY>/ledger-correctness:<TAG>
+          command: ["python", "/harness/correctness/leapfrog_benchmark.py"]
+          args:
+            - --target=$(HOST)
+            - --iterations=1000
+            - --warmup=10
+            - --timeout=60
+            - --progress-every=0
+          env:
+            - name: HOST
+              value: <KV_RPC_SVC>.<KV_RPC_NAMESPACE>.svc.cluster.local:8000
+          resources:
+            requests: { cpu: "500m", memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }

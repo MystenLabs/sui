@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
-"""v2alpha LedgerService correctness harness.
+"""Stable-v2 LedgerService correctness harness.
 
 Replays a corpus.jsonl (built by ../extract.py) against a kv-rpc archival
 endpoint and/or a fullnode, drains each server stream to completion (Model B),
@@ -13,7 +13,7 @@ and checks every case against its oracle:
 
 plus structural invariants on every drain:
   tiling        -> no duplicate identity across pages
-  watermark     -> checkpoint_hi non-decreasing (asc) / checkpoint_lo non-increasing (desc)
+  watermark     -> checkpoint non-decreasing (asc) / non-increasing (desc)
   ordering      -> asc result == reverse(desc result) for paired cases
   read_mask     -> cheap/heavy twins return the same identity set
 
@@ -53,9 +53,9 @@ from dataclasses import dataclass, field
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sui_pb"))
 
 from google.protobuf import json_format  # noqa: E402
-from sui.rpc.v2alpha import ledger_service_pb2 as ls  # noqa: E402
-from sui.rpc.v2alpha import ledger_service_pb2_grpc as ls_grpc  # noqa: E402
-from sui.rpc.v2alpha import query_options_pb2 as qo  # noqa: E402
+from sui.rpc.v2 import ledger_service_pb2 as ls  # noqa: E402
+from sui.rpc.v2 import ledger_service_pb2_grpc as ls_grpc  # noqa: E402
+from sui.rpc.v2 import query_options_pb2 as qo  # noqa: E402
 
 REQ_TYPE = {
     "ListTransactions": ls.ListTransactionsRequest,
@@ -65,18 +65,28 @@ REQ_TYPE = {
 ORDER_ASC = qo.ORDERING_ASCENDING
 RESUME_REASONS = {qo.QUERY_END_REASON_ITEM_LIMIT, qo.QUERY_END_REASON_SCAN_LIMIT}
 
+RESPONSE_PAYLOAD_FIELDS = {
+    "ListTransactions": "transaction",
+    "ListEvents": "event",
+    "ListCheckpoints": "checkpoint",
+}
+
+
+def response_payload(rpc: str, response):
+    field_name = RESPONSE_PAYLOAD_FIELDS[rpc]
+    return getattr(response, field_name) if response.HasField(field_name) else None
+
 
 def reason_name(v: int) -> str:
     return qo.QueryEndReason.Name(v) if v is not None else "<none>"
 
 
 def identity(rpc: str, item):
-    """Stable per-item identity used for set comparison. Present under every
-    read_mask the corpus emits (digest/seq are item-or-default fields)."""
+    """Stable per-item identity used for set comparison."""
     if rpc == "ListTransactions":
-        return ("tx", item.transaction.digest)
+        return ("tx", item.digest)
     if rpc == "ListCheckpoints":
-        return ("cp", item.checkpoint.sequence_number)
+        return ("cp", item.sequence_number)
     if rpc == "ListEvents":
         return ("ev", item.transaction_digest, item.event_index)
     raise ValueError(rpc)
@@ -123,8 +133,6 @@ def drain(send_fn, rpc, base_req, *, full=True, max_drain=250_000, max_pages=100
     seen = set()
     asc = base_req.options.ordering == ORDER_ASC
     last_cursor = None
-    last_hi = None
-    last_lo = None
     retries = 0
     RETRYABLE = ("UNAVAILABLE", "Connection refused", "Socket closed", "GOAWAY",
                  "Broken pipe", "Transport closed", "failed to connect", "Stream removed")
@@ -140,14 +148,13 @@ def drain(send_fn, rpc, base_req, *, full=True, max_drain=250_000, max_pages=100
         page_cursor_start = last_cursor
         pcount = 0
         end_reason = None
-        last_hi = last_lo = None  # watermark monotonicity is a per-stream (per-page) property
+        last_checkpoint = None
         try:
             for resp in send_fn(req):
-                which = resp.WhichOneof("response")
-                if which == "item":
-                    it = resp.item
+                payload = response_payload(rpc, resp)
+                if payload is not None:
                     pcount += 1
-                    ident = identity(rpc, it)
+                    ident = identity(rpc, payload)
                     if not identity_present(rpc, ident):
                         r.identity_ok = False
                     if ident in seen:
@@ -155,25 +162,27 @@ def drain(send_fn, rpc, base_req, *, full=True, max_drain=250_000, max_pages=100
                     else:
                         seen.add(ident)
                         r.ids.append(ident)
-                    wm = it.watermark
-                elif which == "watermark":
-                    wm = resp.watermark
-                elif which == "end":
+
+                if not resp.HasField("watermark"):
+                    r.watermark_ok = False
+                    r.error = "response frame missing required watermark"
+                    return r
+                watermark = resp.watermark
+                if not watermark.HasField("cursor") or not watermark.cursor:
+                    r.watermark_ok = False
+                    r.error = "watermark missing required cursor"
+                    return r
+                last_cursor = watermark.cursor
+                if watermark.HasField("checkpoint"):
+                    if last_checkpoint is not None:
+                        if asc and watermark.checkpoint < last_checkpoint:
+                            r.watermark_ok = False
+                        if not asc and watermark.checkpoint > last_checkpoint:
+                            r.watermark_ok = False
+                    last_checkpoint = watermark.checkpoint
+
+                if resp.HasField("end"):
                     end_reason = resp.end.reason
-                    continue
-                else:
-                    continue
-                # watermark bookkeeping (items + standalone frames)
-                if wm.cursor:
-                    last_cursor = wm.cursor
-                if asc and wm.HasField("checkpoint_hi"):
-                    if last_hi is not None and wm.checkpoint_hi < last_hi:
-                        r.watermark_ok = False
-                    last_hi = wm.checkpoint_hi
-                if (not asc) and wm.HasField("checkpoint_lo"):
-                    if last_lo is not None and wm.checkpoint_lo > last_lo:
-                        r.watermark_ok = False
-                    last_lo = wm.checkpoint_lo
         except Exception as e:  # grpc.RpcError or transport error
             code = getattr(e, "code", lambda: None)()
             detail = getattr(e, "details", lambda: str(e))()
@@ -181,31 +190,34 @@ def drain(send_fn, rpc, base_req, *, full=True, max_drain=250_000, max_pages=100
             if retries < max_retries and any(s in msg for s in RETRYABLE):
                 retries += 1
                 time.sleep(min(2 * retries, 10))
-                continue  # transient: re-issue from last good cursor (resumable)
+                continue
             r.error = msg
             return r
         r.pages.append(PageMeta(pcount, end_reason))
         if end_reason is None:
-            # a successful stream always ends with QueryEnd; its absence means the stream
-            # was truncated (dropped connection / cancel). Resume, don't accept as terminal.
+            # A successful stream always ends with QueryEnd; its absence means the stream
+            # was truncated. Resume only when the watermark cursor advanced.
             if retries < max_retries and last_cursor is not None and last_cursor != page_cursor_start:
                 retries += 1
                 time.sleep(min(2 * retries, 10))
                 continue
             r.error = "stream truncated before QueryEnd (no terminal frame)"
             return r
-        retries = 0  # proper QueryEnd received; reset consecutive-failure budget
+        retries = 0
+        if end_reason in RESUME_REASONS and last_cursor == page_cursor_start:
+            r.error = "resumable QueryEnd did not advance watermark cursor"
+            return r
 
         if not full:
             return r
         if len(r.ids) >= max_drain:
             r.capped = True
             return r
-        if end_reason in RESUME_REASONS and last_cursor is not None and last_cursor != page_cursor_start:
-            continue  # resume from advanced cursor
-        return r  # terminal (CHECKPOINT_BOUND / LEDGER_TIP / CURSOR_BOUND)
+        if end_reason in RESUME_REASONS:
+            continue
+        return r
 
-    r.capped = True  # hit page budget (partial structural sample, or runaway guard)
+    r.capped = True
     return r
 
 
@@ -220,18 +232,19 @@ class CaseResult:
     expected: int = None
 
 
-# Minimal valid read_mask per RPC for identity-only drains: the body's
-# digest/identity field (validated server-side against ExecutedTransaction /
-# Checkpoint / Event). Keeps drains cheap and identity always present.
-IDENTITY_MASK = {"ListTransactions": "digest", "ListCheckpoints": "sequence_number",
-                 "ListEvents": "event_type"}
+# Minimal valid read_mask paths per RPC for identity-only drains.
+IDENTITY_MASK = {
+    "ListTransactions": ("digest",),
+    "ListCheckpoints": ("sequence_number",),
+    "ListEvents": ("transaction_digest", "event_index"),
+}
 
 
 def base_request(rec, identity_mask=False):
     req = json_format.ParseDict(rec["request"], REQ_TYPE[rec["rpc"]]())
     if identity_mask:
         req.ClearField("read_mask")
-        req.read_mask.paths.append(IDENTITY_MASK[rec["rpc"]])
+        req.read_mask.paths.extend(IDENTITY_MASK[rec["rpc"]])
     return req
 
 
@@ -253,7 +266,7 @@ def check_oracle(rec, drains, max_drain):
         reasons.append("watermark non-monotonic")
 
     if kind == "exact_count":
-        lim = rec.get("request", {}).get("options", {}).get("limit_items")
+        lim = rec.get("request", {}).get("options", {}).get("limit")
         if lim and lim < 50:  # limit-semantics probe: verify first page, not the full count
             if len(dr.idset) != lim:
                 reasons.append(f"limit probe: first page returned {len(dr.idset)} != limit {lim}")
@@ -379,7 +392,7 @@ def categorize(rec, max_drain):
     o = rec["oracle"]
     if o["kind"] == "degenerate":
         return "single"
-    lim = rec["request"].get("options", {}).get("limit_items")
+    lim = rec["request"].get("options", {}).get("limit")
     if lim and lim < 50:  # limit-semantics probe: one page, verify limit honored + ITEM_LIMIT
         return "single"
     if o["kind"] == "exact_count" and o["expected_count"] > max_drain:
@@ -388,7 +401,7 @@ def categorize(rec, max_drain):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="v2alpha LedgerService correctness harness")
+    ap = argparse.ArgumentParser(description="stable-v2 LedgerService correctness harness")
     ap.add_argument("--corpus", required=True)
     ap.add_argument("--archival", help="kv-rpc target host:port")
     ap.add_argument("--archival-tls", action="store_true",
@@ -447,7 +460,7 @@ def main():
             base_request(by_id[cid])
         except Exception as e:
             parse_errs.append((cid, str(e)[:140]))
-    print(f"protojson: parsed {len(needed)-len(parse_errs)}/{len(needed)} requests against proto rev")
+    print(f"protojson: parsed {len(needed)-len(parse_errs)}/{len(needed)} requests")
     for cid, e in parse_errs[:20]:
         print(f"  PARSE-ERR {cid}: {e}")
 

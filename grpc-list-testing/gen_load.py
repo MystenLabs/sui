@@ -16,7 +16,7 @@ Hot-key avoidance -- randomize BOTH axes of the BigTable row key per iteration:
      checkpoint-bucket suffix, so scans don't all begin at the same row).
 
 One request = one page (Model A, testing_plan.md sec 2.6): k6 arrival-rate =
-pages/sec, so each line is a single ListX with limit_items=<page>. The scan walks
+pages/sec, so each line is a single ListX with limit=<page>. The scan walks
 buckets from a random start -> honest per-page server work, spread across keys.
 
 Usage:
@@ -104,7 +104,15 @@ def main() -> None:
 
     lines: list[str] = []
     skipped = 0
-    for _ in range(N):
+    attempts = 0
+    max_attempts = max(N * 10, 1_000)
+    while len(lines) < N:
+        attempts += 1
+        if attempts > max_attempts:
+            raise SystemExit(
+                f"unable to generate {N} requests after {max_attempts} attempts; "
+                f"generated {len(lines)}, skipped {skipped}"
+            )
         rpc = weighted(rng, RPC_MIX)
         dim = rng.choice(RPC_DIMS[rpc])
         # choose a tier that actually has values for this dim
@@ -134,7 +142,7 @@ def main() -> None:
             filt = cb.f_single(PREDICATE[dim](v))
             req = cb.request(rpc, end_checkpoint=hi, start_checkpoint=start,
                              filter=filt, read_mask=read_mask,
-                             opts=cb.options(limit_items=PAGE, ordering=ordering))
+                             opts=cb.options(limit=PAGE, ordering=ordering))
         except Exception:
             skipped += 1
             continue

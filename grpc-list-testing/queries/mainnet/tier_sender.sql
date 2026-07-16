@@ -1,14 +1,14 @@
 WITH agg AS (
   SELECT SENDER v, COUNT(*) cnt, MIN(CHECKPOINT) lo, MAX(CHECKPOINT) hi
   FROM CHAINDATA_MAINNET.TRANSACTION
-  WHERE CHECKPOINT < 293000000 AND SENDER IS NOT NULL
+  WHERE CHECKPOINT < 298000000 AND SENDER IS NOT NULL
   GROUP BY 1
 ),
 tiered AS (
   SELECT v, cnt, lo, hi,
     CASE
-      WHEN lo < 5000000 AND hi >= 288000000 THEN 'dense_everywhere'
-      WHEN lo >= 287000000                                      THEN 'recent_only'
+      WHEN lo < 5000000 AND hi >= 293000000 THEN 'dense_everywhere'
+      WHEN lo >= 292000000                                      THEN 'recent_only'
       WHEN cnt > 5000 AND (hi - lo) < 500000                      THEN 'bursty'
       WHEN cnt BETWEEN 20 AND 500                                 THEN 'sparse'
       ELSE 'other'

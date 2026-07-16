@@ -1,7 +1,7 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# k6 load-test image for the v2alpha gRPC List APIs
+# k6 load-test image for the stable-v2 gRPC List APIs
 # (ListTransactions / ListEvents / ListCheckpoints).
 #
 # Unlike the other images under docker/ (which cargo-build a Rust binary), this

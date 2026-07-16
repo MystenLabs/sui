@@ -40,10 +40,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sui_pb"))
 import harness as H  # noqa: E402
-from sui.rpc.v2alpha import ledger_service_pb2 as lsa  # noqa: E402
-from sui.rpc.v2alpha import query_options_pb2 as qo  # noqa: E402
-from sui.rpc.v2 import ledger_service_pb2 as lv2  # noqa: E402
-from sui.rpc.v2 import ledger_service_pb2_grpc as lv2grpc  # noqa: E402
+from sui.rpc.v2 import ledger_service_pb2 as ls  # noqa: E402
+from sui.rpc.v2 import ledger_service_pb2_grpc as ls_grpc  # noqa: E402
+from sui.rpc.v2 import query_options_pb2 as qo  # noqa: E402
 from google.protobuf import json_format  # noqa: E402
 
 def norm_addr(a):
@@ -92,7 +91,7 @@ def predicate_holds(pred, tx):
                 return True
         return False
     if "event_type" in pred:
-        wp = pred["event_type"]["type"].split("::", 1)
+        wp = pred["event_type"]["event_type"].split("::", 1)
         want = norm_addr(wp[0]) + ("::" + wp[1] if len(wp) > 1 else "")
         for ev in _events(tx):
             ep = (ev.get("eventType") or "").split("::", 1)
@@ -109,13 +108,13 @@ def filter_matches(flt, tx):
     for term in flt.get("terms", []):
         ok = True
         for lit in term.get("literals", []):
-            if "include" in lit:
-                hold = predicate_holds(lit["include"], tx)
-            elif "exclude" in lit:
-                r = predicate_holds(lit["exclude"], tx)
-                hold = (not r) if r is not None else None
-            else:
+            pred = {name: value for name, value in lit.items() if name != "negated"}
+            if len(pred) != 1:
                 hold = None
+            else:
+                hold = predicate_holds(pred, tx)
+                if hold is not None and lit.get("negated", False):
+                    hold = not hold
             if hold is None:
                 any_unsupported = True; ok = False; break
             if not hold:
@@ -130,7 +129,7 @@ def filter_matches(flt, tx):
 class Arbiter:
     def __init__(self, list_backend, chain_backend, independent):
         self.list_backend = list_backend
-        self.v2 = lv2grpc.LedgerServiceStub(chain_backend.ch)
+        self.v2 = ls_grpc.LedgerServiceStub(chain_backend.ch)
         self.independent = independent  # True if chain_backend is a separate fullnode
         self._cache = {}
         self.served = self.digest_ok = self.digest_bad = 0
@@ -140,7 +139,7 @@ class Arbiter:
         dict. Sanity-check that the node returned the record we asked for (so a wrong
         digest can't silently pass), then the caller re-derives the predicate."""
         if digest not in self._cache:
-            req = lv2.GetTransactionRequest(digest=digest)
+            req = ls.GetTransactionRequest(digest=digest)
             for p in ("digest", "transaction.kind", "transaction.sender", "events", "effects"):
                 req.read_mask.paths.append(p)
             resp = self.v2.GetTransaction(req, timeout=60)
@@ -161,14 +160,12 @@ class Arbiter:
                 setattr(r.options, "after" if asc else "before", last)
             end = None; cur = None
             for resp in self.list_backend.send_fn(rpc)(r):
-                w = resp.WhichOneof("response")
-                if w == "item":
-                    on_item(resp.item)
-                    if resp.item.watermark.cursor:
-                        cur = resp.item.watermark.cursor
-                elif w == "watermark" and resp.watermark.cursor:
+                payload = H.response_payload(rpc, resp)
+                if payload is not None:
+                    on_item(payload)
+                if resp.HasField("watermark") and resp.watermark.cursor:
                     cur = resp.watermark.cursor
-                elif w == "end":
+                if resp.HasField("end"):
                     end = resp.end.reason
             if stop():
                 return False  # stopped early, not exhausted
@@ -182,25 +179,23 @@ class Arbiter:
         rpc = rec["rpc"]
         req = json_format.ParseDict(rec["request"], H.REQ_TYPE[rpc]())
         req.ClearField("read_mask")
-        # event masks are relative to the Event body; transaction_digest is item-level
-        # (always present). use a cheap valid path for events, "digest" for transactions.
-        req.read_mask.paths.append("event_type" if rpc == "ListEvents" else "digest")
+        req.read_mask.paths.append("transaction_digest" if rpc == "ListEvents" else "digest")
         ids = []
 
         def on_item(it):
-            ids.append(it.transaction_digest if rpc == "ListEvents" else it.transaction.digest)
+            ids.append(it.transaction_digest if rpc == "ListEvents" else it.digest)
         self._pages(rpc, req, on_item, lambda: len(ids) >= pool, page_budget=10)
         return ids
 
     def cp_truth(self, rec, threshold, page_budget=80):
         """Distinct checkpoints of ListTransactions(same filter,range); early-exit once
         the count exceeds `threshold` (enough to prove a ListCheckpoints under-return)."""
-        req = json_format.ParseDict(rec["request"], lsa.ListTransactionsRequest())
+        req = json_format.ParseDict(rec["request"], ls.ListTransactionsRequest())
         req.ClearField("read_mask")
         for p in ("digest", "checkpoint"):
             req.read_mask.paths.append(p)
         cps = set()
-        ended = self._pages("ListTransactions", req, lambda it: cps.add(it.transaction.checkpoint),
+        ended = self._pages("ListTransactions", req, lambda it: cps.add(it.checkpoint),
                             lambda: len(cps) > threshold, page_budget)
         return len(cps), ended
 

@@ -1,14 +1,14 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
-"""Builder for v2alpha gRPC List API test-case records (the corpus).
+"""Builder for stable-v2 gRPC List API test-case records (the corpus).
 
 Each record is a self-describing envelope wrapping a **verbatim protojson
-request** that maps 1:1 onto `sui.rpc.v2alpha.List{Transactions,Events,
-Checkpoints}Request` — exactly what k6 puts on the wire, and what the Rust
+request** that maps 1:1 onto `sui.rpc.v2.List{Transactions,Events,
+Checkpoints}Request` — exactly what k6 puts on the wire, and what the Python
 correctness harness parses into the same proto type. One source of truth, no
 bespoke filter parser, no load-vs-correctness drift.
 
-Field names are **snake_case**, matching the proto (rev 43c5bc1) and the casing
+Field names are **snake_case**, matching the proto (rev 0501847) and the casing
 proven to work with k6's protojson in the streaming/pagination spikes
 (`read_mask`, `move_call`, `affected_object{object_id}`, ...).
 
@@ -18,9 +18,9 @@ Wire contract (verified against the pinned proto):
     start_checkpoint: uint64                       # inclusive
     end_checkpoint:   uint64                       # EXCLUSIVE
     filter:           TransactionFilter|EventFilter# DNF; omit -> match all
-    options:          QueryOptions { limit_items, after, before, ordering }
+    options:          QueryOptions { limit, after, before, ordering }
   }
-  DNF: filter.terms[] (OR) of term.literals[] (AND) of {include|exclude: predicate}.
+  DNF: filter.terms[] (OR) of term.literals[] (AND) of {predicate, negated?}.
   Predicate oneofs (tx-space): sender, affected_address, affected_object,
     move_call, emit_module, event_type, event_stream_head, package_write.
   Predicate oneofs (event-space, strict subset): sender, emit_module,
@@ -62,22 +62,18 @@ _PREDICATES_FOR_RPC = {
 ORDER_ASC = "ORDERING_ASCENDING"
 ORDER_DESC = "ORDERING_DESCENDING"
 
-# Whole-message heavy read masks (full object/JSON/package resolution). Paths are
-# validated server-side against the item BODY message: ExecutedTransaction (tx),
-# Checkpoint (cp), Event (ev) -- NOT the alpha *Item wrapper.
-HEAVY_READ_MASK = {
-    "ListTransactions": "digest,transaction,signatures,effects,events,checkpoint,timestamp,balanceChanges,objects",
-    "ListCheckpoints": "sequenceNumber,digest,summary,signature,contents,transactions,objects",
-    "ListEvents": "packageId,module,sender,eventType,contents,json",
-}
-# Cheapest valid mask per RPC: the body's identity/digest field (matches each
-# RPC's server default family). For events the per-item identity
-# (transaction_digest, event_index) is on the EventItem and returned regardless.
+# Whole-message heavy read masks (full object/JSON/package resolution).
 # protojson FieldMask strings are camelCase; the wire form is snake_case.
+HEAVY_READ_MASK = {
+    "ListTransactions": "digest,transaction,signatures,effects,events,checkpoint,transactionIndex,timestamp,balanceChanges,objects",
+    "ListCheckpoints": "sequenceNumber,digest,summary,signature,contents,transactions,objects",
+    "ListEvents": "packageId,module,sender,eventType,contents,json,checkpoint,transactionDigest,transactionIndex,eventIndex",
+}
+# Cheapest valid mask per RPC.
 CHEAP_READ_MASK = {
     "ListTransactions": "digest",
     "ListCheckpoints": "sequenceNumber",
-    "ListEvents": "eventType",
+    "ListEvents": "transactionDigest,eventIndex,eventType",
 }
 
 
@@ -127,7 +123,7 @@ def emit_module(path: str) -> dict:
 
 def event_type(type_str: str) -> dict:
     """`address[::module[::Name[<type_params>]]]`."""
-    return {"event_type": {"type": _normalize_event_type(type_str)}}
+    return {"event_type": {"event_type": _normalize_event_type(type_str)}}
 
 
 def event_stream_head(stream_id: str) -> dict:
@@ -165,7 +161,7 @@ def _normalize_event_type(type_str: str) -> str:
 
 
 def lit(predicate: dict, *, negate: bool = False) -> dict:
-    return {("exclude" if negate else "include"): predicate}
+    return {**predicate, **({"negated": True} if negate else {})}
 
 
 def term(*literals: dict) -> dict:
@@ -187,7 +183,7 @@ def f_single(predicate: dict, *, negate: bool = False) -> dict:
 
 
 def f_and(*predicates: dict) -> dict:
-    """One term, all predicates ANDed (each included)."""
+    """One term containing every predicate."""
     return dnf(term(*[lit(p) for p in predicates]))
 
 
@@ -206,14 +202,14 @@ def f_or(*predicates: dict) -> dict:
 
 def options(
     *,
-    limit_items: Optional[int] = None,
+    limit: Optional[int] = None,
     ordering: str = ORDER_ASC,
     after: Optional[str] = None,
     before: Optional[str] = None,
 ) -> Optional[dict]:
     o: dict = {}
-    if limit_items is not None:
-        o["limit_items"] = int(limit_items)
+    if limit is not None:
+        o["limit"] = int(limit)
     if ordering == ORDER_DESC:
         o["ordering"] = ORDER_DESC  # ascending is proto3 default 0 -> omit
     elif ordering != ORDER_ASC:
@@ -260,8 +256,12 @@ def _validate_filter(rpc: str, filt: dict) -> None:
         if not lits:
             raise ValueError("term has no literals")
         for literal in lits:
-            polarity = "include" if "include" in literal else "exclude"
-            name = _predicate_name(literal[polarity])
+            predicate_names = set(literal) - {"negated"}
+            if len(predicate_names) != 1:
+                raise ValueError(
+                    "literal must contain exactly one predicate and optional negated"
+                )
+            (name,) = predicate_names
             if name not in allowed:
                 raise ValueError(
                     f"predicate {name!r} not valid for {rpc} "
@@ -342,7 +342,7 @@ if __name__ == "__main__":
                 end_checkpoint=288_000_000,
                 filter=f_single(sender("0xabc")),
                 read_mask="transaction.digest",
-                opts=options(limit_items=1000),
+                opts=options(limit=1000),
             ),
             klass=Klass("sender", "single", "sparse", "cheap", "shared", specificity="na"),
             oracle=Oracle("exact_count", expected_count=42, sql_ref="queries/sender.sql#x"),

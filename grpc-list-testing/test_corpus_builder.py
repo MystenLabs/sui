@@ -53,7 +53,7 @@ def test_emit_module_max_two_parts():
 
 def test_event_type_with_generics_preserved():
     t = b.event_type("0x2::coin::CoinCreated<0x2::sui::SUI>")
-    s = t["event_type"]["type"]
+    s = t["event_type"]["event_type"]
     assert s.endswith("::coin::CoinCreated<0x2::sui::SUI>")
     assert s.startswith("0x" + "0" * 63 + "2::")
 
@@ -62,33 +62,36 @@ def test_package_write_is_empty_message():
     assert b.package_write() == {"package_write": {}}
 
 
-# --- DNF combinators match the verified wire example ---
+# --- DNF combinators ---
 
 
-def test_single_literal_matches_spike_example():
-    # §2.6 gotcha: {"terms":[{"literals":[{"include":{"sender":{"address": ...}}}]}]}
+def test_single_literal_is_direct_predicate():
     full = "0x" + "0" * 63 + "a"
     assert b.f_single(b.sender("0xa")) == {
-        "terms": [{"literals": [{"include": {"sender": {"address": full}}}]}]
+        "terms": [{"literals": [{"sender": {"address": full}}]}]
     }
 
 
-def test_unanchored_negation_exclude_only_term():
+def test_unanchored_negation_is_direct_predicate():
     f = b.f_single(b.sender("0xa"), negate=True)
-    assert f["terms"][0]["literals"][0] == {"exclude": {"sender": {"address": "0x" + "0" * 63 + "a"}}}
+    assert f["terms"][0]["literals"][0] == {
+        "sender": {"address": "0x" + "0" * 63 + "a"},
+        "negated": True,
+    }
 
 
-def test_and_is_one_term_many_includes():
+def test_and_is_one_term_many_direct_predicates():
     f = b.f_and(b.sender("0xa"), b.move_call("0x2::m::f"))
     assert len(f["terms"]) == 1
     assert len(f["terms"][0]["literals"]) == 2
-    assert all("include" in lit for lit in f["terms"][0]["literals"])
+    assert all("negated" not in literal for literal in f["terms"][0]["literals"])
 
 
 def test_and_not_anchored():
     f = b.f_and_not(b.sender("0xa"), b.move_call("0x2::m::f"))
-    lits = f["terms"][0]["literals"]
-    assert "include" in lits[0] and "exclude" in lits[1]
+    literals = f["terms"][0]["literals"]
+    assert "negated" not in literals[0]
+    assert literals[1]["negated"] is True
 
 
 def test_or_is_many_terms():
@@ -102,8 +105,8 @@ def test_or_is_many_terms():
 
 def test_request_omits_ascending_ordering():
     req = b.request("ListTransactions", end_checkpoint=288_000_000,
-                    opts=b.options(limit_items=10, ordering=b.ORDER_ASC))
-    assert req["options"] == {"limit_items": 10}
+                    opts=b.options(limit=10, ordering=b.ORDER_ASC))
+    assert req["options"] == {"limit": 10}
     assert "start_checkpoint" not in req
 
 
@@ -140,6 +143,25 @@ def test_event_rpc_accepts_event_space_predicate():
 
 def test_checkpoints_accept_tx_predicates():
     b.request("ListCheckpoints", end_checkpoint=1, filter=b.f_single(b.move_call("0x2::m::f")))
+
+
+def test_filter_rejects_literal_with_multiple_predicates():
+    filt = {
+        "terms": [{
+            "literals": [{
+                **b.sender("0xa"),
+                **b.move_call("0x2::m::f"),
+            }],
+        }],
+    }
+    with pytest.raises(ValueError, match="exactly one predicate"):
+        b.request("ListTransactions", end_checkpoint=1, filter=filt)
+
+
+def test_filter_rejects_old_literal_wrapper():
+    filt = {"terms": [{"literals": [{"include": b.sender("0xa")}]}]}
+    with pytest.raises(ValueError, match="predicate 'include' not valid"):
+        b.request("ListTransactions", end_checkpoint=1, filter=filt)
 
 
 # --- envelope + serialization ---

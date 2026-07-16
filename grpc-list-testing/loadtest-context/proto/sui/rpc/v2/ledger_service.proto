@@ -10,8 +10,11 @@ import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
 import "sui/rpc/v2/checkpoint.proto";
 import "sui/rpc/v2/epoch.proto";
+import "sui/rpc/v2/event.proto";
 import "sui/rpc/v2/executed_transaction.proto";
+import "sui/rpc/v2/filter.proto";
 import "sui/rpc/v2/object.proto";
+import "sui/rpc/v2/query_options.proto";
 
 service LedgerService {
   // Query the service for general information about its current state.
@@ -26,6 +29,25 @@ service LedgerService {
   rpc GetCheckpoint(GetCheckpointRequest) returns (GetCheckpointResponse);
 
   rpc GetEpoch(GetEpochRequest) returns (GetEpochResponse);
+
+  // List checkpoints matching the provided filters.
+  //
+  // Checkpoints are returned in ascending or descending checkpoint sequence
+  // number order according to the query options ordering.
+  // A checkpoint matches if any transaction it contains satisfies the filter.
+  rpc ListCheckpoints(ListCheckpointsRequest) returns (stream ListCheckpointsResponse);
+
+  // List transactions matching the provided filters.
+  //
+  // Transactions are returned in ascending or descending transaction sequence
+  // order according to the query options ordering.
+  rpc ListTransactions(ListTransactionsRequest) returns (stream ListTransactionsResponse);
+
+  // List events matching the provided filters.
+  //
+  // Events are returned in ascending or descending packed event sequence order
+  // according to the query options ordering.
+  rpc ListEvents(ListEventsRequest) returns (stream ListEventsResponse);
 }
 
 message GetServiceInfoRequest {}
@@ -162,4 +184,155 @@ message GetEpochRequest {
 
 message GetEpochResponse {
   optional Epoch epoch = 1;
+}
+
+// Request message for LedgerService.ListCheckpoints.
+message ListCheckpointsRequest {
+  // Optional. Mask for specifying which parts of the Checkpoint should be
+  // returned (e.g. summary, contents, signatures).
+  optional google.protobuf.FieldMask read_mask = 1;
+
+  // Optional. Start of the checkpoint range to query (inclusive). Defaults to
+  // genesis.
+  optional uint64 start_checkpoint = 2;
+
+  // Optional. End of the checkpoint range to query (exclusive). Defaults to the
+  // current indexed ledger tip.
+  optional uint64 end_checkpoint = 3;
+
+  // Optional. DNF filter over indexed transaction dimensions. A checkpoint
+  // matches if any transaction it contains satisfies the filter. If absent,
+  // all checkpoints in the range are returned.
+  optional TransactionFilter filter = 4;
+
+  // Optional cursor-bounded query options. If unspecified, reads in ascending
+  // order with the default item limit. The server enforces a maximum item
+  // limit and silently coerces larger values down to it. To paginate, pass
+  // the last received `Watermark.cursor` as `options.after` (ascending) or
+  // `options.before` (descending) on the next request.
+  optional QueryOptions options = 5;
+}
+
+// Response message for LedgerService.ListCheckpoints.
+//
+// Every frame carries a `watermark` with a safe resume cursor. A frame
+// with `checkpoint` set delivers one matching item; a frame without it reports
+// scan progress or terminal completion. Watermarks never regress in the
+// requested ordering but may repeat.
+//
+// `end` is set exactly once, on the final frame of a successful stream. For
+// `QUERY_END_REASON_ITEM_LIMIT`, that frame also carries the final item. For
+// every other end reason, the final frame has no `checkpoint` payload.
+message ListCheckpointsResponse {
+  // One matching checkpoint.
+  optional Checkpoint checkpoint = 1;
+
+  // Progress watermark as of this frame. Present on every frame. A
+  // ScanLimit terminal watermark may repeat the previous frame's cursor when
+  // its authoritative scan frontier was already emitted.
+  optional Watermark watermark = 2;
+
+  // Set exactly once, on the final frame of a successful query stream.
+  optional QueryEnd end = 3;
+}
+
+// Request message for LedgerService.ListTransactions.
+message ListTransactionsRequest {
+  // Optional. Mask for specifying which parts of the ExecutedTransaction
+  // should be returned.
+  optional google.protobuf.FieldMask read_mask = 1;
+
+  // Optional. Start of the checkpoint range to query (inclusive). Defaults to
+  // genesis.
+  optional uint64 start_checkpoint = 2;
+
+  // Optional. End of the checkpoint range to query (exclusive). Defaults to the
+  // current indexed ledger tip.
+  optional uint64 end_checkpoint = 3;
+
+  // Optional. DNF filter over indexed dimensions.
+  // If absent, all transactions in the range are returned.
+  optional TransactionFilter filter = 4;
+
+  // Optional cursor-bounded query options. If unspecified, reads in ascending
+  // order with the default item limit. The server enforces a maximum item
+  // limit and silently coerces larger values down to it. To paginate, pass
+  // the last received `Watermark.cursor` as `options.after` (ascending) or
+  // `options.before` (descending) on the next request.
+  optional QueryOptions options = 5;
+}
+
+// Response message for LedgerService.ListTransactions.
+//
+// Every frame carries a `watermark` with a safe resume cursor. A frame
+// with `transaction` set delivers one matching item; a frame without it reports
+// scan progress or terminal completion. Watermarks never regress in the
+// requested ordering but may repeat.
+//
+// `end` is set exactly once, on the final frame of a successful stream. For
+// `QUERY_END_REASON_ITEM_LIMIT`, that frame also carries the final item. For
+// every other end reason, the final frame has no `transaction` payload.
+message ListTransactionsResponse {
+  // One matching transaction. Its position within the containing checkpoint
+  // is reported by `ExecutedTransaction.transaction_index`.
+  optional ExecutedTransaction transaction = 1;
+
+  // Progress watermark as of this frame. Present on every frame. A
+  // ScanLimit terminal watermark may repeat the previous frame's cursor when
+  // its authoritative scan frontier was already emitted.
+  optional Watermark watermark = 2;
+
+  // Set exactly once, on the final frame of a successful query stream.
+  optional QueryEnd end = 3;
+}
+
+// Request message for LedgerService.ListEvents.
+message ListEventsRequest {
+  // Optional. Mask for specifying which parts of the Event should be returned.
+  optional google.protobuf.FieldMask read_mask = 1;
+
+  // Optional. Start of the checkpoint range to query (inclusive). Defaults to
+  // genesis.
+  optional uint64 start_checkpoint = 2;
+
+  // Optional. End of the checkpoint range to query (exclusive). Defaults to the
+  // current indexed ledger tip.
+  optional uint64 end_checkpoint = 3;
+
+  // Optional. DNF filter over indexed dimensions.
+  // If absent, all events in the range are returned.
+  optional EventFilter filter = 4;
+
+  // Optional cursor-bounded query options. If unspecified, reads in ascending
+  // order with the default item limit. The server enforces a maximum item
+  // limit and silently coerces larger values down to it. To paginate, pass
+  // the last received `Watermark.cursor` as `options.after` (ascending) or
+  // `options.before` (descending) on the next request.
+  optional QueryOptions options = 5;
+}
+
+// Response message for LedgerService.ListEvents.
+//
+// Every frame carries a `watermark` with a safe resume cursor. A frame
+// with `event` set delivers one matching item; a frame without it reports scan
+// progress or terminal completion. Watermarks never regress in the requested
+// ordering but may repeat.
+//
+// `end` is set exactly once, on the final frame of a successful stream. For
+// `QUERY_END_REASON_ITEM_LIMIT`, that frame also carries the final item. For
+// every other end reason, the final frame has no `event` payload.
+message ListEventsResponse {
+  // One matching event. Its ledger position -- containing checkpoint,
+  // emitting transaction digest and offset, and index within that
+  // transaction's event list -- is reported by the corresponding fields on
+  // `Event`.
+  optional Event event = 1;
+
+  // Progress watermark as of this frame. Present on every frame. A
+  // ScanLimit terminal watermark may repeat the previous frame's cursor when
+  // its authoritative scan frontier was already emitted.
+  optional Watermark watermark = 2;
+
+  // Set exactly once, on the final frame of a successful query stream.
+  optional QueryEnd end = 3;
 }

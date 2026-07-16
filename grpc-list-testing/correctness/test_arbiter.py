@@ -23,7 +23,7 @@ def tx(sender="0xab", calls=(), events=(), objs=()):
 
 
 def inc(pred):
-    return {"terms": [{"literals": [{"include": pred}]}]}
+    return {"terms": [{"literals": [pred]}]}
 
 
 def test_sender():
@@ -51,24 +51,39 @@ def test_emit_module_and_event_type():
     t = tx(events=[(P2, "clock", f"{P2}::clock::Tick")])
     assert A.filter_matches(inc({"emit_module": {"module": "0x2::clock"}}), t) is True
     assert A.filter_matches(inc({"emit_module": {"module": "0x2::coin"}}), t) is False
-    assert A.filter_matches(inc({"event_type": {"type": "0x2::clock::Tick"}}), t) is True
-    assert A.filter_matches(inc({"event_type": {"type": "0x2::clock"}}), t) is True   # module prefix
-    assert A.filter_matches(inc({"event_type": {"type": "0x2::coin::X"}}), t) is False
+    assert A.filter_matches(inc({"event_type": {"event_type": "0x2::clock::Tick"}}), t) is True
+    assert A.filter_matches(inc({"event_type": {"event_type": "0x2::clock"}}), t) is True
+    assert A.filter_matches(inc({"event_type": {"event_type": "0x2::coin::X"}}), t) is False
 
 
-def test_dnf_or_and_exclude():
+def test_dnf_or_and_negated():
     t = tx(sender="0xab", calls=[(P2, "coin", "destroy_zero")])
-    # OR: matches if either term holds
-    f_or = {"terms": [{"literals": [{"include": {"sender": {"address": P2}}}]},
-                      {"literals": [{"include": {"move_call": {"function": "0x2::coin::destroy_zero"}}}]}]}
+    f_or = {
+        "terms": [
+            {"literals": [{"sender": {"address": P2}}]},
+            {"literals": [{"move_call": {"function": "0x2::coin::destroy_zero"}}]},
+        ],
+    }
     assert A.filter_matches(f_or, t) is True
-    # AND: both literals must hold
-    f_and = {"terms": [{"literals": [{"include": {"sender": {"address": ADDR}}},
-                                      {"include": {"move_call": {"function": "0x2::coin::mint"}}}]}]}
+
+    f_and = {
+        "terms": [{
+            "literals": [
+                {"sender": {"address": ADDR}},
+                {"move_call": {"function": "0x2::coin::mint"}},
+            ],
+        }],
+    }
     assert A.filter_matches(f_and, t) is False
-    # exclude (NOT): tx does NOT call mint -> exclude holds
-    f_not = {"terms": [{"literals": [{"include": {"sender": {"address": ADDR}}},
-                                     {"exclude": {"move_call": {"function": "0x2::coin::mint"}}}]}]}
+
+    f_not = {
+        "terms": [{
+            "literals": [
+                {"sender": {"address": ADDR}},
+                {"move_call": {"function": "0x2::coin::mint"}, "negated": True},
+            ],
+        }],
+    }
     assert A.filter_matches(f_not, t) is True
 
 
@@ -76,6 +91,15 @@ def test_unsupported_predicate_returns_none():
     t = tx(sender="0xab")
     assert A.filter_matches(inc({"affected_address": {"address": ADDR}}), t) is None
     assert A.filter_matches(inc({"package_write": {}}), t) is None
+    negated = {
+        "terms": [{
+            "literals": [{
+                "affected_address": {"address": ADDR},
+                "negated": True,
+            }],
+        }],
+    }
+    assert A.filter_matches(negated, t) is None
 
 
 def test_norm_addr():

@@ -1,7 +1,7 @@
 import sys, os, json
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sui_pb"))
 import grpc
-from sui.rpc.v2alpha import ledger_service_pb2 as ls, ledger_service_pb2_grpc as lsg
+from sui.rpc.v2 import ledger_service_pb2_grpc as lsg
 from google.rpc import status_pb2
 import harness as H
 

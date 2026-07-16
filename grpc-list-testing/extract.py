@@ -34,12 +34,10 @@ import corpus_builder as b
 # Both the Snowflake oracle and the gRPC requests clamp to it (end_checkpoint), so it
 # MUST be a checkpoint both fully serve. Override per cluster with --ceiling=<N>.
 NETS = {
-    # mainnet kv-rpc archival isn't backfilled yet, so the only backend is the v2alpha
-    # fullnode (sui-node-mainnet-rpc-alpha), which PRUNES: it serves ~[285.6M, tip]. The
-    # window must sit inside both the fullnode's retained range AND Snowflake's coverage
-    # (hi ~293.13M). ceiling 293M / window 6M -> shared [287M, 293M], ~1.4M above the
-    # (rising) prune floor. No archival_only cases are servable by a pruning fullnode.
-    "mainnet": {"schema": "CHAINDATA_MAINNET", "ceiling": 293_000_000, "window": 6_000_000},
+    # Mainnet has a full-history archival backend. The shared window is the recent
+    # slice also retained by the pruning alpha fullnode. Keep the ceiling below both
+    # backends' indexed tips and the window start above the fullnode's moving floor.
+    "mainnet": {"schema": "CHAINDATA_MAINNET", "ceiling": 298_000_000, "window": 6_000_000},
     # testnet shared_hi caps the exact-count window below the analytics MOVE_CALL data gap at
     # cp 342,206,316-342,208,925 (Snowflake dropped a batch; the RPC is correct -- see NOTE_ANALYTICS_GAP.md).
     "testnet": {"schema": "CHAINDATA_TESTNET", "ceiling": 344_000_000, "window": 10_000_000,
@@ -303,7 +301,7 @@ def predicate(dim: str, spec: str, v: str):
 
 
 def make_single(cases, reg, *, rpc, dim, spec, v, lo, hi, scope, tier, cost,
-                ordering=b.ORDER_ASC, limit_items=1000, read_mask="__auto__", id_extra=""):
+                ordering=b.ORDER_ASC, limit=1000, read_mask="__auto__", id_extra=""):
     vh = hashlib.sha1(v.encode()).hexdigest()[:6]
     osfx = "asc" if ordering == b.ORDER_ASC else "desc"
     cid = f"{RPC_PREFIX[rpc]}.{dim}.{spec}.{tier}.{scope}.{cost}.{osfx}{id_extra}.{vh}"
@@ -323,7 +321,7 @@ def make_single(cases, reg, *, rpc, dim, spec, v, lo, hi, scope, tier, cost,
         id=cid, rpc=rpc,
         request=b.request(rpc, start_checkpoint=lo, end_checkpoint=hi,
                           filter=b.f_single(predicate(dim, spec, v)),
-                          read_mask=rm, opts=b.options(limit_items=limit_items, ordering=ordering)),
+                          read_mask=rm, opts=b.options(limit=limit, ordering=ordering)),
         klass=b.Klass(dim, "single", tier, cost, scope, specificity=spec),
         oracle=b.Oracle(kind, expected_count=cnt, sql_ref=f"extract.py:_match({dim},{spec})"),
     ))
@@ -477,7 +475,7 @@ def main() -> None:
             cnt = safe(package_write_count, rpc, lo, hi)
             add_case(f"{RPC_PREFIX[rpc]}.package_write.na.dense_everywhere.{scope}", rpc,
                 b.request(rpc, start_checkpoint=lo, end_checkpoint=hi,
-                          filter=b.f_single(b.package_write()), opts=b.options(limit_items=1000)),
+                          filter=b.f_single(b.package_write()), opts=b.options(limit=1000)),
                 b.Klass("package_write", "single", "dense_everywhere", "expensive", scope, specificity="na"),
                 b.Oracle("exact_count", expected_count=cnt, sql_ref="extract.py:package_write_count"))
     for rpc in b.RPCS:
@@ -485,7 +483,7 @@ def main() -> None:
             cnt = safe(unfiltered_count, rpc, lo, hi)
             cid = f"{RPC_PREFIX[rpc]}.unfiltered.{scope}"
             add_case(cid, rpc,
-                b.request(rpc, start_checkpoint=lo, end_checkpoint=hi, opts=b.options(limit_items=1000)),
+                b.request(rpc, start_checkpoint=lo, end_checkpoint=hi, opts=b.options(limit=1000)),
                 b.Klass("unfiltered", "single", "na", "cheap", scope, specificity="na"),
                 b.Oracle("exact_count", expected_count=cnt, sql_ref="extract.py:unfiltered_count"))
             reg[("unfiltered", rpc, scope)] = cid
@@ -524,25 +522,25 @@ def main() -> None:
         tot = safe(oracle_count, "sender", "na", sv, SHARED[0], SHARED[1], "tx")
         add_case("tx.sender.edge_limit5.dense.shared", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_single(b.sender(sv)), opts=b.options(limit_items=5)),
+                      filter=b.f_single(b.sender(sv)), opts=b.options(limit=5)),
             b.Klass("sender", "single", "dense_everywhere", "cheap", "shared", specificity="na"),
             b.Oracle("exact_count", expected_count=tot, expected_end_reason="QUERY_END_REASON_ITEM_LIMIT",
                      sql_ref="returns min(5,total) then ITEM_LIMIT"))
         add_case("tx.sender.edge_overcap.dense.shared", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_single(b.sender(sv)), opts=b.options(limit_items=100_000_000)),
+                      filter=b.f_single(b.sender(sv)), opts=b.options(limit=100_000_000)),
             b.Klass("sender", "single", "dense_everywhere", "cheap", "shared", specificity="na"),
             b.Oracle("exact_count", expected_count=tot, sql_ref="server coerces limit to max"))
         ge = safe(oracle_count, "sender", "na", sv, 0, 1_000_000, "tx")
         add_case("tx.sender.edge_genesis.dense", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=0, end_checkpoint=1_000_000,
-                      filter=b.f_single(b.sender(sv)), opts=b.options(limit_items=1000)),
+                      filter=b.f_single(b.sender(sv)), opts=b.options(limit=1000)),
             b.Klass("sender", "single", "dense_everywhere", "cheap", "archival_only", specificity="na"),
             b.Oracle("exact_count", expected_count=ge, sql_ref="extract.py:_match(sender,na)"))
         te = safe(oracle_count, "sender", "na", sv, CEILING - 100_000, CEILING, "tx")
         add_case("tx.sender.edge_tip.dense", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=CEILING - 100_000, end_checkpoint=CEILING,
-                      filter=b.f_single(b.sender(sv)), opts=b.options(limit_items=1000)),
+                      filter=b.f_single(b.sender(sv)), opts=b.options(limit=1000)),
             b.Klass("sender", "single", "dense_everywhere", "cheap", "shared", specificity="na"),
             b.Oracle("exact_count", expected_count=te, sql_ref="extract.py:_match(sender,na)"))
     srr = pick(T["sender"], "recent_only")
@@ -550,7 +548,7 @@ def main() -> None:
         ec = safe(oracle_count, "sender", "na", srr["v"], 0, 1_000_000, "tx")
         add_case("tx.sender.edge_empty_range.recent_over_genesis", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=0, end_checkpoint=1_000_000,
-                      filter=b.f_single(b.sender(srr["v"])), opts=b.options(limit_items=1000)),
+                      filter=b.f_single(b.sender(srr["v"])), opts=b.options(limit=1000)),
             b.Klass("sender", "single", "recent_only", "cheap", "archival_only", specificity="na"),
             b.Oracle("exact_count", expected_count=ec, sql_ref="recent value over genesis -> expect ~0"))
 
@@ -559,7 +557,7 @@ def main() -> None:
     if sa and sb and ref("ListTransactions", "sender", sa["v"]) and ref("ListTransactions", "sender", sb["v"]):
         add_case("tx.sender.or_samedim.shared", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_or(b.sender(sa["v"]), b.sender(sb["v"])), opts=b.options(limit_items=1000)),
+                      filter=b.f_or(b.sender(sa["v"]), b.sender(sb["v"])), opts=b.options(limit=1000)),
             b.Klass("sender", "or", "mixed", "expensive", "shared", specificity="na"),
             b.Oracle("decomposition", relation="union",
                      components=(ref("ListTransactions", "sender", sa["v"]), ref("ListTransactions", "sender", sb["v"]))))
@@ -567,7 +565,7 @@ def main() -> None:
     if sa and mr and ref("ListTransactions", "sender", sa["v"]) and ref("ListTransactions", "move_call", mr["v"]):
         add_case("tx.sender_or_move_call.crossdim.shared", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_or(b.sender(sa["v"]), b.move_call(mr["v"])), opts=b.options(limit_items=1000)),
+                      filter=b.f_or(b.sender(sa["v"]), b.move_call(mr["v"])), opts=b.options(limit=1000)),
             b.Klass("sender+move_call", "or", "mixed", "expensive", "shared", specificity="na"),
             b.Oracle("decomposition", relation="union",
                      components=(ref("ListTransactions", "sender", sa["v"]), ref("ListTransactions", "move_call", mr["v"]))))
@@ -586,7 +584,7 @@ def main() -> None:
     if len(comps) >= 3:
         add_case("tx.sender.or_deep_dnf.shared", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_or(*[b.sender(q["v"]) for q in quad]), opts=b.options(limit_items=1000)),
+                      filter=b.f_or(*[b.sender(q["v"]) for q in quad]), opts=b.options(limit=1000)),
             b.Klass("sender", "or", "mixed", "expensive", "shared", specificity="na"),
             b.Oracle("decomposition", relation="union", components=tuple(comps)))
     # AND overlap (nonzero) + anchored NOT sharing the pair
@@ -598,12 +596,12 @@ def main() -> None:
         id_and = "tx.sender_and_move_call.overlap.shared"
         add_case(id_and, "ListTransactions",
             b.request("ListTransactions", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_and(b.sender(ps), b.move_call(pm)), opts=b.options(limit_items=1000)),
+                      filter=b.f_and(b.sender(ps), b.move_call(pm)), opts=b.options(limit=1000)),
             b.Klass("sender+move_call", "and", "mixed", "expensive", "shared", specificity="na"),
             b.Oracle("exact_count", expected_count=pc, sql_ref="extract.py:discover_sender_movecall"))
         add_case("tx.sender_not_move_call.anchored.shared", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_and_not(b.sender(ps), b.move_call(pm)), opts=b.options(limit_items=1000)),
+                      filter=b.f_and_not(b.sender(ps), b.move_call(pm)), opts=b.options(limit=1000)),
             b.Klass("sender+move_call", "not", "mixed", "expensive", "shared", specificity="na"),
             b.Oracle("decomposition", relation="difference", components=(id_ps, id_and)))
     # unanchored NOT (tx): NOT recent sender
@@ -611,7 +609,7 @@ def main() -> None:
     if sa and ref("ListTransactions", "sender", sa["v"]) and uni_tx:
         add_case("tx.sender.unanchored_not.recent.shared", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_single(b.sender(sa["v"]), negate=True), opts=b.options(limit_items=1000)),
+                      filter=b.f_single(b.sender(sa["v"]), negate=True), opts=b.options(limit=1000)),
             b.Klass("sender", "not", "recent_only", "expensive", "shared", specificity="na"),
             b.Oracle("decomposition", relation="difference",
                      components=(uni_tx, ref("ListTransactions", "sender", sa["v"]))))
@@ -623,14 +621,14 @@ def main() -> None:
     if emd and etd and ref("ListEvents", "emit_module", emd["v"]) and ref("ListEvents", "event_type", etd["v"]):
         add_case("ev.emit_or_eventtype.crossdim.shared", "ListEvents",
             b.request("ListEvents", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_or(b.emit_module(emd["v"]), b.event_type(etd["v"])), opts=b.options(limit_items=1000)),
+                      filter=b.f_or(b.emit_module(emd["v"]), b.event_type(etd["v"])), opts=b.options(limit=1000)),
             b.Klass("emit_module+event_type", "or", "mixed", "expensive", "shared", specificity="na"),
             b.Oracle("decomposition", relation="union",
                      components=(ref("ListEvents", "emit_module", emd["v"]), ref("ListEvents", "event_type", etd["v"]))))
     if emd and ref("ListEvents", "emit_module", emd["v"]) and uni_ev:
         add_case("ev.emit_module.unanchored_not.dense.shared", "ListEvents",
             b.request("ListEvents", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_single(b.emit_module(emd["v"]), negate=True), opts=b.options(limit_items=1000)),
+                      filter=b.f_single(b.emit_module(emd["v"]), negate=True), opts=b.options(limit=1000)),
             b.Klass("emit_module", "not", "dense_everywhere", "expensive", "shared", specificity="na"),
             b.Oracle("decomposition", relation="difference",
                      components=(uni_ev, ref("ListEvents", "emit_module", emd["v"]))))
@@ -639,7 +637,7 @@ def main() -> None:
         es, eem, eec = epair
         add_case("ev.sender_and_emit_module.overlap.shared", "ListEvents",
             b.request("ListEvents", start_checkpoint=SHARED[0], end_checkpoint=SHARED[1],
-                      filter=b.f_and(b.sender(es), b.emit_module(eem)), opts=b.options(limit_items=1000)),
+                      filter=b.f_and(b.sender(es), b.emit_module(eem)), opts=b.options(limit=1000)),
             b.Klass("sender+emit_module", "and", "mixed", "expensive", "shared", specificity="na"),
             b.Oracle("exact_count", expected_count=eec, sql_ref="extract.py:discover_sender_emitmodule"))
 
@@ -650,7 +648,7 @@ def main() -> None:
             b.request(rpc, start_checkpoint=ARCHIVAL[0], end_checkpoint=ARCHIVAL[1],
                       filter=b.f_single(b.event_stream_head(sh)),
                       read_mask=("transaction.digest" if rpc == "ListTransactions" else None),
-                      opts=b.options(limit_items=1000)),
+                      opts=b.options(limit=1000)),
             b.Klass("event_stream_head", "single", "empty_degenerate", "adversarial", "archival_only", specificity="na"),
             b.Oracle("degenerate", expected_count=0, expected_end_reason="QUERY_END_REASON_CHECKPOINT_BOUND",
                      sql_ref="synthetic: event_stream_head unlaunched (testing_plan SS4.4)"))
@@ -663,7 +661,7 @@ def main() -> None:
         add_case("tx.degenerate.dense_and_dense.empty.archival", "ListTransactions",
             b.request("ListTransactions", start_checkpoint=ARCHIVAL[0], end_checkpoint=ARCHIVAL[1],
                       filter=b.f_and(b.sender(sys_sender), b.move_call(mc_dense["v"])),
-                      read_mask="transaction.digest", opts=b.options(limit_items=1000)),
+                      read_mask="transaction.digest", opts=b.options(limit=1000)),
             b.Klass("sender+move_call", "and", "empty_degenerate", "adversarial", "archival_only", specificity="na"),
             b.Oracle("degenerate", expected_count=deg, expected_end_reason="QUERY_END_REASON_SCAN_LIMIT",
                      sql_ref="extract.py:and_count"))
@@ -675,7 +673,7 @@ def main() -> None:
         "network": NET,
         "cp_ceiling": CEILING, "shared_window_lo": SHARED_LO, "shared_window_hi": SHARED_HI, "genesis": GENESIS,
         "schema": SCHEMA, "warehouse": WAREHOUSE, "connection": CONN,
-        "proto_rev": "43c5bc13202ae398b1519a3eead1f40df8ca277b",
+        "proto_rev": "05018477066df865513f8a771d898ed6a1ded4b1",
         "n_cases": n, "ordering_default": "ORDERING_ASCENDING",
         "notes": "end_checkpoint exclusive; Snowflake oracle uses CHECKPOINT < cp_ceiling. "
                  "cp_ceiling MUST be <= target kv-rpc cluster backfilled tip.",

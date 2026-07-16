@@ -46,4 +46,8 @@ message ExecutedTransaction {
   // Set of objects either referenced as inputs or produced as
   // outputs from this Transaction.
   optional ObjectSet objects = 9;
+
+  // Zero-based position of this transaction within the checkpoint that
+  // includes it.
+  optional uint64 transaction_index = 10;
 }

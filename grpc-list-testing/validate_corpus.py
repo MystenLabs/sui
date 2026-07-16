@@ -25,6 +25,7 @@ import corpus_builder as b
 DEFAULT_CEILING = 288_000_000
 REQUIRED = {"id", "rpc", "request", "class", "oracle"}
 CLASS_KEYS = {"dimension", "combinator", "selectivity_tier", "cost_class", "backend_scope"}
+OPTIONS_KEYS = {"limit", "after", "before", "ordering"}
 
 
 def validate(path: str) -> int:
@@ -63,6 +64,16 @@ def validate(path: str) -> int:
                 errors.append(f"{tag}: end_checkpoint {end} > ceiling {ceiling}")
             if start >= end:
                 errors.append(f"{tag}: start {start} >= end {end}")
+        opts = req.get("options")
+        if opts is not None:
+            if not isinstance(opts, dict):
+                errors.append(f"{tag}: request.options must be an object")
+            else:
+                unknown_options = opts.keys() - OPTIONS_KEYS
+                if unknown_options:
+                    errors.append(
+                        f"{tag}: request.options has unknown keys {unknown_options}"
+                    )
         # re-validate the filter against the rpc's allowed predicate space
         if "filter" in req and r["rpc"] in b.RPCS:
             try:

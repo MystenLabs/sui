@@ -7,35 +7,138 @@ package sui.rpc.v2;
 
 import "google/protobuf/field_mask.proto";
 import "sui/rpc/v2/checkpoint.proto";
+import "sui/rpc/v2/event.proto";
+import "sui/rpc/v2/executed_transaction.proto";
+import "sui/rpc/v2/filter.proto";
+import "sui/rpc/v2/query_options.proto";
 
+// SubscriptionService provides filtered, real-time streams of checkpoints,
+// transactions, and events.
+//
+// Each Subscribe API pairs with the LedgerService List API of the same name:
+// requests take the same filter message, and responses carry the same item
+// and watermark shapes with identical cursor semantics.
+//
+// Subscriptions do not support resumption. A new subscription always begins
+// at the current tip of the chain as seen by the server (the latest executed
+// checkpoint). To recover data missed between subscriptions, replay the gap
+// with the paired List API: pass the last received `Watermark.cursor` as
+// `options.after` on the List request (for checkpoints, pass the last
+// received `cursor + 1` as `start_checkpoint`). The List scan reads from the
+// indexed tip, which may trail the subscription's start position; repeat the
+// List call as the index advances until the replay reaches the position
+// established by the subscription's first frame.
+//
+// A subscription behaves like an unbounded ascending scan: every frame
+// carries the subscriber's resume point, and progress advances as
+// checkpoints are fully covered. Two delivery guarantees keep sparse
+// filters live: the first frame on a filtered subscription is a
+// progress-only frame establishing the stream's start position, and
+// progress continues to advance with bounded staleness even when no item
+// matches.
+//
+// Subscription streams have no successful end: they run until cancelled by
+// the client or terminated by the server with a gRPC status.
 service SubscriptionService {
   // Subscribe to the stream of checkpoints.
   //
-  // This API provides a subscription to the checkpoint stream for the Sui
-  // blockchain. When a subscription is initialized the stream will begin with
-  // the latest executed checkpoint as seen by the server. Responses are
-  // guaranteed to return checkpoints in-order and without gaps. This enables
-  // clients to know exactly the last checkpoint they have processed and in the
-  // event the subscription terminates (either by the client/server or by the
-  // connection breaking), clients will be able to reinitialize a subscription
-  // and then leverage other APIs in order to request data for the checkpoints
-  // they missed.
+  // The stream begins at the latest executed checkpoint as seen by the
+  // server and yields checkpoints matching the filter as they are executed.
+  // A checkpoint matches if any transaction it contains satisfies the
+  // filter.
   rpc SubscribeCheckpoints(SubscribeCheckpointsRequest) returns (stream SubscribeCheckpointsResponse);
+
+  // Subscribe to the stream of transactions.
+  //
+  // The stream begins at the latest executed checkpoint as seen by the
+  // server and yields transactions matching the filter as they are executed.
+  rpc SubscribeTransactions(SubscribeTransactionsRequest) returns (stream SubscribeTransactionsResponse);
+
+  // Subscribe to the stream of events.
+  //
+  // The stream begins at the latest executed checkpoint as seen by the
+  // server and yields events matching the filter as they are emitted.
+  rpc SubscribeEvents(SubscribeEventsRequest) returns (stream SubscribeEventsResponse);
 }
 
-// Request message for SubscriptionService.SubscribeCheckpoints
+// Request message for SubscriptionService.SubscribeCheckpoints.
 message SubscribeCheckpointsRequest {
-  // Optional. Mask for specifying which parts of the
-  // SubscribeCheckpointsResponse should be returned.
+  // Optional. Mask for specifying which parts of the Checkpoint should be
+  // returned (e.g. summary, contents, signatures). `cursor` is always
+  // populated and is not subject to the mask.
   optional google.protobuf.FieldMask read_mask = 1;
+
+  // Optional. DNF filter over indexed transaction dimensions. A checkpoint
+  // matches if any transaction it contains satisfies the filter. If absent,
+  // every checkpoint is streamed.
+  optional TransactionFilter filter = 2;
 }
 
-// Response message for SubscriptionService.SubscribeCheckpoints
+// Response message for SubscriptionService.SubscribeCheckpoints.
+//
+// A checkpoint stream's position is checkpoint-granular, so the `cursor`
+// sequence number stands in for the `Watermark` message the other
+// subscription responses carry. Progress-only frames (with `checkpoint`
+// unset) occur only on filtered streams: on an unfiltered stream every frame
+// carries both fields, in order and without gaps.
 message SubscribeCheckpointsResponse {
-  // Required. The checkpoint sequence number and value of the current cursor
-  // into the checkpoint stream
+  // Required. The checkpoint sequence number the stream has fully covered,
+  // inclusive: every matching checkpoint from the stream's start position
+  // through `cursor` has been delivered. Present on every frame and
+  // advances monotonically.
   optional uint64 cursor = 1;
 
-  // The requested data for this checkpoint
+  // The matching checkpoint. Unset when this frame only advances the
+  // cursor past non-matching checkpoints.
   optional Checkpoint checkpoint = 2;
+}
+
+// Request message for SubscriptionService.SubscribeTransactions.
+message SubscribeTransactionsRequest {
+  // Optional. Mask for specifying which parts of the ExecutedTransaction
+  // should be returned.
+  optional google.protobuf.FieldMask read_mask = 1;
+
+  // Optional. DNF filter over indexed dimensions. If absent, every
+  // transaction is streamed.
+  optional TransactionFilter filter = 2;
+}
+
+// Response message for SubscriptionService.SubscribeTransactions.
+//
+// Mirrors ListTransactionsResponse, except there is no `end` field: a
+// subscription stream has no successful end.
+message SubscribeTransactionsResponse {
+  // One matching transaction. Its position within the containing checkpoint
+  // is reported by `ExecutedTransaction.transaction_index`.
+  optional ExecutedTransaction transaction = 1;
+
+  // Progress watermark as of this frame. Present on every frame.
+  optional Watermark watermark = 2;
+}
+
+// Request message for SubscriptionService.SubscribeEvents.
+message SubscribeEventsRequest {
+  // Optional. Mask for specifying which parts of the Event should be
+  // returned.
+  optional google.protobuf.FieldMask read_mask = 1;
+
+  // Optional. DNF filter over indexed dimensions. If absent, every event is
+  // streamed.
+  optional EventFilter filter = 2;
+}
+
+// Response message for SubscriptionService.SubscribeEvents.
+//
+// Mirrors ListEventsResponse, except there is no `end` field: a subscription
+// stream has no successful end.
+message SubscribeEventsResponse {
+  // One matching event. Its ledger position -- containing checkpoint,
+  // emitting transaction digest and offset, and index within that
+  // transaction's event list -- is reported by the corresponding fields on
+  // `Event`.
+  optional Event event = 1;
+
+  // Progress watermark as of this frame. Present on every frame.
+  optional Watermark watermark = 2;
 }

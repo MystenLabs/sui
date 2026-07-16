@@ -4,12 +4,10 @@
 #
 # Build & push the k6 gRPC load-test image.
 #
-# Unlike the sibling docker/*/build.sh (which cargo-build a Rust binary with the
-# repo root as context), this stages a small context (k6 script + merged proto
-# tree + the generated request list) and builds FROM grafana/k6. The request list
-# and protos are generated/vendored (not committed), so they are staged here at
-# build time -- the image is the frozen, deployable artifact (reproducible from
-# grpc-list-testing/load_manifest.<net>.json: {seed, pool, mixes}).
+# Unlike the sibling docker/*/build.sh scripts, this stages the canonical k6
+# script, committed request lists, and merged proto tree before building from
+# grafana/k6. The committed stage is the deployable CI/meta-svc input and this
+# script regenerates it from the canonical sources.
 #
 # Inputs (env, with defaults):
 #   NET               mainnet | testnet   (default testnet) -> bakes load.<NET>.jsonl
@@ -54,13 +52,13 @@ for f in "$GRPC_TESTING_DIR"/load.*.jsonl; do
   echo "  staged $(basename "$f")"
 done
 
-# 3. merge the two proto roots into one tree (v2alpha under proto/, v2+google
-#    under vendored/proto/; disjoint paths -> single /proto root serves both,
-#    cf. grpc-list-testing/correctness/gen_stubs.sh's -I x2).
+# 3. Merge the stable-v2 List entry and imports from vendored/proto with the
+#    root proto tree. The latter retains the independent v2alpha ProofService;
+#    the disjoint paths share one /proto import root.
 ROOT="${SUI_RPC_PROTO:-}"
 if [[ -z "$ROOT" ]]; then
   for d in "$HOME"/.cargo/git/checkouts/sui-rust-sdk-*/*/crates/sui-rpc; do
-    if [[ -f "$d/proto/sui/rpc/v2alpha/ledger_service.proto" ]]; then ROOT="$d"; break; fi
+    if [[ -f "$d/vendored/proto/sui/rpc/v2/ledger_service.proto" ]]; then ROOT="$d"; break; fi
   done
 fi
 [[ -n "$ROOT" && -d "$ROOT" ]] || { echo "ERROR: sui-rpc proto root not found; set SUI_RPC_PROTO" >&2; exit 1; }

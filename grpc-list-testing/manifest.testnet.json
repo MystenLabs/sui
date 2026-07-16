@@ -7,7 +7,7 @@
   "schema": "CHAINDATA_TESTNET",
   "warehouse": "ANALYTICS_WH",
   "connection": "nick",
-  "proto_rev": "43c5bc13202ae398b1519a3eead1f40df8ca277b",
+  "proto_rev": "05018477066df865513f8a771d898ed6a1ded4b1",
   "n_cases": 154,
   "ordering_default": "ORDERING_ASCENDING",
   "notes": "end_checkpoint exclusive; Snowflake oracle uses CHECKPOINT < cp_ceiling. cp_ceiling MUST be <= target kv-rpc cluster backfilled tip."

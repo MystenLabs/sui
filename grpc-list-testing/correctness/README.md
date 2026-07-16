@@ -3,7 +3,7 @@ Copyright (c) Mysten Labs, Inc.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# v2alpha LedgerService correctness harness
+# Stable-v2 correctness harnesses
 
 Replays a corpus (`../corpus.<net>.jsonl`, built by `../extract.py`) against a
 kv-rpc archival endpoint and/or a fullnode, drains each server stream to
@@ -19,20 +19,26 @@ cross-backend diff, which is the opposite shape from a load tool.
 | `decomposition` | set algebra over component cases: `union` / `difference` |
 | `degenerate` | bounded single-page probe: 0 items + expected terminal reason |
 | tiling | no duplicate identity across pages |
-| watermark | `checkpoint_hi` ↑ (asc) / `checkpoint_lo` ↓ (desc), monotonic |
+| watermark | `checkpoint` ↑ (asc) / ↓ (desc), equal values allowed |
 | ordering | `asc result == reverse(desc result)` for paired cases |
 | read_mask | cheap/heavy twins return the same identity set |
 | differential | archival vs fullnode identity sets equal (`shared`-scope only) |
 
 Requests are parsed straight from the corpus `request` (canonical protojson)
-into the generated proto types via `json_format` — one source of truth, no
-bespoke filter builder. `--list` also makes this a full offline corpus
-validation (every request must parse against the pinned proto rev).
+into `sui.rpc.v2` generated types via `json_format` — one source of truth, no
+bespoke filter builder. Responses carry direct `transaction`, `event`, or
+`checkpoint` payloads alongside a watermark and optional end marker. Pagination
+uses `options.limit` and resumes from the last watermark cursor. `--list` also
+validates that every request parses against the pinned proto revision.
 
 ## Files
 
-- `harness.py` — the harness (drain + oracle + invariants + differential).
-- `test_harness.py` — unit tests (fake stream, no network). `uvx --with grpcio --with protobuf --from pytest pytest test_harness.py`
+- `harness.py` — drain, oracle, invariant, and differential checks.
+- `validate_requests.py` — validates corpus and load JSONL requests against the generated descriptors.
+- `test_harness.py` — fake-stream unit tests with no network.
+- `subscription_harness.py` — records live tip streams, then verifies saved identities against Snowflake.
+- `subscription_cases.testnet.jsonl` — unbounded SubscriptionService requests and primary-table filters.
+- `test_subscription_harness.py` — generated-protobuf fake-stream, capture, SQL, and verifier tests.
 - `gen_stubs.sh` — regenerates `sui_pb/` from the pinned `sui-rpc` protos.
 - `sui_pb/` — generated stubs (gitignored; run `gen_stubs.sh`).
 - `Dockerfile`, `k8s-job.yaml.template` — in-cluster one-off Job.
@@ -48,6 +54,80 @@ Runtime needs `grpcio` + `protobuf`. With uv:
 ```sh
 uvx --with grpcio --with protobuf python harness.py --corpus ../corpus.testnet.jsonl --list
 ```
+
+## SubscriptionService tip correctness
+
+`subscription_harness.py` is separate from the historical List workflow. It
+records a bounded cohort from the live fullnode first, preserving every raw
+frame, then verifies only that saved cohort after Snowflake has ingested the
+same interval. `record` contacts only gRPC. `verify` contacts only Snowflake,
+so authentication or ingestion lag cannot destroy stream evidence.
+
+The testnet target is `svc/sui-node-rpc-alpha` in namespace `rpc-testnet`, port
+`9000`. It is the live stable-v2 SubscriptionService target; it is not the
+historical List oracle.
+
+Start a plaintext local forward in one terminal:
+
+```sh
+CTX=gke_workloads-primary_us-east4_workloads-primary-use4
+kubectl --context "$CTX" -n rpc-testnet port-forward svc/sui-node-rpc-alpha 19000:9000
+```
+
+Record the 100-checkpoint cohort in another terminal:
+
+```sh
+CAPTURE=/tmp/subscription.testnet.jsonl
+uv run --with grpcio --with protobuf subscription_harness.py record localhost:19000 -o "$CAPTURE"
+```
+
+The recorder waits until all cases are registered, fences the interval with
+one additional unfiltered checkpoint, and stops only after every stream covers
+the inclusive `window_end`. Keep the capture when `record` reports a stream or
+structural failure; it remains the raw diagnostic evidence.
+
+Authenticate the `nick` Snow CLI connection, then verify the same file:
+
+```sh
+snow connection test -c nick
+uv run --with grpcio --with protobuf subscription_harness.py verify "$CAPTURE"
+```
+
+The Snowflake defaults are warehouse `ANALYTICS_WH` and schema
+`CHAINDATA_TESTNET`. `verify` waits independently for the `TRANSACTION` and
+`EVENT` frontiers. If the 30-minute wait expires, rerun only `verify` later
+with the same capture.
+
+The fixture covers:
+
+| case | API | predicate |
+|---|---|---|
+| `cp.unfiltered` | checkpoints | none |
+| `cp.sender.system` | checkpoints | system sender |
+| `tx.unfiltered` | transactions | none |
+| `tx.sender.system` | transactions | system sender |
+| `tx.sender.not_system` | transactions | negated system sender |
+| `tx.sender.tautology` | transactions | sender OR negated sender |
+| `ev.unfiltered` | events | none |
+| `ev.sender.system` | events | system sender |
+| `ev.sender.not_system` | events | negated system sender |
+| `ev.event_type.tautology` | events | event type OR negated event type |
+| `ev.emit_module.not_sui_system` | events | negated Sui system module |
+
+The append-only capture JSONL contains one `header`, every received `frame`,
+and one final `summary`. The summary records the common interval, per-case
+frame and payload counts, final covered checkpoints, cancellation intent, and
+capture errors. The verifier writes `<capture stem>.results.json` by default.
+Each case is `PASS`, `FAIL`, or `INCONCLUSIVE`, with exact observed/expected
+counts and at most 20 missing or unexpected identity samples.
+
+`record` exits `0` for a complete capture, `1` for a stream or structural
+failure, and `2` for CLI, fixture, or setup errors. `verify` exits `0` only
+when all cases pass, `1` for an exact-set or structural failure, and `2` for a
+malformed capture, Snowflake failure, warehouse lag, or any inconclusive case.
+
+This workflow tests deployed correctness only. It does not run k6, measure
+throughput, induce backpressure, or mutate Kubernetes resources.
 
 ## Running
 
@@ -87,19 +167,11 @@ uvx --with grpcio --with protobuf python harness.py \
     --max-drain 80000 --no-diff --out results.testnet.json
 ```
 
-Add the cross-backend differential against the testnet fullnode. It serves the
-v2alpha List APIs and retains the shared window (verified: `ListCheckpoints`/
-`ListTransactions`/`ListEvents` all served at cp 334M–344.2M). Use the **plaintext
-h2c** endpoint `sui-node-rpc-alpha.rpc-testnet:9000` — the `:9443` TLS port has a
-SAN-less cert (`CN`-only) that gRPC's hostname verification rejects.
-
-```sh
-( while true; do kubectl --context "$CTX" port-forward -n rpc-testnet \
-    svc/sui-node-rpc-alpha 19000:9000; sleep 2; done ) &
-
-# drop --no-diff, add the fullnode (plaintext); differential runs on shared-scope cases
-... --fullnode localhost:19000 --fullnode-insecure --only 'shared'
-```
+Before enabling the cross-backend differential, verify that the selected
+endpoint exposes `sui.rpc.v2.LedgerService/ListCheckpoints`,
+`ListTransactions`, and `ListEvents`, and that it retains the corpus's shared
+checkpoint window. `sui-node-rpc-alpha` is not a stable-v2 List endpoint and
+must not be used for the List harness; it is the live SubscriptionService target.
 
 The differential drains each shared case on both backends and asserts identical
 id-sets (exact-reverse for asc/desc). Two limits: (1) it only covers the **shared
