@@ -822,6 +822,55 @@ fn ev_and(filters: Vec<EventFilter>) -> EventFilter {
     ev_filter(literals)
 }
 
+/// A sender with zero transactions has no rows in the sender dimension at all.
+/// The absent bucket must behave as `∅`: as an include it matches nothing, and
+/// negated it excludes nothing (the complement is every tx in range).
+/// Live-cluster data never produces this shape by accident — every interesting
+/// sender has sent something — so it is pinned explicitly.
+#[sim_test]
+async fn test_list_transactions_absent_sender() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let ghost = SuiAddress::random_for_testing_only();
+
+    let tx = transfer_self(&cluster, sender).await;
+    let digest = tx_digest(&tx);
+    let (start, end) = checkpoint_range(&[&tx]);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    // Include of an absent sender matches nothing.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_sender(ghost));
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert!(
+        resp.transactions.is_empty(),
+        "include of an absent sender must match nothing, got {:?}",
+        transaction_digest_set(&resp),
+    );
+    assert!(resp.end);
+
+    // Negation of an absent sender excludes nothing: the complement is every
+    // transaction in range.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_not_sender_only_filter(ghost));
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert_transaction_cursors(&resp);
+    assert!(
+        transaction_digest_set(&resp).contains(&digest),
+        "NOT(absent sender) must include every tx in range"
+    );
+    assert!(resp.end);
+}
+
 #[sim_test]
 async fn test_list_transactions_unfiltered_and_sender_filter() {
     let cluster = new_cluster().await;
