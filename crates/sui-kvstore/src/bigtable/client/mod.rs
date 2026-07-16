@@ -707,6 +707,13 @@ impl BigTableClient {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
+        if let Some(metrics) = &self.metrics {
+            let labels = [self.client_name.as_str(), table_name];
+            metrics
+                .kv_bt_read_rows_started_total
+                .with_label_values(&labels)
+                .inc();
+        }
         let response = self.client.clone().read_rows(request).await?.into_inner();
         let metrics = self.metrics.clone();
         let client_name = self.client_name.clone();
