@@ -588,6 +588,12 @@ mod test {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
             config.set_per_object_congestion_control_mode_for_testing(mode);
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
+            // With large max_deferral_rounds and low congestion budgets, transactions can be
+            // legitimately re-deferred for longer than the epoch close deadline, which would
+            // abandon them and fire debug_fatal. Disable the deadline so epoch close blocks
+            // until all deferrals resolve, which is the liveness property this test verifies.
+            // The deadline failsafe has its own dedicated tests.
+            config.disable_epoch_close_deadline_ms_for_testing();
             config
         });
 
