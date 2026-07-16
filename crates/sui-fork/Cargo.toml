@@ -10,6 +10,7 @@ edition = "2024"
 anyhow.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
+bytes.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 cynic.workspace = true
@@ -32,8 +33,11 @@ typed-store-error.workspace = true
 
 bin-version.workspace = true
 simulacrum.workspace = true
+sui-consistent-store.workspace = true
+sui-indexer-alt-framework.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc-api.workspace = true
+sui-rpc-store.workspace = true
 sui-swarm-config.workspace = true
 sui-types.workspace = true
 
