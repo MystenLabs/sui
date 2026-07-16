@@ -9,19 +9,16 @@ use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use futures::StreamExt;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 
-use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
-use crate::api::types::event::CEvent;
+use crate::api::types::checkpoint::CheckpointToken;
 use crate::api::types::event::Event;
-use crate::api::types::event::EventCursor;
+use crate::api::types::event::EventToken;
 use crate::api::types::event::filter::EventFilter;
-use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionToken;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::config::Limits;
 use crate::config::SubscriptionConfig;
@@ -56,7 +53,10 @@ impl Subscription {
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let fetcher: &LedgerGrpcReader = ctx.data()?;
 
-        let resume_from: Option<u64> = match (after.map(|c| *c), after_checkpoint.map(u64::from)) {
+        let resume_from: Option<u64> = match (
+            after.map(|c| c.sequence_number()),
+            after_checkpoint.map(u64::from),
+        ) {
             (Some(a), Some(b)) => Some(a.max(b)),
             (a, b) => a.or(b),
         };
@@ -75,7 +75,7 @@ impl Subscription {
                     resolver_limits.clone(),
                     processed.clone(),
                 );
-                let cursor = CCheckpoint::new(sequence_number).encode_cursor();
+                let cursor = CheckpointToken::cursor(sequence_number).encode_cursor();
                 Edge::new(
                     cursor,
                     Checkpoint {
@@ -128,10 +128,10 @@ impl Subscription {
                             if !filter.matches(&tx.contents) {
                                 continue;
                             }
-                            let cursor = CTransaction::new(OpaqueCursor::new(CursorToken::item(Position::Transactions {
-                                checkpoint: processed.summary.sequence_number,
-                                tx_seq: tx.tx_sequence_number,
-                            })))
+                            let cursor = TransactionToken::cursor(
+                                processed.summary.sequence_number,
+                                tx.tx_sequence_number,
+                            )
                             .encode_cursor();
                             yield Transaction::with_contents(scope.clone(), tx.contents.clone())
                                 .map(|transaction| Edge::new(cursor, transaction));
@@ -190,10 +190,11 @@ impl Subscription {
                                 if !filter.matches(&native) {
                                     continue;
                                 }
-                                let cursor = CEvent::new(EventCursor {
-                                    tx_sequence_number: tx.tx_sequence_number,
-                                    ev_sequence_number: idx as u64,
-                                })
+                                let cursor = EventToken::cursor(
+                                    processed.summary.sequence_number,
+                                    tx.tx_sequence_number,
+                                    idx as u32,
+                                )
                                 .encode_cursor();
                                 yield Ok(Edge::new(
                                     cursor,

@@ -15,6 +15,7 @@ use crate::api::scalars::type_filter::TypeFilter;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::event::CEvent;
 use crate::api::types::lookups::CheckpointBounds;
+use crate::api::types::lookups::TxBoundsCursor;
 use crate::error::RpcError;
 use crate::error::feature_unavailable;
 use crate::pagination::Page;
@@ -194,16 +195,16 @@ pub(super) fn tx_ev_bounds(
     // Find start index from 'after' cursor, defaults to 0
     let ev_lo = page
         .after()
-        .filter(|c| c.tx_sequence_number == tx_sequence_number)
-        .map(|c| c.ev_sequence_number as usize)
+        .filter(|c| c.tx_sequence_number() == tx_sequence_number)
+        .map(|c| c.ev_sequence_number() as usize)
         .unwrap_or(0)
         .min(event_count);
 
     // Find exclusive end index from 'before' cursor, default to event_count
     let ev_hi = page
         .before()
-        .filter(|c| c.tx_sequence_number == tx_sequence_number)
-        .map(|c| (c.ev_sequence_number as usize).saturating_add(1))
+        .filter(|c| c.tx_sequence_number() == tx_sequence_number)
+        .map(|c| (c.ev_sequence_number() as usize).saturating_add(1))
         .unwrap_or(event_count)
         .max(ev_lo)
         .min(event_count);
