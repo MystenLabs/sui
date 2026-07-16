@@ -37,6 +37,8 @@ use crate::context::Context;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
+use crate::rpc::reader::ForkRpcReader;
+use crate::runtime::ForkRuntime;
 use crate::store::DataStore;
 
 /// In-process gRPC harness: builds a fresh Simulacrum from a genesis
@@ -46,7 +48,9 @@ use crate::store::DataStore;
 struct ServerHarness {
     server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,
-    // Held to keep the on-disk store alive for the lifetime of the server.
+    // Held to keep the RPC store alive for the lifetime of the server.
+    _runtime: ForkRuntime,
+    // Held to keep the metadata and RPC store directory alive for the server lifetime.
     _temp: tempfile::TempDir,
 }
 
@@ -59,7 +63,19 @@ impl ServerHarness {
             .deterministic_committee_size(NonZeroUsize::MIN)
             .build();
 
-        let mut data_store = DataStore::new_for_testing(temp.path().to_path_buf());
+        let genesis_checkpoint = config.genesis.checkpoint();
+        let genesis_contents = config.genesis.checkpoint_contents().clone();
+        let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
+        let chain_identifier = (*genesis_checkpoint.digest()).into();
+        let runtime = ForkRuntime::open(
+            temp.path(),
+            "localnet".to_owned(),
+            forked_at_checkpoint,
+            chain_identifier,
+        )?;
+        let mut data_store =
+            DataStore::new_for_testing(temp.path().to_path_buf(), runtime.fork_rpc_store());
+        data_store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
         let written: BTreeMap<ObjectID, Object> = config
             .genesis
             .objects()
@@ -67,13 +83,11 @@ impl ServerHarness {
             .map(|o| (o.id(), o.clone()))
             .collect();
         data_store.update_objects(written, vec![]);
-        data_store.insert_checkpoint(config.genesis.checkpoint());
-        data_store.insert_checkpoint_contents(config.genesis.checkpoint_contents().clone());
 
         let keystore = KeyStore::from_network_config(&config);
         let sim = Simulacrum::new_from_custom_state(
             keystore,
-            config.genesis.checkpoint(),
+            genesis_checkpoint,
             config.genesis.sui_system_object(),
             &config,
             data_store.clone(),
@@ -86,7 +100,8 @@ impl ServerHarness {
 
         let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
 
-        let reader: Arc<dyn RpcStateReader> = Arc::new(data_store);
+        let reader: Arc<dyn RpcStateReader> =
+            Arc::new(ForkRpcReader::new(runtime.reader(), data_store));
         let mut service = RpcService::new(reader);
         service.with_server_version(ServerVersion::new("sui-fork", "test"));
         service.with_subscription_service(subscription_handle);
@@ -116,6 +131,7 @@ impl ServerHarness {
                 return Ok(Self {
                     server_task,
                     grpc_endpoint,
+                    _runtime: runtime,
                     _temp: temp,
                 });
             }

@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Fork manifest and seed resolution for lazy owned-object index initialization.
+//! Fork manifest and seed resolution for seed-bounded owned-object tracking.
 //!
 //! The manifest is written for every initialized fork directory. Address and explicit object
-//! seeds resolve lightweight object-ref metadata at the fork checkpoint. Full object BCS is fetched
-//! later when an object read or lazy owned-object index initialization needs it.
+//! seeds resolve lightweight object-ref metadata at the fork checkpoint. Full object BCS is
+//! saved into `sui-rpc-store` during startup so address-owned RPC indexes are bounded by
+//! seed input plus local execution.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -26,6 +27,7 @@ use crate::DataStore;
 use crate::gql::AddressOwnedObject;
 use crate::gql::GraphQLClient;
 use crate::gql::ObjectSeedMetadata;
+use crate::metadata::ForkMetadataStore;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
@@ -76,11 +78,14 @@ impl From<AddressOwnedObject> for SeedEntry {
 }
 
 /// Reject seed inputs that would overwrite or reinterpret an existing manifest.
-pub(crate) fn ensure_seed_policy(data_store: &DataStore, input: &SeedInput) -> Result<(), Error> {
-    if data_store.local().seed_manifest_exists() && !input.is_empty() {
+pub(crate) fn ensure_seed_policy(
+    local: &ForkMetadataStore,
+    input: &SeedInput,
+) -> Result<(), Error> {
+    if local.seed_manifest_exists() && !input.is_empty() {
         bail!(
             "A seed manifest already exists at {}. To fork the same checkpoint with different seeds, use a different --data-dir.",
-            data_store.local().seed_manifest_path().display(),
+            local.seed_manifest_path().display(),
         );
     }
     Ok(())
@@ -138,6 +143,18 @@ pub(crate) async fn prepare_seed_manifest(
     };
     data_store.local().write_seed_manifest(&manifest)?;
     Ok(manifest)
+}
+
+pub(crate) fn save_seed_manifest_objects(
+    data_store: &DataStore,
+    manifest: &SeedManifest,
+) -> Result<(), Error> {
+    let object_refs: Vec<_> = manifest
+        .entries
+        .iter()
+        .map(|entry| entry.object_ref)
+        .collect();
+    data_store.save_address_owned_seed_objects(&object_refs)
 }
 
 fn dedupe_addresses(addresses: &[SuiAddress]) -> Vec<SuiAddress> {
@@ -256,8 +273,11 @@ async fn resolve_seeds(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use serde_json::json;
     use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::CheckpointDigest;
     use sui_types::object::Object;
     use sui_types::object::Owner;
     use wiremock::Mock;
@@ -267,7 +287,30 @@ mod tests {
     use wiremock::matchers::method;
     use wiremock::matchers::path;
 
+    use crate::runtime::ForkRuntime;
+
     use super::*;
+
+    fn test_data_store_with_remote(
+        root: &Path,
+        gql_url: String,
+        forked_at_checkpoint: CheckpointSequenceNumber,
+    ) -> (DataStore, ForkRuntime) {
+        let runtime = ForkRuntime::open(
+            root,
+            "custom".to_owned(),
+            forked_at_checkpoint,
+            CheckpointDigest::new([9; 32]).into(),
+        )
+        .expect("fork runtime should open");
+        let store = DataStore::new_for_testing_with_remote(
+            root.to_path_buf(),
+            gql_url,
+            forked_at_checkpoint,
+            runtime.fork_rpc_store(),
+        );
+        (store, runtime)
+    }
 
     fn object_seed_response_body(
         object: &Object,
@@ -340,11 +383,8 @@ mod tests {
     #[tokio::test]
     async fn prepare_seed_manifest_writes_empty_manifest_without_seed_input() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let store = DataStore::new_for_testing_with_remote(
-            temp.path().to_path_buf(),
-            "http://localhost:1".to_owned(),
-            11,
-        );
+        let (store, _runtime) =
+            test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), 11);
 
         let manifest = prepare_seed_manifest(&store, "custom".to_owned(), &SeedInput::default())
             .await
@@ -371,8 +411,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let store =
-            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
+        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let err = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -423,8 +462,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let store =
-            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
+        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -440,14 +478,6 @@ mod tests {
         assert_eq!(
             manifest.entries[0].object_ref,
             object.compute_object_reference()
-        );
-        assert!(
-            store
-                .local()
-                .get_object_at_version(&object.id(), object.version().value())
-                .expect("local object lookup should not fail")
-                .is_none(),
-            "explicit object seeding should not cache BCS",
         );
 
         let requests = server
@@ -497,8 +527,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let store =
-            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
+        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -515,14 +544,6 @@ mod tests {
             manifest.entries[0].object_ref,
             object.compute_object_reference()
         );
-        assert!(
-            store
-                .local()
-                .get_object_at_version(&object.id(), object.version().value())
-                .expect("local object lookup should not fail")
-                .is_none(),
-            "explicit object seeding should not cache BCS",
-        );
     }
 
     #[tokio::test]
@@ -535,8 +556,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let store =
-            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
+        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let err = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
