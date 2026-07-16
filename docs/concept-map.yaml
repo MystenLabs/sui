@@ -9,6 +9,8 @@
 
 concepts:
 
+  # ─── Getting Started ───────────────────────────────────────────────────────
+
   sui-install:
     must_appear_in:
       - "getting-started/onboarding/sui-install.mdx"
@@ -86,6 +88,8 @@ concepts:
       - "getting-started/examples/dapp-kit-frontend.mdx"
       - "getting-started/sui-for-ethereum.mdx"
       - "getting-started/sui-for-solana.mdx"
+      - "develop/transactions/ptbs/prog-txn-blocks.mdx"
+      - "develop/transactions/ptbs/building-ptb.mdx"
     terms:
       - "PTB"
       - "programmable transaction"
@@ -98,6 +102,8 @@ concepts:
       - "getting-started/sui-for-ethereum.mdx"
       - "getting-started/sui-for-solana.mdx"
       - "getting-started/examples/capability-pattern.mdx"
+      - "develop/objects/object-ownership/index.mdx"
+      - "develop/sui-architecture/object-model.mdx"
     terms:
       - "owned"
       - "shared"
@@ -109,6 +115,7 @@ concepts:
     must_appear_in:
       - "getting-started/examples/capability-pattern.mdx"
       - "getting-started/dev-cheat-sheet.mdx"
+      - "develop/security/best-practices.mdx"
     terms:
       - "Cap"
       - "capability"
@@ -119,6 +126,7 @@ concepts:
   test-scenario:
     must_appear_in:
       - "getting-started/examples/scenario-testing.mdx"
+      - "develop/testing-debugging/testing.mdx"
     terms:
       - "test_scenario"
       - "#[test]"
@@ -129,6 +137,7 @@ concepts:
   event-indexing:
     must_appear_in:
       - "getting-started/examples/event-indexer.mdx"
+      - "develop/accessing-data/using-events.mdx"
     terms:
       - "event"
       - "SubscribeCheckpoints"
@@ -139,6 +148,7 @@ concepts:
   derived-objects:
     must_appear_in:
       - "getting-started/examples/derived-objects.mdx"
+      - "develop/objects/derived-objects.mdx"
     terms:
       - "derive"
       - "deterministic"
@@ -190,9 +200,436 @@ concepts:
   dev-best-practices:
     must_appear_in:
       - "getting-started/dev-cheat-sheet.mdx"
+      - "develop/security/best-practices.mdx"
+      - "develop/write-move/move-best-practices.mdx"
     terms:
       - "composability"
       - "upgrade"
       - "testing"
       - "signing"
       - "best practice"
+
+  # ─── Develop: Objects ──────────────────────────────────────────────────────
+
+  dynamic-fields:
+    must_appear_in:
+      - "develop/objects/dynamic-fields.mdx"
+    terms:
+      - "dynamic field"
+      - "dynamic object field"
+      - "add"
+      - "borrow"
+      - "remove"
+      - "heterogeneous"
+
+  object-display:
+    must_appear_in:
+      - "develop/objects/display/display-overview.mdx"
+      - "develop/objects/display/using-display.mdx"
+    terms:
+      - "Display"
+      - "template"
+      - "Publisher"
+      - "render"
+
+  transfer-policies:
+    must_appear_in:
+      - "develop/objects/transfers/transfer-policies.mdx"
+      - "develop/objects/transfers/custom-rules.mdx"
+    terms:
+      - "TransferPolicy"
+      - "transfer rule"
+      - "receipt"
+      - "confirm"
+      - "kiosk"
+
+  # ─── Develop: Transactions ─────────────────────────────────────────────────
+
+  transaction-signing:
+    must_appear_in:
+      - "develop/transactions/transaction-auth/auth-overview.mdx"
+      - "develop/transactions/transaction-auth/multisig.mdx"
+    terms:
+      - "signature"
+      - "signer"
+      - "keypair"
+      - "Ed25519"
+      - "intent"
+
+  sponsored-transactions:
+    must_appear_in:
+      - "develop/transaction-payment/sponsor-txn.mdx"
+      - "develop/transaction-payment/gasless-stablecoin-transfers.mdx"
+    terms:
+      - "sponsor"
+      - "gas station"
+      - "gasless"
+      - "GasData"
+      - "onlyTransactionKind"
+
+  gas-mechanics:
+    must_appear_in:
+      - "develop/transaction-payment/gas-in-sui.mdx"
+      - "develop/transaction-payment/gas-smashing.mdx"
+    terms:
+      - "gas budget"
+      - "gas price"
+      - "computation"
+      - "storage"
+      - "rebate"
+
+  # ─── Develop: Data Access ──────────────────────────────────────────────────
+
+  grpc-api:
+    must_appear_in:
+      - "develop/accessing-data/grpc/what-is-grpc.mdx"
+      - "develop/accessing-data/grpc/using-grpc.mdx"
+    terms:
+      - "gRPC"
+      - "LedgerService"
+      - "StateService"
+      - "protobuf"
+      - "FieldMask"
+
+  graphql-rpc:
+    must_appear_in:
+      - "develop/accessing-data/graphql/graphql-rpc.mdx"
+      - "develop/accessing-data/graphql/query-with-graphql.mdx"
+    terms:
+      - "GraphQL"
+      - "query"
+      - "mutation"
+      - "checkpoint"
+      - "pagination"
+
+  json-rpc-migration:
+    must_appear_in:
+      - "develop/accessing-data/json-rpc-migration.mdx"
+    terms:
+      - "JSON-RPC"
+      - "deprecated"
+      - "gRPC"
+      - "GraphQL"
+      - "migration"
+      - "method mapping"
+
+  custom-indexer:
+    must_appear_in:
+      - "develop/accessing-data/custom-indexer/custom-indexers.mdx"
+      - "develop/accessing-data/custom-indexer/build.mdx"
+    terms:
+      - "indexer"
+      - "pipeline"
+      - "checkpoint"
+      - "PostgreSQL"
+      - "sui-indexer-alt"
+
+  archival-store:
+    must_appear_in:
+      - "develop/accessing-data/archival-store/what-is-archival-store.mdx"
+    terms:
+      - "archival"
+      - "historical"
+      - "retention"
+      - "pruning"
+      - "Bigtable"
+
+  # ─── Develop: Move ─────────────────────────────────────────────────────────
+
+  move-concepts:
+    must_appear_in:
+      - "develop/write-move/sui-move-concepts.mdx"
+    terms:
+      - "ability"
+      - "key"
+      - "store"
+      - "drop"
+      - "copy"
+      - "struct"
+
+  package-upgrades:
+    must_appear_in:
+      - "develop/publish-upgrade-packages/upgrade.mdx"
+      - "develop/publish-upgrade-packages/versioning.mdx"
+    terms:
+      - "upgrade"
+      - "UpgradeCap"
+      - "compatible"
+      - "additive"
+      - "version"
+
+  # ─── Develop: Cryptography ─────────────────────────────────────────────────
+
+  zklogin:
+    must_appear_in:
+      - "sui-stack/zklogin-integration/zklogin.mdx"
+      - "sui-stack/zklogin-integration/zklogin-example.mdx"
+    terms:
+      - "zkLogin"
+      - "OAuth"
+      - "JWT"
+      - "salt"
+      - "zero-knowledge"
+      - "ephemeral"
+
+  passkeys:
+    must_appear_in:
+      - "develop/cryptography/passkeys.mdx"
+    terms:
+      - "passkey"
+      - "WebAuthn"
+      - "authenticator"
+      - "biometric"
+
+  # ─── Develop: Architecture ─────────────────────────────────────────────────
+
+  sui-object-model:
+    must_appear_in:
+      - "develop/sui-architecture/object-model.mdx"
+    terms:
+      - "UID"
+      - "object"
+      - "version"
+      - "ownership"
+      - "global storage"
+      - "TxContext"
+
+  consensus:
+    must_appear_in:
+      - "develop/sui-architecture/consensus.mdx"
+    terms:
+      - "Mysticeti"
+      - "consensus"
+      - "validator"
+      - "finality"
+      - "DAG"
+
+  epochs:
+    must_appear_in:
+      - "develop/sui-architecture/epochs.mdx"
+    terms:
+      - "epoch"
+      - "committee"
+      - "reconfiguration"
+      - "stake"
+
+  # ─── Onchain Finance ──────────────────────────────────────────────────────
+
+  coin-standard:
+    must_appear_in:
+      - "onchain-finance/fungible-tokens/coin.mdx"
+      - "onchain-finance/fungible-tokens/create-a-fungible-token-coin.mdx"
+    terms:
+      - "Coin"
+      - "TreasuryCap"
+      - "CoinMetadata"
+      - "mint"
+      - "burn"
+      - "one-time witness"
+
+  currency-standard:
+    must_appear_in:
+      - "onchain-finance/fungible-tokens/currency.mdx"
+      - "onchain-finance/fungible-tokens/create-a-fungible-token.mdx"
+    terms:
+      - "Currency"
+      - "CurrencyTreasuryCap"
+      - "deny list"
+      - "regulated"
+
+  deepbook:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/deepbook.mdx"
+      - "onchain-finance/deepbook/deepbookv3/design.mdx"
+    terms:
+      - "DeepBook"
+      - "CLOB"
+      - "order book"
+      - "pool"
+      - "DEEP"
+      - "flash loan"
+
+  kiosk:
+    must_appear_in:
+      - "onchain-finance/kiosk/kiosk-example.mdx"
+      - "onchain-finance/kiosk/kiosk-apps.mdx"
+    terms:
+      - "Kiosk"
+      - "TransferPolicy"
+      - "purchase"
+      - "list"
+      - "royalty"
+
+  closed-loop-token:
+    must_appear_in:
+      - "onchain-finance/closed-loop-token/index.mdx"
+      - "onchain-finance/closed-loop-token/token-policy.mdx"
+    terms:
+      - "Token"
+      - "TokenPolicy"
+      - "closed-loop"
+      - "action request"
+      - "spend"
+
+  payment-kit:
+    must_appear_in:
+      - "onchain-finance/payment-kit.mdx"
+      - "onchain-finance/payment-intents.mdx"
+    terms:
+      - "payment"
+      - "PaymentRegistry"
+      - "payment intent"
+      - "PTB"
+      - "sponsor"
+
+  address-balances:
+    must_appear_in:
+      - "onchain-finance/asset-custody/address-balances/index.mdx"
+      - "onchain-finance/asset-custody/address-balances/using-address-balances.mdx"
+    terms:
+      - "address balance"
+      - "coin object"
+      - "Balance"
+      - "reservation"
+      - "compatibility"
+
+  stablecoin:
+    must_appear_in:
+      - "onchain-finance/fungible-tokens/integrating-with-stablecoins.mdx"
+      - "develop/transaction-payment/gasless-stablecoin-transfers.mdx"
+    terms:
+      - "USDC"
+      - "stablecoin"
+      - "gasless"
+      - "sponsor"
+
+  # ─── Operators ─────────────────────────────────────────────────────────────
+
+  full-node:
+    must_appear_in:
+      - "operators/full-node/sui-full-node.mdx"
+    terms:
+      - "full node"
+      - "RocksDB"
+      - "sync"
+      - "pruning"
+      - "config"
+
+  validator:
+    must_appear_in:
+      - "operators/validator/validator-tasks.mdx"
+      - "operators/validator/validator-config.mdx"
+    terms:
+      - "validator"
+      - "stake"
+      - "commission"
+      - "BLS"
+      - "protocol key"
+
+  exchange-integration:
+    must_appear_in:
+      - "operators/exchange-integration.mdx"
+    terms:
+      - "exchange"
+      - "deposit"
+      - "withdrawal"
+      - "gRPC"
+      - "GraphQL"
+      - "checkpoint"
+
+  data-management:
+    must_appear_in:
+      - "operators/data-management/managing-data.mdx"
+      - "operators/data-management/archives.mdx"
+    terms:
+      - "pruning"
+      - "snapshot"
+      - "archival"
+      - "retention"
+      - "RocksDB"
+
+  # ─── Sui Stack ─────────────────────────────────────────────────────────────
+
+  walrus:
+    must_appear_in:
+      - "sui-stack/walrus/sui-stack-walrus.mdx"
+    terms:
+      - "Walrus"
+      - "blob"
+      - "storage"
+      - "epoch"
+      - "erasure coding"
+
+  walrus-sites:
+    must_appear_in:
+      - "sui-stack/walrus/sui-stack-walrus-sites.mdx"
+    terms:
+      - "Walrus Sites"
+      - "site-builder"
+      - "portal"
+      - "deploy"
+
+  seal:
+    must_appear_in:
+      - "sui-stack/seal/sui-stack-seal.mdx"
+    terms:
+      - "Seal"
+      - "encrypt"
+      - "threshold"
+      - "access policy"
+      - "decrypt"
+
+  nautilus:
+    must_appear_in:
+      - "sui-stack/nautilus/nautilus-overview.mdx"
+      - "sui-stack/nautilus/using-nautilus.mdx"
+    terms:
+      - "Nautilus"
+      - "TEE"
+      - "enclave"
+      - "attestation"
+      - "offchain"
+
+  suins:
+    must_appear_in:
+      - "sui-stack/suins/sui-stack-suins.mdx"
+    terms:
+      - "SuiNS"
+      - "name"
+      - "domain"
+      - "resolve"
+      - "registration"
+
+  randomness:
+    must_appear_in:
+      - "sui-stack/on-chain-primitives/randomness-onchain.mdx"
+    terms:
+      - "Random"
+      - "random"
+      - "VRF"
+      - "onchain"
+      - "unbiased"
+
+  # ─── References ────────────────────────────────────────────────────────────
+
+  cli-reference:
+    must_appear_in:
+      - "references/cli/client.mdx"
+      - "references/cli/move.mdx"
+    terms:
+      - "sui client"
+      - "sui move"
+      - "command"
+      - "flag"
+      - "usage"
+
+  sdk-overview:
+    must_appear_in:
+      - "references/sdk-comparison.mdx"
+      - "references/sui-sdks.mdx"
+    terms:
+      - "TypeScript"
+      - "Rust"
+      - "SDK"
+      - "@mysten/sui"
+      - "client"
