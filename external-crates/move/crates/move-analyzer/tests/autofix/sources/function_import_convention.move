@@ -10,7 +10,7 @@ module Autofix::function_import_convention {
     }
 
     // If the function's module is already imported under an alias, quick fixes should use it.
-    fun function_quick_fix_with_alias(): d::PubStruct {
+    fun function_quick_fix_with_alias(): Autofix::dep::PubStruct {
         use Autofix::dep as d;
 
         create_struct()
@@ -21,5 +21,13 @@ module Autofix::function_import_convention {
         use Autofix::another_dep as dep;
 
         create_struct()
+    }
+
+    // If the target module's name is taken by a member alias, quick fixes should not
+    // add a conflicting import.
+    fun function_quick_fix_with_member_alias_conflict() {
+        use Autofix::another_dep::AnotherDepStruct as UpperDep;
+
+        create_upper();
     }
 }

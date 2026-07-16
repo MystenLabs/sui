@@ -319,6 +319,9 @@ fn single_element_access_chain_autofixes<I, K>(
                 diag.clone(),
                 file_url.clone(),
             ));
+            // No conflict check is needed for this module import: the unbound-name error
+            // fires only when nothing in the leading-name namespace has this name, and a
+            // module import only affects that namespace.
             if let Some(import_insertion_info) = import_insertion_info(symbols, cursor) {
                 let title = format!("Import as `{}{}`", autofix_prefix, unbound_name);
                 let import_text = format!("use {}{}", autofix_prefix, unbound_name);
@@ -427,8 +430,9 @@ fn single_element_function_autofixes<I, K>(
                 continue;
             };
             // `module_import_info` returns `None` if the module name is already bound to a
-            // different module, in which case the full-qualification fix above is the only one.
-            let Some(import_info) = module_import_info(mod_ident, &info.modules) else {
+            // different module, a member alias, a named address, or a type parameter, in
+            // which case the full-qualification fix above is the only one.
+            let Some(import_info) = module_import_info(mod_ident, info) else {
                 continue;
             };
             let prefix_edit = TextEdit {

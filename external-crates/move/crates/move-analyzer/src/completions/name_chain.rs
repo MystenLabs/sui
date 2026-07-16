@@ -14,8 +14,8 @@
 
 use crate::{
     completions::utils::{
-        PRIMITIVE_TYPE_COMPLETIONS, addr_to_ide_string, call_completion_item, completion_item,
-        import_insertion_info, mod_defs, module_import_info,
+        ModuleImportInfo, PRIMITIVE_TYPE_COMPLETIONS, addr_to_ide_string, call_completion_item,
+        completion_item, import_insertion_info, mod_defs, module_import_info, name_taken_in_scope,
     },
     symbols::{
         Symbols,
@@ -34,7 +34,7 @@ use move_compiler::{
 };
 use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use super::utils::{
     all_mod_consts_to_import, all_mod_enums_to_import, all_mod_functions_to_import,
@@ -143,30 +143,41 @@ pub fn name_chain_completions(
             );
             // module auto-imports
             if let Some(import_insertion_info) = import_insertion_info_opt {
-                let in_scope_modules = info
-                    .modules
-                    .values()
-                    .map(|sp!(_, mi)| mi)
-                    .collect::<BTreeSet<_>>();
-                for mod_ident in symbols.file_mods.values().flatten().map(|mdef| &mdef.ident) {
-                    // exclude modules that are already imported
-                    if in_scope_modules.contains(&mod_ident) {
-                        continue;
-                    }
+                for mod_defs in symbols.file_mods.values().flatten() {
+                    let mod_ident = sp(mod_defs.name_loc, mod_defs.ident);
                     let mut item = completion_item(
-                        mod_ident.module.value().as_str(),
+                        mod_defs.ident.module.value().as_str(),
                         CompletionItemKind::MODULE,
                     );
-                    let auto_import_text = format!(
-                        "use {}::{}",
-                        addr_to_ide_string(&mod_ident.address),
-                        mod_ident.module
-                    );
-                    add_auto_import_to_completion_item(
-                        &mut item,
-                        auto_import_text,
-                        import_insertion_info,
-                    );
+                    match module_import_info(mod_ident, &info) {
+                        Some(import_info) => {
+                            let Some(import_text) = import_info.import_text else {
+                                // the module is already in scope and has been offered
+                                // as a completion under its (aliased) name already
+                                continue;
+                            };
+                            add_auto_import_to_completion_item(
+                                &mut item,
+                                import_text,
+                                import_insertion_info,
+                            );
+                        }
+                        None => {
+                            // Importing the module would conflict with a name already in
+                            // scope; fall back to inserting a fully qualified module path,
+                            // which also makes the conflict visible at the use site.
+                            let qualified_module = format!(
+                                "{}::{}",
+                                addr_to_ide_string(&mod_defs.ident.address),
+                                mod_defs.ident.module
+                            );
+                            set_completion_item_detail(
+                                &mut item,
+                                format!("({})", qualified_module),
+                            );
+                            item.insert_text = Some(qualified_module);
+                        }
+                    }
                     completions.push(item);
                 }
             }
@@ -174,8 +185,7 @@ pub fn name_chain_completions(
             completions.extend(all_single_name_member_completions(
                 symbols,
                 cursor,
-                &info.members,
-                &info.modules,
+                &info,
                 chain_kind,
                 import_insertion_info_opt,
             ));
@@ -651,13 +661,12 @@ fn single_name_member_completion(
 fn all_single_name_member_completions(
     symbols: &Symbols,
     cursor: &CursorContext,
-    members_info: &BTreeMap<(ModuleIdent, Symbol), BTreeSet<Symbol>>,
-    modules_info: &BTreeMap<Symbol, ModuleIdent>,
+    info: &AliasAutocompleteInfo,
     chain_kind: ChainCompletionKind,
     import_insertion_info_opt: Option<AutoImportInsertionInfo>,
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
-    for ((sp!(_, mod_ident), member_name), member_aliases) in members_info {
+    for ((sp!(_, mod_ident), member_name), member_aliases) in &info.members {
         let Some(mod_defs) = mod_defs(symbols, mod_ident) else {
             return completions;
         };
@@ -682,7 +691,7 @@ fn all_single_name_member_completions(
             };
             for function_name in import_functions {
                 // exclude functions that are already imported
-                if members_info.contains_key(&(mod_ident, function_name)) {
+                if info.members.contains_key(&(mod_ident, function_name)) {
                     continue;
                 }
                 let function_imports = function_auto_imports_with_module_import(
@@ -690,7 +699,7 @@ fn all_single_name_member_completions(
                     cursor,
                     mod_defs,
                     &function_name,
-                    modules_info,
+                    info,
                     chain_kind,
                     auto_import_pos,
                 );
@@ -707,7 +716,7 @@ fn all_single_name_member_completions(
             };
             for member_name in import_members {
                 // exclude members that are already imported
-                if members_info.contains_key(&(mod_ident, member_name)) {
+                if info.members.contains_key(&(mod_ident, member_name)) {
                     continue;
                 }
                 let member_imports = member_auto_imports(
@@ -715,6 +724,7 @@ fn all_single_name_member_completions(
                     cursor,
                     mod_defs,
                     &member_name,
+                    info,
                     chain_kind,
                     auto_import_pos,
                 );
@@ -734,13 +744,24 @@ fn function_auto_imports_with_module_import(
     cursor: &CursorContext,
     mod_defs: &ModuleDefs,
     function_name: &Symbol,
-    modules_info: &BTreeMap<Symbol, ModuleIdent>,
+    info: &AliasAutocompleteInfo,
     chain_kind: ChainCompletionKind,
     auto_import_pos: AutoImportInsertionInfo,
 ) -> Vec<CompletionItem> {
     let mod_ident = sp(mod_defs.name_loc, mod_defs.ident);
-    let Some(import_info) = module_import_info(mod_ident, modules_info) else {
-        return vec![];
+    let import_info = match module_import_info(mod_ident, info) {
+        Some(import_info) => import_info,
+        None => ModuleImportInfo {
+            // If importing the module would conflict with a name already in scope, fall back
+            // to a fully qualified call, which stays closest to the module-qualified style
+            // and makes the conflict visible at the use site.
+            module_prefix: format!(
+                "{}::{}",
+                addr_to_ide_string(&mod_ident.value.address),
+                mod_ident.value.module
+            ),
+            import_text: None,
+        },
     };
     let mut function_completions = single_name_member_completion(
         symbols,
@@ -770,6 +791,7 @@ fn member_auto_imports(
     cursor: &CursorContext,
     mod_defs: &ModuleDefs,
     member_name: &Symbol,
+    info: &AliasAutocompleteInfo,
     chain_kind: ChainCompletionKind,
     auto_import_pos: AutoImportInsertionInfo,
 ) -> Vec<CompletionItem> {
@@ -782,15 +804,29 @@ fn member_auto_imports(
         chain_kind,
     );
     let mod_ident = mod_defs.ident;
-    member_completions.iter_mut().for_each(|item| {
-        let auto_import_text = format!(
-            "use {}::{}::{}",
-            addr_to_ide_string(&mod_ident.address),
-            mod_ident.module,
-            member_name,
-        );
-        add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
-    });
+    let module_qualifier = format!(
+        "{}::{}",
+        addr_to_ide_string(&mod_ident.address),
+        mod_ident.module,
+    );
+    if name_taken_in_scope(info, *member_name) {
+        // Importing the member would conflict with a name already in scope (e.g., a
+        // same-named member from another module); fall back to inserting a fully
+        // qualified path, which also makes the conflict visible at the use site.
+        member_completions.iter_mut().for_each(|item| {
+            let insert_text = item
+                .insert_text
+                .clone()
+                .unwrap_or_else(|| item.label.clone());
+            item.insert_text = Some(format!("{}::{}", module_qualifier, insert_text));
+            set_completion_item_detail(item, format!("({}::{})", module_qualifier, member_name));
+        });
+    } else {
+        member_completions.iter_mut().for_each(|item| {
+            let auto_import_text = format!("use {}::{}", module_qualifier, member_name);
+            add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
+        });
+    }
     member_completions
 }
 
@@ -820,21 +856,27 @@ fn member_completions_with_module_import(
     member_completions
 }
 
+/// Annotates a completion item with a detail displayed next to its label
+/// on the completion list.
+fn set_completion_item_detail(item: &mut CompletionItem, detail: String) {
+    if let Some(ref mut d) = item.label_details {
+        d.detail = Some(detail.clone());
+    } else {
+        item.label_details = Some(CompletionItemLabelDetails {
+            detail: Some(detail.clone()),
+            description: None,
+        });
+    }
+    item.detail = Some(detail);
+}
+
 /// Adds additional edit to a completion item at a given position
 fn add_auto_import_to_completion_item(
     item: &mut CompletionItem,
     import_text: String,
     import_insertion_info: AutoImportInsertionInfo,
 ) {
-    if let Some(ref mut d) = item.label_details {
-        d.detail = Some(format!("({})", import_text));
-    } else {
-        item.label_details = Some(CompletionItemLabelDetails {
-            detail: Some(format!("({})", import_text)),
-            description: None,
-        });
-    }
-    item.detail = Some(format!("({})", import_text));
+    set_completion_item_detail(item, format!("({})", import_text));
     item.additional_text_edits = Some(vec![auto_import_text_edit(
         import_text,
         import_insertion_info,
@@ -1030,8 +1072,10 @@ fn imports_for_name_chain_entry(
         let P::LeadingNameAccess_::Name(name) = leading_name.value else {
             return;
         };
-        // If the prefix already resolves to a module, regular member completion covers this chain.
-        if info.modules.contains_key(&name.value) {
+        // If the prefix already resolves to a module, regular member completion covers this
+        // chain. If its name is taken by anything else, a module import would conflict, and
+        // there is nothing sensible to offer for the already-typed prefix.
+        if name_taken_in_scope(info, name.value) {
             return;
         }
         for mod_defs in symbols.file_mods.values().flatten() {

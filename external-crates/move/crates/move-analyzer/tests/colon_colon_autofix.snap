@@ -49,3 +49,6 @@ CODE ACTION: Qualify as `d::create_struct`
 -- test 3 -------------------
 CODE ACTION: Qualify as `Autofix::dep::create_struct`
     EDIT: 'Autofix::dep::'
+-- test 4 -------------------
+CODE ACTION: Qualify as `Autofix::UpperDep::create_upper`
+    EDIT: 'Autofix::UpperDep::'

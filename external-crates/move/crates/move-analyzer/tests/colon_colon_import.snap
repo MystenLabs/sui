@@ -19,9 +19,8 @@ Module 'function_import_convention'
     ADDITIONAL EDIT: '
     use Import::function_import_convention;'
 Module 'Import'
-    TARGET     : '(use Import::Import)'
-    ADDITIONAL EDIT: '
-    use Import::Import;'
+    INSERT TEXT: 'Import::Import'
+    TARGET     : '(Import::Import)'
 Module 'empty'
     TARGET     : '(use SamePkgAddr::empty)'
     ADDITIONAL EDIT: '
@@ -124,10 +123,8 @@ Module 'function_import_convention'
 
     '
 Module 'Import'
-    TARGET     : '(use Import::Import)'
-    ADDITIONAL EDIT: 'use Import::Import;
-
-    '
+    INSERT TEXT: 'Import::Import'
+    TARGET     : '(Import::Import)'
 Module 'empty'
     TARGET     : '(use SamePkgAddr::empty)'
     ADDITIONAL EDIT: 'use SamePkgAddr::empty;
@@ -187,10 +184,8 @@ Module 'dep'
 
     '
 Module 'Import'
-    TARGET     : '(use Import::Import)'
-    ADDITIONAL EDIT: 'use Import::Import;
-
-    '
+    INSERT TEXT: 'Import::Import'
+    TARGET     : '(Import::Import)'
 Module 'empty'
     TARGET     : '(use SamePkgAddr::empty)'
     ADDITIONAL EDIT: 'use SamePkgAddr::empty;
@@ -276,10 +271,8 @@ Module 'dep'
 
     '
 Module 'Import'
-    TARGET     : '(use Import::Import)'
-    ADDITIONAL EDIT: 'use Import::Import;
-
-    '
+    INSERT TEXT: 'Import::Import'
+    TARGET     : '(Import::Import)'
 Module 'empty'
     TARGET     : '(use SamePkgAddr::empty)'
     ADDITIONAL EDIT: 'use SamePkgAddr::empty;
@@ -323,8 +316,3 @@ Module 'another_dep'
 Module 'colon_colon'
 Module 'dep'
 Module 'function_import_convention'
-Struct 'SomeStruct'
-    TARGET     : '(use Import::Import)'
-    ADDITIONAL EDIT: 'use Import::Import;
-
-    '

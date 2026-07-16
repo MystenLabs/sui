@@ -49,6 +49,12 @@
           "err_line": 23,
           "err_col": 9,
           "err_msg": "Unbound function 'create_struct' in current scope"
+        },
+        // member aliases taking the module's name also prevent module-import quick fixes
+        {
+          "err_line": 31,
+          "err_col": 9,
+          "err_msg": "Unbound function 'create_upper' in current scope"
         }
       ]
     }

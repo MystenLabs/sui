@@ -22,12 +22,12 @@ use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{Type, TypeInner},
     parser::keywords::PRIMITIVE_TYPES,
-    shared::{Identifier, Name},
+    shared::{Identifier, Name, ide::AliasAutocompleteInfo},
 };
 use move_ir_types::location::sp;
 use move_symbol_pool::Symbol;
 
-use std::{collections::BTreeMap, path::PathBuf, sync::LazyLock};
+use std::{path::PathBuf, sync::LazyLock};
 
 /// Describes how a module should be referenced from an auto-imported completion or quick fix.
 pub struct ModuleImportInfo {
@@ -102,13 +102,34 @@ pub fn auto_import_text_edit(
     }
 }
 
+/// Checks if a name is already bound in scope to a module, a member alias, a named
+/// address, or a type parameter. Inserting an import with such a name would either
+/// produce a duplicate-alias error (same-scope aliases) or silently shadow the
+/// existing binding for the rest of the module (named addresses, as modules and
+/// addresses share the leading-name namespace).
+///
+/// The member alias check is conservative: only struct and enum aliases share the
+/// leading-name namespace, but alias info does not carry the member kind, so all
+/// member aliases are treated as conflicts (the cost is falling back to a fully
+/// qualified fix or completion).
+pub fn name_taken_in_scope(info: &AliasAutocompleteInfo, name: Symbol) -> bool {
+    info.modules.contains_key(&name)
+        || info.addresses.contains_key(&name)
+        || info.type_params.contains(&name)
+        || info
+            .members
+            .values()
+            .flatten()
+            .any(|member_alias| *member_alias == name)
+}
+
 /// Computes a module prefix and optional module import for a target module.
-/// Returns `None` if importing the module would conflict with an existing module alias.
+/// Returns `None` if importing the module would conflict with a name already in scope.
 pub fn module_import_info(
     mod_ident: ModuleIdent,
-    in_scope_modules: &BTreeMap<Symbol, ModuleIdent>,
+    info: &AliasAutocompleteInfo,
 ) -> Option<ModuleImportInfo> {
-    for (alias, in_scope_mod_ident) in in_scope_modules {
+    for (alias, in_scope_mod_ident) in &info.modules {
         if in_scope_mod_ident.value == mod_ident.value {
             return Some(ModuleImportInfo {
                 module_prefix: alias.to_string(),
@@ -118,7 +139,7 @@ pub fn module_import_info(
     }
 
     let module_name = mod_ident.value.module.value();
-    if in_scope_modules.contains_key(&module_name) {
+    if name_taken_in_scope(info, module_name) {
         return None;
     }
 
