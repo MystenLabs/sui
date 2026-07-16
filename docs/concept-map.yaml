@@ -413,7 +413,7 @@ concepts:
       - "reconfiguration"
       - "stake"
 
-  # ─── Onchain Finance ──────────────────────────────────────────────────────
+  # ─── Onchain Finance: Coins & Fungible Tokens ───────────────────────────
 
   coin-standard:
     must_appear_in:
@@ -437,28 +437,46 @@ concepts:
       - "deny list"
       - "regulated"
 
-  deepbook:
+  regulated-tokens:
     must_appear_in:
-      - "onchain-finance/deepbook/deepbookv3/deepbook.mdx"
-      - "onchain-finance/deepbook/deepbookv3/design.mdx"
+      - "onchain-finance/fungible-tokens/regulated-tokens.mdx"
     terms:
-      - "DeepBook"
-      - "CLOB"
-      - "order book"
-      - "pool"
-      - "DEEP"
-      - "flash loan"
+      - "regulated"
+      - "deny list"
+      - "DenyCap"
+      - "freeze"
+      - "compliance"
 
-  kiosk:
+  stablecoin:
     must_appear_in:
-      - "onchain-finance/kiosk/kiosk-example.mdx"
-      - "onchain-finance/kiosk/kiosk-apps.mdx"
+      - "onchain-finance/fungible-tokens/integrating-with-stablecoins.mdx"
+      - "develop/transaction-payment/gasless-stablecoin-transfers.mdx"
     terms:
-      - "Kiosk"
-      - "TransferPolicy"
-      - "purchase"
-      - "list"
-      - "royalty"
+      - "USDC"
+      - "stablecoin"
+      - "gasless"
+      - "sponsor"
+
+  token-vesting:
+    must_appear_in:
+      - "onchain-finance/fungible-tokens/token-vesting-strategies.mdx"
+    terms:
+      - "vesting"
+      - "cliff"
+      - "linear"
+      - "schedule"
+      - "unlock"
+
+  sui-bridging:
+    must_appear_in:
+      - "onchain-finance/fungible-tokens/sui-bridging.mdx"
+    terms:
+      - "bridge"
+      - "wormhole"
+      - "wrapped"
+      - "cross-chain"
+
+  # ─── Onchain Finance: Closed-Loop Tokens ───────────────────────────────
 
   closed-loop-token:
     must_appear_in:
@@ -471,6 +489,175 @@ concepts:
       - "action request"
       - "spend"
 
+  token-action-request:
+    must_appear_in:
+      - "onchain-finance/closed-loop-token/action-request.mdx"
+    terms:
+      - "ActionRequest"
+      - "approve"
+      - "confirm"
+      - "rule"
+      - "receipt"
+
+  token-spending:
+    must_appear_in:
+      - "onchain-finance/closed-loop-token/spending.mdx"
+      - "onchain-finance/closed-loop-token/rules.mdx"
+    terms:
+      - "spend"
+      - "rule"
+      - "allowlist"
+      - "denylist"
+
+  # ─── Onchain Finance: DeepBook ─────────────────────────────────────────
+
+  deepbook-overview:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/deepbook.mdx"
+      - "onchain-finance/deepbook/deepbookv3/design.mdx"
+    terms:
+      - "DeepBook"
+      - "CLOB"
+      - "order book"
+      - "pool"
+      - "DEEP"
+      - "matching engine"
+
+  deepbook-orders:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/contract-information/orders.mdx"
+      - "onchain-finance/deepbook/deepbookv3-sdk/orders.mdx"
+    terms:
+      - "limit order"
+      - "market order"
+      - "place"
+      - "cancel"
+      - "fill"
+
+  deepbook-pools:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/contract-information/permissionless-pool.mdx"
+      - "onchain-finance/deepbook/deepbookv3-sdk/pools.mdx"
+    terms:
+      - "pool"
+      - "create pool"
+      - "base asset"
+      - "quote asset"
+      - "tick size"
+      - "lot size"
+
+  deepbook-balance-manager:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/contract-information/balance-manager.mdx"
+      - "onchain-finance/deepbook/deepbookv3-sdk/balance-manager.mdx"
+    terms:
+      - "BalanceManager"
+      - "deposit"
+      - "withdraw"
+      - "settle"
+
+  deepbook-swaps:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/contract-information/swaps.mdx"
+      - "onchain-finance/deepbook/deepbookv3-sdk/swaps.mdx"
+    terms:
+      - "swap"
+      - "quantity"
+      - "base"
+      - "quote"
+      - "DeepBook"
+
+  deepbook-flash-loans:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/contract-information/flash-loans.mdx"
+      - "onchain-finance/deepbook/deepbookv3-sdk/flash-loans.mdx"
+    terms:
+      - "flash loan"
+      - "borrow"
+      - "repay"
+      - "same transaction"
+
+  deepbook-governance:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/contract-information/staking-governance.mdx"
+      - "onchain-finance/deepbook/deepbookv3-sdk/staking-governance.mdx"
+    terms:
+      - "DEEP"
+      - "stake"
+      - "governance"
+      - "proposal"
+      - "vote"
+
+  deepbook-indexer:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbookv3/deepbookv3-indexer.mdx"
+    terms:
+      - "indexer"
+      - "endpoint"
+      - "volume"
+      - "pool"
+      - "balance manager"
+
+  # ─── Onchain Finance: DeepBook Margin ──────────────────────────────────
+
+  deepbook-margin-overview:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbook-margin/deepbook-margin.mdx"
+      - "onchain-finance/deepbook/deepbook-margin/design.mdx"
+    terms:
+      - "margin"
+      - "leverage"
+      - "liquidation"
+      - "collateral"
+      - "borrow"
+
+  deepbook-margin-risks:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbook-margin/margin-risks.mdx"
+    terms:
+      - "risk"
+      - "liquidation"
+      - "health"
+      - "collateral"
+      - "margin call"
+
+  deepbook-margin-sdk:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbook-margin-sdk/deepbook-margin-sdk.mdx"
+    terms:
+      - "SDK"
+      - "margin"
+      - "TypeScript"
+      - "DeepBook"
+
+  # ─── Onchain Finance: DeepBook Predict ─────────────────────────────────
+
+  deepbook-predict:
+    must_appear_in:
+      - "onchain-finance/deepbook/deepbook-predict/deepbook-predict.mdx"
+      - "onchain-finance/deepbook/deepbook-predict/design.mdx"
+    terms:
+      - "predict"
+      - "market"
+      - "outcome"
+      - "oracle"
+      - "vault"
+
+  # ─── Onchain Finance: Kiosk ────────────────────────────────────────────
+
+  kiosk:
+    must_appear_in:
+      - "onchain-finance/kiosk/kiosk-example.mdx"
+      - "onchain-finance/kiosk/kiosk-apps.mdx"
+    terms:
+      - "Kiosk"
+      - "TransferPolicy"
+      - "purchase"
+      - "list"
+      - "royalty"
+
+  # ─── Onchain Finance: Payments ─────────────────────────────────────────
+
   payment-kit:
     must_appear_in:
       - "onchain-finance/payment-kit.mdx"
@@ -481,6 +668,8 @@ concepts:
       - "payment intent"
       - "PTB"
       - "sponsor"
+
+  # ─── Onchain Finance: Asset Custody ────────────────────────────────────
 
   address-balances:
     must_appear_in:
@@ -493,15 +682,72 @@ concepts:
       - "reservation"
       - "compatibility"
 
-  stablecoin:
+  wallet-standard:
     must_appear_in:
-      - "onchain-finance/fungible-tokens/integrating-with-stablecoins.mdx"
-      - "develop/transaction-payment/gasless-stablecoin-transfers.mdx"
+      - "onchain-finance/asset-custody/wallets/wallet-standard.mdx"
+      - "onchain-finance/asset-custody/wallets/what-is-a-wallet.mdx"
     terms:
-      - "USDC"
-      - "stablecoin"
-      - "gasless"
-      - "sponsor"
+      - "wallet"
+      - "Wallet Standard"
+      - "connect"
+      - "sign"
+      - "dApp"
+
+  zklogin-wallets:
+    must_appear_in:
+      - "onchain-finance/asset-custody/wallets/zk-login-wallets.mdx"
+    terms:
+      - "zkLogin"
+      - "wallet"
+      - "OAuth"
+      - "social login"
+      - "embedded"
+
+  # ─── Onchain Finance: PAS ──────────────────────────────────────────────
+
+  permissioned-assets:
+    must_appear_in:
+      - "onchain-finance/pas/pas-architecture.mdx"
+      - "onchain-finance/pas/integrating-pas.mdx"
+    terms:
+      - "PAS"
+      - "Permissioned Asset"
+      - "Account"
+      - "Policy"
+      - "Request"
+
+  # ─── Onchain Finance: NFTs & Tokenized Assets ─────────────────────────
+
+  nft-creation:
+    must_appear_in:
+      - "onchain-finance/tokenized-assets/create-nft.mdx"
+      - "onchain-finance/tokenized-assets/asset-tokenization.mdx"
+    terms:
+      - "NFT"
+      - "Display"
+      - "mint"
+      - "metadata"
+      - "object"
+
+  tokenized-assets:
+    must_appear_in:
+      - "onchain-finance/tokenized-assets/deploy-tokenized-asset.mdx"
+    terms:
+      - "tokenized"
+      - "fractional"
+      - "asset"
+      - "deploy"
+      - "template"
+
+  asset-types:
+    must_appear_in:
+      - "onchain-finance/types-of-assets.mdx"
+    terms:
+      - "fungible"
+      - "non-fungible"
+      - "NFT"
+      - "Coin"
+      - "object"
 
   # ─── Operators ─────────────────────────────────────────────────────────────
 
