@@ -124,13 +124,20 @@ pub struct LockResolutionStats {
 /// 1. Quarantined (un-flushed) commit locks - in memory.
 /// 2. Deferred-transaction locks - in memory (finalized but unexecuted, so invisible to
 ///    the objects table).
-/// 3. Live-object cache - a monotone lower bound on latest versions; decisive only in
-///    the consumed direction (bound above the claimed version ⇒ consumed).
+/// 3. Live-object cache - a monotone lower bound on latest versions, decisive in both
+///    directions: above the claimed version ⇒ consumed; at or below it (or known
+///    absent) ⇒ unclaimed. The clear direction is sound because every path that
+///    removes a lock from the memory layers bumps the bound past the consumed version
+///    first. The only equality case a bound cannot decide is immutability at exactly
+///    the claimed version (backstop routing, layer 5): a known-immutable bit routes to
+///    the backstop, a known-mutable bit clears, and an unknown bit re-reads the object
+///    once to learn it.
 /// 4. Latest-object read (authoritative, tombstone-aware; served from the in-memory
 ///    object cache when hot): latest version above the claimed version ⇒ consumed by an
 ///    earlier finalized transaction of this epoch; at or below it (or absent) ⇒
-///    unclaimed. Locks of flushed commits are covered because flushed transactions are
-///    durably executed and execution always bumps every locked ref.
+///    unclaimed, with latest exactly at it routed by immutability as in layer 3. Locks
+///    of flushed commits are covered because flushed transactions are durably executed
+///    and execution always bumps every locked ref.
 /// 5. Lock-table backstop, only for refs whose object is immutable at exactly the
 ///    claimed version: an immutable ref can be locked (byzantine under-claiming of
 ///    immutable inputs) but never bumps, so the objects table cannot see the lock. The
@@ -187,8 +194,57 @@ pub(crate) fn resolve_owned_object_lock_states(
                 stats.cache += 1;
                 if version > claimed_version {
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
-                } else if version == claimed_version && immutable {
-                    backstop_refs.push(*obj_ref);
+                } else if version == claimed_version {
+                    match immutable {
+                        // Known mutable at the claimed version: any lock on this ref
+                        // would have bumped past it by every path that removes locks
+                        // from the memory layers, so the ref is unclaimed.
+                        Some(false) => (),
+                        Some(true) => backstop_refs.push(*obj_ref),
+                        // The bound came from an observation that did not inspect the
+                        // object at this version (a consumption bump or ref-only read);
+                        // whether the backstop applies is unknown. Re-read the object
+                        // to learn it - once per (id, version), since the read upgrades
+                        // the cached bit.
+                        None => {
+                            stats.objects_db += 1;
+                            match object_cache.get_object(&obj_ref.0) {
+                                Some(object) => {
+                                    live_object_cache.record_object(&object);
+                                    if object.version() > claimed_version {
+                                        resolutions
+                                            .insert(*obj_ref, LockResolution::ConsumedSinceClaim);
+                                    } else if object.is_immutable() {
+                                        // object.version() == claimed_version: the
+                                        // bound is a lower bound of the latest version.
+                                        backstop_refs.push(*obj_ref);
+                                    }
+                                }
+                                None => {
+                                    // Not live despite a bound at the claimed version:
+                                    // deleted or wrapped. A tombstone above the claimed
+                                    // version means the claimed version was consumed;
+                                    // at it, the version never existed as a live object
+                                    // and cannot be locked (stale claims of it are
+                                    // quorum-unreachable).
+                                    if let Some(latest_ref) =
+                                        object_cache.get_latest_object_ref_or_tombstone(obj_ref.0)
+                                        && latest_ref.1 > claimed_version
+                                    {
+                                        live_object_cache.record(
+                                            obj_ref.0,
+                                            VersionLowerBound::Version {
+                                                version: latest_ref.1,
+                                                immutable: None,
+                                            },
+                                        );
+                                        resolutions
+                                            .insert(*obj_ref, LockResolution::ConsumedSinceClaim);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 // Live at or below the claimed version and not immutable-at-claim:
                 // unclaimed (below ⇒ a pipelined input whose producer has not executed
@@ -206,15 +262,47 @@ pub(crate) fn resolve_owned_object_lock_states(
         stats.objects_db += 1;
         match object_cache.get_latest_object_ref_or_tombstone(obj_ref.0) {
             Some(latest_ref) => {
-                live_object_cache.record(
-                    obj_ref.0,
-                    VersionLowerBound::Version {
-                        version: latest_ref.1,
-                        immutable: false,
-                    },
-                );
                 if latest_ref.1 > claimed_version {
+                    live_object_cache.record(
+                        obj_ref.0,
+                        VersionLowerBound::Version {
+                            version: latest_ref.1,
+                            immutable: None,
+                        },
+                    );
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
+                } else if latest_ref.1 == claimed_version {
+                    // Latest at exactly the claimed version: the backstop applies if the
+                    // object is immutable at it, so inspect the object (also warming the
+                    // cache with a known bit). A tombstone at the claimed version is not
+                    // live and cannot be locked.
+                    match object_cache.get_object(&obj_ref.0) {
+                        Some(object) => {
+                            live_object_cache.record_object(&object);
+                            if object.version() > claimed_version {
+                                resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
+                            } else if object.is_immutable() {
+                                backstop_refs.push(*obj_ref);
+                            }
+                        }
+                        None => {
+                            live_object_cache.record(
+                                obj_ref.0,
+                                VersionLowerBound::Version {
+                                    version: latest_ref.1,
+                                    immutable: None,
+                                },
+                            );
+                        }
+                    }
+                } else {
+                    live_object_cache.record(
+                        obj_ref.0,
+                        VersionLowerBound::Version {
+                            version: latest_ref.1,
+                            immutable: None,
+                        },
+                    );
                 }
                 // Latest at or below the claimed version: unclaimed (below ⇒ a
                 // pipelined input whose producer has not executed locally yet; the
@@ -2727,7 +2815,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let table_locks = self
             .epoch_store
             .get_owned_object_locks_map(&prefetch_refs)
-            .unwrap_or_default();
+            .expect("cannot read owned object lock table for differential validation");
 
         for (block, parsed_transactions) in block_transactions {
             let author = block.author.value();

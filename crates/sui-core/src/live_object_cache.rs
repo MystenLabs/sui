@@ -15,11 +15,15 @@
 //! Correctness rests on observations being lower bounds: versions never
 //! decrease, and objects never disappear once they (or their tombstones)
 //! exist, so any previously observed state is a valid lower bound on the
-//! current state. This means the cache needs no invalidation, arbitrary
-//! eviction is safe, and a stale entry can only cause a fallback read, never a
-//! wrong verdict: conflict resolution treats a bound as decisive only in the
-//! consumed direction (bound above the claimed version), and everything else
-//! falls back to an authoritative read of latest-object state (see
+//! current state. This means the cache needs no invalidation and arbitrary
+//! eviction is safe. Bounds are decisive in both directions: above the claimed
+//! version ⇒ consumed; at or below it ⇒ unclaimed, which is sound because
+//! every path that removes a lock from the in-memory layers bumps the bound
+//! past the consumed version first (`record_consumed` at quarantine flush,
+//! before entry removal). The one equality case a bound cannot decide is an
+//! object immutable at exactly the claimed version - immutable refs never
+//! bump - which is routed through the lock-table backstop using the
+//! `immutable` bit, re-reading the object when the bit is unknown (see
 //! `docs/objects_locking.md` §3.5/§3.6a).
 //!
 //! Entries do not survive restarts (in-memory) and are cleared at epoch
@@ -43,10 +47,14 @@ pub enum VersionLowerBound {
     /// The latest version was at least `version` at observation time.
     Version {
         version: SequenceNumber,
-        /// Whether the object was immutable at exactly `version`. Ownership of
-        /// a given version never changes, so this bit is stable per version.
-        /// Tombstones record `false`.
-        immutable: bool,
+        /// Whether the object is immutable at exactly `version`, or `None` if
+        /// the observation did not inspect the object at that version (a
+        /// consumption bump or a ref-only read). Ownership of a given version
+        /// never changes, so a `Some` bit is stable per version. Conflict
+        /// resolution needs the bit only when the bound equals the claimed
+        /// version (the lock-table-backstop routing); `None` there forces an
+        /// authoritative re-read rather than guessing.
+        immutable: Option<bool>,
     },
 }
 
@@ -54,7 +62,7 @@ impl VersionLowerBound {
     pub fn from_object(object: &Object) -> Self {
         VersionLowerBound::Version {
             version: object.version(),
-            immutable: object.is_immutable(),
+            immutable: Some(object.is_immutable()),
         }
     }
 
@@ -66,13 +74,31 @@ impl VersionLowerBound {
     }
 
     /// The greater (more informative) of two bounds. `KnownAbsent` is the
-    /// bottom element. Equal versions carry equal `immutable` bits, so which
-    /// one wins is immaterial.
+    /// bottom element. At equal versions, a known `immutable` bit upgrades an
+    /// unknown one; two known bits at the same version are always equal.
     fn merge(self, other: Self) -> Self {
-        if other.version_key() > self.version_key() {
-            other
-        } else {
-            self
+        match other.version_key().cmp(&self.version_key()) {
+            std::cmp::Ordering::Greater => other,
+            std::cmp::Ordering::Equal => {
+                if matches!(
+                    (&self, &other),
+                    (
+                        VersionLowerBound::Version {
+                            immutable: None,
+                            ..
+                        },
+                        VersionLowerBound::Version {
+                            immutable: Some(_),
+                            ..
+                        },
+                    )
+                ) {
+                    other
+                } else {
+                    self
+                }
+            }
+            std::cmp::Ordering::Less => self,
         }
     }
 }
@@ -157,7 +183,9 @@ impl LiveObjectCache {
             obj_ref.0,
             VersionLowerBound::Version {
                 version: obj_ref.1.next(),
-                immutable: false,
+                // The consuming execution may have frozen (or deleted) the
+                // object; this observation does not inspect the new version.
+                immutable: None,
             },
         );
     }
@@ -189,7 +217,7 @@ mod tests {
     fn version(v: u64) -> VersionLowerBound {
         VersionLowerBound::Version {
             version: SequenceNumber::from_u64(v),
-            immutable: false,
+            immutable: None,
         }
     }
 
@@ -225,7 +253,7 @@ mod tests {
             id,
             VersionLowerBound::Version {
                 version: SequenceNumber::from_u64(2),
-                immutable: true,
+                immutable: Some(true),
             },
         );
         cache.record(id, version(1));
@@ -233,7 +261,39 @@ mod tests {
             cache.get(&id),
             Some(VersionLowerBound::Version {
                 version: SequenceNumber::from_u64(2),
-                immutable: true,
+                immutable: Some(true),
+            })
+        );
+    }
+
+    #[test]
+    fn test_known_immutable_bit_upgrades_unknown_at_equal_version() {
+        let cache = LiveObjectCache::with_capacity(100);
+        let id = ObjectID::random();
+
+        cache.record(id, version(3));
+        cache.record(
+            id,
+            VersionLowerBound::Version {
+                version: SequenceNumber::from_u64(3),
+                immutable: Some(false),
+            },
+        );
+        assert_eq!(
+            cache.get(&id),
+            Some(VersionLowerBound::Version {
+                version: SequenceNumber::from_u64(3),
+                immutable: Some(false),
+            })
+        );
+
+        // A known bit is never downgraded back to unknown.
+        cache.record(id, version(3));
+        assert_eq!(
+            cache.get(&id),
+            Some(VersionLowerBound::Version {
+                version: SequenceNumber::from_u64(3),
+                immutable: Some(false),
             })
         );
     }

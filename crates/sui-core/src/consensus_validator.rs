@@ -230,7 +230,7 @@ impl SuiTxValidator {
                             *object_id,
                             crate::live_object_cache::VersionLowerBound::Version {
                                 version: latest_ref.1,
-                                immutable: false,
+                                immutable: None,
                             },
                         ),
                         None => live_object_cache.record_absent(*object_id),
