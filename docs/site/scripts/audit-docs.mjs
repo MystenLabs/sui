@@ -369,11 +369,15 @@ function evaluateGoalRequires(goal, body, data, headings) {
       // Also check for junk questions
       const junkPatterns = [
         /How do I [a-z]+(tion|ment|ness|ity|ing|cap|ticket) /i,   // noun after "How do I"
-        /\b(\w+) \1\b/i,                                           // repeated word ("reference reference")
+        /How do I [a-z]+ (and [a-z]+ing|[a-z]+ing)\?$/i,          // "How do I test and debugging?"
+        /How do I [a-z]+ [a-z]+(ture|ure|icy|ity)\?$/i,           // "How do I user signature?"
+        /How do I [a-z]+ and [a-z]+\?$/i,                          // "How do I create and share?" (no object)
+        /\b(\w{4,}) \1\b/i,                                        // repeated word ("reference reference")
         /How do I (the|a|an|sui|set up sui|operator|data) /i,     // bad starts
         /verify that .* worked\?/i,                                 // template leak
         /need before I can .*\?/i,                                  // template leak
         /overview [a-z]+-[a-z]+\?/i,                                // anchor fragment leak
+        /How do I [a-z]+ [a-z]+ [a-z]+-[a-z]+\?$/i,               // "How do I upgradecap upgradecap?"
       ];
       let junkCount = 0;
       if (has) {
