@@ -208,7 +208,9 @@ impl Event {
 
         page.paginate_results(
             events,
-            |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number),
+            // The ev_sequence_number is an index into the transaction's events (built by
+            // `tx_events_paginated`), so it is protocol-bounded, far below u32::MAX.
+            |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number as u32),
             |(_, e)| Ok(e),
         )
     }
@@ -216,15 +218,12 @@ impl Event {
 
 impl EventToken {
     /// Mint the edge cursor for the event at the given coordinates.
-    pub(crate) fn cursor(checkpoint: u64, tx_seq: u64, ev_sequence_number: u64) -> CEvent {
+    pub(crate) fn cursor(checkpoint: u64, tx_seq: u64, event_index: u32) -> CEvent {
         CEvent::new(OpaqueCursor::new(Self {
             kind: CursorKind::Item,
             checkpoint,
             tx_seq,
-            // Event counts per transaction are protocol-bounded, far below u32::MAX.
-            event_index: ev_sequence_number
-                .try_into()
-                .expect("event index fits in u32"),
+            event_index,
         }))
     }
 }

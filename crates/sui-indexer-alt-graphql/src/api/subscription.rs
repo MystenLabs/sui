@@ -193,7 +193,7 @@ impl Subscription {
                                 let cursor = EventToken::cursor(
                                     processed.summary.sequence_number,
                                     tx.tx_sequence_number,
-                                    idx as u64,
+                                    idx as u32,
                                 )
                                 .encode_cursor();
                                 yield Ok(Edge::new(
