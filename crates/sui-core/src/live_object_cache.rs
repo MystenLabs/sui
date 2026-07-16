@@ -15,12 +15,13 @@
 //! Correctness rests on observations being lower bounds: versions never
 //! decrease, and objects never disappear once they (or their tombstones)
 //! exist, so any previously observed state is a valid lower bound on the
-//! current state. This means the cache needs no invalidation, arbitrary
-//! eviction is safe, and a stale entry can only cause a fallback read, never a
-//! wrong verdict: conflict resolution treats a bound as decisive only in the
-//! consumed direction (bound above the claimed version), and everything else
-//! falls back to an authoritative read of latest-object state (see
-//! `docs/objects_locking.md` §3.5/§3.6a).
+//! current state. This means the cache needs no invalidation and arbitrary
+//! eviction is safe. Bounds are decisive in both directions: above the
+//! claimed version ⇒ consumed; at or below it ⇒ unclaimed, which is sound
+//! because every path that removes a lock from the in-memory layers bumps the
+//! bound past the consumed version first (`record_consumed` at quarantine
+//! flush, before entry removal), and present entries are only ever max-merged
+//! upward (see `record`). See `docs/objects_locking.md` §3.5/§3.6a.
 //!
 //! Entries do not survive restarts (in-memory) and are cleared at epoch
 //! reconfiguration: observations can include executed-but-not-finalized state,
@@ -41,33 +42,18 @@ pub enum VersionLowerBound {
     /// The object id had no version and no tombstone at observation time.
     KnownAbsent,
     /// The latest version was at least `version` at observation time.
-    Version {
-        version: SequenceNumber,
-        /// Whether the object was immutable at exactly `version`. Ownership of
-        /// a given version never changes, so this bit is stable per version.
-        /// Tombstones record `false`.
-        immutable: bool,
-    },
+    Version { version: SequenceNumber },
 }
 
 impl VersionLowerBound {
-    pub fn from_object(object: &Object) -> Self {
-        VersionLowerBound::Version {
-            version: object.version(),
-            immutable: object.is_immutable(),
-        }
-    }
-
     fn version_key(&self) -> Option<SequenceNumber> {
         match self {
             VersionLowerBound::KnownAbsent => None,
-            VersionLowerBound::Version { version, .. } => Some(*version),
+            VersionLowerBound::Version { version } => Some(*version),
         }
     }
 
-    /// The greater (more informative) of two bounds. `KnownAbsent` is the
-    /// bottom element. Equal versions carry equal `immutable` bits, so which
-    /// one wins is immaterial.
+    /// The greater of two bounds. `KnownAbsent` is the bottom element.
     fn merge(self, other: Self) -> Self {
         if other.version_key() > self.version_key() {
             other
@@ -113,9 +99,12 @@ impl LiveObjectCache {
     }
 
     /// Record an observed bound, keeping the max of the existing and new
-    /// bounds. (A plain overwrite would also be correct — every observation is
-    /// a valid lower bound — but max-merge avoids a slow observer regressing a
-    /// fresher entry into extra fallback reads.)
+    /// bounds. Max-merge is load-bearing, not an optimization: warms taken
+    /// outside the quarantine guard (the vote path) can hold a pre-execution
+    /// observation and land AFTER the flush hook's `record_consumed` bump for
+    /// the same object. A plain overwrite would regress the bump while the
+    /// entry is present, and conflict resolution would then decisively (and
+    /// wrongly) clear a consumed ref (see `resolve_owned_object_lock_states`).
     pub fn record(&self, id: ObjectID, bound: VersionLowerBound) {
         let mut shard = self.shard(&id).write();
         if let Some(existing) = shard.get_mut(&id) {
@@ -133,7 +122,12 @@ impl LiveObjectCache {
     }
 
     pub fn record_object(&self, object: &Object) {
-        self.record(object.id(), VersionLowerBound::from_object(object));
+        self.record(
+            object.id(),
+            VersionLowerBound::Version {
+                version: object.version(),
+            },
+        );
     }
 
     /// Record that an id had no version and no tombstone. Only call this from
@@ -142,6 +136,18 @@ impl LiveObjectCache {
     /// returns `None` for a deleted object must not be recorded as absent.
     pub fn record_absent(&self, id: ObjectID) {
         self.record(id, VersionLowerBound::KnownAbsent);
+    }
+
+    /// Record the result of an authoritative, tombstone-aware latest-ref
+    /// lookup (`get_latest_object_ref_or_tombstone`). `None` means the id has
+    /// no version and no tombstone; this must NOT be fed from live-object
+    /// reads, which also return `None` for deleted objects (see
+    /// `record_absent`).
+    pub fn record_latest_lookup(&self, id: ObjectID, latest_version: Option<SequenceNumber>) {
+        match latest_version {
+            Some(version) => self.record(id, VersionLowerBound::Version { version }),
+            None => self.record_absent(id),
+        }
     }
 
     /// Record that `obj_ref` was consumed: its holder executed, so the latest
@@ -157,7 +163,6 @@ impl LiveObjectCache {
             obj_ref.0,
             VersionLowerBound::Version {
                 version: obj_ref.1.next(),
-                immutable: false,
             },
         );
     }
@@ -189,7 +194,6 @@ mod tests {
     fn version(v: u64) -> VersionLowerBound {
         VersionLowerBound::Version {
             version: SequenceNumber::from_u64(v),
-            immutable: false,
         }
     }
 
@@ -217,24 +221,25 @@ mod tests {
     }
 
     #[test]
-    fn test_immutable_bit_follows_version() {
+    fn test_consumed_bump_is_never_regressed_by_stale_warm() {
+        // The contract that makes decisive-clear verdicts sound: once
+        // record_consumed bumps a bound, a later warm carrying a stale
+        // pre-execution observation must not regress it.
         let cache = LiveObjectCache::with_capacity(100);
         let id = ObjectID::random();
-
-        cache.record(
+        let consumed_ref = (
             id,
-            VersionLowerBound::Version {
-                version: SequenceNumber::from_u64(2),
-                immutable: true,
-            },
+            SequenceNumber::from_u64(5),
+            sui_types::digests::ObjectDigest::random(),
         );
-        cache.record(id, version(1));
-        assert_eq!(
-            cache.get(&id),
-            Some(VersionLowerBound::Version {
-                version: SequenceNumber::from_u64(2),
-                immutable: true,
-            })
-        );
+
+        cache.record_consumed(&consumed_ref);
+        assert_eq!(cache.get(&id), Some(version(6)));
+
+        // A vote-thread warm that read the object at v5 before execution.
+        cache.record(id, version(5));
+        assert_eq!(cache.get(&id), Some(version(6)));
+        cache.record_latest_lookup(id, Some(SequenceNumber::from_u64(5)));
+        assert_eq!(cache.get(&id), Some(version(6)));
     }
 }

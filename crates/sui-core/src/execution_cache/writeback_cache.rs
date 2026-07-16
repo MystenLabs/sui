@@ -99,7 +99,6 @@ use super::{
     ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
     cache_types::{CacheResult, CachedVersionMap, IsNewer, MonotonicCache},
     implement_passthrough_traits,
-    object_locks::ObjectLocks,
 };
 
 #[cfg(test)]
@@ -446,8 +445,6 @@ pub struct WritebackCache {
     // - note that we removed any unfinalized packages from the cache during revert_state_update().
     packages: MokaCache<ObjectID, PackageObject>,
 
-    object_locks: ObjectLocks,
-
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     object_notify_read: NotifyRead<InputKey, ()>,
 
@@ -513,7 +510,6 @@ impl WritebackCache {
                 config.object_by_id_cache_size(),
             )),
             packages,
-            object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             object_notify_read: NotifyRead::new(),
             store,
@@ -1335,8 +1331,6 @@ impl WritebackCache {
 
         self.dirty.clear();
 
-        info!("clearing old transaction locks");
-        self.object_locks.clear();
         info!("clearing object per epoch marker table");
         self.store
             .clear_object_per_epoch_marker_table(execution_guard)
@@ -1905,9 +1899,9 @@ impl ObjectCacheRead for WritebackCache {
         } else {
             // requested object ref is live, check if there is a lock
             Ok(
-                match self
-                    .object_locks
-                    .get_transaction_lock(&obj_ref, epoch_store)?
+                match epoch_store
+                    .get_owned_object_lock_in_memory(&obj_ref)
+                    .or_else(|| epoch_store.get_deferred_transaction_lock(&obj_ref))
                 {
                     Some(tx_digest) => ObjectLockStatus::LockedToTx {
                         locked_by_tx: LockDetailsDeprecated {
@@ -2329,7 +2323,7 @@ impl TransactionCacheRead for WritebackCache {
 
 impl ExecutionCacheWrite for WritebackCache {
     fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
-        ObjectLocks::validate_owned_object_versions(self, owned_input_objects)
+        super::object_locks::validate_owned_object_versions(self, owned_input_objects)
     }
 
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {

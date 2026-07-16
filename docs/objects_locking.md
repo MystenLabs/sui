@@ -786,9 +786,11 @@ sequencing discipline. Two seams to implement carefully (the debug double-read
 differentially tests both): deferred-map seeding must reproduce the exact lock set
 (owned refs always; actually-immutable refs excluded — a byzantine under-claim that
 slips through in the mixed era is covered by the backstop, and becomes impossible once
-strict voting is universal); and a re-loaded deferred tx must re-acquire into the current
-commit's locks when it leaves the deferred map, or there is a coverage gap between reload
-and execution (`latest == v`, owned, no memory layer).
+strict voting is universal); and a re-loaded deferred tx must stay covered between reload
+and execution (`latest == v`, owned) — its deferred-locks map entry is kept until the
+*reloading* commit's flush (the flush gate guarantees execution by then), rather than
+re-acquiring into the current commit's locks, whose flush-time key removal would erase
+the re-acquired entry early.
 
 **PR 2 (deletion)** removes the backstop + table + writes + `LockDetailsWrapper` +
 quarantine lock plumbing + debug compare. Its safety condition is the deploy discipline

@@ -282,6 +282,12 @@ impl ConsensusCommitOutput {
         self.owned_object_locks = locks;
     }
 
+    /// Locks acquired by this commit's transactions (deferral bookkeeping derives a
+    /// deferred transaction's lock set from this map).
+    pub fn owned_object_locks(&self) -> &HashMap<ObjectRef, LockDetails> {
+        &self.owned_object_locks
+    }
+
     pub fn write_to_batch(
         self,
         epoch_store: &AuthorityPerEpochStore,
@@ -518,10 +524,6 @@ impl ConsensusOutputCache {
                 .eviction_policy(EvictionPolicy::lru())
                 .build(),
         }
-    }
-
-    pub fn get_deferred_transaction_lock(&self, obj_ref: &ObjectRef) -> Option<TransactionDigest> {
-        self.deferred_transaction_locks.lock().get(obj_ref)
     }
 
     pub fn executed_in_current_epoch(&self, digest: &TransactionDigest) -> bool {
@@ -1374,7 +1376,6 @@ mod tests {
             epoch_store.live_object_cache().get(&lock_ref.0),
             Some(crate::live_object_cache::VersionLowerBound::Version {
                 version: lock_ref.1.next(),
-                immutable: false,
             })
         );
     }

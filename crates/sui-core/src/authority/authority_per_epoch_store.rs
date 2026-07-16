@@ -1755,7 +1755,9 @@ impl AuthorityPerEpochStore {
 
     /// Lock held on `obj_ref` by a commit that is still quarantined (not yet flushed).
     /// Locks of flushed commits are derivable from the objects table (their holders are
-    /// durably executed) and from the deferred-locks map.
+    /// durably executed) and from the deferred-locks map. Production resolution reads
+    /// through held guards instead (see `resolve_owned_object_lock_states`).
+    #[cfg(test)]
     pub fn get_owned_object_lock_in_memory(&self, obj_ref: &ObjectRef) -> Option<LockDetails> {
         self.consensus_quarantine
             .read()
@@ -1763,9 +1765,12 @@ impl AuthorityPerEpochStore {
     }
 
     /// Lock held on `obj_ref` by a currently-deferred transaction.
+    #[cfg(test)]
     pub fn get_deferred_transaction_lock(&self, obj_ref: &ObjectRef) -> Option<TransactionDigest> {
         self.consensus_output_cache
-            .get_deferred_transaction_lock(obj_ref)
+            .deferred_transaction_locks
+            .lock()
+            .get(obj_ref)
     }
 
     pub fn live_object_cache(&self) -> &Arc<LiveObjectCache> {
@@ -1789,7 +1794,8 @@ impl AuthorityPerEpochStore {
     /// "this digest already executed in this epoch", which is durably true wherever the
     /// in-memory layers no longer hold the first sequencing's locks.
     ///
-    /// Returns the new locks to add on success, or error if a conflict exists.
+    /// Returns Ok(()) when all locks are acquirable, or error if a conflict exists.
+    /// Pure check: the caller records the acquired locks.
     pub fn try_acquire_owned_object_locks_post_consensus(
         &self,
         owned_object_refs: &[ObjectRef],
@@ -1797,7 +1803,7 @@ impl AuthorityPerEpochStore {
         current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
         existing_locks: &HashMap<ObjectRef, LockResolution>,
         object_cache: &dyn ObjectCacheRead,
-    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
+    ) -> SuiResult<()> {
         // Lazily computed: only would-be conflicts on consumed refs need it.
         let mut already_executed: Option<bool> = None;
         for obj_ref in owned_object_refs {
@@ -1854,12 +1860,9 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // No conflicts, so the consumed owned object versions are valid (from preconsensus validation)
-        // and available (from the checks above). Return the new locks to add.
-        Ok(owned_object_refs
-            .iter()
-            .map(|obj_ref| (*obj_ref, tx_digest))
-            .collect())
+        // No conflicts, so the consumed owned object versions are valid (from
+        // preconsensus validation) and available (from the checks above).
+        Ok(())
     }
 
     /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
