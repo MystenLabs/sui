@@ -1413,7 +1413,7 @@ mod tests {
             epoch_store.live_object_cache().get(&lock_ref.0),
             Some(crate::live_object_cache::VersionLowerBound::Version {
                 version: lock_ref.1.next(),
-                immutable: false,
+                immutable: None,
             })
         );
     }
