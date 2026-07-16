@@ -647,9 +647,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4e
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4ea1f4573f08c2c75317fcb205b823de" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b4525bd569ed8450f57423bc296c31a98760426", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b4525bd569ed8450f57423bc296c31a98760426", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b4525bd569ed8450f57423bc296c31a98760426", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d8643443b523fb14873c3ea566a7b7f8146b34e8", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d8643443b523fb14873c3ea566a7b7f8146b34e8", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d8643443b523fb14873c3ea566a7b7f8146b34e8", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
