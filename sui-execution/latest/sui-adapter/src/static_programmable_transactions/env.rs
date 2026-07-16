@@ -10,7 +10,6 @@ use crate::{
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     static_programmable_transactions::{
-        execution::context::subst_signature,
         linkage::{analysis::LinkageAnalyzer, resolved_linkage::ExecutableLinkage},
         loading::ast::{
             self as L, Datatype, DeserializedPackage, LoadedFunction, LoadedFunctionInstantiation,
@@ -255,8 +254,6 @@ where
                     self.convert_linked_vm_error(e, &linkage)
                 }
             })?;
-        let runtime_signature = subst_signature(runtime_signature, &loaded_type_arguments)
-            .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let parameters = runtime_signature
             .parameters
             .into_iter()

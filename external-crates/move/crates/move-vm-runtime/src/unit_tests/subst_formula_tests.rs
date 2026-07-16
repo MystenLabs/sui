@@ -9,13 +9,17 @@
 //! `TypeSize`-threaded `apply_subst`) exactly, so that checked `subst` accepts and rejects
 //! precisely the same instantiations it always did. We keep a small reference implementation of
 //! the legacy counters here and compare against it over a family of generated type shapes.
+//!
+//! Substitution is defined on static (arena) terms only, so test base terms are built as
+//! `ArenaType`s (mirrored from runtime terms via [`to_arena`], which keeps the shapes readable);
+//! arguments are runtime `Type`s, as in the real substitution sites.
 
 use crate::{
     cache::{arena::ArenaBuilder, identifier_interner::IdentifierInterner},
     execution::dispatch_tables::VirtualTableKey,
     jit::execution::ast::{
         ArenaType, DatatypeMeasure, DatatypeSizes, FieldVar, FormulatedType, Type, TypeArguments,
-        TypeFormula as _, TypeMeasure, TypeSizes, TypeSubst as _,
+        TypeFormula as _, TypeMeasure, TypeSizes,
     },
     shared::constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
 };
@@ -37,6 +41,38 @@ fn dt_key() -> VirtualTableKey {
 
 fn dt(children: Vec<Type>) -> Type {
     Type::DatatypeInstantiation(Box::new((dt_key(), children)))
+}
+
+/// Mirror a runtime type term into `arena` as an `ArenaType`, so tests can write terms in the
+/// readable runtime syntax and still exercise the arena-term substitution entry points.
+pub(crate) fn to_arena(arena: &ArenaBuilder, ty: &Type) -> ArenaType {
+    match ty {
+        Type::Bool => ArenaType::Bool,
+        Type::U8 => ArenaType::U8,
+        Type::U16 => ArenaType::U16,
+        Type::U32 => ArenaType::U32,
+        Type::U64 => ArenaType::U64,
+        Type::U128 => ArenaType::U128,
+        Type::U256 => ArenaType::U256,
+        Type::Address => ArenaType::Address,
+        Type::Signer => ArenaType::Signer,
+        Type::TyParam(idx) => ArenaType::TyParam(*idx),
+        Type::Vector(t) => ArenaType::Vector(arena.alloc_box(to_arena(arena, t)).unwrap()),
+        Type::Reference(t) => ArenaType::Reference(arena.alloc_box(to_arena(arena, t)).unwrap()),
+        Type::MutableReference(t) => {
+            ArenaType::MutableReference(arena.alloc_box(to_arena(arena, t)).unwrap())
+        }
+        Type::Datatype(key) => ArenaType::Datatype(key.clone()),
+        Type::DatatypeInstantiation(inst) => {
+            let (key, tys) = &**inst;
+            let children = tys.iter().map(|t| to_arena(arena, t)).collect::<Vec<_>>();
+            ArenaType::DatatypeInstantiation(
+                arena
+                    .alloc_box((key.clone(), arena.alloc_vec(children.into_iter()).unwrap()))
+                    .unwrap(),
+            )
+        }
+    }
 }
 
 /// Build `TypeArguments` for tests. The through-field quantities normally come from the
@@ -169,11 +205,13 @@ fn gen_type(seed: &mut u64, budget: u64, n_params: u16) -> Type {
 /// `T = S<Vector<T0>, T1, T0>` applied to `[Vector<Vector<U8>>, U8]`.
 #[test]
 fn formula_hand_example() {
-    let base = dt(vec![
+    let arena = ArenaBuilder::new_bounded();
+    let base_term = dt(vec![
         Type::Vector(Box::new(Type::TyParam(0))),
         Type::TyParam(1),
         Type::TyParam(0),
     ]);
+    let base = to_arena(&arena, &base_term);
     // Base term: 5 nodes (S, Vector, T0, T1, T0); T0 occurs twice, deepest at depth 3;
     // T1 occurs once at depth 2.
     let arg0 = nested_vec(3); // Vector<Vector<U8>>: 3 nodes, depth 3
@@ -262,14 +300,16 @@ fn measure_check_boundaries() {
 fn formula_matches_legacy_traversal_counters() {
     let mut seed = 0x5EED_CAFE_u64;
     for case in 0..500u64 {
+        let arena = ArenaBuilder::new_bounded();
         let n_params = (case % 4) as u16 + 1;
-        let base = gen_type(&mut seed, 4, n_params);
+        let base_term = gen_type(&mut seed, 4, n_params);
+        let base = to_arena(&arena, &base_term);
         let args = (0..n_params)
             .map(|_| gen_type(&mut seed, 3, 0))
             .collect::<Vec<_>>();
 
         let mut legacy = LegacyCounters::default();
-        legacy_subst(&base, &args, 0, &mut legacy);
+        legacy_subst(&base_term, &args, 0, &mut legacy);
 
         let measures = args.iter().map(|t| t.measure()).collect::<Vec<_>>();
         let predicted = base.formula().apply(&measures).unwrap();
@@ -308,7 +348,7 @@ fn formula_matches_legacy_traversal_counters() {
 /// depth error (depth is checked first).
 #[test]
 fn subst_rejects_on_constant_limits() {
-    let base = Type::TyParam(0);
+    let base = ArenaType::TyParam(0);
     // The parameter occurrence itself is counted in addition to the argument's nodes (legacy
     // semantics), so the predicted measure is the argument's plus one node and one level.
     assert!(
@@ -324,22 +364,17 @@ fn subst_rejects_on_constant_limits() {
 }
 
 /// The precomputed-formula route (`FormulatedType`, as stored in loaded packages at translation
-/// time) must agree with the on-the-fly route (`TypeSubst::subst`) on both the built type and
+/// time) must agree with the on-the-fly route (`ArenaType::subst`) on both the built type and
 /// the accept/reject boundary.
 #[test]
 fn formulated_type_matches_on_the_fly_subst() {
     let arena = ArenaBuilder::new_bounded();
-    // Vector<Vector<T0>> as both an arena term and a runtime type term.
-    let arena_term = ArenaType::Vector(
-        arena
-            .alloc_box(ArenaType::Vector(
-                arena.alloc_box(ArenaType::TyParam(0)).unwrap(),
-            ))
-            .unwrap(),
-    );
-    let type_term = Type::Vector(Box::new(Type::Vector(Box::new(Type::TyParam(0)))));
+    // Vector<Vector<T0>>, twice: one term consumed by `FormulatedType`, one kept for the
+    // on-the-fly route.
+    let term = Type::Vector(Box::new(Type::Vector(Box::new(Type::TyParam(0)))));
+    let formulated = FormulatedType::new(to_arena(&arena, &term), &arena).unwrap();
+    let on_the_fly = to_arena(&arena, &term);
 
-    let formulated = FormulatedType::new(arena_term, &arena).unwrap();
     let args = ty_args(vec![nested_vec(4)]);
     let arg_measures = args
         .sizes()
@@ -349,22 +384,25 @@ fn formulated_type_matches_on_the_fly_subst() {
 
     // Same predicted measure...
     let predicted = formulated.predict(&args).unwrap();
-    assert_eq!(predicted, type_term.formula().apply(&arg_measures).unwrap());
+    assert_eq!(
+        predicted,
+        on_the_fly.formula().apply(&arg_measures).unwrap()
+    );
     // ...same built type...
     assert_eq!(
         formulated.instantiate(&args).unwrap(),
-        type_term.subst(args.types()).unwrap()
+        on_the_fly.subst(args.types()).unwrap()
     );
 
     // ...and the same accept/reject boundary at the constant limits. The term contributes three
     // nodes (two vectors plus the parameter occurrence) on top of the argument.
     let at_limit = ty_args(vec![nested_vec(MAX_TYPE_INSTANTIATION_NODES - 3)]);
     assert!(formulated.instantiate(&at_limit).is_ok());
-    assert!(type_term.subst(at_limit.types()).is_ok());
+    assert!(on_the_fly.subst(at_limit.types()).is_ok());
     let over_limit = ty_args(vec![nested_vec(MAX_TYPE_INSTANTIATION_NODES - 2)]);
     let err = formulated.instantiate(&over_limit).unwrap_err();
     assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
-    let err = type_term.subst(over_limit.types()).unwrap_err();
+    let err = on_the_fly.subst(over_limit.types()).unwrap_err();
     assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
 }
 
@@ -443,7 +481,7 @@ fn datatype_measure() {
 }
 
 /// `measure()` must agree with a naive node count (the semantics of the old `count_type_nodes`,
-/// which `measure` subsumes).
+/// which `measure` subsumes), on both type representations.
 #[test]
 fn measure_matches_naive_node_count() {
     fn naive_count(ty: &Type) -> u64 {
@@ -455,8 +493,10 @@ fn measure_matches_naive_node_count() {
     }
     let mut seed = 0xBADC_0FFE_u64;
     for _ in 0..200 {
+        let arena = ArenaBuilder::new_bounded();
         let ty = gen_type(&mut seed, 4, 3);
         assert_eq!(ty.measure().type_size, naive_count(&ty));
+        assert_eq!(to_arena(&arena, &ty).measure(), ty.measure());
     }
 }
 
@@ -465,7 +505,8 @@ fn measure_matches_naive_node_count() {
 /// oversized type is built.
 #[test]
 fn quadratic_instantiation_rejected_before_construction() {
-    let base = dt(vec![Type::TyParam(0); 32]);
+    let arena = ArenaBuilder::new_bounded();
+    let base = to_arena(&arena, &dt(vec![Type::TyParam(0); 32]));
     let arg = nested_vec(95);
 
     // Predicted: 33 base nodes + 32 occurrences × 95 nodes.
@@ -480,7 +521,8 @@ fn quadratic_instantiation_rejected_before_construction() {
 
 #[test]
 fn missing_type_argument_is_an_invariant_violation() {
-    let base = Type::Vector(Box::new(Type::TyParam(1)));
+    let arena = ArenaBuilder::new_bounded();
+    let base = ArenaType::Vector(arena.alloc_box(ArenaType::TyParam(1)).unwrap());
     let err = base
         .formula()
         .apply(&[TypeMeasure {

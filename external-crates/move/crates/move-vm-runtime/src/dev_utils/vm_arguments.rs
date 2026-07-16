@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     execution::{
-        TypeSubst as _,
         dispatch_tables::VMDispatchTables,
         interpreter::locals::{BaseHeap, BaseHeapId},
         values::Value,
@@ -65,12 +64,7 @@ impl ValueFrame {
     ) -> VMResult<Self> {
         let mut frame = Self::empty();
         let fun = vm.find_function(original_id, function_name, &ty_args)?;
-        let arg_types = fun
-            .parameters
-            .into_iter()
-            .map(|ty| ty.subst(&ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
+        let arg_types = fun.parameters;
         frame
             .deserialize_args(&vm.virtual_tables, arg_types, serialized_args)
             .map_err(|e| e.finish(Location::Undefined))?;
