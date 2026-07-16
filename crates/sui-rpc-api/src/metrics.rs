@@ -314,6 +314,7 @@ fn code_as_str(code: tonic::Code) -> &'static str {
 pub(crate) struct SubscriptionMetrics {
     pub inflight_subscribers: IntGauge,
     pub last_recieved_checkpoint: IntGauge,
+    pub payload_messages: IntCounterVec,
 }
 
 impl SubscriptionMetrics {
@@ -328,6 +329,13 @@ impl SubscriptionMetrics {
             last_recieved_checkpoint: register_int_gauge_with_registry!(
                 "subscription_last_recieved_checkpoint",
                 "Last recieved checkpoint by the subscription service",
+                registry,
+            )
+            .unwrap(),
+            payload_messages: register_int_counter_vec_with_registry!(
+                "subscription_payload_messages",
+                "Total number of payload messages emitted by gRPC subscriptions, by type",
+                &["type"],
                 registry,
             )
             .unwrap(),

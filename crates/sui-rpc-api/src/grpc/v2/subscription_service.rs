@@ -67,7 +67,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::CHECKPOINT,
         )?;
         let query = compile_transaction_filter(self, request.filter.as_ref())?;
-        let mut receiver = register(
+        let (mut receiver, payload_messages) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Checkpoints,
@@ -85,6 +85,7 @@ impl SubscriptionService for RpcService {
                         response.cursor = Some(cp);
                         response.checkpoint =
                             Some(render_checkpoint_message(&matched.checkpoint, &read_mask));
+                        payload_messages.inc();
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, .. } => {
                         response.cursor = Some(cp);
@@ -107,7 +108,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::TRANSACTION,
         )?;
         let query = compile_transaction_filter(self, request.filter.as_ref())?;
-        let mut receiver = register(
+        let (mut receiver, payload_messages) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Transactions,
@@ -157,6 +158,7 @@ impl SubscriptionService for RpcService {
                                 },
                                 boundary,
                             ));
+                            payload_messages.inc();
                             yield Ok(response);
                         }
                     }
@@ -197,7 +199,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::EVENT,
         )?;
         let query = compile_event_filter(self, request.filter.as_ref())?;
-        let mut receiver = register(
+        let (mut receiver, payload_messages) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Events,
@@ -264,6 +266,7 @@ impl SubscriptionService for RpcService {
                                 },
                                 boundary,
                             ));
+                            payload_messages.inc();
                             yield Ok(response);
                         }
                     }
@@ -374,13 +377,16 @@ fn compile_event_filter(
 async fn register(
     service: &RpcService,
     spec: SubscriptionSpec,
-) -> Result<mpsc::Receiver<SubscriptionUpdate>, tonic::Status> {
+) -> Result<(mpsc::Receiver<SubscriptionUpdate>, prometheus::IntCounter), tonic::Status> {
     let handle = service
         .subscription_service_handle
         .as_ref()
         .ok_or_else(|| tonic::Status::unimplemented("subscription service not enabled"))?;
-    handle
+    let kind = spec.kind;
+    let receiver = handle
         .register_subscription(spec)
         .await
-        .ok_or_else(|| tonic::Status::unavailable("too many existing subscriptions"))
+        .ok_or_else(|| tonic::Status::unavailable("too many existing subscriptions"))?;
+    let payload_messages = handle.payload_message_counter(kind);
+    Ok((receiver, payload_messages))
 }
