@@ -20,10 +20,11 @@
 //! version ⇒ consumed; at or below it ⇒ unclaimed, which is sound because
 //! every path that removes a lock from the in-memory layers bumps the bound
 //! past the consumed version first (`record_consumed` at quarantine flush,
-//! before entry removal). The one equality case a bound cannot decide is an
-//! object immutable at exactly the claimed version - immutable refs never
-//! bump - which is routed through the lock-table backstop using the
-//! `immutable` bit, re-reading the object when the bit is unknown (see
+//! before entry removal), and present entries are only ever max-merged upward
+//! (see `record`). The one equality case a bound cannot decide is an object
+//! immutable at exactly the claimed version - immutable refs never bump -
+//! which is routed through the lock-table backstop using the `immutable` bit,
+//! re-reading the object when the bit is unknown (see
 //! `docs/objects_locking.md` §3.5/§3.6a).
 //!
 //! Entries do not survive restarts (in-memory) and are cleared at epoch
@@ -139,9 +140,12 @@ impl LiveObjectCache {
     }
 
     /// Record an observed bound, keeping the max of the existing and new
-    /// bounds. (A plain overwrite would also be correct — every observation is
-    /// a valid lower bound — but max-merge avoids a slow observer regressing a
-    /// fresher entry into extra fallback reads.)
+    /// bounds. Max-merge is load-bearing, not an optimization: warms taken
+    /// outside the quarantine guard (the vote path) can hold a pre-execution
+    /// observation and land AFTER the flush hook's `record_consumed` bump for
+    /// the same object. A plain overwrite would regress the bump while the
+    /// entry is present, and conflict resolution would then decisively (and
+    /// wrongly) clear a consumed ref (see `resolve_owned_object_lock_states`).
     pub fn record(&self, id: ObjectID, bound: VersionLowerBound) {
         let mut shard = self.shard(&id).write();
         if let Some(existing) = shard.get_mut(&id) {
@@ -168,6 +172,25 @@ impl LiveObjectCache {
     /// returns `None` for a deleted object must not be recorded as absent.
     pub fn record_absent(&self, id: ObjectID) {
         self.record(id, VersionLowerBound::KnownAbsent);
+    }
+
+    /// Record the result of an authoritative, tombstone-aware latest-ref
+    /// lookup (`get_latest_object_ref_or_tombstone`). `None` means the id has
+    /// no version and no tombstone; this must NOT be fed from live-object
+    /// reads, which also return `None` for deleted objects (see
+    /// `record_absent`).
+    pub fn record_latest_lookup(&self, id: ObjectID, latest_version: Option<SequenceNumber>) {
+        match latest_version {
+            Some(version) => self.record(
+                id,
+                VersionLowerBound::Version {
+                    version,
+                    // Ref-only read: immutability at `version` was not inspected.
+                    immutable: None,
+                },
+            ),
+            None => self.record_absent(id),
+        }
     }
 
     /// Record that `obj_ref` was consumed: its holder executed, so the latest
@@ -296,5 +319,28 @@ mod tests {
                 immutable: Some(false),
             })
         );
+    }
+
+    #[test]
+    fn test_consumed_bump_is_never_regressed_by_stale_warm() {
+        // The contract that makes decisive-clear verdicts sound: once
+        // record_consumed bumps a bound, a later warm carrying a stale
+        // pre-execution observation must not regress it.
+        let cache = LiveObjectCache::with_capacity(100);
+        let id = ObjectID::random();
+        let consumed_ref = (
+            id,
+            SequenceNumber::from_u64(5),
+            sui_types::digests::ObjectDigest::random(),
+        );
+
+        cache.record_consumed(&consumed_ref);
+        assert_eq!(cache.get(&id), Some(version(6)));
+
+        // A vote-thread warm that read the object at v5 before execution.
+        cache.record(id, version(5));
+        assert_eq!(cache.get(&id), Some(version(6)));
+        cache.record_latest_lookup(id, Some(SequenceNumber::from_u64(5)));
+        assert_eq!(cache.get(&id), Some(version(6)));
     }
 }
