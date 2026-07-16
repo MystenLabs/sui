@@ -113,14 +113,13 @@ pub struct RpcConfig {
     /// a streaming request's time to first response; it does not bound the
     /// lifetime of an established stream.
     ///
-    /// Defaults to 60 seconds. Set to `0` to disable.
+    /// Disabled by default. Setting this to `0` also disables it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grpc_timeout_ms: Option<u64>,
 }
 
 const DEFAULT_MAX_CONNECTION_AGE: Duration = Duration::from_secs(4 * 60 * 60);
 const DEFAULT_MAX_CONNECTION_AGE_GRACE: Duration = Duration::from_secs(10 * 60);
-const DEFAULT_GRPC_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl RpcConfig {
     pub fn enable_indexing(&self) -> bool {
@@ -185,9 +184,8 @@ impl RpcConfig {
     /// server-imposed deadline (client `grpc-timeout` headers still apply).
     pub fn grpc_timeout(&self) -> Option<Duration> {
         match self.grpc_timeout_ms {
-            Some(0) => None,
+            Some(0) | None => None,
             Some(ms) => Some(Duration::from_millis(ms)),
-            None => Some(DEFAULT_GRPC_TIMEOUT),
         }
     }
 
@@ -334,9 +332,10 @@ mod connection_lifecycle_tests {
 
     /// These defaults are availability-relevant: connection age plus grace
     /// is the server-side backstop that reclaims streams wedged behind
-    /// HTTP/2 flow-control windows, and the gRPC deadline bounds requests
-    /// from clients that set none. Pin them so they cannot silently regress
-    /// to disabled.
+    /// HTTP/2 flow-control windows. Pin them so they cannot silently
+    /// regress to disabled. The gRPC deadline is opt-in and defaults to
+    /// disabled; clients bound their own requests via `grpc-timeout`
+    /// headers.
     #[test]
     fn connection_lifecycle_defaults_are_enabled() {
         let config = RpcConfig::default();
@@ -348,7 +347,7 @@ mod connection_lifecycle_tests {
             config.max_connection_age_grace(),
             Duration::from_secs(10 * 60)
         );
-        assert_eq!(config.grpc_timeout(), Some(Duration::from_secs(60)));
+        assert_eq!(config.grpc_timeout(), None);
     }
 
     #[test]
