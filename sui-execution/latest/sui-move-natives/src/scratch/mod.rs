@@ -270,7 +270,7 @@ pub fn exists_with_type_impl(
 
     native_charge_gas_early_exit!(
         context,
-        scratch_exists_with_type_type_cost * u64::from(ty.size()?).into()
+        scratch_exists_with_type_type_cost * u64::from(ty.size()).into()
     );
 
     let scratch_runtime: &ScratchRuntime = get_extension!(context)?;

@@ -13,6 +13,7 @@ use crate::{
         vm_arguments::ValueFrame,
         vm_test_adapter::VMTestAdapter,
     },
+    jit::execution::ast::{Type as TnType, TypeSubst as _},
     shared::linkage_context::LinkageContext,
 };
 use move_binary_format::{
@@ -1065,4 +1066,107 @@ fn deep_rec_gen_call(
 // Code for all `CallGeneric` tests
 fn get_generic_call() -> Vec<Bytecode> {
     vec![LdU64(0), CallGeneric(FunctionInstantiationIndex(1))]
+}
+
+fn tn_nested_vec_type(nodes: u64) -> TnType {
+    let mut t = TnType::U128;
+    for _ in 1..nodes {
+        t = TnType::Vector(Box::new(t));
+    }
+    t
+}
+
+fn tn_nested_vec_tag(nodes: usize) -> TypeTag {
+    let mut t = TypeTag::U128;
+    for _ in 1..nodes {
+        t = TypeTag::Vector(Box::new(t));
+    }
+    t
+}
+
+fn tn_model_datatype_instantiation(type_params: &[TnType], ty_args: &[TnType]) -> (u64, u64) {
+    let mut pre = 1u64;
+    for ty in type_params {
+        pre += ty.measure().type_size;
+    }
+    for ty in ty_args {
+        pre += ty.measure().type_size;
+    }
+    let post_children = type_params
+        .iter()
+        .map(|ty| ty.subst(ty_args).unwrap())
+        .collect::<Vec<_>>();
+    let post = 1u64
+        + post_children
+            .iter()
+            .map(|ty| ty.measure().type_size)
+            .sum::<u64>();
+    (pre, post)
+}
+
+#[test]
+fn type_node_guard_escape_trace_poc() {
+    let type_params = vec![TnType::TyParam(0); 32];
+    let ty_args = vec![tn_nested_vec_type(95)];
+    let (pre, post) = tn_model_datatype_instantiation(&type_params, &ty_args);
+    println!("type-node guard escape: pre_subst_guard_sum={pre} post_subst_nodes={post}");
+    assert_eq!(pre, 128);
+    assert_eq!(post, 3041);
+}
+
+fn tn_pack_gen(
+    addr: AccountAddress,
+    session: &mut InMemoryTestAdapter,
+    struct_ty_params: usize,
+    arg_nodes: usize,
+) -> (ModuleId, Identifier, Vec<TypeTag>) {
+    let snippet = vec![LdU8(0), PackGeneric(StructDefInstantiationIndex(0)), Pop];
+    let (self_id, entry_name) = make_module(
+        session,
+        addr,
+        1,
+        None,
+        snippet,
+        1,
+        vec![],
+        struct_ty_params,
+        vec![Signature(vec![TypeParameter(0); struct_ty_params])],
+        vec![],
+        vec![],
+    );
+    (self_id, entry_name, vec![tn_nested_vec_tag(arg_nodes)])
+}
+
+fn tn_pack_attack(
+    addr: AccountAddress,
+    session: &mut InMemoryTestAdapter,
+) -> (ModuleId, Identifier, Vec<TypeTag>) {
+    tn_pack_gen(addr, session, 32, 95)
+}
+
+fn tn_pack_legit(
+    addr: AccountAddress,
+    session: &mut InMemoryTestAdapter,
+) -> (ModuleId, Identifier, Vec<TypeTag>) {
+    tn_pack_gen(addr, session, 2, 63)
+}
+
+#[test]
+fn type_node_pack_generic_e2e_poc() {
+    let gas = 20_000;
+    let status = |r: &VMResult<ValueFrame>| r.as_ref().err().map(|e| e.major_status());
+    let (baseline, baseline_ms) = run_with_module(&mut get_gas_meter(gas), load_pop);
+    let (legit, legit_ms) = run_with_module(&mut get_gas_meter(gas), tn_pack_legit);
+    let (attack, attack_ms) = run_with_module(&mut get_gas_meter(gas), tn_pack_attack);
+    println!(
+        "baseline load_pop:      {baseline_ms}ms {:?}",
+        status(&baseline)
+    );
+    println!("legit pack 127 nodes:   {legit_ms}ms {:?}", status(&legit));
+    println!(
+        "attack pack 3041 nodes: {attack_ms}ms {:?}",
+        status(&attack)
+    );
+    assert_eq!(status(&attack), Some(StatusCode::VM_MAX_TYPE_NODES_REACHED));
+    assert_ne!(status(&attack), Some(StatusCode::OUT_OF_GAS));
 }

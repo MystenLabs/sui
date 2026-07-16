@@ -81,7 +81,7 @@ struct Definitions {
     field_handles: Vec<VMPointer<FieldHandle>>,
     field_instantiations: Vec<VMPointer<FieldInstantiation>>,
     function_instantiations: Vec<VMPointer<FunctionInstantiation>>,
-    signatures: Vec<VMPointer<ArenaVec<ArenaType>>>,
+    signatures: Vec<VMPointer<ArenaVec<FormulatedType>>>,
     constants: Vec<VMPointer<Constant>>,
 }
 
@@ -155,7 +155,7 @@ impl FunctionContext<'_, '_> {
     fn get_vec_type(
         &self,
         signature_index: &SignatureIndex,
-    ) -> PartialVMResult<VMPointer<ArenaType>> {
+    ) -> PartialVMResult<VMPointer<FormulatedType>> {
         let Some(tys) = self.definitions.signatures.get(signature_index.0 as usize) else {
             return Err(partial_vm_error!(
                 VERIFIER_INVARIANT_VIOLATION,
@@ -567,7 +567,13 @@ fn datatypes(
             let datatype_info =
                 context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
             let name = context.interner.intern_identifier(&name);
-            let descriptor = DatatypeDescriptor::new(name, defining_id, original_id, datatype_info);
+            let measure = DatatypeMeasure::for_datatype_fields(
+                struct_.fields.iter(),
+                /* extra_layout_nodes */ 0,
+                &context.package_arena,
+            )?;
+            let descriptor =
+                DatatypeDescriptor::new(name, defining_id, original_id, datatype_info, measure);
             Ok(descriptor)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
@@ -580,7 +586,19 @@ fn datatypes(
             let original_id = module_original_id;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
             let name = context.interner.intern_identifier(&name);
-            let descriptor = DatatypeDescriptor::new(name, defining_id, original_id, datatype_info);
+            // The value depth of an enum is the maximum over all of its variants, so the
+            // measure folds every variant's fields; its layout counts one node per variant on
+            // top of the fields, mirroring the layout traversal.
+            let measure = DatatypeMeasure::for_datatype_fields(
+                enum_
+                    .variants
+                    .iter()
+                    .flat_map(|variant| variant.fields.iter()),
+                /* extra_layout_nodes */ enum_.variants.len() as u64,
+                &context.package_arena,
+            )?;
+            let descriptor =
+                DatatypeDescriptor::new(name, defining_id, original_id, datatype_info, measure);
             Ok(descriptor)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
@@ -761,8 +779,8 @@ fn cache_signatures(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
 ) -> PartialVMResult<(
-    ArenaVec<ArenaVec<ArenaType>>,
-    BTreeMap<SignatureIndex, VMPointer<ArenaVec<ArenaType>>>,
+    ArenaVec<ArenaVec<FormulatedType>>,
+    BTreeMap<SignatureIndex, VMPointer<ArenaVec<FormulatedType>>>,
 )> {
     let signatures = module
         .signatures()
@@ -771,7 +789,12 @@ fn cache_signatures(
             let tys = sig
                 .0
                 .iter()
-                .map(|ty| make_arena_type(context, module, ty))
+                .map(|ty| {
+                    // Pair each signature type with its substitution formula, computed once
+                    // here so every runtime instantiation check is pure arithmetic.
+                    let ty = make_arena_type(context, module, ty)?;
+                    FormulatedType::new(ty, &context.package_arena)
+                })
                 .collect::<PartialVMResult<Vec<_>>>()?;
             context.arena_vec(tys.into_iter())
         })
@@ -839,7 +862,7 @@ fn struct_instantiations(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
     structs: &[StructDef],
-    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+    signatures: &[VMPointer<ArenaVec<FormulatedType>>],
 ) -> PartialVMResult<ArenaVec<StructInstantiation>> {
     let struct_insts = module
         .struct_instantiations()
@@ -867,7 +890,7 @@ fn enum_instantiations(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
     enums: &[EnumDef],
-    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+    signatures: &[VMPointer<ArenaVec<FormulatedType>>],
 ) -> PartialVMResult<ArenaVec<EnumInstantiation>> {
     let enum_insts = module
         .enum_instantiations()
@@ -905,7 +928,7 @@ fn enum_instantiations(
 fn function_instantiations(
     package_context: &mut PackageContext,
     module: &CompiledModule,
-    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+    signatures: &[VMPointer<ArenaVec<FormulatedType>>],
 ) -> PartialVMResult<ArenaVec<FunctionInstantiation>> {
     dbg_println!(flag: function_list_sizes, "handle size: {}", module.function_handles().len());
 
