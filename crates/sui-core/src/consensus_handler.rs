@@ -150,13 +150,25 @@ pub(crate) fn resolve_owned_object_lock_states(
     let mut resolutions = HashMap::new();
     let mut backstop_refs = Vec::new();
 
+    // One lock acquisition per layer for the whole batch, not per ref: per-ref
+    // acquisition queues behind quarantine flushes (long write-lock critical sections)
+    // once per ref. Holding the read guard across the batch also makes the entire
+    // resolution atomic with respect to flushes, so the bump-before-removal ordering
+    // the cache verdicts rely on cannot interleave mid-batch. Lock order (quarantine →
+    // deferred) matches the flush path.
+    let quarantine = epoch_store.consensus_quarantine.read();
+    let deferred_locks = epoch_store
+        .consensus_output_cache
+        .deferred_transaction_locks
+        .lock();
+
     for obj_ref in obj_refs {
-        if let Some(lock) = epoch_store.get_owned_object_lock_in_memory(obj_ref) {
+        if let Some(lock) = quarantine.get_owned_object_lock_in_memory(obj_ref) {
             stats.quarantine += 1;
             resolutions.insert(*obj_ref, LockResolution::LockedBy(lock));
             continue;
         }
-        if let Some(lock) = epoch_store.get_deferred_transaction_lock(obj_ref) {
+        if let Some(lock) = deferred_locks.get(obj_ref) {
             stats.deferred += 1;
             resolutions.insert(*obj_ref, LockResolution::LockedBy(lock));
             continue;

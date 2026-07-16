@@ -29,7 +29,8 @@
 //! restarts) the property holds - replayed commits re-execute, so state only
 //! advances.
 
-use moka::sync::SegmentedCache as MokaCache;
+use parking_lot::RwLock;
+use std::collections::HashMap;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::object::Object;
 
@@ -76,11 +77,19 @@ impl VersionLowerBound {
     }
 }
 
+/// Sharded flat map rather than an LRU cache: the quarantine flush bumps bounds for
+/// every flushed lock ref while holding the quarantine write lock, so writes must be a
+/// couple of hash-map operations, not an eviction-policy update. Bounded by dropping
+/// *inserts* (never updates) when a shard is full after evicting one arbitrary entry —
+/// both are sound: a missing entry falls back to an authoritative read, while updates of
+/// present entries (which consumption bumps rely on) always succeed.
 pub struct LiveObjectCache {
-    entries: MokaCache<ObjectID, VersionLowerBound>,
+    shards: Vec<RwLock<HashMap<ObjectID, VersionLowerBound>>>,
+    capacity_per_shard: usize,
 }
 
-const DEFAULT_CAPACITY: u64 = 1_000_000;
+const DEFAULT_CAPACITY: usize = 1_000_000;
+const SHARDS: usize = 64;
 
 impl LiveObjectCache {
     pub fn new() -> Self {
@@ -91,10 +100,16 @@ impl LiveObjectCache {
         Self::with_capacity(capacity)
     }
 
-    pub fn with_capacity(capacity: u64) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            entries: MokaCache::builder(8).max_capacity(capacity).build(),
+            shards: (0..SHARDS).map(|_| RwLock::new(HashMap::new())).collect(),
+            capacity_per_shard: (capacity / SHARDS).max(1),
         }
+    }
+
+    fn shard(&self, id: &ObjectID) -> &RwLock<HashMap<ObjectID, VersionLowerBound>> {
+        // ObjectIDs are hash digests; the first byte is uniform.
+        &self.shards[id.as_ref()[0] as usize % SHARDS]
     }
 
     /// Record an observed bound, keeping the max of the existing and new
@@ -102,9 +117,19 @@ impl LiveObjectCache {
     /// a valid lower bound — but max-merge avoids a slow observer regressing a
     /// fresher entry into extra fallback reads.)
     pub fn record(&self, id: ObjectID, bound: VersionLowerBound) {
-        self.entries.entry(id).and_upsert_with(|existing| {
-            existing.map_or(bound, |entry| entry.into_value().merge(bound))
-        });
+        let mut shard = self.shard(&id).write();
+        if let Some(existing) = shard.get_mut(&id) {
+            *existing = existing.merge(bound);
+            return;
+        }
+        if shard.len() >= self.capacity_per_shard {
+            // Evict one arbitrary entry to make room; evicting is always sound
+            // (a missing entry just means an authoritative fallback read).
+            if let Some(&victim) = shard.keys().next() {
+                shard.remove(&victim);
+            }
+        }
+        shard.insert(id, bound);
     }
 
     pub fn record_object(&self, object: &Object) {
@@ -138,14 +163,16 @@ impl LiveObjectCache {
     }
 
     pub fn get(&self, id: &ObjectID) -> Option<VersionLowerBound> {
-        self.entries.get(id)
+        self.shard(id).read().get(id).copied()
     }
 
     /// Drop all bounds. MUST be called at epoch reconfiguration: end-of-epoch state
     /// clearing discards executed-but-not-finalized transaction outputs, so bounds
     /// recorded from that state are no longer lower bounds of durable latest versions.
     pub fn clear(&self) {
-        self.entries.invalidate_all();
+        for shard in &self.shards {
+            shard.write().clear();
+        }
     }
 }
 
