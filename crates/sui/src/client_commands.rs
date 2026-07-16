@@ -3422,21 +3422,54 @@ pub async fn max_gas_budget(client: &Client) -> Result<u64, anyhow::Error> {
     )
 }
 
-/// Queries the protocol config for the maximum number of objects a gas payment may contain.
-async fn max_gas_payment_objects(client: &Client) -> Result<usize, anyhow::Error> {
+/// The protocol limits that bound how many coins a single transaction can drain.
+struct CoinLimits {
+    /// Maximum number of objects a gas payment may contain.
+    max_gas_payment_objects: usize,
+    /// Maximum number of arguments a single command may take. A command's target does not count
+    /// towards this, and the limit is exclusive.
+    max_arguments: usize,
+    /// Maximum number of object inputs a transaction may have. The gas payment does not count
+    /// towards this.
+    max_input_objects: usize,
+}
+
+/// Queries the protocol config for the limits that bound how many coins fit in one transaction.
+async fn coin_limits(client: &Client) -> Result<CoinLimits, anyhow::Error> {
     let cfg = client.get_protocol_config(None).await?;
-    cfg.attributes()
-        .get("max_gas_payment_objects")
-        .and_then(|s| s.parse::<usize>().ok())
-        .ok_or_else(|| {
-            anyhow!(
-                "Could not find the maximum number of gas payment objects in the protocol config."
-            )
-        })
+    let attributes = cfg.attributes();
+    let limit = |name: &str| -> Result<usize, anyhow::Error> {
+        attributes
+            .get(name)
+            .and_then(|s| s.parse().ok())
+            .with_context(|| format!("Could not find {name} in the protocol config."))
+    };
+
+    Ok(CoinLimits {
+        max_gas_payment_objects: limit("max_gas_payment_objects")?,
+        max_arguments: limit("max_arguments")?,
+        max_input_objects: limit("max_input_objects")?,
+    })
+}
+
+/// Warn about, and drop, any coins past what one transaction can hold.
+fn truncate_to_max_coins(coin_refs: &mut Vec<ObjectRef>, max_coins: usize) {
+    if coin_refs.len() > max_coins {
+        let remaining = coin_refs.len() - max_coins;
+        coin_refs.truncate(max_coins);
+        eprintln!(
+            "Warning: a transaction sends at most {max_coins} coins, so {remaining} of your coins \
+             will not be sent. Run the command again to send the rest."
+        );
+    }
 }
 
 /// Send every `Coin<T>` object owned by `signer` to `recipient`'s address balance. The signer's
 /// own address balance is left untouched: only their coin objects are drained.
+///
+/// Every coin is merged into one, which is then sent by value. SUI is what pays for gas, so its
+/// coins go into the gas payment, where gas smashing merges them into the gas coin for nothing;
+/// coins of any other type are ordinary inputs, merged into the first of them.
 async fn send_all_coins(
     context: &mut WalletContext,
     signer: SuiAddress,
@@ -3446,53 +3479,76 @@ async fn send_all_coins(
     processing: TxProcessingArgs,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let client = context.grpc_client()?;
+
+    // For SUI the coins being sent are also what pays for gas, which a sponsor's gas coin cannot do:
+    // it is the sponsor's amount that would end up with the recipient.
+    let is_sui = coin_type_tag == GAS::type_tag();
     ensure!(
-        coin_type_tag == GAS::type_tag(),
-        "--all-coins is only supported for SUI. Use --amount with --stateless to send another \
-         coin type from your address balance."
-    );
-    // The coins being sent are also what pays for gas, which a sponsor's gas coin cannot do: it is
-    // the sponsor's money that would end up with the recipient.
-    ensure!(
-        gas_data.gas_sponsor.is_none(),
-        "--all-coins cannot be used with a gas sponsor, because the coins being sent are the ones \
-         paying for gas."
+        !is_sui || gas_data.gas_sponsor.is_none(),
+        "--all-coins cannot be used with a gas sponsor for SUI coin type, because the coins being \
+         sent are the ones paying for gas."
     );
 
     let coins: Vec<Object> = client
-        .list_owned_objects(signer, Some(GasCoin::type_()))
+        .list_owned_objects(signer, Some(Coin::type_(coin_type_tag.clone())))
         .try_collect()
         .await?;
-    ensure!(!coins.is_empty(), "No coins available to send");
+    ensure!(
+        !coins.is_empty(),
+        "No {coin_type_tag} coins available to send"
+    );
 
     let mut coin_refs: Vec<ObjectRef> =
         coins.iter().map(|c| c.compute_object_reference()).collect();
 
-    // Every coin has to fit in a single gas payment, so when the signer holds more than that, drain
-    // as many as will fit and let them run the command again for the rest.
-    let max_payment = max_gas_payment_objects(&client).await?;
-    if coin_refs.len() > max_payment {
-        let remaining = coin_refs.len() - max_payment;
-        coin_refs.truncate(max_payment);
-        eprintln!(
-            "Warning: a gas payment holds at most {max_payment} coins, so {remaining} of your \
-             coins will not be sent. Run the command again to send the rest."
-        );
+    // Coins that do not fit in the gas payment are merged in by a single `MergeCoins`, so they are
+    // bounded by the per-command argument limit, and each is also a transaction input. For SUI they
+    // are all merge sources; otherwise the first is the merge target, which is not an argument.
+    let limits = coin_limits(&client).await?;
+    let smashed = if is_sui {
+        limits.max_gas_payment_objects
+    } else {
+        0
+    };
+    let max_merged = std::cmp::min(
+        limits.max_arguments - if is_sui { 1 } else { 0 },
+        limits.max_input_objects,
+    );
+    truncate_to_max_coins(&mut coin_refs, smashed + max_merged);
+
+    // Whatever is left in `coin_refs` is the gas payment, which is empty unless the coin is SUI.
+    let merged_refs = coin_refs.split_off(std::cmp::min(coin_refs.len(), smashed));
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let mut merged_args = merged_refs
+        .iter()
+        .map(|r| builder.obj(ObjectArg::ImmOrOwnedObject(*r)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Gas smashing has already merged the gas payment into the gas coin, so that is what the rest
+    // merge into; without one, the first coin takes the role. `MergeCoins` only borrows its target,
+    // so either way it is still ours to send afterwards.
+    let target = if is_sui {
+        Argument::GasCoin
+    } else {
+        merged_args.remove(0)
+    };
+    if !merged_args.is_empty() {
+        builder.command(Command::MergeCoins(target, merged_args));
     }
 
-    // Hand the whole (smashed) gas coin to the recipient. Moving the gas coin into
-    // `coin::send_funds` by value is understood by the execution layer: it consumes the gas coin
-    // and refunds the unused gas budget into the recipient's address balance, so no dust is left
-    // behind. Passing the coins as an explicit gas payment also keeps the fullnode from performing
-    // gas selection, which would otherwise pull in the signer's address balance as well.
-    let mut builder = ProgrammableTransactionBuilder::new();
+    // Moving the coin into `coin::send_funds` by value is understood by the execution layer: when
+    // it is the gas coin, that consumes it and refunds the unused gas budget into the recipient's
+    // address balance, so no dust is left behind. Passing the SUI coins as an explicit gas payment
+    // also keeps the fullnode from performing gas selection, which would otherwise pull in the
+    // signer's address balance as well.
     let recipient_arg = builder.pure(recipient)?;
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::from_str("coin")?,
         Identifier::from_str("send_funds")?,
         vec![coin_type_tag],
-        vec![Argument::GasCoin, recipient_arg],
+        vec![target, recipient_arg],
     );
     let tx_kind = TransactionKind::programmable(builder.finish());
 

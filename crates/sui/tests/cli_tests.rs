@@ -24,6 +24,9 @@ use sui_keys::key_identity::KeyIdentity;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_rpc_api::Client;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::TypeTag;
+use sui_types::coin::Coin;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
 use sui_types::object::{Object, Owner};
@@ -3715,6 +3718,296 @@ async fn test_send_funds_all_coins() -> Result<(), anyhow::Error> {
         coins_before.coin_balance() as i64 - gas_used
     );
     assert_eq!(recipient_after.coin_balance(), 0);
+
+    Ok(())
+}
+
+/// Publish the `trusted_coin` package and mint one `Coin<TRUSTED_COIN>` per entry in `amounts`, all
+/// owned by `context`'s active address. Returns the minted coin's type.
+async fn publish_and_mint_trusted_coin(
+    context: &mut WalletContext,
+    rgp: u64,
+    amounts: &[u64],
+) -> Result<TypeTag, anyhow::Error> {
+    let response = publish_with_gas(context, vec![]).await?;
+    assert!(
+        response.effects.status().is_ok(),
+        "publishing trusted_coin failed: {:?}",
+        response.effects.status()
+    );
+
+    let package_id = *response
+        .effects
+        .published_packages()
+        .first()
+        .expect("trusted_coin package must be published");
+    let coin_type = TypeTag::from_str(&format!("{package_id}::trusted_coin::TRUSTED_COIN"))?;
+
+    // Look the cap up by type: publishing hands the sender an `UpgradeCap` as well, so being owned
+    // by them is not enough to identify it.
+    let treasury_cap_type = TypeTag::from_str(&format!("0x2::coin::TreasuryCap<{coin_type}>"))?;
+    let TypeTag::Struct(treasury_cap_struct) = treasury_cap_type else {
+        panic!("TreasuryCap must be a struct type");
+    };
+    let client = context.grpc_client()?;
+    let treasury_cap = client
+        .get_owned_objects(
+            context.active_address()?,
+            Some(*treasury_cap_struct),
+            None,
+            None,
+        )
+        .await?
+        .items
+        .first()
+        .expect("trusted_coin init must create a treasury cap")
+        .id();
+
+    let sender = context.active_address()?;
+    for amount in amounts {
+        // `trusted_coin::mint` returns the coin rather than transferring it, and `Call` leaves
+        // return values unused, so mint through the framework's entry function instead.
+        let result = SuiClientCommands::Call {
+            package: SUI_FRAMEWORK_PACKAGE_ID,
+            module: "coin".to_string(),
+            function: "mint_and_transfer".to_string(),
+            type_args: vec![coin_type.clone()],
+            args: vec![
+                SuiJsonValue::new(json!(treasury_cap.to_string()))?,
+                SuiJsonValue::new(json!(amount.to_string()))?,
+                SuiJsonValue::new(json!(sender.to_string()))?,
+            ],
+            payment: PaymentArgs::default(),
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
+        }
+        .execute(context)
+        .await?;
+
+        let SuiClientCommandResult::TransactionBlock(response) = result else {
+            panic!("Call did not return a transaction block");
+        };
+        assert!(
+            response.effects.status().is_ok(),
+            "minting TRUSTED_COIN failed: {:?}",
+            response.effects.status()
+        );
+    }
+
+    Ok(coin_type)
+}
+
+/// The `Coin<T>` objects owned by `address`.
+async fn coins_of_type(
+    client: &Client,
+    address: SuiAddress,
+    coin_type: &TypeTag,
+) -> Result<Vec<Object>, anyhow::Error> {
+    Ok(client
+        .get_owned_objects(address, Some(Coin::type_(coin_type.clone())), None, None)
+        .await?
+        .items)
+}
+
+/// `send-funds --all-coins` drains a non-SUI coin type too. Gas is paid in SUI from a separate
+/// source, so unlike the SUI case the recipient receives the full amount with nothing deducted.
+#[sim_test]
+async fn test_send_funds_all_coins_non_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let recipient = &recipients[0];
+    let recipient_address = addresses[0];
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let amounts = [1_000u64, 2_000, 3_000];
+    let minted: u64 = amounts.iter().sum();
+    let coin_type = publish_and_mint_trusted_coin(context, rgp, &amounts).await?;
+    let TypeTag::Struct(coin_struct_tag) = &coin_type else {
+        panic!("TRUSTED_COIN must be a struct type");
+    };
+
+    let before = client.get_balance(sender, coin_struct_tag).await?;
+    assert_eq!(before.coin_balance(), minted);
+    assert_eq!(
+        coins_of_type(&client, sender, &coin_type).await?.len(),
+        amounts.len()
+    );
+    let sui_before = client.get_balance(sender, &GAS::type_()).await?;
+
+    let result = SuiClientCommands::SendFunds {
+        to: recipient.clone(),
+        amount: None,
+        all_coins: true,
+        coin_type: Some(coin_type.clone()),
+        stateless: false,
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(
+        response.effects.status().is_ok(),
+        "send-funds --all-coins failed: {:?}",
+        response.effects.status()
+    );
+
+    // Every TRUSTED_COIN the sender owned is gone.
+    let sender_after = client.get_balance(sender, coin_struct_tag).await?;
+    assert_eq!(sender_after.coin_balance(), 0);
+    assert!(coins_of_type(&client, sender, &coin_type).await?.is_empty());
+
+    // The recipient received the whole minted amount, with no gas deducted from it.
+    let recipient_after = client
+        .get_balance(recipient_address, coin_struct_tag)
+        .await?;
+    assert_eq!(recipient_after.address_balance(), minted);
+    assert_eq!(recipient_after.coin_balance(), 0);
+
+    // The sender paid for the transfer in SUI instead.
+    let sui_after = client.get_balance(sender, &GAS::type_()).await?;
+    let gas_used = response.effects.gas_cost_summary().net_gas_usage();
+    assert_eq!(
+        sui_after.coin_balance() as i64 + sui_after.address_balance() as i64,
+        sui_before.coin_balance() as i64 + sui_before.address_balance() as i64 - gas_used
+    );
+
+    Ok(())
+}
+
+/// A sender holding exactly one non-SUI coin has nothing to merge it with, and a `MergeCoins` with
+/// no sources is not a valid command, so `--all-coins` has to skip the merge entirely.
+#[sim_test]
+async fn test_send_funds_all_coins_non_sui_single_coin() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let recipient = &recipients[0];
+    let recipient_address = addresses[0];
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let minted = 5_000u64;
+    let coin_type = publish_and_mint_trusted_coin(context, rgp, &[minted]).await?;
+    let TypeTag::Struct(coin_struct_tag) = &coin_type else {
+        panic!("TRUSTED_COIN must be a struct type");
+    };
+    assert_eq!(coins_of_type(&client, sender, &coin_type).await?.len(), 1);
+
+    let result = SuiClientCommands::SendFunds {
+        to: recipient.clone(),
+        amount: None,
+        all_coins: true,
+        coin_type: Some(coin_type.clone()),
+        stateless: false,
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(
+        response.effects.status().is_ok(),
+        "send-funds --all-coins with a single coin failed: {:?}",
+        response.effects.status()
+    );
+
+    assert!(coins_of_type(&client, sender, &coin_type).await?.is_empty());
+    let recipient_after = client
+        .get_balance(recipient_address, coin_struct_tag)
+        .await?;
+    assert_eq!(recipient_after.address_balance(), minted);
+
+    Ok(())
+}
+
+/// `--all-coins` for a non-SUI coin works with a gas sponsor: the sponsor pays SUI gas, which has
+/// nothing to do with the coins being sent. The SUI case still refuses, because there the coins
+/// being sent are the gas payment.
+#[sim_test]
+async fn test_send_funds_all_coins_sponsor() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let recipient = &recipients[0];
+    let recipient_address = addresses[0];
+    let sponsor = test_cluster.get_address_1();
+    let context = &mut test_cluster.wallet;
+
+    let minted = 7_000u64;
+    let coin_type = publish_and_mint_trusted_coin(context, rgp, &[minted, minted]).await?;
+    let TypeTag::Struct(coin_struct_tag) = &coin_type else {
+        panic!("TRUSTED_COIN must be a struct type");
+    };
+
+    let sponsor_before = client.get_balance(sponsor, &GAS::type_()).await?;
+
+    let result = SuiClientCommands::SendFunds {
+        to: recipient.clone(),
+        amount: None,
+        all_coins: true,
+        coin_type: Some(coin_type.clone()),
+        stateless: false,
+        gas_data: GasDataArgs {
+            gas_sponsor: Some(sponsor),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = result else {
+        panic!("SendFunds did not return a transaction block");
+    };
+    assert!(
+        response.effects.status().is_ok(),
+        "sponsored send-funds --all-coins failed: {:?}",
+        response.effects.status()
+    );
+
+    let recipient_after = client
+        .get_balance(recipient_address, coin_struct_tag)
+        .await?;
+    assert_eq!(recipient_after.address_balance(), minted * 2);
+
+    // The sponsor, not the sender, paid the gas.
+    let sponsor_after = client.get_balance(sponsor, &GAS::type_()).await?;
+    let gas_used = response.effects.gas_cost_summary().net_gas_usage();
+    assert_eq!(
+        sponsor_after.coin_balance() as i64 + sponsor_after.address_balance() as i64,
+        sponsor_before.coin_balance() as i64 + sponsor_before.address_balance() as i64 - gas_used
+    );
+
+    // SUI still cannot be sponsored: there the coins being sent are what pays for gas.
+    let err = SuiClientCommands::SendFunds {
+        to: recipient.clone(),
+        amount: None,
+        all_coins: true,
+        coin_type: None,
+        stateless: false,
+        gas_data: GasDataArgs {
+            gas_sponsor: Some(sponsor),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("cannot be used with a gas sponsor"),
+        "unexpected error: {err}"
+    );
 
     Ok(())
 }
