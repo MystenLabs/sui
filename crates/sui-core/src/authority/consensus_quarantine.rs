@@ -954,7 +954,7 @@ impl ConsensusOutputQuarantine {
     /// In-memory-only lock lookup: locks acquired by commits that are still quarantined
     /// (not yet flushed to the epoch DB). Used by the objects-table-based conflict
     /// resolution, which covers flushed commits via the objects table instead of the DB.
-    pub(super) fn get_owned_object_lock_in_memory(
+    pub(crate) fn get_owned_object_lock_in_memory(
         &self,
         obj_ref: &ObjectRef,
     ) -> Option<LockDetails> {
