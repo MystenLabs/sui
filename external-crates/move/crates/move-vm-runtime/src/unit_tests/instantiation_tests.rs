@@ -1088,10 +1088,10 @@ fn tn_model_datatype_instantiation(type_params: &[TnType], ty_args: &[TnType]) -
     let arena = crate::cache::arena::ArenaBuilder::new_bounded();
     let mut pre = 1u64;
     for ty in type_params {
-        pre += ty.measure().type_size;
+        pre += ty.syntactic_sizes().0;
     }
     for ty in ty_args {
-        pre += ty.measure().type_size;
+        pre += ty.syntactic_sizes().0;
     }
     let post_children = type_params
         .iter()
@@ -1104,7 +1104,7 @@ fn tn_model_datatype_instantiation(type_params: &[TnType], ty_args: &[TnType]) -
     let post = 1u64
         + post_children
             .iter()
-            .map(|ty| ty.measure().type_size)
+            .map(|ty| ty.syntactic_sizes().0)
             .sum::<u64>();
     (pre, post)
 }

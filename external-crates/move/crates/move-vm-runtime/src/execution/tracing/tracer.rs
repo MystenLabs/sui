@@ -1492,7 +1492,7 @@ impl VMTracer<'_> {
             }
             B::VecPack(ty_ptr, n) => {
                 let ty = vtables
-                    .instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
+                    .subst_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
                     .ok()?;
                 let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));

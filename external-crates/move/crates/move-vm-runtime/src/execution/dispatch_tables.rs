@@ -11,12 +11,13 @@ use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
     execution::vm::DatatypeInfo,
     jit::execution::ast::{
-        ArenaType, Datatype, DatatypeDescriptor, DatatypeMeasure, FieldVar, FormulatedType,
-        Function, FunctionInstantiation, Package, StructInstantiation, Type, TypeArguments,
-        TypeMeasure, TypeSizes, VariantInstantiation,
+        ArenaType, Datatype, DatatypeDescriptor, DatatypeSizeFormula, DatatypeSizeInfo, Function,
+        FunctionInstantiation, LinearFormula, MaxPlusFormula, Package, PartialLinearFormula,
+        PartialMaxPlusFormula, PartialTypeFormula, StructInstantiation, Type, TypeArguments,
+        TypeSize, VariantInstantiation, check_syntactic_limits,
     },
     shared::{
-        TypeSize,
+        TraversalBudget,
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
             VALUE_DEPTH_MAX,
@@ -28,9 +29,8 @@ use crate::{
 };
 
 use move_binary_format::{
-    checked_as,
     errors::{Location, PartialVMResult, VMResult},
-    file_format::{AbilitySet, TypeParameterIndex},
+    file_format::AbilitySet,
     partial_vm_error,
 };
 use move_core_types::{
@@ -46,7 +46,7 @@ use quick_cache::unsync::Cache as QCache;
 use tracing::instrument;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -76,16 +76,18 @@ pub struct VMDispatchTables {
     /// [SAFETY] Ordering is not guaranteed
     pub(crate) defining_id_origins: Arc<BTreeMap<DefiningTypeId, OriginalId>>,
     pub(crate) link_context: Arc<LinkageContext>,
-    /// Representation of runtime through-field type measures (value depth and layout size).
-    /// This is separate from the underlying packages to avoid grabbing write-locks and toward
-    /// the possibility these may change based on linkage (e.g., type ugrades or similar).
+    /// Closed through-field size formulas (`value_depth` and `layout_size`) of datatypes,
+    /// resolved under this table's linkage view and memoized per datatype. This is separate
+    /// from the underlying packages to avoid grabbing write-locks and because a closed formula
+    /// is a property of (datatype, linkage), not of the datatype alone (e.g., type upgrades
+    /// can change a dependency's shape).
     /// [SAFETY] Ordering of inner maps is not guaranteed
     /// NB: This cache is mutated during execution (behind the `Mutex`, so shared borrowers of
     /// the dispatch tables — e.g. natives requesting layouts — can hit it), so we make a new
     /// one for each VM instantiation.
     ///
     /// However, the contents of the cache do not affect execution correctness, only performance.
-    pub(crate) type_measures: Mutex<QCache<VirtualTableKey, ResolvedMeasure>>,
+    pub(crate) size_formulas: Mutex<QCache<VirtualTableKey, DatatypeSizeFormula>>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -132,39 +134,6 @@ pub enum DatatypeTagType {
     Defining,
 }
 
-/// A formula for the maximum depth of the value for a type
-/// max(Ti + Ci, ..., CBase)
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-pub struct DepthFormula {
-    /// The terms for each type parameter, if present.
-    /// Ti + Ci
-    pub terms: Vec<(TypeParameterIndex, u64)>,
-    /// The minimal depth of the value of this type regardless of type parameters.
-    /// CBase
-    pub constant: u64,
-}
-
-/// A formula for the layout size (in nodes) of a type: the linear analogue of [`DepthFormula`].
-/// C + Σ Ni × Ti, where Ni is the number of times type parameter i occurs in the (expanded)
-/// layout.
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub(crate) struct LayoutFormula {
-    /// The occurrence count for each type parameter, if present.
-    pub(crate) terms: Vec<(TypeParameterIndex, u64)>,
-    /// The layout nodes contributed regardless of type parameters.
-    pub(crate) constant: u64,
-}
-
-/// The linkage-resolved through-field measure of a datatype (or of a type term over an
-/// enclosing generic context), derived by folding the `DatatypeMeasure`s stored on descriptors
-/// at JIT time: `value_depth` as a [`DepthFormula`] and `layout_size` as a [`LayoutFormula`],
-/// both over type parameters.
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub(crate) struct ResolvedMeasure {
-    pub(crate) depth: DepthFormula,
-    pub(crate) layout: LayoutFormula,
-}
-
 // -------------------------------------------------------------------------------------------------
 // Impls
 // -------------------------------------------------------------------------------------------------
@@ -177,7 +146,7 @@ impl Clone for VMDispatchTables {
             loaded_packages: Arc::clone(&self.loaded_packages),
             defining_id_origins: Arc::clone(&self.defining_id_origins),
             link_context: Arc::clone(&self.link_context),
-            type_measures: Mutex::new(self.type_measures().clone()),
+            size_formulas: Mutex::new(self.size_formulas().clone()),
         }
     }
 }
@@ -227,7 +196,7 @@ impl VMDispatchTables {
             loaded_packages,
             defining_id_origins,
             link_context,
-            type_measures: Mutex::new(QCache::new(TYPE_DEPTH_LRU_SIZE)),
+            size_formulas: Mutex::new(QCache::new(TYPE_DEPTH_LRU_SIZE)),
         })
     }
 
@@ -364,14 +333,14 @@ impl VMDispatchTables {
     // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
     // fail.
     pub(crate) fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
-        self.load_type_impl(type_tag, &mut TypeSize::for_type_traversal())
+        self.load_type_impl(type_tag, &mut TraversalBudget::for_type_traversal())
             .map_err(|e| e.finish(Location::Undefined))
     }
 
     fn load_type_impl(
         &self,
         type_tag: &TypeTag,
-        type_size: &mut TypeSize,
+        type_size: &mut TraversalBudget,
     ) -> PartialVMResult<Type> {
         type_size.enter_type(|type_size| {
             Ok(match type_tag {
@@ -463,10 +432,14 @@ impl VMDispatchTables {
     }
 
     pub(crate) fn abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
-        self.abilities_impl(ty, &mut TypeSize::for_type_traversal())
+        self.abilities_impl(ty, &mut TraversalBudget::for_type_traversal())
     }
 
-    fn abilities_impl(&self, ty: &Type, type_size: &mut TypeSize) -> PartialVMResult<AbilitySet> {
+    fn abilities_impl(
+        &self,
+        ty: &Type,
+        type_size: &mut TraversalBudget,
+    ) -> PartialVMResult<AbilitySet> {
         type_size.enter_type(|type_size| {
             match ty {
                 Type::Bool
@@ -552,154 +525,136 @@ impl VMDispatchTables {
     }
 
     // -------------------------------------------
-    // Through-Field Measure Computations (value depth and layout size)
+    // Through-Field Size Formulas (value depth and layout size)
     // -------------------------------------------
-    // These functions derive the linkage-resolved through-field measure of datatypes and type
-    // terms by folding the `DatatypeMeasure`s computed when each package was JIT'd: all purely
-    // local field structure is already summarized in their constants, so the only recursion
-    // left is into the datatype applications appearing in fields — each memoized in the cache.
-    // Note that the `type_size` cursor consequently only charges for that residual work, not
-    // for the local field structure the legacy traversals used to walk (and charge) here.
+    // These functions derive the linkage-resolved through-field formulas of datatypes by
+    // closing the partial forms computed when each package was JIT'd: all purely local field
+    // structure is already summarized in their constants and every datatype application's
+    // arguments were pre-lowered to sub-forms at translation time, so closing is pure formula
+    // algebra — resolve each pending application's key under this linkage, substitute its
+    // (recursively closed) argument forms, and fold it in. No type term is ever traversed.
 
-    /// Lock the measure cache, shrugging off poisoning: the cache is a pure optimization and
+    /// Lock the formula cache, shrugging off poisoning: the cache is a pure optimization and
     /// its contents never affect correctness.
-    fn type_measures(&self) -> std::sync::MutexGuard<'_, QCache<VirtualTableKey, ResolvedMeasure>> {
-        self.type_measures
+    fn size_formulas(
+        &self,
+    ) -> std::sync::MutexGuard<'_, QCache<VirtualTableKey, DatatypeSizeFormula>> {
+        self.size_formulas
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    fn cached_type_measure(&self, datatype: &VirtualTableKey) -> Option<ResolvedMeasure> {
-        self.type_measures().get(datatype).cloned()
+    fn cached_size_formula(&self, datatype: &VirtualTableKey) -> Option<DatatypeSizeFormula> {
+        self.size_formulas().get(datatype).cloned()
     }
 
-    pub fn calculate_depth_of_type(
+    /// The closed `value_depth` formula of a datatype under this table's linkage.
+    pub fn datatype_value_depth_formula(
         &self,
         datatype_name: &VirtualTableKey,
-    ) -> PartialVMResult<DepthFormula> {
+    ) -> PartialVMResult<MaxPlusFormula> {
         Ok(self
-            .calculate_measure_of_datatype_and_cache(
-                datatype_name,
-                &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
-            )?
-            .depth)
+            .size_info(datatype_name, &mut HashSet::new())?
+            .value_depth)
     }
 
-    fn calculate_measure_of_datatype_and_cache(
+    /// The closed through-field formulas of a datatype under this table's linkage, memoized
+    /// per datatype. Move's verifier guarantees acyclic datatype definitions, so closing
+    /// terminates on well-formed state; `visiting` turns a cycle in corrupt or adversarial
+    /// store state into an invariant violation instead of unbounded recursion.
+    fn size_info(
         &self,
         datatype_name: &VirtualTableKey,
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<ResolvedMeasure> {
-        type_size.check()?;
-        // If we've already computed this datatype's measure, no more work remains to be done.
-        if let Some(measure) = self.cached_type_measure(datatype_name) {
-            return Ok(measure);
+        visiting: &mut HashSet<VirtualTableKey>,
+    ) -> PartialVMResult<DatatypeSizeFormula> {
+        // If we've already closed this datatype's formulas, no more work remains to be done.
+        if let Some(formula) = self.cached_size_formula(datatype_name) {
+            return Ok(formula);
+        }
+        if !visiting.insert(datatype_name.clone()) {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "cyclic datatype definition encountered while closing size formulas for {}",
+                datatype_name.to_string(&self.interner)
+            ));
         }
 
         let datatype = self.resolve_type(datatype_name)?.to_ref();
-        let measure = match datatype.datatype_measure() {
+        let formula = match datatype.size_info() {
             // Fully concrete: the JIT wrote the sizes down.
-            DatatypeMeasure::Constant(sizes) => ResolvedMeasure {
-                depth: DepthFormula::constant(sizes.value_depth),
-                layout: LayoutFormula::constant(sizes.layout_size),
+            DatatypeSizeInfo::Constant(sizes) => DatatypeSizeFormula::constant(*sizes),
+            DatatypeSizeInfo::Formula {
+                value_depth,
+                layout_size,
+            } => DatatypeSizeFormula {
+                value_depth: self.close_value_formula(value_depth, visiting)?,
+                layout_size: self.close_layout_formula(layout_size, visiting)?,
             },
-            DatatypeMeasure::Formula(datatype_formula) => {
-                let mut depth_formulas = vec![DepthFormula::constant(
-                    datatype_formula.value_depth_constant(),
-                )];
-                let mut layout = LayoutFormula::constant(datatype_formula.layout_size_constant());
-                for term in datatype_formula.terms() {
-                    let sub = match &term.var {
-                        FieldVar::Param(idx) => ResolvedMeasure::type_parameter(*idx),
-                        FieldVar::App(ty) => {
-                            self.calculate_measure_of_type_and_cache(ty.to_ref(), type_size)?
-                        }
-                    };
-                    let mut depth = sub.depth;
-                    depth.add(term.depth_offset);
-                    depth_formulas.push(depth);
-                    layout.accumulate(term.occurrences, &sub.layout);
-                }
-                ResolvedMeasure {
-                    depth: DepthFormula::normalize(depth_formulas),
-                    layout,
-                }
-            }
         };
+        visiting.remove(datatype_name);
         // Insert without checking if it was already present; this is a pure optmization, so
         // we do not care about overwriting.
-        self.type_measures()
-            .insert(datatype_name.clone(), measure.clone());
-        type_size.check()?;
-        Ok(measure)
+        self.size_formulas()
+            .insert(datatype_name.clone(), formula.clone());
+        Ok(formula)
     }
 
-    fn calculate_measure_of_type_and_cache(
+    /// Close a partial `value_depth` form under this table's linkage: pure max-plus algebra
+    /// over the pending applications' (memoized) closed formulas.
+    fn close_value_formula(
         &self,
-        ty: &ArenaType,
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<ResolvedMeasure> {
-        type_size.enter_type(|type_size| {
-            Ok(match ty {
-                ArenaType::Bool
-                | ArenaType::U8
-                | ArenaType::U64
-                | ArenaType::U128
-                | ArenaType::Address
-                | ArenaType::Signer
-                | ArenaType::U16
-                | ArenaType::U32
-                | ArenaType::U256 => ResolvedMeasure::constant(1, 1),
-                // we should not see the reference here, we could instead give an invariant
-                // violation
-                ArenaType::Vector(ty)
-                | ArenaType::Reference(ty)
-                | ArenaType::MutableReference(ty) => {
-                    let mut inner = self.calculate_measure_of_type_and_cache(ty, type_size)?;
-                    // add 1 for the vector itself
-                    inner.depth.add(1);
-                    inner.layout.constant = inner.layout.constant.saturating_add(1);
-                    inner
-                }
-                ArenaType::TyParam(ty_idx) => ResolvedMeasure::type_parameter(*ty_idx),
-                ArenaType::Datatype(datatype_key) => {
-                    let datatype_measure =
-                        self.calculate_measure_of_datatype_and_cache(datatype_key, type_size)?;
-                    debug_assert!(datatype_measure.depth.terms.is_empty());
-                    datatype_measure
-                }
-                ArenaType::DatatypeInstantiation(inst) => {
-                    let (cache_idx, ty_args) = &**inst;
-                    let arg_measures = ty_args
-                        .iter()
-                        .map(|ty| self.calculate_measure_of_type_and_cache(ty, type_size))
-                        .collect::<PartialVMResult<Vec<_>>>()?;
-                    let ty_arg_map = arg_measures
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, measure)| {
-                            let var = checked_as!(idx, TypeParameterIndex)?;
-                            Ok((var, measure.depth.clone()))
-                        })
-                        .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
-                    let datatype_measure =
-                        self.calculate_measure_of_datatype_and_cache(cache_idx, type_size)?;
-
-                    ResolvedMeasure {
-                        depth: datatype_measure.depth.subst(ty_arg_map)?,
-                        layout: datatype_measure.layout.subst(&arg_measures)?,
-                    }
-                }
-            })
-        })
+        partial: &PartialMaxPlusFormula,
+        visiting: &mut HashSet<VirtualTableKey>,
+    ) -> PartialVMResult<MaxPlusFormula> {
+        let mut closed = MaxPlusFormula {
+            constant: partial.constant,
+            terms: partial.params.to_vec(),
+        };
+        for (offset, apply) in partial.applies.iter() {
+            let datatype = self.size_info(&apply.key, visiting)?;
+            let args = apply
+                .args
+                .iter()
+                .map(|arg| self.close_value_formula(arg, visiting))
+                .collect::<PartialVMResult<Vec<_>>>()?;
+            let applied = datatype.value_depth.subst(&args)?;
+            closed.absorb(*offset, &applied);
+        }
+        closed.canonicalize();
+        Ok(closed)
     }
 
-    /// The through-field pair (`value_depth`, `layout_size`) of a concrete runtime type,
-    /// resolving datatypes through the measure cache.
+    /// Close a partial `layout_size` form under this table's linkage: pure linear algebra
+    /// over the pending applications' (memoized) closed formulas.
+    fn close_layout_formula(
+        &self,
+        partial: &PartialLinearFormula,
+        visiting: &mut HashSet<VirtualTableKey>,
+    ) -> PartialVMResult<LinearFormula> {
+        let mut closed = LinearFormula {
+            constant: partial.constant,
+            terms: partial.params.to_vec(),
+        };
+        for (multiplicity, apply) in partial.applies.iter() {
+            let datatype = self.size_info(&apply.key, visiting)?;
+            let args = apply
+                .args
+                .iter()
+                .map(|arg| self.close_layout_formula(arg, visiting))
+                .collect::<PartialVMResult<Vec<_>>>()?;
+            let applied = datatype.layout_size.subst(&args)?;
+            closed.absorb(*multiplicity, &applied);
+        }
+        closed.canonicalize();
+        Ok(closed)
+    }
+
+    /// The through-field pair (`value_depth`, `layout_size`) of a concrete runtime type,    /// The through-field pair (`value_depth`, `layout_size`) of a concrete runtime type,
+    /// resolving datatypes through the formula cache.
     fn value_and_layout_of_type(
         &self,
         ty: &Type,
-        type_size: &mut TypeSize,
+        type_size: &mut TraversalBudget,
     ) -> PartialVMResult<(u64, u64)> {
         type_size.enter_type(|type_size| {
             Ok(match ty {
@@ -718,9 +673,11 @@ impl VMDispatchTables {
                     (value_depth.saturating_add(1), layout_size.saturating_add(1))
                 }
                 Type::Datatype(datatype_key) => {
-                    let measure =
-                        self.calculate_measure_of_datatype_and_cache(datatype_key, type_size)?;
-                    (measure.depth.solve(&[])?, measure.layout.solve(&[])?)
+                    let formula = self.size_info(datatype_key, &mut HashSet::new())?;
+                    (
+                        formula.value_depth.solve(&[])?,
+                        formula.layout_size.solve(&[])?,
+                    )
                 }
                 Type::DatatypeInstantiation(inst) => {
                     let (datatype_key, ty_args) = &**inst;
@@ -732,11 +689,10 @@ impl VMDispatchTables {
                         value_depths.push(value_depth);
                         layout_sizes.push(layout_size);
                     }
-                    let measure =
-                        self.calculate_measure_of_datatype_and_cache(datatype_key, type_size)?;
+                    let formula = self.size_info(datatype_key, &mut HashSet::new())?;
                     (
-                        measure.depth.solve(&value_depths)?,
-                        measure.layout.solve(&layout_sizes)?,
+                        formula.value_depth.solve(&value_depths)?,
+                        formula.layout_size.solve(&layout_sizes)?,
                     )
                 }
                 Type::TyParam(_) => {
@@ -750,16 +706,13 @@ impl VMDispatchTables {
     }
 
     /// All four size quantities of a concrete runtime type.
-    pub(crate) fn sizes_of_type(&self, ty: &Type) -> PartialVMResult<TypeSizes> {
-        let TypeMeasure {
-            type_size,
-            type_depth,
-        } = ty.measure();
+    pub(crate) fn sizes_of_type(&self, ty: &Type) -> PartialVMResult<TypeSize> {
+        let (type_size, type_depth) = ty.syntactic_sizes();
         let (value_depth, layout_size) = self.value_and_layout_of_type(
             ty,
-            &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
+            &mut TraversalBudget::from_vm_config_for_value_depth(&self.vm_config),
         )?;
-        Ok(TypeSizes {
+        Ok(TypeSize {
             type_size,
             type_depth,
             value_depth,
@@ -780,31 +733,23 @@ impl VMDispatchTables {
     /// This is kept only for legacy gas-metering reasons.
     /// New applications should not use this.
     pub fn abstract_type_size(&self, ty: &Type) -> AbstractMemorySize {
-        AbstractMemorySize::new(ty.measure().type_size)
+        AbstractMemorySize::new(ty.syntactic_sizes().0)
     }
 
-    /// Check the `value_depth` of instantiating `term` with `ty_args` against the configured
-    /// limit, without building anything: the term's formula is solved with the frame-cached
-    /// argument value depths. Used at `VecPack`, where a value of the instantiated element type
-    /// is about to be created.
+    /// Check the `value_depth` of instantiating `formula`'s term with `ty_args` against the
+    /// configured limit, without building anything: the term's closed `value_depth` form is
+    /// solved with the frame-cached argument value depths. Used at `VecPack`, where a value of
+    /// the instantiated element type is about to be created.
     pub(crate) fn check_instantiated_value_depth(
         &self,
-        term: &ArenaType,
+        formula: &PartialTypeFormula,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
         let Some(max_depth) = self.vm_config.runtime_limits_config.max_value_nest_depth else {
             return Ok(());
         };
-        let measure = self.calculate_measure_of_type_and_cache(
-            term,
-            &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
-        )?;
-        let value_depths = ty_args
-            .sizes()
-            .iter()
-            .map(|sizes| sizes.value_depth)
-            .collect::<Vec<_>>();
-        let value_depth = measure.depth.solve(&value_depths)?;
+        let closed = self.close_value_formula(&formula.value_depth, &mut HashSet::new())?;
+        let value_depth = closed.solve_with(ty_args.sizes(), |sizes| sizes.value_depth)?;
         if value_depth > max_depth {
             return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
         }
@@ -820,7 +765,7 @@ impl VMDispatchTables {
         datatype_name: &VirtualTableKey,
         ty_args: &[Type],
         tag_type: DatatypeTagType,
-        type_size: &mut TypeSize,
+        type_size: &mut TraversalBudget,
     ) -> PartialVMResult<StructTag> {
         type_size.check()?;
         let type_params = ty_args
@@ -856,7 +801,7 @@ impl VMDispatchTables {
         &self,
         ty: &Type,
         tag_type: DatatypeTagType,
-        type_size: &mut TypeSize,
+        type_size: &mut TraversalBudget,
     ) -> PartialVMResult<TypeTag> {
         type_size.enter_type(|type_size| {
             Ok(match ty {
@@ -899,7 +844,7 @@ impl VMDispatchTables {
         self.type_to_type_tag_impl(
             ty,
             DatatypeTagType::Defining,
-            &mut TypeSize::for_type_traversal(),
+            &mut TraversalBudget::for_type_traversal(),
         )
     }
 
@@ -907,17 +852,17 @@ impl VMDispatchTables {
         self.type_to_type_tag_impl(
             ty,
             DatatypeTagType::Runtime,
-            &mut TypeSize::for_type_traversal(),
+            &mut TraversalBudget::for_type_traversal(),
         )
     }
 
     /// Check a type's predicted `value_depth` and `layout_size` against the configured limits
-    /// before any layout generation — pure arithmetic over the descriptor measures; nothing of
+    /// before any layout generation — pure arithmetic over the descriptor formulas; nothing of
     /// an oversized layout is ever built. The error codes mirror the legacy cursor's.
     fn check_layout_limits(&self, ty: &Type) -> PartialVMResult<()> {
         let (value_depth, layout_size) = self.value_and_layout_of_type(
             ty,
-            &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
+            &mut TraversalBudget::from_vm_config_for_value_depth(&self.vm_config),
         )?;
         if value_depth
             > self
@@ -1051,7 +996,7 @@ impl VMDispatchTables {
                 datatype_name,
                 ty_args,
                 DatatypeTagType::Defining,
-                &mut TypeSize::for_type_traversal(),
+                &mut TraversalBudget::for_type_traversal(),
             )?;
 
             let type_layout = match ty.datatype_info.inner_ref() {
@@ -1184,17 +1129,62 @@ impl VMDispatchTables {
         fun_inst: &FunctionInstantiation,
         type_params: &TypeArguments,
     ) -> PartialVMResult<TypeArguments> {
-        // Each element is checked against the limits via its precomputed formula before it is
-        // built.
+        // Realize the callee's type arguments, each checked against the limits via its
+        // precomputed formulas before it is built.
         let instantiation = fun_inst
             .instantiation
             .to_ref()
             .iter()
-            .map(|ty| ty.instantiate(type_params))
+            .map(|formula| self.subst_type(formula, type_params))
             .collect::<PartialVMResult<Vec<_>>>()?;
-        // The callee frame's type arguments: computing their sizes here, once, is what makes
-        // every later check against them pure arithmetic.
-        let instantiation = self.make_type_arguments(instantiation)?;
+
+        // The callee frame's type arguments: computing their four size quantities here, once,
+        // is what makes every later check against them pure arithmetic. The syntactic pair is
+        // read off the realized term; the through-field pair is solved from the terms' closed
+        // formulas with the caller frame's argument sizes — no realized type is ever walked
+        // for datatype resolution.
+        let mut sizes = Vec::with_capacity(instantiation.len());
+        let budget_depth = self
+            .vm_config
+            .runtime_limits_config
+            .max_value_nest_depth
+            .unwrap_or(VALUE_DEPTH_MAX);
+        let budget_nodes = self
+            .vm_config
+            .max_type_to_layout_nodes
+            .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES);
+        for (formula, ty) in fun_inst
+            .instantiation
+            .to_ref()
+            .iter()
+            .zip(instantiation.iter())
+        {
+            let (type_size, type_depth) = ty.syntactic_sizes();
+            // The legacy sizing walk ran under the value-depth traversal budget, so a type
+            // argument whose *term* exceeded that budget was rejected at frame creation.
+            // Preserve that verdict arithmetically. (The node bound is unreachable here — the
+            // syntactic size was already checked against the smaller instantiation-node limit
+            // — but is kept for exactness.)
+            if type_depth > budget_depth {
+                return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
+            }
+            if type_size > budget_nodes {
+                return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
+            }
+            let value_depth = self
+                .close_value_formula(&formula.value_depth, &mut HashSet::new())?
+                .solve_with(type_params.sizes(), |sizes| sizes.value_depth)?;
+            let layout_size = self
+                .close_layout_formula(&formula.layout_size, &mut HashSet::new())?
+                .solve_with(type_params.sizes(), |sizes| sizes.layout_size)?;
+            sizes.push(TypeSize {
+                type_size,
+                type_depth,
+                value_depth,
+                layout_size,
+            });
+        }
+        let instantiation = TypeArguments::from_parts(instantiation, sizes)?;
 
         // Check if the function instantiation over all generics is larger
         // than the max instantiation node count.
@@ -1214,45 +1204,117 @@ impl VMDispatchTables {
         Ok(instantiation)
     }
 
-    pub(crate) fn instantiate_single_type(
+    /// Realize `formula`'s term with `ty_args` substituted for its parameters: the formula
+    /// work happens first — the predicted syntactic sizes are checked against the limits —
+    /// and only then is the type built.
+    pub(crate) fn subst_type(
         &self,
-        ty: &FormulatedType,
+        formula: &PartialTypeFormula,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
         if ty_args.is_empty() {
-            ty.to_type()
+            check_syntactic_limits(formula.type_size.constant, formula.type_depth.constant)?;
+            Ok(formula.term.to_type_unchecked())
         } else {
-            ty.instantiate(ty_args)
+            let type_depth = formula
+                .type_depth
+                .solve_with(ty_args.sizes(), |sizes| sizes.type_depth)?;
+            let type_size = formula
+                .type_size
+                .solve_with(ty_args.sizes(), |sizes| sizes.type_size)?;
+            check_syntactic_limits(type_size, type_depth)?;
+            formula.term.subst_unchecked(ty_args.types())
         }
     }
 
+    /// Check a struct instantiation (the `Pack` family of instructions) against the limits
+    /// without building anything — see [`VMDispatchTables::check_instantiation`].
+    pub(crate) fn check_struct_instantiation(
+        &self,
+        struct_inst: &StructInstantiation,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<()> {
+        self.check_instantiation(
+            &struct_inst.def_vtable_key,
+            struct_inst.type_params.to_ref(),
+            ty_args,
+        )
+    }
+
+    /// Check an enum variant instantiation (the `PackVariant` family of instructions) against
+    /// the limits without building anything — see [`VMDispatchTables::check_instantiation`].
+    pub(crate) fn check_variant_instantiation(
+        &self,
+        variant_inst: &VariantInstantiation,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<()> {
+        let enum_inst = variant_inst.enum_inst.to_ref();
+        self.check_instantiation(
+            &enum_inst.def_vtable_key,
+            enum_inst.type_params.to_ref(),
+            ty_args,
+        )
+    }
+
+    /// Realize a struct instantiation's runtime type. Observational (the tracer): execution
+    /// itself only *checks* instantiations (`check_struct_instantiation`) and never builds
+    /// them.
     pub(crate) fn instantiate_struct_type(
         &self,
         struct_inst: &StructInstantiation,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
-        let type_params = struct_inst.type_params.to_ref();
-        self.instantiate_datatype_common(&struct_inst.def_vtable_key, type_params, ty_args)
+        self.instantiate_datatype_type(
+            &struct_inst.def_vtable_key,
+            struct_inst.type_params.to_ref(),
+            ty_args,
+        )
     }
 
+    /// Realize an enum instantiation's runtime type. Observational (the tracer): execution
+    /// itself only *checks* instantiations (`check_variant_instantiation`) and never builds
+    /// them.
     pub(crate) fn instantiate_enum_type(
         &self,
         variant_inst: &VariantInstantiation,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
         let enum_inst = variant_inst.enum_inst.to_ref();
-        let type_params = enum_inst.type_params.to_ref();
-        self.instantiate_datatype_common(&enum_inst.def_vtable_key, type_params, ty_args)
+        self.instantiate_datatype_type(
+            &enum_inst.def_vtable_key,
+            enum_inst.type_params.to_ref(),
+            ty_args,
+        )
     }
 
-    fn instantiate_datatype_common(
+    fn instantiate_datatype_type(
         &self,
         datatype_key: &VirtualTableKey,
-        type_params: &[FormulatedType],
+        type_params: &[PartialTypeFormula],
         ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
+        let instantiation = type_params
+            .iter()
+            .map(|formula| self.subst_type(formula, ty_args))
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        Ok(Type::DatatypeInstantiation(Box::new((
+            datatype_key.clone(),
+            instantiation,
+        ))))
+    }
+
+    /// Check a datatype instantiation against the limits without realizing anything: the
+    /// type-node counts and the result's `value_depth` are all solved from precomputed
+    /// formulas. This path serves the `Pack` family of instructions — the instantiated type
+    /// itself is never needed, so no part of it is ever built.
+    fn check_instantiation(
+        &self,
+        datatype_key: &VirtualTableKey,
+        type_params: &[PartialTypeFormula],
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<()> {
         // Before instantiating the type, count the # of nodes of all type arguments plus
-        // existing type instantiation.
+        // the existing type instantiation.
         // If that number is larger than the max instantiation node count, refuse to
         // construct this type.
         // This prevents constructing larger and larger types via datatype instantiation.
@@ -1262,7 +1324,7 @@ impl VMDispatchTables {
         let mut sum_nodes = 1u64;
         for nodes in type_params
             .iter()
-            .map(|ty| ty.measure().type_size)
+            .map(|formula| formula.type_size.constant)
             .chain(ty_args.sizes().iter().map(|sizes| sizes.type_size))
         {
             sum_nodes = sum_nodes.saturating_add(nodes);
@@ -1271,231 +1333,52 @@ impl VMDispatchTables {
             }
         }
 
-        // Build the type-parameter instantiations, each checked against the limits via its
-        // precomputed formula, while accumulating the result's true node count arithmetically
-        // (the prediction counts the parameter nodes themselves in addition to the substituted
-        // arguments; see `MeasureFormula`).
+        // Predict each type-parameter instantiation and check it against the limits, while
+        // accumulating the result's true node count arithmetically (the prediction counts the
+        // parameter nodes themselves in addition to the substituted arguments; see
+        // [`ArenaType::syntactic_formulas`]).
         let mut result_nodes = 1u64;
-        let mut instantiation = Vec::with_capacity(type_params.len());
-        for ty in type_params.iter() {
-            instantiation.push(ty.instantiate(ty_args)?);
-            let child_nodes = ty
-                .predict(ty_args)?
+        for formula in type_params.iter() {
+            let predicted_depth = formula
+                .type_depth
+                .solve_with(ty_args.sizes(), |sizes| sizes.type_depth)?;
+            let predicted_size = formula
                 .type_size
-                .saturating_sub(ty.occurrences());
+                .solve_with(ty_args.sizes(), |sizes| sizes.type_size)?;
+            check_syntactic_limits(predicted_size, predicted_depth)?;
+            let child_nodes = predicted_size.saturating_sub(formula.type_size.occurrences());
             result_nodes = result_nodes.saturating_add(child_nodes);
         }
-        let ty = Type::DatatypeInstantiation(Box::new((datatype_key.clone(), instantiation)));
 
         if result_nodes > MAX_TYPE_INSTANTIATION_NODES {
             return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
         }
 
-        // A value of this datatype is about to be created (this path serves the `Pack` family
-        // of instructions), so also check its `value_depth` — the third quantity — predicted
-        // from the datatype's measure, the type-parameter terms, and the frame-cached argument
-        // value depths. Nothing is traversed: the built type is never walked.
+        // A value of this datatype is about to be created, so also check its `value_depth` —
+        // the third quantity — predicted from the datatype's closed formula, the
+        // type-parameter terms' closed formulas, and the frame-cached argument value depths.
+        // Nothing is realized or traversed.
         if let Some(max_depth) = self.vm_config.runtime_limits_config.max_value_nest_depth {
-            let cursor = &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config);
+            let visiting = &mut HashSet::new();
             let param_depths = type_params
                 .iter()
-                .map(|term| {
-                    let measure = self.calculate_measure_of_type_and_cache(term.ty(), cursor)?;
-                    let value_depths = ty_args
-                        .sizes()
-                        .iter()
-                        .map(|sizes| sizes.value_depth)
-                        .collect::<Vec<_>>();
-                    measure.depth.solve(&value_depths)
+                .map(|formula| {
+                    let closed = self.close_value_formula(&formula.value_depth, visiting)?;
+                    closed.solve_with(ty_args.sizes(), |sizes| sizes.value_depth)
                 })
                 .collect::<PartialVMResult<Vec<_>>>()?;
-            let datatype_measure =
-                self.calculate_measure_of_datatype_and_cache(datatype_key, cursor)?;
-            if datatype_measure.depth.solve(&param_depths)? > max_depth {
+            let datatype = self.size_info(datatype_key, visiting)?;
+            if datatype.value_depth.solve(&param_depths)? > max_depth {
                 return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
             }
         }
 
-        Ok(ty)
-    }
-}
-
-impl DepthFormula {
-    /// A value with no type parameters
-    pub fn constant(constant: u64) -> Self {
-        Self {
-            terms: vec![],
-            constant,
-        }
-    }
-
-    /// A stand alone type parameter value
-    pub fn type_parameter(tparam: TypeParameterIndex) -> Self {
-        Self {
-            terms: vec![(tparam, 0)],
-            constant: 0,
-        }
-    }
-
-    /// We `max` over a list of formulas, and we normalize it to deal with duplicate terms, e.g.
-    /// `max(max(t1 + 1, t2 + 2, 2), max(t1 + 3, t2 + 1, 4))` becomes
-    /// `max(t1 + 3, t2 + 2, 4)`
-    pub fn normalize(formulas: Vec<Self>) -> Self {
-        let mut var_map = BTreeMap::new();
-        let mut constant_acc = 0;
-        for formula in formulas {
-            let Self { terms, constant } = formula;
-            for (var, cur_factor) in terms {
-                var_map
-                    .entry(var)
-                    .and_modify(|prev_factor| {
-                        *prev_factor = std::cmp::max(cur_factor, *prev_factor)
-                    })
-                    .or_insert(cur_factor);
-            }
-            constant_acc = std::cmp::max(constant_acc, constant);
-        }
-        Self {
-            terms: var_map.into_iter().collect(),
-            constant: constant_acc,
-        }
-    }
-
-    /// Substitute in formulas for each type parameter and normalize the final formula
-    pub fn subst(
-        &self,
-        mut map: BTreeMap<TypeParameterIndex, DepthFormula>,
-    ) -> PartialVMResult<DepthFormula> {
-        let Self { terms, constant } = self;
-        let mut formulas = vec![DepthFormula::constant(*constant)];
-        for (t_i, c_i) in terms {
-            let Some(mut u_form) = map.remove(t_i) else {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "{t_i:?} missing mapping"
-                ));
-            };
-            u_form.add(*c_i);
-            formulas.push(u_form)
-        }
-        Ok(DepthFormula::normalize(formulas))
-    }
-
-    /// Given depths for each type parameter, solve the formula giving the max depth for the type
-    pub fn solve(&self, tparam_depths: &[u64]) -> PartialVMResult<u64> {
-        let Self { terms, constant } = self;
-        let mut depth = *constant;
-        for (t_i, c_i) in terms {
-            match tparam_depths.get(*t_i as usize) {
-                None => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "{t_i:?} missing mapping"
-                    ));
-                }
-                Some(ty_depth) => depth = std::cmp::max(depth, ty_depth.saturating_add(*c_i)),
-            }
-        }
-        Ok(depth)
-    }
-
-    // `max(t_0 + c_0, ..., t_n + c_n, c_base) + c`. But our representation forces us to distribute
-    // the addition, so it becomes `max(t_0 + c_0 + c, ..., t_n + c_n + c, c_base + c)`
-    pub fn add(&mut self, c: u64) {
-        let Self { terms, constant } = self;
-        for (_t_i, c_i) in terms {
-            *c_i = (*c_i).saturating_add(c);
-        }
-        *constant = (*constant).saturating_add(c);
-    }
-}
-
-impl LayoutFormula {
-    /// A layout with no type parameters.
-    pub(crate) fn constant(constant: u64) -> Self {
-        Self {
-            terms: vec![],
-            constant,
-        }
-    }
-
-    /// A single type parameter occurring once.
-    pub(crate) fn type_parameter(tparam: TypeParameterIndex) -> Self {
-        Self {
-            terms: vec![(tparam, 1)],
-            constant: 0,
-        }
-    }
-
-    /// Add `occurrences` copies of `other` into this formula.
-    pub(crate) fn accumulate(&mut self, occurrences: u64, other: &LayoutFormula) {
-        self.constant = self
-            .constant
-            .saturating_add(occurrences.saturating_mul(other.constant));
-        for (t_i, n_i) in &other.terms {
-            let scaled = occurrences.saturating_mul(*n_i);
-            match self.terms.iter_mut().find(|(t_j, _)| t_j == t_i) {
-                Some((_, n_j)) => *n_j = n_j.saturating_add(scaled),
-                None => self.terms.push((*t_i, scaled)),
-            }
-        }
-    }
-
-    /// Substitute in formulas for each type parameter (indexed positionally by `arg_measures`).
-    pub(crate) fn subst(&self, arg_measures: &[ResolvedMeasure]) -> PartialVMResult<LayoutFormula> {
-        let mut result = LayoutFormula::constant(self.constant);
-        for (t_i, n_i) in &self.terms {
-            let Some(arg) = arg_measures.get(*t_i as usize) else {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "{t_i:?} missing mapping"
-                ));
-            };
-            result.accumulate(*n_i, &arg.layout);
-        }
-        Ok(result)
-    }
-
-    /// C + Σ Ni × Ti with the given per-parameter layout sizes.
-    pub(crate) fn solve(&self, tparam_layouts: &[u64]) -> PartialVMResult<u64> {
-        let Self { terms, constant } = self;
-        let mut layout_size = *constant;
-        for (t_i, n_i) in terms {
-            match tparam_layouts.get(*t_i as usize) {
-                None => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "{t_i:?} missing mapping"
-                    ));
-                }
-                Some(ty_layout) => {
-                    layout_size = layout_size.saturating_add(n_i.saturating_mul(*ty_layout))
-                }
-            }
-        }
-        Ok(layout_size)
-    }
-}
-
-impl ResolvedMeasure {
-    /// A fully concrete measure.
-    pub(crate) fn constant(value_depth: u64, layout_size: u64) -> Self {
-        Self {
-            depth: DepthFormula::constant(value_depth),
-            layout: LayoutFormula::constant(layout_size),
-        }
-    }
-
-    /// The measure of a bare type parameter.
-    pub(crate) fn type_parameter(tparam: TypeParameterIndex) -> Self {
-        Self {
-            depth: DepthFormula::type_parameter(tparam),
-            layout: LayoutFormula::type_parameter(tparam),
-        }
+        Ok(())
     }
 }
 
 // ------------------------------------------------------------------------
+// Other Impls// ------------------------------------------------------------------------
 // Other Impls
 // ------------------------------------------------------------------------
 

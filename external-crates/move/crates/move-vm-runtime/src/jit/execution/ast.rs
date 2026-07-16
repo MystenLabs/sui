@@ -20,7 +20,7 @@ use crate::{
 
 use indexmap::IndexMap;
 use move_binary_format::{
-    errors::PartialVMResult,
+    errors::{PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, CodeOffset, DatatypeTyParameter, FunctionDefinitionIndex, LocalIndex,
         VariantTag, Visibility,
@@ -114,10 +114,10 @@ pub(crate) struct Module {
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     pub field_instantiations: ArenaVec<FieldInstantiation>,
 
-    /// a map from signatures in instantiations to the `ArenaVec<FormulatedType>` that represents
+    /// a map from signatures in instantiations to the `ArenaVec<PartialTypeFormula>` that represents
     /// it, with each type's substitution formula precomputed at translation time.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub instantiation_signatures: ArenaVec<ArenaVec<FormulatedType>>,
+    pub instantiation_signatures: ArenaVec<ArenaVec<PartialTypeFormula>>,
 
     /// constant references carry an index into a global vector of values.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -236,7 +236,7 @@ pub(crate) struct VariantDef {
 #[derive(Debug)]
 pub(crate) struct FunctionInstantiation {
     pub handle: CallType,
-    pub(crate) instantiation: VMPointer<ArenaVec<FormulatedType>>,
+    pub(crate) instantiation: VMPointer<ArenaVec<PartialTypeFormula>>,
 }
 
 #[derive(Debug)]
@@ -244,7 +244,7 @@ pub(crate) struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
-    pub(crate) type_params: VMPointer<ArenaVec<FormulatedType>>,
+    pub(crate) type_params: VMPointer<ArenaVec<PartialTypeFormula>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
@@ -268,7 +268,7 @@ pub(crate) struct EnumInstantiation {
     pub variant_count_map: ArenaVec<u16>,
     pub enum_def: VMPointer<EnumDef>,
     pub def_vtable_key: VirtualTableKey,
-    pub type_params: VMPointer<ArenaVec<FormulatedType>>,
+    pub type_params: VMPointer<ArenaVec<PartialTypeFormula>>,
 }
 
 // A variant instantiation.
@@ -306,12 +306,12 @@ pub(crate) struct DatatypeDescriptor {
     pub defining_id: ModuleIdKey,
     pub original_id: ModuleIdKey,
     pub datatype_info: ArenaBox<Datatype>,
-    /// The datatype's through-field measure (`value_depth` and `layout_size`), computed while
-    /// the package is JIT'd: plain constants when the datatype is fully concrete, otherwise a
-    /// formula whose local field structure is folded into its constants, with type parameters
-    /// and datatype applications remaining symbolic terms folded by the dispatch tables under a
-    /// transaction's linkage view.
-    measure: DatatypeMeasure,
+    /// The datatype's through-field size information (`value_depth` and `layout_size`),
+    /// computed while the package is JIT'd: plain constants when the datatype is fully
+    /// concrete, otherwise partial formulas whose local field structure is folded into their
+    /// constants, with type parameters and datatype applications remaining symbolic, closed by
+    /// the dispatch tables under a transaction's linkage view.
+    size_info: DatatypeSizeInfo,
 }
 
 #[derive(Debug)]
@@ -736,51 +736,51 @@ pub(crate) enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., e1, e2, ..., eN -> ..., vec[e1, e2, ..., eN]```
-    VecPack(VMPointer<FormulatedType>, u64),
+    VecPack(VMPointer<PartialTypeFormula>, u64),
     /// Return the length of the vector,
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., u64_value```
-    VecLen(VMPointer<FormulatedType>),
+    VecLen(VMPointer<PartialTypeFormula>),
     /// Acquire an immutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecImmBorrow(VMPointer<FormulatedType>),
+    VecImmBorrow(VMPointer<PartialTypeFormula>),
     /// Acquire a mutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecMutBorrow(VMPointer<FormulatedType>),
+    VecMutBorrow(VMPointer<PartialTypeFormula>),
     /// Add an element to the end of the vector.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, element -> ...```
-    VecPushBack(VMPointer<FormulatedType>),
+    VecPushBack(VMPointer<PartialTypeFormula>),
     /// Pop an element from the end of vector. Aborts if the vector is empty.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., element```
-    VecPopBack(VMPointer<FormulatedType>),
+    VecPopBack(VMPointer<PartialTypeFormula>),
     /// Destroy the vector and unpack a statically known number of elements onto the stack. Aborts
     /// if the vector does not have a length N.
     ///
     /// Stack transition:
     ///
     /// ```..., vec[e1, e2, ..., eN] -> ..., e1, e2, ..., eN```
-    VecUnpack(VMPointer<FormulatedType>, u64),
+    VecUnpack(VMPointer<PartialTypeFormula>, u64),
     /// Swaps the elements at two indices in the vector. Abort the execution if any of the indices
     /// is out of bounds.
     ///
     /// ```..., vector_reference, u64_value(1), u64_value(2) -> ...```
-    VecSwap(VMPointer<FormulatedType>),
+    VecSwap(VMPointer<PartialTypeFormula>),
     /// Push a U16 constant onto the stack.
     ///
     /// Stack transition:
@@ -988,19 +988,22 @@ impl VariantInstantiation {
 }
 
 impl ArenaType {
-    /// Convert to a runtime type by performing a deep copy, after checking the term against the
-    /// configured type-traversal limits. The copy is equivalent to substituting each `TyParam`
-    /// for itself, so this is just an identity substitution kept limit-free by the up-front
-    /// measure check.
+    /// Convert to a runtime type by performing a deep copy, after checking the term's
+    /// syntactic sizes against the type-traversal limits. The copy is equivalent to
+    /// substituting each `TyParam` for itself, so this is just an identity substitution kept
+    /// limit-free by the up-front check.
     pub fn to_type(&self) -> PartialVMResult<Type> {
-        self.measure().check()?;
+        let (type_size, type_depth) = self.syntactic_sizes();
+        check_syntactic_limits(type_size, type_depth)?;
         Ok(self.to_type_unchecked())
     }
 
     /// Deep-copy into a runtime type without checking limits. The traversal (and recursion
     /// depth) is bounded by the size of `self`, which was already bounded when the arena type
-    /// was built at translation time.
-    fn to_type_unchecked(&self) -> Type {
+    /// was built at translation time. Crate-private by design: the checked routes
+    /// ([`ArenaType::to_type`], the dispatch tables' `subst_type`) verify the term's sizes
+    /// against the limits first.
+    pub(crate) fn to_type_unchecked(&self) -> Type {
         match self {
             ArenaType::TyParam(idx) => Type::TyParam(*idx),
             ArenaType::Bool => Type::Bool,
@@ -1056,20 +1059,20 @@ impl DatatypeDescriptor {
         defining_id: ModuleIdKey,
         original_id: ModuleIdKey,
         datatype_info: ArenaBox<Datatype>,
-        measure: DatatypeMeasure,
+        size_info: DatatypeSizeInfo,
     ) -> Self {
         Self {
             name,
             defining_id,
             original_id,
             datatype_info,
-            measure,
+            size_info,
         }
     }
 
-    /// The datatype's through-field measure (see [`DatatypeMeasure`]).
-    pub(crate) fn datatype_measure(&self) -> &DatatypeMeasure {
-        &self.measure
+    /// The datatype's through-field size information (see [`DatatypeSizeInfo`]).
+    pub(crate) fn size_info(&self) -> &DatatypeSizeInfo {
+        &self.size_info
     }
 
     pub fn type_parameters(&self) -> &[DatatypeTyParameter] {
@@ -1195,262 +1198,510 @@ impl DatatypeDescriptor {
 }
 
 // -------------------------------------------------------------------------------------------------
-// Type Measurement and Substitution
+// Type Size Formulae
 // -------------------------------------------------------------------------------------------------
-// The VM bounds types with four distinct quantities, each with its own configured limit:
+// The VM bounds types with four distinct quantities, each with its own limit:
 //
-// - `type_size`: the syntactic node count of a type term (`max_type_instantiation_nodes`);
-// - `type_depth`: the syntactic depth of a type term (`max_type_depth`);
-// - `value_depth`: the depth of a *value* of the type, through datatype fields
-//   (`max_value_nest_depth`);
-// - `layout_size`: the node count of the type's generated layout, through datatype fields
-//   (`max_type_to_layout_nodes`).
+// - `type_size`: the syntactic node count of a type term;
+// - `type_depth`: the syntactic depth of a type term;
+// - `value_depth`: the depth of a *value* of the type, through datatype fields;
+// - `layout_size`: the node count of the type's generated layout, through datatype fields.
 //
-// All four used to be enforced by threading counters (`TypeSize`) or runtime field traversals
-// through every recursive type operation. Instead, we *predict* each quantity with a formula
-// and check the prediction up front, so rejection is pure arithmetic and no part of an
-// oversized type, value, or layout is ever built. There are two formula kinds, precomputed at
-// translation time:
+// All four used to be enforced by threading counters or runtime field traversals through every
+// recursive type operation. Instead, we *predict* each quantity with a closed-form formula and
+// check the prediction up front, so rejection is pure arithmetic and no part of an oversized
+// type, value, or layout is ever built.
 //
-// - [`MeasureFormula`], on every signature-pool term ([`FormulatedType`]): predicts the
-//   `type_size` and `type_depth` of a substitution result. Checked on every type construction.
-// - [`DatatypeMeasure`], on every [`DatatypeDescriptor`]: the through-field `value_depth` and
-//   `layout_size` — written down as plain constants when the datatype is fully concrete, and as
-//   a formula otherwise. Folded by the dispatch tables under a transaction's linkage view, and
-//   checked on every value construction (`Pack`, `PackVariant`, `VecPack`, and their generic
-//   forms) and every layout generation.
+// Every measure lives in one of exactly two algebras, each with a flat canonical normal form
+// that is closed under substitution:
 //
-// All four quantities of a call frame's type arguments are cached on the frame (see
-// [`TypeSizes`] and [`TypeArguments`]), computed once when the frame is created.
+// - additive (linear) forms, [`LinearFormula`]: `c + Σᵢ kᵢ·xᵢ` — `type_size`, `layout_size`;
+// - max-plus (tropical) forms, [`MaxPlusFormula`]: `max(c, maxᵢ(dᵢ + xᵢ))` — `type_depth`,
+//   `value_depth`.
+//
+// Substitution is same-measure: the value depth of a composite depends only on the value
+// depths of its arguments, and so on. The four measures are therefore fully independent
+// end-to-end, and each can be solved without computing the others.
+//
+// The syntactic pair is a property of a type *term* alone, so its formulas close at
+// translation time. The through-field pair reaches through datatype fields, and a field may
+// apply a datatype from another package whose definition is only resolvable under a
+// transaction's linkage: those applications stay symbolic ([`ApplyFormula`]) in *partial*
+// forms ([`PartialLinearFormula`], [`PartialMaxPlusFormula`]), built once per package version
+// at translation time with their arguments pre-lowered to sub-forms. The dispatch tables close
+// them per (datatype, linkage) with pure formula algebra — no arena traversal happens at link
+// time or runtime. See `VMDispatchTables::size_info`.
+//
+// All arithmetic saturates: every quantity exists only to be compared against a limit, and a
+// saturated value exceeds any limit, which is the correct verdict.
 
-/// The measured syntactic extent of a type term: `type_size` is the total node count and
-/// `type_depth` the maximum nesting depth (a leaf has one node and depth one). `TyParam`s count
-/// as ordinary leaves. Note this says nothing about *values* of the type — see
-/// [`ValueDepthFormula`] for that.
+/// All four size quantities of a concrete type. These are cached per type argument on every
+/// call frame (see [`TypeArguments`]), computed once when the frame is created, so every later
+/// limit check against a frame's type arguments is pure arithmetic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TypeMeasure {
-    pub type_size: u64,
-    pub type_depth: u64,
-}
-
-impl TypeMeasure {
-    /// Check this measure against the `type_depth` and `type_size` limits.
-    pub fn check(&self) -> PartialVMResult<()> {
-        if self.type_depth > TYPE_DEPTH_MAX {
-            return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
-        }
-        if self.type_size > MAX_TYPE_INSTANTIATION_NODES {
-            return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
-        }
-        Ok(())
-    }
-}
-
-/// All four size quantities of a concrete type: the syntactic pair plus the through-field pair.
-/// These are cached per type argument on every call frame (see [`TypeArguments`]), computed once
-/// when the frame is created, so every later limit check against a frame's type arguments is
-/// pure arithmetic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TypeSizes {
+pub struct TypeSize {
     pub type_size: u64,
     pub type_depth: u64,
     pub value_depth: u64,
     pub layout_size: u64,
 }
 
-impl TypeSizes {
-    /// The syntactic pair, as consumed by [`TypeFormula`]s.
-    pub fn type_measure(&self) -> TypeMeasure {
-        TypeMeasure {
-            type_size: self.type_size,
-            type_depth: self.type_depth,
-        }
-    }
-}
-
-impl From<TypeSizes> for TypeMeasure {
-    fn from(sizes: TypeSizes) -> Self {
-        sizes.type_measure()
-    }
-}
-
-/// One term of a [`MeasureFormula`]: how often a type parameter occurs in the term and how deep
-/// its deepest occurrence sits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FormulaTerm {
-    param: u16,
-    occurrences: u64,
-    depth_offset: u64,
-}
-
-/// A measure formula predicts the *syntactic* [`TypeMeasure`] of `subst(term, ty_args)` from
-/// the measures of the `ty_args` alone, without performing the substitution:
+/// A closed additive form: `constant + Σ terms[i].1 · x_{terms[i].0}`. The formula for
+/// `type_size` and `layout_size`. `terms` is sparse, sorted by parameter index, merged by
+/// summing coefficients.
 ///
-/// ```text
-/// type_size  = size_constant + Σᵢ occurrences(i) × type_size(ty_args[i])
-/// type_depth = max(depth_constant, maxᵢ (depth_offset(i) + type_depth(ty_args[i])))
-/// ```
-///
-/// The prediction matches the counters of the historical checked traversal exactly: that
-/// traversal counted both the `TyParam` node itself and every node of the argument cloned in
-/// for it, with the argument's nodes sitting one level *below* the occurrence. Checking the
-/// prediction therefore accepts and rejects exactly the substitutions the traversal did. (This
-/// over-counts relative to the true measure of the *result*: the result's true node count is
-/// the prediction minus the total parameter occurrences.)
-///
-/// All arithmetic saturates: a saturated measure simply exceeds any configured limit.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MeasureFormula {
-    size_constant: u64,
-    depth_constant: u64,
-    /// One term per distinct type parameter, sorted by parameter index.
-    terms: Vec<FormulaTerm>,
+/// The container is generic so the same formula can live on the heap (`Vec`, the default —
+/// products of closing and on-the-fly construction) or in a package arena (`ArenaVec`,
+/// translation-time formulas).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinearFormula<C = Vec<(u16, u64)>> {
+    pub(crate) constant: u64,
+    pub(crate) terms: C,
 }
 
-/// The shared surface of the heap- and arena-resident measure-formula representations
-/// ([`MeasureFormula`] and [`ArenaMeasureFormula`]): the formula parts, plus the prediction
-/// arithmetic implemented exactly once as provided methods over those parts.
-pub trait TypeFormula {
-    /// The formula's constant node count: the measure of the bare term (`TyParam`s count as
-    /// leaves).
-    fn size_constant(&self) -> u64;
+/// A closed max-plus (tropical) form: `max(constant, maxᵢ(terms[i].1 + x_{terms[i].0}))`. The
+/// formula for `type_depth` and `value_depth`. `terms` is sparse, sorted by parameter index,
+/// merged by taking the maximum offset.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaxPlusFormula<C = Vec<(u16, u64)>> {
+    pub(crate) constant: u64,
+    pub(crate) terms: C,
+}
 
-    /// The formula's constant depth: the maximum nesting depth of the bare term.
-    fn depth_constant(&self) -> u64;
+pub(crate) type ArenaLinearFormula = LinearFormula<ArenaVec<(u16, u64)>>;
+pub(crate) type ArenaMaxPlusFormula = MaxPlusFormula<ArenaVec<(u16, u64)>>;
 
-    /// One term per distinct type parameter, sorted by parameter index.
-    fn terms(&self) -> &[FormulaTerm];
+fn missing_argument_error(param: u16, len: usize) -> PartialVMError {
+    partial_vm_error!(
+        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        "type parameter {param} out of bounds -- len {len}"
+    )
+}
 
-    /// The formula's constant part as a measure: the measure of the term itself (`TyParam`s
-    /// count as leaves).
-    fn constant_measure(&self) -> TypeMeasure {
-        TypeMeasure {
-            type_size: self.size_constant(),
-            type_depth: self.depth_constant(),
-        }
-    }
-
-    /// Total number of type-parameter occurrences in the formula.
-    fn occurrences(&self) -> u64 {
-        self.terms()
-            .iter()
-            .fold(0u64, |acc, term| acc.saturating_add(term.occurrences))
-    }
-
-    /// Predict the measure of substituting arguments with the given measures into this
-    /// formula's term (see [`MeasureFormula`] for the equations). Arguments may be anything a
-    /// syntactic measure can be read from (e.g. frame-cached [`TypeSizes`]). Errors if the term
-    /// mentions a type parameter with no argument.
-    fn apply<M: Copy + Into<TypeMeasure>>(
+impl<C: AsRef<[(u16, u64)]>> LinearFormula<C> {
+    /// Solve the formula with per-parameter values read out of `args` by `value_of`. Errors if
+    /// the formula mentions a parameter with no argument.
+    pub(crate) fn solve_with<T>(
         &self,
-        arg_measures: &[M],
-    ) -> PartialVMResult<TypeMeasure> {
-        let mut type_size = self.size_constant();
-        let mut type_depth = self.depth_constant();
-        for term in self.terms() {
-            let arg: TypeMeasure = arg_measures
-                .get(term.param as usize)
-                .copied()
-                .ok_or_else(|| {
-                    partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "type substitution failed: index out of bounds -- len {} got {}",
-                        arg_measures.len(),
-                        term.param
-                    )
-                })?
-                .into();
-            type_size = type_size.saturating_add(term.occurrences.saturating_mul(arg.type_size));
-            type_depth = type_depth.max(term.depth_offset.saturating_add(arg.type_depth));
+        args: &[T],
+        value_of: impl Fn(&T) -> u64,
+    ) -> PartialVMResult<u64> {
+        let mut acc = self.constant;
+        for (param, coeff) in self.terms.as_ref() {
+            let arg = args
+                .get(*param as usize)
+                .ok_or_else(|| missing_argument_error(*param, args.len()))?;
+            acc = acc.saturating_add(coeff.saturating_mul(value_of(arg)));
         }
-        Ok(TypeMeasure {
-            type_size,
-            type_depth,
-        })
+        Ok(acc)
+    }
+
+    pub(crate) fn solve(&self, args: &[u64]) -> PartialVMResult<u64> {
+        self.solve_with(args, |x| *x)
+    }
+
+    /// Total number of type-parameter occurrences. The true node count of a substitution
+    /// result is the solved prediction minus this (the prediction also counts the parameter
+    /// nodes themselves, mirroring the legacy checked traversal).
+    pub(crate) fn occurrences(&self) -> u64 {
+        self.terms
+            .as_ref()
+            .iter()
+            .fold(0u64, |acc, (_, coeff)| acc.saturating_add(*coeff))
     }
 }
 
-impl TypeFormula for MeasureFormula {
-    fn size_constant(&self) -> u64 {
-        self.size_constant
+impl LinearFormula {
+    pub(crate) fn constant(constant: u64) -> Self {
+        Self {
+            constant,
+            terms: vec![],
+        }
     }
 
-    fn depth_constant(&self) -> u64 {
-        self.depth_constant
+    /// Add `multiplicity` copies of `other` into this formula.
+    pub(crate) fn absorb<C: AsRef<[(u16, u64)]>>(
+        &mut self,
+        multiplicity: u64,
+        other: &LinearFormula<C>,
+    ) {
+        self.constant = self
+            .constant
+            .saturating_add(multiplicity.saturating_mul(other.constant));
+        for (param, coeff) in other.terms.as_ref() {
+            let scaled = multiplicity.saturating_mul(*coeff);
+            match self.terms.iter_mut().find(|(p, _)| p == param) {
+                Some((_, acc)) => *acc = acc.saturating_add(scaled),
+                None => self.terms.push((*param, scaled)),
+            }
+        }
     }
 
-    fn terms(&self) -> &[FormulaTerm] {
-        &self.terms
+    /// Substitute a formula for each parameter (indexed positionally). Linear forms are closed
+    /// under substitution: the result is again a flat linear form.
+    pub(crate) fn subst(&self, args: &[LinearFormula]) -> PartialVMResult<LinearFormula> {
+        let mut result = LinearFormula::constant(self.constant);
+        for (param, coeff) in &self.terms {
+            let arg = args
+                .get(*param as usize)
+                .ok_or_else(|| missing_argument_error(*param, args.len()))?;
+            result.absorb(*coeff, arg);
+        }
+        result.canonicalize();
+        Ok(result)
     }
-}
 
-impl MeasureFormula {
+    pub(crate) fn canonicalize(&mut self) {
+        self.terms.sort_unstable_by_key(|(param, _)| *param);
+    }
+
     /// Move this formula's terms into `arena`, producing the arena-resident form stored in
     /// loaded packages.
-    pub(crate) fn allocate(self, arena: &ArenaBuilder) -> PartialVMResult<ArenaMeasureFormula> {
-        let MeasureFormula {
-            size_constant,
-            depth_constant,
-            terms,
-        } = self;
-        let terms = arena.alloc_vec(terms.into_iter())?;
-        Ok(ArenaMeasureFormula {
-            size_constant,
-            depth_constant,
-            terms,
+    pub(crate) fn allocate(self, arena: &ArenaBuilder) -> PartialVMResult<ArenaLinearFormula> {
+        Ok(LinearFormula {
+            constant: self.constant,
+            terms: arena.alloc_vec(self.terms.into_iter())?,
         })
     }
 }
 
-/// The arena-resident form of a [`MeasureFormula`], stored on every [`FormulatedType`] in a
-/// loaded package's signature pool so the package arena remains the sole owner of loaded-code
-/// memory.
-#[derive(Debug)]
-pub(crate) struct ArenaMeasureFormula {
-    size_constant: u64,
-    depth_constant: u64,
-    terms: ArenaVec<FormulaTerm>,
+impl<C: AsRef<[(u16, u64)]>> MaxPlusFormula<C> {
+    /// Solve the formula with per-parameter values read out of `args` by `value_of`. Errors if
+    /// the formula mentions a parameter with no argument.
+    pub(crate) fn solve_with<T>(
+        &self,
+        args: &[T],
+        value_of: impl Fn(&T) -> u64,
+    ) -> PartialVMResult<u64> {
+        let mut acc = self.constant;
+        for (param, offset) in self.terms.as_ref() {
+            let arg = args
+                .get(*param as usize)
+                .ok_or_else(|| missing_argument_error(*param, args.len()))?;
+            acc = acc.max(offset.saturating_add(value_of(arg)));
+        }
+        Ok(acc)
+    }
+
+    pub(crate) fn solve(&self, args: &[u64]) -> PartialVMResult<u64> {
+        self.solve_with(args, |x| *x)
+    }
 }
 
-impl TypeFormula for ArenaMeasureFormula {
-    fn size_constant(&self) -> u64 {
-        self.size_constant
+impl MaxPlusFormula {
+    pub(crate) fn constant(constant: u64) -> Self {
+        Self {
+            constant,
+            terms: vec![],
+        }
     }
 
-    fn depth_constant(&self) -> u64 {
-        self.depth_constant
+    /// Max `other`, shifted up by `offset`, into this formula.
+    pub(crate) fn absorb<C: AsRef<[(u16, u64)]>>(
+        &mut self,
+        offset: u64,
+        other: &MaxPlusFormula<C>,
+    ) {
+        self.constant = self.constant.max(offset.saturating_add(other.constant));
+        for (param, arg_offset) in other.terms.as_ref() {
+            let shifted = offset.saturating_add(*arg_offset);
+            match self.terms.iter_mut().find(|(p, _)| p == param) {
+                Some((_, acc)) => *acc = (*acc).max(shifted),
+                None => self.terms.push((*param, shifted)),
+            }
+        }
     }
 
-    fn terms(&self) -> &[FormulaTerm] {
-        &self.terms
+    /// Substitute a formula for each parameter (indexed positionally). Max-plus forms are
+    /// closed under substitution: the result is again a flat max-plus form.
+    pub(crate) fn subst(&self, args: &[MaxPlusFormula]) -> PartialVMResult<MaxPlusFormula> {
+        let mut result = MaxPlusFormula::constant(self.constant);
+        for (param, offset) in &self.terms {
+            let arg = args
+                .get(*param as usize)
+                .ok_or_else(|| missing_argument_error(*param, args.len()))?;
+            result.absorb(*offset, arg);
+        }
+        result.canonicalize();
+        Ok(result)
+    }
+
+    pub(crate) fn canonicalize(&mut self) {
+        self.terms.sort_unstable_by_key(|(param, _)| *param);
+    }
+
+    /// Move this formula's terms into `arena`, producing the arena-resident form stored in
+    /// loaded packages.
+    pub(crate) fn allocate(self, arena: &ArenaBuilder) -> PartialVMResult<ArenaMaxPlusFormula> {
+        Ok(MaxPlusFormula {
+            constant: self.constant,
+            terms: arena.alloc_vec(self.terms.into_iter())?,
+        })
+    }
+}
+
+/// Check a solved syntactic pair against the type-traversal limits: depth first, then size,
+/// mirroring the order of the legacy checked traversal.
+pub(crate) fn check_syntactic_limits(type_size: u64, type_depth: u64) -> PartialVMResult<()> {
+    if type_depth > TYPE_DEPTH_MAX {
+        return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
+    }
+    if type_size > MAX_TYPE_INSTANTIATION_NODES {
+        return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
+    }
+    Ok(())
+}
+
+// -------------------------------------------------------------------------------------------------
+// Partial Formulae
+// -------------------------------------------------------------------------------------------------
+
+/// A pending datatype application inside a partial form: `key` applied to `args`, one sub-form
+/// per type argument, in the same measure as the ambient form. The application's own formula
+/// over its parameters is unknown until the key is resolved under a linkage; the dispatch
+/// tables fold these at closing time with pure formula algebra.
+#[derive(Debug)]
+pub(crate) struct ApplyFormula<F> {
+    pub(crate) key: VirtualTableKey,
+    pub(crate) args: ArenaVec<F>,
+}
+
+/// A partial additive form: `constant + Σ params[i].1·x + Σ applies[j].0 · Apply(...)`.
+#[derive(Debug)]
+pub(crate) struct PartialLinearFormula {
+    pub(crate) constant: u64,
+    pub(crate) params: ArenaVec<(u16, u64)>,
+    /// Pending applications, each with a multiplicity.
+    pub(crate) applies: ArenaVec<(u64, ApplyFormula<PartialLinearFormula>)>,
+}
+
+/// A partial max-plus form: `max(constant, params[i].1 + x, applies[j].0 + Apply(...))`.
+#[derive(Debug)]
+pub(crate) struct PartialMaxPlusFormula {
+    pub(crate) constant: u64,
+    pub(crate) params: ArenaVec<(u16, u64)>,
+    /// Pending applications, each with an offset.
+    pub(crate) applies: ArenaVec<(u64, ApplyFormula<PartialMaxPlusFormula>)>,
+}
+
+/// Heap-side builder for [`PartialLinearFormula`], used during translation; allocated into the
+/// package arena once complete.
+#[derive(Debug, Default)]
+struct PartialLinearBuilder {
+    constant: u64,
+    params: BTreeMap<u16, u64>,
+    applies: Vec<(u64, VirtualTableKey, Vec<PartialLinearBuilder>)>,
+}
+
+/// Heap-side builder for [`PartialMaxPlusFormula`], used during translation; allocated into
+/// the package arena once complete.
+#[derive(Debug, Default)]
+struct PartialMaxPlusBuilder {
+    constant: u64,
+    params: BTreeMap<u16, u64>,
+    applies: Vec<(u64, VirtualTableKey, Vec<PartialMaxPlusBuilder>)>,
+}
+
+impl PartialLinearBuilder {
+    fn allocate(self, arena: &ArenaBuilder) -> PartialVMResult<PartialLinearFormula> {
+        let PartialLinearBuilder {
+            constant,
+            params,
+            applies,
+        } = self;
+        let applies = applies
+            .into_iter()
+            .map(|(multiplicity, key, args)| {
+                let args = args
+                    .into_iter()
+                    .map(|arg| arg.allocate(arena))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                Ok((
+                    multiplicity,
+                    ApplyFormula {
+                        key,
+                        args: arena.alloc_vec(args.into_iter())?,
+                    },
+                ))
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        Ok(PartialLinearFormula {
+            constant,
+            params: arena.alloc_vec(params.into_iter())?,
+            applies: arena.alloc_vec(applies.into_iter())?,
+        })
+    }
+}
+
+impl PartialMaxPlusBuilder {
+    /// Shift the whole form up by `delta`: the constant, every parameter offset, and every
+    /// pending application's offset.
+    fn shift(&mut self, delta: u64) {
+        self.constant = self.constant.saturating_add(delta);
+        for offset in self.params.values_mut() {
+            *offset = offset.saturating_add(delta);
+        }
+        for (offset, _, _) in self.applies.iter_mut() {
+            *offset = offset.saturating_add(delta);
+        }
+    }
+
+    /// Max `other` into this form (offsets are already absolute).
+    fn merge_max(&mut self, other: PartialMaxPlusBuilder) {
+        self.constant = self.constant.max(other.constant);
+        for (param, offset) in other.params {
+            let entry = self.params.entry(param).or_insert(0);
+            *entry = (*entry).max(offset);
+        }
+        self.applies.extend(other.applies);
+    }
+
+    fn allocate(self, arena: &ArenaBuilder) -> PartialVMResult<PartialMaxPlusFormula> {
+        let PartialMaxPlusBuilder {
+            constant,
+            params,
+            applies,
+        } = self;
+        let applies = applies
+            .into_iter()
+            .map(|(offset, key, args)| {
+                let args = args
+                    .into_iter()
+                    .map(|arg| arg.allocate(arena))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                Ok((
+                    offset,
+                    ApplyFormula {
+                        key,
+                        args: arena.alloc_vec(args.into_iter())?,
+                    },
+                ))
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        Ok(PartialMaxPlusFormula {
+            constant,
+            params: arena.alloc_vec(params.into_iter())?,
+            applies: arena.alloc_vec(applies.into_iter())?,
+        })
+    }
+}
+
+/// The through-field `layout_size` form of a type term: one layout node per structural node,
+/// datatype applications pending with their argument sub-forms pre-lowered.
+fn layout_form_of_term(ty: &ArenaType) -> PartialLinearBuilder {
+    match ty {
+        ArenaType::TyParam(idx) => PartialLinearBuilder {
+            constant: 0,
+            params: BTreeMap::from([(*idx, 1)]),
+            applies: vec![],
+        },
+        ArenaType::Vector(inner)
+        | ArenaType::Reference(inner)
+        | ArenaType::MutableReference(inner) => {
+            let mut form = layout_form_of_term(inner);
+            form.constant = form.constant.saturating_add(1);
+            form
+        }
+        ArenaType::Datatype(key) => PartialLinearBuilder {
+            constant: 0,
+            params: BTreeMap::new(),
+            applies: vec![(1, key.clone(), vec![])],
+        },
+        ArenaType::DatatypeInstantiation(inst) => {
+            let (key, ty_args) = &**inst;
+            let args = ty_args.iter().map(layout_form_of_term).collect();
+            PartialLinearBuilder {
+                constant: 0,
+                params: BTreeMap::new(),
+                applies: vec![(1, key.clone(), args)],
+            }
+        }
+        _ => PartialLinearBuilder {
+            constant: 1,
+            params: BTreeMap::new(),
+            applies: vec![],
+        },
+    }
+}
+
+/// The through-field `value_depth` form of a type term: one value-nesting level per structural
+/// node, datatype applications pending with their argument sub-forms pre-lowered.
+fn value_form_of_term(ty: &ArenaType) -> PartialMaxPlusBuilder {
+    match ty {
+        ArenaType::TyParam(idx) => PartialMaxPlusBuilder {
+            constant: 0,
+            params: BTreeMap::from([(*idx, 0)]),
+            applies: vec![],
+        },
+        ArenaType::Vector(inner)
+        | ArenaType::Reference(inner)
+        | ArenaType::MutableReference(inner) => {
+            let mut form = value_form_of_term(inner);
+            form.shift(1);
+            form
+        }
+        ArenaType::Datatype(key) => PartialMaxPlusBuilder {
+            constant: 0,
+            params: BTreeMap::new(),
+            applies: vec![(0, key.clone(), vec![])],
+        },
+        ArenaType::DatatypeInstantiation(inst) => {
+            let (key, ty_args) = &**inst;
+            let args = ty_args.iter().map(value_form_of_term).collect();
+            PartialMaxPlusBuilder {
+                constant: 0,
+                params: BTreeMap::new(),
+                applies: vec![(0, key.clone(), args)],
+            }
+        }
+        _ => PartialMaxPlusBuilder {
+            constant: 1,
+            params: BTreeMap::new(),
+            applies: vec![],
+        },
     }
 }
 
 // -------------------------------------------------------------------------------------------------
-// Datatype (Through-Field) Measure
+// Per-Term Formulae
 // -------------------------------------------------------------------------------------------------
 
-/// The variable of a [`DatatypeFormula`] term.
+/// A signature-pool type term together with all four of its size formulas, computed once at
+/// translation time. The syntactic pair is closed (a datatype head is a single syntactic
+/// node, so no linkage is needed); the through-field pair is partial, closed by the dispatch
+/// tables under a transaction's linkage.
+///
+/// This is plain data: the operations — checked substitution, instantiation checks — live on
+/// the dispatch tables (`subst_type`, `check_instantiation`, ...), which do the formula work
+/// first and only then realize a type from `term`, if one is needed at all.
 #[derive(Debug)]
-pub(crate) enum FieldVar {
-    /// A type parameter of the datatype the formula describes.
-    Param(u16),
-    /// A datatype application (`Datatype` or `DatatypeInstantiation` subterm) appearing in a
-    /// field of the datatype the formula describes. These stay symbolic at translation time
-    /// because the referenced datatype may live in another package, whose descriptor is only
-    /// resolvable under a transaction's linkage view; the dispatch tables fold them at runtime.
-    App(VMPointer<ArenaType>),
+pub(crate) struct PartialTypeFormula {
+    pub(crate) term: ArenaType,
+    pub(crate) type_size: ArenaLinearFormula,
+    pub(crate) type_depth: ArenaMaxPlusFormula,
+    pub(crate) value_depth: PartialMaxPlusFormula,
+    pub(crate) layout_size: PartialLinearFormula,
 }
 
-/// One term of a [`DatatypeFormula`]: a variable, the number of value-nesting levels sitting
-/// above its deepest occurrence in the datatype's fields (for `value_depth`), and how many
-/// times it occurs (for `layout_size`).
-#[derive(Debug)]
-pub(crate) struct DatatypeFormulaTerm {
-    pub(crate) var: FieldVar,
-    pub(crate) depth_offset: u64,
-    pub(crate) occurrences: u64,
+impl PartialTypeFormula {
+    /// Compute all four formulas for `term`, allocating them in `arena`.
+    pub(crate) fn for_term(term: ArenaType, arena: &ArenaBuilder) -> PartialVMResult<Self> {
+        let (type_size, type_depth) = term.syntactic_formulas();
+        let value_depth = value_form_of_term(&term).allocate(arena)?;
+        let layout_size = layout_form_of_term(&term).allocate(arena)?;
+        Ok(Self {
+            term,
+            type_size: type_size.allocate(arena)?,
+            type_depth: type_depth.allocate(arena)?,
+            value_depth,
+            layout_size,
+        })
+    }
 }
+
+// -------------------------------------------------------------------------------------------------
+// Datatype (Through-Field) Formulae
+// -------------------------------------------------------------------------------------------------
 
 /// The through-field sizes of a fully concrete datatype: the maximum nesting depth of a value
 /// of the type, and the node count of its generated layout.
@@ -1460,55 +1711,24 @@ pub(crate) struct DatatypeSizes {
     pub(crate) layout_size: u64,
 }
 
-/// A datatype formula predicts the through-field quantities of a datatype instantiation from
-/// the corresponding quantities of its variables:
-///
-/// ```text
-/// value_depth = max(value_depth_constant, maxᵥ (depth_offset(v) + value_depth(v)))
-/// layout_size = layout_size_constant + Σᵥ occurrences(v) × layout_size(v)
-/// ```
-///
-/// The depth component is the seed of the runtime `DepthFormula`; the layout component is its
-/// linear analogue. All purely local field structure (primitives, vectors, references, the
-/// datatype's own node and nesting level, and — for enums — one layout node per variant) is
-/// folded into the constants at translation time. The dispatch tables derive the
-/// linkage-resolved formulas by folding the symbolic terms — see
-/// `calculate_measure_of_datatype_and_cache`. All arithmetic saturates.
+/// The through-field size information of a datatype, living on its [`DatatypeDescriptor`],
+/// computed while the package is JIT'd. When the datatype is fully concrete — no type
+/// parameters and no datatype references in its fields — the quantities are known exactly at
+/// translation time and are written down as plain constants; otherwise they are partial
+/// formulas over the type parameters and the (linkage-dependent) datatype applications in the
+/// fields.
 #[derive(Debug)]
-pub(crate) struct DatatypeFormula {
-    value_depth_constant: u64,
-    layout_size_constant: u64,
-    terms: ArenaVec<DatatypeFormulaTerm>,
-}
-
-impl DatatypeFormula {
-    pub(crate) fn value_depth_constant(&self) -> u64 {
-        self.value_depth_constant
-    }
-
-    pub(crate) fn layout_size_constant(&self) -> u64 {
-        self.layout_size_constant
-    }
-
-    pub(crate) fn terms(&self) -> &[DatatypeFormulaTerm] {
-        &self.terms
-    }
-}
-
-/// The through-field measure of a datatype, living on its [`DatatypeDescriptor`],
-/// arena-allocated and computed while the package is JIT'd. When the datatype is fully concrete
-/// — no type parameters and no datatype references in its fields — the quantities are known
-/// exactly at translation time and are written down as plain constants; otherwise they are a
-/// [`DatatypeFormula`].
-#[derive(Debug)]
-pub(crate) enum DatatypeMeasure {
+pub(crate) enum DatatypeSizeInfo {
     Constant(DatatypeSizes),
-    Formula(DatatypeFormula),
+    Formula {
+        value_depth: PartialMaxPlusFormula,
+        layout_size: PartialLinearFormula,
+    },
 }
 
-impl DatatypeMeasure {
-    /// Compute the through-field measure for a datatype with the given field types (for enums,
-    /// the fields of every variant), allocating any formula terms in `arena`.
+impl DatatypeSizeInfo {
+    /// Compute the through-field size information for a datatype with the given field types
+    /// (for enums, the fields of every variant), allocating any formula terms in `arena`.
     /// `extra_layout_nodes` is the datatype's flat layout overhead beyond its own node — one
     /// per variant for enums, zero for structs — mirroring the per-variant node the legacy
     /// layout traversal counted.
@@ -1516,92 +1736,73 @@ impl DatatypeMeasure {
         field_types: impl Iterator<Item = &'a ArenaType>,
         extra_layout_nodes: u64,
         arena: &ArenaBuilder,
-    ) -> PartialVMResult<DatatypeMeasure> {
-        // `prefix_depth` is the number of value-nesting levels strictly above the visited term
-        // (starting at 1: the datatype itself).
-        fn visit(
-            ty: &ArenaType,
-            prefix_depth: u64,
-            value_depth_constant: &mut u64,
-            layout_size_constant: &mut u64,
-            apps: &mut Vec<DatatypeFormulaTerm>,
-            params: &mut BTreeMap<u16, (u64, u64)>,
-        ) {
-            match ty {
-                ArenaType::TyParam(idx) => {
-                    let (offset, occurrences) = params.entry(*idx).or_insert((0, 0));
-                    *offset = (*offset).max(prefix_depth);
-                    *occurrences = occurrences.saturating_add(1);
-                }
-                ArenaType::Vector(inner)
-                | ArenaType::Reference(inner)
-                | ArenaType::MutableReference(inner) => {
-                    *value_depth_constant =
-                        (*value_depth_constant).max(prefix_depth.saturating_add(1));
-                    *layout_size_constant = layout_size_constant.saturating_add(1);
-                    visit(
-                        inner,
-                        prefix_depth.saturating_add(1),
-                        value_depth_constant,
-                        layout_size_constant,
-                        apps,
-                        params,
-                    );
-                }
-                ArenaType::Datatype(_) | ArenaType::DatatypeInstantiation(_) => {
-                    apps.push(DatatypeFormulaTerm {
-                        var: FieldVar::App(VMPointer::from_ref(ty)),
-                        depth_offset: prefix_depth,
-                        occurrences: 1,
-                    });
-                }
-                _ => {
-                    *value_depth_constant =
-                        (*value_depth_constant).max(prefix_depth.saturating_add(1));
-                    *layout_size_constant = layout_size_constant.saturating_add(1);
-                }
-            }
-        }
-        // The datatype itself, plus its flat layout overhead.
-        let mut value_depth_constant = 1u64;
-        let mut layout_size_constant = 1u64.saturating_add(extra_layout_nodes);
-        let mut terms = vec![];
-        let mut params = BTreeMap::new();
+    ) -> PartialVMResult<DatatypeSizeInfo> {
+        // The datatype itself contributes one value-nesting level and one layout node (plus
+        // the flat overhead); each field sits one level below the datatype.
+        let mut value = PartialMaxPlusBuilder {
+            constant: 1,
+            params: BTreeMap::new(),
+            applies: vec![],
+        };
+        let mut layout = PartialLinearBuilder {
+            constant: 1u64.saturating_add(extra_layout_nodes),
+            params: BTreeMap::new(),
+            applies: vec![],
+        };
         for field_ty in field_types {
-            visit(
-                field_ty,
-                1,
-                &mut value_depth_constant,
-                &mut layout_size_constant,
-                &mut terms,
-                &mut params,
-            );
+            let mut field_value = value_form_of_term(field_ty);
+            field_value.shift(1);
+            value.merge_max(field_value);
+
+            let field_layout = layout_form_of_term(field_ty);
+            layout.constant = layout.constant.saturating_add(field_layout.constant);
+            for (param, coeff) in field_layout.params {
+                let entry = layout.params.entry(param).or_insert(0);
+                *entry = entry.saturating_add(coeff);
+            }
+            layout.applies.extend(field_layout.applies);
         }
-        terms.extend(
-            params
-                .into_iter()
-                .map(|(param, (depth_offset, occurrences))| DatatypeFormulaTerm {
-                    var: FieldVar::Param(param),
-                    depth_offset,
-                    occurrences,
-                }),
-        );
-        if terms.is_empty() {
+        let concrete = value.params.is_empty()
+            && value.applies.is_empty()
+            && layout.params.is_empty()
+            && layout.applies.is_empty();
+        if concrete {
             // Fully concrete: just write the sizes down.
-            Ok(DatatypeMeasure::Constant(DatatypeSizes {
-                value_depth: value_depth_constant,
-                layout_size: layout_size_constant,
+            Ok(DatatypeSizeInfo::Constant(DatatypeSizes {
+                value_depth: value.constant,
+                layout_size: layout.constant,
             }))
         } else {
-            let terms = arena.alloc_vec(terms.into_iter())?;
-            Ok(DatatypeMeasure::Formula(DatatypeFormula {
-                value_depth_constant,
-                layout_size_constant,
-                terms,
-            }))
+            Ok(DatatypeSizeInfo::Formula {
+                value_depth: value.allocate(arena)?,
+                layout_size: layout.allocate(arena)?,
+            })
         }
     }
 }
+
+/// The linkage-resolved through-field formulas of a datatype, produced by the dispatch tables
+/// closing the descriptor's partial forms under a transaction's linkage view and memoized per
+/// (datatype, linkage). Closed: the runtime solve path cannot encounter an unresolved key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DatatypeSizeFormula {
+    pub(crate) value_depth: MaxPlusFormula,
+    pub(crate) layout_size: LinearFormula,
+}
+
+impl DatatypeSizeFormula {
+    /// A fully concrete datatype's formulas.
+    pub(crate) fn constant(sizes: DatatypeSizes) -> Self {
+        Self {
+            value_depth: MaxPlusFormula::constant(sizes.value_depth),
+            layout_size: LinearFormula::constant(sizes.layout_size),
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Type Arguments
+// -------------------------------------------------------------------------------------------------
 
 /// Fully-instantiated type arguments paired with all four of their size quantities, computed
 /// once at construction (when a call frame is created) and passed down with the frame. Every
@@ -1610,7 +1811,7 @@ impl DatatypeMeasure {
 #[derive(Debug, Clone)]
 pub struct TypeArguments {
     types: Vec<Type>,
-    sizes: Vec<TypeSizes>,
+    sizes: Vec<TypeSize>,
 }
 
 impl TypeArguments {
@@ -1619,12 +1820,26 @@ impl TypeArguments {
     /// under the transaction's linkage view); see `VMDispatchTables::make_type_arguments`.
     pub(crate) fn new(
         types: Vec<Type>,
-        mut sizes_of: impl FnMut(&Type) -> PartialVMResult<TypeSizes>,
+        mut sizes_of: impl FnMut(&Type) -> PartialVMResult<TypeSize>,
     ) -> PartialVMResult<Self> {
         let sizes = types
             .iter()
             .map(&mut sizes_of)
             .collect::<PartialVMResult<Vec<_>>>()?;
+        Ok(Self { types, sizes })
+    }
+
+    /// Pair `types` with sizes that were computed alongside them (e.g. solved from formulas
+    /// during generic-function instantiation).
+    pub(crate) fn from_parts(types: Vec<Type>, sizes: Vec<TypeSize>) -> PartialVMResult<Self> {
+        if types.len() != sizes.len() {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "type argument sizes mismatch: {} types, {} sizes",
+                types.len(),
+                sizes.len()
+            ));
+        }
         Ok(Self { types, sizes })
     }
 
@@ -1639,7 +1854,7 @@ impl TypeArguments {
         &self.types
     }
 
-    pub fn sizes(&self) -> &[TypeSizes] {
+    pub fn sizes(&self) -> &[TypeSize] {
         &self.sizes
     }
 
@@ -1648,136 +1863,71 @@ impl TypeArguments {
     }
 }
 
-/// An arena-resident type term paired with its substitution [`MeasureFormula`], computed once
-/// at translation time. All fields are private: the only way to turn one of these into a
-/// runtime `Type` is [`FormulatedType::instantiate`], which checks the predicted measure
-/// against the limits before building anything.
-#[derive(Debug)]
-pub(crate) struct FormulatedType {
-    ty: ArenaType,
-    formula: ArenaMeasureFormula,
-}
-
-impl FormulatedType {
-    /// Compute the formula for `ty` and store it alongside the term, with the formula's terms
-    /// allocated in `arena`.
-    pub(crate) fn new(ty: ArenaType, arena: &ArenaBuilder) -> PartialVMResult<Self> {
-        let formula = ty.formula().allocate(arena)?;
-        Ok(Self { ty, formula })
-    }
-
-    /// Read-only access to the underlying term.
-    pub(crate) fn ty(&self) -> &ArenaType {
-        &self.ty
-    }
-
-    /// The term's own measure — the formula constants (`TyParam`s count as leaves). Equal to
-    /// the node count / max depth of the raw term, with no traversal.
-    pub(crate) fn measure(&self) -> TypeMeasure {
-        self.formula.constant_measure()
-    }
-
-    /// Total number of type-parameter occurrences in the term. The true node count of an
-    /// instantiation is the predicted count minus this (see [`MeasureFormula`]).
-    pub(crate) fn occurrences(&self) -> u64 {
-        self.formula.occurrences()
-    }
-
-    /// Predict the measure of instantiating this term with arguments of the given measures —
-    /// pure arithmetic, no traversal.
-    pub(crate) fn predict(&self, ty_args: &TypeArguments) -> PartialVMResult<TypeMeasure> {
-        self.formula.apply(ty_args.sizes())
-    }
-
-    /// Identity conversion to a runtime `Type` (`TyParam`s map to themselves), checked against
-    /// the limits. This is the conversion for terms used outside a generic context.
-    pub(crate) fn to_type(&self) -> PartialVMResult<Type> {
-        self.measure().check()?;
-        Ok(self.ty.to_type_unchecked())
-    }
-
-    /// Substitute `ty_args` into this term: check the predicted measure against the limits,
-    /// then build. Rejection is pure arithmetic — no part of an oversized type is ever
-    /// constructed. A term mentioning a parameter with no matching argument is an invariant
-    /// violation (use [`FormulatedType::to_type`] for identity conversion).
-    pub(crate) fn instantiate(&self, ty_args: &TypeArguments) -> PartialVMResult<Type> {
-        self.predict(ty_args)?.check()?;
-        self.ty.subst_unchecked(ty_args.types())
-    }
-}
+// -------------------------------------------------------------------------------------------------
+// Syntactic Sizes and Substitution
+// -------------------------------------------------------------------------------------------------
 
 impl Type {
-    /// The syntactic measure of this term itself, counting `TyParam`s as ordinary leaves.
-    /// Crate-private by design: measurement is the dispatch tables' concern — external callers
-    /// go through them (e.g. `VMDispatchTables::sizes_of_type`), so every size and limit
-    /// decision flows through one place.
-    pub(crate) fn measure(&self) -> TypeMeasure {
+    /// The syntactic `(type_size, type_depth)` of this term, counting every node (datatype
+    /// heads are single nodes; fields are not traversed). Crate-private by design: measurement
+    /// is the dispatch tables' concern — external callers go through them (e.g.
+    /// `VMDispatchTables::sizes_of_type`), so every size and limit decision flows through one
+    /// place.
+    pub(crate) fn syntactic_sizes(&self) -> (u64, u64) {
         match self {
             Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
-                let inner = ty.measure();
-                TypeMeasure {
-                    type_size: inner.type_size.saturating_add(1),
-                    type_depth: inner.type_depth.saturating_add(1),
-                }
+                let (size, depth) = ty.syntactic_sizes();
+                (size.saturating_add(1), depth.saturating_add(1))
             }
-            Type::DatatypeInstantiation(def_inst) => {
-                let (_, instantiation) = &**def_inst;
-                let mut type_size = 1u64;
-                let mut type_depth = 1u64;
-                for ty in instantiation.iter() {
-                    let m = ty.measure();
-                    type_size = type_size.saturating_add(m.type_size);
-                    type_depth = type_depth.max(m.type_depth.saturating_add(1));
+            Type::DatatypeInstantiation(inst) => {
+                let (_, ty_args) = &**inst;
+                let mut size = 1u64;
+                let mut depth = 1u64;
+                for ty in ty_args.iter() {
+                    let (arg_size, arg_depth) = ty.syntactic_sizes();
+                    size = size.saturating_add(arg_size);
+                    depth = depth.max(arg_depth.saturating_add(1));
                 }
-                TypeMeasure {
-                    type_size,
-                    type_depth,
-                }
+                (size, depth)
             }
-            _ => TypeMeasure {
-                type_size: 1,
-                type_depth: 1,
-            },
+            _ => (1, 1),
         }
     }
 }
 
 impl ArenaType {
-    /// The syntactic measure of this term itself, counting `TyParam`s as ordinary leaves.
-    pub(crate) fn measure(&self) -> TypeMeasure {
+    /// The syntactic `(type_size, type_depth)` of this term, counting every node (`TyParam`s
+    /// count as ordinary leaves).
+    pub(crate) fn syntactic_sizes(&self) -> (u64, u64) {
         match self {
             ArenaType::Vector(ty) | ArenaType::Reference(ty) | ArenaType::MutableReference(ty) => {
-                let inner = ty.measure();
-                TypeMeasure {
-                    type_size: inner.type_size.saturating_add(1),
-                    type_depth: inner.type_depth.saturating_add(1),
-                }
+                let (size, depth) = ty.syntactic_sizes();
+                (size.saturating_add(1), depth.saturating_add(1))
             }
-            ArenaType::DatatypeInstantiation(def_inst) => {
-                let (_, instantiation) = &**def_inst;
-                let mut type_size = 1u64;
-                let mut type_depth = 1u64;
-                for ty in instantiation.iter() {
-                    let m = ty.measure();
-                    type_size = type_size.saturating_add(m.type_size);
-                    type_depth = type_depth.max(m.type_depth.saturating_add(1));
+            ArenaType::DatatypeInstantiation(inst) => {
+                let (_, ty_args) = &**inst;
+                let mut size = 1u64;
+                let mut depth = 1u64;
+                for ty in ty_args.iter() {
+                    let (arg_size, arg_depth) = ty.syntactic_sizes();
+                    size = size.saturating_add(arg_size);
+                    depth = depth.max(arg_depth.saturating_add(1));
                 }
-                TypeMeasure {
-                    type_size,
-                    type_depth,
-                }
+                (size, depth)
             }
-            _ => TypeMeasure {
-                type_size: 1,
-                type_depth: 1,
-            },
+            _ => (1, 1),
         }
     }
 
-    /// The substitution formula for this term. Costs one traversal of the (static) term. Hot
-    /// paths do not use this: instantiation sites get their formulas precomputed at translation
-    /// time (see [`FormulatedType`]).
-    pub(crate) fn formula(&self) -> MeasureFormula {
+    /// The closed syntactic formulas of this term: `type_size` and `type_depth` of
+    /// `subst(term, args)` as functions of the arguments' syntactic sizes. The prediction
+    /// matches the counters of the historical checked traversal exactly: that traversal
+    /// counted both the `TyParam` node itself and every node of the argument cloned in for it,
+    /// with the argument's nodes sitting one level *below* the occurrence. Checking the
+    /// prediction therefore accepts and rejects exactly the substitutions the traversal did.
+    /// (This over-counts relative to the true measure of the *result*: the result's true node
+    /// count is the prediction minus the total parameter occurrences.)
+    pub(crate) fn syntactic_formulas(&self) -> (LinearFormula, MaxPlusFormula) {
         fn visit(
             ty: &ArenaType,
             depth: u64,
@@ -1804,9 +1954,9 @@ impl ArenaType {
                         terms,
                     );
                 }
-                ArenaType::DatatypeInstantiation(def_inst) => {
-                    let (_, instantiation) = &**def_inst;
-                    for ty in instantiation.iter() {
+                ArenaType::DatatypeInstantiation(inst) => {
+                    let (_, ty_args) = &**inst;
+                    for ty in ty_args.iter() {
                         visit(
                             ty,
                             depth.saturating_add(1),
@@ -1829,35 +1979,46 @@ impl ArenaType {
             &mut depth_constant,
             &mut term_map,
         );
-        MeasureFormula {
-            size_constant,
-            depth_constant,
-            terms: term_map
-                .into_iter()
-                .map(|(param, (occurrences, depth_offset))| FormulaTerm {
-                    param,
-                    occurrences,
-                    depth_offset,
-                })
-                .collect(),
+        let mut size_terms = Vec::with_capacity(term_map.len());
+        let mut depth_terms = Vec::with_capacity(term_map.len());
+        for (param, (occurrences, offset)) in term_map {
+            size_terms.push((param, occurrences));
+            depth_terms.push((param, offset));
         }
+        (
+            LinearFormula {
+                constant: size_constant,
+                terms: size_terms,
+            },
+            MaxPlusFormula {
+                constant: depth_constant,
+                terms: depth_terms,
+            },
+        )
     }
 
-    /// Checked substitution: predict the result's measure, check it against the limits, and
-    /// only then build the result. This is the only on-the-fly substitution entry point — the
-    /// raw builder is private to this module, so there is no unchecked route to a substituted
-    /// type.
+    /// Checked on-the-fly substitution: compute this term's syntactic formulas, check the
+    /// predicted sizes against the limits, and only then build the result. Used where no
+    /// precomputed formulas exist (function signatures, layout builders, the tracer); hot
+    /// instantiation sites go through the dispatch tables with translation-time formulas
+    /// instead.
     pub(crate) fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
-        let arg_measures = ty_args.iter().map(|ty| ty.measure()).collect::<Vec<_>>();
-        self.formula().apply(&arg_measures)?.check()?;
+        let (size_formula, depth_formula) = self.syntactic_formulas();
+        let arg_sizes = ty_args
+            .iter()
+            .map(|ty| ty.syntactic_sizes())
+            .collect::<Vec<_>>();
+        let type_depth = depth_formula.solve_with(&arg_sizes, |(_, depth)| *depth)?;
+        let type_size = size_formula.solve_with(&arg_sizes, |(size, _)| *size)?;
+        check_syntactic_limits(type_size, type_depth)?;
         self.subst_unchecked(ty_args)
     }
 
-    /// Substitute `ty_args` into this term WITHOUT enforcing size or depth limits. Private to
-    /// this module by design: every route to a substituted type ([`ArenaType::subst`],
-    /// [`FormulatedType::instantiate`]) checks a predicted measure against the limits before
-    /// calling this.
-    fn subst_unchecked(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
+    /// Substitute `ty_args` into this term WITHOUT enforcing size or depth limits.
+    /// Crate-private by design: every route to a substituted type ([`ArenaType::subst`], the
+    /// dispatch tables' `subst_type` and `instantiate_generic_function`) checks a predicted
+    /// size against the limits before calling this.
+    pub(crate) fn subst_unchecked(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
         Ok(match self {
             ArenaType::TyParam(idx) => match ty_args.get(*idx as usize) {
                 Some(ty) => ty.clone(),
@@ -2569,9 +2730,9 @@ impl<B: std::fmt::Write> InternedDisplay<B> for CallType {
     }
 }
 
-impl<B: std::fmt::Write> InternedDisplay<B> for FormulatedType {
+impl<B: std::fmt::Write> InternedDisplay<B> for PartialTypeFormula {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
-        self.ty().fmt(f, interner)
+        self.term.fmt(f, interner)
     }
 }
 

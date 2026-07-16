@@ -428,7 +428,7 @@ impl<'extensions> MoveVM<'extensions> {
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         // Instantiate the signature with the (verified) type arguments. Substitution is
-        // checked: the predicted measure of each instantiated type is checked against the
+        // checked: the predicted sizes of each instantiated type are checked against the
         // type-traversal limits before it is built.
         let instantiate = |ty: &ArenaType| {
             if ty_args.is_empty() {
