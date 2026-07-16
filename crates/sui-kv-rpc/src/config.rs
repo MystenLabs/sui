@@ -17,6 +17,7 @@ use sui_kvstore::validate_pipeline_name;
 use crate::default_service_info_watermark_pipelines;
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 5_000;
+const DEFAULT_RENDER_AHEAD: usize = 2;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 1_024;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 1_024;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
@@ -199,6 +200,11 @@ pub struct LedgerHistoryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_checkpoints: Option<LedgerHistoryMethodConfig>,
 
+    /// Bounds admitted checkpoint render tasks and retained rendered pages.
+    /// Defaults to `2`; `1` serializes rendering with emission.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub render_ahead: Option<usize>,
+
     /// Per-request evaluated-bucket budget for filtered tx-bitmap scans, shared
     /// across all DNF dimensions of one query. Caps how many fetched buckets the
     /// eval evaluates, NOT how many bucket reads BigTable receives — at
@@ -257,6 +263,10 @@ impl LedgerHistoryConfig {
         )
     }
 
+    pub fn render_ahead(&self) -> usize {
+        self.render_ahead.unwrap_or(DEFAULT_RENDER_AHEAD)
+    }
+
     pub fn bitmap_bucket_budget_tx(&self) -> u64 {
         self.bitmap_bucket_budget_tx
             .unwrap_or(DEFAULT_BITMAP_BUCKET_BUDGET_TX)
@@ -287,6 +297,10 @@ impl LedgerHistoryConfig {
     /// leaving the client a cursorless `QueryEnd` it cannot resume from. Mirrors
     /// the fullnode side's `LedgerHistoryConfig::validate`.
     pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.render_ahead() > 0,
+            "ledger_history.render_ahead must be greater than zero",
+        );
         anyhow::ensure!(
             self.max_bitmap_filter_literals() > 0,
             "ledger_history.max_bitmap_filter_literals must be greater than zero",
@@ -563,6 +577,7 @@ mod tests {
     #[test]
     fn validate_accepts_defaults() {
         LedgerHistoryConfig::default().validate().unwrap();
+        assert_eq!(LedgerHistoryConfig::default().render_ahead(), 2);
     }
 
     #[test]
@@ -624,6 +639,21 @@ stages:
     }
 
     #[test]
+    fn validate_rejects_zero_render_ahead() {
+        let cfg = LedgerHistoryConfig {
+            render_ahead: Some(0),
+            ..Default::default()
+        };
+        let err = cfg
+            .validate()
+            .expect_err("zero render_ahead must fail validation");
+        assert!(
+            err.to_string().contains("ledger_history.render_ahead"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn partial_yaml_falls_back_to_defaults() {
         // Only one nested knob set; everything else must resolve to defaults.
         let yaml = r#"
@@ -631,6 +661,7 @@ instance-id: my-instance
 ledger-history:
   list-transactions:
     max-limit-items: 7
+  render-ahead: 4
   bitmap-bucket-budget-tx: 2048
 "#;
         let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
@@ -643,6 +674,7 @@ ledger-history:
         // Untouched sibling falls back to the per-endpoint default.
         assert_eq!(lh.list_transactions().default_limit_items, 50);
         assert_eq!(lh.bitmap_bucket_budget_tx(), 2048);
+        assert_eq!(lh.render_ahead(), 4);
         assert_eq!(lh.bitmap_bucket_budget_event(), 1024);
         lh.validate().unwrap();
     }

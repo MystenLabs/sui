@@ -248,13 +248,23 @@ mod test_utils {
         method: &'static str,
         checkpoint_hi_exclusive: u64,
     ) -> (QueryContext, tokio::task::JoinHandle<()>) {
+        let (ctx, _registry, server) =
+            query_context_with_registry(method, checkpoint_hi_exclusive).await;
+        (ctx, server)
+    }
+
+    pub(super) async fn query_context_with_registry(
+        method: &'static str,
+        checkpoint_hi_exclusive: u64,
+    ) -> (QueryContext, Registry, tokio::task::JoinHandle<()>) {
         let mock = MockBigtableServer::new();
         let (addr, server) = mock.start().await.expect("start mock BigTable");
         let inner = InnerBigTableClient::new_local(addr.to_string(), "test".to_string())
             .await
             .expect("connect to mock BigTable");
 
-        let metrics = KvRpcMetrics::new(&Registry::new());
+        let registry = Registry::new();
+        let metrics = KvRpcMetrics::new(&registry);
         let client =
             BigTableClient::new(inner.clone(), 2, metrics.bigtable_limiter.clone(), method);
         let package_store: Arc<dyn PackageStore> = Arc::new(BigTablePackageStore::new(inner));
@@ -269,6 +279,7 @@ mod test_utils {
             list_transactions: Some(method_config.clone()),
             list_events: Some(method_config.clone()),
             list_checkpoints: Some(method_config),
+            render_ahead: Some(2),
             bitmap_bucket_budget_tx: Some(10),
             bitmap_bucket_budget_event: Some(10),
             bitmap_drain_probe_rows: None,
@@ -296,6 +307,7 @@ mod test_utils {
                 2,
                 stages,
             ),
+            registry,
             server,
         )
     }

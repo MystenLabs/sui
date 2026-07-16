@@ -8,9 +8,9 @@ use std::future::Future;
 use std::sync::Arc;
 use std::task::Poll;
 
-use futures::future;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::future;
 use futures::stream;
 use futures::stream::BoxStream;
 use sui_futures::task::TaskGuard;
@@ -973,6 +973,73 @@ pub(crate) enum ResolvedWatermarked<T, P = u64> {
     Watermark { position: P, cp: u64 },
 }
 
+#[derive(Debug)]
+pub(crate) enum RenderAheadError<UpstreamError, RenderError> {
+    Upstream(UpstreamError),
+    Render(RenderError),
+}
+
+/// Render resolved items concurrently while preserving item, watermark, and
+/// error order.
+///
+/// The returned stream is lazy until polled. Ordered buffering admits at most
+/// `look_ahead` render tasks, and `look_ahead = 1` serializes rendering with
+/// downstream emission. Dropping the stream aborts admitted tasks through their
+/// [`TaskGuard`]s. Completed responses retained behind an earlier frame are
+/// bounded by `look_ahead * rendered page size`; a full-mask fat checkpoint
+/// page is about 4–5 MB.
+pub(crate) fn render_ahead<I, O, P, UpstreamError, RenderError, RenderFut>(
+    upstream: BoxStream<'static, Result<ResolvedWatermarked<I, P>, UpstreamError>>,
+    look_ahead: usize,
+    render: impl Fn(I) -> RenderFut + Send + Sync + 'static,
+) -> BoxStream<
+    'static,
+    Result<ResolvedWatermarked<O, P>, RenderAheadError<UpstreamError, RenderError>>,
+>
+where
+    I: Send + 'static,
+    O: Send + 'static,
+    P: Send + 'static,
+    UpstreamError: Send + 'static,
+    RenderError: Send + 'static,
+    RenderFut: Future<Output = Result<O, RenderError>> + Send + 'static,
+{
+    assert!(look_ahead > 0, "render_ahead: look_ahead must be > 0");
+    let render = Arc::new(render);
+
+    upstream
+        .map(move |frame| {
+            let render = render.clone();
+            match frame {
+                Ok(ResolvedWatermarked::Item(item)) => {
+                    let render_task =
+                        TaskGuard::new(tokio::spawn(async move { render(item).await }));
+                    future::Either::Left(async move {
+                        match render_task.await {
+                            Ok(Ok(output)) => Ok(ResolvedWatermarked::Item(output)),
+                            Ok(Err(error)) => Err(RenderAheadError::Render(error)),
+                            Err(join_error) => {
+                                surface_panic(Err(join_error));
+                                std::future::pending().await
+                            }
+                        }
+                    })
+                }
+                Ok(ResolvedWatermarked::Watermark { position, cp }) => {
+                    future::Either::Right(future::ready(Ok(ResolvedWatermarked::Watermark {
+                        position,
+                        cp,
+                    })))
+                }
+                Err(error) => {
+                    future::Either::Right(future::ready(Err(RenderAheadError::Upstream(error))))
+                }
+            }
+        })
+        .buffered(look_ahead)
+        .boxed()
+}
+
 /// Terminal outcome from [`resolve_scan_watermarks`].
 ///
 /// A scan limit always carries the authoritative terminal position in the same
@@ -1226,6 +1293,178 @@ mod tests {
         fn drop(&mut self) {
             self.active.fetch_sub(1, Ordering::SeqCst);
         }
+    }
+
+    #[tokio::test]
+    async fn render_ahead_completes_admitted_work_without_consumer_polls() {
+        let upstream: BoxStream<'static, Result<ResolvedWatermarked<u64>, RpcError>> =
+            stream::iter([
+                Ok(ResolvedWatermarked::Item(0u64)),
+                Ok(ResolvedWatermarked::Item(1u64)),
+            ])
+            .boxed();
+        let started = Arc::new(AtomicUsize::new(0));
+        let completed = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(3));
+        let completion_notify = Arc::new(Notify::new());
+        let mut stream = render_ahead(upstream, 2, {
+            let started = started.clone();
+            let completed = completed.clone();
+            let barrier = barrier.clone();
+            let completion_notify = completion_notify.clone();
+            move |item| {
+                let started = started.clone();
+                let completed = completed.clone();
+                let barrier = barrier.clone();
+                let completion_notify = completion_notify.clone();
+                async move {
+                    started.fetch_add(1, Ordering::SeqCst);
+                    barrier.wait().await;
+                    if completed.fetch_add(1, Ordering::SeqCst) + 1 == 2 {
+                        completion_notify.notify_one();
+                    }
+                    Ok::<_, RpcError>(item)
+                }
+            }
+        });
+
+        tokio::task::yield_now().await;
+        assert_eq!(started.load(Ordering::SeqCst), 0);
+
+        let first_poll =
+            futures::future::poll_fn(|cx| Poll::Ready(stream.poll_next_unpin(cx))).await;
+        assert!(first_poll.is_pending());
+
+        timeout(Duration::from_millis(500), barrier.wait())
+            .await
+            .expect("admitted renders did not reach the barrier");
+        timeout(Duration::from_millis(500), completion_notify.notified())
+            .await
+            .expect("admitted renders did not complete");
+        assert_eq!(started.load(Ordering::SeqCst), 2);
+        assert_eq!(completed.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn render_ahead_preserves_items_and_watermarks_in_input_order() {
+        let upstream: BoxStream<'static, Result<ResolvedWatermarked<u64>, RpcError>> =
+            stream::iter([
+                Ok(ResolvedWatermarked::Item(0u64)),
+                Ok(ResolvedWatermarked::Watermark {
+                    position: 10,
+                    cp: 20,
+                }),
+                Ok(ResolvedWatermarked::Item(1u64)),
+            ])
+            .boxed();
+        let release_first = Arc::new(Notify::new());
+        let second_completed = Arc::new(Notify::new());
+        let mut stream = render_ahead(upstream, 3, {
+            let release_first = release_first.clone();
+            let second_completed = second_completed.clone();
+            move |item| {
+                let release_first = release_first.clone();
+                let second_completed = second_completed.clone();
+                async move {
+                    if item == 0 {
+                        release_first.notified().await;
+                    } else {
+                        second_completed.notify_one();
+                    }
+                    Ok::<_, RpcError>(item)
+                }
+            }
+        });
+
+        let first_poll =
+            futures::future::poll_fn(|cx| Poll::Ready(stream.poll_next_unpin(cx))).await;
+        assert!(first_poll.is_pending());
+        timeout(Duration::from_millis(500), second_completed.notified())
+            .await
+            .expect("later render did not complete");
+        release_first.notify_one();
+
+        match stream.next().await {
+            Some(Ok(ResolvedWatermarked::Item(0))) => {}
+            _ => panic!("expected item 0 first"),
+        }
+        match stream.next().await {
+            Some(Ok(ResolvedWatermarked::Watermark {
+                position: 10,
+                cp: 20,
+            })) => {}
+            _ => panic!("expected watermark second"),
+        }
+        match stream.next().await {
+            Some(Ok(ResolvedWatermarked::Item(1))) => {}
+            _ => panic!("expected item 1 third"),
+        }
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn dropping_render_ahead_stream_aborts_render_tasks() {
+        let upstream: BoxStream<'static, Result<ResolvedWatermarked<u64>, RpcError>> =
+            stream::iter([Ok(ResolvedWatermarked::Item(0u64))]).boxed();
+        let limiter = Arc::new(Semaphore::new(1));
+        let mut stream = render_ahead(upstream, 1, {
+            let limiter = limiter.clone();
+            move |_item| {
+                let limiter = limiter.clone();
+                async move {
+                    let _permit =
+                        limiter.clone().acquire_owned().await.map_err(|_| {
+                            RpcError::new(tonic::Code::Internal, "test limiter closed")
+                        })?;
+                    std::future::pending::<Result<u64, RpcError>>().await
+                }
+            }
+        });
+
+        let first_poll =
+            futures::future::poll_fn(|cx| Poll::Ready(stream.poll_next_unpin(cx))).await;
+        assert!(first_poll.is_pending());
+        wait_for_available_permits(&limiter, 0).await;
+
+        drop(stream);
+        wait_for_available_permits(&limiter, 1).await;
+    }
+
+    #[tokio::test]
+    async fn render_ahead_propagates_render_error() {
+        let upstream: BoxStream<'static, Result<ResolvedWatermarked<u64>, RpcError>> =
+            stream::iter([Ok(ResolvedWatermarked::Item(0u64))]).boxed();
+        let mut stream = render_ahead(upstream, 1, |_item| async move {
+            Err::<u64, _>(RpcError::new(tonic::Code::Internal, "boom"))
+        });
+
+        let error = match stream.next().await {
+            Some(Err(RenderAheadError::Render(error))) => error,
+            _ => panic!("expected render error"),
+        };
+        let status: tonic::Status = error.into();
+        assert_eq!(status.message(), "boom");
+    }
+
+    #[tokio::test]
+    async fn render_ahead_resurfaces_render_panic() {
+        use futures::FutureExt;
+        let upstream: BoxStream<'static, Result<ResolvedWatermarked<u64>, RpcError>> =
+            stream::iter([Ok(ResolvedWatermarked::Item(0u64))]).boxed();
+        let stream = render_ahead(upstream, 1, |_item| async move {
+            if std::hint::black_box(true) {
+                panic!("render boom");
+            }
+            Ok::<_, RpcError>(0u64)
+        });
+
+        let outcome = std::panic::AssertUnwindSafe(stream.try_collect::<Vec<_>>())
+            .catch_unwind()
+            .await;
+        assert!(
+            outcome.is_err(),
+            "render panic must surface, not silently truncate the stream"
+        );
     }
 
     /// Wrap an iterator of plain values into a `Watermarked` upstream for
@@ -2477,12 +2716,9 @@ mod tests {
         timeout(Duration::from_millis(500), barrier.wait())
             .await
             .expect("admitted fetches did not reach the barrier");
-        timeout(
-            Duration::from_millis(500),
-            completion_notify.notified(),
-        )
-        .await
-        .expect("admitted fetches did not complete");
+        timeout(Duration::from_millis(500), completion_notify.notified())
+            .await
+            .expect("admitted fetches did not complete");
         assert_eq!(started.load(Ordering::SeqCst), 2);
         assert_eq!(completed.load(Ordering::SeqCst), 2);
     }
@@ -2500,9 +2736,10 @@ mod tests {
             move |_keys: Vec<i32>| {
                 let limiter = limiter_for_fetch.clone();
                 async move {
-                    let _permit = limiter.clone().acquire_owned().await.map_err(|_| {
-                        RpcError::new(tonic::Code::Internal, "test limiter closed")
-                    })?;
+                    let _permit =
+                        limiter.clone().acquire_owned().await.map_err(|_| {
+                            RpcError::new(tonic::Code::Internal, "test limiter closed")
+                        })?;
                     std::future::pending::<Result<HashMap<i32, i32>, RpcError>>().await
                 }
             },

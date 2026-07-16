@@ -72,6 +72,8 @@ pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
 pub(crate) struct KvRpcMetrics {
     bigtable_limiter: Arc<BigTableLimiterMetrics>,
     response_render_latency_ms: HistogramVec,
+    response_page_bytes: HistogramVec,
+    stream_first_item_latency_ms: HistogramVec,
     stream_item_yield_wait_ms: HistogramVec,
     bitmap_buckets_evaluated: HistogramVec,
     bitmap_buckets_discarded: HistogramVec,
@@ -87,6 +89,22 @@ impl KvRpcMetrics {
                 "Wall time spent rendering one list response item.",
                 &["method"],
                 prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            response_page_bytes: register_histogram_vec_with_registry!(
+                "kv_rpc_response_page_bytes",
+                "Protobuf encoded size of one list response frame at emission.",
+                &["method"],
+                prometheus::exponential_buckets(1_024.0, 2.0, 17).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            stream_first_item_latency_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_stream_first_item_latency_ms",
+                "Wall time from list stream construction until its first item is ready to yield.",
+                &["method"],
+                prometheus::exponential_buckets(1.0, 2.0, 14).unwrap(),
                 registry,
             )
             .unwrap(),
@@ -129,6 +147,22 @@ impl KvRpcMetrics {
 
     fn observe_response_render(&self, method: &'static str, elapsed: std::time::Duration) {
         self.response_render_latency_ms
+            .with_label_values(&[method])
+            .observe(elapsed.as_secs_f64() * 1000.0);
+    }
+
+    fn observe_response_page_bytes(&self, method: &'static str, bytes: usize) {
+        self.response_page_bytes
+            .with_label_values(&[method])
+            .observe(bytes as f64);
+    }
+
+    fn observe_stream_first_item_latency(
+        &self,
+        method: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.stream_first_item_latency_ms
             .with_label_values(&[method])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
