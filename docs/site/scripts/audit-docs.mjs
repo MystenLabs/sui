@@ -366,8 +366,23 @@ function evaluateGoalRequires(goal, body, data, headings) {
       result.detail = `${wc} words, need >= ${req.min_words}`;
     } else if (req.has_questions !== undefined) {
       const has = Array.isArray(data.questions) && data.questions.length > 0;
-      result.pass = req.has_questions ? has : !has;
-      result.detail = has ? `${data.questions.length} question(s)` : 'no questions field';
+      // Also check for junk questions
+      const junkPatterns = [
+        /How do I [a-z]+(tion|ment|ness|ity|ing|cap|ticket) /i,   // noun after "How do I"
+        /\b(\w+) \1\b/i,                                           // repeated word ("reference reference")
+        /How do I (the|a|an|sui|set up sui|operator|data) /i,     // bad starts
+        /verify that .* worked\?/i,                                 // template leak
+        /need before I can .*\?/i,                                  // template leak
+        /overview [a-z]+-[a-z]+\?/i,                                // anchor fragment leak
+      ];
+      let junkCount = 0;
+      if (has) {
+        for (const q of data.questions) {
+          if (junkPatterns.some(p => p.test(q))) junkCount++;
+        }
+      }
+      result.pass = req.has_questions ? (has && junkCount === 0) : !has;
+      result.detail = !has ? 'no questions field' : junkCount > 0 ? `${junkCount}/${data.questions.length} question(s) look malformed` : `${data.questions.length} question(s)`;
     } else if (req.has_answer !== undefined) {
       const has = typeof data.answer === 'string' && data.answer.trim().length > 0;
       result.pass = req.has_answer ? has : !has;
