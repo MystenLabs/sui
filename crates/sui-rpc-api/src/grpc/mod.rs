@@ -61,9 +61,15 @@ impl Services {
         self
     }
 
-    pub fn into_router(self) -> axum::Router {
+    pub fn into_router(
+        self,
+        request_log: mysten_network::request_log::GrpcRequestLogLayer,
+    ) -> axum::Router {
         let timeout = self.timeout;
         self.router
+            // The capture layer sits under `GrpcWebLayer` (the last layer added is outermost) so
+            // it always sees standard gRPC frames, including for grpc-web(-text) requests.
+            .layer(request_log)
             // The timeout sits inside the grpc-web layer so that its
             // trailers-only DeadlineExceeded response is translated for
             // grpc-web clients too.
@@ -74,12 +80,20 @@ impl Services {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::future::Future;
     use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::Mutex;
     use std::task::Context;
     use std::task::Poll;
+
+    use base64::Engine as _;
+    use mysten_network::request_log::GrpcRequestLogLayer;
+    use prost::Message;
     use tower::ServiceExt;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    use super::*;
 
     /// A gRPC service whose handler never completes, standing in for a
     /// request wedged on a lock, a stalled backend, or an h2 send window
@@ -126,6 +140,13 @@ mod tests {
             .and_then(|value| value.to_str().ok())
     }
 
+    /// A request-log layer with an empty descriptor pool: `capture_state` never resolves a
+    /// service/method against it, so it's a pure pass-through — for tests that exercise
+    /// unrelated `Services` behavior and don't care about capture.
+    fn empty_request_log() -> GrpcRequestLogLayer {
+        GrpcRequestLogLayer::from_encoded_file_descriptor_sets([]).unwrap()
+    }
+
     /// The server-side default deadline must bound a request whose handler
     /// never completes, surfacing gRPC status 4 (DeadlineExceeded) instead
     /// of hanging the client forever.
@@ -134,7 +155,7 @@ mod tests {
         let router = Services::new()
             .timeout(Some(Duration::from_millis(50)))
             .add_service(HangingService)
-            .into_router();
+            .into_router(empty_request_log());
 
         let response = router.oneshot(request(None)).await.unwrap();
         assert_eq!(response.status(), http::StatusCode::OK);
@@ -148,7 +169,7 @@ mod tests {
         let router = Services::new()
             .timeout(None)
             .add_service(HangingService)
-            .into_router();
+            .into_router(empty_request_log());
 
         let response = router.oneshot(request(Some("50m"))).await.unwrap();
         assert_eq!(response.status(), http::StatusCode::OK);
@@ -163,7 +184,7 @@ mod tests {
         let router = Services::new()
             .timeout(None)
             .add_service(HangingService)
-            .into_router();
+            .into_router(empty_request_log());
 
         let response = tokio::time::timeout(
             Duration::from_secs(24 * 60 * 60),
@@ -171,5 +192,85 @@ mod tests {
         )
         .await;
         assert!(response.is_err(), "request completed without a deadline");
+    }
+
+    /// Records the `payload` field of every `grpc_request` event.
+    #[derive(Clone, Default)]
+    struct CaptureLayer {
+        payloads: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for CaptureLayer {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _ctx: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            struct Visitor(Option<String>);
+            impl tracing::field::Visit for Visitor {
+                fn record_debug(
+                    &mut self,
+                    field: &tracing::field::Field,
+                    value: &dyn std::fmt::Debug,
+                ) {
+                    if field.name() == "payload" {
+                        self.0 = Some(format!("{value:?}"));
+                    }
+                }
+            }
+
+            let mut visitor = Visitor(None);
+            event.record(&mut visitor);
+            if let Some(payload) = visitor.0 {
+                self.payloads.lock().unwrap().push(payload);
+            }
+        }
+    }
+
+    /// The request-log layer must sit *under* `GrpcWebLayer` so it sees standard gRPC frames for
+    /// grpc-web requests too. If the ordering regresses, the capture stream silently loses all
+    /// browser-client traffic.
+    #[tokio::test]
+    async fn request_log_captures_grpc_web_requests() {
+        let capture_layer = CaptureLayer::default();
+        let subscriber = tracing_subscriber::registry()
+            .with(tracing_subscriber::EnvFilter::new("grpc_request=trace"))
+            .with(capture_layer.clone());
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let (_health_reporter, health_service) = tonic_health::server::health_reporter();
+        let router = Services::new().add_service(health_service).into_router(
+            GrpcRequestLogLayer::from_encoded_file_descriptor_sets([
+                tonic_health::pb::FILE_DESCRIPTOR_SET,
+            ])
+            .unwrap(),
+        );
+
+        let message = tonic_health::pb::HealthCheckRequest {
+            service: "x".to_owned(),
+        }
+        .encode_to_vec();
+        let mut body = vec![0u8];
+        body.extend_from_slice(&(message.len() as u32).to_be_bytes());
+        body.extend_from_slice(&message);
+
+        let request = axum::http::Request::builder()
+            .method(axum::http::Method::POST)
+            .uri("/grpc.health.v1.Health/Check")
+            .header(
+                axum::http::header::CONTENT_TYPE,
+                "application/grpc-web+proto",
+            )
+            .body(axum::body::Body::from(body))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+
+        let payloads = capture_layer.payloads.lock().unwrap();
+        assert_eq!(
+            *payloads,
+            vec![base64::engine::general_purpose::STANDARD.encode(&message)]
+        );
     }
 }
