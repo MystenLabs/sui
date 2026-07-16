@@ -32,10 +32,12 @@ builder_paths:
     step: Transfer policies
     stage: Authorization
 questions:
-  - What is Object Transfer Policies in Sui?
-  - How do I transferpolicy rules?
-  - How do I transferrequest receipts?
-answer: Learn about transfer policies on Sui.
+  - What are object transfer policies on Sui?
+  - How do I add rules to a TransferPolicy?
+  - How do TransferRequest receipts satisfy transfer policy rules?
+answer: >-
+  Learn how TransferPolicy rules and TransferRequest receipts control object
+  transfers on Sui.
 ---
 
 A [`TransferPolicy`](https://docs.sui.io/references/framework/sui_sui/transfer_policy) on Sui is a customizable primitive that enables the owner of a type to create custom rules that define how the type can be transferred. You can set any number of rules, such as paying a royalty or commission, and all must be satisfied in a single transaction for the transfer to succeed. A `TransferPolicy` can be used within a Sui Kiosk marketplace or any other system that integrates the `TransferPolicy` primitive. 

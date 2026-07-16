@@ -42,12 +42,13 @@ builder_paths:
     step: zkLogin for agent identity
     stage: Authorization
 questions:
-  - What is zkLogin Integration in Sui?
-  - How do I install the zklogin typescript sdk?
-  - How do I user salt management?
+  - What is zkLogin integration on Sui?
+  - How do I install and use the zkLogin TypeScript SDK?
+  - How do I manage user salts for zkLogin?
 answer: >-
-  Here is the high-level flow the wallet or frontend application must implement
-  to support zkLogin-enabled transactions:.
+  This guide covers the zkLogin flow for creating ephemeral keys, obtaining JWTs
+  and proofs, managing user salts, assembling signatures, and submitting
+  transactions.
 ---
 
 Here is the high-level flow the wallet or frontend application must implement to support zkLogin-enabled transactions:
