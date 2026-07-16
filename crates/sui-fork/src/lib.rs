@@ -9,6 +9,7 @@ pub mod cli;
 pub(crate) mod context;
 pub(crate) mod filesystem;
 mod gql;
+pub(crate) mod live_state;
 mod node;
 mod proto;
 mod rpc;
