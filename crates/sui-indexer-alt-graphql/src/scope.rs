@@ -61,6 +61,13 @@ pub(crate) enum DataSource {
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
     },
+    /// A scanned, already-finalized transaction's input/output objects, taken from the scanning
+    /// API's `ExecutedTransaction`. Used by subscription backfills that hydrate a scanned
+    /// transaction.
+    #[cfg(feature = "staging")]
+    Scanned {
+        execution_objects: ExecutionObjectMap,
+    },
 }
 
 /// Identifies the transaction whose effects are currently in view. Descendant resolvers default
@@ -171,6 +178,27 @@ impl Scope {
             package_store,
             resolver_limits,
         }
+    }
+
+    /// Create a scope for a transaction replayed from the scanning API (subscription backfill).
+    /// Like [`for_streamed_checkpoint`], lookups resolve in memory: the transaction's input/output
+    /// objects come from the proto `ExecutedTransaction`, and `checkpoint_viewed_at` is `None`
+    /// because the data is not bounded by an indexed checkpoint.
+    #[cfg(feature = "staging")]
+    pub(crate) fn for_scanned_transaction(
+        package_store: Arc<StreamingPackageStore>,
+        resolver_limits: sui_package_resolver::Limits,
+        executed_transaction: &grpc::ExecutedTransaction,
+    ) -> Result<Self, RpcError> {
+        let execution_objects = extract_objects_from_executed_transaction(executed_transaction)?;
+        Ok(Self {
+            checkpoint_viewed_at: None,
+            active_transaction: None,
+            root_bound: None,
+            data_source: DataSource::Scanned { execution_objects },
+            package_store,
+            resolver_limits,
+        })
     }
 
     /// Anchor a nested scope to a transaction by digest only. Used when the caller does not yet
@@ -359,6 +387,8 @@ impl Scope {
             DataSource::Executed { execution_objects } => Some(execution_objects),
             #[cfg(feature = "staging")]
             DataSource::Streamed { checkpoint } => Some(&checkpoint.execution_objects),
+            #[cfg(feature = "staging")]
+            DataSource::Scanned { execution_objects } => Some(execution_objects),
         }
     }
 

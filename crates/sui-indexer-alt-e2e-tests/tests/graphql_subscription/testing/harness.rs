@@ -14,10 +14,12 @@ use fastcrypto::encoding::Encoding;
 use prometheus::Registry;
 use serde_json::Value;
 use serde_json::json;
+use sui_config::RpcConfig;
+use sui_config::rpc_config::LedgerHistoryConfig;
 use sui_futures::service::Service;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+pub use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
@@ -54,7 +56,16 @@ impl SubscriptionTestCluster {
     /// validator + postgres DB + kv_packages indexer + GraphQL service.
     /// Waits for kv_packages to index the genesis checkpoint so subscriptions are ready.
     pub async fn new() -> Self {
-        let (cluster, _controller) = Self::new_inner(false).await;
+        let (cluster, _controller) = Self::new_inner(false, false, GraphQlConfig::default()).await;
+        cluster
+    }
+
+    /// Same as `new()`, but enables the validator's v2alpha `LedgerService` (bitmap-backed
+    /// `list_transactions`) so the transaction subscription's backfill scan has a data source.
+    /// Requires ledger-history indexing on the validator and the experimental query APIs on the
+    /// GraphQL reader.
+    pub async fn new_with_ledger_history() -> Self {
+        let (cluster, _controller) = Self::new_inner(false, true, GraphQlConfig::default()).await;
         cluster
     }
 
@@ -68,16 +79,31 @@ impl SubscriptionTestCluster {
     /// `disconnect_all()` only severs the stream and leaves recovery reads
     /// untouched.
     pub async fn new_with_disruption_proxy() -> (Self, ProxyController) {
-        Self::new_inner(true).await
+        Self::new_inner(true, false, GraphQlConfig::default()).await
     }
 
-    async fn new_inner(use_proxy: bool) -> (Self, ProxyController) {
+    async fn new_inner(
+        use_proxy: bool,
+        ledger_history: bool,
+        graphql_config: GraphQlConfig,
+    ) -> (Self, ProxyController) {
         let ingestion_dir = tempfile::tempdir().expect("Failed to create ingestion dir");
-        let validator = TestClusterBuilder::new()
+        let mut builder = TestClusterBuilder::new()
             .with_num_validators(1)
-            .with_data_ingestion_dir(ingestion_dir.path().to_owned())
-            .build()
-            .await;
+            .with_data_ingestion_dir(ingestion_dir.path().to_owned());
+        if ledger_history {
+            // The transaction subscription backfills through the validator's v2alpha
+            // LedgerService (bitmap-backed `list_transactions`), which requires ledger-history
+            // indexing; disable pruning so backfilled checkpoints stay queryable.
+            builder = builder
+                .disable_fullnode_pruning()
+                .with_rpc_config(RpcConfig {
+                    enable_indexing: Some(true),
+                    ledger_history: Some(LedgerHistoryConfig::default()),
+                    ..Default::default()
+                });
+        }
+        let validator = builder.build().await;
 
         let db = TempDb::new().expect("Failed to create TempDb");
         let database_url = db.database().url().clone();
@@ -128,6 +154,9 @@ impl SubscriptionTestCluster {
         // directly so `disconnect_all()` cannot interfere with gap-recovery reads.
         let kv_args = KvArgs {
             ledger_grpc_url: Some(rpc_url.parse().unwrap()),
+            // Enables the v2alpha `list_transactions` reader the transaction subscription
+            // backfill scans through (paired with ledger-history indexing on the validator).
+            experimental_query_apis: Some(ledger_history),
             ..Default::default()
         };
 
@@ -146,7 +175,7 @@ impl SubscriptionTestCluster {
                 checkpoint_stream_url: Some(stream_url.parse().unwrap()),
             },
             "0.0.0",
-            GraphQlConfig::default(),
+            graphql_config,
             vec!["kv_packages".to_string()],
             &Registry::new(),
         )
@@ -182,15 +211,23 @@ impl SubscriptionTestCluster {
 
     /// Subscribe and return a stream of GraphQL payloads.
     /// Use `tokio_stream::StreamExt` methods (`next`, `take`, `collect`, etc.) to consume.
-    /// Optionally pass GraphQL variables (e.g. `json!({"sender": "0x..."})`).
     pub async fn subscribe(
         &self,
         query: &str,
     ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
-        self.subscribe_with_variables(query, None).await
+        self.post_subscription(query, None).await
     }
 
+    /// Like `subscribe`, but binds GraphQL variables (e.g. `json!({"sender": "0x..."})`).
     pub async fn subscribe_with_variables(
+        &self,
+        query: &str,
+        variables: Option<Value>,
+    ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
+        self.post_subscription(query, variables).await
+    }
+
+    async fn post_subscription(
         &self,
         query: &str,
         variables: Option<Value>,
@@ -200,10 +237,12 @@ impl SubscriptionTestCluster {
             payload["variables"] = vars;
         }
 
-        let response = reqwest::Client::new()
+        let request = reqwest::Client::new()
             .post(&self.subscription_url)
             .header("Accept", "text/event-stream")
-            .header("Content-Type", "application/json")
+            .header("Content-Type", "application/json");
+
+        let response = request
             .json(&payload)
             .send()
             .await
@@ -405,13 +444,18 @@ pub fn graphql_redactions() -> insta::Settings {
     settings
 }
 
-/// Extract digest from a top-level transaction subscription response.
-/// Path: data.transactions.node.digest
+/// Extract digests from a top-level transaction subscription response. Each payload is a batch of
+/// edges. Path: data.transactions[].node.digest
 pub fn transaction_digest(item: &Value) -> Vec<&str> {
-    item["data"]["transactions"]["node"]["digest"]
-        .as_str()
-        .into_iter()
-        .collect()
+    item["data"]["transactions"]
+        .as_array()
+        .map(|edges| {
+            edges
+                .iter()
+                .filter_map(|e| e["node"]["digest"].as_str())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Poll the kv_packages watermark until it reaches `target_checkpoint`.

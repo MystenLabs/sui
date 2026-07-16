@@ -7,6 +7,7 @@ use async_graphql::InputObject;
 use async_graphql::InputValueError;
 
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
+use sui_rpc::proto::sui::rpc::v2alpha;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -236,6 +237,86 @@ impl TransactionFilter {
 
         true
     }
+
+    pub(crate) fn to_bitmap_filter(&self) -> Option<v2alpha::TransactionFilter> {
+        let mut literals = Vec::new();
+
+        if let Some(sent) = &self.sent_address {
+            literals.push(include_literal(sender_predicate(sent)));
+        }
+        if let Some(address) = &self.affected_address {
+            literals.push(include_literal(affected_address_predicate(address)));
+        }
+        if let Some(object) = &self.affected_object {
+            literals.push(include_literal(affected_object_predicate(object)));
+        }
+        if let Some(function) = &self.function {
+            literals.push(include_literal(move_call_predicate(function)));
+        }
+        if let Some(kind) = &self.kind {
+            // Every system transaction (Genesis, ConsensusCommitPrologue, ChangeEpoch,
+            // RandomnessStateUpdate, AuthenticatorStateUpdate, EndOfEpoch) is sent from
+            // 0x0; programmable transactions never are. So ProgrammableTx maps to an
+            // unanchored `Exclude(Sender = 0x0)` and the bitmap layer synthesizes the
+            // TxUniverse anchor for us (sui-rpc-api/src/ledger_history/filter.rs).
+            let zero_sender = sender_predicate(&SuiAddress::ZERO);
+            literals.push(match kind {
+                TransactionKindInput::SystemTx => include_literal(zero_sender),
+                TransactionKindInput::ProgrammableTx => exclude_literal(zero_sender),
+            });
+        }
+
+        if literals.is_empty() {
+            return None;
+        }
+
+        let mut term = v2alpha::TransactionTerm::default();
+        term.literals = literals;
+        let mut filter = v2alpha::TransactionFilter::default();
+        filter.terms = vec![term];
+        Some(filter)
+    }
+}
+
+fn include_literal(
+    predicate: v2alpha::transaction_literal::Predicate,
+) -> v2alpha::TransactionLiteral {
+    let mut literal = v2alpha::TransactionLiteral::default();
+    literal.predicate = Some(predicate);
+    literal
+}
+
+fn exclude_literal(
+    predicate: v2alpha::transaction_literal::Predicate,
+) -> v2alpha::TransactionLiteral {
+    let mut literal = v2alpha::TransactionLiteral::default();
+    literal.predicate = Some(predicate);
+    literal.negated = true;
+    literal
+}
+
+fn sender_predicate(address: &SuiAddress) -> v2alpha::transaction_literal::Predicate {
+    let mut f = v2alpha::SenderFilter::default();
+    f.address = Some(address.to_string());
+    v2alpha::transaction_literal::Predicate::Sender(f)
+}
+
+fn affected_address_predicate(address: &SuiAddress) -> v2alpha::transaction_literal::Predicate {
+    let mut f = v2alpha::AffectedAddressFilter::default();
+    f.address = Some(address.to_string());
+    v2alpha::transaction_literal::Predicate::AffectedAddress(f)
+}
+
+fn affected_object_predicate(object: &SuiAddress) -> v2alpha::transaction_literal::Predicate {
+    let mut f = v2alpha::AffectedObjectFilter::default();
+    f.object_id = Some(object.to_string());
+    v2alpha::transaction_literal::Predicate::AffectedObject(f)
+}
+
+fn move_call_predicate(function: &FqNameFilter) -> v2alpha::transaction_literal::Predicate {
+    let mut f = v2alpha::MoveCallFilter::default();
+    f.function = Some(function.to_string());
+    v2alpha::transaction_literal::Predicate::MoveCall(f)
 }
 
 impl CheckpointBounds for TransactionFilter {
