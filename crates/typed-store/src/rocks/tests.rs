@@ -105,6 +105,15 @@ async fn test_safe_drop_db() {
         .unwrap();
 }
 
+#[cfg(tidehunter)]
+#[test]
+fn test_is_tidehunter_db_detects_shape_v2_marker() {
+    let path = temp_dir();
+    std::fs::write(path.join("shape_v2.yaml"), "").unwrap();
+
+    assert!(is_tidehunter_db(&path));
+}
+
 #[tokio::test]
 async fn test_multi_contain() {
     let db = open_map(temp_dir(), None);
