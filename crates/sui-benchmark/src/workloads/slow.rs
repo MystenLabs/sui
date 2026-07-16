@@ -17,10 +17,7 @@ use move_core_types::identifier::Identifier;
 use std::{sync::Arc, time::Duration};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::transaction::{ObjectArg, SharedObjectMutability};
-use sui_types::{
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    base_types::{ObjectRef, random_object_ref},
-};
+use sui_types::base_types::{ObjectRef, random_object_ref};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, transaction::Transaction};
 
@@ -72,24 +69,26 @@ impl SlowTestPayload {
         let mut tx_builder = TestTransactionBuilder::new(self.sender, account.gas, gas_price);
         {
             let builder = tx_builder.ptb_builder_mut();
-            let args = vec![
-                builder
-                    .obj(ObjectArg::SharedObject {
-                        id: SUI_CLOCK_OBJECT_ID,
-                        initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                        mutability: SharedObjectMutability::Immutable,
-                    })
-                    .unwrap(),
-            ];
+            // Heavy, always-on compute so each tx has high REAL execution time. On a real
+            // (non-simulated) cluster this drives up the ExecutionTimeEstimate charged to the
+            // mutable shared object below, triggering per-object congestion control -- the
+            // mechanism behind the mainnet high-traffic incident that cheap counter increments
+            // (~0 execution time) cannot reproduce. Tune SLOW_VECTORS/SLOW_SIZE to hit the
+            // target per-object execution-time budget (keep under the per-tx gas limit).
+            const SLOW_VECTORS: u64 = 2000;
+            const SLOW_SIZE: u64 = 100;
+            let n_arg = builder.pure(SLOW_VECTORS).unwrap();
+            let size_arg = builder.pure(SLOW_SIZE).unwrap();
             builder.programmable_move_call(
                 self.package_id,
                 Identifier::new("slow").unwrap(),
-                Identifier::new("bimodal").unwrap(),
+                Identifier::new("slow").unwrap(),
                 vec![],
-                args,
+                vec![n_arg, size_arg],
             );
 
-            // Add unused mutable shared object input to activate congestion control.
+            // Mutable shared object input activates congestion control: the transaction's
+            // execution time is charged against this object's per-commit budget.
             builder
                 .obj(ObjectArg::SharedObject {
                     id: self.shared_object_ref.0,

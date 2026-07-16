@@ -616,6 +616,69 @@ mod test {
         .await;
     }
 
+    // Repro attempt for the sui_mainnet_high_traffic incident: concentrate HIGH
+    // EXECUTION-TIME transactions on a single shared object under the exact
+    // ExecutionTimeEstimate congestion mode mainnet ran at the incident (protocol v86),
+    // and observe whether it degrades consensus liveness/round progression. Prior
+    // repros used cheap counter increments (~0 execution time) which cannot move the
+    // execution-time-based congestion budget; the `slow` workload runs slow::bimodal
+    // (a real compute loop) while holding a mutable shared object.
+    #[sim_test(config = "test_config()")]
+    async fn test_shared_object_execution_time_congestion_repro() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+            // Exact mainnet protocol-v86 congestion params (incident era).
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                    target_utilization: 50,
+                    allowed_txn_cost_overage_burst_limit_us: 500_000,
+                    randomness_scalar: 20,
+                    max_estimate_us: 1_500_000,
+                    stored_observations_num_included_checkpoints: 10,
+                    stored_observations_limit: 20,
+                    stake_weighted_median_threshold: 3334,
+                    default_none_duration_for_new_keys: true,
+                    observations_chunk_size: None,
+                }),
+            );
+            config.set_max_deferral_rounds_for_congestion_control_for_testing(10);
+            config
+        });
+
+        let test_cluster = build_test_cluster(4, 30000, 2).await;
+
+        // Isolate the high-execution-time `slow` workload; zero everything else so all
+        // load contends the single slow::Obj shared object.
+        let mut config = SimulatedLoadConfig::default();
+        config.slow_weight = 100;
+        config.shared_counter_weight = 0;
+        config.transfer_object_weight = 0;
+        config.delegation_weight = 0;
+        config.batch_payment_weight = 0;
+        config.shared_deletion_weight = 0;
+        config.randomness_weight = 0;
+        config.randomized_transaction_weight = 0;
+        config.composite_weight = 0;
+        config.expected_failure_weight = 0;
+        config.party_weight = 0;
+        config.conflicting_transfer_weight = 0;
+        config.gas_double_spend_weight = 0;
+        info!("execution-time congestion repro config: {:?}", config);
+
+        let target_qps = get_var("SIM_STRESS_TEST_QPS", 200);
+        let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 20);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            90,
+            config,
+            Some(target_qps),
+            Some(num_workers),
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
+        )
+        .await;
+    }
+
     // Tests cluster defense against failing transaction floods Traffic Control
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_expected_failure_traffic_control() {
