@@ -141,6 +141,38 @@ impl GraphQLClient {
         queries::address_owned_objects_query::query(address, checkpoint, self).await
     }
 
+    pub(crate) fn get_address_owned_objects_at_checkpoint_blocking(
+        &self,
+        address: SuiAddress,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<AddressOwnedObject>, Error> {
+        block_on!(queries::address_owned_objects_query::query(
+            address, checkpoint, self,
+        ))
+    }
+
+    pub(crate) fn get_object_owned_objects_at_checkpoint_blocking(
+        &self,
+        owner: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<queries::object_inventory_query::InventoryObject>, Error> {
+        block_on!(queries::object_inventory_query::query_object_owner(
+            owner, checkpoint, self,
+        ))
+    }
+
+    pub(crate) fn get_objects_by_type_at_checkpoint_blocking(
+        &self,
+        type_filter: String,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<queries::object_inventory_query::InventoryObject>, Error> {
+        block_on!(queries::object_inventory_query::query_type(
+            type_filter,
+            checkpoint,
+            self,
+        ))
+    }
+
     /// Fetch lightweight metadata for explicit object seeds at a checkpoint.
     pub(crate) async fn get_object_seed_metadata_at_checkpoint(
         &self,

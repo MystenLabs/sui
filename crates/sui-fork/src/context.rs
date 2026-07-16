@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::anyhow;
+use prometheus::Registry;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -18,6 +19,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::ReadStore as _;
 
+use crate::runtime::ForkRuntime;
 use crate::store::DataStore;
 
 type ForkedSimulacrum = Simulacrum<OsRng, DataStore>;
@@ -44,6 +46,7 @@ struct CheckpointPublication {
 pub struct Context {
     simulacrum: Arc<RwLock<ForkedSimulacrum>>,
     chain_identifier: Chain,
+    runtime: Option<ForkRuntime>,
     checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
     checkpoint_publication_lock: Mutex<()>,
 }
@@ -57,13 +60,38 @@ impl Context {
         Self {
             simulacrum: Arc::new(RwLock::new(simulacrum)),
             chain_identifier,
+            runtime: None,
             checkpoint_sender,
             checkpoint_publication_lock: Mutex::new(()),
         }
     }
 
+    pub(crate) async fn new_with_runtime(
+        simulacrum: Simulacrum<OsRng, DataStore>,
+        chain_identifier: Chain,
+        mut runtime: ForkRuntime,
+        checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
+        registry: &Registry,
+    ) -> Result<Self> {
+        let simulacrum = Arc::new(RwLock::new(simulacrum));
+        runtime
+            .start_indexer(simulacrum.clone(), checkpoint_sender.clone(), registry)
+            .await?;
+        Ok(Self {
+            simulacrum,
+            chain_identifier,
+            runtime: Some(runtime),
+            checkpoint_sender,
+            checkpoint_publication_lock: Mutex::new(()),
+        })
+    }
+
     pub(crate) fn simulacrum(&self) -> &Arc<RwLock<ForkedSimulacrum>> {
         &self.simulacrum
+    }
+
+    pub(crate) fn runtime(&self) -> Option<&ForkRuntime> {
+        self.runtime.as_ref()
     }
 
     pub(crate) fn chain_identifier(&self) -> &Chain {
@@ -74,13 +102,14 @@ impl Context {
     /// checkpoint to subscribers.
     ///
     /// This is the main entry point for any execution that requires checkpoint
-    /// advancement to ensure the checkpoint is published for the subscription
-    /// service.
+    /// advancement to ensure the checkpoint is either indexed and published by
+    /// `sui-rpc-store`, or published directly when the runtime is not enabled.
     ///
     /// # Panics
     ///
     /// Panics if Simulacrum creates a checkpoint but the full checkpoint
-    /// payload cannot be assembled from the same store.
+    /// payload cannot be assembled from the same store, or if the runtime
+    /// cannot index the checkpoint before publishing.
     pub(crate) async fn run_with_new_checkpoint<T, F>(
         &self,
         operation: F,
@@ -96,14 +125,15 @@ impl Context {
 
     /// Fallible variant of [`Self::run_with_new_checkpoint`]. If `operation`
     /// returns an error, no checkpoint is created. The publication lock is
-    /// intentionally held through enqueueing the checkpoint so the
-    /// `sui-rpc-api` subscription broker observes the same order that
-    /// Simulacrum used to create checkpoints.
+    /// intentionally held through runtime indexing or direct enqueueing so
+    /// subscribers observe the same order that Simulacrum used to create
+    /// checkpoints.
     ///
     /// # Panics
     ///
     /// Panics if Simulacrum creates a checkpoint but the full checkpoint
-    /// payload cannot be assembled from the same store.
+    /// payload cannot be assembled from the same store, or if the runtime
+    /// cannot index the checkpoint before publishing.
     pub(crate) async fn try_run_with_new_checkpoint<T, E, F>(
         &self,
         operation: F,
@@ -122,7 +152,14 @@ impl Context {
         };
 
         let metadata = publication.metadata;
-        self.publish_checkpoint(publication);
+        self.publish_checkpoint(publication)
+            .await
+            .unwrap_or_else(|err| {
+                panic!(
+                    "failed to publish checkpoint {}: {err:#}",
+                    metadata.sequence_number
+                )
+            });
 
         Ok((output, metadata))
     }
@@ -161,7 +198,14 @@ impl Context {
         Ok(sim.get_checkpoint_data(verified, contents)?)
     }
 
-    fn publish_checkpoint(&self, publication: CheckpointPublication) {
+    async fn publish_checkpoint(&self, publication: CheckpointPublication) -> Result<()> {
+        if let Some(runtime) = &self.runtime {
+            runtime
+                .wait_for_indexed_checkpoint(publication.metadata.sequence_number)
+                .await?;
+            return Ok(());
+        }
+
         // The broadcast send is non-blocking; an error just means there are no
         // live subscribers, which is fine.
         if let Err(err) = self
@@ -175,5 +219,6 @@ impl Context {
                 "failed to publish checkpoint to subscribers"
             );
         }
+        Ok(())
     }
 }
