@@ -368,7 +368,7 @@ function evaluateGoalRequires(goal, body, data, headings) {
       const has = Array.isArray(data.questions) && data.questions.length > 0;
       // Also check for junk questions
       const junkPatterns = [
-        /How do I [a-z]+(tion|ment|ness|ity|ing|cap|ticket) /i,   // noun after "How do I"
+        /How do I (?!implement|supplement|augment|comment|document)[a-z]+(tion|ment|ness|ity|ing|cap|ticket) /i,   // noun after "How do I"
         /How do I [a-z]+ (and [a-z]+ing|[a-z]+ing)\?$/i,          // "How do I test and debugging?"
         /How do I [a-z]+ [a-z]+(ture|ure|icy|ity)\?$/i,           // "How do I user signature?"
         /How do I [a-z]+ and [a-z]+\?$/i,                          // "How do I create and share?" (no object)
@@ -378,6 +378,11 @@ function evaluateGoalRequires(goal, body, data, headings) {
         /need before I can .*\?/i,                                  // template leak
         /overview [a-z]+-[a-z]+\?/i,                                // anchor fragment leak
         /How do I [a-z]+ [a-z]+ [a-z]+-[a-z]+\?$/i,               // "How do I upgradecap upgradecap?"
+        /How do I build a [a-z]+ on Sui\?$/i,                      // "How do I build a plinko on Sui?" (single word)
+        /How do I build a [a-z]+ (testing|apps) on Sui/i,         // "How do I build a scenario testing on Sui?"
+        /How do I add your /i,                                      // "How do I add your sdk?"
+        /^What you learn\??$/i,                                     // heading fragment "What you learn?"
+        /^What is [A-Z][a-z]+ a [A-Z]/i,                          // "What is Build a Custom Indexer in Sui?"
       ];
       let junkCount = 0;
       if (has) {
