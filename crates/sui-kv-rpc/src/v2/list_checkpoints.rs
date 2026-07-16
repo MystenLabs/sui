@@ -280,6 +280,7 @@ pub(crate) async fn list_checkpoints(
                         },
                         covered_checkpoint_bound,
                     );
+                    let render_started = Instant::now();
                     let message = match item {
                         CheckpointListItem::Summary(_, cp_data) => {
                             crate::render::checkpoint_to_response(cp_data, &read_mask)?
@@ -288,16 +289,20 @@ pub(crate) async fn list_checkpoints(
                             render_full_checkpoint(cp_data, txs, objects, &read_mask)?
                         }
                     };
+                    ctx.observe_response_render(render_started.elapsed());
                     emitted += 1;
                     let mut response = response_for(watermark, message);
+                    let yield_started = Instant::now();
                     if emitted == limit_items {
                         let mut end = QueryEnd::default();
                         end.reason = Some(QueryEndReason::ItemLimit as i32);
                         response.end = Some(end);
                         yield response;
+                        ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                         break QueryEndReason::ItemLimit;
                     }
                     yield response;
+                    ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                 }
                 Ok(ResolvedWatermarked::Watermark {
                     position: _,

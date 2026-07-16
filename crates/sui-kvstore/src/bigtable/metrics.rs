@@ -21,6 +21,7 @@ pub(crate) struct KvMetrics {
     pub kv_scan_error: IntCounterVec,
     pub kv_scan_latency_ms: HistogramVec,
     pub kv_bt_chunk_latency_ms: HistogramVec,
+    pub kv_bt_read_rows_started_total: IntCounterVec,
     pub kv_bt_chunk_rows_returned_count: IntCounterVec,
     pub kv_bt_chunk_rows_seen_count: IntCounterVec,
 }
@@ -117,6 +118,13 @@ impl KvMetrics {
                 prometheus::exponential_buckets(1.0, 1.6, 24)
                     .unwrap()
                     .to_vec(),
+                registry,
+            )
+            .unwrap(),
+            kv_bt_read_rows_started_total: register_int_counter_vec_with_registry!(
+                "kv_bt_read_rows_started_total",
+                "ReadRows RPCs initiated per table; incremented at RPC start, covering point multi-gets and range scans alike",
+                &["client", "table"],
                 registry,
             )
             .unwrap(),
