@@ -26,7 +26,11 @@ jobs:
           echo "files<<EOF" >> $GITHUB_OUTPUT
           echo "$FILES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          COUNT=$(echo "$FILES" | grep -c '.mdx$' || echo 0)
+          if [ -z "$FILES" ]; then
+            COUNT=0
+          else
+            COUNT=$(echo "$FILES" | grep -c '.mdx$' || true)
+          fi
           echo "count=$COUNT" >> $GITHUB_OUTPUT
 
       - name: Check frontmatter

@@ -157,7 +157,7 @@ This detects each page's archetype (onboarding, example, guide, reference, opera
 
 ### CI enforcement
 
-A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx`. It comments on the PR listing any pages missing `title`, `description`, `keywords`, or `goal` frontmatter, with instructions to auto-generate.
+A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx`. It writes a job summary listing any pages missing `title`, `description`, `keywords`, `goal`, `questions`, or `answer` frontmatter, with instructions to auto-generate. Check the workflow's summary tab for results.
 
 ## Build the site locally
 
