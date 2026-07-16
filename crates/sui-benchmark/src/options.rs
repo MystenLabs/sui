@@ -197,7 +197,7 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         composite: Vec<u32>,
         // relative weight of transactions that race distinct transactions over the same gas object
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [20])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         gas_double_spend: Vec<u32>,
         // Target address(es) for deposit load test. When set, runs the
         // addr_bal_deposit workload exclusively: every transaction withdraws
@@ -265,16 +265,16 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [12])]
         num_workers: Vec<u64>,
         // Max in-flight ratio
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [30])]
         in_flight_ratio: Vec<u64>,
         // Probability that a logical transaction is submitted to multiple validators.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.8])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
         amplification_probability: Vec<f64>,
         // Number of validators to submit to when amplification_probability triggers.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [8])]
         amplification_validators_per_tx: Vec<usize>,
         // Probability that each selected validator receives multiple copies.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.5])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
         duplicate_probability: Vec<f64>,
         // Number of copies sent to each selected validator when duplicate_probability triggers.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [4])]
