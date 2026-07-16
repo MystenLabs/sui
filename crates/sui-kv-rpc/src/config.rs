@@ -17,6 +17,7 @@ use sui_kvstore::validate_pipeline_name;
 use crate::default_service_info_watermark_pipelines;
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 5_000;
+const DEFAULT_RENDER_AHEAD: usize = 4;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 1_024;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 1_024;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
@@ -30,19 +31,23 @@ const DEFAULT_STAGE_CONCURRENCY: usize = 10;
 struct LedgerHistoryMethodDefaults {
     default_limit_items: u32,
     max_limit_items: u32,
+    render_ahead: usize,
 }
 
 const LIST_TRANSACTIONS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 50,
     max_limit_items: 500,
+    render_ahead: DEFAULT_RENDER_AHEAD,
 };
 const LIST_EVENTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 50,
     max_limit_items: 1_000,
+    render_ahead: DEFAULT_RENDER_AHEAD,
 };
 const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 10,
     max_limit_items: 100,
+    render_ahead: DEFAULT_RENDER_AHEAD,
 };
 
 /// Per-endpoint tunables for one ledger-history list API. Every field is
@@ -62,6 +67,12 @@ pub struct LedgerHistoryMethodConfig {
     /// Upper bound a request's `limit_items` is clamped to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_limit_items: Option<u32>,
+
+    /// Bounds admitted render tasks and retained rendered responses for this
+    /// endpoint's render-ahead stage. Defaults to `4`; `1` serializes rendering
+    /// with emission.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub render_ahead: Option<usize>,
 }
 
 /// A [`LedgerHistoryMethodConfig`] with all defaults applied.
@@ -70,6 +81,7 @@ pub struct ResolvedLedgerHistoryMethodConfig {
     pub timeout: Duration,
     pub default_limit_items: u32,
     pub max_limit_items: u32,
+    pub render_ahead: usize,
 }
 
 impl LedgerHistoryMethodConfig {
@@ -88,6 +100,9 @@ impl LedgerHistoryMethodConfig {
             max_limit_items: this
                 .and_then(|c| c.max_limit_items)
                 .unwrap_or(defaults.max_limit_items),
+            render_ahead: this
+                .and_then(|c| c.render_ahead)
+                .unwrap_or(defaults.render_ahead),
         }
     }
 }
@@ -287,6 +302,16 @@ impl LedgerHistoryConfig {
     /// leaving the client a cursorless `QueryEnd` it cannot resume from. Mirrors
     /// the fullnode side's `LedgerHistoryConfig::validate`.
     pub fn validate(&self) -> anyhow::Result<()> {
+        for (name, endpoint) in [
+            ("list_transactions", self.list_transactions()),
+            ("list_events", self.list_events()),
+            ("list_checkpoints", self.list_checkpoints()),
+        ] {
+            anyhow::ensure!(
+                endpoint.render_ahead > 0,
+                "ledger_history.{name}.render_ahead must be greater than zero",
+            );
+        }
         anyhow::ensure!(
             self.max_bitmap_filter_literals() > 0,
             "ledger_history.max_bitmap_filter_literals must be greater than zero",
@@ -563,6 +588,19 @@ mod tests {
     #[test]
     fn validate_accepts_defaults() {
         LedgerHistoryConfig::default().validate().unwrap();
+        assert_eq!(
+            LedgerHistoryConfig::default()
+                .list_checkpoints()
+                .render_ahead,
+            4
+        );
+        assert_eq!(
+            LedgerHistoryConfig::default()
+                .list_transactions()
+                .render_ahead,
+            4
+        );
+        assert_eq!(LedgerHistoryConfig::default().list_events().render_ahead, 4);
     }
 
     #[test]
@@ -624,13 +662,33 @@ stages:
     }
 
     #[test]
+    fn validate_rejects_zero_render_ahead() {
+        let cfg = LedgerHistoryConfig {
+            list_events: Some(LedgerHistoryMethodConfig {
+                render_ahead: Some(0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let err = cfg
+            .validate()
+            .expect_err("zero render_ahead must fail validation");
+        assert!(
+            err.to_string()
+                .contains("ledger_history.list_events.render_ahead"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn partial_yaml_falls_back_to_defaults() {
-        // Only one nested knob set; everything else must resolve to defaults.
+        // Only one endpoint is customized; everything else must resolve to defaults.
         let yaml = r#"
 instance-id: my-instance
 ledger-history:
   list-transactions:
     max-limit-items: 7
+    render-ahead: 3
   bitmap-bucket-budget-tx: 2048
 "#;
         let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
@@ -643,6 +701,8 @@ ledger-history:
         // Untouched sibling falls back to the per-endpoint default.
         assert_eq!(lh.list_transactions().default_limit_items, 50);
         assert_eq!(lh.bitmap_bucket_budget_tx(), 2048);
+        assert_eq!(lh.list_transactions().render_ahead, 3);
+        assert_eq!(lh.list_events().render_ahead, 4);
         assert_eq!(lh.bitmap_bucket_budget_event(), 1024);
         lh.validate().unwrap();
     }

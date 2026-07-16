@@ -118,6 +118,15 @@ impl QueryContext {
         self.metrics.observe_response_render(self.method, elapsed);
     }
 
+    pub(crate) fn observe_response_page_bytes(&self, bytes: usize) {
+        self.metrics.observe_response_page_bytes(self.method, bytes);
+    }
+
+    pub(crate) fn observe_stream_first_item_latency(&self, elapsed: std::time::Duration) {
+        self.metrics
+            .observe_stream_first_item_latency(self.method, elapsed);
+    }
+
     pub(crate) fn observe_stream_item_yield_wait(&self, elapsed: std::time::Duration) {
         self.metrics
             .observe_stream_item_yield_wait(self.method, elapsed);
