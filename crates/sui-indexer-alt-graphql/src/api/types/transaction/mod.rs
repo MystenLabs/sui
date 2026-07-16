@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -22,6 +21,7 @@ use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionC
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
+use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
@@ -74,10 +74,17 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-/// Wrapper around a `CursorToken` that is validated at decode to carry a `Transactions` position.
+/// Validated transaction cursor coordinates.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TransactionToken(CursorToken);
+pub struct TransactionToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+    tx_seq: u64,
+}
 
+/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
+/// legacy JSON cursor (secondary).
 pub type CTransaction = MultiCursor<OpaqueCursor<TransactionToken>, JsonCursor<u64>>;
 
 /// Custom `Connection` for transactions to support partially-filled pages.
@@ -467,19 +474,18 @@ impl TransactionConnection {
 impl TransactionToken {
     /// Mint the edge cursor for the transaction at the given coordinates.
     pub(crate) fn cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
-        MultiCursor::new(OpaqueCursor::new(Self(CursorToken::item(
-            Position::Transactions { checkpoint, tx_seq },
-        ))))
+        CTransaction::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Item,
+            checkpoint,
+            tx_seq,
+        }))
     }
 }
 
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
         match self {
-            CTransaction::Primary(c) => match c.position {
-                Position::Transactions { tx_seq, .. } => tx_seq,
-                _ => unreachable!("validated at decode"),
-            },
+            CTransaction::Primary(c) => c.tx_seq,
             CTransaction::Secondary(c) => **c,
         }
     }
@@ -487,23 +493,38 @@ impl TxBoundsCursor for CTransaction {
 
 impl ByteCursor for TransactionToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let token = CursorToken::decode(bytes)?;
-        if !matches!(token.position, Position::Transactions { .. }) {
-            anyhow::bail!("invalid cursor");
-        }
-        Ok(Self(token))
+        CursorToken::decode(bytes)?.try_into()
     }
 
     fn encode_cursor(&self) -> bytes::Bytes {
-        self.0.encode()
+        CursorToken::from(self).encode()
     }
 }
 
-impl Deref for TransactionToken {
-    type Target = CursorToken;
+impl From<&TransactionToken> for CursorToken {
+    fn from(token: &TransactionToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Transactions {
+                checkpoint: token.checkpoint,
+                tx_seq: token.tx_seq,
+            },
+        }
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl TryFrom<CursorToken> for TransactionToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Transactions { checkpoint, tx_seq } = token.position else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+            tx_seq,
+        })
     }
 }
 
@@ -853,14 +874,14 @@ mod tests {
 
     /// Legacy pg-style cursor: a bare JSON-encoded `tx_sequence_number`.
     fn legacy_cursor(position: u64) -> CTransaction {
-        MultiCursor::Secondary(JsonCursor::new(position))
+        CTransaction::Secondary(JsonCursor::new(position))
     }
 
     /// Decode an edge cursor back into its `CursorToken`.
     fn edge_token(cursor: &str) -> CursorToken {
         match CTransaction::decode_cursor(cursor).expect("decodable edge cursor") {
-            MultiCursor::Primary(c) => (**c).clone(),
-            MultiCursor::Secondary(_) => panic!("expected grpc cursor, got legacy"),
+            CTransaction::Primary(c) => CursorToken::from(&*c),
+            CTransaction::Secondary(_) => panic!("expected grpc cursor, got legacy"),
         }
     }
 

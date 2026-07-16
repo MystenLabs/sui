@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -9,6 +8,7 @@ use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
@@ -76,10 +76,16 @@ struct CheckpointContents {
     streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-/// Wrapper around a `CursorToken` that is validated at decode to carry a `Checkpoints` position.
+/// Validated checkpoint cursor coordinates.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CheckpointToken(CursorToken);
+pub struct CheckpointToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+}
 
+/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
+/// legacy JSON cursor (secondary).
 pub type CCheckpoint = MultiCursor<OpaqueCursor<CheckpointToken>, JsonCursor<u64>>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
@@ -397,19 +403,17 @@ impl CheckpointContents {
 impl CheckpointToken {
     /// Mint the edge cursor for the checkpoint at the given sequence number.
     pub fn cursor(checkpoint: u64) -> CCheckpoint {
-        MultiCursor::new(OpaqueCursor::new(Self(CursorToken::item(
-            Position::Checkpoints { checkpoint },
-        ))))
+        CCheckpoint::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Item,
+            checkpoint,
+        }))
     }
 }
 
 impl CCheckpoint {
     pub(crate) fn sequence_number(&self) -> u64 {
         match self {
-            CCheckpoint::Primary(c) => match c.position {
-                Position::Checkpoints { checkpoint } => checkpoint,
-                _ => unreachable!("validated at decode"),
-            },
+            CCheckpoint::Primary(c) => c.checkpoint,
             CCheckpoint::Secondary(c) => **c,
         }
     }
@@ -417,23 +421,36 @@ impl CCheckpoint {
 
 impl ByteCursor for CheckpointToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let token = CursorToken::decode(bytes)?;
-        if !matches!(token.position, Position::Checkpoints { .. }) {
-            anyhow::bail!("invalid cursor");
-        }
-        Ok(Self(token))
+        CursorToken::decode(bytes)?.try_into()
     }
 
     fn encode_cursor(&self) -> bytes::Bytes {
-        self.0.encode()
+        CursorToken::from(self).encode()
     }
 }
 
-impl Deref for CheckpointToken {
-    type Target = CursorToken;
+impl From<&CheckpointToken> for CursorToken {
+    fn from(token: &CheckpointToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Checkpoints {
+                checkpoint: token.checkpoint,
+            },
+        }
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl TryFrom<CursorToken> for CheckpointToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Checkpoints { checkpoint } = token.position else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+        })
     }
 }
 
@@ -456,7 +473,7 @@ mod tests {
 
     /// Legacy pg-style cursor: a bare JSON-encoded checkpoint sequence number.
     fn legacy_cursor(checkpoint: u64) -> CCheckpoint {
-        MultiCursor::Secondary(JsonCursor::new(checkpoint))
+        CCheckpoint::Secondary(JsonCursor::new(checkpoint))
     }
 
     #[test]

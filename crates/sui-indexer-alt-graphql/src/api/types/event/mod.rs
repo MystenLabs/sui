@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -14,6 +13,7 @@ use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
@@ -55,10 +55,18 @@ pub struct EventCursor {
     pub ev_sequence_number: u64,
 }
 
-/// Wrapper around a `CursorToken` that is validated at decode to carry an `Events` position.
+/// Validated event cursor coordinates.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EventToken(CursorToken);
+pub struct EventToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+    tx_seq: u64,
+    event_index: u32,
+}
 
+/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
+/// legacy JSON cursor (secondary).
 pub type CEvent = MultiCursor<OpaqueCursor<EventToken>, JsonCursor<EventCursor>>;
 
 #[derive(Clone)]
@@ -209,26 +217,22 @@ impl Event {
 impl EventToken {
     /// Mint the edge cursor for the event at the given coordinates.
     pub(crate) fn cursor(checkpoint: u64, tx_seq: u64, ev_sequence_number: u64) -> CEvent {
-        MultiCursor::new(OpaqueCursor::new(Self(CursorToken::item(
-            Position::Events {
-                checkpoint,
-                tx_seq,
-                // Event counts per transaction are protocol-bounded, far below u32::MAX.
-                event_index: ev_sequence_number
-                    .try_into()
-                    .expect("event index fits in u32"),
-            },
-        ))))
+        CEvent::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Item,
+            checkpoint,
+            tx_seq,
+            // Event counts per transaction are protocol-bounded, far below u32::MAX.
+            event_index: ev_sequence_number
+                .try_into()
+                .expect("event index fits in u32"),
+        }))
     }
 }
 
 impl CEvent {
     pub(crate) fn ev_sequence_number(&self) -> u64 {
         match self {
-            CEvent::Primary(c) => match c.position {
-                Position::Events { event_index, .. } => event_index as u64,
-                _ => unreachable!("validated at decode"),
-            },
+            CEvent::Primary(c) => c.event_index as u64,
             CEvent::Secondary(c) => c.ev_sequence_number,
         }
     }
@@ -236,23 +240,45 @@ impl CEvent {
 
 impl ByteCursor for EventToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let token = CursorToken::decode(bytes)?;
-        if !matches!(token.position, Position::Events { .. }) {
-            anyhow::bail!("invalid cursor");
-        }
-        Ok(Self(token))
+        CursorToken::decode(bytes)?.try_into()
     }
 
     fn encode_cursor(&self) -> bytes::Bytes {
-        self.0.encode()
+        CursorToken::from(self).encode()
     }
 }
 
-impl Deref for EventToken {
-    type Target = CursorToken;
+impl From<&EventToken> for CursorToken {
+    fn from(token: &EventToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Events {
+                checkpoint: token.checkpoint,
+                tx_seq: token.tx_seq,
+                event_index: token.event_index,
+            },
+        }
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl TryFrom<CursorToken> for EventToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Events {
+            checkpoint,
+            tx_seq,
+            event_index,
+        } = token.position
+        else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+            tx_seq,
+            event_index,
+        })
     }
 }
 
@@ -270,10 +296,7 @@ impl PartialEq for CEvent {
 impl TxBoundsCursor for CEvent {
     fn tx_sequence_number(&self) -> u64 {
         match self {
-            CEvent::Primary(c) => match c.position {
-                Position::Events { tx_seq, .. } => tx_seq,
-                _ => unreachable!("validated at decode"),
-            },
+            CEvent::Primary(c) => c.tx_seq,
             CEvent::Secondary(c) => c.tx_sequence_number,
         }
     }
@@ -288,7 +311,7 @@ mod tests {
 
     /// Legacy pg-style cursor: a JSON-encoded `EventCursor`.
     fn legacy_cursor(tx_sequence_number: u64, ev_sequence_number: u64) -> CEvent {
-        MultiCursor::Secondary(JsonCursor::new(EventCursor {
+        CEvent::Secondary(JsonCursor::new(EventCursor {
             tx_sequence_number,
             ev_sequence_number,
         }))
