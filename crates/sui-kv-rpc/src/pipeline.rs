@@ -8,6 +8,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::task::Poll;
 
+use futures::future;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
@@ -540,8 +541,21 @@ pub(crate) type MarkedKeyedDownstream<I, K, V, E, P = u64> =
 ///   budget — fat-item splits parallelize naturally rather than serializing
 ///   inside one slot.
 ///
-/// Output is in input order. Partial batches flush at upstream `Pending`
-/// boundaries, not held across them.
+/// The returned stream is lazy until its first poll. Ordered
+/// `.buffered(max_concurrent_fetches)` admission spawns each non-empty fetch,
+/// allowing it to finish independently of downstream response polling; no-op
+/// groups, watermarks, and upstream errors remain inline-ready. Dropping the
+/// stream drops the buffered futures' [`TaskGuard`]s and aborts live fetches.
+///
+/// Completed result maps can remain buffered while a consumer stalls. Per
+/// stage, this is bounded by
+/// `max_concurrent_fetches * max_keys_per_request * row size`, trading memory
+/// for earlier release of request-scoped backend permits, as in
+/// [`pipelined_chunks`].
+///
+/// Output and watermarks preserve input order. Partial batches flush at
+/// upstream `Pending` boundaries, and a terminal error deliberately does not
+/// flush a watermark held by the reassembler.
 pub(crate) fn pipelined_keyed_batches<I, K, V, P, E, FetchFut>(
     upstream: MarkedKeyedUpstream<I, K, E, P>,
     upstream_chunk_size: usize,
@@ -571,12 +585,13 @@ where
     );
     let fetch = Arc::new(fetch);
     // Flat pipeline: each `ChunkInput` expands into a Vec<FetchRequest>,
-    // those flatten into a single stream, each request runs as a future
-    // through ONE `.buffered(max_concurrent_fetches)` (so total in-flight
-    // fetches across all chunks is bounded by N, not N*N). The reassembler
-    // drains the buffered results in input order; watermarks ride through
-    // as zero-cost `FetchRequest::Watermark` units that resolve instantly
-    // and the reassembler passes them straight through between batches.
+    // those flatten into a single stream, and ordered
+    // `.buffered(max_concurrent_fetches)` admits at most N live fetch tasks
+    // across all chunks. Non-empty fetches drain and decode in spawned tasks;
+    // no-op groups, watermarks, and upstream errors remain inline-ready. The
+    // reassembler consumes results in input order and passes watermarks between
+    // batches. Dropping the returned stream drops the buffered `TaskGuard`s
+    // and aborts live fetches.
     let fetch_results = chunks_with_watermarks(upstream, upstream_chunk_size)
         .map_ok(move |input| {
             let requests = match input {
@@ -588,30 +603,49 @@ where
         .try_flatten()
         .map(move |request_res| {
             let fetch = fetch.clone();
-            async move {
-                match request_res? {
-                    FetchRequest::NewGroup {
+            let fetch_task = match request_res {
+                Err(error) => return future::Either::Right(future::ready(Err(error))),
+                Ok(FetchRequest::NewGroup {
+                    items,
+                    keys,
+                    requests_total,
+                }) if keys.is_empty() => {
+                    return future::Either::Right(future::ready(Ok(FetchResult::NewGroup {
                         items,
-                        keys,
                         requests_total,
-                    } => {
-                        let map = if keys.is_empty() {
-                            HashMap::new()
-                        } else {
-                            fetch(keys).await?
-                        };
-                        Ok::<_, E>(FetchResult::NewGroup {
-                            items,
-                            requests_total,
-                            map,
-                        })
-                    }
-                    FetchRequest::Continuation { keys } => Ok(FetchResult::Continuation {
-                        map: fetch(keys).await?,
-                    }),
-                    FetchRequest::Watermark(pos) => Ok(FetchResult::Watermark(pos)),
+                        map: HashMap::new(),
+                    })));
                 }
-            }
+                Ok(FetchRequest::NewGroup {
+                    items,
+                    keys,
+                    requests_total,
+                }) => tokio::spawn(async move {
+                    Ok::<_, E>(FetchResult::NewGroup {
+                        items,
+                        requests_total,
+                        map: fetch(keys).await?,
+                    })
+                }),
+                Ok(FetchRequest::Continuation { keys }) => tokio::spawn(async move {
+                    Ok::<_, E>(FetchResult::Continuation {
+                        map: fetch(keys).await?,
+                    })
+                }),
+                Ok(FetchRequest::Watermark(pos)) => {
+                    return future::Either::Right(future::ready(Ok(FetchResult::Watermark(pos))));
+                }
+            };
+            let fetch_task = TaskGuard::new(fetch_task);
+            future::Either::Left(async move {
+                match fetch_task.await {
+                    Ok(result) => result,
+                    Err(join_error) => {
+                        surface_panic(Err(join_error));
+                        std::future::pending().await
+                    }
+                }
+            })
         })
         .buffered(max_concurrent_fetches);
 
@@ -1168,6 +1202,8 @@ mod tests {
     use std::time::Duration;
 
     use futures::stream;
+    use tokio::sync::Barrier;
+    use tokio::sync::Notify;
     use tokio::sync::Semaphore;
     use tokio::sync::oneshot;
     use tokio::time::timeout;
@@ -2396,6 +2432,89 @@ mod tests {
             elapsed < Duration::from_millis(250),
             "fat-item chunks should run in parallel; got {elapsed:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn keyed_batch_fetches_complete_without_consumer_polls() {
+        let upstream = iter_upstream(vec![Ok((0u32, vec![10])), Ok((1u32, vec![20]))]);
+        let started = Arc::new(AtomicUsize::new(0));
+        let completed = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(3));
+        let completion_notify = Arc::new(Notify::new());
+        let started_for_fetch = started.clone();
+        let completed_for_fetch = completed.clone();
+        let barrier_for_fetch = barrier.clone();
+        let completion_notify_for_fetch = completion_notify.clone();
+        let mut stream = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
+            upstream,
+            2,
+            1,
+            2,
+            move |keys: Vec<i32>| {
+                let started = started_for_fetch.clone();
+                let completed = completed_for_fetch.clone();
+                let barrier = barrier_for_fetch.clone();
+                let completion_notify = completion_notify_for_fetch.clone();
+                async move {
+                    started.fetch_add(1, Ordering::SeqCst);
+                    barrier.wait().await;
+                    let map = keys.into_iter().map(|key| (key, key)).collect();
+                    if completed.fetch_add(1, Ordering::SeqCst) + 1 == 2 {
+                        completion_notify.notify_one();
+                    }
+                    Ok::<_, RpcError>(map)
+                }
+            },
+        );
+
+        tokio::task::yield_now().await;
+        assert_eq!(started.load(Ordering::SeqCst), 0);
+
+        let first_poll =
+            futures::future::poll_fn(|cx| Poll::Ready(stream.poll_next_unpin(cx))).await;
+        assert!(first_poll.is_pending());
+
+        timeout(Duration::from_millis(500), barrier.wait())
+            .await
+            .expect("admitted fetches did not reach the barrier");
+        timeout(
+            Duration::from_millis(500),
+            completion_notify.notified(),
+        )
+        .await
+        .expect("admitted fetches did not complete");
+        assert_eq!(started.load(Ordering::SeqCst), 2);
+        assert_eq!(completed.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn dropping_keyed_batch_stream_aborts_fetch() {
+        let upstream = iter_upstream(vec![Ok((0u32, vec![10]))]);
+        let limiter = Arc::new(Semaphore::new(1));
+        let limiter_for_fetch = limiter.clone();
+        let mut stream = pipelined_keyed_batches::<u32, i32, i32, u64, _, _>(
+            upstream,
+            1,
+            1,
+            1,
+            move |_keys: Vec<i32>| {
+                let limiter = limiter_for_fetch.clone();
+                async move {
+                    let _permit = limiter.clone().acquire_owned().await.map_err(|_| {
+                        RpcError::new(tonic::Code::Internal, "test limiter closed")
+                    })?;
+                    std::future::pending::<Result<HashMap<i32, i32>, RpcError>>().await
+                }
+            },
+        );
+
+        let first_poll =
+            futures::future::poll_fn(|cx| Poll::Ready(stream.poll_next_unpin(cx))).await;
+        assert!(first_poll.is_pending());
+        wait_for_available_permits(&limiter, 0).await;
+
+        drop(stream);
+        wait_for_available_permits(&limiter, 1).await;
     }
 
     #[tokio::test]
