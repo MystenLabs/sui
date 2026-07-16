@@ -128,6 +128,18 @@ pub(crate) static USER_AGENT: &str =
 /// Only to be used within CLI
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
 
+/// The protocol limits that bound how many coins a single transaction can drain.
+struct CoinLimits {
+    /// Maximum number of objects a gas payment may contain.
+    max_gas_payment_objects: usize,
+    /// Maximum number of arguments a single command may take. A command's target does not count
+    /// towards this, and the limit is exclusive.
+    max_arguments: usize,
+    /// Maximum number of object inputs a transaction may have. The gas payment does not count
+    /// towards this.
+    max_input_objects: usize,
+}
+
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum SuiClientCommands {
@@ -3420,18 +3432,6 @@ pub async fn max_gas_budget(client: &Client) -> Result<u64, anyhow::Error> {
             ),
         },
     )
-}
-
-/// The protocol limits that bound how many coins a single transaction can drain.
-struct CoinLimits {
-    /// Maximum number of objects a gas payment may contain.
-    max_gas_payment_objects: usize,
-    /// Maximum number of arguments a single command may take. A command's target does not count
-    /// towards this, and the limit is exclusive.
-    max_arguments: usize,
-    /// Maximum number of object inputs a transaction may have. The gas payment does not count
-    /// towards this.
-    max_input_objects: usize,
 }
 
 /// Queries the protocol config for the limits that bound how many coins fit in one transaction.
