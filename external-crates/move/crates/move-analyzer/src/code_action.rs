@@ -37,7 +37,7 @@ use move_compiler::{
     expansion::ast::ModuleIdent,
     linters::LintLevel,
     parser::ast::{LeadingNameAccess_, NameAccessChain_},
-    shared::{Identifier, Name, ide::AliasAutocompleteInfo},
+    shared::{Identifier, Name},
 };
 use move_package_alt::MoveFlavor;
 
@@ -389,11 +389,9 @@ fn single_element_function_autofixes<I, K>(
     else {
         return;
     };
-    let info = symbols
+    let info_opt = symbols
         .compiler_autocomplete_info
-        .get_path_autocomplete_info(&unbound_name.loc)
-        .cloned()
-        .unwrap_or_else(AliasAutocompleteInfo::new);
+        .get_path_autocomplete_info(&unbound_name.loc);
     for (mod_ident, mod_functions) in mod_functions {
         for function_name in mod_functions {
             if function_name != unbound_name.value {
@@ -422,6 +420,12 @@ fn single_element_function_autofixes<I, K>(
             ));
 
             // Then offer the Move-style fix: import the module and qualify the call through it.
+            // Without alias info recorded at this location we cannot tell whether the module
+            // is already imported (possibly under a different name), and inserting an import
+            // blindly could create a duplicate or conflicting `use`, so offer nothing more.
+            let Some(info) = info_opt else {
+                continue;
+            };
             // `module_import_info` returns `None` if the module name is already bound to a
             // different module, in which case the full-qualification fix above is the only one.
             let Some(import_info) = module_import_info(mod_ident, &info.modules) else {
