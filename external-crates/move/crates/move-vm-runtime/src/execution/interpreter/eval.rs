@@ -567,10 +567,10 @@ fn op_step_impl(
         }
         Bytecode::PackGeneric(struct_inst_ptr) => {
             let field_count = struct_inst_ptr.field_count;
-            // NB: `instantiate_struct_type` checks all of `type_size`, `type_depth`, and
-            // `value_depth` (a value of this type is created right here); the built type
-            // itself is not otherwise needed.
-            let _ty = run_context.vtables.instantiate_struct_type(
+            // NB: `check_struct_instantiation` checks all of `type_size`, `type_depth`, and
+            // `value_depth` (a value of this type is created right here) by solving the site's
+            // precomputed formulas; the instantiated type is never built.
+            run_context.vtables.check_struct_instantiation(
                 struct_inst_ptr,
                 state.call_stack.current_frame.ty_args(),
             )?;
@@ -752,14 +752,13 @@ fn op_step_impl(
             let num = checked_as!(*num, u16)?;
             let ty = run_context
                 .vtables
-                .instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             // A vector value of this element type is created here: check its `value_depth`,
             // predicted from the site's term and the frame-cached argument sizes rather than by
             // walking the instantiated type.
-            run_context.vtables.check_instantiated_value_depth(
-                ty_ptr.ty(),
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            run_context
+                .vtables
+                .check_instantiated_value_depth(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
             let elements = state.pop_n_operands(num)?;
             let specialization: VectorSpecialization = (&ty).try_into()?;
@@ -770,7 +769,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = run_context
                 .vtables
-                .instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_len()?;
             let value = vec_ref.len(&ty)?;
             state.push_operand(value)?;
@@ -780,7 +779,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = run_context
                 .vtables
-                .instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
             gas_meter.charge_vec_borrow(false, res.is_ok())?;
             state.push_operand(res?)?;
@@ -790,7 +789,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = run_context
                 .vtables
-                .instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
             gas_meter.charge_vec_borrow(true, res.is_ok())?;
             state.push_operand(res?)?;
@@ -800,7 +799,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = run_context
                 .vtables
-                .instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_push_back(&elem)?;
             vec_ref.push_back(
                 elem,
@@ -812,7 +811,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = run_context
                 .vtables
-                .instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.pop(&ty);
             gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
             state.push_operand(res?)?;
@@ -821,7 +820,7 @@ fn op_step_impl(
             let vec_val = state.pop_operand_as::<Vector>()?;
             let ty = run_context
                 .vtables
-                .instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
             let elements = vec_val.unpack(&ty, *num)?;
             for value in elements {
@@ -832,10 +831,9 @@ fn op_step_impl(
             let idx2 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let idx1 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context.vtables.instantiate_single_type(
-                ty_ptr.to_ref(),
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr.to_ref(), state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_swap()?;
             vec_ref.swap(idx1, idx2, &ty)?;
         }
@@ -850,12 +848,12 @@ fn op_step_impl(
         Bytecode::PackVariantGeneric(vinst_ptr) => {
             let variant = &vinst_ptr.variant;
             let (field_count, variant_tag) = (variant.field_count(), variant.variant_tag);
-            // NB: `instantiate_enum_type` checks all of `type_size`, `type_depth`, and
-            // `value_depth` (a value of this type is created right here); the built type
-            // itself is not otherwise needed.
-            let _ty = run_context
+            // NB: `check_variant_instantiation` checks all of `type_size`, `type_depth`, and
+            // `value_depth` (a value of this type is created right here) by solving the site's
+            // precomputed formulas; the instantiated type is never built.
+            run_context
                 .vtables
-                .instantiate_enum_type(vinst_ptr, state.call_stack.current_frame.ty_args())?;
+                .check_variant_instantiation(vinst_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
             state.push_operand(Value::make_variant(variant_tag, args))?;
@@ -1234,7 +1232,7 @@ fn check_value_depth_of_type_impl(
             check_value_depth_of_type_impl(run_context, ty, check_depth!(1), max_depth)?
         }
         Type::Datatype(si) => {
-            let depth_formula = run_context.vtables.calculate_depth_of_type(si)?;
+            let depth_formula = run_context.vtables.datatype_value_depth_formula(si)?;
             check_depth!(depth_formula.solve(&[])?)
         }
         Type::DatatypeInstantiation(inst) => {
@@ -1247,7 +1245,7 @@ fn check_value_depth_of_type_impl(
                     check_value_depth_of_type_impl(run_context, ty, check_depth!(0), max_depth)
                 })
                 .collect::<PartialVMResult<Vec<_>>>()?;
-            let depth_formula = run_context.vtables.calculate_depth_of_type(si)?;
+            let depth_formula = run_context.vtables.datatype_value_depth_formula(si)?;
             check_depth!(depth_formula.solve(&ty_arg_depths)?)
         }
         // NB: substitution must be performed before calling this function
