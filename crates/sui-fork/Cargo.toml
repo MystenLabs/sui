@@ -34,6 +34,7 @@ typed-store-error.workspace = true
 bin-version.workspace = true
 simulacrum.workspace = true
 sui-consistent-store.workspace = true
+sui-futures.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc-api.workspace = true
