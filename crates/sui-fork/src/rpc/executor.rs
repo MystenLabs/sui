@@ -91,8 +91,8 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         // Input/output objects are resolved via the `DataStore`, which is
         // the same `ObjectStore` the gRPC reader serves from — after
         // execution it holds the pre-execution input versions (from the
-        // fork snapshot / filesystem cache) and the newly written output
-        // versions.
+        // fork snapshot / sparse RPC-store saves) and the newly
+        // written output versions.
         let sim = self.context.simulacrum().read().await;
         let object_store = sim.store();
         let input_objects = if include_input_objects {
