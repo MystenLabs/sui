@@ -41,6 +41,7 @@ use sui_consistent_store::Schema;
 use sui_consistent_store::error::DecodeError;
 use sui_consistent_store::error::EncodeError;
 use sui_consistent_store::error::OpenError;
+use sui_rpc_store::schema::objects::TombstoneKind;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 
@@ -50,19 +51,11 @@ const CF_NAME: &str = "fork_live_state";
 /// Subdirectory of the fork data dir holding the live-state database.
 const LIVE_STATE_DIR: &str = "live_state";
 
-/// How an object left the live set, preserved so tombstone reads can report the
-/// exact removal kind the way transaction effects do.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RemovedObjectKind {
-    /// The object moved directly from live to deleted.
-    Deleted,
-    /// The object moved directly from live to wrapped.
-    Wrapped,
-    /// The object was unwrapped and deleted in the same transaction.
-    UnwrappedThenDeleted,
-}
-
 /// The authoritative current state of an object as tracked by the fork.
+///
+/// Removals reuse `sui-rpc-store`'s [`TombstoneKind`] (`Deleted` / `Wrapped`);
+/// `unwrapped_then_deleted` is already collapsed into `Deleted` upstream, so no
+/// fork-specific removal kind is needed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ForkLiveState {
     /// The object is currently live at `version`; the object bytes live in the
@@ -71,7 +64,7 @@ pub(crate) enum ForkLiveState {
     /// The object was removed from the live set at `version`.
     Removed {
         version: SequenceNumber,
-        kind: RemovedObjectKind,
+        kind: TombstoneKind,
     },
 }
 
@@ -122,7 +115,6 @@ const TAG_REMOVED: u8 = 1;
 // Removal-kind discriminants.
 const KIND_DELETED: u8 = 0;
 const KIND_WRAPPED: u8 = 1;
-const KIND_UNWRAPPED_THEN_DELETED: u8 = 2;
 
 impl Encode for ForkLiveState {
     fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
@@ -135,9 +127,8 @@ impl Encode for ForkLiveState {
                 buf.put_u8(TAG_REMOVED);
                 buf.put_u64(version.value());
                 buf.put_u8(match kind {
-                    RemovedObjectKind::Deleted => KIND_DELETED,
-                    RemovedObjectKind::Wrapped => KIND_WRAPPED,
-                    RemovedObjectKind::UnwrappedThenDeleted => KIND_UNWRAPPED_THEN_DELETED,
+                    TombstoneKind::Deleted => KIND_DELETED,
+                    TombstoneKind::Wrapped => KIND_WRAPPED,
                 });
             }
         }
@@ -166,9 +157,8 @@ impl Decode for ForkLiveState {
                 }
                 let version = SequenceNumber::from_u64(buf.get_u64());
                 let kind = match buf.get_u8() {
-                    KIND_DELETED => RemovedObjectKind::Deleted,
-                    KIND_WRAPPED => RemovedObjectKind::Wrapped,
-                    KIND_UNWRAPPED_THEN_DELETED => RemovedObjectKind::UnwrappedThenDeleted,
+                    KIND_DELETED => TombstoneKind::Deleted,
+                    KIND_WRAPPED => TombstoneKind::Wrapped,
                     other => {
                         return Err(DecodeError::msg(format!(
                             "unrecognised removal kind: {other}"
@@ -232,26 +222,28 @@ impl LiveState {
     /// object version.
     pub(crate) fn set_live(&self, id: ObjectID, version: SequenceNumber) -> anyhow::Result<()> {
         let mut batch = self.db.batch();
-        batch.put(&self.schema.live_state, &Key(id), &ForkLiveState::Live(version))?;
+        batch.put(
+            &self.schema.live_state,
+            &Key(id),
+            &ForkLiveState::Live(version),
+        )?;
         batch.commit().context("failed to write live-state pointer")
     }
 
     /// Atomically apply the live-state changes from one executed checkpoint:
-    /// every written object becomes `Live(version)`, every removed object becomes
-    /// `Removed { version, kind }`.
+    /// every removed object becomes `Removed { version, kind }`, every written
+    /// object becomes `Live(version)`.
     ///
-    /// Removals are staged after writes so that an object created and then
-    /// removed within the same checkpoint ends up `Removed`, matching effects
-    /// ordering.
+    /// Writes are staged after removals so that an object which is both removed
+    /// and rewritten in the same result (e.g. wrapped then written again) ends up
+    /// `Live`. Objects created and terminally deleted in the same result are
+    /// excluded from `written` by the caller, so they correctly stay `Removed`.
     pub(crate) fn apply_checkpoint<W, R>(&self, written: W, removed: R) -> anyhow::Result<()>
     where
         W: IntoIterator<Item = (ObjectID, SequenceNumber)>,
-        R: IntoIterator<Item = (ObjectID, SequenceNumber, RemovedObjectKind)>,
+        R: IntoIterator<Item = (ObjectID, SequenceNumber, TombstoneKind)>,
     {
         let mut batch = self.db.batch();
-        for (id, version) in written {
-            batch.put(&self.schema.live_state, &Key(id), &ForkLiveState::Live(version))?;
-        }
         for (id, version, kind) in removed {
             batch.put(
                 &self.schema.live_state,
@@ -259,7 +251,16 @@ impl LiveState {
                 &ForkLiveState::Removed { version, kind },
             )?;
         }
-        batch.commit().context("failed to apply checkpoint live-state")
+        for (id, version) in written {
+            batch.put(
+                &self.schema.live_state,
+                &Key(id),
+                &ForkLiveState::Live(version),
+            )?;
+        }
+        batch
+            .commit()
+            .context("failed to apply checkpoint live-state")
     }
 }
 
@@ -300,8 +301,8 @@ mod tests {
         live.apply_checkpoint(
             [(written, SequenceNumber::from_u64(3))],
             [
-                (deleted, SequenceNumber::from_u64(4), RemovedObjectKind::Deleted),
-                (wrapped, SequenceNumber::from_u64(4), RemovedObjectKind::Wrapped),
+                (deleted, SequenceNumber::from_u64(4), TombstoneKind::Deleted),
+                (wrapped, SequenceNumber::from_u64(4), TombstoneKind::Wrapped),
             ],
         )
         .unwrap();
@@ -314,7 +315,7 @@ mod tests {
             live.get(deleted).unwrap(),
             Some(ForkLiveState::Removed {
                 version: SequenceNumber::from_u64(4),
-                kind: RemovedObjectKind::Deleted,
+                kind: TombstoneKind::Deleted,
             }),
         );
         assert!(live.get(wrapped).unwrap().unwrap().is_removed());
@@ -327,7 +328,7 @@ mod tests {
         live.set_live(id, SequenceNumber::from_u64(1)).unwrap();
         live.apply_checkpoint(
             std::iter::empty(),
-            [(id, SequenceNumber::from_u64(2), RemovedObjectKind::Deleted)],
+            [(id, SequenceNumber::from_u64(2), TombstoneKind::Deleted)],
         )
         .unwrap();
         assert!(live.get(id).unwrap().unwrap().is_removed());
