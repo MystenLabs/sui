@@ -2267,6 +2267,20 @@ impl AuthorityPerEpochStore {
             .collect()
     }
 
+    /// Injects deferred transactions directly into the in-memory cache, bypassing consensus.
+    /// Simulates invariant-breaking bugs.
+    #[cfg(any(test, msim))]
+    pub fn insert_deferred_transactions_for_test(
+        &self,
+        key: DeferralKey,
+        transactions: Vec<VerifiedExecutableTransactionWithAliases>,
+    ) {
+        self.consensus_output_cache
+            .deferred_transactions
+            .lock()
+            .insert(key, transactions);
+    }
+
     pub(crate) fn should_defer(
         &self,
         cert: &VerifiedExecutableTransaction,

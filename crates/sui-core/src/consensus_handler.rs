@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     hash::Hash,
     num::NonZeroUsize,
     sync::{Arc, Mutex},
@@ -927,6 +927,17 @@ struct CommitHandlerState {
 }
 
 impl CommitHandlerState {
+    fn new(epoch_store: &AuthorityPerEpochStore, consensus_round: u64) -> Self {
+        Self {
+            output: ConsensusCommitOutput::new(consensus_round),
+            dkg_failed: false,
+            randomness_round: None,
+            indirect_state_observer: Some(IndirectStateObserver::new()),
+            initial_reconfig_state: epoch_store.get_reconfig_state_read_lock_guard().clone(),
+            occurrence_counts: HashMap::new(),
+        }
+    }
+
     fn get_notifications(&self) -> Vec<SequencedConsensusTransactionKey> {
         self.output
             .get_consensus_messages_processed()
@@ -981,6 +992,14 @@ impl CommitHandlerState {
 
         randomness_manager
     }
+}
+
+/// Deferred transactions abandoned because the epoch close deadline forced the epoch
+/// closed while they were still unscheduled.
+struct AbandonedDeferredTxns {
+    count: usize,
+    // At most 10 (key, digest) pairs for logging.
+    sample: Vec<(DeferralKey, TransactionDigest)>,
 }
 
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
@@ -1071,17 +1090,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
-        let mut state = CommitHandlerState {
-            output: ConsensusCommitOutput::new(commit_info.round),
-            dkg_failed: false,
-            randomness_round: None,
-            indirect_state_observer: Some(IndirectStateObserver::new()),
-            initial_reconfig_state: self
-                .epoch_store
-                .get_reconfig_state_read_lock_guard()
-                .clone(),
-            occurrence_counts: HashMap::new(),
-        };
+        let mut state = CommitHandlerState::new(&self.epoch_store, commit_info.round);
 
         let FilteredConsensusOutput {
             transactions,
@@ -1154,7 +1163,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             user_transactions,
         );
 
-        let (should_accept_tx, lock, final_round) =
+        let (should_accept_tx, lock, final_round, abandoned_deferred_txns) =
             self.handle_close_epoch(&mut state, &commit_info, end_of_publish_transactions);
 
         let make_checkpoint = should_accept_tx || final_round;
@@ -1246,6 +1255,21 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // pass lock by value to ensure that it is held until this point
         self.log_final_round(lock, final_round);
 
+        // Report abandoned transactions only after the commit output has been pushed
+        // and all notifications delivered: in configurations where debug_fatal panics, firing
+        // it mid-commit would abort processing of the very commit that closes the epoch.
+        if let Some(AbandonedDeferredTxns { count, sample }) = abandoned_deferred_txns {
+            self.metrics
+                .consensus_handler_dropped_transactions
+                .with_label_values(&["epoch_close_deadline"])
+                .inc_by(count as u64);
+            debug_fatal!(
+                "Epoch close deadline reached with unscheduled deferred transactions: count={}, sample={:?}",
+                count,
+                sample
+            );
+        }
+
         // update the calculated throughput
         self.throughput_calculator
             .add_transactions(timestamp, num_schedulables as u64);
@@ -1267,13 +1291,30 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state: &mut CommitHandlerState,
         commit_info: &ConsensusCommitInfo,
         end_of_publish_transactions: Vec<AuthorityName>,
-    ) -> (bool, Option<RwLockWriteGuard<'_, ReconfigState>>, bool) {
+    ) -> (
+        bool,
+        Option<RwLockWriteGuard<'_, ReconfigState>>,
+        bool,
+        Option<AbandonedDeferredTxns>,
+    ) {
         let timestamp_based_epoch_close = self
             .epoch_store
             .protocol_config()
             .timestamp_based_epoch_close();
         let timestamp_triggered = timestamp_based_epoch_close
             && commit_info.timestamp >= self.epoch_store.next_reconfiguration_timestamp_ms();
+        let deadline_reached = timestamp_based_epoch_close
+            && self
+                .epoch_store
+                .protocol_config()
+                .epoch_close_deadline_ms_as_option()
+                .is_some_and(|deadline_ms| {
+                    commit_info.timestamp
+                        >= self
+                            .epoch_store
+                            .next_reconfiguration_timestamp_ms()
+                            .saturating_add(deadline_ms)
+                });
         if timestamp_triggered {
             // close_user_certs() is only needed here when timestamp_based_epoch_close is enabled.
             let reconfig_guard = self.epoch_store.get_reconfig_state_write_lock_guard();
@@ -1284,10 +1325,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let collected_eop_quorum =
             self.process_end_of_publish_transactions(state, end_of_publish_transactions);
         if timestamp_triggered || collected_eop_quorum {
-            let (lock, final_round) = self.advance_eop_state_machine(state);
-            (lock.should_accept_tx(), Some(lock), final_round)
+            let (lock, final_round, abandoned_deferred_txns) =
+                self.advance_eop_state_machine(state, deadline_reached);
+            (
+                lock.should_accept_tx(),
+                Some(lock),
+                final_round,
+                abandoned_deferred_txns,
+            )
         } else {
-            (true, None, false)
+            (true, None, false, None)
         }
     }
 
@@ -2232,9 +2279,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     fn advance_eop_state_machine(
         &self,
         state: &mut CommitHandlerState,
+        deadline_reached: bool,
     ) -> (
         RwLockWriteGuard<'_, ReconfigState>,
         bool, // true if final round
+        Option<AbandonedDeferredTxns>,
     ) {
         let mut reconfig_state = self.epoch_store.get_reconfig_state_write_lock_guard();
         let start_state_is_reject_all_tx = reconfig_state.is_reject_all_tx();
@@ -2243,13 +2292,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
         let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
+        let has_deferred_txns = commit_has_deferred_txns || previous_commits_have_deferred_txns;
 
-        if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
-            if !start_state_is_reject_all_tx {
-                info!("Transitioning to RejectAllTx");
+        // The epoch closes normally only once all deferred transactions have been scheduled;
+        // past the deadline it closes regardless, abandoning whatever remains.
+        let should_close = !has_deferred_txns || deadline_reached;
+        let final_round = should_close && !start_state_is_reject_all_tx;
+
+        let mut abandoned_deferred_txns = None;
+        if final_round {
+            info!("Transitioning to RejectAllTx");
+            if has_deferred_txns {
+                // Closing with deferred transactions remaining implies the deadline forced it.
+                debug_assert!(deadline_reached);
+                abandoned_deferred_txns = self.abandon_deferred_transactions(state);
             }
             reconfig_state.close_all_tx();
-        } else {
+        } else if !should_close {
             debug!(
                 "Blocking end of epoch on deferred transactions, from previous commits?={}, from this commit?={}",
                 previous_commits_have_deferred_txns, commit_has_deferred_txns,
@@ -2258,11 +2317,52 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         state.output.store_reconfig_state(reconfig_state.clone());
 
-        if !start_state_is_reject_all_tx && reconfig_state.is_reject_all_tx() {
-            (reconfig_state, true)
-        } else {
-            (reconfig_state, false)
+        (reconfig_state, final_round, abandoned_deferred_txns)
+    }
+
+    /// Abandons every deferred transaction still unscheduled when the epoch close deadline
+    /// forces the epoch closed: drops this commit's newly staged deferrals and stages all
+    /// remaining deferral keys for deletion.
+    ///
+    /// (Without this, post-close commits would reload and re-defer them forever, growing the
+    /// cache without bound.)
+    fn abandon_deferred_transactions(
+        &self,
+        state: &mut CommitHandlerState,
+    ) -> Option<AbandonedDeferredTxns> {
+        state.output.clear_deferred_transactions();
+
+        let already_deleted: BTreeSet<_> = state.output.get_deleted_deferred_txn_keys().collect();
+        let mut count = 0;
+        let mut sample = Vec::new();
+        let mut abandoned_keys = Vec::new();
+        {
+            let deferred_transactions = self
+                .epoch_store
+                .consensus_output_cache
+                .deferred_transactions
+                .lock();
+            for (key, txns) in deferred_transactions.iter() {
+                if already_deleted.contains(key) {
+                    // Loaded and scheduled by this commit; not abandoned.
+                    continue;
+                }
+                abandoned_keys.push(*key);
+                count += txns.len();
+                for tx in txns {
+                    if sample.len() < 10 {
+                        sample.push((*key, *tx.tx().digest()));
+                    }
+                }
+            }
         }
+        if abandoned_keys.is_empty() {
+            return None;
+        }
+        state
+            .output
+            .delete_loaded_deferred_transactions(&abandoned_keys);
+        (count > 0).then_some(AbandonedDeferredTxns { count, sample })
     }
 
     fn gather_commit_metadata(
@@ -3416,6 +3516,249 @@ mod tests {
         },
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
+
+    fn epoch_close_deadline_config(deadline_ms: Option<u64>) -> ProtocolConfig {
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        if let Some(deadline_ms) = deadline_ms {
+            protocol_config.set_epoch_close_deadline_ms_for_testing(deadline_ms);
+        } else {
+            protocol_config.disable_epoch_close_deadline_ms_for_testing();
+        }
+        protocol_config
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_epoch_close_deadline_preserves_pre_deadline_blocking() {
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(epoch_close_deadline_config(Some(100)))
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        epoch_store.insert_deferred_transactions_for_test(
+            DeferralKey::new_for_consensus_round(u64::MAX, 1),
+            vec![user_txn(1)],
+        );
+        let scheduled_end = epoch_store.next_reconfiguration_timestamp_ms();
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::empty(1, scheduled_end + 99, 1))
+            .await;
+
+        let reconfig_state = epoch_store.get_reconfig_state_read_lock_guard();
+        assert!(reconfig_state.is_reject_all_certs());
+        assert!(!reconfig_state.is_reject_all_tx());
+        assert_eq!(
+            epoch_store.get_all_deferred_transactions_for_test().len(),
+            1
+        );
+        assert!(
+            epoch_store
+                .get_pending_checkpoints(None)
+                .unwrap()
+                .iter()
+                .all(|(_, checkpoint)| !checkpoint.details.last_of_epoch)
+        );
+        assert_eq!(
+            setup
+                .consensus_handler
+                .metrics
+                .consensus_handler_dropped_transactions
+                .with_label_values(&["epoch_close_deadline"])
+                .get(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_epoch_close_deadline_none_preserves_indefinite_blocking() {
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(epoch_close_deadline_config(None))
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        epoch_store.insert_deferred_transactions_for_test(
+            DeferralKey::new_for_consensus_round(u64::MAX, 1),
+            vec![user_txn(1)],
+        );
+        let scheduled_end = epoch_store.next_reconfiguration_timestamp_ms();
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::empty(
+                1,
+                scheduled_end.saturating_add(1_000_000),
+                1,
+            ))
+            .await;
+
+        let reconfig_state = epoch_store.get_reconfig_state_read_lock_guard();
+        assert!(reconfig_state.is_reject_all_certs());
+        assert!(!reconfig_state.is_reject_all_tx());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_epoch_close_deadline_is_inert_without_deferred_transactions() {
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(epoch_close_deadline_config(Some(100)))
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        let scheduled_end = epoch_store.next_reconfiguration_timestamp_ms();
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+
+        // Commit timestamp is past the deadline, so deadline_reached is true — with no
+        // deferred transactions this must close cleanly with nothing abandoned (no
+        // debug_fatal panic, metric stays zero).
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::empty(1, scheduled_end + 100, 1))
+            .await;
+
+        assert!(
+            epoch_store
+                .get_reconfig_state_read_lock_guard()
+                .is_reject_all_tx()
+        );
+        let checkpoints = epoch_store.get_pending_checkpoints(None).unwrap();
+        assert!(checkpoints.last().unwrap().1.details.last_of_epoch);
+        assert_eq!(
+            setup
+                .consensus_handler
+                .metrics
+                .consensus_handler_dropped_transactions
+                .with_label_values(&["epoch_close_deadline"])
+                .get(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_epoch_close_deadline_counts_abandoned_transactions_and_closes_first() {
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(epoch_close_deadline_config(Some(100)))
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        let key = DeferralKey::new_for_consensus_round(u64::MAX, 1);
+        epoch_store.insert_deferred_transactions_for_test(key, vec![user_txn(1), user_txn(2)]);
+        let setup = setup_consensus_handler_for_testing(&state).await;
+        let mut handler_state = CommitHandlerState::new(&epoch_store, 1);
+
+        let (reconfig_state, final_round, abandoned) = setup
+            .consensus_handler
+            .advance_eop_state_machine(&mut handler_state, true);
+
+        assert!(reconfig_state.is_reject_all_tx());
+        assert!(final_round);
+        let abandoned = abandoned.expect("deferred transactions must be reported as abandoned");
+        assert_eq!(abandoned.count, 2);
+        assert_eq!(abandoned.sample.len(), 2);
+        // The abandoned key must be staged for deletion so the final commit clears both the
+        // db table and (via record_deferral_deletion) the in-memory cache.
+        assert!(
+            handler_state
+                .output
+                .get_deleted_deferred_txn_keys()
+                .any(|deleted| deleted == key)
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_epoch_close_deadline_does_not_report_transactions_drained_in_commit() {
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(epoch_close_deadline_config(Some(100)))
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        let key = DeferralKey::new_for_consensus_round(1, 0);
+        epoch_store.insert_deferred_transactions_for_test(key, vec![user_txn(1), user_txn(2)]);
+        let setup = setup_consensus_handler_for_testing(&state).await;
+        let mut handler_state = CommitHandlerState::new(&epoch_store, 1);
+        handler_state
+            .output
+            .delete_loaded_deferred_transactions(&[key]);
+
+        let (reconfig_state, final_round, abandoned) = setup
+            .consensus_handler
+            .advance_eop_state_machine(&mut handler_state, true);
+
+        assert!(reconfig_state.is_reject_all_tx());
+        assert!(final_round);
+        assert!(abandoned.is_none());
+    }
+
+    // debug_fatal only panics when crash_on_debug() is true (debug_assertions, msim, or
+    // SUI_ENABLE_DEBUG_ASSERTIONS); in a plain release build it logs and continues, so the
+    // should_panic expectation would fail there.
+    #[cfg(debug_assertions)]
+    #[tokio::test(flavor = "current_thread")]
+    #[should_panic(
+        expected = "Epoch close deadline reached with unscheduled deferred transactions"
+    )]
+    async fn test_epoch_close_deadline_timestamp_jump_abandons_fresh_deferral() {
+        use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionControlMode};
+
+        let execution_time_params = ExecutionTimeEstimateParams {
+            target_utilization: 1,
+            allowed_txn_cost_overage_burst_limit_us: 0,
+            max_estimate_us: u64::MAX,
+            randomness_scalar: 100,
+            stored_observations_num_included_checkpoints: 10,
+            stored_observations_limit: u64::MAX,
+            stake_weighted_median_threshold: 0,
+            default_none_duration_for_new_keys: true,
+            observations_chunk_size: None,
+        };
+        let mut protocol_config = epoch_close_deadline_config(Some(100));
+        protocol_config.set_per_object_congestion_control_mode_for_testing(
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(execution_time_params),
+        );
+        protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1_000);
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_objects: Vec<_> = (0..4)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        let shared_object = Object::shared_for_testing();
+        let mut starting_objects = gas_objects.clone();
+        starting_objects.push(shared_object.clone());
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&starting_objects)
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
+        let mut consensus_transactions = Vec::new();
+        for gas_object in gas_objects {
+            let transaction = test_user_transaction(
+                &state,
+                sender,
+                &keypair,
+                gas_object,
+                vec![shared_object.clone()],
+            )
+            .await;
+            consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
+                &state.name,
+                transaction.into(),
+            ));
+        }
+        let epoch_store = state.epoch_store_for_testing();
+        let scheduled_end = epoch_store.next_reconfiguration_timestamp_ms();
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                consensus_transactions,
+                1,
+                scheduled_end + 100,
+                1,
+            ))
+            .await;
+    }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_consensus_commit_handler() {
