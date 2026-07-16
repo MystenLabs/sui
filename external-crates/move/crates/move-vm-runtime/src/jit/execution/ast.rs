@@ -1105,16 +1105,6 @@ impl DatatypeDescriptor {
 impl Type {
     const LEGACY_BASE_MEMORY_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
 
-    /// Returns the abstract memory size the data structure occupies: one unit per type node.
-    /// Any `Type` was bounded by the type-traversal limits when it was built, so no limits are
-    /// enforced (or needed) here.
-    ///
-    /// This is kept only for legacy reasons.
-    /// New applications should not use this.
-    pub fn size(&self) -> AbstractMemorySize {
-        AbstractMemorySize::new(self.measure().type_size)
-    }
-
     /// Abstract memory size of a non-recursive ("primitive") type. Unlike [`Type::size`], this
     /// does not traverse into element/field types, so it needs no traversal limits or config. It
     /// errors if called on a composite type (vector/reference/datatype instantiation).
@@ -1716,176 +1706,196 @@ impl FormulatedType {
     }
 }
 
-pub trait TypeSubst {
-    /// The measure of this term itself, counting `TyParam`s as ordinary leaves.
-    fn measure(&self) -> TypeMeasure;
+impl Type {
+    /// The syntactic measure of this term itself, counting `TyParam`s as ordinary leaves.
+    /// Crate-private by design: measurement is the dispatch tables' concern — external callers
+    /// go through them (e.g. `VMDispatchTables::sizes_of_type`), so every size and limit
+    /// decision flows through one place.
+    pub(crate) fn measure(&self) -> TypeMeasure {
+        match self {
+            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
+                let inner = ty.measure();
+                TypeMeasure {
+                    type_size: inner.type_size.saturating_add(1),
+                    type_depth: inner.type_depth.saturating_add(1),
+                }
+            }
+            Type::DatatypeInstantiation(def_inst) => {
+                let (_, instantiation) = &**def_inst;
+                let mut type_size = 1u64;
+                let mut type_depth = 1u64;
+                for ty in instantiation.iter() {
+                    let m = ty.measure();
+                    type_size = type_size.saturating_add(m.type_size);
+                    type_depth = type_depth.max(m.type_depth.saturating_add(1));
+                }
+                TypeMeasure {
+                    type_size,
+                    type_depth,
+                }
+            }
+            _ => TypeMeasure {
+                type_size: 1,
+                type_depth: 1,
+            },
+        }
+    }
+}
+
+impl ArenaType {
+    /// The syntactic measure of this term itself, counting `TyParam`s as ordinary leaves.
+    pub(crate) fn measure(&self) -> TypeMeasure {
+        match self {
+            ArenaType::Vector(ty) | ArenaType::Reference(ty) | ArenaType::MutableReference(ty) => {
+                let inner = ty.measure();
+                TypeMeasure {
+                    type_size: inner.type_size.saturating_add(1),
+                    type_depth: inner.type_depth.saturating_add(1),
+                }
+            }
+            ArenaType::DatatypeInstantiation(def_inst) => {
+                let (_, instantiation) = &**def_inst;
+                let mut type_size = 1u64;
+                let mut type_depth = 1u64;
+                for ty in instantiation.iter() {
+                    let m = ty.measure();
+                    type_size = type_size.saturating_add(m.type_size);
+                    type_depth = type_depth.max(m.type_depth.saturating_add(1));
+                }
+                TypeMeasure {
+                    type_size,
+                    type_depth,
+                }
+            }
+            _ => TypeMeasure {
+                type_size: 1,
+                type_depth: 1,
+            },
+        }
+    }
 
     /// The substitution formula for this term. Costs one traversal of the (static) term. Hot
     /// paths do not use this: instantiation sites get their formulas precomputed at translation
     /// time (see [`FormulatedType`]).
-    fn formula(&self) -> MeasureFormula;
-
-    /// Checked substitution: predict the result's measure, check it against `limits`, and only
-    /// then build the result. This is the only substitution entry point — the raw builder is
-    /// private to this module, so there is no unchecked route to a substituted type.
-    fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type>;
-}
-
-// Macro that generates the implementations.
-macro_rules! impl_type_subst {
-    ($ty:ident) => {
-        impl TypeSubst for $ty {
-            fn measure(&self) -> TypeMeasure {
-                match self {
-                    $ty::Vector(ty) | $ty::Reference(ty) | $ty::MutableReference(ty) => {
-                        let inner = ty.measure();
-                        TypeMeasure {
-                            type_size: inner.type_size.saturating_add(1),
-                            type_depth: inner.type_depth.saturating_add(1),
-                        }
-                    }
-                    $ty::DatatypeInstantiation(def_inst) => {
-                        let (_, instantiation) = &**def_inst;
-                        let mut type_size = 1u64;
-                        let mut type_depth = 1u64;
-                        for ty in instantiation.iter() {
-                            let m = ty.measure();
-                            type_size = type_size.saturating_add(m.type_size);
-                            type_depth = type_depth.max(m.type_depth.saturating_add(1));
-                        }
-                        TypeMeasure {
-                            type_size,
-                            type_depth,
-                        }
-                    }
-                    _ => TypeMeasure {
-                        type_size: 1,
-                        type_depth: 1,
-                    },
+    pub(crate) fn formula(&self) -> MeasureFormula {
+        fn visit(
+            ty: &ArenaType,
+            depth: u64,
+            size_constant: &mut u64,
+            depth_constant: &mut u64,
+            terms: &mut BTreeMap<u16, (u64, u64)>,
+        ) {
+            *size_constant = size_constant.saturating_add(1);
+            *depth_constant = (*depth_constant).max(depth);
+            match ty {
+                ArenaType::TyParam(idx) => {
+                    let (occurrences, offset) = terms.entry(*idx).or_insert((0, 0));
+                    *occurrences = occurrences.saturating_add(1);
+                    *offset = (*offset).max(depth);
                 }
-            }
-
-            fn formula(&self) -> MeasureFormula {
-                fn visit(
-                    ty: &$ty,
-                    depth: u64,
-                    size_constant: &mut u64,
-                    depth_constant: &mut u64,
-                    terms: &mut std::collections::BTreeMap<u16, (u64, u64)>,
-                ) {
-                    *size_constant = size_constant.saturating_add(1);
-                    *depth_constant = (*depth_constant).max(depth);
-                    match ty {
-                        $ty::TyParam(idx) => {
-                            let (occurrences, offset) = terms.entry(*idx).or_insert((0, 0));
-                            *occurrences = occurrences.saturating_add(1);
-                            *offset = (*offset).max(depth);
-                        }
-                        $ty::Vector(ty) | $ty::Reference(ty) | $ty::MutableReference(ty) => {
-                            visit(
-                                &**ty,
-                                depth.saturating_add(1),
-                                size_constant,
-                                depth_constant,
-                                terms,
-                            );
-                        }
-                        $ty::DatatypeInstantiation(def_inst) => {
-                            let (_, instantiation) = &**def_inst;
-                            for ty in instantiation.iter() {
-                                visit(
-                                    ty,
-                                    depth.saturating_add(1),
-                                    size_constant,
-                                    depth_constant,
-                                    terms,
-                                );
-                            }
-                        }
-                        _ => (),
+                ArenaType::Vector(ty)
+                | ArenaType::Reference(ty)
+                | ArenaType::MutableReference(ty) => {
+                    visit(
+                        ty,
+                        depth.saturating_add(1),
+                        size_constant,
+                        depth_constant,
+                        terms,
+                    );
+                }
+                ArenaType::DatatypeInstantiation(def_inst) => {
+                    let (_, instantiation) = &**def_inst;
+                    for ty in instantiation.iter() {
+                        visit(
+                            ty,
+                            depth.saturating_add(1),
+                            size_constant,
+                            depth_constant,
+                            terms,
+                        );
                     }
                 }
-                let mut size_constant = 0u64;
-                let mut depth_constant = 0u64;
-                let mut term_map = std::collections::BTreeMap::new();
-                visit(
-                    self,
-                    1,
-                    &mut size_constant,
-                    &mut depth_constant,
-                    &mut term_map,
-                );
-                MeasureFormula {
-                    size_constant,
-                    depth_constant,
-                    terms: term_map
-                        .into_iter()
-                        .map(|(param, (occurrences, depth_offset))| FormulaTerm {
-                            param,
-                            occurrences,
-                            depth_offset,
-                        })
-                        .collect(),
-                }
-            }
-
-            fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
-                let arg_measures = ty_args.iter().map(|ty| ty.measure()).collect::<Vec<_>>();
-                self.formula().apply(&arg_measures)?.check()?;
-                self.subst_unchecked(ty_args)
+                _ => (),
             }
         }
-
-        impl $ty {
-            /// Substitute `ty_args` into this term WITHOUT enforcing size or depth limits.
-            /// Private to this module by design: every public route to a substituted type
-            /// (`TypeSubst::subst`, `FormulatedType::instantiate`) checks a predicted measure
-            /// against the limits before calling this.
-            fn subst_unchecked(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
-                Ok(match self {
-                    $ty::TyParam(idx) => match ty_args.get(*idx as usize) {
-                        Some(ty) => ty.clone(),
-                        None => {
-                            return Err(move_binary_format::partial_vm_error!(
-                                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                                "type substitution failed: index out of bounds -- len {} got {}",
-                                ty_args.len(),
-                                idx
-                            ));
-                        }
-                    },
-                    $ty::Bool => Type::Bool,
-                    $ty::U8 => Type::U8,
-                    $ty::U16 => Type::U16,
-                    $ty::U32 => Type::U32,
-                    $ty::U64 => Type::U64,
-                    $ty::U128 => Type::U128,
-                    $ty::U256 => Type::U256,
-                    $ty::Address => Type::Address,
-                    $ty::Signer => Type::Signer,
-                    $ty::Vector(ty) => Type::Vector(Box::new(ty.subst_unchecked(ty_args)?)),
-                    $ty::Reference(ty) => Type::Reference(Box::new(ty.subst_unchecked(ty_args)?)),
-                    $ty::MutableReference(ty) => {
-                        Type::MutableReference(Box::new(ty.subst_unchecked(ty_args)?))
-                    }
-                    $ty::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
-                    $ty::DatatypeInstantiation(def_inst) => {
-                        let (def_idx, instantiation) = &**def_inst;
-                        let inst = instantiation
-                            .iter()
-                            .map(|ty| ty.subst_unchecked(ty_args))
-                            .collect::<PartialVMResult<Vec<_>>>()?;
-                        Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
-                    }
+        let mut size_constant = 0u64;
+        let mut depth_constant = 0u64;
+        let mut term_map = BTreeMap::new();
+        visit(
+            self,
+            1,
+            &mut size_constant,
+            &mut depth_constant,
+            &mut term_map,
+        );
+        MeasureFormula {
+            size_constant,
+            depth_constant,
+            terms: term_map
+                .into_iter()
+                .map(|(param, (occurrences, depth_offset))| FormulaTerm {
+                    param,
+                    occurrences,
+                    depth_offset,
                 })
-            }
+                .collect(),
         }
-    };
-}
+    }
 
-// Generated implementations.
-impl_type_subst!(Type);
-impl_type_subst!(ArenaType);
+    /// Checked substitution: predict the result's measure, check it against the limits, and
+    /// only then build the result. This is the only on-the-fly substitution entry point — the
+    /// raw builder is private to this module, so there is no unchecked route to a substituted
+    /// type.
+    pub(crate) fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
+        let arg_measures = ty_args.iter().map(|ty| ty.measure()).collect::<Vec<_>>();
+        self.formula().apply(&arg_measures)?.check()?;
+        self.subst_unchecked(ty_args)
+    }
+
+    /// Substitute `ty_args` into this term WITHOUT enforcing size or depth limits. Private to
+    /// this module by design: every route to a substituted type ([`ArenaType::subst`],
+    /// [`FormulatedType::instantiate`]) checks a predicted measure against the limits before
+    /// calling this.
+    fn subst_unchecked(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
+        Ok(match self {
+            ArenaType::TyParam(idx) => match ty_args.get(*idx as usize) {
+                Some(ty) => ty.clone(),
+                None => {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "type substitution failed: index out of bounds -- len {} got {}",
+                        ty_args.len(),
+                        idx
+                    ));
+                }
+            },
+            ArenaType::Bool => Type::Bool,
+            ArenaType::U8 => Type::U8,
+            ArenaType::U16 => Type::U16,
+            ArenaType::U32 => Type::U32,
+            ArenaType::U64 => Type::U64,
+            ArenaType::U128 => Type::U128,
+            ArenaType::U256 => Type::U256,
+            ArenaType::Address => Type::Address,
+            ArenaType::Signer => Type::Signer,
+            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.subst_unchecked(ty_args)?)),
+            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.subst_unchecked(ty_args)?)),
+            ArenaType::MutableReference(ty) => {
+                Type::MutableReference(Box::new(ty.subst_unchecked(ty_args)?))
+            }
+            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+            ArenaType::DatatypeInstantiation(def_inst) => {
+                let (def_idx, instantiation) = &**def_inst;
+                let inst = instantiation
+                    .iter()
+                    .map(|ty| ty.subst_unchecked(ty_args))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+            }
+        })
+    }
+}
 
 // -------------------------------------------------------------------------------------------------
 // Into

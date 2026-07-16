@@ -13,7 +13,7 @@ use crate::{
         vm_arguments::ValueFrame,
         vm_test_adapter::VMTestAdapter,
     },
-    jit::execution::ast::{Type as TnType, TypeSubst as _},
+    jit::execution::ast::Type as TnType,
     shared::linkage_context::LinkageContext,
 };
 use move_binary_format::{
@@ -1085,6 +1085,7 @@ fn tn_nested_vec_tag(nodes: usize) -> TypeTag {
 }
 
 fn tn_model_datatype_instantiation(type_params: &[TnType], ty_args: &[TnType]) -> (u64, u64) {
+    let arena = crate::cache::arena::ArenaBuilder::new_bounded();
     let mut pre = 1u64;
     for ty in type_params {
         pre += ty.measure().type_size;
@@ -1094,7 +1095,11 @@ fn tn_model_datatype_instantiation(type_params: &[TnType], ty_args: &[TnType]) -
     }
     let post_children = type_params
         .iter()
-        .map(|ty| ty.subst(ty_args).unwrap())
+        .map(|ty| {
+            super::subst_formula_tests::to_arena(&arena, ty)
+                .subst(ty_args)
+                .unwrap()
+        })
         .collect::<Vec<_>>();
     let post = 1u64
         + post_children

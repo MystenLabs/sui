@@ -13,7 +13,7 @@ use crate::{
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, DatatypeMeasure, FieldVar, FormulatedType,
         Function, FunctionInstantiation, Package, StructInstantiation, Type, TypeArguments,
-        TypeMeasure, TypeSizes, TypeSubst, VariantInstantiation,
+        TypeMeasure, TypeSizes, VariantInstantiation,
     },
     shared::{
         TypeSize,
@@ -35,6 +35,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     annotated_value,
+    gas_algebra::AbstractMemorySize,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     runtime_value,
@@ -770,6 +771,16 @@ impl VMDispatchTables {
     /// frame can carry them.
     pub(crate) fn make_type_arguments(&self, types: Vec<Type>) -> PartialVMResult<TypeArguments> {
         TypeArguments::new(types, |ty| self.sizes_of_type(ty))
+    }
+
+    /// The abstract memory size of a runtime type: one unit per type node. Any `Type` was
+    /// bounded by the type-traversal limits when it was built, so no limits are enforced (or
+    /// needed) here.
+    ///
+    /// This is kept only for legacy gas-metering reasons.
+    /// New applications should not use this.
+    pub fn abstract_type_size(&self, ty: &Type) -> AbstractMemorySize {
+        AbstractMemorySize::new(ty.measure().type_size)
     }
 
     /// Check the `value_depth` of instantiating `term` with `ty_args` against the configured

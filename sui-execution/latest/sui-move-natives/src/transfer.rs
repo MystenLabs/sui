@@ -64,7 +64,7 @@ pub fn receive_object_internal(
         context,
         transfer_receive_object_internal_cost_params
             .transfer_receive_object_internal_type_cost_per_byte
-            * u64::from(child_ty.size()).into()
+            * u64::from(context.abstract_type_size(&child_ty)).into()
     );
     let child_receiver_sequence_number: SequenceNumber = pop_arg!(args, u64).into();
     let child_receiver_object_id = safe_unwrap!(args.pop_back());
