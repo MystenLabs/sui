@@ -16,7 +16,7 @@ use crate::{
         dispatch_tables::VMDispatchTables, interpreter::state::MachineState,
         values::Value as RuntimeValue,
     },
-    jit::execution::ast::{ArenaType, Function, Type, TypeSubst},
+    jit::execution::ast::{ArenaType, Function, Type},
     shared::vm_pointer::VMPointer,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMError, VMResult};
