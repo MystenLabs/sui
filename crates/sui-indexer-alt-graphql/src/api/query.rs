@@ -38,6 +38,8 @@ use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
+#[cfg(feature = "staging")]
+use crate::api::types::event::CScanEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::move_object::MoveObject;
@@ -61,6 +63,8 @@ use crate::api::types::signature_verify;
 use crate::api::types::signature_verify::IntentScope;
 use crate::api::types::signature_verify::SignatureVerifyResult;
 use crate::api::types::simulation_result::SimulationResult;
+#[cfg(feature = "staging")]
+use crate::api::types::transaction::CScanTransaction;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::TransactionConnection;
@@ -733,6 +737,54 @@ impl Query {
             }
             .await,
         )
+    }
+
+    /// The transactions that exist in the network, optionally filtered by multiple transaction filters.
+    ///
+    /// Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being
+    /// scanned cannot exceed `ServiceConfig.maxScanLimit` — use `checkpointBound` to narrow it.
+    /// Supports a longer retention than `Query.transactions`.
+    ///
+    /// Note that this differs from `Query.transactions`, which supports a single filter with an
+    /// optional sender filter, with no checkpoint range restriction and generally a shorter retention.
+    #[cfg(feature = "staging")]
+    async fn scan_transactions(
+        &self,
+        _ctx: &Context<'_>,
+        _first: Option<u64>,
+        _after: Option<CScanTransaction>,
+        _last: Option<u64>,
+        _before: Option<CScanTransaction>,
+        _filter: TransactionFilter,
+    ) -> Result<Connection<String, Transaction>, RpcError> {
+        // TODO(phase-2): Skeleton to unblock subscription backfill integration.
+        // Real implementation pending the team's decision on bloom filter vs
+        // roaring bitmap indexing strategy.
+        Err(feature_unavailable("scanTransactions"))
+    }
+
+    /// The events that exist in the network, optionally filtered by multiple event filters.
+    ///
+    /// Supports combining filters (e.g. `sender` AND `module` AND `type`). The checkpoint range being
+    /// scanned cannot exceed `ServiceConfig.maxScanLimit` — use `afterCheckpoint`, `beforeCheckpoint`,
+    /// or `atCheckpoint` to narrow it. Supports a longer retention than `Query.events`.
+    ///
+    /// Note that this differs from `Query.events`, which supports a single filter with an optional
+    /// sender filter, with no checkpoint range restriction and generally a shorter retention.
+    #[cfg(feature = "staging")]
+    async fn scan_events(
+        &self,
+        _ctx: &Context<'_>,
+        _first: Option<u64>,
+        _after: Option<CScanEvent>,
+        _last: Option<u64>,
+        _before: Option<CScanEvent>,
+        _filter: EventFilter,
+    ) -> Result<Connection<String, Event>, RpcError> {
+        // TODO(phase-2): Skeleton to unblock subscription backfill integration.
+        // Real implementation pending the team's decision on bloom filter vs
+        // roaring bitmap indexing strategy.
+        Err(feature_unavailable("scanEvents"))
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.

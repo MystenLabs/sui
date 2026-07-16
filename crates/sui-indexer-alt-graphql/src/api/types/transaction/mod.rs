@@ -81,6 +81,20 @@ pub(crate) struct TransactionConnection {
     pub page_info: PageInfo,
 }
 
+#[cfg(feature = "staging")]
+#[derive(
+    serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord,
+)]
+pub(crate) struct ScanTransactionCursor {
+    #[serde(rename = "c")]
+    pub(crate) cp_sequence_number: u64,
+    #[serde(rename = "t")]
+    pub(crate) tx_sequence_number: u64,
+}
+
+#[cfg(feature = "staging")]
+pub(crate) type CScanTransaction = JsonCursor<ScanTransactionCursor>;
+
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
 impl Transaction {
