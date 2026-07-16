@@ -485,6 +485,49 @@ impl TestCluster {
             .expect("timed out waiting for reconfiguration to complete");
     }
 
+    /// Waits until every node advances to a strictly higher epoch than the one it is at when this is
+    /// called. Unlike `wait_for_epoch_all_nodes`, which matches a target epoch exactly, this only
+    /// requires forward progress, so it is safe when the cluster catches up through several epochs at
+    /// once (e.g. recovering from a stall) and would blow past any fixed target.
+    pub async fn wait_for_next_epoch_all_nodes(&self) {
+        let handles: Vec<_> = self
+            .swarm
+            .all_nodes()
+            .map(|node| node.get_node_handle().unwrap())
+            .collect();
+        let tasks: Vec<_> = handles
+            .iter()
+            .map(|handle| {
+                handle.with_async(|node| async {
+                    let start_epoch = node.state().epoch_store_for_testing().epoch();
+                    let mut retries = 0;
+                    loop {
+                        let epoch = node.state().epoch_store_for_testing().epoch();
+                        if epoch > start_epoch {
+                            if let Some(agg) = node.clone_authority_aggregator() {
+                                // Fullnode: also wait for its auth aggregator to reconfigure.
+                                if agg.committee.epoch() > start_epoch {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        retries += 1;
+                        if retries % 5 == 0 {
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting {:?}s for an epoch beyond {:?}; currently at {:?}", retries, start_epoch, epoch);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        timeout(Duration::from_secs(40), join_all(tasks))
+            .await
+            .expect("timed out waiting for all nodes to advance an epoch");
+    }
+
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         // fullnode_handle is not part of swarm and cannot be dropped / killed
         self.fullnode_handle

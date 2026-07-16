@@ -55,6 +55,7 @@ use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::Weak;
 use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime};
@@ -92,8 +93,41 @@ use typed_store::{
 };
 
 const TRANSACTION_FORK_DETECTED_KEY: u8 = 0;
+const CHECKPOINT_FORK_DETECTED_KEY: u8 = 0;
 
 pub type CheckpointHeight = u64;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransactionForkInfo {
+    pub tx_digest: TransactionDigest,
+    pub expected_effects_digest: TransactionEffectsDigest,
+    pub actual_effects_digest: TransactionEffectsDigest,
+    /// Sequence of the certified checkpoint whose contents supplied `expected_effects_digest`,
+    /// when the fork was detected while executing a synced checkpoint. None when the
+    /// expectation came from a non-certified source (e.g. this validator's own previously
+    /// signed effects), in which case automatic recovery is never allowed: nothing proves the
+    /// network certified the outcome.
+    pub certified_checkpoint_seq: Option<CheckpointSequenceNumber>,
+    /// The binary version that produced the fork (the node sets the store's version at startup,
+    /// before any fork can be recorded). Automatic recovery refuses to clear a marker carrying
+    /// the currently running version: re-deriving with the binary that forked would
+    /// deterministically fork again, so the node hangs until a corrected binary is deployed.
+    pub binary_version: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointForkInfo {
+    pub checkpoint_seq: CheckpointSequenceNumber,
+    /// Digest of the locally computed checkpoint that diverged.
+    pub checkpoint_digest: CheckpointDigest,
+    /// Digest of the certified checkpoint the local one diverged from, when the fork was
+    /// detected against a certified checkpoint. None when the builder re-derived a previously
+    /// computed sequence with a different result (e.g. after a binary upgrade): nothing proves
+    /// the network certified this sequence, so automatic recovery is never allowed.
+    pub certified_checkpoint_digest: Option<CheckpointDigest>,
+    /// See [`TransactionForkInfo::binary_version`].
+    pub binary_version: String,
+}
 
 pub struct EpochStats {
     pub checkpoint_count: u64,
@@ -173,17 +207,16 @@ pub struct CheckpointStoreTables {
     /// fully executed checkpoints
     pub(crate) watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
 
-    /// Stores transaction fork detection information
-    pub(crate) transaction_fork_detected: DBMap<
-        u8,
-        (
-            TransactionDigest,
-            TransactionEffectsDigest,
-            TransactionEffectsDigest,
-        ),
-    >,
+    /// Stores transaction fork detection information, including the certified checkpoint (if
+    /// any) that supplied the expected effects digest and the binary version that forked.
+    /// Automatic fork recovery is gated on both: it may only proceed once the network has
+    /// certified the forked outcome, and only under a different binary version.
+    pub(crate) transaction_fork_detected_v2: DBMap<u8, TransactionForkInfo>,
     #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
     full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
+
+    /// Stores checkpoint fork detection information, including the binary version that forked.
+    pub(crate) checkpoint_fork_detected: DBMap<u8, CheckpointForkInfo>,
 }
 
 #[cfg(not(tidehunter))]
@@ -287,7 +320,18 @@ impl CheckpointStoreTables {
                 ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config.clone()),
             ),
             (
-                "transaction_fork_detected",
+                "transaction_fork_detected_v2",
+                ThConfig::new_with_config(
+                    1,
+                    1,
+                    KeyType::uniform(1),
+                    watermarks_config
+                        .clone()
+                        .with_relocation_filter(|_, _| Decision::Remove),
+                ),
+            ),
+            (
+                "checkpoint_fork_detected",
                 ThConfig::new_with_config(
                     1,
                     1,
@@ -335,6 +379,9 @@ pub struct CheckpointStore {
     pub(crate) tables: CheckpointStoreTables,
     synced_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, VerifiedCheckpoint>,
     executed_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, VerifiedCheckpoint>,
+    /// The running binary's version, set once at node startup. Embedded in fork markers so
+    /// recovery can refuse to clear a fork with the same binary version that produced it.
+    binary_version: OnceLock<String>,
 }
 
 impl CheckpointStore {
@@ -344,6 +391,7 @@ impl CheckpointStore {
             tables,
             synced_checkpoint_notify_read: NotifyRead::new(),
             executed_checkpoint_notify_read: NotifyRead::new(),
+            binary_version: OnceLock::new(),
         })
     }
 
@@ -362,7 +410,12 @@ impl CheckpointStore {
             tables,
             synced_checkpoint_notify_read: NotifyRead::new(),
             executed_checkpoint_notify_read: NotifyRead::new(),
+            binary_version: OnceLock::new(),
         })
+    }
+
+    pub fn set_binary_version(&self, version: &str) {
+        let _ = self.binary_version.set(version.to_string());
     }
 
     #[cfg(not(tidehunter))]
@@ -726,6 +779,7 @@ impl CheckpointStore {
             if let Err(e) = self.record_checkpoint_fork_detected(
                 *local_checkpoint.sequence_number(),
                 local_checkpoint.digest(),
+                Some(*verified_checkpoint.digest()),
             ) {
                 error!("Failed to record checkpoint fork in database: {:?}", e);
             }
@@ -1200,30 +1254,39 @@ impl CheckpointStore {
         &self,
         checkpoint_seq: CheckpointSequenceNumber,
         checkpoint_digest: CheckpointDigest,
+        certified_checkpoint_digest: Option<CheckpointDigest>,
     ) -> Result<(), TypedStoreError> {
+        let binary_version = self.binary_version.get().cloned().unwrap_or_default();
         info!(
             checkpoint_seq = checkpoint_seq,
             checkpoint_digest = ?checkpoint_digest,
+            certified_checkpoint_digest = ?certified_checkpoint_digest,
+            binary_version,
             "Recording checkpoint fork detection in database"
         );
-        self.tables.watermarks.insert(
-            &CheckpointWatermark::CheckpointForkDetected,
-            &(checkpoint_seq, checkpoint_digest),
+        self.tables.checkpoint_fork_detected.insert(
+            &CHECKPOINT_FORK_DETECTED_KEY,
+            &CheckpointForkInfo {
+                checkpoint_seq,
+                checkpoint_digest,
+                certified_checkpoint_digest,
+                binary_version,
+            },
         )
     }
 
     pub fn get_checkpoint_fork_detected(
         &self,
-    ) -> Result<Option<(CheckpointSequenceNumber, CheckpointDigest)>, TypedStoreError> {
+    ) -> Result<Option<CheckpointForkInfo>, TypedStoreError> {
         self.tables
-            .watermarks
-            .get(&CheckpointWatermark::CheckpointForkDetected)
+            .checkpoint_fork_detected
+            .get(&CHECKPOINT_FORK_DETECTED_KEY)
     }
 
     pub fn clear_checkpoint_fork_detected(&self) -> Result<(), TypedStoreError> {
         self.tables
-            .watermarks
-            .remove(&CheckpointWatermark::CheckpointForkDetected)
+            .checkpoint_fork_detected
+            .remove(&CHECKPOINT_FORK_DETECTED_KEY)
     }
 
     pub fn record_transaction_fork_detected(
@@ -1231,37 +1294,40 @@ impl CheckpointStore {
         tx_digest: TransactionDigest,
         expected_effects_digest: TransactionEffectsDigest,
         actual_effects_digest: TransactionEffectsDigest,
+        certified_checkpoint_seq: Option<CheckpointSequenceNumber>,
     ) -> Result<(), TypedStoreError> {
+        let binary_version = self.binary_version.get().cloned().unwrap_or_default();
         info!(
             tx_digest = ?tx_digest,
             expected_effects_digest = ?expected_effects_digest,
             actual_effects_digest = ?actual_effects_digest,
+            certified_checkpoint_seq = ?certified_checkpoint_seq,
+            binary_version,
             "Recording transaction fork detection in database"
         );
-        self.tables.transaction_fork_detected.insert(
+        self.tables.transaction_fork_detected_v2.insert(
             &TRANSACTION_FORK_DETECTED_KEY,
-            &(tx_digest, expected_effects_digest, actual_effects_digest),
+            &TransactionForkInfo {
+                tx_digest,
+                expected_effects_digest,
+                actual_effects_digest,
+                certified_checkpoint_seq,
+                binary_version,
+            },
         )
     }
 
     pub fn get_transaction_fork_detected(
         &self,
-    ) -> Result<
-        Option<(
-            TransactionDigest,
-            TransactionEffectsDigest,
-            TransactionEffectsDigest,
-        )>,
-        TypedStoreError,
-    > {
+    ) -> Result<Option<TransactionForkInfo>, TypedStoreError> {
         self.tables
-            .transaction_fork_detected
+            .transaction_fork_detected_v2
             .get(&TRANSACTION_FORK_DETECTED_KEY)
     }
 
     pub fn clear_transaction_fork_detected(&self) -> Result<(), TypedStoreError> {
         self.tables
-            .transaction_fork_detected
+            .transaction_fork_detected_v2
             .remove(&TRANSACTION_FORK_DETECTED_KEY)
     }
 }
@@ -1272,6 +1338,8 @@ pub enum CheckpointWatermark {
     HighestSynced,
     HighestExecuted,
     HighestPruned,
+    /// Retired: checkpoint fork markers now live in the `checkpoint_fork_detected` table. Kept
+    /// because existing databases may hold this key.
     CheckpointForkDetected,
 }
 
@@ -1748,6 +1816,17 @@ impl CheckpointBuilder {
             .get(&summary.sequence_number)?
             && previously_computed_summary.digest() != summary.digest()
         {
+            // The builder re-derived this sequence with a different result than a previous run
+            // (e.g. after a binary upgrade), which may already have signed and sent its result
+            // to consensus. No certified checkpoint proves which result is canonical, so the
+            // marker carries no certified digest and is never cleared automatically.
+            if let Err(e) = self.store.record_checkpoint_fork_detected(
+                summary.sequence_number,
+                previously_computed_summary.digest(),
+                None,
+            ) {
+                error!("Failed to record checkpoint fork in database: {:?}", e);
+            }
             fatal!(
                 "Checkpoint {} was previously built with a different result: previously_computed_summary {:?} vs current_summary {:?}",
                 summary.sequence_number,
@@ -3248,21 +3327,25 @@ mod tests {
     #[tokio::test]
     async fn test_fork_detection_storage() {
         let store = CheckpointStore::new_for_tests();
+        store.set_binary_version("v1");
         // checkpoint fork
         let seq_num = 42;
         let digest = CheckpointDigest::random();
+        let certified_digest = CheckpointDigest::random();
 
         assert!(store.get_checkpoint_fork_detected().unwrap().is_none());
 
         store
-            .record_checkpoint_fork_detected(seq_num, digest)
+            .record_checkpoint_fork_detected(seq_num, digest, Some(certified_digest))
             .unwrap();
 
         let retrieved = store.get_checkpoint_fork_detected().unwrap();
         assert!(retrieved.is_some());
-        let (retrieved_seq, retrieved_digest) = retrieved.unwrap();
-        assert_eq!(retrieved_seq, seq_num);
-        assert_eq!(retrieved_digest, digest);
+        let info = retrieved.unwrap();
+        assert_eq!(info.checkpoint_seq, seq_num);
+        assert_eq!(info.checkpoint_digest, digest);
+        assert_eq!(info.certified_checkpoint_digest, Some(certified_digest));
+        assert_eq!(info.binary_version, "v1");
 
         store.clear_checkpoint_fork_detected().unwrap();
         assert!(store.get_checkpoint_fork_detected().unwrap().is_none());
@@ -3275,15 +3358,17 @@ mod tests {
         assert!(store.get_transaction_fork_detected().unwrap().is_none());
 
         store
-            .record_transaction_fork_detected(tx_digest, expected_effects, actual_effects)
+            .record_transaction_fork_detected(tx_digest, expected_effects, actual_effects, Some(7))
             .unwrap();
 
         let retrieved = store.get_transaction_fork_detected().unwrap();
         assert!(retrieved.is_some());
-        let (retrieved_tx, retrieved_expected, retrieved_actual) = retrieved.unwrap();
-        assert_eq!(retrieved_tx, tx_digest);
-        assert_eq!(retrieved_expected, expected_effects);
-        assert_eq!(retrieved_actual, actual_effects);
+        let info = retrieved.unwrap();
+        assert_eq!(info.tx_digest, tx_digest);
+        assert_eq!(info.expected_effects_digest, expected_effects);
+        assert_eq!(info.actual_effects_digest, actual_effects);
+        assert_eq!(info.certified_checkpoint_seq, Some(7));
+        assert_eq!(info.binary_version, "v1");
 
         store.clear_transaction_fork_detected().unwrap();
         assert!(store.get_transaction_fork_detected().unwrap().is_none());
