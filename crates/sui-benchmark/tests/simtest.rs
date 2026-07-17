@@ -1044,18 +1044,19 @@ mod test {
     fn register_fork_kill_failpoints(
         forked_validators: Arc<Mutex<HashSet<AuthorityName>>>,
         checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>>,
-        node_to_authority_map: std::collections::HashMap<
-            sui_simulator::task::NodeId,
-            AuthorityName,
-        >,
+        resolve_authority: impl Fn(sui_simulator::task::NodeId) -> Option<AuthorityName>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     ) {
         register_fail_point_arg("kill_checkpoint_fork_node", {
             let forked_validators = forked_validators.clone();
             let checkpoint_overrides = checkpoint_overrides.clone();
-            let node_to_authority_map = node_to_authority_map.clone();
+            let resolve_authority = resolve_authority.clone();
             move || {
-                let current = node_to_authority_map.get(&sui_simulator::current_simnode_id())?;
-                if forked_validators.lock().unwrap().contains(current) {
+                let current = resolve_authority(sui_simulator::current_simnode_id())?;
+                if forked_validators.lock().unwrap().contains(&current) {
                     Some(checkpoint_overrides.clone())
                 } else {
                     None
@@ -1064,11 +1065,10 @@ mod test {
         });
         register_fail_point_if("kill_transaction_fork_node", {
             let forked_validators = forked_validators.clone();
-            let node_to_authority_map = node_to_authority_map.clone();
+            let resolve_authority = resolve_authority.clone();
             move || {
-                node_to_authority_map
-                    .get(&sui_simulator::current_simnode_id())
-                    .is_some_and(|current| forked_validators.lock().unwrap().contains(current))
+                resolve_authority(sui_simulator::current_simnode_id())
+                    .is_some_and(|current| forked_validators.lock().unwrap().contains(&current))
             }
         });
         // Split-brain bookkeeping: record the canonical (non-forked) digest into checkpoint_overrides.
@@ -1515,7 +1515,10 @@ mod test {
                     register_fork_kill_failpoints(
                         forked_validators.clone(),
                         checkpoint_overrides.clone(),
-                        node_to_authority_map.clone(),
+                        {
+                            let node_to_authority_map = node_to_authority_map.clone();
+                            move |id| node_to_authority_map.get(&id).copied()
+                        },
                     );
                 }
             }),
@@ -1659,7 +1662,10 @@ mod test {
                             register_fork_kill_failpoints(
                                 forked_validators.clone(),
                                 checkpoint_overrides.clone(),
-                                node_to_authority_map.clone(),
+                                {
+                                    let node_to_authority_map = node_to_authority_map.clone();
+                                    move |id| node_to_authority_map.get(&id).copied()
+                                },
                             );
                         }
                     }),
@@ -1770,8 +1776,54 @@ mod test {
             .stop();
         tokio::time::sleep(std::time::Duration::from_secs(8)).await;
 
-        // Restart the target (it gets a new sim node id) and rebuild the map before arming the
-        // injection. start() returns before the executor catches up, so the injection lands first.
+        // Arm the injection and kill hooks BEFORE restarting the target: its catch-up
+        // re-execution can complete inside start()'s internal awaits, so arming afterwards
+        // races the executor and loses on some schedules (the fork window closes forever once
+        // catch-up finishes — and a fork tripped before the kill hooks are armed would
+        // fatal!-abort the sim). The target's new sim node id is unknowable until start()
+        // returns, so match by exclusion instead: while the target is down, snapshot the sim
+        // ids of every running node — any id outside that set executing transactions must be
+        // the restarted target (nothing else starts during this test).
+        let known_other_ids: std::collections::HashSet<sui_simulator::task::NodeId> = test_cluster
+            .swarm
+            .all_nodes()
+            .filter_map(|node| {
+                node.get_node_handle()
+                    .map(|handle| handle.with(|n| n.get_sim_node_id()))
+            })
+            .collect();
+        let node_to_authority_map = fork_test_node_to_authority_map(&test_cluster);
+
+        // Fork the target only on the executor path, so its catch-up re-execution trips the tx check.
+        register_fail_point_arg("simulate_fork_during_execution", {
+            let forked_validators = forked_validators.clone();
+            let effects_overrides = effects_overrides.clone();
+            let known_other_ids = known_other_ids.clone();
+            move || {
+                if known_other_ids.contains(&sui_simulator::current_simnode_id()) {
+                    None
+                } else {
+                    Some((
+                        forked_validators.clone(),
+                        /* full_halt: */ false,
+                        effects_overrides.clone(),
+                        1.0f32,
+                        /* executor_path_only: */ true,
+                    ))
+                }
+            }
+        });
+        register_fork_kill_failpoints(forked_validators.clone(), checkpoint_overrides.clone(), {
+            let node_to_authority_map = node_to_authority_map.clone();
+            let known_other_ids = known_other_ids.clone();
+            move |id| {
+                node_to_authority_map
+                    .get(&id)
+                    .copied()
+                    .or_else(|| (!known_other_ids.contains(&id)).then_some(target))
+            }
+        });
+
         test_cluster
             .swarm
             .validator_nodes()
@@ -1780,33 +1832,6 @@ mod test {
             .start()
             .await
             .unwrap();
-        let node_to_authority_map = fork_test_node_to_authority_map(&test_cluster);
-
-        // Fork the target only on the executor path, so its catch-up re-execution trips the tx check.
-        register_fail_point_arg("simulate_fork_during_execution", {
-            let forked_validators = forked_validators.clone();
-            let effects_overrides = effects_overrides.clone();
-            let node_to_authority_map = node_to_authority_map.clone();
-            move || {
-                let current = node_to_authority_map.get(&sui_simulator::current_simnode_id())?;
-                if *current == target {
-                    Some((
-                        forked_validators.clone(),
-                        /* full_halt: */ false,
-                        effects_overrides.clone(),
-                        1.0f32,
-                        /* executor_path_only: */ true,
-                    ))
-                } else {
-                    None
-                }
-            }
-        });
-        register_fork_kill_failpoints(
-            forked_validators.clone(),
-            checkpoint_overrides.clone(),
-            node_to_authority_map.clone(),
-        );
 
         // Wait until the target forks (after which kill_transaction_fork_node shuts it down).
         let mut forked = false;
