@@ -11,10 +11,8 @@ use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
     execution::vm::DatatypeInfo,
     jit::execution::ast::{
-        ArenaType, Datatype, DatatypeDescriptor, DatatypeSizeFormula, DatatypeSizeInfo, Function,
-        FunctionInstantiation, LinearFormula, MaxPlusFormula, Package, PartialLinearFormula,
-        PartialMaxPlusFormula, PartialTypeFormula, StructInstantiation, Type, TypeArguments,
-        TypeSize, VariantInstantiation, check_syntactic_limits,
+        ArenaType, Datatype, DatatypeDescriptor, Function, FunctionInstantiation, Package,
+        StructInstantiation, Type, VariantInstantiation,
     },
     shared::{
         TraversalBudget,
@@ -23,6 +21,11 @@ use crate::{
             VALUE_DEPTH_MAX,
         },
         linkage_context::LinkageContext,
+        type_size_formulae::{
+            DatatypeSizeInfo, LinearFormula, MaxPlusFormula, PartialLinearFormula,
+            PartialMaxPlusFormula, PartialTypeFormula, SizeFormula, TypeArguments, TypeSize,
+            check_syntactic_limits,
+        },
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
@@ -87,7 +90,12 @@ pub struct VMDispatchTables {
     /// one for each VM instantiation.
     ///
     /// However, the contents of the cache do not affect execution correctness, only performance.
-    pub(crate) size_formulas: Mutex<QCache<VirtualTableKey, DatatypeSizeFormula>>,
+    pub(crate) size_formulas: Mutex<QCache<VirtualTableKey, SizeFormula>>,
+    /// Closed through-field size formulas of signature terms, memoized per term under this
+    /// table's linkage view, keyed by the term formula's address (stable: the owning package
+    /// is kept alive by `loaded_packages` for this table's lifetime). Same caveats as
+    /// `size_formulas`.
+    pub(crate) term_size_formulas: Mutex<QCache<usize, SizeFormula>>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -147,6 +155,7 @@ impl Clone for VMDispatchTables {
             defining_id_origins: Arc::clone(&self.defining_id_origins),
             link_context: Arc::clone(&self.link_context),
             size_formulas: Mutex::new(self.size_formulas().clone()),
+            term_size_formulas: Mutex::new(self.term_size_formulas().clone()),
         }
     }
 }
@@ -197,6 +206,7 @@ impl VMDispatchTables {
             defining_id_origins,
             link_context,
             size_formulas: Mutex::new(QCache::new(TYPE_DEPTH_LRU_SIZE)),
+            term_size_formulas: Mutex::new(QCache::new(TYPE_DEPTH_LRU_SIZE)),
         })
     }
 
@@ -536,16 +546,79 @@ impl VMDispatchTables {
 
     /// Lock the formula cache, shrugging off poisoning: the cache is a pure optimization and
     /// its contents never affect correctness.
-    fn size_formulas(
-        &self,
-    ) -> std::sync::MutexGuard<'_, QCache<VirtualTableKey, DatatypeSizeFormula>> {
+    fn size_formulas(&self) -> std::sync::MutexGuard<'_, QCache<VirtualTableKey, SizeFormula>> {
         self.size_formulas
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    fn cached_size_formula(&self, datatype: &VirtualTableKey) -> Option<DatatypeSizeFormula> {
+    fn cached_size_formula(&self, datatype: &VirtualTableKey) -> Option<SizeFormula> {
         self.size_formulas().get(datatype).cloned()
+    }
+
+    /// Lock the term-formula cache, shrugging off poisoning: the cache is a pure optimization
+    /// and its contents never affect correctness.
+    fn term_size_formulas(&self) -> std::sync::MutexGuard<'_, QCache<usize, SizeFormula>> {
+        self.term_size_formulas
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The closed through-field formulas of a signature term under this table's linkage,
+    /// memoized per term.
+    fn closed_term_formulas(&self, formula: &PartialTypeFormula) -> PartialVMResult<SizeFormula> {
+        let key = std::ptr::from_ref(formula) as usize;
+        if let Some(closed) = self.term_size_formulas().get(&key).cloned() {
+            return Ok(closed);
+        }
+        let visiting = &mut HashSet::new();
+        let closed = SizeFormula {
+            value_depth: self.close_value_formula(&formula.value_depth, visiting)?,
+            layout_size: self.close_layout_formula(&formula.layout_size, visiting)?,
+        };
+        self.term_size_formulas().insert(key, closed.clone());
+        Ok(closed)
+    }
+
+    /// Solve a signature term's `value_depth` with the frame-cached argument sizes. Fast path:
+    /// a partial form with no pending applications is already closed and is solved in place,
+    /// with no allocation; otherwise the memoized closed form is used.
+    fn solve_term_value_depth(
+        &self,
+        formula: &PartialTypeFormula,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<u64> {
+        let partial = &formula.value_depth;
+        if partial.applies.is_empty() {
+            let closed = MaxPlusFormula {
+                constant: partial.constant,
+                terms: partial.params.as_ref(),
+            };
+            return closed.solve_with(ty_args.sizes(), |sizes| sizes.value_depth);
+        }
+        self.closed_term_formulas(formula)?
+            .value_depth
+            .solve_with(ty_args.sizes(), |sizes| sizes.value_depth)
+    }
+
+    /// Solve a signature term's `layout_size` with the frame-cached argument sizes. Fast path
+    /// as in [`VMDispatchTables::solve_term_value_depth`].
+    fn solve_term_layout_size(
+        &self,
+        formula: &PartialTypeFormula,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<u64> {
+        let partial = &formula.layout_size;
+        if partial.applies.is_empty() {
+            let closed = LinearFormula {
+                constant: partial.constant,
+                terms: partial.params.as_ref(),
+            };
+            return closed.solve_with(ty_args.sizes(), |sizes| sizes.layout_size);
+        }
+        self.closed_term_formulas(formula)?
+            .layout_size
+            .solve_with(ty_args.sizes(), |sizes| sizes.layout_size)
     }
 
     /// The closed `value_depth` formula of a datatype under this table's linkage.
@@ -553,24 +626,41 @@ impl VMDispatchTables {
         &self,
         datatype_name: &VirtualTableKey,
     ) -> PartialVMResult<MaxPlusFormula> {
-        Ok(self
-            .size_info(datatype_name, &mut HashSet::new())?
-            .value_depth)
+        Ok(self.size_info(datatype_name)?.value_depth)
     }
 
     /// The closed through-field formulas of a datatype under this table's linkage, memoized
-    /// per datatype. Move's verifier guarantees acyclic datatype definitions, so closing
-    /// terminates on well-formed state; `visiting` turns a cycle in corrupt or adversarial
-    /// store state into an invariant violation instead of unbounded recursion.
-    fn size_info(
-        &self,
-        datatype_name: &VirtualTableKey,
-        visiting: &mut HashSet<VirtualTableKey>,
-    ) -> PartialVMResult<DatatypeSizeFormula> {
-        // If we've already closed this datatype's formulas, no more work remains to be done.
+    /// per datatype. The cache is consulted before any closing state is set up: only an
+    /// actual miss allocates the visiting set and recurses.
+    fn size_info(&self, datatype_name: &VirtualTableKey) -> PartialVMResult<SizeFormula> {
         if let Some(formula) = self.cached_size_formula(datatype_name) {
             return Ok(formula);
         }
+        self.close_datatype_formula(datatype_name, &mut HashSet::new())
+    }
+
+    /// As [`VMDispatchTables::size_info`], for recursive calls that already carry closing
+    /// state.
+    fn size_info_visiting(
+        &self,
+        datatype_name: &VirtualTableKey,
+        visiting: &mut HashSet<VirtualTableKey>,
+    ) -> PartialVMResult<SizeFormula> {
+        if let Some(formula) = self.cached_size_formula(datatype_name) {
+            return Ok(formula);
+        }
+        self.close_datatype_formula(datatype_name, visiting)
+    }
+
+    /// Close a datatype's through-field formulas under this table's linkage (cache miss
+    /// path). Move's verifier guarantees acyclic datatype definitions, so closing terminates
+    /// on well-formed state; `visiting` turns a cycle in corrupt or adversarial store state
+    /// into an invariant violation instead of unbounded recursion.
+    fn close_datatype_formula(
+        &self,
+        datatype_name: &VirtualTableKey,
+        visiting: &mut HashSet<VirtualTableKey>,
+    ) -> PartialVMResult<SizeFormula> {
         if !visiting.insert(datatype_name.clone()) {
             return Err(partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
@@ -582,11 +672,11 @@ impl VMDispatchTables {
         let datatype = self.resolve_type(datatype_name)?.to_ref();
         let formula = match datatype.size_info() {
             // Fully concrete: the JIT wrote the sizes down.
-            DatatypeSizeInfo::Constant(sizes) => DatatypeSizeFormula::constant(*sizes),
+            DatatypeSizeInfo::Constant(sizes) => SizeFormula::constant(*sizes),
             DatatypeSizeInfo::Formula {
                 value_depth,
                 layout_size,
-            } => DatatypeSizeFormula {
+            } => SizeFormula {
                 value_depth: self.close_value_formula(value_depth, visiting)?,
                 layout_size: self.close_layout_formula(layout_size, visiting)?,
             },
@@ -611,7 +701,7 @@ impl VMDispatchTables {
             terms: partial.params.to_vec(),
         };
         for (offset, apply) in partial.applies.iter() {
-            let datatype = self.size_info(&apply.key, visiting)?;
+            let datatype = self.size_info_visiting(&apply.key, visiting)?;
             let args = apply
                 .args
                 .iter()
@@ -636,7 +726,7 @@ impl VMDispatchTables {
             terms: partial.params.to_vec(),
         };
         for (multiplicity, apply) in partial.applies.iter() {
-            let datatype = self.size_info(&apply.key, visiting)?;
+            let datatype = self.size_info_visiting(&apply.key, visiting)?;
             let args = apply
                 .args
                 .iter()
@@ -673,7 +763,7 @@ impl VMDispatchTables {
                     (value_depth.saturating_add(1), layout_size.saturating_add(1))
                 }
                 Type::Datatype(datatype_key) => {
-                    let formula = self.size_info(datatype_key, &mut HashSet::new())?;
+                    let formula = self.size_info(datatype_key)?;
                     (
                         formula.value_depth.solve(&[])?,
                         formula.layout_size.solve(&[])?,
@@ -689,7 +779,7 @@ impl VMDispatchTables {
                         value_depths.push(value_depth);
                         layout_sizes.push(layout_size);
                     }
-                    let formula = self.size_info(datatype_key, &mut HashSet::new())?;
+                    let formula = self.size_info(datatype_key)?;
                     (
                         formula.value_depth.solve(&value_depths)?,
                         formula.layout_size.solve(&layout_sizes)?,
@@ -748,8 +838,7 @@ impl VMDispatchTables {
         let Some(max_depth) = self.vm_config.runtime_limits_config.max_value_nest_depth else {
             return Ok(());
         };
-        let closed = self.close_value_formula(&formula.value_depth, &mut HashSet::new())?;
-        let value_depth = closed.solve_with(ty_args.sizes(), |sizes| sizes.value_depth)?;
+        let value_depth = self.solve_term_value_depth(formula, ty_args)?;
         if value_depth > max_depth {
             return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
         }
@@ -1171,12 +1260,8 @@ impl VMDispatchTables {
             if type_size > budget_nodes {
                 return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
             }
-            let value_depth = self
-                .close_value_formula(&formula.value_depth, &mut HashSet::new())?
-                .solve_with(type_params.sizes(), |sizes| sizes.value_depth)?;
-            let layout_size = self
-                .close_layout_formula(&formula.layout_size, &mut HashSet::new())?
-                .solve_with(type_params.sizes(), |sizes| sizes.layout_size)?;
+            let value_depth = self.solve_term_value_depth(formula, type_params)?;
+            let layout_size = self.solve_term_layout_size(formula, type_params)?;
             sizes.push(TypeSize {
                 type_size,
                 type_depth,
@@ -1359,15 +1444,11 @@ impl VMDispatchTables {
         // type-parameter terms' closed formulas, and the frame-cached argument value depths.
         // Nothing is realized or traversed.
         if let Some(max_depth) = self.vm_config.runtime_limits_config.max_value_nest_depth {
-            let visiting = &mut HashSet::new();
             let param_depths = type_params
                 .iter()
-                .map(|formula| {
-                    let closed = self.close_value_formula(&formula.value_depth, visiting)?;
-                    closed.solve_with(ty_args.sizes(), |sizes| sizes.value_depth)
-                })
+                .map(|formula| self.solve_term_value_depth(formula, ty_args))
                 .collect::<PartialVMResult<Vec<_>>>()?;
-            let datatype = self.size_info(datatype_key, visiting)?;
+            let datatype = self.size_info(datatype_key)?;
             if datatype.value_depth.solve(&param_depths)? > max_depth {
                 return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
             }
