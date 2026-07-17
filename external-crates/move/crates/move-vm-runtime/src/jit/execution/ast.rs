@@ -1333,6 +1333,50 @@ impl ArenaType {
         )
     }
 
+    /// The closed formula for the *true* `type_depth` of `subst(term, args)` — the depth of the
+    /// realized type, as opposed to the [`syntactic_formulas`](Self::syntactic_formulas) depth,
+    /// which is the (over-counting) legacy checked-traversal counter. Substituting an argument
+    /// of depth `a` for a parameter occurring at nesting depth `d` puts the argument's root at
+    /// depth `d`, so the branch contributes `(d - 1) + a`; the constant is the maximum depth
+    /// over the *non-parameter* leaves (primitives and bare datatype heads), which are the only
+    /// leaves whose depth is not replaced by an argument. Lets a generic call frame's callee
+    /// type-argument depth be solved arithmetically instead of by walking the realized type.
+    pub(crate) fn result_depth_formula(&self) -> MaxPlusFormula {
+        fn visit(ty: &ArenaType, depth: u64, constant: &mut u64, terms: &mut BTreeMap<u16, u64>) {
+            match ty {
+                ArenaType::TyParam(idx) => {
+                    let offset = terms.entry(*idx).or_insert(0);
+                    *offset = (*offset).max(depth);
+                }
+                ArenaType::Vector(ty)
+                | ArenaType::Reference(ty)
+                | ArenaType::MutableReference(ty) => {
+                    visit(ty, depth.saturating_add(1), constant, terms);
+                }
+                ArenaType::DatatypeInstantiation(inst) => {
+                    let (_, ty_args) = &**inst;
+                    for ty in ty_args.iter() {
+                        visit(ty, depth.saturating_add(1), constant, terms);
+                    }
+                }
+                // Non-parameter leaf: its depth is fixed, not replaced by an argument.
+                _ => *constant = (*constant).max(depth),
+            }
+        }
+        let mut constant = 0u64;
+        let mut term_map = BTreeMap::new();
+        visit(self, 1, &mut constant, &mut term_map);
+        MaxPlusFormula {
+            constant,
+            // A parameter's root lands at its occurrence depth `d`, so the argument's own depth
+            // sits atop `d - 1` enclosing levels.
+            terms: term_map
+                .into_iter()
+                .map(|(param, depth)| (param, depth.saturating_sub(1)))
+                .collect(),
+        }
+    }
+
     /// Checked on-the-fly substitution: compute this term's syntactic formulas, check the
     /// predicted sizes against the limits, and only then build the result. Used where no
     /// precomputed formulas exist (function signatures, layout builders, the tracer); hot
