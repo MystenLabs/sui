@@ -272,8 +272,10 @@ The most common options are:
 - `--to`: Recipient address (or its keystore alias). Required.
 - `--amount`: Amount to send in the coin's smallest unit (MIST for SUI). Required unless `--all-coins` is set.
 - `--coin-type`: Coin type to send. Defaults to `0x2::sui::SUI`.
-- `--all-coins`: Send all owned coin objects of the specified type (not address-balance funds). Conflicts with `--amount` and `--stateless`.
-- `--stateless`: Draw all funds (including gas) from the sender's address balances, producing a transaction with no owned-object inputs. Conflicts with `--all-coins`.
+- `--all-coins`: Send all owned coin objects of the specified type (not address-balance funds). Conflicts with `--amount` and `--from-address-balance`.
+- `--from-address-balance`: Draw the amount from the sender's address balance rather than their coins. Without it, coins are preferred and the address balance is only used if the coins cannot cover the amount. Conflicts with `--all-coins`.
+
+Either way, the recipient is paid into their address balance. Gas is selected separately: it comes from the sender's address balance when that can cover the budget, and from their coins otherwise.
 
 ### Transfer an object to party ownership
 

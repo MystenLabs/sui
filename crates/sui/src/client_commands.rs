@@ -62,7 +62,7 @@ use sui_rpc_api::{
     client::{ExecutedTransaction, SimulateTransactionResponse},
 };
 use sui_sdk::{
-    SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
+    SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
     digests::chain_id_base58,
     sui_client_config::{SuiClientConfig, SuiEnv},
     sui_sdk_types::bcs::ToBcs,
@@ -79,7 +79,7 @@ use sui_types::{
     event::EventID,
     execution_status::{ExecutionFailure, ExecutionStatus},
     gas::GasCostSummary,
-    gas_coin::GasCoin,
+    gas_coin::{GAS, GasCoin},
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
     move_package::{MovePackage, UpgradeCap},
@@ -89,8 +89,8 @@ use sui_types::{
     signature::GenericSignature,
     sui_sdk_types_conversions::type_tag_sdk_to_core,
     transaction::{
-        Argument, Command, FundsWithdrawalArg, GasData, InputObjectKind, ObjectArg,
-        SenderSignedData, SharedObjectMutability, Transaction, TransactionData, TransactionDataAPI,
+        Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, SenderSignedData,
+        SharedObjectMutability, Transaction, TransactionData, TransactionDataAPI,
         TransactionExpiration, TransactionKind,
     },
 };
@@ -410,19 +410,20 @@ pub enum SuiClientCommands {
         amount: Option<u64>,
 
         /// Send all coins of the specified type to the recipient's address balance.
-        /// Conflicts with --amount and --stateless.
-        #[clap(long, conflicts_with_all = ["amount", "stateless"])]
+        /// Conflicts with --amount and --from-address-balance.
+        #[clap(long, conflicts_with_all = ["amount", "from_address_balance"])]
         all_coins: bool,
 
         /// The coin type to send (e.g., "0x2::sui::SUI"). Defaults to SUI.
         #[clap(long, value_parser = parse_sui_type_tag)]
         coin_type: Option<TypeTag>,
 
-        /// If set, draws all funds (including gas payment) from the sender's address balances.
-        /// This creates a fully stateless transaction with no owned object inputs.
+        /// Draw the funds from the sender's address balance rather than from their coins. Without
+        /// this, coins are preferred and the address balance is only used if they cannot cover the
+        /// amount. Either way the recipient is paid into their address balance.
         /// Conflicts with --all-coins.
         #[clap(long, conflicts_with = "all_coins")]
-        stateless: bool,
+        from_address_balance: bool,
 
         #[clap(flatten)]
         gas_data: GasDataArgs,
@@ -842,6 +843,18 @@ pub struct TestUpgradeArgs {
 #[derive(serde::Deserialize, Debug)]
 struct FaucetResponse {
     error: Option<String>,
+}
+
+/// The protocol limits that bound how many coins a single transaction can drain.
+struct CoinLimits {
+    /// Maximum number of objects a gas payment may contain.
+    max_gas_payment_objects: usize,
+    /// Maximum number of arguments a single command may take. A command's target does not count
+    /// towards this, and the limit is exclusive.
+    max_arguments: usize,
+    /// Maximum number of object inputs a transaction may have. The gas payment does not count
+    /// towards this.
+    max_input_objects: usize,
 }
 
 impl SuiClientCommands {
@@ -1354,7 +1367,7 @@ impl SuiClientCommands {
                 amount,
                 all_coins,
                 coin_type,
-                stateless,
+                from_address_balance,
                 gas_data,
                 processing,
             } => {
@@ -1363,11 +1376,21 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 let client = context.grpc_client()?;
 
-                let sui_type_tag =
-                    TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid");
-                let coin_type_tag = coin_type.unwrap_or_else(|| sui_type_tag.clone());
+                let coin_type_tag = coin_type.unwrap_or_else(GAS::type_tag);
 
-                let is_sui = coin_type_tag == sui_type_tag;
+                let is_sui = coin_type_tag == GAS::type_tag();
+
+                if all_coins {
+                    return send_all_coins(
+                        context,
+                        signer,
+                        recipient,
+                        coin_type_tag,
+                        gas_data,
+                        processing,
+                    )
+                    .await;
+                }
 
                 let TypeTag::Struct(coin_struct_tag) = &coin_type_tag else {
                     bail!("coin type must be a struct type, got {coin_type_tag}");
@@ -1376,12 +1399,13 @@ impl SuiClientCommands {
                 let coin_balance = balance_info.coin_balance();
                 let address_balance = balance_info.address_balance();
 
-                let (amount, use_address_balance) = if all_coins {
-                    // --all-coins uses all coin balance (cannot be combined with --stateless)
-                    ensure!(coin_balance > 0, "No coins available to send");
-                    (coin_balance, false)
-                } else if let Some(amount) = amount {
-                    let use_address_balance = if stateless {
+                let (amount, use_address_balance) = if let Some(amount) = amount {
+                    let use_address_balance = if from_address_balance {
+                        ensure!(
+                            address_balance >= amount,
+                            "Insufficient address balance to send {amount} MIST. \
+                            Address balance: {address_balance}, Coin balance: {coin_balance}"
+                        );
                         true
                     } else if coin_balance >= amount {
                         false
@@ -1389,11 +1413,8 @@ impl SuiClientCommands {
                         true
                     } else {
                         bail!(
-                            "Insufficient balance to send {} MIST. \
-                            Coin balance: {}, Address balance: {}",
-                            amount,
-                            coin_balance,
-                            address_balance
+                            "Insufficient balance to send {amount} MIST. \
+                            Coin balance: {coin_balance}, Address balance: {address_balance}"
                         );
                     };
                     (amount, use_address_balance)
@@ -1427,27 +1448,23 @@ impl SuiClientCommands {
 
                     let tx_kind = TransactionKind::programmable(builder.finish());
 
-                    if stateless {
-                        dry_run_or_execute_or_serialize_with_address_balance_gas(
-                            signer, tx_kind, context, gas_data, processing,
-                        )
-                        .await?
-                    } else {
-                        dry_run_or_execute_or_serialize(
-                            signer,
-                            tx_kind,
-                            context,
-                            vec![],
-                            gas_data,
-                            processing,
-                        )
-                        .await?
-                    }
+                    // Gas is a separate concern from where the funds come from: the withdrawal
+                    // never touches the gas coin, so ordinary selection pays from the sender's
+                    // address balance whenever it can cover the budget, and their coins otherwise.
+                    dry_run_or_execute_or_serialize(
+                        signer,
+                        tx_kind,
+                        context,
+                        vec![],
+                        gas_data,
+                        processing,
+                    )
+                    .await?
                 } else {
                     ensure!(
                         is_sui,
                         "Non-SUI coin transfers using coins require explicit coin selection. \
-                        Use --stateless to transfer from address balance instead."
+                        Use --from-address-balance to transfer from your address balance instead."
                     );
                     let amount_arg = builder.pure(amount)?;
                     let coin_arg =
@@ -3416,6 +3433,176 @@ pub async fn max_gas_budget(client: &Client) -> Result<u64, anyhow::Error> {
     )
 }
 
+/// Queries the protocol config for the limits that bound how many coins fit in one transaction.
+async fn coin_limits(client: &Client) -> Result<CoinLimits, anyhow::Error> {
+    let cfg = client.get_protocol_config(None).await?;
+    let attributes = cfg.attributes();
+    let limit = |name: &str| -> Result<usize, anyhow::Error> {
+        attributes
+            .get(name)
+            .and_then(|s| s.parse().ok())
+            .with_context(|| format!("Could not find {name} in the protocol config."))
+    };
+
+    Ok(CoinLimits {
+        max_gas_payment_objects: limit("max_gas_payment_objects")?,
+        max_arguments: limit("max_arguments")?,
+        max_input_objects: limit("max_input_objects")?,
+    })
+}
+
+/// Warn about, and drop, any coins past what one transaction can hold.
+fn truncate_to_max_coins(coin_refs: &mut Vec<ObjectRef>, max_coins: usize) {
+    if coin_refs.len() <= max_coins {
+        return;
+    }
+
+    let remaining = coin_refs.len() - max_coins;
+    coin_refs.truncate(max_coins);
+    eprintln!(
+        "Warning: a transaction sends at most {max_coins} coins, so {remaining} of your coins \
+         will not be sent. Run the command again to send the rest."
+    );
+}
+
+/// Send every `Coin<T>` object owned by `signer` to `recipient`'s address balance. The signer's
+/// own address balance is left untouched: only their coin objects are drained.
+///
+/// Every coin is merged into one, which is then sent by value. SUI is what pays for gas, so its
+/// coins go into the gas payment, where gas smashing merges them into the gas coin.
+/// Coins of any other type are ordinary inputs, merged into the last of them.
+async fn send_all_coins(
+    context: &mut WalletContext,
+    signer: SuiAddress,
+    recipient: SuiAddress,
+    coin_type_tag: TypeTag,
+    gas_data: GasDataArgs,
+    processing: TxProcessingArgs,
+) -> Result<SuiClientCommandResult, anyhow::Error> {
+    let client = context.grpc_client()?;
+
+    // For SUI the coins being sent are also what pays for gas, which a sponsor's gas coin cannot do:
+    // it is the sponsor's amount that would end up with the recipient.
+    let is_sui = coin_type_tag == GAS::type_tag();
+    ensure!(
+        !is_sui || gas_data.gas_sponsor.is_none(),
+        "--all-coins cannot be used with a gas sponsor for SUI coin type, because the coins being \
+         sent are the ones paying for gas."
+    );
+
+    let coins: Vec<Object> = client
+        .list_owned_objects(signer, Some(Coin::type_(coin_type_tag.clone())))
+        .try_collect()
+        .await?;
+    ensure!(
+        !coins.is_empty(),
+        "No {coin_type_tag} coins available to send"
+    );
+
+    let mut coin_refs: Vec<ObjectRef> =
+        coins.iter().map(|c| c.compute_object_reference()).collect();
+
+    // Coins that do not fit in the gas payment are merged in with `MergeCoins`. Each such coin is a
+    // transaction input, so the merged set is bounded by the input-object limit; the sources are
+    // split across as many `MergeCoins` commands as it takes to stay under the per-command argument
+    // limit. Gas payment coins are validated separately and do not count against the input limit.
+    let limits = coin_limits(&client).await?;
+    let smashed = if is_sui {
+        limits.max_gas_payment_objects
+    } else {
+        0
+    };
+    truncate_to_max_coins(&mut coin_refs, smashed + limits.max_input_objects);
+
+    // Whatever is left in `coin_refs` is the gas payment, which is empty unless the coin is SUI.
+    let merged_refs = coin_refs.split_off(std::cmp::min(coin_refs.len(), smashed));
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let mut merged_args = merged_refs
+        .iter()
+        .map(|r| builder.obj(ObjectArg::ImmOrOwnedObject(*r)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Gas smashing has already merged the gas payment into the gas coin, so that is what the rest
+    // merge into; without one, the last coin takes the role. `MergeCoins` only borrows its target,
+    // so either way it is still ours to send afterwards.
+    let target = if is_sui {
+        Argument::GasCoin
+    } else {
+        merged_args
+            .pop()
+            .context("non-SUI path always has at least one coin to merge into")?
+    };
+
+    // `MergeCoins` counts only its source list against `max_arguments` (strict `<`), so at most
+    // `max_arguments - 1` sources fit per command; batch the rest across commands, all merging into
+    // the same target.
+    let max_sources = limits.max_arguments.saturating_sub(1).max(1);
+    for sources in merged_args.chunks(max_sources) {
+        builder.command(Command::MergeCoins(target, sources.to_vec()));
+    }
+
+    // Moving the coin into `coin::send_funds` by value is understood by the execution layer: when
+    // it is the gas coin, that consumes it and refunds the unused gas budget into the recipient's
+    // address balance, so no dust is left behind. Passing the SUI coins as an explicit gas payment
+    // also keeps the fullnode from performing gas selection, which would otherwise pull in the
+    // signer's address balance as well.
+    let recipient_arg = builder.pure(recipient)?;
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::from_str("coin")?,
+        Identifier::from_str("send_funds")?,
+        vec![coin_type_tag],
+        vec![target, recipient_arg],
+    );
+    let tx_kind = TransactionKind::programmable(builder.finish());
+
+    dry_run_or_execute_or_serialize(signer, tx_kind, context, coin_refs, gas_data, processing).await
+}
+
+/// Ask the fullnode to pick the gas payment for a transaction, and return it along with the
+/// budget and expiration it resolved.
+///
+/// The fullnode applies the same rules as the TypeScript SDK: it pays from `gas_owner`'s address
+/// balance when the transaction never touches the gas coin and that balance covers the budget
+/// (empty payment, `ValidDuring` expiration), pays from their SUI coins otherwise, and when the
+/// transaction *does* use the gas coin it prepends an address balance reservation so both sources
+/// are available. Coins already used as inputs are excluded.
+async fn select_gas_with_fullnode(
+    client: &Client,
+    signer: SuiAddress,
+    tx_kind: &TransactionKind,
+    gas_owner: SuiAddress,
+    gas_budget: u64,
+    gas_price: u64,
+) -> Result<(Vec<ObjectRef>, u64, TransactionExpiration), anyhow::Error> {
+    // An empty payment is what asks the fullnode to perform selection.
+    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
+        tx_kind.clone(),
+        signer,
+        vec![],
+        gas_budget,
+        gas_price,
+        gas_owner,
+    );
+
+    debug!("Selecting gas payment");
+    let resolved = client
+        .simulate_transaction(&tx_data, true, true)
+        .await
+        .context("Gas selection failed")?
+        .transaction
+        .transaction;
+    debug!("Finished selecting gas payment");
+
+    let gas_data = resolved.gas_data();
+    Ok((
+        gas_data.payment.clone(),
+        gas_data.budget,
+        *resolved.expiration(),
+    ))
+}
+
 /// Dry run, execute, or serialize a transaction.
 ///
 /// This basically extracts the logical code for each command that deals with dry run, executing,
@@ -3427,51 +3614,6 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     gas_payment: Vec<ObjectRef>,
     gas_data: GasDataArgs,
     processing: TxProcessingArgs,
-) -> Result<SuiClientCommandResult, anyhow::Error> {
-    dry_run_or_execute_or_serialize_impl(
-        signer,
-        tx_kind,
-        context,
-        gas_payment,
-        gas_data,
-        processing,
-        false,
-    )
-    .await
-}
-
-/// Dry run, execute, or serialize a transaction with address balance gas support.
-///
-/// When `use_address_balance_gas` is true, the transaction uses the sender's address balance
-/// for gas payment instead of selecting a gas coin. This requires adding a ValidDuring
-/// expiration for replay protection.
-pub(crate) async fn dry_run_or_execute_or_serialize_with_address_balance_gas(
-    signer: SuiAddress,
-    tx_kind: TransactionKind,
-    context: &mut WalletContext,
-    gas_data: GasDataArgs,
-    processing: TxProcessingArgs,
-) -> Result<SuiClientCommandResult, anyhow::Error> {
-    dry_run_or_execute_or_serialize_impl(
-        signer,
-        tx_kind,
-        context,
-        vec![],
-        gas_data,
-        processing,
-        true,
-    )
-    .await
-}
-
-async fn dry_run_or_execute_or_serialize_impl(
-    signer: SuiAddress,
-    tx_kind: TransactionKind,
-    context: &mut WalletContext,
-    gas_payment: Vec<ObjectRef>,
-    gas_data: GasDataArgs,
-    processing: TxProcessingArgs,
-    use_address_balance_gas: bool,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let GasDataArgs {
         gas_budget,
@@ -3535,12 +3677,15 @@ async fn dry_run_or_execute_or_serialize_impl(
         Some(gas_budget) => gas_budget,
         None => {
             debug!("Estimating gas budget");
+            // Estimate against an empty gas payment so the fullnode simulates with a mock gas
+            // coin. Passing the real payment here would have it checked against the very budget
+            // we are trying to compute.
             let budget = estimate_gas_budget(
                 context,
                 signer,
                 tx_kind.clone(),
                 gas_price,
-                gas_payment.clone(),
+                vec![],
                 gas_sponsor,
             )
             .await?;
@@ -3549,47 +3694,16 @@ async fn dry_run_or_execute_or_serialize_impl(
         }
     };
 
-    let (gas_payment, expiration) = if use_address_balance_gas {
-        let current_epoch = context.get_current_epoch().await?;
-        let chain_id = context.get_chain_identifier().await?;
+    let gas_owner = gas_sponsor.unwrap_or(signer);
 
-        let expiration = TransactionExpiration::ValidDuring {
-            min_epoch: Some(current_epoch),
-            max_epoch: Some(current_epoch.saturating_add(1)),
-            min_timestamp: None,
-            max_timestamp: None,
-            chain: chain_id,
-            nonce: rand::random(),
-        };
-        (vec![], expiration)
-    } else if !gas_payment.is_empty() {
-        (gas_payment, TransactionExpiration::None)
+    let (gas_payment, gas_budget, expiration) = if !gas_payment.is_empty() {
+        (gas_payment, gas_budget, TransactionExpiration::None)
     } else {
-        let input_objects: Vec<_> = tx_kind
-            .input_objects()?
-            .iter()
-            .filter_map(|o| match o {
-                InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
-                _ => None,
-            })
-            .collect();
-
-        let gas_payment = client
-            .transaction_builder()
-            .select_gas(
-                gas_sponsor.unwrap_or(signer),
-                None,
-                gas_budget,
-                input_objects,
-                gas_price,
-            )
-            .await?;
-
-        (vec![gas_payment], TransactionExpiration::None)
+        select_gas_with_fullnode(&client, signer, &tx_kind, gas_owner, gas_budget, gas_price)
+            .await?
     };
 
     debug!("Preparing transaction data");
-    let gas_owner = gas_sponsor.unwrap_or(signer);
     let tx_data = TransactionData::new_with_gas_data_and_expiration(
         tx_kind,
         signer,
