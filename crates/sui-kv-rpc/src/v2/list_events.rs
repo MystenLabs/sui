@@ -8,6 +8,7 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
+use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_inverted_index::event_seq;
@@ -50,10 +51,12 @@ use crate::bigtable_client::BigTableClient;
 use crate::config::PipelineStage;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
+use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
 use crate::render::render_json;
@@ -61,6 +64,10 @@ use crate::render::render_json;
 const EVENT_READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EVENT;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
+
+fn event_resolution(wants_json: bool) -> &'static str {
+    if wants_json { "json" } else { "no_json" }
+}
 
 pub(crate) async fn list_events(
     ctx: QueryContext,
@@ -91,6 +98,7 @@ pub(crate) async fn list_events(
     let ordering = options.ordering;
     let direction = options.scan_direction();
     let wants_json = read_mask.contains(ProtoEvent::JSON_FIELD.name);
+    let resolution = event_resolution(wants_json);
 
     let event_range = resolve_event_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_event_range"))
@@ -118,14 +126,14 @@ pub(crate) async fn list_events(
             tx_seq: range_end_position.tx_seq,
             event_index: range_end_position.event_index,
         };
-        return Ok(futures::stream::iter([Ok(range_end_response(
-            &options,
-            exhaustion,
-            terminal_position,
-            None,
-            true,
-        )
-        .0)])
+        let response = range_end_response(&options, exhaustion, terminal_position, None, true).0;
+        return Ok(async_stream::try_stream! {
+            ctx.inc_stream_watermark_frames();
+            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+            let yield_started = Instant::now();
+            yield response;
+            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
+        }
         .boxed());
     }
 
@@ -139,7 +147,6 @@ pub(crate) async fn list_events(
     // Stage A: stream of EventRefs. Filtered requests discover event positions
     // through the event bitmap. Unfiltered requests scan tx_seq_digest rows and
     // expand each row's event_count into concrete EventRefs.
-    let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
     let event_ref_stream: BoxStream<
         'static,
         Result<Watermarked<EventRef, EventPosition>, ScanStop>,
@@ -224,55 +231,47 @@ pub(crate) async fn list_events(
         },
     );
 
-    // Stage D: render. `buffered` (ordered) lets per-event JSON rendering
-    // overlap while preserving input ref order in the output. Frontier
-    // watermarks pass through unchanged.
+    let event_stream = resolve_scan_watermarks(
+        tx_ref_stream,
+        client.event_wm_resolver(direction),
+        frontier_to_position,
+    );
+
+    // Stage D: render. Spawned render tasks are admitted up to this endpoint's
+    // render-ahead bound. Admitted tasks run freely while their results remain
+    // ordered, and frontier watermarks pass through unchanged.
     //
     // Package resolution uses the server-global `PackageResolver`, backed by
     // a cross-request LRU over the raw BigTable client. It is intentionally
     // outside this request's downstream BigTable semaphore: tying a global
     // cache miss to one request's budget would let that request's budget stall
-    // unrelated requests waiting on the same package. The local buffer below
-    // only bounds how many render/package-resolution attempts this request
-    // runs concurrently.
+    // unrelated requests waiting on the same package. The admission bound
+    // limits this request's concurrent render/package-resolution attempts.
     //
     // TODO: add global single-flight dedupe around package cache misses so
     // concurrent requests for the same uncached package share one BigTable
     // fetch.
-    let event_stream = tx_ref_stream
-        .map(move |item| {
+    let mut rendered_stream = render_ahead(event_stream, endpoint.render_ahead, {
+        let resolver = resolver.clone();
+        let read_mask = read_mask.clone();
+        move |(event_ref, tx)| {
             let resolver = resolver.clone();
             let read_mask = read_mask.clone();
             async move {
-                match item? {
-                    Watermarked::Item((event_ref, tx)) => {
-                        let rendered =
-                            render_event(event_ref, tx, &read_mask, &resolver, wants_json)
-                                .await
-                                .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))?;
-                        Ok::<Watermarked<RenderedEvent, EventPosition>, ScanStop>(
-                            Watermarked::Item(rendered),
-                        )
-                    }
-                    Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
-                }
+                let render_started = Instant::now();
+                let rendered =
+                    render_event(event_ref, tx, &read_mask, &resolver, wants_json).await?;
+                Ok::<_, RpcError>((rendered, render_started.elapsed()))
             }
-        })
-        .buffered(request_bigtable_concurrency)
-        .boxed();
-
-    let event_stream = resolve_scan_watermarks(
-        event_stream,
-        client.event_wm_resolver(direction),
-        frontier_to_position,
-    );
+        }
+    });
 
     Ok(async_stream::try_stream! {
-        futures::pin_mut!(event_stream);
         let mut emitted = 0usize;
+        let mut first_frame_emitted = false;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
-            let Some(item) = event_stream.next().await else {
+            let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
                 let terminal_position = Position::Events {
                     checkpoint: range_end_checkpoint,
                     tx_seq: range_end_position.tx_seq,
@@ -285,11 +284,17 @@ pub(crate) async fn list_events(
                     covered_checkpoint_bound,
                     false,
                 );
+                ctx.inc_stream_watermark_frames();
+                if !first_frame_emitted {
+                    ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                }
+                let yield_started = Instant::now();
                 yield response;
+                ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 break reason;
             };
             match item {
-                Ok(ResolvedWatermarked::Item(rendered)) => {
+                Ok(ResolvedWatermarked::Item((rendered, render_elapsed))) => {
                     let item_checkpoint = rendered.checkpoint_number;
                     covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
                         covered_checkpoint_bound,
@@ -306,15 +311,25 @@ pub(crate) async fn list_events(
                         covered_checkpoint_bound,
                     );
                     emitted += 1;
+                    ctx.observe_response_render(resolution, render_elapsed);
                     let mut response = event_item_response(rendered.event, watermark);
-                    if emitted == limit_items {
+                    let item_limit = emitted == limit_items;
+                    if item_limit {
                         let mut end = QueryEnd::default();
                         end.reason = Some(QueryEndReason::ItemLimit as i32);
                         response.end = Some(end);
-                        yield response;
+                    }
+                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
+                    if item_limit {
                         break QueryEndReason::ItemLimit;
                     }
-                    yield response;
                 }
                 Ok(ResolvedWatermarked::Watermark {
                     position,
@@ -328,18 +343,34 @@ pub(crate) async fn list_events(
                         position,
                         Some(checkpoint_at_frontier),
                     )?;
-                    yield watermark_response(watermark);
+                    let response = watermark_response(watermark);
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 }
-                Err(stop) => {
-                    yield terminal_response_from_scan_stop(
+                Err(RenderAheadError::Upstream(stop)) => {
+                    let response = terminal_response_from_scan_stop(
                         stop,
                         &options,
                         direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                     break QueryEndReason::ScanLimit;
                 }
+                Err(RenderAheadError::Render(error)) => Err(error)?,
             }
         };
         info!(
@@ -828,17 +859,156 @@ async fn checkpoint_to_tx_boundary(
 
 #[cfg(test)]
 mod tests {
+    use sui_kvstore::testing::insert_checkpoint_rows;
     use sui_types::digests::TransactionDigest;
 
     use super::*;
+    use crate::v2::test_utils::query_context_with_mock_and_registry as metric_context;
+    use crate::v2::test_utils::{
+        ascending_options, assert_list_metric_absent, list_counter, list_histogram,
+        query_context_with_registry,
+    };
+    use move_core_types::ident_str;
+    use sui_rpc::proto::sui::rpc::v2 as proto;
     use sui_rpc_cursor::CursorToken;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+    use sui_types::{base_types::ObjectID, event::Event, gas_coin::GAS};
 
-    use crate::v2::test_utils::ascending_options;
-    use crate::v2::test_utils::query_context;
+    fn resolution(request: &mut ListEventsRequest, path: &str) -> &'static str {
+        request.read_mask = Some(FieldMask::from_paths([path]));
+        let mask = validate_event_read_mask(request.read_mask.take()).unwrap();
+        event_resolution(mask.contains(ProtoEvent::JSON_FIELD.name))
+    }
+
+    async fn assert_event_metrics(count: usize) {
+        let event = Event::new(
+            &ObjectID::ZERO,
+            ident_str!("metrics"),
+            TestCheckpointBuilder::derive_address(1),
+            GAS::type_(),
+            vec![],
+        );
+        let checkpoint = TestCheckpointBuilder::new(0)
+            .start_transaction(1)
+            .with_events(vec![event.clone(); count])
+            .finish_transaction()
+            .build_checkpoint();
+        let (ctx, registry, mock, server) = metric_context("list_events", 1).await;
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let mut request = ListEventsRequest::default();
+        request.read_mask = Some(FieldMask::from_paths(["event_type"]));
+        request.options = Some(ascending_options());
+        request.options.as_mut().unwrap().limit = (count == 2).then_some(2);
+        let mask = validate_event_read_mask(request.read_mask.clone()).unwrap();
+        let expected = ProtoEvent::merge_from(&event, &mask);
+        let mut responses = list_events(ctx, request).await.unwrap();
+        if count == 1 {
+            let responses = responses.try_collect::<Vec<_>>().await.unwrap();
+            let families = registry.gather();
+            for (name, sample_count) in [
+                ("kv_rpc_response_render_latency_ms", 1),
+                ("kv_rpc_response_page_bytes", 1),
+                ("kv_rpc_stream_first_frame_latency_ms", 1),
+                ("kv_rpc_stream_frame_yield_wait_ms", responses.len() as u64),
+            ] {
+                let histogram = list_histogram(&families, name, "list_events", "no_json");
+                assert_eq!(histogram.get_sample_count(), sample_count);
+            }
+            let page_bytes = list_histogram(
+                &families,
+                "kv_rpc_response_page_bytes",
+                "list_events",
+                "no_json",
+            );
+            assert_eq!(
+                page_bytes.get_sample_sum(),
+                responses
+                    .iter()
+                    .filter(|response| response.event.is_some())
+                    .map(|response| response.encoded_len() as f64)
+                    .sum::<f64>()
+            );
+            let watermark_frames = list_counter(
+                &families,
+                "kv_rpc_stream_watermark_frames_total",
+                "list_events",
+            );
+            assert_eq!(watermark_frames.value(), (responses.len() - 1) as f64);
+            let final_poll = list_histogram(
+                &families,
+                "kv_rpc_final_stream_poll_wait_ms",
+                "list_events",
+                "no_json",
+            );
+            assert_eq!(final_poll.get_sample_count(), responses.len() as u64);
+        } else {
+            let first = responses.try_next().await.unwrap().unwrap();
+            assert_eq!(first.event, Some(expected.clone()));
+            let second = responses.try_next().await.unwrap().unwrap();
+            assert_eq!(second.event, Some(expected));
+            tokio::task::yield_now().await;
+            drop(responses);
+            let families = registry.gather();
+            for (name, sample_count) in [
+                ("kv_rpc_response_render_latency_ms", 2),
+                ("kv_rpc_response_page_bytes", 2),
+                ("kv_rpc_stream_first_frame_latency_ms", 1),
+                ("kv_rpc_stream_frame_yield_wait_ms", 1),
+            ] {
+                let histogram = list_histogram(&families, name, "list_events", "no_json");
+                assert_eq!(histogram.get_sample_count(), sample_count);
+            }
+            assert_list_metric_absent(&families, "kv_rpc_stream_watermark_frames_total");
+            let final_poll = list_histogram(
+                &families,
+                "kv_rpc_final_stream_poll_wait_ms",
+                "list_events",
+                "no_json",
+            );
+            assert_eq!(final_poll.get_sample_count(), 2);
+        }
+        server.abort();
+    }
+
+    #[test]
+    fn resolution_uses_validated_read_mask_predicate() {
+        let mut request = ListEventsRequest::default();
+        for (path, expected) in [("event_type", "no_json"), ("json", "json")] {
+            assert_eq!(resolution(&mut request, path), expected);
+        }
+    }
+
+    #[test]
+    fn resolution_is_independent_of_filter_and_non_json_fields() {
+        let mut event_type_filter = proto::EventTypeFilter::default();
+        event_type_filter.event_type = Some("0x2::observability::ArbitraryEvent".to_owned());
+        let mut literal = proto::EventLiteral::default();
+        literal.predicate = Some(proto::event_literal::Predicate::EventType(
+            event_type_filter,
+        ));
+        let mut request = ListEventsRequest::default();
+        let filter = request.filter.insert(proto::EventFilter::default());
+        filter.terms.push(proto::EventTerm::default());
+        filter.terms[0].literals.push(literal);
+        for (path, expected) in [
+            ("event_type", "no_json"),
+            ("checkpoint", "no_json"),
+            ("transaction_digest", "no_json"),
+            ("json", "json"),
+        ] {
+            assert_eq!(resolution(&mut request, path), expected);
+        }
+    }
 
     #[tokio::test]
-    async fn empty_ledger_tip_emits_one_standalone_event_boundary() {
-        let (ctx, server) = query_context("test_list_events_natural_end", 0).await;
+    async fn list_events_metric_coverage_excludes_discarded_render_ahead_items() {
+        assert_event_metrics(1).await;
+        assert_event_metrics(2).await;
+    }
+
+    #[tokio::test]
+    async fn empty_ledger_metric_coverage_records_event_terminal_frame_metrics() {
+        let (ctx, registry, server) = query_context_with_registry("list_events", 0).await;
         let mut request = ListEventsRequest::default();
         request.read_mask = Some(FieldMask::from_paths(["event_type"]));
         request.options = Some(ascending_options());
@@ -870,6 +1040,27 @@ mod tests {
         .encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
+        let families = registry.gather();
+        for name in [
+            "kv_rpc_response_render_latency_ms",
+            "kv_rpc_response_page_bytes",
+            "kv_rpc_final_stream_poll_wait_ms",
+        ] {
+            assert_list_metric_absent(&families, name);
+        }
+        for name in [
+            "kv_rpc_stream_first_frame_latency_ms",
+            "kv_rpc_stream_frame_yield_wait_ms",
+        ] {
+            let histogram = list_histogram(&families, name, "list_events", "no_json");
+            assert_eq!(histogram.get_sample_count(), 1);
+        }
+        let watermark_frames = list_counter(
+            &families,
+            "kv_rpc_stream_watermark_frames_total",
+            "list_events",
+        );
+        assert_eq!(watermark_frames.value(), 1.0);
     }
     use std::ops::Bound;
     use sui_rpc_api::ledger_history::query_options::Ordering;

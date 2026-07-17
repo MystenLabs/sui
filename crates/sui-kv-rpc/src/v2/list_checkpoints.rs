@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use bytes::Bytes;
@@ -9,6 +10,7 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
+use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_kvstore::BitmapIndexSpec;
@@ -45,11 +47,13 @@ use crate::bigtable_client::stage;
 use crate::config::PipelineStage;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::dedup_consecutive;
 use crate::pipeline::pipelined_chunks;
+use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
 use crate::render::render_full_checkpoint;
@@ -61,10 +65,25 @@ const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
 pub(crate) type ListCheckpointsStream =
     BoxStream<'static, Result<ListCheckpointsResponse, RpcError>>;
+type RenderedCheckpointStream = BoxStream<
+    'static,
+    Result<
+        ResolvedWatermarked<(u64, Checkpoint, Duration)>,
+        RenderAheadError<ResolvedScanStop<u64>, RpcError>,
+    >,
+>;
 
 enum CheckpointListItem {
     Summary(u64, CheckpointData),
     Full(resolve::ResolvedCp),
+}
+
+fn checkpoint_resolution(needs_objects: bool, needs_transactions_or_objects: bool) -> &'static str {
+    match (needs_objects, needs_transactions_or_objects) {
+        (true, _) => "objects",
+        (false, true) => "transactions",
+        (false, false) => "summary",
+    }
 }
 
 pub(crate) async fn list_checkpoints(
@@ -96,8 +115,11 @@ pub(crate) async fn list_checkpoints(
                 .with_description(format!("invalid read_mask path: {path}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
-        FieldMaskTree::from(read_mask)
+        Arc::new(FieldMaskTree::from(read_mask))
     };
+    let needs_objects = read_mask.contains(Checkpoint::OBJECTS_FIELD);
+    let needs_full = needs_transactions_or_objects(&read_mask);
+    let resolution = checkpoint_resolution(needs_objects, needs_full);
     let options = QueryOptions::checkpoints_from_proto(
         request.options.as_ref(),
         endpoint.default_limit_items,
@@ -130,7 +152,7 @@ pub(crate) async fn list_checkpoints(
         );
         // Empty resolved ranges still surface their terminal cursor, but
         // natural completion claims no checkpoint coverage.
-        return Ok(stream::iter([Ok(range_end_response(
+        let response = range_end_response(
             &options,
             exhaustion,
             Position::Checkpoints {
@@ -139,11 +161,17 @@ pub(crate) async fn list_checkpoints(
             None,
             true,
         )
-        .0)])
+        .0;
+        return Ok(async_stream::try_stream! {
+            ctx.inc_stream_watermark_frames();
+            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+            let yield_started = Instant::now();
+            yield response;
+            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
+        }
         .boxed());
     }
 
-    let needs_full = needs_transactions_or_objects(&read_mask);
     let cp_columns: Arc<[&'static str]> = list_checkpoint_columns(&read_mask, needs_full).into();
 
     // Stage A: discover checkpoint rows for the requested response. Filtered
@@ -245,14 +273,64 @@ pub(crate) async fn list_checkpoints(
         std::convert::identity,
     );
 
-    // Stage E: sync render — build the requested Checkpoint shape (CPU-only,
-    // with no further IO).
-    Ok(async_stream::try_stream! {
-        futures::pin_mut!(checkpoint_stream);
+    // Stage E: bounded ordered render-ahead builds the requested Checkpoint shape (CPU-only, with no further IO).
+    let rendered_stream = render_ahead(checkpoint_stream, endpoint.render_ahead, {
+        let read_mask = read_mask.clone();
+        move |item| {
+            let read_mask = read_mask.clone();
+            async move {
+                let item_checkpoint = match &item {
+                    CheckpointListItem::Summary(item_checkpoint, _) => *item_checkpoint,
+                    CheckpointListItem::Full((item_checkpoint, _, _, _)) => *item_checkpoint,
+                };
+                let render_started = Instant::now();
+                let message = match item {
+                    CheckpointListItem::Summary(_, cp_data) => {
+                        crate::render::checkpoint_to_response(cp_data, &read_mask)?
+                    }
+                    CheckpointListItem::Full((_, cp_data, txs, objects)) => {
+                        render_full_checkpoint(cp_data, txs, objects, &read_mask)?
+                    }
+                };
+                Ok::<_, RpcError>((item_checkpoint, message, render_started.elapsed()))
+            }
+        }
+    });
+
+    Ok(drive_rendered_checkpoints(
+        ctx,
+        rendered_stream,
+        resolution,
+        options,
+        exhaustion,
+        range_end_position,
+        entry_checkpoint,
+        direction,
+        filtered,
+        started,
+    ))
+}
+
+fn drive_rendered_checkpoints(
+    ctx: QueryContext,
+    mut rendered_stream: RenderedCheckpointStream,
+    resolution: &'static str,
+    options: QueryOptions,
+    exhaustion: RangeExhaustion,
+    range_end_position: u64,
+    entry_checkpoint: u64,
+    direction: ScanDirection,
+    filtered: bool,
+    started: Instant,
+) -> ListCheckpointsStream {
+    async_stream::try_stream! {
+        let limit_items = options.limit_items;
+        let ordering = options.ordering;
         let mut emitted = 0usize;
+        let mut first_frame_emitted = false;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
-            let Some(item) = checkpoint_stream.next().await else {
+            let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
                 let (response, reason) = range_end_response(
                     &options,
                     exhaustion,
@@ -262,15 +340,21 @@ pub(crate) async fn list_checkpoints(
                     covered_checkpoint_bound,
                     false,
                 );
+                ctx.inc_stream_watermark_frames();
+                if !first_frame_emitted {
+                    ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                }
+                let yield_started = Instant::now();
                 yield response;
+                ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 break reason;
             };
             match item {
-                Ok(ResolvedWatermarked::Item(item)) => {
-                    let item_checkpoint = match &item {
-                        CheckpointListItem::Summary(item_checkpoint, _) => *item_checkpoint,
-                        CheckpointListItem::Full((item_checkpoint, _, _, _)) => *item_checkpoint,
-                    };
+                Ok(ResolvedWatermarked::Item((
+                    item_checkpoint,
+                    message,
+                    render_duration,
+                ))) => {
                     // Checkpoint items are emitted in scan order and deduped, so
                     // emitting this item proves its checkpoint fully covered.
                     covered_checkpoint_bound = Some(item_checkpoint);
@@ -280,24 +364,26 @@ pub(crate) async fn list_checkpoints(
                         },
                         covered_checkpoint_bound,
                     );
-                    let message = match item {
-                        CheckpointListItem::Summary(_, cp_data) => {
-                            crate::render::checkpoint_to_response(cp_data, &read_mask)?
-                        }
-                        CheckpointListItem::Full((_, cp_data, txs, objects)) => {
-                            render_full_checkpoint(cp_data, txs, objects, &read_mask)?
-                        }
-                    };
+                    ctx.observe_response_render(resolution, render_duration);
                     emitted += 1;
                     let mut response = response_for(watermark, message);
-                    if emitted == limit_items {
+                    let item_limit = emitted == limit_items;
+                    if item_limit {
                         let mut end = QueryEnd::default();
                         end.reason = Some(QueryEndReason::ItemLimit as i32);
                         response.end = Some(end);
-                        yield response;
+                    }
+                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
+                    if item_limit {
                         break QueryEndReason::ItemLimit;
                     }
-                    yield response;
                 }
                 Ok(ResolvedWatermarked::Watermark {
                     position: _,
@@ -310,18 +396,34 @@ pub(crate) async fn list_checkpoints(
                         &options,
                         &mut covered_checkpoint_bound,
                     );
-                    yield watermark_response(watermark);
+                    let response = watermark_response(watermark);
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 }
-                Err(stop) => {
-                    yield terminal_response_from_scan_stop(
+                Err(RenderAheadError::Upstream(stop)) => {
+                    let response = terminal_response_from_scan_stop(
                         stop,
                         &options,
                         direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                     break QueryEndReason::ScanLimit;
                 }
+                Err(RenderAheadError::Render(error)) => Err(error)?,
             }
         };
         info!(
@@ -334,7 +436,7 @@ pub(crate) async fn list_checkpoints(
             "list_checkpoints: done"
         );
     }
-    .boxed())
+    .boxed()
 }
 
 /// Convert the checkpoint containing a transaction-space scan frontier into a
@@ -597,14 +699,124 @@ fn clamp_cp_frontier_past_last(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mysten_common::ZipDebugEqIteratorExt;
     use sui_rpc_cursor::CursorToken;
 
-    use crate::v2::test_utils::ascending_options;
-    use crate::v2::test_utils::query_context;
+    use crate::v2::test_utils::{
+        LIST_PIPELINE_METRICS, ascending_options, assert_list_metric_absent, list_counter,
+        list_histogram, query_context, query_context_with_registry,
+    };
+
+    #[test]
+    fn resolution_uses_validated_read_mask_predicates() {
+        let mut masks =
+            "sequence_number;transactions.digest;objects;transactions.digest,objects".split(';');
+        let actual: [&str; 4] = std::array::from_fn(|_| {
+            let mask = FieldMask::from_str(masks.next().unwrap());
+            mask.validate::<Checkpoint>()
+                .expect("valid checkpoint mask");
+            let mask = FieldMaskTree::from(mask);
+            let objects = mask.contains(Checkpoint::OBJECTS_FIELD);
+            checkpoint_resolution(objects, needs_transactions_or_objects(&mask))
+        });
+        assert_eq!(actual, ["summary", "transactions", "objects", "objects"]);
+    }
 
     #[tokio::test]
-    async fn natural_empty_range_emits_one_standalone_terminal_boundary() {
-        let (ctx, server) = query_context("test_list_checkpoints_natural_end", 10).await;
+    async fn item_limit_records_complete_metric_matrix_after_render_ahead() {
+        let (ctx, registry, server) = query_context_with_registry("list_checkpoints", 10).await;
+        let mut proto_options = ascending_options();
+        proto_options.limit = Some(3);
+        let options = QueryOptions::checkpoints_from_proto(Some(&proto_options), 10, 100).unwrap();
+        let rendered_stream = stream::iter([
+            Ok::<_, RenderAheadError<ResolvedScanStop<u64>, RpcError>>(ResolvedWatermarked::Item(
+                (7, Checkpoint::default(), Duration::from_millis(1)),
+            )),
+            Ok(ResolvedWatermarked::Item((
+                8,
+                Checkpoint::default(),
+                Duration::from_millis(1),
+            ))),
+            Ok(ResolvedWatermarked::Item((
+                9,
+                Checkpoint::default(),
+                Duration::from_millis(1),
+            ))),
+        ])
+        .boxed();
+
+        let responses: Vec<_> = drive_rendered_checkpoints(
+            ctx,
+            rendered_stream,
+            checkpoint_resolution(true, true),
+            options,
+            RangeExhaustion::CheckpointBound,
+            10,
+            7,
+            ScanDirection::Ascending,
+            false,
+            Instant::now(),
+        )
+        .try_collect()
+        .await
+        .expect("collect rendered checkpoint responses");
+        server.abort();
+
+        assert_eq!(responses.len(), 3, "item limit emits no terminal frame");
+        for (index, (response, checkpoint)) in
+            responses.iter().zip_debug_eq([7u64, 8, 9]).enumerate()
+        {
+            assert!(
+                response.checkpoint.is_some(),
+                "response {index} has payload"
+            );
+            let watermark = response
+                .watermark
+                .as_ref()
+                .unwrap_or_else(|| panic!("response {index} has watermark"));
+            assert_eq!(
+                watermark.cursor.as_ref(),
+                Some(&CursorToken::item(Position::Checkpoints { checkpoint }).encode())
+            );
+            assert_eq!(watermark.checkpoint, Some(checkpoint));
+            if index < 2 {
+                assert!(response.end.is_none(), "response {index} is not terminal");
+            } else {
+                assert_eq!(
+                    response.end.as_ref().map(|end| end.reason()),
+                    Some(QueryEndReason::ItemLimit)
+                );
+            }
+        }
+
+        let expected_page_bytes = responses
+            .iter()
+            .map(|response| response.encoded_len() as f64)
+            .sum::<f64>();
+        let families = registry.gather();
+        for (name, count) in [
+            ("kv_rpc_response_render_latency_ms", 3),
+            ("kv_rpc_stream_frame_yield_wait_ms", 3),
+            ("kv_rpc_response_page_bytes", 3),
+            ("kv_rpc_stream_first_frame_latency_ms", 1),
+            ("kv_rpc_final_stream_poll_wait_ms", 3),
+        ] {
+            let histogram = list_histogram(&families, name, "list_checkpoints", "objects");
+            assert_eq!(histogram.get_sample_count(), count);
+        }
+        let page_bytes = list_histogram(
+            &families,
+            "kv_rpc_response_page_bytes",
+            "list_checkpoints",
+            "objects",
+        );
+        assert_eq!(page_bytes.get_sample_sum(), expected_page_bytes);
+        assert_list_metric_absent(&families, "kv_rpc_stream_watermark_frames_total");
+    }
+
+    #[tokio::test]
+    async fn empty_range_metric_coverage_records_terminal_frame_metrics() {
+        let (ctx, registry, server) = query_context_with_registry("list_checkpoints", 10).await;
         let mut request = ListCheckpointsRequest::default();
         request.start_checkpoint = Some(0);
         request.end_checkpoint = Some(0);
@@ -637,6 +849,20 @@ mod tests {
             CursorToken::boundary(Position::Checkpoints { checkpoint: 0 }).encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
+        let families = registry.gather();
+        for name in LIST_PIPELINE_METRICS {
+            match name {
+                "kv_rpc_stream_first_frame_latency_ms" | "kv_rpc_stream_frame_yield_wait_ms" => {
+                    let histogram = list_histogram(&families, name, "list_checkpoints", "summary");
+                    assert_eq!(histogram.get_sample_count(), 1);
+                }
+                "kv_rpc_stream_watermark_frames_total" => {
+                    let counter = list_counter(&families, name, "list_checkpoints");
+                    assert_eq!(counter.value(), 1.0);
+                }
+                _ => assert_list_metric_absent(&families, name),
+            }
+        }
     }
 
     #[tokio::test]
