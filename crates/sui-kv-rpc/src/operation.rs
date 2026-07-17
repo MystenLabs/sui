@@ -45,7 +45,6 @@ pub(crate) struct QueryContext {
     method: &'static str,
     checkpoint_hi_exclusive: u64,
     ledger_history: LedgerHistoryConfig,
-    request_bigtable_concurrency: usize,
     stages: StagesConfig,
 }
 
@@ -57,7 +56,6 @@ impl QueryContext {
         method: &'static str,
         checkpoint_hi_exclusive: u64,
         ledger_history: LedgerHistoryConfig,
-        request_bigtable_concurrency: usize,
         stages: StagesConfig,
     ) -> Self {
         Self {
@@ -67,7 +65,6 @@ impl QueryContext {
             method,
             checkpoint_hi_exclusive,
             ledger_history,
-            request_bigtable_concurrency,
             stages,
         }
     }
@@ -91,10 +88,6 @@ impl QueryContext {
 
     pub(crate) fn checkpoint_hi_exclusive(&self) -> u64 {
         self.checkpoint_hi_exclusive
-    }
-
-    pub(crate) fn request_bigtable_concurrency(&self) -> usize {
-        self.request_bigtable_concurrency
     }
 
     /// Per-request evaluated-bucket budget for `spec`. Handlers pass this
@@ -234,7 +227,6 @@ impl KvRpcServer {
             operation,
             self.cached_checkpoint_hi_exclusive().await?,
             self.ledger_history.clone(),
-            self.request_bigtable_concurrency,
             self.stages.clone(),
         ))
     }

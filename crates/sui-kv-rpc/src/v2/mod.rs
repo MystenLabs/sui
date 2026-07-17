@@ -357,7 +357,6 @@ mod test_utils {
                 method,
                 checkpoint_hi_exclusive,
                 ledger_history,
-                2,
                 stages,
             ),
             registry,

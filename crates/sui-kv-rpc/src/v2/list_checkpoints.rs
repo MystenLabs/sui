@@ -65,6 +65,13 @@ const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
 pub(crate) type ListCheckpointsStream =
     BoxStream<'static, Result<ListCheckpointsResponse, RpcError>>;
+type RenderedCheckpointStream = BoxStream<
+    'static,
+    Result<
+        ResolvedWatermarked<(u64, Checkpoint, Duration)>,
+        RenderAheadError<ResolvedScanStop<u64>, RpcError>,
+    >,
+>;
 
 enum CheckpointListItem {
     Summary(u64, CheckpointData),
@@ -303,13 +310,7 @@ pub(crate) async fn list_checkpoints(
 
 fn drive_rendered_checkpoints(
     ctx: QueryContext,
-    mut rendered_stream: BoxStream<
-        'static,
-        Result<
-            ResolvedWatermarked<(u64, Checkpoint, Duration)>,
-            RenderAheadError<ResolvedScanStop<u64>, RpcError>,
-        >,
-    >,
+    mut rendered_stream: RenderedCheckpointStream,
     resolution: &'static str,
     options: QueryOptions,
     exhaustion: RangeExhaustion,
@@ -677,6 +678,7 @@ fn clamp_cp_frontier_past_last(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mysten_common::ZipDebugEqIteratorExt;
     use sui_rpc_cursor::CursorToken;
 
     use crate::v2::test_utils::{
@@ -740,7 +742,9 @@ mod tests {
         server.abort();
 
         assert_eq!(responses.len(), 3, "item limit emits no terminal frame");
-        for (index, (response, checkpoint)) in responses.iter().zip([7u64, 8, 9]).enumerate() {
+        for (index, (response, checkpoint)) in
+            responses.iter().zip_debug_eq([7u64, 8, 9]).enumerate()
+        {
             assert!(
                 response.checkpoint.is_some(),
                 "response {index} has payload"

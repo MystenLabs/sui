@@ -72,7 +72,7 @@ enum RenderedTransactionItem {
         tx_seq: u64,
         checkpoint: u64,
         tx_offset: u32,
-        executed: ExecutedTransaction,
+        executed: Box<ExecutedTransaction>,
         render_elapsed: Duration,
     },
 }
@@ -258,7 +258,7 @@ pub(crate) async fn list_transactions(
                             tx_seq,
                             checkpoint,
                             tx_offset,
-                            executed,
+                            executed: Box::new(executed),
                             render_elapsed: render_started.elapsed(),
                         }
                     }
@@ -329,7 +329,7 @@ pub(crate) async fn list_transactions(
                             ctx.observe_response_render(resolution, render_elapsed);
                             transaction_item_response(
                                 watermark,
-                                executed,
+                                *executed,
                                 tx_offset,
                                 &read_mask,
                             )
