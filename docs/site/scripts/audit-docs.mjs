@@ -385,7 +385,7 @@ function evaluateGoalRequires(goal, body, data, headings) {
         /^What is [A-Z][a-z]+ a [A-Z]/i,                          // "What is Build a Custom Indexer in Sui?"
         /(in|on) Sui (in|on) Sui/i,                                // "What is X on Sui in Sui?"
         /-> Sui in Sui/i,                                          // "What is Ethereum -> Sui in Sui?"
-        /\bon sui (work on|reference|in) Sui/i,                   // "How does X on sui work on Sui?"
+        /\bon sui\b/,                                               // lowercase "on sui" is always a template artifact (proper noun is "Sui")
       ];
       let junkCount = 0;
       if (has) {
