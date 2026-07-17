@@ -1343,13 +1343,11 @@ mod test {
             adversarial_cfg,
             expected_failure_cfg: config.expected_failure_config,
             batch_payment_size,
-<<<<<<< HEAD
-=======
             slow_vectors: 200,
             slow_size: 100,
             slow_padding_bytes: 0,
             slow_commands: 0,
->>>>>>> 6563c5c9c1 (slow workload: add --slow-commands to inflate per-tx consensus verification cost (block-acceptance gate))
+            slow_shared_object: true,
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
