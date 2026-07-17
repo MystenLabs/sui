@@ -202,6 +202,11 @@ pub enum RunSpec {
         // acceptance) with ~zero execution cost. Capped by max_programmable_tx_commands.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         slow_commands: Vec<u64>,
+        // Attach a mutable shared object to each slow tx (activates congestion control).
+        // Set false for a pure verification-cost test (owned-only: no congestion/serialization,
+        // so throughput stays high and blocks fill with verification-heavy txns).
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [true])]
+        slow_shared_object: Vec<bool>,
         // relative weight of party transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         party: Vec<u32>,
