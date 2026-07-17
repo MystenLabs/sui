@@ -12,6 +12,7 @@ use tokio_util::sync::DropGuard;
 use crate::RpcError;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::watermark::ScanTerminal;
+use crate::metrics::ListApiMetrics;
 
 /// Chunk terminal for a scan that either exhausted its request scan budget
 /// (authoritative frontier watermark, built lazily) or ended at the resolved
@@ -59,6 +60,26 @@ pub(crate) struct ChunkArgs {
 pub(super) fn cancelled() -> RpcError {
     RpcError::new(tonic::Code::Cancelled, "request cancelled")
 }
+pub(crate) fn spawn_list_chunk<T, F>(
+    metrics: Option<ListApiMetrics>,
+    work: F,
+) -> JoinHandle<Result<T, RpcError>>
+where
+    T: Send + 'static,
+    F: FnOnce(Option<&ListApiMetrics>) -> Result<T, RpcError> + Send + 'static,
+{
+    match metrics {
+        Some(metrics) => {
+            let queue_timer = metrics.start_queue_timer();
+            tokio::task::spawn_blocking(move || {
+                queue_timer.stop_and_record();
+                let _work_timer = metrics.start_work_timer();
+                work(Some(&metrics))
+            })
+        }
+        None => tokio::task::spawn_blocking(move || work(None)),
+    }
+}
 
 /// Bridges the async gRPC stream to blocking RocksDB reads.
 ///
@@ -80,6 +101,7 @@ where
     buffered: VecDeque<Item>,
     spawn: Spawn,
     produced: usize,
+    initial_scan_budget: usize,
     scan_budget: usize,
     terminal: Option<ScanTerminal>,
     limit_items: usize,
@@ -122,6 +144,7 @@ where
             buffered: VecDeque::new(),
             spawn,
             produced: 0,
+            initial_scan_budget: scan_budget,
             scan_budget,
             terminal: None,
             limit_items,
@@ -155,6 +178,10 @@ where
     /// Total real items produced across all chunks (excludes watermark frames).
     pub(crate) fn produced(&self) -> usize {
         self.produced
+    }
+
+    pub(crate) fn bitmap_buckets_evaluated(&self) -> usize {
+        self.initial_scan_budget - self.scan_budget
     }
 
     /// True when no buffered frame remains and no further chunk is in flight —
@@ -198,6 +225,12 @@ mod tests {
 
     use super::*;
     use crate::ledger_history::watermark::NaturalRangeEnd;
+    use std::time::Instant;
+
+    use prometheus::Registry;
+    use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+
+    use crate::metrics::{ListRequestMetrics, RpcMetrics};
 
     #[tokio::test]
     async fn chunked_scan_drains_vector_chunks_in_order() {
@@ -358,6 +391,102 @@ mod tests {
             spawn_count.load(Ordering::SeqCst),
             1,
             "next_state must not schedule another chunk at the item limit"
+        );
+    }
+    #[tokio::test]
+    async fn spawn_list_chunk_observes_queue_and_work_on_success_and_error() {
+        let registry = Registry::new();
+        let metrics = RpcMetrics::new(&registry).list_metrics("list_checkpoints", "summary");
+
+        let success = spawn_list_chunk(Some(metrics.clone()), |_| Ok(()));
+        let error = spawn_list_chunk::<(), _>(Some(metrics), |_| {
+            Err(RpcError::new(
+                tonic::Code::Internal,
+                "synthetic chunk error",
+            ))
+        });
+
+        assert!(success.await.expect("success worker joined").is_ok());
+        assert!(error.await.expect("error worker joined").is_err());
+
+        let families = registry.gather();
+        let family = families
+            .iter()
+            .find(|family| family.name() == "list_chunk_seconds")
+            .expect("list chunk metric family");
+        assert_eq!(family.get_metric().len(), 2);
+        for phase in ["queue", "work"] {
+            let metric = family
+                .get_metric()
+                .iter()
+                .find(|metric| {
+                    metric
+                        .get_label()
+                        .iter()
+                        .any(|label| label.name() == "phase" && label.value() == phase)
+                })
+                .unwrap_or_else(|| panic!("missing {phase} metric"));
+            assert_eq!(metric.get_histogram().get_sample_count(), 2, "{phase}");
+        }
+    }
+
+    #[tokio::test]
+    async fn chunked_scan_accumulates_bitmap_buckets_across_chunks() {
+        let mut scan = ChunkedScan::new(0usize, 1, 1, 10, move |state, args: ChunkArgs| {
+            tokio::task::spawn_blocking(move || {
+                let buckets_evaluated = if state == 0 { 2 } else { 3 };
+                Ok(ScanChunkDone::<usize, usize> {
+                    items: Vec::new(),
+                    produced: 0,
+                    next_state: (state == 0).then_some(1),
+                    terminal: ScanTerminal::from_range_exhaustion(
+                        RangeExhaustion::CheckpointBound,
+                        Position::Transactions {
+                            checkpoint: 0,
+                            tx_seq: 0,
+                        },
+                        false,
+                    ),
+                    remaining_scan_budget: args.scan_budget - buckets_evaluated,
+                })
+            })
+        });
+
+        assert_eq!(scan.next_item().await.unwrap(), None);
+        assert_eq!(scan.bitmap_buckets_evaluated(), 5);
+
+        let filtered_registry = Registry::new();
+        let mut filtered_metrics = ListRequestMetrics::new(
+            Some(RpcMetrics::new(&filtered_registry).list_metrics("list_checkpoints", "summary")),
+            Instant::now(),
+        );
+        filtered_metrics.finish_success(QueryEndReason::LedgerTip, Some(5));
+        let filtered_family = filtered_registry
+            .gather()
+            .into_iter()
+            .find(|family| family.name() == "list_bitmap_buckets_evaluated")
+            .expect("filtered bitmap metric family");
+        assert_eq!(filtered_family.get_metric().len(), 1);
+        let filtered_histogram = filtered_family.get_metric()[0].get_histogram();
+        assert_eq!(filtered_histogram.get_sample_count(), 1);
+        assert_eq!(filtered_histogram.get_sample_sum(), 5.0);
+
+        let unfiltered_registry = Registry::new();
+        let mut unfiltered_metrics = ListRequestMetrics::new(
+            Some(RpcMetrics::new(&unfiltered_registry).list_metrics("list_checkpoints", "summary")),
+            Instant::now(),
+        );
+        unfiltered_metrics.finish_success(QueryEndReason::LedgerTip, None);
+        let unfiltered_family = unfiltered_registry
+            .gather()
+            .into_iter()
+            .find(|family| family.name() == "list_bitmap_buckets_evaluated")
+            .expect("unfiltered bitmap metric family");
+        assert_eq!(
+            unfiltered_family.get_metric()[0]
+                .get_histogram()
+                .get_sample_count(),
+            0
         );
     }
 }

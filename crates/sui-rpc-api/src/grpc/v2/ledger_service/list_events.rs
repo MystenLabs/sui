@@ -32,6 +32,8 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::EventScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedEventRange;
+use crate::metrics::ListApiMetrics;
+use crate::metrics::ListRequestMetrics;
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::PendingBitmapBucket;
@@ -40,6 +42,7 @@ use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
 use super::chunked_scan::scan_limit_or_range;
+use super::chunked_scan::spawn_list_chunk;
 use super::event_scan::EventRef;
 use super::event_scan::drain_event_bitmap_hits;
 use super::event_scan::event_frontier_checkpoint;
@@ -58,6 +61,16 @@ use crate::ledger_history::watermark::scan_frontier_cursor_cp;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
+const METHOD: &str = "list_events";
+
+fn resolution(read_mask: &FieldMaskTree) -> &'static str {
+    if read_mask.contains(ProtoEvent::JSON_FIELD.name) {
+        "json"
+    } else {
+        "no_json"
+    }
+}
+
 pub(crate) async fn list_events(
     service: RpcService,
     request: ListEventsRequest,
@@ -73,6 +86,13 @@ pub(crate) async fn list_events(
         request.read_mask,
         read_mask_defaults::EVENT,
     )?;
+    let mut request_metrics = ListRequestMetrics::new(
+        service
+            .metrics
+            .as_ref()
+            .map(|metrics| metrics.list_metrics(METHOD, resolution(&read_mask))),
+        started,
+    );
     let ledger_history = service.config.ledger_history();
     let endpoint = ledger_history.list_events();
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
@@ -97,6 +117,7 @@ pub(crate) async fn list_events(
     };
 
     let terminal_options = options.clone();
+    let chunk_metrics = request_metrics.chunk_metrics();
     Ok(async_stream::try_stream! {
         let unfiltered_row_scan_budget = endpoint.max_limit_items as usize;
         let mut scan = ChunkedScan::new(
@@ -107,6 +128,7 @@ pub(crate) async fn list_events(
             move |state, args: ChunkArgs| {
                 spawn_event_chunk(
                     service.clone(),
+                    chunk_metrics.clone(),
                     state,
                     read_mask.clone(),
                     options.clone(),
@@ -129,18 +151,26 @@ pub(crate) async fn list_events(
             {
                 covered_checkpoint_bound = Some(checkpoint);
             }
-            if response.event.is_some()
-                && scan.produced() == limit_items
-                && scan.exhausted()
-            {
+            let is_data = response.event.is_some();
+            let reached_item_limit =
+                is_data && scan.produced() == limit_items && scan.exhausted();
+            if reached_item_limit {
                 let mut end = QueryEnd::default();
                 end.reason = Some(QueryEndReason::ItemLimit as i32);
                 response.end = Some(end);
+                request_metrics.finish_success(
+                    QueryEndReason::ItemLimit,
+                    filtered.then(|| scan.bitmap_buckets_evaluated()),
+                );
             }
+            request_metrics.observe_frame(&response, is_data);
+            let yield_started = request_metrics.yield_clock();
             yield response;
+            request_metrics.observe_yield_wait(yield_started);
         }
 
         let produced = scan.produced();
+        let bitmap_buckets_evaluated = filtered.then(|| scan.bitmap_buckets_evaluated());
         let chunk_terminal = scan.into_terminal().expect("query emits terminal state");
         let terminal_reason = super::query_end::effective_terminal_reason(
             produced,
@@ -150,7 +180,12 @@ pub(crate) async fn list_events(
         if terminal_reason != QueryEndReason::ItemLimit {
             let terminal_watermark =
                 chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
-            yield end_response(terminal_watermark, terminal_reason);
+            let response = end_response(terminal_watermark, terminal_reason);
+            request_metrics.observe_frame(&response, false);
+            request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
+            let yield_started = request_metrics.yield_clock();
+            yield response;
+            request_metrics.observe_yield_wait(yield_started);
         }
         info!(
             filtered,
@@ -167,6 +202,7 @@ pub(crate) async fn list_events(
 
 fn spawn_event_chunk(
     service: RpcService,
+    metrics: Option<ListApiMetrics>,
     state: EventScanState,
     read_mask: FieldMaskTree,
     options: QueryOptions,
@@ -177,7 +213,7 @@ fn spawn_event_chunk(
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
 ) -> JoinHandle<Result<EventChunkDone, RpcError>> {
-    tokio::task::spawn_blocking(move || {
+    spawn_list_chunk(metrics, move |metrics| {
         next_event_chunk(
             service,
             state,
@@ -189,6 +225,7 @@ fn spawn_event_chunk(
             chunk_item_limit,
             remaining_request_item_limit,
             &cancel,
+            metrics,
         )
     })
 }
@@ -238,6 +275,7 @@ fn next_event_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
+    metrics: Option<&ListApiMetrics>,
 ) -> Result<EventChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
@@ -307,6 +345,7 @@ fn next_event_chunk(
                 chunk_item_limit,
                 remaining_request_item_limit,
                 cancel,
+                metrics,
             );
         }
         EventScanState::Unfiltered {
@@ -511,6 +550,7 @@ fn next_event_chunk(
         &options,
         entry_checkpoint,
         cancel,
+        metrics,
     )?;
     let produced = items.len();
     if let Some(watermark) = scan_watermark {
@@ -580,6 +620,7 @@ fn render_event_chunk(
     options: &QueryOptions,
     entry_checkpoint: u64,
     cancel: &CancellationToken,
+    metrics: Option<&ListApiMetrics>,
 ) -> Result<Vec<ListEventsResponse>, RpcError> {
     let rows = tx_seq_digest_rows_for_event_refs(service, &refs)?;
     let mut unique_digests = Vec::new();
@@ -606,6 +647,7 @@ fn render_event_chunk(
         if cancel.is_cancelled() {
             return Err(cancelled());
         }
+        let render_started = metrics.map(|_| Instant::now());
         let tx_events = events_by_digest
             .get(&row.digest)
             .and_then(Option::as_ref)
@@ -675,6 +717,9 @@ fn render_event_chunk(
         response.event = Some(proto_event);
         response.watermark = Some(watermark);
         items.push(response);
+        if let (Some(metrics), Some(render_started)) = (metrics, render_started) {
+            metrics.observe_render(render_started.elapsed());
+        }
     }
     Ok(items)
 }
@@ -771,6 +816,7 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsRespo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sui_rpc::field::FieldMask;
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;
@@ -781,6 +827,24 @@ mod tests {
             proto.ordering = Some(Ordering::Descending as i32);
         }
         QueryOptions::events_from_proto(Some(&proto), 100, 100).unwrap()
+    }
+
+    #[test]
+    fn resolution_uses_validated_read_mask() {
+        for (paths, expected) in [
+            (vec![ProtoEvent::EVENT_TYPE_FIELD.name], "no_json"),
+            (vec![ProtoEvent::JSON_FIELD.name], "json"),
+        ] {
+            let read_mask = read_mask_defaults::validate_read_mask::<ProtoEvent>(
+                Some(FieldMask {
+                    paths: paths.into_iter().map(str::to_owned).collect(),
+                }),
+                read_mask_defaults::EVENT,
+            )
+            .unwrap();
+
+            assert_eq!(resolution(&read_mask), expected);
+        }
     }
 
     #[test]
