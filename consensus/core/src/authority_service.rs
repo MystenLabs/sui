@@ -176,18 +176,22 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         }
 
         // Reject blocks failing parsing and validations.
-        let (verified_block, reject_txn_votes) = self
-            .block_verifier
-            .verify_and_vote(signed_block, serialized_block.block)
-            .tap_err(|e| {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .invalid_blocks
-                    .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
-                    .inc();
-                info!("Invalid block from {}: {}", peer, e);
-            })?;
+        let block_verifier = self.block_verifier.clone();
+        let serialized = serialized_block.block.clone();
+        let (verified_block, reject_txn_votes) = tokio::task::spawn_blocking(move || {
+            block_verifier.verify_and_vote(signed_block, serialized)
+        })
+        .await
+        .expect("verify_and_vote blocking task panicked")
+        .tap_err(|e| {
+            self.context
+                .metrics
+                .node_metrics
+                .invalid_blocks
+                .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
+                .inc();
+            info!("Invalid block from {}: {}", peer, e);
+        })?;
         let excluded_ancestors = self
             .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
             .tap_err(|e| {
