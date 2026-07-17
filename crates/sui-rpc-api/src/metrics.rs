@@ -24,6 +24,7 @@ pub struct RpcMetrics {
     num_requests: IntCounterVec,
     request_latency: HistogramVec,
     request_handler_latency: HistogramVec,
+    first_chunk_latency: HistogramVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -61,6 +62,18 @@ impl RpcMetrics {
                 "Latency of RPC requests per route, measured from receipt of the request \
                  until the request handler produced a response, excluding the time spent \
                  streaming the response body back to the client",
+                &["path"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            first_chunk_latency: register_histogram_vec_with_registry!(
+                "rpc_first_chunk_latency",
+                "Latency of RPC requests per route, measured from receipt of the request \
+                 until the first response body data chunk is produced. For streaming responses \
+                 this is when the first chunk is handed to the transport, which for gRPC \
+                 typically carries the first encoded message; response headers are excluded. \
+                 Responses whose body never yields a data chunk are not observed.",
                 &["path"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -297,6 +310,7 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
                 path,
                 start,
                 counted_response: false,
+                counted_first_chunk: false,
             },
         )
     }
@@ -336,6 +350,7 @@ pub struct RpcMetricsCallbackHandler {
     // Indicates if we successfully counted the response. In some cases when a request is
     // prematurely canceled this will remain false
     counted_response: bool,
+    counted_first_chunk: bool,
 }
 
 impl ResponseHandler for RpcMetricsCallbackHandler {
@@ -373,6 +388,19 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
             .inc();
 
         self.counted_response = true;
+    }
+
+    fn on_body_chunk<B>(&mut self, _chunk: &B)
+    where
+        B: bytes::Buf,
+    {
+        if !self.counted_first_chunk {
+            self.metrics
+                .first_chunk_latency
+                .with_label_values(&[self.path.as_ref()])
+                .observe(self.start.elapsed().as_secs_f64());
+            self.counted_first_chunk = true;
+        }
     }
 
     fn on_service_error<E>(&mut self, _error: &E)
@@ -865,6 +893,26 @@ mod tests {
         assert_eq!(total_latency.get_sample_count(), 1);
     }
 
+    #[test]
+    fn first_chunk_latency_observed_once_on_first_body_chunk() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let mut handler = make_test_handler(&metrics);
+        let first_chunk_latency = metrics
+            .first_chunk_latency
+            .with_label_values(&["unknown"]);
+
+        let (parts, _) = http::Response::new(()).into_parts();
+        handler.on_response(&parts);
+        handler.on_body_chunk(&bytes::Bytes::from_static(b"first"));
+        handler.on_body_chunk(&bytes::Bytes::from_static(b"second"));
+
+        assert_eq!(first_chunk_latency.get_sample_count(), 1);
+
+        drop(handler);
+
+        assert_eq!(first_chunk_latency.get_sample_count(), 1);
+    }
+
     // A request canceled before the handler produces a response records the
     // total latency and the canceled count, but no handler latency.
     #[test]
@@ -877,6 +925,13 @@ mod tests {
         assert_eq!(
             metrics
                 .request_handler_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .first_chunk_latency
                 .with_label_values(&["unknown"])
                 .get_sample_count(),
             0
