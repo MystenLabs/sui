@@ -128,8 +128,11 @@ pub(crate) async fn list_events(
         };
         let response = range_end_response(&options, exhaustion, terminal_position, None, true).0;
         return Ok(async_stream::try_stream! {
-            ctx.observe_response_page_bytes(resolution, response.encoded_len());
+            ctx.inc_stream_watermark_frames();
+            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+            let yield_started = Instant::now();
             yield response;
+            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
         }
         .boxed());
     }
@@ -265,6 +268,7 @@ pub(crate) async fn list_events(
 
     Ok(async_stream::try_stream! {
         let mut emitted = 0usize;
+        let mut first_frame_emitted = false;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
             let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
@@ -280,8 +284,13 @@ pub(crate) async fn list_events(
                     covered_checkpoint_bound,
                     false,
                 );
-                ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                ctx.inc_stream_watermark_frames();
+                if !first_frame_emitted {
+                    ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                }
+                let yield_started = Instant::now();
                 yield response;
+                ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 break reason;
             };
             match item {
@@ -311,12 +320,13 @@ pub(crate) async fn list_events(
                         response.end = Some(end);
                     }
                     ctx.observe_response_page_bytes(resolution, response.encoded_len());
-                    if emitted == 1 {
-                        ctx.observe_stream_first_item_latency(resolution, started.elapsed());
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
                     }
                     let yield_started = Instant::now();
                     yield response;
-                    ctx.observe_stream_item_yield_wait(resolution, yield_started.elapsed());
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                     if item_limit {
                         break QueryEndReason::ItemLimit;
                     }
@@ -334,8 +344,14 @@ pub(crate) async fn list_events(
                         Some(checkpoint_at_frontier),
                     )?;
                     let response = watermark_response(watermark);
-                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
                     yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 }
                 Err(RenderAheadError::Upstream(stop)) => {
                     let response = terminal_response_from_scan_stop(
@@ -345,8 +361,13 @@ pub(crate) async fn list_events(
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
-                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                    }
+                    let yield_started = Instant::now();
                     yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                     break QueryEndReason::ScanLimit;
                 }
                 Err(RenderAheadError::Render(error)) => Err(error)?,
@@ -844,7 +865,7 @@ mod tests {
     use super::*;
     use crate::v2::test_utils::query_context_with_mock_and_registry as metric_context;
     use crate::v2::test_utils::{
-        LIST_PIPELINE_METRICS, ascending_options, assert_list_histogram_absent, list_histogram,
+        ascending_options, assert_list_metric_absent, list_counter, list_histogram,
         query_context_with_registry,
     };
     use move_core_types::ident_str;
@@ -886,9 +907,9 @@ mod tests {
             let families = registry.gather();
             for (name, sample_count) in [
                 ("kv_rpc_response_render_latency_ms", 1),
-                ("kv_rpc_response_page_bytes", responses.len() as u64),
-                ("kv_rpc_stream_first_item_latency_ms", 1),
-                ("kv_rpc_stream_item_yield_wait_ms", 1),
+                ("kv_rpc_response_page_bytes", 1),
+                ("kv_rpc_stream_first_frame_latency_ms", 1),
+                ("kv_rpc_stream_frame_yield_wait_ms", responses.len() as u64),
             ] {
                 let histogram = list_histogram(&families, name, "list_events", "no_json");
                 assert_eq!(histogram.get_sample_count(), sample_count);
@@ -903,9 +924,16 @@ mod tests {
                 page_bytes.get_sample_sum(),
                 responses
                     .iter()
+                    .filter(|response| response.event.is_some())
                     .map(|response| response.encoded_len() as f64)
                     .sum::<f64>()
             );
+            let watermark_frames = list_counter(
+                &families,
+                "kv_rpc_stream_watermark_frames_total",
+                "list_events",
+            );
+            assert_eq!(watermark_frames.value(), (responses.len() - 1) as f64);
             let final_poll = list_histogram(
                 &families,
                 "kv_rpc_final_stream_poll_wait_ms",
@@ -915,26 +943,29 @@ mod tests {
             assert_eq!(final_poll.get_sample_count(), responses.len() as u64);
         } else {
             let first = responses.try_next().await.unwrap().unwrap();
-            assert_eq!(first.event, Some(expected));
+            assert_eq!(first.event, Some(expected.clone()));
+            let second = responses.try_next().await.unwrap().unwrap();
+            assert_eq!(second.event, Some(expected));
             tokio::task::yield_now().await;
             drop(responses);
             let families = registry.gather();
-            for name in [
-                "kv_rpc_response_render_latency_ms",
-                "kv_rpc_response_page_bytes",
-                "kv_rpc_stream_first_item_latency_ms",
+            for (name, sample_count) in [
+                ("kv_rpc_response_render_latency_ms", 2),
+                ("kv_rpc_response_page_bytes", 2),
+                ("kv_rpc_stream_first_frame_latency_ms", 1),
+                ("kv_rpc_stream_frame_yield_wait_ms", 1),
             ] {
                 let histogram = list_histogram(&families, name, "list_events", "no_json");
-                assert_eq!(histogram.get_sample_count(), 1);
+                assert_eq!(histogram.get_sample_count(), sample_count);
             }
-            assert_list_histogram_absent(&families, "kv_rpc_stream_item_yield_wait_ms");
+            assert_list_metric_absent(&families, "kv_rpc_stream_watermark_frames_total");
             let final_poll = list_histogram(
                 &families,
                 "kv_rpc_final_stream_poll_wait_ms",
                 "list_events",
                 "no_json",
             );
-            assert_eq!(final_poll.get_sample_count(), 1);
+            assert_eq!(final_poll.get_sample_count(), 2);
         }
         server.abort();
     }
@@ -976,7 +1007,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn empty_ledger_metric_coverage_records_only_event_terminal_page_bytes() {
+    async fn empty_ledger_metric_coverage_records_event_terminal_frame_metrics() {
         let (ctx, registry, server) = query_context_with_registry("list_events", 0).await;
         let mut request = ListEventsRequest::default();
         request.read_mask = Some(FieldMask::from_paths(["event_type"]));
@@ -1010,19 +1041,26 @@ mod tests {
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
         let families = registry.gather();
-        let page_bytes = list_histogram(
-            &families,
+        for name in [
+            "kv_rpc_response_render_latency_ms",
             "kv_rpc_response_page_bytes",
-            "list_events",
-            "no_json",
-        );
-        assert_eq!(page_bytes.get_sample_count(), 1);
-        assert_eq!(page_bytes.get_sample_sum(), response.encoded_len() as f64);
-        for name in LIST_PIPELINE_METRICS {
-            if name != "kv_rpc_response_page_bytes" {
-                assert_list_histogram_absent(&families, name);
-            }
+            "kv_rpc_final_stream_poll_wait_ms",
+        ] {
+            assert_list_metric_absent(&families, name);
         }
+        for name in [
+            "kv_rpc_stream_first_frame_latency_ms",
+            "kv_rpc_stream_frame_yield_wait_ms",
+        ] {
+            let histogram = list_histogram(&families, name, "list_events", "no_json");
+            assert_eq!(histogram.get_sample_count(), 1);
+        }
+        let watermark_frames = list_counter(
+            &families,
+            "kv_rpc_stream_watermark_frames_total",
+            "list_events",
+        );
+        assert_eq!(watermark_frames.value(), 1.0);
     }
     use std::ops::Bound;
     use sui_rpc_api::ledger_history::query_options::Ordering;

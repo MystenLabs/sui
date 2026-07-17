@@ -141,8 +141,11 @@ pub(crate) async fn list_transactions(
         )
         .0;
         return Ok(async_stream::try_stream! {
-            ctx.observe_response_page_bytes(resolution, response.encoded_len());
+            ctx.inc_stream_watermark_frames();
+            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+            let yield_started = Instant::now();
             yield response;
+            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
         }
         .boxed());
     }
@@ -269,6 +272,7 @@ pub(crate) async fn list_transactions(
 
     Ok(async_stream::try_stream! {
         let mut emitted = 0usize;
+        let mut first_frame_emitted = false;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
             let Some(item) = ctx
@@ -285,8 +289,13 @@ pub(crate) async fn list_transactions(
                     covered_checkpoint_bound,
                     false,
                 );
-                ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                ctx.inc_stream_watermark_frames();
+                if !first_frame_emitted {
+                    ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                }
+                let yield_started = Instant::now();
                 yield response;
+                ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 break reason;
             };
             match item {
@@ -343,12 +352,13 @@ pub(crate) async fn list_transactions(
                         response.end = Some(end);
                     }
                     ctx.observe_response_page_bytes(resolution, response.encoded_len());
-                    if emitted == 1 {
-                        ctx.observe_stream_first_item_latency(resolution, started.elapsed());
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
                     }
                     let yield_started = Instant::now();
                     yield response;
-                    ctx.observe_stream_item_yield_wait(resolution, yield_started.elapsed());
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                     if item_limit {
                         break QueryEndReason::ItemLimit;
                     }
@@ -366,8 +376,14 @@ pub(crate) async fn list_transactions(
                         Some(checkpoint_at_frontier),
                     )?;
                     let response = watermark_response(watermark);
-                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
                     yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 }
                 Err(RenderAheadError::Upstream(stop)) => {
                     let response = terminal_response_from_scan_stop(
@@ -377,8 +393,13 @@ pub(crate) async fn list_transactions(
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
-                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                    }
+                    let yield_started = Instant::now();
                     yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                     break QueryEndReason::ScanLimit;
                 }
                 Err(RenderAheadError::Render(error)) => Err(error)?,
@@ -703,7 +724,7 @@ mod tests {
     use sui_rpc_cursor::CursorToken;
 
     use crate::v2::test_utils::{
-        LIST_PIPELINE_METRICS, ascending_options, assert_list_histogram_absent, list_histogram,
+        ascending_options, assert_list_metric_absent, list_counter, list_histogram,
         query_context_with_mock_and_registry, query_context_with_registry,
     };
 
@@ -749,11 +770,12 @@ mod tests {
         assert!(emitted_digests.eq(expected_digests));
         let families = registry.gather();
         let data_items = checkpoint.transactions.len() as u64;
+        let non_data_frames = responses.len() as u64 - data_items;
         for (name, sample_count) in [
             ("kv_rpc_response_render_latency_ms", data_items),
-            ("kv_rpc_response_page_bytes", responses.len() as u64),
-            ("kv_rpc_stream_first_item_latency_ms", 1),
-            ("kv_rpc_stream_item_yield_wait_ms", data_items),
+            ("kv_rpc_response_page_bytes", data_items),
+            ("kv_rpc_stream_first_frame_latency_ms", 1),
+            ("kv_rpc_stream_frame_yield_wait_ms", responses.len() as u64),
         ] {
             let histogram = list_histogram(&families, name, method, "digest");
             assert_eq!(histogram.get_sample_count(), sample_count);
@@ -763,9 +785,13 @@ mod tests {
             page_bytes.get_sample_sum(),
             responses
                 .iter()
+                .filter(|response| response.transaction.is_some())
                 .map(|response| response.encoded_len() as f64)
                 .sum::<f64>()
         );
+        let watermark_frames =
+            list_counter(&families, "kv_rpc_stream_watermark_frames_total", method);
+        assert_eq!(watermark_frames.value(), non_data_frames as f64);
         let final_poll = list_histogram(
             &families,
             "kv_rpc_final_stream_poll_wait_ms",
@@ -782,7 +808,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn empty_ledger_metric_coverage_records_only_transaction_terminal_page_bytes() {
+    async fn empty_ledger_metric_coverage_records_transaction_terminal_frame_metrics() {
         let (ctx, registry, server) = query_context_with_registry("list_transactions", 0).await;
         let mut request = ListTransactionsRequest::default();
         request.read_mask = Some(FieldMask::from_paths(["digest"]));
@@ -818,19 +844,26 @@ mod tests {
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
         let families = registry.gather();
-        let page_bytes = list_histogram(
-            &families,
+        for name in [
+            "kv_rpc_response_render_latency_ms",
             "kv_rpc_response_page_bytes",
-            "list_transactions",
-            "digest",
-        );
-        assert_eq!(page_bytes.get_sample_count(), 1);
-        assert_eq!(page_bytes.get_sample_sum(), response.encoded_len() as f64);
-        for name in LIST_PIPELINE_METRICS {
-            if name != "kv_rpc_response_page_bytes" {
-                assert_list_histogram_absent(&families, name);
-            }
+            "kv_rpc_final_stream_poll_wait_ms",
+        ] {
+            assert_list_metric_absent(&families, name);
         }
+        for name in [
+            "kv_rpc_stream_first_frame_latency_ms",
+            "kv_rpc_stream_frame_yield_wait_ms",
+        ] {
+            let histogram = list_histogram(&families, name, "list_transactions", "digest");
+            assert_eq!(histogram.get_sample_count(), 1);
+        }
+        let watermark_frames = list_counter(
+            &families,
+            "kv_rpc_stream_watermark_frames_total",
+            "list_transactions",
+        );
+        assert_eq!(watermark_frames.value(), 1.0);
     }
 
     #[test]

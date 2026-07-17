@@ -220,7 +220,7 @@ mod test_utils {
     use std::sync::Arc;
 
     use prometheus::Registry;
-    use prometheus::proto::{Histogram, MetricFamily};
+    use prometheus::proto::{Counter, Histogram, MetricFamily};
     use sui_kvstore::BigTableClient as InnerBigTableClient;
     use sui_kvstore::testing::MockBigtableServer;
     use sui_package_resolver::PackageStore;
@@ -237,11 +237,12 @@ mod test_utils {
     use crate::operation::QueryContext;
     use crate::package_store::BigTablePackageStore;
 
-    pub(super) const LIST_PIPELINE_METRICS: [&str; 5] = [
+    pub(super) const LIST_PIPELINE_METRICS: [&str; 6] = [
         "kv_rpc_response_render_latency_ms",
         "kv_rpc_response_page_bytes",
-        "kv_rpc_stream_first_item_latency_ms",
-        "kv_rpc_stream_item_yield_wait_ms",
+        "kv_rpc_stream_first_frame_latency_ms",
+        "kv_rpc_stream_frame_yield_wait_ms",
+        "kv_rpc_stream_watermark_frames_total",
         "kv_rpc_final_stream_poll_wait_ms",
     ];
 
@@ -268,8 +269,30 @@ mod test_utils {
         );
         metric.get_histogram()
     }
+    pub(super) fn list_counter<'a>(
+        families: &'a [MetricFamily],
+        name: &str,
+        method: &str,
+    ) -> &'a Counter {
+        let family = families
+            .iter()
+            .find(|family| family.name() == name)
+            .unwrap_or_else(|| panic!("metric family {name} not registered"));
+        let [metric] = family.get_metric() else {
+            panic!("{name} has unexpected series");
+        };
+        assert!(
+            metric
+                .get_label()
+                .iter()
+                .map(|label| (label.name(), label.value()))
+                .eq([("method", method)]),
+            "{name} has unexpected labels"
+        );
+        metric.get_counter()
+    }
 
-    pub(super) fn assert_list_histogram_absent(families: &[MetricFamily], name: &str) {
+    pub(super) fn assert_list_metric_absent(families: &[MetricFamily], name: &str) {
         assert!(
             families.iter().all(|family| family.name() != name),
             "{name} unexpectedly registered"

@@ -122,22 +122,26 @@ impl QueryContext {
             .observe_response_page_bytes(self.method, resolution, bytes);
     }
 
-    pub(crate) fn observe_stream_first_item_latency(
+    pub(crate) fn observe_stream_first_frame_latency(
         &self,
         resolution: &'static str,
         elapsed: std::time::Duration,
     ) {
         self.metrics
-            .observe_stream_first_item_latency(self.method, resolution, elapsed);
+            .observe_stream_first_frame_latency(self.method, resolution, elapsed);
     }
 
-    pub(crate) fn observe_stream_item_yield_wait(
+    pub(crate) fn observe_stream_frame_yield_wait(
         &self,
         resolution: &'static str,
         elapsed: std::time::Duration,
     ) {
         self.metrics
-            .observe_stream_item_yield_wait(self.method, resolution, elapsed);
+            .observe_stream_frame_yield_wait(self.method, resolution, elapsed);
+    }
+
+    pub(crate) fn inc_stream_watermark_frames(&self) {
+        self.metrics.inc_stream_watermark_frames(self.method);
     }
 
     pub(crate) async fn next_response_item<T>(

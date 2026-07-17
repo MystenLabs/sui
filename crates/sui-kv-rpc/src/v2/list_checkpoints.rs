@@ -163,8 +163,11 @@ pub(crate) async fn list_checkpoints(
         )
         .0;
         return Ok(async_stream::try_stream! {
-            ctx.observe_response_page_bytes(resolution, response.encoded_len());
+            ctx.inc_stream_watermark_frames();
+            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+            let yield_started = Instant::now();
             yield response;
+            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
         }
         .boxed());
     }
@@ -324,6 +327,7 @@ fn drive_rendered_checkpoints(
         let limit_items = options.limit_items;
         let ordering = options.ordering;
         let mut emitted = 0usize;
+        let mut first_frame_emitted = false;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
             let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
@@ -336,8 +340,13 @@ fn drive_rendered_checkpoints(
                     covered_checkpoint_bound,
                     false,
                 );
-                ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                ctx.inc_stream_watermark_frames();
+                if !first_frame_emitted {
+                    ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                }
+                let yield_started = Instant::now();
                 yield response;
+                ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 break reason;
             };
             match item {
@@ -365,12 +374,13 @@ fn drive_rendered_checkpoints(
                         response.end = Some(end);
                     }
                     ctx.observe_response_page_bytes(resolution, response.encoded_len());
-                    if emitted == 1 {
-                        ctx.observe_stream_first_item_latency(resolution, started.elapsed());
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
                     }
                     let yield_started = Instant::now();
                     yield response;
-                    ctx.observe_stream_item_yield_wait(resolution, yield_started.elapsed());
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                     if item_limit {
                         break QueryEndReason::ItemLimit;
                     }
@@ -387,8 +397,14 @@ fn drive_rendered_checkpoints(
                         &mut covered_checkpoint_bound,
                     );
                     let response = watermark_response(watermark);
-                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
                     yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                 }
                 Err(RenderAheadError::Upstream(stop)) => {
                     let response = terminal_response_from_scan_stop(
@@ -398,8 +414,13 @@ fn drive_rendered_checkpoints(
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
-                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+                    }
+                    let yield_started = Instant::now();
                     yield response;
+                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
                     break QueryEndReason::ScanLimit;
                 }
                 Err(RenderAheadError::Render(error)) => Err(error)?,
@@ -682,8 +703,8 @@ mod tests {
     use sui_rpc_cursor::CursorToken;
 
     use crate::v2::test_utils::{
-        LIST_PIPELINE_METRICS, ascending_options, assert_list_histogram_absent, list_histogram,
-        query_context, query_context_with_registry,
+        LIST_PIPELINE_METRICS, ascending_options, assert_list_metric_absent, list_counter,
+        list_histogram, query_context, query_context_with_registry,
     };
 
     #[test]
@@ -775,9 +796,9 @@ mod tests {
         let families = registry.gather();
         for (name, count) in [
             ("kv_rpc_response_render_latency_ms", 3),
-            ("kv_rpc_stream_item_yield_wait_ms", 3),
+            ("kv_rpc_stream_frame_yield_wait_ms", 3),
             ("kv_rpc_response_page_bytes", 3),
-            ("kv_rpc_stream_first_item_latency_ms", 1),
+            ("kv_rpc_stream_first_frame_latency_ms", 1),
             ("kv_rpc_final_stream_poll_wait_ms", 3),
         ] {
             let histogram = list_histogram(&families, name, "list_checkpoints", "objects");
@@ -790,10 +811,11 @@ mod tests {
             "objects",
         );
         assert_eq!(page_bytes.get_sample_sum(), expected_page_bytes);
+        assert_list_metric_absent(&families, "kv_rpc_stream_watermark_frames_total");
     }
 
     #[tokio::test]
-    async fn empty_range_metric_coverage_records_only_terminal_page_bytes() {
+    async fn empty_range_metric_coverage_records_terminal_frame_metrics() {
         let (ctx, registry, server) = query_context_with_registry("list_checkpoints", 10).await;
         let mut request = ListCheckpointsRequest::default();
         request.start_checkpoint = Some(0);
@@ -828,17 +850,17 @@ mod tests {
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
         let families = registry.gather();
-        let page_bytes = list_histogram(
-            &families,
-            "kv_rpc_response_page_bytes",
-            "list_checkpoints",
-            "summary",
-        );
-        assert_eq!(page_bytes.get_sample_count(), 1);
-        assert_eq!(page_bytes.get_sample_sum(), response.encoded_len() as f64);
         for name in LIST_PIPELINE_METRICS {
-            if name != "kv_rpc_response_page_bytes" {
-                assert_list_histogram_absent(&families, name);
+            match name {
+                "kv_rpc_stream_first_frame_latency_ms" | "kv_rpc_stream_frame_yield_wait_ms" => {
+                    let histogram = list_histogram(&families, name, "list_checkpoints", "summary");
+                    assert_eq!(histogram.get_sample_count(), 1);
+                }
+                "kv_rpc_stream_watermark_frames_total" => {
+                    let counter = list_counter(&families, name, "list_checkpoints");
+                    assert_eq!(counter.value(), 1.0);
+                }
+                _ => assert_list_metric_absent(&families, name),
             }
         }
     }
