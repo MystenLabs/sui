@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "130",
+              "maxSupportedProtocolVersion": "131",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -2014,6 +2014,8 @@
                 "object_runtime_max_num_store_entries_system_tx": {
                   "u64": "16000"
                 },
+                "package_original_package_id_impl_cost_base": null,
+                "package_original_package_id_impl_cost_per_byte": null,
                 "package_publish_cost_fixed": {
                   "u64": "1000"
                 },
