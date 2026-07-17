@@ -396,8 +396,7 @@ mod tests {
     #[tokio::test]
     async fn spawn_list_chunk_observes_queue_and_work_on_success_and_error() {
         let registry = Registry::new();
-        let metrics =
-            ListApiMetrics::new(&registry).stream_metrics("list_checkpoints", "summary");
+        let metrics = ListApiMetrics::new(&registry).stream_metrics("list_checkpoints", "summary");
 
         let success = spawn_list_chunk(Some(metrics.clone()), |_| Ok(()));
         let error = spawn_list_chunk::<(), _>(Some(metrics), |_| {

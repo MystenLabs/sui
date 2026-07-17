@@ -34,8 +34,8 @@ use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
-use crate::metrics::ListStreamMetrics;
 use crate::metrics::ListRequestMetrics;
+use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::LedgerBitmapKind;

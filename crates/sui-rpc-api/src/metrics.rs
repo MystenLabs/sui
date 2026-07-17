@@ -897,9 +897,7 @@ mod tests {
     fn first_chunk_latency_observed_once_on_first_body_chunk() {
         let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
         let mut handler = make_test_handler(&metrics);
-        let first_chunk_latency = metrics
-            .first_chunk_latency
-            .with_label_values(&["unknown"]);
+        let first_chunk_latency = metrics.first_chunk_latency.with_label_values(&["unknown"]);
 
         let (parts, _) = http::Response::new(()).into_parts();
         handler.on_response(&parts);
@@ -1217,8 +1215,7 @@ mod tests {
 
         let terminal_registry = Registry::new();
         let terminal_metrics = ListApiMetrics::new(&terminal_registry);
-        let terminal_handles =
-            terminal_metrics.stream_metrics("list_transactions", "digest");
+        let terminal_handles = terminal_metrics.stream_metrics("list_transactions", "digest");
         let mut terminal_request =
             ListRequestMetrics::new(Some(terminal_handles.clone()), Instant::now());
         terminal_request.observe_frame(&terminal, false);

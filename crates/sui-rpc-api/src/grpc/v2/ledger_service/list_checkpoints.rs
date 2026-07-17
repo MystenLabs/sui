@@ -30,8 +30,8 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedRange;
-use crate::metrics::ListStreamMetrics;
 use crate::metrics::ListRequestMetrics;
+use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::DrainedBitmapHits;
