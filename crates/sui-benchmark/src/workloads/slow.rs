@@ -33,6 +33,10 @@ pub struct SlowTestPayload {
     sender: SuiAddress,
     state: InMemoryWallet,
     system_state_observer: Arc<SystemStateObserver>,
+    slow_vectors: u64,
+    slow_size: u64,
+    slow_padding_bytes: u64,
+    slow_commands: u64,
 }
 
 impl std::fmt::Display for SlowTestPayload {
@@ -112,6 +116,20 @@ impl SlowTestPayload {
                 }
             }
 
+            // Extra no-op commands: inflate per-tx consensus VERIFICATION cost (PTB
+            // bcs-deserialize + validity checks run for every tx at block acceptance,
+            // which gates the threshold clock / round rate) with ~zero execution cost.
+            for _ in 0..self.slow_commands {
+                let tiny = builder.pure(vec![0u8; 1]).unwrap();
+                builder.programmable_move_call(
+                    self.package_id,
+                    Identifier::new("slow").unwrap(),
+                    Identifier::new("consume").unwrap(),
+                    vec![],
+                    vec![tiny],
+                );
+            }
+
             // Mutable shared object input activates congestion control: the transaction's
             // execution time is charged against this object's per-commit budget.
             builder
@@ -130,6 +148,10 @@ impl SlowTestPayload {
 #[derive(Debug)]
 pub struct SlowWorkloadBuilder {
     num_payloads: u64,
+    slow_vectors: u64,
+    slow_size: u64,
+    slow_padding_bytes: u64,
+    slow_commands: u64,
 }
 
 #[async_trait]
@@ -172,6 +194,10 @@ impl WorkloadBuilder<dyn Payload> for SlowWorkloadBuilder {
             },
             init_gas: init_gas.pop().unwrap(),
             payload_gas,
+            slow_vectors: self.slow_vectors,
+            slow_size: self.slow_size,
+            slow_padding_bytes: self.slow_padding_bytes,
+            slow_commands: self.slow_commands,
         }))
     }
 }
@@ -182,6 +208,10 @@ impl SlowWorkloadBuilder {
         target_qps: u64,
         num_workers: u64,
         in_flight_ratio: u64,
+        slow_vectors: u64,
+        slow_size: u64,
+        slow_padding_bytes: u64,
+        slow_commands: u64,
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
@@ -201,6 +231,10 @@ impl SlowWorkloadBuilder {
             let workload_builder =
                 Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(SlowWorkloadBuilder {
                     num_payloads: max_ops,
+                    slow_vectors,
+                    slow_size,
+                    slow_padding_bytes,
+                    slow_commands,
                 }));
             let builder_info = WorkloadBuilderInfo {
                 workload_params,
@@ -221,6 +255,10 @@ pub struct SlowWorkload {
     // shared_objs: Vec<BenchMoveCallArg>,
     pub init_gas: Gas,
     pub payload_gas: Vec<Gas>,
+    slow_vectors: u64,
+    slow_size: u64,
+    slow_padding_bytes: u64,
+    slow_commands: u64,
 }
 
 #[async_trait]
@@ -292,6 +330,10 @@ impl Workload<dyn Payload> for SlowWorkload {
                 sender: gas.1,
                 state: InMemoryWallet::new(gas),
                 system_state_observer: system_state_observer.clone(),
+                slow_vectors: self.slow_vectors,
+                slow_size: self.slow_size,
+                slow_padding_bytes: self.slow_padding_bytes,
+                slow_commands: self.slow_commands,
             })
         }
         payloads

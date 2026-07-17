@@ -186,6 +186,22 @@ pub enum RunSpec {
         // relative weight of slow transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         slow: Vec<u32>,
+        // Number of vectors created per slow transaction. Controls per-tx execution time
+        // (hence shared-object congestion pressure). Tune to hit target congested_transactions.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [200])]
+        slow_vectors: Vec<u64>,
+        // Size in bytes of each vector created per slow transaction.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [100])]
+        slow_size: Vec<u64>,
+        // Padding bytes added to each slow transaction (inflates tx and block size to slow
+        // consensus sequencing). 0 disables padding.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        slow_padding_bytes: Vec<u64>,
+        // Number of extra no-op move-call commands per slow transaction. Inflates per-tx
+        // consensus verification cost (PTB bcs-deserialize + validity checks at block
+        // acceptance) with ~zero execution cost. Capped by max_programmable_tx_commands.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        slow_commands: Vec<u64>,
         // relative weight of party transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         party: Vec<u32>,
