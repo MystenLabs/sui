@@ -49,7 +49,6 @@ use sui_core::storage::RestReadStore;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
-use sui_rpc_api::RpcMetrics;
 use sui_rpc_api::ServerVersion;
 use sui_rpc_api::subscription::SubscriptionService;
 use sui_types::base_types::ConciseableName;
@@ -2974,7 +2973,7 @@ async fn build_http_servers(
             rpc_service.with_config(config);
         }
 
-        rpc_service.with_metrics(RpcMetrics::new(prometheus_registry));
+        rpc_service.with_metrics(prometheus_registry);
         rpc_service.with_subscription_service(subscription_service_handle);
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
