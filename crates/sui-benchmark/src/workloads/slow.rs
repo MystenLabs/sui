@@ -37,6 +37,7 @@ pub struct SlowTestPayload {
     slow_size: u64,
     slow_padding_bytes: u64,
     slow_commands: u64,
+    slow_shared_object: bool,
 }
 
 impl std::fmt::Display for SlowTestPayload {
@@ -131,14 +132,17 @@ impl SlowTestPayload {
             }
 
             // Mutable shared object input activates congestion control: the transaction's
-            // execution time is charged against this object's per-commit budget.
-            builder
-                .obj(ObjectArg::SharedObject {
-                    id: self.shared_object_ref.0,
-                    initial_shared_version: self.shared_object_ref.1,
-                    mutability: SharedObjectMutability::Mutable,
-                })
-                .unwrap();
+            // execution time is charged against this object's per-commit budget. Disable for a
+            // pure verification-cost test (owned-only, no congestion/serialization throttle).
+            if self.slow_shared_object {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: self.shared_object_ref.0,
+                        initial_shared_version: self.shared_object_ref.1,
+                        mutability: SharedObjectMutability::Mutable,
+                    })
+                    .unwrap();
+            }
         }
 
         tx_builder.ensure_unique().build_and_sign(account.key())
@@ -152,6 +156,7 @@ pub struct SlowWorkloadBuilder {
     slow_size: u64,
     slow_padding_bytes: u64,
     slow_commands: u64,
+    slow_shared_object: bool,
 }
 
 #[async_trait]
@@ -198,6 +203,7 @@ impl WorkloadBuilder<dyn Payload> for SlowWorkloadBuilder {
             slow_size: self.slow_size,
             slow_padding_bytes: self.slow_padding_bytes,
             slow_commands: self.slow_commands,
+            slow_shared_object: self.slow_shared_object,
         }))
     }
 }
@@ -212,6 +218,7 @@ impl SlowWorkloadBuilder {
         slow_size: u64,
         slow_padding_bytes: u64,
         slow_commands: u64,
+        slow_shared_object: bool,
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
@@ -235,6 +242,7 @@ impl SlowWorkloadBuilder {
                     slow_size,
                     slow_padding_bytes,
                     slow_commands,
+                    slow_shared_object,
                 }));
             let builder_info = WorkloadBuilderInfo {
                 workload_params,
@@ -259,6 +267,7 @@ pub struct SlowWorkload {
     slow_size: u64,
     slow_padding_bytes: u64,
     slow_commands: u64,
+    slow_shared_object: bool,
 }
 
 #[async_trait]
@@ -334,6 +343,7 @@ impl Workload<dyn Payload> for SlowWorkload {
                 slow_size: self.slow_size,
                 slow_padding_bytes: self.slow_padding_bytes,
                 slow_commands: self.slow_commands,
+                slow_shared_object: self.slow_shared_object,
             })
         }
         payloads
