@@ -1175,11 +1175,14 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
         0,
     );
 
+    // The rpc-store cursor is inclusive: it carries the full sort position of
+    // the first *unread* object, and the resumed scan seeks straight to it. So
+    // resuming from `infos[1]` yields exactly that trailing object.
     let page_from_cursor: Vec<_> = RpcIndexes::owned_objects_iter(
         &reader,
         owner,
         Some(GasCoin::type_()),
-        Some(infos[0].clone()),
+        Some(infos[1].clone()),
     )
     .expect("owned-object iterator should build")
     .map(|result| result.expect("owned-object entry should decode"))
