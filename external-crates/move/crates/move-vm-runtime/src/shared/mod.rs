@@ -19,6 +19,7 @@ pub mod linkage_context;
 pub mod logging;
 pub mod safe_ops;
 pub mod system_packages;
+pub mod type_size_formulae;
 pub mod types;
 pub mod views;
 pub mod vm_pointer;
@@ -74,8 +75,8 @@ impl TypeLimits {
         self.max_type_nodes
     }
 
-    pub fn traversal(&self) -> TypeSize {
-        TypeSize {
+    pub fn traversal(&self) -> TraversalBudget {
+        TraversalBudget {
             depth: 0,
             node_count: 0,
             max_depth: self.max_type_depth,

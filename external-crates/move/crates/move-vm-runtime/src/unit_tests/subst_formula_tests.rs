@@ -18,11 +18,14 @@
 use crate::{
     cache::{arena::ArenaBuilder, identifier_interner::IdentifierInterner},
     execution::dispatch_tables::VirtualTableKey,
-    jit::execution::ast::{
-        ArenaType, DatatypeSizeInfo, DatatypeSizes, LinearFormula, MaxPlusFormula,
-        PartialTypeFormula, Type, TypeArguments, TypeSize, check_syntactic_limits,
+    jit::execution::ast::{ArenaType, Type},
+    shared::{
+        constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
+        type_size_formulae::{
+            DatatypeSizeInfo, DatatypeSizes, LinearFormula, MaxPlusFormula, NoFolding,
+            PartialTypeFormula, TypeArguments, TypeSize, check_syntactic_limits,
+        },
     },
-    shared::constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
@@ -347,7 +350,8 @@ fn precomputed_formulas_match_on_the_fly_subst() {
     // Vector<Vector<T0>>, twice: one term consumed by `for_term`, one kept for the on-the-fly
     // route.
     let term = Type::Vector(Box::new(Type::Vector(Box::new(Type::TyParam(0)))));
-    let precomputed = PartialTypeFormula::for_term(to_arena(&arena, &term), &arena).unwrap();
+    let precomputed =
+        PartialTypeFormula::for_term(to_arena(&arena, &term), &arena, &mut NoFolding).unwrap();
     let on_the_fly = to_arena(&arena, &term);
 
     let args = ty_args(vec![nested_vec(4)]);
@@ -480,7 +484,8 @@ fn datatype_size_info() {
         ArenaType::U64,
         ArenaType::Vector(arena.alloc_box(ArenaType::U32).unwrap()),
     ];
-    let info = DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena).unwrap();
+    let info =
+        DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena, &mut NoFolding).unwrap();
     assert!(matches!(
         info,
         DatatypeSizeInfo::Constant(DatatypeSizes {
@@ -494,7 +499,8 @@ fn datatype_size_info() {
         ArenaType::U64,
         ArenaType::Vector(arena.alloc_box(ArenaType::TyParam(0)).unwrap()),
     ];
-    let info = DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena).unwrap();
+    let info =
+        DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena, &mut NoFolding).unwrap();
     let DatatypeSizeInfo::Formula {
         value_depth,
         layout_size,
@@ -514,7 +520,8 @@ fn datatype_size_info() {
     // struct P { s: SomeOtherStruct } — the field's datatype application is a pending
     // `ApplyFormula` one nesting level below `P` itself, occurring once.
     let fields = [ArenaType::Datatype(dt_key())];
-    let info = DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena).unwrap();
+    let info =
+        DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena, &mut NoFolding).unwrap();
     let DatatypeSizeInfo::Formula {
         value_depth,
         layout_size,
@@ -538,8 +545,13 @@ fn datatype_size_info() {
     // enum E<T0> { A { a: T0 }, B { b: u8 } } — one layout node per variant on top of the
     // datatype's own node.
     let fields = [ArenaType::TyParam(0), ArenaType::U8];
-    let info =
-        DatatypeSizeInfo::for_datatype_fields(fields.iter(), /* variants */ 2, &arena).unwrap();
+    let info = DatatypeSizeInfo::for_datatype_fields(
+        fields.iter(),
+        /* variants */ 2,
+        &arena,
+        &mut NoFolding,
+    )
+    .unwrap();
     let DatatypeSizeInfo::Formula {
         value_depth,
         layout_size,
