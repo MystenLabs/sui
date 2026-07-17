@@ -22,6 +22,7 @@ use sui_package_resolver::PackageStore;
 use sui_package_resolver::PackageStoreWithLruCache;
 use sui_package_resolver::Resolver;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
 use sui_rpc_api::ServerVersion;
 use sui_types::digests::ChainIdentifier;
@@ -255,6 +256,13 @@ pub struct ServerConfig {
     pub enable_experimental_query_apis: bool,
 }
 
+fn ledger_service_with_response_compression<T>(service: T) -> LedgerServiceServer<T>
+where
+    T: LedgerService,
+{
+    LedgerServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
+}
+
 impl KvRpcServer {
     pub async fn new(
         instance_id: String,
@@ -466,6 +474,7 @@ impl KvRpcServer {
                 )?,
             )
             .add_service(LedgerServiceServer::new(self));
+            .add_service(ledger_service_with_response_compression(self));
 
         if config.enable_reflection {
             let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
