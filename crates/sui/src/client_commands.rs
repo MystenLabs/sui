@@ -128,18 +128,6 @@ pub(crate) static USER_AGENT: &str =
 /// Only to be used within CLI
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
 
-/// The protocol limits that bound how many coins a single transaction can drain.
-struct CoinLimits {
-    /// Maximum number of objects a gas payment may contain.
-    max_gas_payment_objects: usize,
-    /// Maximum number of arguments a single command may take. A command's target does not count
-    /// towards this, and the limit is exclusive.
-    max_arguments: usize,
-    /// Maximum number of object inputs a transaction may have. The gas payment does not count
-    /// towards this.
-    max_input_objects: usize,
-}
-
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum SuiClientCommands {
@@ -857,6 +845,18 @@ struct FaucetResponse {
     error: Option<String>,
 }
 
+/// The protocol limits that bound how many coins a single transaction can drain.
+struct CoinLimits {
+    /// Maximum number of objects a gas payment may contain.
+    max_gas_payment_objects: usize,
+    /// Maximum number of arguments a single command may take. A command's target does not count
+    /// towards this, and the limit is exclusive.
+    max_arguments: usize,
+    /// Maximum number of object inputs a transaction may have. The gas payment does not count
+    /// towards this.
+    max_input_objects: usize,
+}
+
 impl SuiClientCommands {
     pub async fn execute(
         self,
@@ -1403,11 +1403,8 @@ impl SuiClientCommands {
                     let use_address_balance = if from_address_balance {
                         ensure!(
                             address_balance >= amount,
-                            "Insufficient address balance to send {} MIST. \
-                            Address balance: {}, Coin balance: {}",
-                            amount,
-                            address_balance,
-                            coin_balance
+                            "Insufficient address balance to send {amount} MIST. \
+                            Address balance: {address_balance}, Coin balance: {coin_balance}"
                         );
                         true
                     } else if coin_balance >= amount {
@@ -1416,11 +1413,8 @@ impl SuiClientCommands {
                         true
                     } else {
                         bail!(
-                            "Insufficient balance to send {} MIST. \
-                            Coin balance: {}, Address balance: {}",
-                            amount,
-                            coin_balance,
-                            address_balance
+                            "Insufficient balance to send {amount} MIST. \
+                            Coin balance: {coin_balance}, Address balance: {address_balance}"
                         );
                     };
                     (amount, use_address_balance)
@@ -3459,14 +3453,16 @@ async fn coin_limits(client: &Client) -> Result<CoinLimits, anyhow::Error> {
 
 /// Warn about, and drop, any coins past what one transaction can hold.
 fn truncate_to_max_coins(coin_refs: &mut Vec<ObjectRef>, max_coins: usize) {
-    if coin_refs.len() > max_coins {
-        let remaining = coin_refs.len() - max_coins;
-        coin_refs.truncate(max_coins);
-        eprintln!(
-            "Warning: a transaction sends at most {max_coins} coins, so {remaining} of your coins \
-             will not be sent. Run the command again to send the rest."
-        );
+    if coin_refs.len() <= max_coins {
+        return;
     }
+
+    let remaining = coin_refs.len() - max_coins;
+    coin_refs.truncate(max_coins);
+    eprintln!(
+        "Warning: a transaction sends at most {max_coins} coins, so {remaining} of your coins \
+         will not be sent. Run the command again to send the rest."
+    );
 }
 
 /// Send every `Coin<T>` object owned by `signer` to `recipient`'s address balance. The signer's
@@ -3515,10 +3511,10 @@ async fn send_all_coins(
     } else {
         0
     };
-    let max_merged = std::cmp::min(
-        limits.max_arguments - if is_sui { 1 } else { 0 },
-        limits.max_input_objects,
-    );
+    let max_merged = limits
+        .max_arguments
+        .saturating_sub(is_sui as usize)
+        .min(limits.max_input_objects);
     truncate_to_max_coins(&mut coin_refs, smashed + max_merged);
 
     // Whatever is left in `coin_refs` is the gas payment, which is empty unless the coin is SUI.
