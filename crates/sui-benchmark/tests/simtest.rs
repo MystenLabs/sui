@@ -1328,6 +1328,7 @@ mod test {
             slow_vectors: 200,
             slow_size: 100,
             slow_padding_bytes: 0,
+            slow_commands: 0,
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,

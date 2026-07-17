@@ -4,6 +4,25 @@ Tracking the effort to reproduce the mainnet high-traffic incident's **consensus
 
 ---
 
+## Executive summary
+
+**Outcome:** 8 tests across Tasos and Alex reproduced every *individual* signal of the June 2026 mainnet high-traffic incident — latency regression, submit-semaphore saturation, shared-object congestion, and ~1 MB blocks — but **did not reproduce the consensus round-rate collapse.** The campaign is concluded; a faithful PT replay is not achievable under the agreed constraint of excluding mainnet hardware differences.
+
+**What the incident was:** MEV searchers amplified and spammed **failing** DEX-arbitrage transactions (Cetus / flash-loan multi-hop) against a handful of **hot shared objects**. Those txns carry real execution time and large byte size, submitted at ~20K tps (with <150 tps of unique work). This drove three pressures at once: (1) per-object **execution-time congestion** (mainnet ran `ExecutionTimeEstimate` mode), (2) **submit-semaphore saturation** with no system-message bypass in v1.73.2, and (3) **~1 MB blocks** that slowed consensus RocksDB/sequencing. Together they starved checkpoint-signature/system-message submission and stalled round progression — round rate fell 13 → 3.7/s.
+
+**Why PT couldn't reproduce it — and what we ruled out:** the mainnet collapse was a **uniform block-production slowdown** (production, acceptance, and commit rates all fell 11.6 → 3.6/s together) coincident with peak traffic, ~1 MB blocks, and checkpoint-signature starvation. A metric sweep of the collapse window **ruled out, with data, the four leading candidate causes**: consensus RocksDB latency/stalls (zero write stalls; latency ~flat — an earlier draft wrongly blamed this), execution-backlog magnitude (PT ran 2.9M pending certs vs mainnet's 59k without collapsing), execution-cache backpressure (fired on PT, not mainnet), and fleet propagation delay (~0 on both). **The cause of the PT/mainnet divergence is therefore not yet definitively identified.** The leading remaining hypothesis is **per-round consensus processing cost** (verify/deserialize each block's txns), which scales with block size *and* per-tx complexity ÷ CPU — we reproduced block size but not real-txn complexity, and PT's fast uniform CPUs outpace mainnet's heterogeneous fleet. This needs code-level confirmation.
+
+**Key technical findings:**
+- Congestion is **execution-time-based**, not gas- or count-based — cheap synthetic traffic (Tests 3–5) can never trigger it regardless of volume or gas budget; the purpose-built `slow` workload (Test 6) was required and did fire it (obj cost 743k vs incident 733k).
+- **Congestion alone does not collapse rounds** — it defers gracefully and protects liveness (Test 6).
+- **Semaphore saturation alone does not collapse rounds** either (Tests 3, 4, 7) — permits release at sequencing, which is fast on PT.
+- **RocksDB was measured and ruled out** as the collapse driver (no write stalls on mainnet during the incident); so were execution-backlog magnitude and execution-cache backpressure (PT exceeded mainnet on both without collapsing).
+- The mainnet collapse is a **uniform threshold-clock (block production) slowdown that tracks block size** — pointing at per-round processing cost, not a storage or backpressure stall.
+
+**Recommendation:** the divergence cause is not pinned, so the next step is **code-level analysis of what throttles Mysticeti block production under load**, plus a PT test of **transaction-verification complexity** (many commands / shared-object inputs per tx, not just byte size). Separately, validate the specific incident-response fixes in isolation (unit/sim: #27123, #27074, congestion/backpressure). A full end-to-end replay would need mainnet-representative hardware and realistic tx complexity. Full details, per-test template, and metrics below.
+
+---
+
 ## FACTS
 
 Only directly observed / verifiable items. No interpretation or causal claims.
@@ -107,6 +126,15 @@ Template per test: **Hypothesis · Purpose · Inputs · Outcome**. "Collapse rep
 - **Outcome:** **Both pressures achieved for the first time** — `sequencing_in_flight_submissions` **pinned at cap (median 317, 95 hosts ≥ 300)**, matching the incident's "inflight pinned ~310 / ~120 hosts waiting"; congestion firing (`congested` ~250k/s, `cancelled` ~7.6k/s). **But `checkpoint_signature` stayed healthy (~477/s) and round rate held ~9/s.** **Collapse: NO.**
   - **Mechanistic finding (key):** congestion does **not** hold submit-semaphore permits. A permit is held only until a tx is *sequenced* (included in a committed block); congestion **deferral occurs later, in the consensus handler, after sequencing**, so the permit is already released. On PT, sequencing is fast (small blocks, fast RocksDB), so permits cycle quickly and checkpoint-signature submissions acquire a permit almost immediately — even with the semaphore pinned. Checkpoint-signature starvation therefore requires **slow sequencing** (long permit-hold), which requires **slow consensus block inclusion** — i.e. large blocks / slow consensus RocksDB. This isolates **byte size** as the specific missing ingredient, not congestion.
 
+### Test 8 — Alex — add ~1 MB blocks (byte-size A/B step) (runs #3933 rejected, #3934 valid)
+- **Date:** 2026-07-17
+- **Hypothesis:** Large blocks slow consensus sequencing → submit-semaphore permits are held longer → checkpoint-signature submissions starve → round collapse. (Test 7's mechanistic finding pointed here.)
+- **Purpose:** B step of the byte-size A/B — Test 7's mix plus byte padding on the slow txns to push block size toward the incident's ~1 MB p99.
+- **Inputs:** commit `2e55122a3e` (adds `--slow-padding-bytes`, chunked under the 16 KB pure-arg / 128 KB tx limits); `protocol_config_override=mainnet`; `target_tps=40000`; `stress_bench_extra_args: --slow 40 --slow-vectors 100 --slow-padding-bytes 100000 --gas-double-spend 100 --gas-double-spend-submission soft-bundle`; 126 validators.
+  - *First attempt (#3933, commit `c2a6165ebc`, `--slow-padding-bytes 30000`) was invalid:* 30 KB > `max_pure_argument_size` (16 KB), so every slow tx was rejected (6,181/s submitted, 0 success) — no big blocks, no result. Fixed by chunking.
+- **Outcome:** **Byte size reproduced** — `consensus_proposed_block_size` p99 **790 KB** (incident ~959 KB), up from Test 7's ~150 KB; slow txns landing (423/s); congestion firing (~259k/s). **But the submit semaphore fell OFF cap** — `sequencing_in_flight_submissions` median dropped to **41** (only 3 hosts ≥ 300) vs Test 7's pinned 317 — because the expensive slow+padding load throttled throughput to ~2.1k tps, starving the soft-bundle volume that pins the semaphore. Checkpoint signatures stayed healthy (~352/s); round rate degraded mildly to ~6.9/s. **Collapse: NO.**
+  - **Decisive finding:** the three ingredients (semaphore saturation, congestion, ~1 MB blocks) are **mutually exclusive on PT throughput**. High volume (Test 7) pins the semaphore but keeps blocks small; big/expensive txns (Test 8) inflate blocks but throttle volume so the semaphore drains. PT's fast, uniform hardware processes whatever is offered, so the load never produces the sustained **drain backlog** that, on mainnet, held permits long enough to starve system messages. That backlog required the drain to *fall behind* — the mainnet hardware/scale characteristic explicitly excluded from this effort.
+
 ---
 
 ## Synthesis (what is and isn't reproduced)
@@ -117,7 +145,9 @@ Template per test: **Hypothesis · Purpose · Inputs · Outcome**. "Collapse rep
 | Adapter / submit-semaphore saturation (inflight pinned at cap) | ✅ yes | #3918, #3919, **#3932** |
 | Shared-object congestion (`congested`/`cancelled`, obj cost 733k) | ✅ yes (exceeded incident) | #3929, #3932 |
 | Congestion + semaphore-saturation **simultaneously** | ✅ yes | **#3932** |
-| Large blocks (p99 ~1 MB → consensus RocksDB / propagation load) | ❌ no (all txns byte-tiny) | — |
+| Large blocks (p99 ~790 KB, ≈ incident ~1 MB) | ✅ yes | **#3934** |
+| **All three (semaphore + congestion + big blocks) simultaneously** | ❌ **no** — mutually exclusive on PT throughput | — |
+| Consensus **drain falling behind** (backlog spiral) | ❌ no (PT drains everything) | — |
 | Checkpoint-signature starvation (→ ~70) | ❌ no | — |
 | **Round-rate collapse (→ 3–5/s, flatlines)** | ❌ **no** | — |
 
@@ -127,28 +157,47 @@ The incident's collapse coincided with high shared-object congestion, submit-sem
 
 ---
 
-## Proposed final test — combine congestion + semaphore saturation to starve system messages
+## Conclusion
 
-Goal: drive shared-object execution-time congestion **and** submit-semaphore saturation **concurrently**, so that checkpoint-signature / EndOfPublish submissions are starved (no `v1.73.2` bypass) and round progression stalls. Mainnet hardware differences are explicitly excluded.
+**The round-rate collapse was not reproduced on private-testnet, and the test campaign is concluded.** Every individual incident signal was reproduced — often exceeding incident magnitude — but never in the combination that produces the collapse:
 
-### Traffic — two simultaneous workload slices
-1. **Congestion slice — tuned `slow`.** Dial the per-tx cost **down** from #3929 (which over-fired ~100×) to hit the incident magnitude: `congested_transactions ≈ 24k/s`, `max_congestion_control_object_costs ≈ 733k`. Lower `SLOW_VECTORS`/`SLOW_SIZE` (e.g. `slow(400, 100)`) and/or `--slow` weight so congestion is sustained near the incident level rather than saturating.
-2. **Semaphore slice — high-volume soft-bundle gas double-spend.** Run the #3919 soft-bundle path concurrently at high submission rate to pin `sequencing_in_flight_submissions` at cap (~312 fleet-wide) and hold permits for full round-trips. This is the piece that starves system messages.
-3. **Byte-size dimension — inflate transaction bytes.** All prior tests (incl. #3929) produced byte-tiny blocks (p99 ~150 KB vs incident's ~1 MB). Add large `vector<u8>` pure-argument padding to the workload transactions so `consensus_proposed_block_size` p99 approaches the incident's ~1 MB. This raises consensus RocksDB write volume and block-propagation bytes — the HW-neutral proxy for the incident's "slower consensus RocksDB under 1 MB blocks," and a direct stressor on the consensus **drain** side that has stayed healthy in every PT test. Requires a small stress-client change (a byte-padding pure arg; there is no existing payload-size knob). Note: byte size does **not** affect congestion (execution-time based) or the semaphore (count based) — its role is purely drain/commit throughput.
+| Ingredient | Best PT result | Incident |
+|---|---|---|
+| Latency regression | p50 27–49s | p50 >15s |
+| Submit-semaphore saturation (inflight at cap) | median 317, 95 hosts (Test 7) | pinned ~310, ~120 hosts |
+| Shared-object execution-time congestion | 3.4M/s (Test 6), 259k/s (Test 8) | 24.7k/s |
+| ~1 MB blocks | p99 790 KB (Test 8) | p99 ~959 KB |
+| Checkpoint-signature starvation | — (stayed healthy) | 522 → 69 |
+| **Round-rate collapse** | — (floor ~6.9/s) | 13 → 3.7/s |
 
-Run all slices in the same benchmark mix (separate groups, since amplification and soft-bundle are mutually exclusive per payload), `protocol_config_override=mainnet`.
+**Cause of the PT/mainnet divergence: NOT yet definitively identified.** An earlier draft of this conclusion attributed it to consensus-RocksDB latency / drain-lag. **That was inferred, not measured, and a metric sweep of the mainnet collapse window (06-24 18:17Z) ruled it out**, along with three other candidates:
 
-### Success bar (must co-occur)
-- `sequencing_in_flight_submissions` pinned at cap (~312) across most validators, **sustained**.
-- `consensus_handler_congested_transactions` ≈ 20–25k/s (incident magnitude, not 100×).
-- `consensus_proposed_block_size` p99 approaching ~1 MB (incident level).
-- `checkpoint_signature` tx/s falling toward **~70** — the decisive starvation signal.
-- → round rate breaking below the ~8–9/s plateau toward 3–5/s.
+| Candidate cause | Verdict (measured) |
+|---|---|
+| Consensus RocksDB write latency / stalls | ❌ Ruled out — `rocksdb_write_batch_commit_latency` p50 flat (0.3→0.4 ms), p99 modest (peak 180 ms, not time-correlated with the trough), **`actual_delayed_write_rate` = 0** (zero write stalls). Only raised as a passing "concern" in Slack (Tasos 06-23, Kostas via Mark 06-30), never diagnosed. |
+| Execution backlog magnitude (`pending_certificates`) | ❌ Ruled out — PT ran at **2.9M** pending certs vs mainnet's 59k at collapse, and PT did **not** collapse. |
+| Execution-cache backpressure (`execution_cache_backpressure_status`) | ❌ Ruled out — fired **constantly on PT** (harmless) but **not on mainnet** during the collapse. |
+| Fleet-wide consensus propagation delay | ❌ Ruled out — ~0 on both (only 1–5 isolated stuck hosts). |
 
-### Optional accelerator (config, not hardware)
-The collapse hinges on the submit semaphore actually pinning. Its cap is `40_000 / num_validators`. To make saturation reliably reachable without touching hardware, lower `max_pending_transactions` in the PT validator overlay (e.g. 20000 → 8000 ⇒ cap ~63 permits at 127 validators), or raise committee size. This shrinks the permit pool so sustained submission volume pins it — matching the incident's "semaphore pinned at cap" fact while staying HW-neutral. Note this diverges from mainnet's exact config; use only if the mainnet-faithful volume cannot pin the semaphore.
+**What the collapse actually looked like (06-24 18:17Z):** block **production, acceptance, and commit rates all dropped together** (11.6 → 3.6/s) — i.e. the whole consensus threshold clock slowed uniformly, *not* a commit-lag or network-propagation problem. It **tracks block size** within the window (p99 84 KB → 960 KB as production fell 11.6 → 3.6), coincident with peak traffic (23.6k tps), a `pending_certificates` spike (~100 → 59k), and checkpoint-signature starvation (420 → 32.5/s).
 
-### Why this should work where the others didn't
-- #3929 proved execution-time congestion is now reproducible (the `slow` workload).
-- #3918/#3919 proved the submit adapter can be saturated beyond incident levels.
-- Neither starved checkpoint signatures. Combining a congestion backlog (which lengthens consensus round-trips, so each held semaphore permit is held longer) with sustained high-volume soft-bundle submission is the mechanism that pins the semaphore long enough to starve system-message submission — the last missing incident signal before round collapse.
+**Leading hypothesis — now code-confirmed as the mechanism: per-transaction verification cost at block acceptance.** A code trace of Mysticeti (`consensus/core/`) established:
+- The threshold clock (round) advances only on **2f+1 *accepted* blocks** (`threshold_clock.rs:42-52`); proposal and commit are both downstream of acceptance (`core.rs:371-392`) — so all three rates slow together when acceptance slows.
+- Transactions are opaque bytes at block *deserialization*, but block **acceptance is gated by `verify_and_vote`** (`block_verifier.rs:193-212`), which for **every transaction** `bcs`-decodes the full PTB, runs validity checks, **verifies the user signature, and locks input objects** (`consensus_validator.rs:235-328`, `:425`). This runs **inline, serially per peer, with no CPU offload** (`subscriber.rs:205`, `authority_service.rs:179`).
+- Mainnet at the incident ran **protocol version 126** (confirmed via `sui_current_protocol_version`), i.e. `mysticeti_fastpath` ON (enabled at v96) → the heavy vote path (incl. signature verification + object locking) was live. (Our PT runs also used protocol 126, so the path was active there too.)
+
+So per-tx cost scales with **PTB complexity (commands/inputs), signature count, and input-object count** — *not* just bytes. PT's synthetic txns (1–2 commands, 1 sig, 1 object) verify in microseconds; the incident's real arb (11 MoveCalls, 12 shared objects, real sigs) is orders of magnitude heavier per tx. As blocks filled with expensive-to-verify txns, acceptance saturated CPU → threshold clock slowed → uniform round-rate collapse tracking block content. **Our Test 8 reproduced block *bytes* but not per-tx *verification complexity*, which is why it only reached round 6.9.** The remaining PT-vs-mainnet delta is (a) transaction verification complexity — **reproducible** (Test 9, in progress) — and (b) CPU speed/heterogeneity — excluded.
+
+**What IS established (value of the campaign):**
+1. Traffic shape: MEV amplification of **failing** DEX arbitrage against a few **hot shared objects**, plus gas double-spend and soft bundles.
+2. Congestion is **`ExecutionTimeEstimate`**-based — driven by execution *time*, not gas/count/bytes (this invalidated Tests 3–5 and is why the `slow` workload was needed).
+3. Every individual pressure — latency regression, submit-semaphore saturation, shared-object congestion, ~1 MB blocks — is reproducible and instrumented on PT.
+4. Four candidate collapse mechanisms are now **ruled out with data** (table above), which materially narrows the search.
+
+**Recommended next steps.**
+- **Code-level analysis** of what throttles Mysticeti block *production* under load (the threshold-clock / proposer path) — since the collapse is a uniform production slowdown, not RocksDB, execution backlog, or propagation.
+- Test **transaction-verification complexity** (not just byte size) on PT — e.g. many commands / many shared-object inputs per tx — to see whether per-round processing cost is the gate.
+- Validate the specific incident-response fixes in **isolation** (unit/sim): #27123 system-message semaphore bypass, #27074 soft-bundle accounting, congestion/backpressure interaction.
+- Full end-to-end replay, if needed, requires **mainnet-representative hardware** (CPU heterogeneity) and/or realistic transaction complexity.
+
+*Tuning knobs added during the campaign and available for future runs: `--slow-vectors`, `--slow-size` (per-tx execution cost / congestion magnitude), `--slow-padding-bytes` (block size), plus the `stress_bench_extra_args` deploy input on branch `steka/ptn-run1-stress-args`.*

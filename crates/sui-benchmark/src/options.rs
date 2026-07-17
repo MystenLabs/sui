@@ -197,6 +197,11 @@ pub enum RunSpec {
         // consensus sequencing). 0 disables padding.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         slow_padding_bytes: Vec<u64>,
+        // Number of extra no-op move-call commands per slow transaction. Inflates per-tx
+        // consensus verification cost (PTB bcs-deserialize + validity checks at block
+        // acceptance) with ~zero execution cost. Capped by max_programmable_tx_commands.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        slow_commands: Vec<u64>,
         // relative weight of party transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         party: Vec<u32>,

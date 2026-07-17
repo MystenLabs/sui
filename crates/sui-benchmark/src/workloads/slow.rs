@@ -33,6 +33,7 @@ pub struct SlowTestPayload {
     slow_vectors: u64,
     slow_size: u64,
     slow_padding_bytes: u64,
+    slow_commands: u64,
 }
 
 impl std::fmt::Display for SlowTestPayload {
@@ -111,6 +112,20 @@ impl SlowTestPayload {
                 }
             }
 
+            // Extra no-op commands: inflate per-tx consensus VERIFICATION cost (PTB
+            // bcs-deserialize + validity checks run for every tx at block acceptance,
+            // which gates the threshold clock / round rate) with ~zero execution cost.
+            for _ in 0..self.slow_commands {
+                let tiny = builder.pure(vec![0u8; 1]).unwrap();
+                builder.programmable_move_call(
+                    self.package_id,
+                    Identifier::new("slow").unwrap(),
+                    Identifier::new("consume").unwrap(),
+                    vec![],
+                    vec![tiny],
+                );
+            }
+
             // Mutable shared object input activates congestion control: the transaction's
             // execution time is charged against this object's per-commit budget.
             builder
@@ -132,6 +147,7 @@ pub struct SlowWorkloadBuilder {
     slow_vectors: u64,
     slow_size: u64,
     slow_padding_bytes: u64,
+    slow_commands: u64,
 }
 
 #[async_trait]
@@ -177,6 +193,7 @@ impl WorkloadBuilder<dyn Payload> for SlowWorkloadBuilder {
             slow_vectors: self.slow_vectors,
             slow_size: self.slow_size,
             slow_padding_bytes: self.slow_padding_bytes,
+            slow_commands: self.slow_commands,
         }))
     }
 }
@@ -190,6 +207,7 @@ impl SlowWorkloadBuilder {
         slow_vectors: u64,
         slow_size: u64,
         slow_padding_bytes: u64,
+        slow_commands: u64,
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
@@ -212,6 +230,7 @@ impl SlowWorkloadBuilder {
                     slow_vectors,
                     slow_size,
                     slow_padding_bytes,
+                    slow_commands,
                 }));
             let builder_info = WorkloadBuilderInfo {
                 workload_params,
@@ -235,6 +254,7 @@ pub struct SlowWorkload {
     slow_vectors: u64,
     slow_size: u64,
     slow_padding_bytes: u64,
+    slow_commands: u64,
 }
 
 #[async_trait]
@@ -308,6 +328,7 @@ impl Workload<dyn Payload> for SlowWorkload {
                 slow_vectors: self.slow_vectors,
                 slow_size: self.slow_size,
                 slow_padding_bytes: self.slow_padding_bytes,
+                slow_commands: self.slow_commands,
             })
         }
         payloads
