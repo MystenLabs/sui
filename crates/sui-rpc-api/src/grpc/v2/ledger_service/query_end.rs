@@ -27,8 +27,7 @@ mod tests {
 
     use prometheus::Registry;
 
-    use crate::metrics::ListRequestMetrics;
-    use crate::metrics::RpcMetrics;
+    use crate::metrics::{ListApiMetrics, ListRequestMetrics};
 
     use super::*;
 
@@ -56,8 +55,8 @@ mod tests {
         expected_label: &str,
     ) {
         let registry = Registry::new();
-        let metrics = RpcMetrics::new(&registry);
-        let handles = metrics.list_metrics("list_transactions", "digest");
+        let metrics = ListApiMetrics::new(&registry);
+        let handles = metrics.stream_metrics("list_transactions", "digest");
         let mut request_metrics = ListRequestMetrics::new(Some(handles), Instant::now());
 
         let effective_reason = effective_terminal_reason(produced, limit_items, scan_end_reason);

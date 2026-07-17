@@ -12,7 +12,7 @@ use tokio_util::sync::DropGuard;
 use crate::RpcError;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::watermark::ScanTerminal;
-use crate::metrics::ListApiMetrics;
+use crate::metrics::ListStreamMetrics;
 
 /// Chunk terminal for a scan that either exhausted its request scan budget
 /// (authoritative frontier watermark, built lazily) or ended at the resolved
@@ -61,12 +61,12 @@ pub(super) fn cancelled() -> RpcError {
     RpcError::new(tonic::Code::Cancelled, "request cancelled")
 }
 pub(crate) fn spawn_list_chunk<T, F>(
-    metrics: Option<ListApiMetrics>,
+    metrics: Option<ListStreamMetrics>,
     work: F,
 ) -> JoinHandle<Result<T, RpcError>>
 where
     T: Send + 'static,
-    F: FnOnce(Option<&ListApiMetrics>) -> Result<T, RpcError> + Send + 'static,
+    F: FnOnce(Option<&ListStreamMetrics>) -> Result<T, RpcError> + Send + 'static,
 {
     match metrics {
         Some(metrics) => {
@@ -230,7 +230,7 @@ mod tests {
     use prometheus::Registry;
     use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 
-    use crate::metrics::{ListRequestMetrics, RpcMetrics};
+    use crate::metrics::{ListApiMetrics, ListRequestMetrics};
 
     #[tokio::test]
     async fn chunked_scan_drains_vector_chunks_in_order() {
@@ -396,7 +396,8 @@ mod tests {
     #[tokio::test]
     async fn spawn_list_chunk_observes_queue_and_work_on_success_and_error() {
         let registry = Registry::new();
-        let metrics = RpcMetrics::new(&registry).list_metrics("list_checkpoints", "summary");
+        let metrics =
+            ListApiMetrics::new(&registry).stream_metrics("list_checkpoints", "summary");
 
         let success = spawn_list_chunk(Some(metrics.clone()), |_| Ok(()));
         let error = spawn_list_chunk::<(), _>(Some(metrics), |_| {
@@ -457,7 +458,10 @@ mod tests {
 
         let filtered_registry = Registry::new();
         let mut filtered_metrics = ListRequestMetrics::new(
-            Some(RpcMetrics::new(&filtered_registry).list_metrics("list_checkpoints", "summary")),
+            Some(
+                ListApiMetrics::new(&filtered_registry)
+                    .stream_metrics("list_checkpoints", "summary"),
+            ),
             Instant::now(),
         );
         filtered_metrics.finish_success(QueryEndReason::LedgerTip, Some(5));
@@ -473,7 +477,10 @@ mod tests {
 
         let unfiltered_registry = Registry::new();
         let mut unfiltered_metrics = ListRequestMetrics::new(
-            Some(RpcMetrics::new(&unfiltered_registry).list_metrics("list_checkpoints", "summary")),
+            Some(
+                ListApiMetrics::new(&unfiltered_registry)
+                    .stream_metrics("list_checkpoints", "summary"),
+            ),
             Instant::now(),
         );
         unfiltered_metrics.finish_success(QueryEndReason::LedgerTip, None);

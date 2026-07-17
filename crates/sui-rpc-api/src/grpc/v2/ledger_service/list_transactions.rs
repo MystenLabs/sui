@@ -34,7 +34,7 @@ use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
-use crate::metrics::ListApiMetrics;
+use crate::metrics::ListStreamMetrics;
 use crate::metrics::ListRequestMetrics;
 use crate::read_mask_defaults;
 
@@ -94,9 +94,9 @@ pub(crate) async fn list_transactions(
     )?;
     let mut request_metrics = ListRequestMetrics::new(
         service
-            .metrics
+            .list_metrics
             .as_ref()
-            .map(|metrics| metrics.list_metrics(METHOD, resolution(&read_mask))),
+            .map(|metrics| metrics.stream_metrics(METHOD, resolution(&read_mask))),
         started,
     );
     let ledger_history = service.config.ledger_history();
@@ -208,7 +208,7 @@ pub(crate) async fn list_transactions(
 
 fn spawn_transaction_chunk(
     service: RpcService,
-    metrics: Option<ListApiMetrics>,
+    metrics: Option<ListStreamMetrics>,
     state: TransactionScanState,
     read_mask: FieldMaskTree,
     options: QueryOptions,
@@ -274,7 +274,7 @@ fn next_transaction_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
-    metrics: Option<&ListApiMetrics>,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<TransactionChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
@@ -542,7 +542,7 @@ fn render_transaction_rows(
     entry_checkpoint: u64,
     render_contents: bool,
     cancel: &CancellationToken,
-    metrics: Option<&ListApiMetrics>,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<Vec<ListTransactionsResponse>, RpcError> {
     let mut transaction_reads = if render_contents {
         let digests = rows

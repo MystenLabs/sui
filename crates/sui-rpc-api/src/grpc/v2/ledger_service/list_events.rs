@@ -32,7 +32,7 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::EventScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedEventRange;
-use crate::metrics::ListApiMetrics;
+use crate::metrics::ListStreamMetrics;
 use crate::metrics::ListRequestMetrics;
 use crate::read_mask_defaults;
 
@@ -88,9 +88,9 @@ pub(crate) async fn list_events(
     )?;
     let mut request_metrics = ListRequestMetrics::new(
         service
-            .metrics
+            .list_metrics
             .as_ref()
-            .map(|metrics| metrics.list_metrics(METHOD, resolution(&read_mask))),
+            .map(|metrics| metrics.stream_metrics(METHOD, resolution(&read_mask))),
         started,
     );
     let ledger_history = service.config.ledger_history();
@@ -202,7 +202,7 @@ pub(crate) async fn list_events(
 
 fn spawn_event_chunk(
     service: RpcService,
-    metrics: Option<ListApiMetrics>,
+    metrics: Option<ListStreamMetrics>,
     state: EventScanState,
     read_mask: FieldMaskTree,
     options: QueryOptions,
@@ -275,7 +275,7 @@ fn next_event_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
-    metrics: Option<&ListApiMetrics>,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<EventChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
@@ -620,7 +620,7 @@ fn render_event_chunk(
     options: &QueryOptions,
     entry_checkpoint: u64,
     cancel: &CancellationToken,
-    metrics: Option<&ListApiMetrics>,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<Vec<ListEventsResponse>, RpcError> {
     let rows = tx_seq_digest_rows_for_event_refs(service, &refs)?;
     let mut unique_digests = Vec::new();

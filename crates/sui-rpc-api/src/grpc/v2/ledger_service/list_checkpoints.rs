@@ -30,7 +30,7 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedRange;
-use crate::metrics::ListApiMetrics;
+use crate::metrics::ListStreamMetrics;
 use crate::metrics::ListRequestMetrics;
 use crate::read_mask_defaults;
 
@@ -94,9 +94,9 @@ pub(crate) async fn list_checkpoints(
     )?;
     let mut request_metrics = ListRequestMetrics::new(
         service
-            .metrics
+            .list_metrics
             .as_ref()
-            .map(|metrics| metrics.list_metrics(METHOD, resolution(&read_mask))),
+            .map(|metrics| metrics.stream_metrics(METHOD, resolution(&read_mask))),
         started,
     );
     let ledger_history = service.config.ledger_history();
@@ -214,7 +214,7 @@ fn spawn_checkpoint_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
-    metrics: Option<ListApiMetrics>,
+    metrics: Option<ListStreamMetrics>,
 ) -> JoinHandle<Result<CheckpointChunkDone, RpcError>> {
     spawn_list_chunk(metrics, move |metrics| {
         next_checkpoint_chunk(
@@ -272,7 +272,7 @@ fn next_checkpoint_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
-    metrics: Option<&ListApiMetrics>,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<CheckpointChunkDone, RpcError> {
     match state {
         CheckpointScanState::Init {
@@ -468,7 +468,7 @@ fn next_unfiltered_checkpoint_chunk(
     scan_budget: usize,
     chunk_item_limit: usize,
     cancel: &CancellationToken,
-    metrics: Option<&ListApiMetrics>,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<CheckpointChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let seqs = checkpoint_seqs_for_range(range.clone(), ascending, chunk_item_limit);
@@ -520,7 +520,7 @@ fn next_filtered_checkpoint_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
-    metrics: Option<&ListApiMetrics>,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<CheckpointChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let item_limit = chunk_item_limit.min(remaining_request_item_limit);
@@ -846,7 +846,7 @@ fn render_checkpoint_seqs(
     read_mask: &FieldMaskTree,
     options: &QueryOptions,
     cancel: &CancellationToken,
-    metrics: Option<&ListApiMetrics>,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<Vec<ListCheckpointsResponse>, RpcError> {
     let mut items = Vec::with_capacity(seqs.len());
     // Per-chunk running boundary; monotonic across chunks because seqs are

@@ -65,6 +65,7 @@ pub struct RpcService {
     chain_id: sui_types::digests::ChainIdentifier,
     server_version: Option<ServerVersion>,
     metrics: Option<Arc<RpcMetrics>>,
+    pub(crate) list_metrics: Option<Arc<metrics::ListApiMetrics>>,
     config: Config,
     extra_routes: axum::Router,
     extra_service_names: Vec<&'static str>,
@@ -81,6 +82,7 @@ impl RpcService {
             chain_id,
             server_version: None,
             metrics: None,
+            list_metrics: None,
             config: Config::default(),
             extra_routes: axum::Router::new(),
             extra_service_names: Vec::new(),
@@ -108,8 +110,9 @@ impl RpcService {
         self.subscription_service_handle = Some(subscription_service_handle);
     }
 
-    pub fn with_metrics(&mut self, metrics: RpcMetrics) {
-        self.metrics = Some(Arc::new(metrics));
+    pub fn with_metrics(&mut self, registry: &prometheus::Registry) {
+        self.metrics = Some(Arc::new(RpcMetrics::new(registry)));
+        self.list_metrics = Some(Arc::new(metrics::ListApiMetrics::new(registry)));
     }
 
     pub fn with_custom_service<S>(&mut self, svc: S)

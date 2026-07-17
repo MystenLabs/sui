@@ -24,14 +24,6 @@ pub struct RpcMetrics {
     num_requests: IntCounterVec,
     request_latency: HistogramVec,
     request_handler_latency: HistogramVec,
-    list_first_frame_seconds: HistogramVec,
-    list_response_page_bytes: HistogramVec,
-    list_watermark_frames_total: IntCounterVec,
-    list_stream_yield_wait_seconds: HistogramVec,
-    list_render_seconds: HistogramVec,
-    list_chunk_seconds: HistogramVec,
-    list_query_ends_total: IntCounterVec,
-    list_bitmap_buckets_evaluated: HistogramVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -74,6 +66,25 @@ impl RpcMetrics {
                 registry,
             )
             .unwrap(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ListApiMetrics {
+    list_first_frame_seconds: HistogramVec,
+    list_response_page_bytes: HistogramVec,
+    list_watermark_frames_total: IntCounterVec,
+    list_stream_yield_wait_seconds: HistogramVec,
+    list_render_seconds: HistogramVec,
+    list_chunk_seconds: HistogramVec,
+    list_query_ends_total: IntCounterVec,
+    list_bitmap_buckets_evaluated: HistogramVec,
+}
+
+impl ListApiMetrics {
+    pub(crate) fn new(registry: &Registry) -> Self {
+        Self {
             list_first_frame_seconds: register_histogram_vec_with_registry!(
                 "list_first_frame_seconds",
                 "Time in seconds from List handler entry to the first response frame of any kind — data, watermark-only, or terminal — the client's first actionable signal; resolution label derived only from the validated read mask.",
@@ -138,14 +149,13 @@ impl RpcMetrics {
             .unwrap(),
         }
     }
-}
-impl RpcMetrics {
-    pub(crate) fn list_metrics(
+
+    pub(crate) fn stream_metrics(
         &self,
         method: &'static str,
         resolution: &'static str,
-    ) -> ListApiMetrics {
-        ListApiMetrics {
+    ) -> ListStreamMetrics {
+        ListStreamMetrics {
             method,
             first_frame: self
                 .list_first_frame_seconds
@@ -421,7 +431,7 @@ fn code_as_str(code: tonic::Code) -> &'static str {
 }
 
 #[derive(Clone)]
-pub(crate) struct ListApiMetrics {
+pub(crate) struct ListStreamMetrics {
     method: &'static str,
     first_frame: Histogram,
     page_bytes: Histogram,
@@ -434,7 +444,7 @@ pub(crate) struct ListApiMetrics {
     bitmap_buckets_evaluated: Histogram,
 }
 
-impl ListApiMetrics {
+impl ListStreamMetrics {
     pub(crate) fn observe_render(&self, elapsed: Duration) {
         self.render.observe(elapsed.as_secs_f64());
     }
@@ -453,14 +463,14 @@ pub(crate) struct ListRequestMetrics {
 }
 
 struct ListRequestMetricsInner {
-    handles: ListApiMetrics,
+    handles: ListStreamMetrics,
     started: Instant,
     first_frame_observed: bool,
     success_finished: bool,
 }
 
 impl ListRequestMetrics {
-    pub(crate) fn new(handles: Option<ListApiMetrics>, started: Instant) -> Self {
+    pub(crate) fn new(handles: Option<ListStreamMetrics>, started: Instant) -> Self {
         Self {
             inner: handles.map(|handles| ListRequestMetricsInner {
                 handles,
@@ -471,7 +481,7 @@ impl ListRequestMetrics {
         }
     }
 
-    pub(crate) fn chunk_metrics(&self) -> Option<ListApiMetrics> {
+    pub(crate) fn chunk_metrics(&self) -> Option<ListStreamMetrics> {
         self.inner.as_ref().map(|inner| inner.handles.clone())
     }
 
@@ -932,7 +942,7 @@ mod tests {
     #[test]
     fn focused_metric_families_use_exact_bounded_labels() {
         let registry = Registry::new();
-        let rpc_metrics = RpcMetrics::new(&registry);
+        let list_metrics = ListApiMetrics::new(&registry);
         let method_resolutions = [
             ("list_checkpoints", "summary"),
             ("list_checkpoints", "transactions"),
@@ -944,7 +954,7 @@ mod tests {
             ("list_events", "json"),
         ];
         for (method, resolution) in method_resolutions {
-            rpc_metrics.list_metrics(method, resolution);
+            list_metrics.stream_metrics(method, resolution);
         }
         let methods = ["list_checkpoints", "list_transactions", "list_events"];
         let reasons = [
@@ -956,7 +966,7 @@ mod tests {
         ];
         for method in methods {
             for reason in reasons {
-                rpc_metrics
+                list_metrics
                     .list_query_ends_total
                     .with_label_values(&[method, reason]);
             }
@@ -1117,8 +1127,8 @@ mod tests {
     #[test]
     fn list_page_and_watermark_metrics_cover_all_frame_kinds() {
         let registry = Registry::new();
-        let metrics = RpcMetrics::new(&registry);
-        let handles = metrics.list_metrics("list_transactions", "full");
+        let metrics = ListApiMetrics::new(&registry);
+        let handles = metrics.stream_metrics("list_transactions", "full");
         let mut request_metrics = ListRequestMetrics::new(Some(handles.clone()), Instant::now());
 
         let mut data = ListTransactionsResponse::default();
@@ -1151,8 +1161,9 @@ mod tests {
         assert_eq!(handles.render.get_sample_count(), 1);
 
         let terminal_registry = Registry::new();
-        let terminal_metrics = RpcMetrics::new(&terminal_registry);
-        let terminal_handles = terminal_metrics.list_metrics("list_transactions", "digest");
+        let terminal_metrics = ListApiMetrics::new(&terminal_registry);
+        let terminal_handles =
+            terminal_metrics.stream_metrics("list_transactions", "digest");
         let mut terminal_request =
             ListRequestMetrics::new(Some(terminal_handles.clone()), Instant::now());
         terminal_request.observe_frame(&terminal, false);
