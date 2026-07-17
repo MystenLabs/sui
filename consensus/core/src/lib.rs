@@ -40,6 +40,7 @@ mod stake_aggregator;
 pub mod storage;
 mod subscriber;
 mod synchronizer;
+mod task;
 mod threshold_clock;
 mod transaction;
 mod transaction_vote_tracker;
