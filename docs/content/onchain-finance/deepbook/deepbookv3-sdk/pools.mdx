@@ -3,24 +3,54 @@ title: Pools SDK
 sidebar_label: Pools
 description: Learn how to use the DeepBookV3 SDK to read the state of a pool.
 keywords:
-  [
-    deepbook design,
-    deepbookv3,
-    deep book,
-    pool,
-    poolregistry,
-    balancemanager,
-    pool shared object,
-    poolregister shared object,
-    balancemanager shared object,
-    book,
-    state,
-    vault,
-    governance,
-    history,
-    account,
-    bigvector,
-  ]
+  - deepbook design
+  - deepbookv3
+  - deep book
+  - pool
+  - poolregistry
+  - balancemanager
+  - pool shared object
+  - poolregister shared object
+  - balancemanager shared object
+  - book
+  - state
+  - vault
+  - governance
+  - history
+  - account
+  - bigvector
+goal:
+  description: Developer can use the DeepBookV3 SDK to read the state of a pool
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Needs more API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'SDK: Pools'
+    stage: DeFi SDK
+questions:
+  - How do I use the Pools SDK?
+  - What is Pools SDK in Sui?
+  - What methods does the Pools SDK provide?
+answer: >-
+  Pools are shared objects that represent a market. See [Query the
+  Pool](/onchain-finance/deepbook/deepbookv3/contract-information/query-the-pool)
+  for more information on pools.
 ---
 
 Pools are shared objects that represent a market. See [Query the Pool](/onchain-finance/deepbook/deepbookv3/contract-information/query-the-pool) for more information on pools.

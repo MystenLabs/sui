@@ -1,7 +1,63 @@
 ---
 title: JSON-RPC Migration Guide
-description: Choose between gRPC and GraphQL RPC when migrating from the deprecated JSON-RPC API. Includes a method mapping, decision criteria, and common migration gotchas.
-keywords: [ json-rpc, migration, grpc, graphql, deprecation, sui rpc, json-rpc migration, sui rpc migration, replace json-rpc ]
+description: >-
+  Choose between gRPC and GraphQL RPC when migrating from the deprecated
+  JSON-RPC API. Includes a method mapping, decision criteria, and common
+  migration gotchas.
+keywords:
+  - json-rpc
+  - migration
+  - grpc
+  - graphql
+  - deprecation
+  - sui rpc
+  - json-rpc migration
+  - sui rpc migration
+  - replace json-rpc
+goal:
+  description: >-
+    Reader can choose between gRPC and GraphQL RPC when migrating from the
+    deprecated JSON-RPC API.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Transaction indexing (migration)
+    stage: History
+    eval: partial
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Index payment history
+    stage: Ship
+    eval: partial
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - What is JSON-RPC Migration Guide in Sui?
+  - How does json-rpc migration guide work on Sui?
+  - How do I migrate to json-rpc migration guide?
+answer: >-
+  Choose between gRPC and GraphQL RPC when migrating from the deprecated
+  JSON-RPC API. Includes a method mapping, decision criteria, and common
+  migration gotchas.
 ---
 
 <ImportContent source="json-rpc-deprecation" mode="snippet" />
@@ -167,7 +223,7 @@ query {
 
 - **GraphQL:** Query `Address.balance` for a single coin type or `Address.balances` for all balances, both reached from `Query.address`. Read `Balance.totalBalance`, `Balance.coinBalance`, and `Balance.addressBalance` together to reconcile. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for a verified example.
 
-- **gRPC:** Use `StateService.GetBalance` or `StateService.ListBalances`. See the [`GetBalance` request reference](/references/fullnode-protocol-messages#sui-rpc-v2-GetBalanceRequest) and the worked example in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances).
+- **gRPC:** Use `StateService.GetBalance` or `StateService.ListBalances`. See the [`GetBalance` request reference](/references/fullnode-protocol-messages) and the worked example in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances).
 
 <details>
 

@@ -1,7 +1,52 @@
 ---
 title: DeepBookV3 SDK
-description: Use the DeepBook TypeScript SDK to interact directly with the DeepBook package. 
-keywords: [ deepbook, deep book, deepbook v3, typescript, typescript SDK, mysten/deepbook, deepbookV3 SDK, Coin, Pool, Manager ] 
+description: >-
+  Use the DeepBook TypeScript SDK to interact directly with the DeepBook
+  package.
+keywords:
+  - deepbook
+  - deep book
+  - deepbook v3
+  - typescript
+  - typescript SDK
+  - mysten/deepbook
+  - deepbookV3 SDK
+  - Coin
+  - Pool
+  - Manager
+goal:
+  description: >-
+    Developer can use the DeepBook TypeScript SDK to interact directly with the
+    DeepBook package
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Needs more API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: DeepBook SDK overview
+    stage: DeFi Primitives
+questions:
+  - How do I use the DeepBookV3 SDK?
+  - What is DeepBookV3 SDK in Sui?
+  - What methods does the DeepBookV3 SDK provide?
+answer: >-
+  The DeepBookV3 TypeScript SDK abstracts away the transaction calls, allowing
+  for direct interactions with the `DeepBook` package.
 ---
 
 The DeepBookV3 TypeScript SDK abstracts away the transaction calls, allowing for direct interactions with the `DeepBook` package.

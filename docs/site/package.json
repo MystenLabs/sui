@@ -19,7 +19,10 @@
     "typecheck": "tsc",
     "fire:deploy-dev": "firebase deploy --only hosting:dev",
     "ampli": "ampli",
-    "test:markdown": "node scripts/test-markdown-export.js"
+    "test:markdown": "node scripts/test-markdown-export.js",
+    "docs:audit": "node scripts/audit-docs.mjs",
+    "docs:audit:summary": "node scripts/audit-docs.mjs --summary",
+    "docs:audit:failures": "node scripts/audit-docs.mjs --only-failures --summary"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.5.3",

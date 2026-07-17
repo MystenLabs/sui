@@ -1,7 +1,52 @@
 ---
 title: Inputs and Results
-description: Programmable transaction blocks accept two types of inputs (objects and pure values) and produce results that subsequent commands can use.
-keywords: [PTB inputs, PTB results, pure values, object inputs, transaction arguments, BCS bytes, ObjectArg, programmable transaction blocks]
+description: >-
+  Programmable transaction blocks accept two types of inputs (objects and pure
+  values) and produce results that subsequent commands can use.
+keywords:
+  - PTB inputs
+  - PTB results
+  - pure values
+  - object inputs
+  - transaction arguments
+  - BCS bytes
+  - ObjectArg
+  - programmable transaction blocks
+goal:
+  description: >-
+    Reader understands programmable transaction blocks accept two types of
+    inputs (objects and pure values)
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: PTB inputs and results
+    stage: Money Movement
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: PTB inputs and results
+    stage: Agent Write
+questions:
+  - What is Inputs and Results in Sui?
+  - How does inputs and results work on Sui?
+  - Why should I use inputs and results?
+answer: >-
+  Programmable transaction blocks accept two types of inputs (objects and pure
+  values) and produce results that subsequent commands can use.
 ---
 
 <AgentPrompt

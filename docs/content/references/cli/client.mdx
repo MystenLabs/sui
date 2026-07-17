@@ -1,7 +1,42 @@
 ---
 title: Sui Client CLI
-description: The Sui Client CLI provides command-level access to interact with the Sui network.
-keywords: [ sui cli, sui client cli, sui client cli, sui client, sui cli help, sui cli reference, sui cli commands, cli commands, cli reference ]
+description: >-
+  The Sui Client CLI provides command-level access to interact with the Sui
+  network.
+keywords:
+  - sui cli
+  - sui client cli
+  - sui client cli
+  - sui client
+  - sui cli help
+  - sui cli reference
+  - sui cli commands
+  - cli commands
+  - cli reference
+goal:
+  description: 'Reader can look up client cli command syntax, flags, and usage examples'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - pattern: 'sui '
+      min: 2
+      label: Shows CLI command usage
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui Client CLI in Sui?
+  - How do I publish a move package?
+  - What are the available sui client cli commands?
+answer: >-
+  The Sui CLI `client` command provides command-level access to interact with
+  the Sui network.
 ---
 
 The Sui CLI `client` command provides command-level access to interact with the Sui network. Typical uses for `sui client` include publishing Move smart contracts, getting the information of an object, executing transactions, or managing addresses.

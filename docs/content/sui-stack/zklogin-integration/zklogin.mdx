@@ -1,7 +1,60 @@
 ---
 title: What is zkLogin?
-description: zkLogin is a Sui primitive that enables you to send transactions from a Sui address using an OAuth credential without publicly linking the two.
-keywords: [ zklogin, how to use zklogin, generate ephemeral key pair, fetch JWT, decode JWT, generate salt, generate user Sui address, fetch ZK proof, assemble zkLogin signature, oauth, openid ]
+description: >-
+  zkLogin is a Sui primitive that enables you to send transactions from a Sui
+  address using an OAuth credential without publicly linking the two.
+keywords:
+  - zklogin
+  - how to use zklogin
+  - generate ephemeral key pair
+  - fetch JWT
+  - decode JWT
+  - generate salt
+  - generate user Sui address
+  - fetch ZK proof
+  - assemble zkLogin signature
+  - oauth
+  - openid
+goal:
+  description: >-
+    Reader understands zkLogin is a Sui primitive that enables you to send
+    transactions from a Sui address using an OAuth
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: zkLogin + sponsored tx
+    stage: UX
+    eval: missing
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: zkLogin setup
+    stage: Auth
+    eval: partial
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - What is zkLogin in Sui?
+  - How does zklogin work on Sui?
+  - Why should I use zklogin?
+answer: >-
+  zkLogin is a Sui primitive that allows you to send transactions from a Sui
+  address using an OAuth credential without publicly linking the two.
 ---
 
 zkLogin is a Sui primitive that allows you to send transactions from a Sui address using an OAuth credential without publicly linking the two.

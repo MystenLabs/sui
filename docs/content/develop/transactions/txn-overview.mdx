@@ -1,7 +1,49 @@
 ---
 title: What is a Transaction?
-description: Sui has two types of transactions, programmable transaction blocks and system transactions.
-keywords: [ ptbs, system transactions, programmable transaction, transaction blocks, transactions, sui transactions, transaction metadata ]
+description: >-
+  Sui has two types of transactions, programmable transaction blocks and system
+  transactions.
+keywords:
+  - ptbs
+  - system transactions
+  - programmable transaction
+  - transaction blocks
+  - transactions
+  - sui transactions
+  - transaction metadata
+goal:
+  description: >-
+    Reader understands sui has two types of transactions, programmable
+    transaction blocks and system transactions
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Transaction overview
+    stage: Payment Flow
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Transaction overview
+    stage: Money Movement
+questions:
+  - What is a Transaction in Sui?
+  - How does a transaction work on Sui?
+  - Why should I use a transaction?
+answer: >-
+  Every update on Sui, whether to the network itself or to objects on the
+  network, happens through a transaction. Transactions handle everything from
+  creating objects and minting assets to managing network operations.
 ---
 
 Every update on Sui, whether to the network itself or to objects on the network, happens through a transaction. Transactions handle everything from creating objects and minting assets to managing network operations.

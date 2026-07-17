@@ -1,7 +1,42 @@
 ---
 title: What is gRPC?
-description: Learn about gRPC and how it provides fast, type-safe access to Sui network data.
-keywords: [ grpc, g rpc, RPC, sui full node grpc, full node rpc, what is grpc, grpc on sui ]
+description: >-
+  Learn about gRPC and how it provides fast, type-safe access to Sui network
+  data.
+keywords:
+  - grpc
+  - g rpc
+  - RPC
+  - sui full node grpc
+  - full node rpc
+  - what is grpc
+  - grpc on sui
+goal:
+  description: >-
+    Reader understands how gRPC provides fast, type-safe access to Sui network
+    data
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is gRPC in Sui?
+  - When to use?
+  - How does grpc work on Sui?
+answer: >-
+  Learn about gRPC and how it provides fast, type-safe access to Sui network
+  data.
 ---
 
 The [Sui Full Node gRPC API](/references/fullnode-protocol) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Designed for power users, indexers, explorers, and decentralized apps, this API enables access to Sui data with high performance and low latency.
@@ -87,7 +122,7 @@ You can reuse the same gRPC `LedgerService` methods for this lookup, but you mus
 
 1. Generate client code from the official `.proto` definitions in [`sui-apis`](https://github.com/MystenLabs/sui-apis/tree/main/proto) to ensure compatibility and type safety.
 
-1. [Paginate](#pagination) carefully. Always check `next_page_token` and do not assume all data is returned at once.
+1. Paginate carefully. Always check `next_page_token` and do not assume all data is returned at once.
 
 1. Retry transient failures with [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff), especially for streaming APIs or busy public nodes.
 

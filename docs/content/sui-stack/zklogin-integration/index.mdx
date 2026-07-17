@@ -1,7 +1,54 @@
 ---
 title: zkLogin Integration
 description: zkLogin can be integrated into applications deployed on Sui.
-keywords: [ zklogin, how to use zklogin, generate ephemeral key pair, fetch JWT, decode JWT, generate salt, generate user Sui address, fetch ZK proof, assemble zkLogin signature, oauth, openid ]
+keywords:
+  - zklogin
+  - how to use zklogin
+  - generate ephemeral key pair
+  - fetch JWT
+  - decode JWT
+  - generate salt
+  - generate user Sui address
+  - fetch ZK proof
+  - assemble zkLogin signature
+  - oauth
+  - openid
+goal:
+  description: >-
+    Reader can implement the zkLogin flow — ephemeral keys, JWT, user salt, and
+    zero-knowledge proof — to enable zkLogin transactions in an app
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: zkLogin overview
+    stage: Auth
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: zkLogin for agent identity
+    stage: Authorization
+questions:
+  - What is zkLogin integration on Sui?
+  - How do I install and use the zkLogin TypeScript SDK?
+  - How do I manage user salts for zkLogin?
+answer: >-
+  This guide covers the zkLogin flow for creating ephemeral keys, obtaining JWTs
+  and proofs, managing user salts, assembling signatures, and submitting
+  transactions.
 ---
 
 Here is the high-level flow the wallet or frontend application must implement to support zkLogin-enabled transactions:

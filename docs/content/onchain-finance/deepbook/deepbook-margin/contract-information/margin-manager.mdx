@@ -1,18 +1,46 @@
 ---
 title: Margin Manager
-description: Learn about the margin manager and how it enables leveraged trading on DeepBook.
+description: >-
+  Learn about the margin manager and how it enables leveraged trading on
+  DeepBook.
 keywords:
-  [
-    margin manager,
-    marginmanager,
-    leveraged trading,
-    margin trading,
-    borrow,
-    repay,
-    liquidation,
-    collateral,
-    deepbook margin,
-  ]
+  - margin manager
+  - marginmanager
+  - leveraged trading
+  - margin trading
+  - borrow
+  - repay
+  - liquidation
+  - collateral
+  - deepbook margin
+goal:
+  description: >-
+    Reader understands how the margin manager enables leveraged trading on
+    DeepBook
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'Margin contract: Manager'
+    stage: Margin
+questions:
+  - What is Margin Manager in Sui?
+  - How does margin manager work on Sui?
+  - Why should I use margin manager?
+answer: >-
+  Learn about the margin manager and how it enables leveraged trading on
+  DeepBook.
 ---
 
 The `MarginManager` is a shared object that wraps a `BalanceManager` and provides the necessary capabilities to deposit, withdraw, trade, and manage leveraged positions. It enables users to borrow assets from margin pools to amplify their trading positions while managing risk through collateralization.

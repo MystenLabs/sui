@@ -1,20 +1,54 @@
 ---
 title: BalanceManager SDK
 sidebar_label: BalanceManager
-description: Learn how to use the DeepBookV3 SDK to manage balance managers and their capabilities.
+description: >-
+  Learn how to use the DeepBookV3 SDK to manage balance managers and their
+  capabilities.
 keywords:
-  [
-    balance manager,
-    balancemanager,
-    deepbookv3,
-    sdk,
-    trade cap,
-    deposit cap,
-    withdraw cap,
-    proof,
-    referral,
-    capabilities,
-  ]
+  - balance manager
+  - balancemanager
+  - deepbookv3
+  - sdk
+  - trade cap
+  - deposit cap
+  - withdraw cap
+  - proof
+  - referral
+  - capabilities
+goal:
+  description: >-
+    Developer can use the DeepBookV3 SDK to manage balance managers and their
+    capabilities
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Needs more API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'SDK: Balance manager'
+    stage: DeFi SDK
+questions:
+  - How do I use the BalanceManager SDK?
+  - What is BalanceManager SDK in Sui?
+  - What methods does the BalanceManager SDK provide?
+answer: >-
+  The `BalanceManager` is a core component of DeepBookV3 that holds all asset
+  balances. The SDK provides comprehensive functions to create, manage, and
+  interact with balance managers.
 ---
 
 The `BalanceManager` is a core component of DeepBookV3 that holds all asset balances. The SDK provides comprehensive functions to create, manage, and interact with balance managers.

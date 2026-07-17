@@ -1,7 +1,67 @@
 ---
 title: Emitting Events
-description: Use events to notify onchain assets of activity your smart contracts initiate and query events from other packages to trigger logic based on emitted events.
-keywords: [ using events, notify events, notify assets, notify onchain assets, activity events, events for activities, move events, events in move, query events, sui RPC, graphql, move, filter events, rust, typescript ]
+description: >-
+  Use events to notify onchain assets of activity your smart contracts initiate
+  and query events from other packages to trigger logic based on emitted events.
+keywords:
+  - using events
+  - notify events
+  - notify assets
+  - notify onchain assets
+  - activity events
+  - events for activities
+  - move events
+  - events in move
+  - query events
+  - sui RPC
+  - graphql
+  - move
+  - filter events
+  - rust
+  - typescript
+goal:
+  description: >-
+    Reader can define, emit, and query Move events to track onchain activity
+    from offchain applications
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Event querying
+    stage: Advanced
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Event querying
+    stage: History
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Event querying
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Event querying
+    stage: Verify & Secure
+questions:
+  - How do I emit events from a Move smart contract?
+  - How do I query Sui events with GraphQL or gRPC?
+  - What is the difference between Move events and system events?
+answer: >-
+  Use events to notify onchain assets of activity your smart contracts initiate
+  and query events from other packages to trigger logic based on emitted events.
 ---
 
 Move code can interact with objects stored on Sui. Some applications track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates. 
@@ -58,7 +118,7 @@ When you process events, each event object contains the following attributes:
 
 ### Querying events with RPC
 
-The Sui RPC provides a [`queryEvents`](/references/sui-api#suix_queryEvents) method to query onchain packages and return available events. As an example, the following `curl` command queries the DeepBookV3 package on Mainnet for a specific type of event:
+The Sui RPC provides a [`queryEvents`](/references/sui-api) method to query onchain packages and return available events. As an example, the following `curl` command queries the DeepBookV3 package on Mainnet for a specific type of event:
 
 ```sh
 $ curl -X POST https://fullnode.mainnet.sui.io:443 \

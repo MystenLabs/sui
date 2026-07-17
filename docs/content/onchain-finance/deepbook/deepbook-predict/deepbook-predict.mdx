@@ -1,20 +1,43 @@
 ---
 title: DeepBook Predict
-description: Prediction market protocol built alongside DeepBook, with binary positions, vertical ranges, oracle-driven pricing, and shared vault liquidity on Sui.
+description: >-
+  Prediction market protocol built alongside DeepBook, with binary positions,
+  vertical ranges, oracle-driven pricing, and shared vault liquidity on Sui.
 keywords:
-  [
-    deepbook predict,
-    predict,
-    prediction market,
-    binary position,
-    vertical range,
-    oracle,
-    plp,
-    deepbook,
-    sui,
-  ]
-last_verified: 2025-04-16
+  - deepbook predict
+  - predict
+  - prediction market
+  - binary position
+  - vertical range
+  - oracle
+  - plp
+  - deepbook
+  - sui
+last_verified: 2025-04-16T00:00:00.000Z
 verified_against: predict-testnet-4-16
+goal:
+  description: >-
+    Reader understands prediction market protocol built alongside DeepBook, with
+    binary positions, vertical ranges
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is DeepBook Predict in Sui?
+  - How do I user flow?
+  - How does deepbook predict work on Sui?
+answer: >-
+  Prediction market protocol built alongside DeepBook, with binary positions,
+  vertical ranges, oracle-driven pricing, and shared vault liquidity on Sui.
 ---
 
 DeepBook Predict is an expiry-based prediction market protocol on Sui. It lets applications build markets where users can mint and redeem binary positions or vertical ranges against oracle-driven prices, while liquidity providers supply quote assets to a shared vault and receive `PLP` LP shares.

@@ -1,7 +1,57 @@
 ---
 title: Custom Indexer and Walrus
-description: Walrus is a content-addressable storage protocol, where data is retrieved using a unique identifier derived from the content itself, rather than from a file path or location. Integrating a custom Sui Indexer with Walrus can provide novel user experiences.
-keywords: [ walrus, indexer, custom indexer, custom indexer framework, blob, sequential pipeline, blog ]
+description: >-
+  Walrus is a content-addressable storage protocol, where data is retrieved
+  using a unique identifier derived from the content itself, rather than from a
+  file path or location. Integrating a custom Sui Indexer with Walrus can
+  provide novel user experiences.
+keywords:
+  - walrus
+  - indexer
+  - custom indexer
+  - custom indexer framework
+  - blob
+  - sequential pipeline
+  - blog
+goal:
+  description: >-
+    Reader can build a custom indexer for a blog platform backed by Walrus
+    content-addressable storage
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Walrus custom indexer
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Walrus custom indexer
+    stage: Ship
+questions:
+  - What is Custom Indexer and Walrus in Sui?
+  - How does custom indexer and walrus work on Sui?
+  - Why should I use custom indexer and walrus?
+answer: >-
+  Walrus is a content-addressable storage protocol, where data is retrieved
+  using a unique identifier derived from the content itself, rather than from a
+  file path or location.
 ---
 
 [Walrus](https://walrus.xyz) is a decentralized storage and data availability protocol designed specifically for large binary files. It is a content-addressable storage protocol, meaning data is identified and retrieved using a unique identifier called a blob. The protocol derives blobs from the content itself rather than from a file path or location. Consequently, if different users upload the same content, Walrus reuses the existing blob rather than creating a new one. 

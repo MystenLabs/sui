@@ -1,24 +1,62 @@
 ---
 title: DeepBookV3
-description: A central limit order book that brings features and functionality to marketplaces on Sui. Token exchanges that use the layer can offer transparency, a full range of trading options, and customer privacy.
+description: >-
+  A central limit order book that brings features and functionality to
+  marketplaces on Sui. Token exchanges that use the layer can offer
+  transparency, a full range of trading options, and customer privacy.
 keywords:
-  [
-    deepbook,
-    deep book,
-    limit order book,
-    order book,
-    orderbook,
-    deepbookv3,
-    deep book v3,
-    deep book 3,
-    decentralized central limit order book,
-    clob,
-    DEEP token,
-    deep,
-    liquidity support,
-    digital ledger,
-  ]
+  - deepbook
+  - deep book
+  - limit order book
+  - order book
+  - orderbook
+  - deepbookv3
+  - deep book v3
+  - deep book 3
+  - decentralized central limit order book
+  - clob
+  - DEEP token
+  - deep
+  - liquidity support
+  - digital ledger
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands a central limit order book that offers features and
+    functionality for marketplaces on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Understand DeFi on Sui
+    stage: DeFi Primitives
+    eval: partial
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: DeepBook integration
+    stage: DeFi Primitives
+    eval: partial
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - What is DeepBookV3 in Sui?
+  - How does deepbookv3 work on Sui?
+  - Why should I use deepbookv3?
+answer: >-
+  DeepBookV3 is a next-generation decentralized central limit order book (CLOB)
+  built on Sui.
 ---
 
 DeepBookV3 is a next-generation decentralized central limit order book (CLOB) built on Sui. DeepBookV3 leverages Sui's parallel execution and low transaction fees to bring a highly performant, low-latency exchange onchain.

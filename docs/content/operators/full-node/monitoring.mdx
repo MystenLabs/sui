@@ -2,7 +2,35 @@
 title: Sui Node Monitoring
 sidebar_label: Monitoring
 description: Monitor Sui node metrics to ensure the health and performance of your node.
-keywords: [ localhost:9184/metrics, node metrics, view metrics, monitor production ]
+keywords:
+  - 'localhost:9184/metrics'
+  - node metrics
+  - view metrics
+  - monitor production
+goal:
+  description: >-
+    Node operator can monitor Sui node metrics to ensure the health and
+    performance of your node
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I monitor a Sui full node?
+  - What Prometheus metrics does a Sui node expose?
+  - How do I set up alerts for my Sui node?
+answer: Monitor Sui node metrics to ensure the health and performance of your node.
 ---
 
 :::info

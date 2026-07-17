@@ -1,17 +1,51 @@
 ---
 title: DeepBook Margin SDK
-description: Use the DeepBook TypeScript SDK to interact directly with the DeepBook Margin package.
+description: >-
+  Use the DeepBook TypeScript SDK to interact directly with the DeepBook Margin
+  package.
 keywords:
-  [
-    deepbook margin,
-    margin trading,
-    typescript,
-    typescript SDK,
-    mysten/deepbook,
-    deepbook margin SDK,
-    margin manager,
-    margin pool,
-  ]
+  - deepbook margin
+  - margin trading
+  - typescript
+  - typescript SDK
+  - mysten/deepbook
+  - deepbook margin SDK
+  - margin manager
+  - margin pool
+goal:
+  description: >-
+    Developer can use the DeepBook TypeScript SDK to interact directly with the
+    DeepBook Margin package
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Needs more API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Margin SDK overview
+    stage: Margin
+questions:
+  - How do I use the DeepBook Margin SDK?
+  - What is DeepBook Margin SDK in Sui?
+  - What methods does the DeepBook Margin SDK provide?
+answer: >-
+  The DeepBook Margin TypeScript SDK abstracts away the transaction calls,
+  allowing for direct interactions with the `DeepBook Margin` package for
+  leveraged trading.
 ---
 
 The DeepBook Margin TypeScript SDK abstracts away the transaction calls, allowing for direct interactions with the `DeepBook Margin` package for leveraged trading.

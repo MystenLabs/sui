@@ -1,7 +1,40 @@
 ---
 title: GraphQL and General-Purpose Indexer
-description: Setup instructions for running the indexer, consistent store, and GraphQL in production.
-keywords: [indexer, consistent store, graphql, setup]
+description: >-
+  Setup instructions for running the indexer, consistent store, and GraphQL in
+  production.
+keywords:
+  - indexer
+  - consistent store
+  - graphql
+  - setup
+goal:
+  description: >-
+    Operator understands setup instructions for running the indexer, consistent
+    store, and GraphQL in production
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I set up the Sui GraphQL and indexer stack?
+  - What infrastructure do I need for the general-purpose indexer?
+  - How do I configure the indexer for production?
+answer: >-
+  See [GraphQL and General-Purpose
+  Indexer](/develop/accessing-data/custom-indexer/custom-indexers) for more
+  information on the stack.
 ---
 
 <ImportContent source="indexer-graphql" mode="snippet" />
