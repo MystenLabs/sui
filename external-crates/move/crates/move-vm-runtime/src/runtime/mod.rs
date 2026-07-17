@@ -150,7 +150,7 @@ impl MoveRuntime {
                 // linkage context does not match the expected linkage context, then we drop the
                 // cached VTables and reload them. This should never happen, but if it does, we
                 // want to recover gracefully rather than erroring out with an invariant violation.
-                if !virtual_tables.size_formulas.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_empty() || link_context != *virtual_tables.link_context {
+                if !virtual_tables.size_formulas.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_empty() || !virtual_tables.term_size_formulas.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_empty() || link_context != *virtual_tables.link_context {
                     error!("Cached VTables for linkage context {:?} have precomputed type depths or do not match the expected linkage context. Dropping cached VTables and reloading.", link_context);
                     self.cache.drop_all_cached_linkage_tables();
                     virtual_tables = self.load_and_cache_vtables(
