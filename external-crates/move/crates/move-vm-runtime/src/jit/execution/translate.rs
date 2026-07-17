@@ -17,6 +17,10 @@ use crate::{
     shared::{
         TraversalBudget,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
+        type_size_formulae::{
+            ApplyResolver, DatatypeSizeInfo, FoldedSizeInfo, PartialTypeFormula,
+            datatype_builders_for_fields,
+        },
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
         vm_pointer::VMPointer,
@@ -408,6 +412,9 @@ fn module(
     let type_refs = initialize_type_refs(context, cmodule)?;
 
     let (structs, enums, datatype_descriptors) = datatypes(context, &version_id, &mkey, cmodule)?;
+    // NB: the descriptors go into the vtable before signatures are cached, so signature-term
+    // folding can resolve this module's own datatypes.
+    context.insert_vtable_datatypes(datatype_descriptors.to_ptrs())?;
     let (instantiation_signatures, _signature_map) = cache_signatures(context, cmodule)?;
     dbg_println!("Module types loaded");
 
@@ -415,8 +422,6 @@ fn module(
         .iter()
         .map(VMPointer::from_ref)
         .collect::<Vec<_>>();
-
-    context.insert_vtable_datatypes(datatype_descriptors.to_ptrs())?;
 
     let struct_instantiations = struct_instantiations(context, cmodule, &structs, &sig_pointers)?;
     let enum_instantiations = enum_instantiations(context, cmodule, &enums, &sig_pointers)?;
@@ -510,6 +515,124 @@ fn initialize_type_refs(
 // Datatype Translation
 // -------------------------------------------------------------------------------------------------
 
+// -------------------------------------------------------------------------------------------------
+// Intra-Package Size Folding
+// -------------------------------------------------------------------------------------------------
+
+/// A datatype definition of the module currently being translated, for folding same-module
+/// references whose descriptors are not built yet.
+#[derive(Copy, Clone)]
+enum ModuleDatatypeDef<'a> {
+    Struct(&'a StructDef),
+    Enum(&'a EnumDef),
+}
+
+/// Folds intra-package datatype applications while through-field size forms are built at
+/// translation time. Intra-package resolution is linkage-independent — a package's
+/// self-references always resolve to itself — so the folded forms remain valid under every
+/// linkage; only genuinely cross-package applications stay symbolic (`None`).
+///
+/// Dependency modules were translated first (the module DFS loads in dependency order), so
+/// their descriptors carry already-folded size information in the package vtable; same-module
+/// references fold recursively from the definitions, memoized, with a visiting set turning a
+/// (verifier-impossible) definition cycle into an invariant violation.
+struct PackageSizeFolder<'a> {
+    original_id: OriginalId,
+    vtable_types: &'a DefinitionMap<VMPointer<DatatypeDescriptor>>,
+    defs: std::collections::HashMap<IntraPackageKey, ModuleDatatypeDef<'a>>,
+    memo: std::collections::HashMap<IntraPackageKey, FoldedSizeInfo>,
+    visiting: std::collections::HashSet<IntraPackageKey>,
+}
+
+impl<'a> PackageSizeFolder<'a> {
+    fn new(
+        original_id: OriginalId,
+        vtable_types: &'a DefinitionMap<VMPointer<DatatypeDescriptor>>,
+        structs: &'a [StructDef],
+        enums: &'a [EnumDef],
+    ) -> Self {
+        let defs = structs
+            .iter()
+            .map(|struct_| {
+                (
+                    *struct_.def_vtable_key.intra_package_key(),
+                    ModuleDatatypeDef::Struct(struct_),
+                )
+            })
+            .chain(enums.iter().map(|enum_| {
+                (
+                    *enum_.def_vtable_key.intra_package_key(),
+                    ModuleDatatypeDef::Enum(enum_),
+                )
+            }))
+            .collect();
+        Self {
+            original_id,
+            vtable_types,
+            defs,
+            memo: std::collections::HashMap::new(),
+            visiting: std::collections::HashSet::new(),
+        }
+    }
+
+    /// A folder with no same-module definitions, for signature terms (by the time signatures
+    /// are cached, the module's own descriptors are already in the vtable).
+    fn for_signatures(
+        original_id: OriginalId,
+        vtable_types: &'a DefinitionMap<VMPointer<DatatypeDescriptor>>,
+    ) -> Self {
+        Self::new(original_id, vtable_types, &[], &[])
+    }
+}
+
+impl ApplyResolver for PackageSizeFolder<'_> {
+    fn resolve_apply(&mut self, key: &VirtualTableKey) -> PartialVMResult<Option<FoldedSizeInfo>> {
+        if key.package_key() != self.original_id {
+            return Ok(None);
+        }
+        let intra_key = *key.intra_package_key();
+        if let Some(info) = self.memo.get(&intra_key) {
+            return Ok(Some(info.clone()));
+        }
+        // Already-translated modules: read the descriptor's (already folded) information.
+        if let Some(descriptor) = self.vtable_types.get(&intra_key) {
+            let info = FoldedSizeInfo::from_size_info(descriptor.to_ref().size_info());
+            self.memo.insert(intra_key, info.clone());
+            return Ok(Some(info));
+        }
+        // Same-module reference whose descriptor is not built yet: fold from the definition.
+        let Some(def) = self.defs.get(&intra_key).copied() else {
+            return Err(partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "unresolvable intra-package datatype reference while folding size formulas"
+            ));
+        };
+        if !self.visiting.insert(intra_key) {
+            return Err(partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "cyclic datatype definition encountered while folding size formulas"
+            ));
+        }
+        let (value_depth, layout_size) = match def {
+            ModuleDatatypeDef::Struct(struct_) => {
+                datatype_builders_for_fields(struct_.fields.iter(), 0, self)?
+            }
+            ModuleDatatypeDef::Enum(enum_) => datatype_builders_for_fields(
+                enum_
+                    .variants
+                    .iter()
+                    .flat_map(|variant| variant.fields.iter()),
+                enum_.variants.len() as u64,
+                self,
+            )?,
+        };
+        self.visiting.remove(&intra_key);
+        let info = FoldedSizeInfo::from_builders(value_depth, layout_size);
+        self.memo.insert(intra_key, info.clone());
+        Ok(Some(info))
+    }
+}
+
 /// Loads structs and enums, returning them and their datatype descriptors (for vtable entry).
 fn datatypes(
     context: &mut PackageContext,
@@ -558,6 +681,40 @@ fn datatypes(
 
     let module_original_id = ModuleIdKey::from_parts(original_address, *module_name);
 
+    // Fold every datatype's through-field size information up front, eagerly resolving
+    // intra-package applications (see [`PackageSizeFolder`]). The value depth of an enum is
+    // the maximum over all of its variants, so its folding covers every variant's fields; its
+    // layout counts one node per variant on top of the fields, mirroring the layout traversal.
+    let mut size_infos: std::collections::HashMap<IntraPackageKey, DatatypeSizeInfo> = {
+        let mut folder =
+            PackageSizeFolder::new(context.original_id, &context.vtable_types, &structs, &enums);
+        structs
+            .iter()
+            .map(|struct_| &struct_.def_vtable_key)
+            .chain(enums.iter().map(|enum_| &enum_.def_vtable_key))
+            .map(|key| {
+                let folded = folder.resolve_apply(key)?.ok_or_else(|| {
+                    partial_vm_error!(
+                        VERIFIER_INVARIANT_VIOLATION,
+                        "module datatype missing from its own package while folding"
+                    )
+                })?;
+                Ok((
+                    *key.intra_package_key(),
+                    folded.allocate(&context.package_arena)?,
+                ))
+            })
+            .collect::<PartialVMResult<_>>()?
+    };
+    let mut size_info_for = |key: &VirtualTableKey| {
+        size_infos.remove(key.intra_package_key()).ok_or_else(|| {
+            partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "missing folded size information for module datatype"
+            )
+        })
+    };
+
     let struct_descriptors = structs
         .iter()
         .map(|struct_| {
@@ -567,11 +724,7 @@ fn datatypes(
             let datatype_info =
                 context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
             let name = context.interner.intern_identifier(&name);
-            let size_info = DatatypeSizeInfo::for_datatype_fields(
-                struct_.fields.iter(),
-                /* extra_layout_nodes */ 0,
-                &context.package_arena,
-            )?;
+            let size_info = size_info_for(&struct_.def_vtable_key)?;
             let descriptor =
                 DatatypeDescriptor::new(name, defining_id, original_id, datatype_info, size_info);
             Ok(descriptor)
@@ -586,17 +739,7 @@ fn datatypes(
             let original_id = module_original_id;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
             let name = context.interner.intern_identifier(&name);
-            // The value depth of an enum is the maximum over all of its variants, so the
-            // size information folds every variant's fields; its layout counts one node per variant on
-            // top of the fields, mirroring the layout traversal.
-            let size_info = DatatypeSizeInfo::for_datatype_fields(
-                enum_
-                    .variants
-                    .iter()
-                    .flat_map(|variant| variant.fields.iter()),
-                /* extra_layout_nodes */ enum_.variants.len() as u64,
-                &context.package_arena,
-            )?;
+            let size_info = size_info_for(&enum_.def_vtable_key)?;
             let descriptor =
                 DatatypeDescriptor::new(name, defining_id, original_id, datatype_info, size_info);
             Ok(descriptor)
@@ -790,10 +933,16 @@ fn cache_signatures(
                 .0
                 .iter()
                 .map(|ty| {
-                    // Pair each signature type with its substitution formula, computed once
-                    // here so every runtime instantiation check is pure arithmetic.
+                    // Pair each signature type with its size formulas, computed once here so
+                    // every runtime instantiation check is pure arithmetic. Intra-package
+                    // datatype applications fold eagerly: this module's own descriptors are
+                    // already in the vtable, as are its (already translated) dependencies'.
                     let ty = make_arena_type(context, module, ty)?;
-                    PartialTypeFormula::for_term(ty, &context.package_arena)
+                    let mut folder = PackageSizeFolder::for_signatures(
+                        context.original_id,
+                        &context.vtable_types,
+                    );
+                    PartialTypeFormula::for_term(ty, &context.package_arena, &mut folder)
                 })
                 .collect::<PartialVMResult<Vec<_>>>()?;
             context.arena_vec(tys.into_iter())

@@ -11,7 +11,8 @@ use crate::{
         },
         values::values_impl::{self as values, VMValueCast, Value},
     },
-    jit::execution::ast::{Function, InternedDisplay, TypeArguments},
+    jit::execution::ast::{Function, InternedDisplay},
+    shared::type_size_formulae::TypeArguments,
     shared::{
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
