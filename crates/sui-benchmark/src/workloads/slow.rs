@@ -89,18 +89,26 @@ impl SlowTestPayload {
             );
 
             // Padding: inflate transaction (and hence block) bytes to slow consensus
-            // sequencing, which lengthens the submit-semaphore permit hold time.
+            // sequencing, which lengthens the submit-semaphore permit hold time. Each pure
+            // argument is capped at max_pure_argument_size (16 KB) and the whole tx at
+            // max_tx_size_bytes (128 KB), so split padding into sub-16 KB chunks across
+            // commands and bound the total to stay under the tx-size limit.
             if self.slow_padding_bytes > 0 {
-                let pad = builder
-                    .pure(vec![0u8; self.slow_padding_bytes as usize])
-                    .unwrap();
-                builder.programmable_move_call(
-                    self.package_id,
-                    Identifier::new("slow").unwrap(),
-                    Identifier::new("consume").unwrap(),
-                    vec![],
-                    vec![pad],
-                );
+                const CHUNK: u64 = 15_000;
+                const MAX_TOTAL: u64 = 110_000;
+                let mut remaining = self.slow_padding_bytes.min(MAX_TOTAL);
+                while remaining > 0 {
+                    let chunk = remaining.min(CHUNK);
+                    let pad = builder.pure(vec![0u8; chunk as usize]).unwrap();
+                    builder.programmable_move_call(
+                        self.package_id,
+                        Identifier::new("slow").unwrap(),
+                        Identifier::new("consume").unwrap(),
+                        vec![],
+                        vec![pad],
+                    );
+                    remaining -= chunk;
+                }
             }
 
             // Mutable shared object input activates congestion control: the transaction's
