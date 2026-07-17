@@ -1325,6 +1325,8 @@ mod test {
             adversarial_cfg,
             expected_failure_cfg: config.expected_failure_config,
             batch_payment_size,
+            slow_vectors: 200,
+            slow_size: 100,
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,

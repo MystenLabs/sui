@@ -30,6 +30,8 @@ pub struct SlowTestPayload {
     sender: SuiAddress,
     state: InMemoryWallet,
     system_state_observer: Arc<SystemStateObserver>,
+    slow_vectors: u64,
+    slow_size: u64,
 }
 
 impl std::fmt::Display for SlowTestPayload {
@@ -73,12 +75,10 @@ impl SlowTestPayload {
             // (non-simulated) cluster this drives up the ExecutionTimeEstimate charged to the
             // mutable shared object below, triggering per-object congestion control -- the
             // mechanism behind the mainnet high-traffic incident that cheap counter increments
-            // (~0 execution time) cannot reproduce. Tune SLOW_VECTORS/SLOW_SIZE to hit the
+            // (~0 execution time) cannot reproduce. Tune --slow-vectors/--slow-size to hit the
             // target per-object execution-time budget (keep under the per-tx gas limit).
-            const SLOW_VECTORS: u64 = 2000;
-            const SLOW_SIZE: u64 = 100;
-            let n_arg = builder.pure(SLOW_VECTORS).unwrap();
-            let size_arg = builder.pure(SLOW_SIZE).unwrap();
+            let n_arg = builder.pure(self.slow_vectors).unwrap();
+            let size_arg = builder.pure(self.slow_size).unwrap();
             builder.programmable_move_call(
                 self.package_id,
                 Identifier::new("slow").unwrap(),
@@ -105,6 +105,8 @@ impl SlowTestPayload {
 #[derive(Debug)]
 pub struct SlowWorkloadBuilder {
     num_payloads: u64,
+    slow_vectors: u64,
+    slow_size: u64,
 }
 
 #[async_trait]
@@ -147,6 +149,8 @@ impl WorkloadBuilder<dyn Payload> for SlowWorkloadBuilder {
             },
             init_gas: init_gas.pop().unwrap(),
             payload_gas,
+            slow_vectors: self.slow_vectors,
+            slow_size: self.slow_size,
         }))
     }
 }
@@ -157,6 +161,8 @@ impl SlowWorkloadBuilder {
         target_qps: u64,
         num_workers: u64,
         in_flight_ratio: u64,
+        slow_vectors: u64,
+        slow_size: u64,
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
@@ -176,6 +182,8 @@ impl SlowWorkloadBuilder {
             let workload_builder =
                 Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(SlowWorkloadBuilder {
                     num_payloads: max_ops,
+                    slow_vectors,
+                    slow_size,
                 }));
             let builder_info = WorkloadBuilderInfo {
                 workload_params,
@@ -196,6 +204,8 @@ pub struct SlowWorkload {
     // shared_objs: Vec<BenchMoveCallArg>,
     pub init_gas: Gas,
     pub payload_gas: Vec<Gas>,
+    slow_vectors: u64,
+    slow_size: u64,
 }
 
 #[async_trait]
@@ -266,6 +276,8 @@ impl Workload<dyn Payload> for SlowWorkload {
                 sender: gas.1,
                 state: InMemoryWallet::new(gas),
                 system_state_observer: system_state_observer.clone(),
+                slow_vectors: self.slow_vectors,
+                slow_size: self.slow_size,
             })
         }
         payloads
