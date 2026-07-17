@@ -356,6 +356,9 @@ fn quorum_gated_accepted_block_stream(
                     };
                     state.accept_blocks(blocks)
                 }
+                _ = tx.closed() => {
+                    return;
+                }
                 _ = tokio::time::sleep_until(state.next_timeout()) => {
                     state.release_timed_out_rounds()
                 }
@@ -611,6 +614,26 @@ mod tests {
         assert_eq!(received_blocks[1].author().value(), 1);
         assert_eq!(received_blocks[2].round(), 15);
         assert_eq!(received_blocks[2].author().value(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_quorum_gated_stream_stops_when_receiver_is_dropped() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let (tx_accepted_block, rx_accepted_block) = broadcast::channel(100);
+        let source = BroadcastStream::<VerifiedBlock>::new_untracked(rx_accepted_block, 20);
+
+        let stream = quorum_gated_accepted_block_stream(context, source, 20);
+        assert_eq!(tx_accepted_block.receiver_count(), 1);
+        drop(stream);
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while tx_accepted_block.receiver_count() != 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("quorum-gated stream task should stop when its receiver is dropped");
     }
 
     #[tokio::test]
