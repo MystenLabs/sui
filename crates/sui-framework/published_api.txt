@@ -1402,7 +1402,7 @@ new_uid_from_hash
 delete_impl
 	fun
 	0x2::object
-record_new_uid
+record_new_uid_from_hash
 	fun
 	0x2::object
 Receiving

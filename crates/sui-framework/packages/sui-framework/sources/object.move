@@ -267,8 +267,8 @@ public fun id_address<T: key>(obj: &T): address {
 native fun borrow_uid<T: key>(obj: &T): &UID;
 
 /// Generate a new UID specifically used for creating a UID from a hash
-public(package) fun new_uid_from_hash(bytes: address): UID {
-    record_new_uid(bytes);
+public(package) fun new_uid_from_hash(parent: address, bytes: address): UID {
+    record_new_uid_from_hash(parent, bytes);
     UID { id: ID { bytes } }
 }
 
@@ -277,8 +277,9 @@ public(package) fun new_uid_from_hash(bytes: address): UID {
 // helper for delete
 native fun delete_impl(id: address);
 
-// marks newly created UIDs from hash
-native fun record_new_uid(id: address);
+// marks newly created UIDs from hash, tracking the root version of `parent` so that the new UID
+// `bytes` inherits the parent's root version.
+native fun record_new_uid_from_hash(parent: address, bytes: address);
 
 #[test_only]
 /// Return the most recent created object ID.

@@ -435,6 +435,15 @@ impl<'a> ChildObjectStore<'a> {
         }
     }
 
+    /// When `parent` has a tracked root version, record the same root version for `id`.
+    /// Note that this is not observable at this time, but will be if we either allow for the
+    /// re-creation of derived objects, or if we grant access to the `id: UID` of a dynamic field.
+    pub(super) fn inherit_root_version_from_parent(&mut self, parent: ObjectID, id: ObjectID) {
+        if let Some(v) = self.inner.root_version.get(&parent).copied() {
+            self.inner.root_version.insert(id, v);
+        }
+    }
+
     pub(super) fn receive_object(
         &mut self,
         parent: ObjectID,
