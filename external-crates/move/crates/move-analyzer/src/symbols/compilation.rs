@@ -109,7 +109,7 @@ pub struct CompiledPkgInfo {
     /// Compiler analysis info
     pub compiler_analysis_info: CompilerAnalysisInfo,
     /// Compiler autocomplete info
-    pub compiler_autocomplete_info: Option<CompilerAutocompleteInfo>,
+    pub compiler_autocomplete_info: Option<Arc<CompilerAutocompleteInfo>>,
     /// IDE diagnostics related to the package
     pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
 }
@@ -751,15 +751,16 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 // Filter autocomplete info based on cursor file
                 // - If cursor_file_opt is None: no autocomplete needed, use empty info
                 // - If cursor_file_opt is Some: only keep autocomplete info for that file
-                compiler_autocomplete_info_opt = Some(if let Some(cursor_file) = cursor_file_opt {
-                    filter_autocomplete_for_file(
-                        autocomplete_info,
-                        cursor_file,
-                        mapped_files_data.files.file_name_mapping(),
-                    )
-                } else {
-                    CompilerAutocompleteInfo::new()
-                });
+                compiler_autocomplete_info_opt =
+                    Some(Arc::new(if let Some(cursor_file) = cursor_file_opt {
+                        filter_autocomplete_for_file(
+                            autocomplete_info,
+                            cursor_file,
+                            mapped_files_data.files.file_name_mapping(),
+                        )
+                    } else {
+                        CompilerAutocompleteInfo::new()
+                    }));
                 // compile to CFGIR for accurate diags
                 eprintln!("compiling to CFGIR");
                 let compilation_result = compiler.at_typing(typed_program).run::<PASS_CFGIR>();
