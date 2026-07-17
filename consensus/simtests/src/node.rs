@@ -3,7 +3,10 @@
 
 use std::{
     net::{IpAddr, SocketAddr},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -46,14 +49,17 @@ pub struct Config {
 pub struct AuthorityNode {
     inner: Mutex<Option<AuthorityNodeInner>>,
     config: Config,
+    boot_counter: AtomicU64,
     commit_consumer_receiver: Mutex<Option<UnboundedReceiver<CommittedSubDag>>>,
 }
 
 impl AuthorityNode {
     pub fn new(config: Config) -> Self {
+        let boot_counter = AtomicU64::new(config.boot_counter);
         Self {
             inner: Default::default(),
             config,
+            boot_counter,
             commit_consumer_receiver: Mutex::new(None),
         }
     }
@@ -71,9 +77,19 @@ impl AuthorityNode {
             "Validator"
         };
         info!(index = %self.config.authority_index, node_type = node_type, "starting in-memory node");
-        let config = self.config.clone();
+        let mut config = self.config.clone();
+        config.boot_counter = self.boot_counter.fetch_add(1, Ordering::Relaxed);
         *self.inner.lock() = Some(AuthorityNodeInner::spawn(config).await);
         Ok(())
+    }
+
+    /// Return the simulator node ID for the running authority.
+    pub fn sim_node_id(&self) -> sui_simulator::task::NodeId {
+        self.inner
+            .lock()
+            .as_ref()
+            .expect("Node not initialised")
+            .node_id()
     }
 
     pub fn spawn_committed_subdag_consumer(&self) -> Result<()> {
@@ -126,15 +142,26 @@ impl AuthorityNode {
         }
     }
 
+    pub fn transaction_client_if_running(&self) -> Option<Arc<TransactionClient>> {
+        let inner = self.inner.lock();
+        inner
+            .as_ref()
+            .filter(|inner| inner.is_alive())
+            .map(AuthorityNodeInner::transaction_client)
+    }
+
     /// Stop this Node
-    pub fn stop(&self) {
+    pub async fn stop(&self) {
         let node_type = if self.config.observer_network_keypair.is_some() {
             "Observer"
         } else {
             "Validator"
         };
         info!(index =% self.config.authority_index, node_type = node_type, "stopping in-memory node");
-        *self.inner.lock() = None;
+        let inner = self.inner.lock().take();
+        if let Some(inner) = inner {
+            inner.stop().await;
+        }
         info!(index =% self.config.authority_index, node_type = node_type, "node stopped");
     }
 
@@ -147,7 +174,7 @@ impl AuthorityNode {
 pub(crate) struct AuthorityNodeInner {
     handle: Option<NodeHandle>,
     cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
-    consensus_authority: ConsensusAuthority,
+    consensus_authority: Option<ConsensusAuthority>,
     commit_receiver: ArcSwapOption<UnboundedReceiver<CommittedSubDag>>,
     commit_consumer_monitor: Arc<CommitConsumerMonitor>,
 }
@@ -168,6 +195,19 @@ impl Drop for AuthorityNodeInner {
 }
 
 impl AuthorityNodeInner {
+    fn node_id(&self) -> sui_simulator::task::NodeId {
+        self.handle.as_ref().expect("Node handle missing").node_id
+    }
+
+    async fn stop(mut self) {
+        if let Some(cancel_sender) = self.cancel_sender.take() {
+            cancel_sender.send(true).ok();
+        }
+        if let Some(consensus_authority) = self.consensus_authority.take() {
+            consensus_authority.stop().await;
+        }
+    }
+
     /// Spawn a new Node.
     pub async fn spawn(config: Config) -> Self {
         let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(false);
@@ -249,7 +289,7 @@ impl AuthorityNodeInner {
         Self {
             handle: Some(NodeHandle { node_id: node.id() }),
             cancel_sender: Some(cancel_sender),
-            consensus_authority,
+            consensus_authority: Some(consensus_authority),
             commit_receiver: ArcSwapOption::new(Some(Arc::new(commit_receiver))),
             commit_consumer_monitor,
         }
@@ -285,7 +325,10 @@ impl AuthorityNodeInner {
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
-        self.consensus_authority.transaction_client()
+        self.consensus_authority
+            .as_ref()
+            .expect("Consensus authority missing")
+            .transaction_client()
     }
 }
 
