@@ -7,7 +7,7 @@ use crate::{
     base_types::{EpochId, SuiAddress},
     crypto::{DefaultHash, Signature, SignatureScheme, SuiSignature},
     digests::ZKLoginInputsDigest,
-    error::{SuiErrorKind, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     signature::{AuthenticatorTrait, VerifyParams},
 };
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
@@ -48,6 +48,15 @@ struct ZkLoginCachingParams {
     zklogin_circuit_mode: u64,
 }
 
+impl ZkLoginCachingParams {
+    fn digest(&self) -> ZKLoginInputsDigest {
+        use fastcrypto::hash::HashFunction;
+        let mut hasher = DefaultHash::default();
+        bcs::serialize_into(&mut hasher, self).expect("serde should not fail");
+        ZKLoginInputsDigest::new(hasher.finalize().into())
+    }
+}
+
 /// Map the protocol config circuit mode flag to the fastcrypto circuit mode:
 /// 0 = v1 circuit only, 1 = v2 circuit with fallback to v1 (migration mode), 2 = v2 circuit only.
 /// The flag comes from protocol config, so any other value is a config bug.
@@ -76,11 +85,7 @@ impl ZkLoginAuthenticator {
     }
 
     pub fn hash_inputs(&self, zklogin_circuit_mode: u64) -> ZKLoginInputsDigest {
-        use fastcrypto::hash::HashFunction;
-        let mut hasher = DefaultHash::default();
-        bcs::serialize_into(&mut hasher, &self.get_caching_params(zklogin_circuit_mode))
-            .expect("serde should not fail");
-        ZKLoginInputsDigest::new(hasher.finalize().into())
+        self.get_caching_params(zklogin_circuit_mode).digest()
     }
 
     /// Create a new [struct ZkLoginAuthenticator] with necessary fields.
@@ -215,34 +220,28 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         )?;
 
         let zklogin_circuit_mode = aux_verify_data.zklogin_circuit_mode;
-        if zklogin_inputs_cache.is_cached(&self.hash_inputs(zklogin_circuit_mode)) {
+        let caching_params = self.get_caching_params(zklogin_circuit_mode);
+        let inputs_digest = caching_params.digest();
+        if zklogin_inputs_cache.is_cached(&inputs_digest) {
             // If the zklogin inputs hits the cache, we don't need to verify the zklogin
             // again that contains the heavy computation.
             Ok(())
         } else {
             // if it is not cached, we verify the full zklogin inputs.
-            // build extended_pk_bytes as flag || pk_bytes.
-            let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
-            extended_pk_bytes.extend(self.user_signature.public_key_bytes());
-            let res = verify_zklogin_inputs_wrapper(
-                self.get_caching_params(zklogin_circuit_mode),
+            verify_zklogin_inputs_wrapper(
+                caching_params,
                 &aux_verify_data.oidc_provider_jwks,
                 &aux_verify_data.zk_login_env,
             )
-            .map_err(|e| {
+            .map_err(|e| -> SuiError {
                 SuiErrorKind::InvalidSignature {
                     error: e.to_string(),
                 }
                 .into()
-            });
-            match res {
-                Ok(_) => {
-                    // If it's verified ok, we cache the digest.
-                    zklogin_inputs_cache.cache_digest(self.hash_inputs(zklogin_circuit_mode));
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
+            })?;
+            // If it's verified ok, we cache the digest.
+            zklogin_inputs_cache.cache_digest(inputs_digest);
+            Ok(())
         }
     }
 }
