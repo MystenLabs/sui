@@ -689,6 +689,19 @@ fn all_single_name_member_completions(
             let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
                 continue;
             };
+            // The import info only depends on the module - compute it once for all of its
+            // functions. If importing the module would conflict with a name already in
+            // scope, fall back to a fully qualified call, which stays closest to the
+            // module-qualified style and makes the conflict visible at the use site.
+            let import_info = module_import_info(sp(mod_defs.name_loc, mod_defs.ident), info)
+                .unwrap_or_else(|| ModuleImportInfo {
+                    module_prefix: format!(
+                        "{}::{}",
+                        addr_to_ide_string(&mod_defs.ident.address),
+                        mod_defs.ident.module
+                    ),
+                    import_text: None,
+                });
             for function_name in import_functions {
                 // exclude functions that are already imported
                 if info.members.contains_key(&(mod_ident, function_name)) {
@@ -699,7 +712,7 @@ fn all_single_name_member_completions(
                     cursor,
                     mod_defs,
                     &function_name,
-                    info,
+                    &import_info,
                     chain_kind,
                     auto_import_pos,
                 );
@@ -744,25 +757,10 @@ fn function_auto_imports_with_module_import(
     cursor: &CursorContext,
     mod_defs: &ModuleDefs,
     function_name: &Symbol,
-    info: &AliasAutocompleteInfo,
+    import_info: &ModuleImportInfo,
     chain_kind: ChainCompletionKind,
     auto_import_pos: AutoImportInsertionInfo,
 ) -> Vec<CompletionItem> {
-    let mod_ident = sp(mod_defs.name_loc, mod_defs.ident);
-    let import_info = match module_import_info(mod_ident, info) {
-        Some(import_info) => import_info,
-        None => ModuleImportInfo {
-            // If importing the module would conflict with a name already in scope, fall back
-            // to a fully qualified call, which stays closest to the module-qualified style
-            // and makes the conflict visible at the use site.
-            module_prefix: format!(
-                "{}::{}",
-                addr_to_ide_string(&mod_ident.value.address),
-                mod_ident.value.module
-            ),
-            import_text: None,
-        },
-    };
     let mut function_completions = single_name_member_completion(
         symbols,
         cursor,
