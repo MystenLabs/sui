@@ -757,14 +757,15 @@ pub(crate) fn datatype_builders_for_fields<'a, R: ApplyResolver>(
 }
 
 // -------------------------------------------------------------------------------------------------
-// Per-Term Formulae// -------------------------------------------------------------------------------------------------
 // Per-Term Formulae
 // -------------------------------------------------------------------------------------------------
 
-/// A signature-pool type term together with all four of its size formulas, computed once at
-/// translation time. The syntactic pair is closed (a datatype head is a single syntactic
-/// node, so no linkage is needed); the through-field pair is partial, closed by the dispatch
-/// tables under a transaction's linkage.
+/// A signature-pool type term together with its size formulas, computed once at translation
+/// time. The syntactic formulas are closed (a datatype head is a single syntactic node, so no
+/// linkage is needed): `type_size` and `type_depth` predict the legacy checked-traversal
+/// counters (for limit checks), and `result_depth` predicts the true depth of the realized
+/// substitution (for building callee frame sizes without a walk). The through-field pair is
+/// partial, closed by the dispatch tables under a transaction's linkage.
 ///
 /// This is plain data: the operations — checked substitution, instantiation checks — live on
 /// the dispatch tables (`subst_type`, `check_instantiation`, ...), which do the formula work
@@ -774,12 +775,13 @@ pub(crate) struct PartialTypeFormula {
     pub(crate) term: ArenaType,
     pub(crate) type_size: ArenaLinearFormula,
     pub(crate) type_depth: ArenaMaxPlusFormula,
+    pub(crate) result_depth: ArenaMaxPlusFormula,
     pub(crate) value_depth: PartialMaxPlusFormula,
     pub(crate) layout_size: PartialLinearFormula,
 }
 
 impl PartialTypeFormula {
-    /// Compute all four formulas for `term`, allocating them in `arena`. Intra-package
+    /// Compute all of `term`'s size formulas, allocating them in `arena`. Intra-package
     /// datatype applications are folded eagerly through `resolver`.
     pub(crate) fn for_term<R: ApplyResolver>(
         term: ArenaType,
@@ -787,12 +789,14 @@ impl PartialTypeFormula {
         resolver: &mut R,
     ) -> PartialVMResult<Self> {
         let (type_size, type_depth) = term.syntactic_formulas();
+        let result_depth = term.result_depth_formula();
         let value_depth = value_form_of_term(&term, resolver)?.allocate(arena)?;
         let layout_size = layout_form_of_term(&term, resolver)?.allocate(arena)?;
         Ok(Self {
             term,
             type_size: type_size.allocate(arena)?,
             type_depth: type_depth.allocate(arena)?,
+            result_depth: result_depth.allocate(arena)?,
             value_depth,
             layout_size,
         })

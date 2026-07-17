@@ -588,6 +588,40 @@ fn syntactic_sizes_match_naive_node_count() {
     }
 }
 
+/// The `result_depth` formula must equal the *true* depth of the realized substitution — the
+/// depth of `subst(term, args)` — on every shape (as opposed to `syntactic_formulas`, which
+/// predicts the over-counting legacy traversal counter).
+#[test]
+fn result_depth_formula_matches_realized_depth() {
+    fn true_depth(ty: &Type) -> u64 {
+        match ty {
+            Type::Vector(t) | Type::Reference(t) | Type::MutableReference(t) => 1 + true_depth(t),
+            Type::DatatypeInstantiation(inst) => {
+                1 + inst.1.iter().map(true_depth).max().unwrap_or(0)
+            }
+            _ => 1,
+        }
+    }
+    let mut seed = 0x0DDBA11_u64;
+    for case in 0..500u64 {
+        let arena = ArenaBuilder::new_bounded();
+        let n_params = (case % 4) as u16 + 1;
+        let base_term = gen_type(&mut seed, 4, n_params);
+        let base = to_arena(&arena, &base_term);
+        let args = (0..n_params)
+            .map(|_| gen_type(&mut seed, 3, 0))
+            .collect::<Vec<_>>();
+
+        // Solve the formula against the arguments' true depths.
+        let arg_depths = args.iter().map(true_depth).collect::<Vec<_>>();
+        let predicted = base.result_depth_formula().solve(&arg_depths).unwrap();
+
+        // The realized type's actual depth.
+        let realized = base.subst(&args).unwrap();
+        assert_eq!(predicted, true_depth(&realized), "case {case}");
+    }
+}
+
 /// The DoS shape from the type-instantiation fix: a term mentioning one parameter many times,
 /// applied to a large argument. The formula rejects it by arithmetic before any part of the
 /// oversized type is built.
