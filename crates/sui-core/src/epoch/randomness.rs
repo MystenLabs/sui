@@ -316,6 +316,7 @@ pub struct RandomnessManager {
     used_messages: OnceCell<VersionedUsedProcessedMessages>,
     confirmations: BTreeMap<PartyId, VersionedDkgConfirmation>,
     dkg_output: OnceCell<Option<dkg_v1::Output<PkG, EncG>>>,
+    dkg_timeout_reported: bool,
 
     // State for randomness generation.
     next_randomness_round: RandomnessRound,
@@ -353,6 +354,10 @@ impl RandomnessManager {
         };
         let protocol_config = epoch_store.protocol_config();
         epoch_store.metrics.epoch_random_beacon_dkg_failed.set(0);
+        epoch_store
+            .metrics
+            .epoch_random_beacon_dkg_completed_after_timeout
+            .set(0);
         epoch_store
             .metrics
             .epoch_random_beacon_dkg_num_shares
@@ -441,6 +446,7 @@ impl RandomnessManager {
             used_messages: OnceCell::new(),
             confirmations: BTreeMap::new(),
             dkg_output: OnceCell::new(),
+            dkg_timeout_reported: false,
             next_randomness_round: RandomnessRound(0),
             highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
             randomness_receiver_handle,
@@ -478,7 +484,7 @@ impl RandomnessManager {
                 }
             }
             Some(None) => {
-                // DKG previously completed as a failure (recorded only in `dkg_output_v2`).
+                // This terminal failure is only written when late DKG completion is disabled.
                 // Restore that terminal state so DKG isn't re-run and randomness stays disabled
                 // for the epoch.
                 error!(
@@ -570,14 +576,49 @@ impl RandomnessManager {
             DkgRole::Party(party) => party,
         };
 
-        if self.used_messages.initialized() || self.dkg_output.initialized() {
-            // DKG already started (or completed or failed).
+        if self.dkg_output.initialized() {
+            return Ok(()); // DKG already completed.
+        }
+
+        let epoch_store = self.epoch_store()?;
+        if self.used_messages.initialized() {
+            if !epoch_store
+                .protocol_config()
+                .allow_dkg_completion_after_timeout()
+            {
+                return Ok(());
+            }
+
+            // If our own Confirmation was already sequenced by consensus, it was durably
+            // delivered to all validators; re-sending it cannot help DKG progress.
+            if self.confirmations.contains_key(&party.id) {
+                return Ok(());
+            }
+
+            // Our Confirmation was lost if we restarted after merging messages but before it
+            // was sequenced by consensus. Re-send the persisted copy; it is written in the
+            // same batch as `used_messages`, so it must be present here.
+            if let Some(confirmation) = epoch_store
+                .tables()?
+                .dkg_own_confirmation
+                .get(&SINGLETON_KEY)
+                .expect("typed_store should not fail")
+            {
+                info!(
+                    "random beacon: re-sending DKG Confirmation with {} complaints",
+                    confirmation.num_of_complaints()
+                );
+                self.submit_dkg_confirmation(&epoch_store, &confirmation)?;
+            } else {
+                debug_fatal!(
+                    "random beacon: `used_messages` is initialized but own DKG Confirmation was not persisted"
+                );
+            }
             return Ok(());
         }
 
         let _ = self.dkg_start_time.set(Instant::now());
 
-        let epoch_store = self.epoch_store()?;
         let dkg_version = epoch_store.protocol_config().dkg_version();
         info!("random beacon: starting DKG, version {dkg_version}");
 
@@ -637,12 +678,11 @@ impl RandomnessManager {
         self.try_complete_dkg(consensus_output, round, &epoch_store)?;
 
         // If we ran out of time, mark DKG as failed.
-        if !self.dkg_output.initialized()
-            && round
-                > epoch_store
-                    .protocol_config()
-                    .random_beacon_dkg_timeout_round()
-                    .into()
+        if !epoch_store
+            .protocol_config()
+            .allow_dkg_completion_after_timeout()
+            && !self.dkg_output.initialized()
+            && Self::is_past_dkg_timeout_round(round, epoch_store.protocol_config())
         {
             error!(
                 "random beacon: DKG timed out. Randomness disabled for this epoch. All randomness-using transactions will fail."
@@ -705,21 +745,10 @@ impl RandomnessManager {
                 consensus_output.insert_dkg_used_messages(used_msgs);
 
                 if let Some(conf) = conf {
-                    let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
-                        epoch_store.name,
-                        &conf,
-                    );
-
-                    #[allow(unused_mut)]
-                    let mut fail_point_skip_sending = false;
-                    fail_point_if!("rb-dkg", || {
-                        // maybe skip sending in simtests
-                        fail_point_skip_sending = true;
-                    });
-                    if !fail_point_skip_sending {
-                        self.consensus_adapter
-                            .submit_to_consensus(&[transaction], epoch_store)?;
-                    }
+                    // Persist our own confirmation alongside `used_messages` so it can be
+                    // re-sent if we restart before it is sequenced by consensus.
+                    consensus_output.set_dkg_own_confirmation(conf.clone());
+                    self.submit_dkg_confirmation(epoch_store, &conf)?;
 
                     let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
                     if let Some(elapsed) = elapsed {
@@ -771,11 +800,17 @@ impl RandomnessManager {
                         .set_public_key(output.vss_pk.c0());
 
                     let epoch_elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
+                    let completed_after_timeout =
+                        Self::is_past_dkg_timeout_round(round, epoch_store.protocol_config());
                     epoch_store
                         .metrics
                         .epoch_random_beacon_dkg_epoch_start_completion_time_ms
                         .set(epoch_elapsed as i64);
                     epoch_store.metrics.epoch_random_beacon_dkg_failed.set(0);
+                    epoch_store
+                        .metrics
+                        .epoch_random_beacon_dkg_completed_after_timeout
+                        .set(i64::from(completed_after_timeout));
 
                     match self.role.as_ref() {
                         DkgRole::Party(party) => {
@@ -786,7 +821,8 @@ impl RandomnessManager {
                             info!(
                                 "random beacon: DKG complete for Party epoch={epoch} commit_round={round} \
                                  num_messages={num_messages} num_confirmations={num_confirmations} \
-                                 num_shares={num_shares} epoch_elapsed_ms={epoch_elapsed} dkg_elapsed_ms={elapsed:?}"
+                                 num_shares={num_shares} epoch_elapsed_ms={epoch_elapsed} dkg_elapsed_ms={elapsed:?} \
+                                 completed_after_timeout={completed_after_timeout}"
                             );
                             epoch_store
                                 .metrics
@@ -812,7 +848,8 @@ impl RandomnessManager {
                             info!(
                                 "random beacon: DKG complete for Observer epoch={epoch} commit_round={round} \
                                  num_messages={num_messages} num_confirmations={num_confirmations} \
-                                 epoch_elapsed_ms={epoch_elapsed}"
+                                 epoch_elapsed_ms={epoch_elapsed} \
+                                 completed_after_timeout={completed_after_timeout}"
                             );
                         }
                     }
@@ -960,9 +997,71 @@ impl RandomnessManager {
     pub fn dkg_status(&self) -> DkgStatus {
         match self.dkg_output.get() {
             Some(Some(_)) => DkgStatus::Successful,
-            Some(None) => DkgStatus::Failed,
+            Some(None) => DkgStatus::TimedOut,
             None => DkgStatus::Pending,
         }
+    }
+
+    /// Returns true if `round` is past the DKG timeout round. This comparison is
+    /// consensus-critical: all validators must agree on the exact commit round at which
+    /// DKG times out.
+    fn is_past_dkg_timeout_round(
+        round: Round,
+        protocol_config: &sui_protocol_config::ProtocolConfig,
+    ) -> bool {
+        round > protocol_config.random_beacon_dkg_timeout_round().into()
+    }
+
+    /// Returns the DKG status as observed at the given consensus commit round. When
+    /// `allow_dkg_completion_after_timeout` is enabled, an incomplete DKG reports `TimedOut`
+    /// for commits past the timeout round while the protocol keeps running, so a later commit
+    /// may observe `Successful`.
+    pub fn dkg_status_for_commit_round(&mut self, round: Round) -> DkgStatus {
+        let status = self.dkg_status();
+        if status != DkgStatus::Pending {
+            return status;
+        }
+
+        let epoch_store = self
+            .epoch_store()
+            .expect("epoch store must be alive while computing DKG status for a commit");
+        if !epoch_store
+            .protocol_config()
+            .allow_dkg_completion_after_timeout()
+            || !Self::is_past_dkg_timeout_round(round, epoch_store.protocol_config())
+        {
+            return status;
+        }
+
+        if !self.dkg_timeout_reported {
+            error!(
+                "random beacon: DKG timed out; randomness-using transactions will be canceled unless/until DKG completes"
+            );
+            epoch_store.metrics.epoch_random_beacon_dkg_failed.set(1);
+            self.dkg_timeout_reported = true;
+        }
+        DkgStatus::TimedOut
+    }
+
+    fn submit_dkg_confirmation(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        confirmation: &VersionedDkgConfirmation,
+    ) -> SuiResult {
+        let transaction =
+            ConsensusTransaction::new_randomness_dkg_confirmation(epoch_store.name, confirmation);
+
+        #[allow(unused_mut)]
+        let mut fail_point_skip_sending = false;
+        fail_point_if!("rb-dkg", || {
+            // maybe skip sending in simtests
+            fail_point_skip_sending = true;
+        });
+        if !fail_point_skip_sending {
+            self.consensus_adapter
+                .submit_to_consensus(&[transaction], epoch_store)?;
+        }
+        Ok(())
     }
 
     /// Generates a new RandomnessReporter for reporting observed rounds to this RandomnessManager.
@@ -1061,7 +1160,9 @@ impl RandomnessReporter {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DkgStatus {
     Pending,
-    Failed,
+    /// DKG did not complete by the timeout round. If `allow_dkg_completion_after_timeout`
+    /// is enabled, DKG may still complete later and reach `Successful`.
+    TimedOut,
     Successful,
 }
 
@@ -1105,15 +1206,21 @@ mod tests {
 
     impl DkgTestSetup {
         async fn new(include_observer: bool) -> Self {
+            let mut protocol_config =
+                ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+            protocol_config.set_random_beacon_dkg_version_for_testing(1);
+            Self::new_with_protocol_config(include_observer, protocol_config).await
+        }
+
+        async fn new_with_protocol_config(
+            include_observer: bool,
+            protocol_config: ProtocolConfig,
+        ) -> Self {
             let network_config =
                 sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
                     .committee_size(NonZeroUsize::new(4).unwrap())
                     .with_reference_gas_price(500)
                     .build();
-
-            let mut protocol_config =
-                ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-            protocol_config.set_random_beacon_dkg_version_for_testing(1);
 
             let num_validators = network_config.validator_configs.len();
             let mut epoch_stores = Vec::new();
@@ -1324,8 +1431,7 @@ mod tests {
             }
         }
 
-        /// Collects DKG confirmations from validators and distributes them to all managers.
-        async fn collect_and_distribute_confirmations(&mut self) {
+        async fn collect_confirmations(&mut self) -> Vec<VersionedDkgConfirmation> {
             let mut dkg_confirmations = Vec::new();
             for _ in 0..self.num_validators {
                 let mut dkg_confirmation = self.rx_consensus.recv().await.unwrap();
@@ -1339,6 +1445,14 @@ mod tests {
                     _ => panic!("wrong type of message sent"),
                 }
             }
+            dkg_confirmations
+        }
+
+        async fn distribute_confirmations_and_advance(
+            &mut self,
+            dkg_confirmations: &[VersionedDkgConfirmation],
+            advance_round: Round,
+        ) {
             for i in 0..self.randomness_managers.len() {
                 let mut output = ConsensusCommitOutput::new(0);
                 output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
@@ -1354,7 +1468,7 @@ mod tests {
                         .unwrap();
                 }
                 self.randomness_managers[i]
-                    .advance_dkg(&mut output, 0)
+                    .advance_dkg(&mut output, advance_round)
                     .await
                     .unwrap();
                 let mut batch = self.epoch_stores[i].db_batch_for_test();
@@ -1363,6 +1477,13 @@ mod tests {
                     .unwrap();
                 batch.write().unwrap();
             }
+        }
+
+        /// Collects DKG confirmations from validators and distributes them to all managers.
+        async fn collect_and_distribute_confirmations(&mut self, advance_round: Round) {
+            let dkg_confirmations = self.collect_confirmations().await;
+            self.distribute_confirmations_and_advance(&dkg_confirmations, advance_round)
+                .await;
         }
     }
 
@@ -1375,7 +1496,7 @@ mod tests {
         setup
             .distribute_messages_and_advance(&dkg_messages, 0)
             .await;
-        setup.collect_and_distribute_confirmations().await;
+        setup.collect_and_distribute_confirmations(0).await;
 
         for rm in &setup.randomness_managers {
             assert_eq!(DkgStatus::Successful, rm.dkg_status());
@@ -1386,15 +1507,27 @@ mod tests {
     async fn test_dkg_expiration() {
         telemetry_subscribers::init_for_testing();
 
-        let mut setup = DkgTestSetup::new(false).await;
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_random_beacon_dkg_version_for_testing(1);
+        protocol_config.set_allow_dkg_completion_after_timeout_for_testing(false);
+        let mut setup = DkgTestSetup::new_with_protocol_config(false, protocol_config).await;
         let dkg_messages = setup.start_dkg_and_collect_messages().await;
+
+        // With late completion disabled, `dkg_status_for_commit_round` passes through the raw
+        // status; timeout failure is only marked by `advance_dkg`.
+        assert_eq!(
+            DkgStatus::Pending,
+            setup.randomness_managers[0].dkg_status_for_commit_round(u64::MAX)
+        );
+
         // Pass u64::MAX as round to trigger DKG timeout.
         setup
             .distribute_messages_and_advance(&dkg_messages, u64::MAX)
             .await;
 
         for rm in &setup.randomness_managers {
-            assert_eq!(DkgStatus::Failed, rm.dkg_status());
+            assert_eq!(DkgStatus::TimedOut, rm.dkg_status());
         }
 
         let recovered_count = setup.recover_validator_randomness_managers().await;
@@ -1404,8 +1537,121 @@ mod tests {
         // from the same epoch stores must report DKG as failed (not pending), exercising the
         // `dkg_output_v2` failure-load path in `try_new`.
         for rm in &setup.randomness_managers {
-            assert_eq!(DkgStatus::Failed, rm.dkg_status());
+            assert_eq!(DkgStatus::TimedOut, rm.dkg_status());
         }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_completes_after_timeout() {
+        telemetry_subscribers::init_for_testing();
+
+        let mut setup = DkgTestSetup::new(false).await;
+        let timeout: Round = setup.epoch_stores[0]
+            .protocol_config()
+            .random_beacon_dkg_timeout_round()
+            .into();
+        let dkg_messages = setup.start_dkg_and_collect_messages().await;
+        setup
+            .distribute_messages_and_advance(&dkg_messages, timeout + 1)
+            .await;
+
+        for rm in &mut setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
+            assert_eq!(
+                DkgStatus::TimedOut,
+                rm.dkg_status_for_commit_round(timeout + 1)
+            );
+        }
+
+        setup
+            .collect_and_distribute_confirmations(timeout + 2)
+            .await;
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Successful, rm.dkg_status());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_timeout_then_restart_then_complete() {
+        telemetry_subscribers::init_for_testing();
+
+        let mut setup = DkgTestSetup::new(false).await;
+        let timeout: Round = setup.epoch_stores[0]
+            .protocol_config()
+            .random_beacon_dkg_timeout_round()
+            .into();
+        let dkg_messages = setup.start_dkg_and_collect_messages().await;
+        setup
+            .distribute_messages_and_advance(&dkg_messages, timeout + 1)
+            .await;
+
+        let recovered_count = setup.recover_validator_randomness_managers().await;
+        assert_eq!(setup.num_validators, recovered_count);
+        for rm in &mut setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
+            assert!(rm.used_messages.initialized());
+            assert_eq!(
+                DkgStatus::TimedOut,
+                rm.dkg_status_for_commit_round(timeout + 1)
+            );
+        }
+
+        setup
+            .collect_and_distribute_confirmations(timeout + 2)
+            .await;
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Successful, rm.dkg_status());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_confirmation_resent_after_restart() {
+        telemetry_subscribers::init_for_testing();
+
+        let mut setup = DkgTestSetup::new(false).await;
+        let dkg_messages = setup.start_dkg_and_collect_messages().await;
+        setup
+            .distribute_messages_and_advance(&dkg_messages, 0)
+            .await;
+        let original_confirmations = setup.collect_confirmations().await;
+        assert_eq!(setup.num_validators, original_confirmations.len());
+
+        let recovered_count = setup.recover_validator_randomness_managers().await;
+        assert_eq!(setup.num_validators, recovered_count);
+        for randomness_manager in &mut setup.randomness_managers {
+            randomness_manager.start_dkg().await.unwrap();
+        }
+
+        let resent_confirmations = setup.collect_confirmations().await;
+        assert_eq!(setup.num_validators, resent_confirmations.len());
+        // The persisted copy must be identical to the originally-sent confirmation.
+        assert_eq!(original_confirmations, resent_confirmations);
+        setup
+            .distribute_confirmations_and_advance(&resent_confirmations, 0)
+            .await;
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Successful, rm.dkg_status());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_status_for_commit_round() {
+        telemetry_subscribers::init_for_testing();
+
+        let mut setup = DkgTestSetup::new(false).await;
+        let timeout: Round = setup.epoch_stores[0]
+            .protocol_config()
+            .random_beacon_dkg_timeout_round()
+            .into();
+        let rm = &mut setup.randomness_managers[0];
+        assert_eq!(DkgStatus::Pending, rm.dkg_status_for_commit_round(timeout));
+        assert_eq!(
+            DkgStatus::TimedOut,
+            rm.dkg_status_for_commit_round(timeout + 1)
+        );
+        rm.dkg_output.set(None).unwrap();
+        assert_eq!(DkgStatus::TimedOut, rm.dkg_status_for_commit_round(0));
+        // Flag-off passthrough is covered by test_dkg_expiration.
     }
 
     #[tokio::test]
@@ -1458,7 +1704,7 @@ mod tests {
             assert!(rm.used_messages.initialized());
         }
 
-        setup.collect_and_distribute_confirmations().await;
+        setup.collect_and_distribute_confirmations(0).await;
 
         for rm in &setup.randomness_managers {
             assert_eq!(DkgStatus::Successful, rm.dkg_status());
@@ -1483,7 +1729,7 @@ mod tests {
             assert_eq!(DkgStatus::Pending, rm.dkg_status());
         }
 
-        setup.collect_and_distribute_confirmations().await;
+        setup.collect_and_distribute_confirmations(0).await;
 
         for rm in &setup.randomness_managers {
             assert_eq!(DkgStatus::Successful, rm.dkg_status());

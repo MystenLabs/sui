@@ -525,6 +525,9 @@ pub struct AuthorityEpochTables {
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
     pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfirmation>,
+    /// Records this node's own dkg::Confirmation, so that it can be re-sent if the node
+    /// restarts before the confirmation is sequenced by consensus.
+    pub(crate) dkg_own_confirmation: DBMap<u64, VersionedDkgConfirmation>,
     /// Holds the value of the next RandomnessRound to be generated.
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
     /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
@@ -727,6 +730,10 @@ impl AuthorityEpochTables {
             (
                 "dkg_confirmations_v2".to_string(),
                 ThConfig::new(2, 1, KeyType::uniform(1)),
+            ),
+            (
+                "dkg_own_confirmation".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
                 "randomness_next_round".to_string(),

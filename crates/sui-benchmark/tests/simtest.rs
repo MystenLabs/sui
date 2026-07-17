@@ -690,7 +690,10 @@ mod test {
         .await;
     }
 
-    // Tests cluster liveness when DKG has failed.
+    // Tests cluster liveness across a DKG timeout. With `allow_dkg_completion_after_timeout`
+    // enabled, DKG in this test completes shortly after the timeout round, so this exercises the
+    // cancellation window followed by mid-epoch randomness recovery under load. See
+    // `test_simulated_load_dkg_permanent_failure` for the case where DKG never completes.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_dkg_failure() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
@@ -699,7 +702,28 @@ mod test {
         });
 
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
-        test_simulated_load(test_cluster, 120).await;
+        test_simulated_load(test_cluster.clone(), 120).await;
+
+        // Verify reconfiguration still completes after the DKG timeout/recovery cycles.
+        test_cluster.wait_for_epoch(None).await;
+    }
+
+    // Tests cluster liveness (including epoch close) when DKG can never complete, since the
+    // fail point suppresses all DKG sends for the entire test.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_dkg_permanent_failure() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+            config.set_random_beacon_dkg_timeout_round_for_testing(0);
+            config
+        });
+        register_fail_point_if("rb-dkg", || true);
+
+        let test_cluster = build_test_cluster(4, 30_000, 1).await;
+        test_simulated_load(test_cluster.clone(), 60).await;
+
+        // Verify epoch close is not blocked by the never-completing DKG: reconfiguration
+        // must still complete (the fail point remains active during this wait).
+        test_cluster.wait_for_epoch(None).await;
     }
 
     #[sim_test(config = "test_config()")]

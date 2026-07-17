@@ -79,6 +79,7 @@ pub(crate) struct ConsensusCommitOutput {
     dkg_confirmations: BTreeMap<PartyId, VersionedDkgConfirmation>,
     dkg_processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
     dkg_used_message: Option<VersionedUsedProcessedMessages>,
+    dkg_own_confirmation: Option<VersionedDkgConfirmation>,
     dkg_output: Option<Option<dkg_v1::Output<PkG, EncG>>>,
 
     // jwk state
@@ -241,6 +242,10 @@ impl ConsensusCommitOutput {
         self.dkg_used_message = Some(used_messages);
     }
 
+    pub fn set_dkg_own_confirmation(&mut self, conf: VersionedDkgConfirmation) {
+        self.dkg_own_confirmation = Some(conf);
+    }
+
     pub fn set_dkg_output(&mut self, output: Option<dkg_v1::Output<PkG, EncG>>) {
         self.dkg_output = Some(output);
     }
@@ -360,6 +365,13 @@ impl ConsensusCommitOutput {
             self.dkg_used_message
                 .into_iter()
                 .map(|used_msgs| (SINGLETON_KEY, used_msgs)),
+        )?;
+        batch.insert_batch(
+            &tables.dkg_own_confirmation,
+            // using Option as iter
+            self.dkg_own_confirmation
+                .into_iter()
+                .map(|conf| (SINGLETON_KEY, conf)),
         )?;
         if let Some(output) = self.dkg_output {
             batch.insert_batch(&tables.dkg_output_v2, [(SINGLETON_KEY, output)])?;

@@ -983,14 +983,8 @@ pub async fn increment_counter(
     context.execute_transaction_must_succeed(txn).await
 }
 
-/// Executes a transaction that generates a new random u128 using Random and emits it as an event.
-pub async fn emit_new_random_u128(
-    context: &WalletContext,
-    package_id: ObjectID,
-) -> ExecutedTransaction {
-    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
-    let rgp = context.get_reference_gas_price().await.unwrap();
-
+/// Builds the `CallArg` for reading the shared randomness state object.
+pub async fn randomness_state_call_arg(context: &WalletContext) -> CallArg {
     let mut client = context.grpc_client().unwrap();
     let random_obj = client
         .get_object(SUI_RANDOMNESS_STATE_OBJECT_ID)
@@ -1004,11 +998,21 @@ pub async fn emit_new_random_u128(
     else {
         panic!("Expect Randomness to be shared object")
     };
-    let random_call_arg = CallArg::Object(ObjectArg::SharedObject {
+    CallArg::Object(ObjectArg::SharedObject {
         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
         initial_shared_version,
         mutability: SharedObjectMutability::Immutable,
-    });
+    })
+}
+
+/// Executes a transaction that generates a new random u128 using Random and emits it as an event.
+pub async fn emit_new_random_u128(
+    context: &WalletContext,
+    package_id: ObjectID,
+) -> ExecutedTransaction {
+    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+    let rgp = context.get_reference_gas_price().await.unwrap();
+    let random_call_arg = randomness_state_call_arg(context).await;
 
     let txn = context
         .sign_transaction(

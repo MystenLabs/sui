@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 130;
+const MAX_PROTOCOL_VERSION: u64 = 131;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -367,6 +367,7 @@ const MAINNET_USDB: &str =
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
 //              Add an epoch close deadline failsafe for deferred transactions.
+// Version 131: Allow random beacon DKG to complete after its timeout.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -986,6 +987,10 @@ struct FeatureFlags {
     // If true, keep advancing the DKG state machine while DKG is pending.
     #[serde(skip_serializing_if = "is_false")]
     always_advance_dkg_to_resolution: bool,
+
+    // If true, keep DKG pending after its timeout so that it can complete later in the epoch.
+    #[serde(skip_serializing_if = "is_false")]
+    allow_dkg_completion_after_timeout: bool,
 
     // Enable coin registry protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -4528,6 +4533,9 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
                     }
+                }
+                131 => {
+                    cfg.feature_flags.allow_dkg_completion_after_timeout = true;
                 }
                 // Use this template when making changes:
                 //
