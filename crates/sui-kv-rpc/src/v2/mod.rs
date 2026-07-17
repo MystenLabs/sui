@@ -138,11 +138,10 @@ impl LedgerService for KvRpcServer {
         .map_err(Into::into)
     }
 
-    // The list RPCs carry a per-RPC hard request timeout (from
-    // `LedgerHistoryConfig`). The outer `operation::with_deadline` wrapper
-    // drops the response stream with `DeadlineExceeded` when this fires;
-    // debounced intermediate `Watermark` frames let the client resume from
-    // wherever it got to.
+    // The list RPC hard timeout covers both computation and response delivery.
+    // Expiry drops the stream with `DeadlineExceeded` without emitting a
+    // terminal resume-cursor frame, so a client can resume only from the last
+    // `Watermark` it retained.
     async fn list_checkpoints(
         &self,
         request: tonic::Request<ListCheckpointsRequest>,
