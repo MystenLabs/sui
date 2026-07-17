@@ -75,6 +75,7 @@ pub(crate) struct KvRpcMetrics {
     response_page_bytes: HistogramVec,
     stream_first_item_latency_ms: HistogramVec,
     stream_item_yield_wait_ms: HistogramVec,
+    final_stream_poll_wait_ms: HistogramVec,
     bitmap_buckets_evaluated: HistogramVec,
     bitmap_buckets_discarded: HistogramVec,
     bitmap_leaf_seeks: HistogramVec,
@@ -86,33 +87,41 @@ impl KvRpcMetrics {
             bigtable_limiter: BigTableLimiterMetrics::new(registry),
             response_render_latency_ms: register_histogram_vec_with_registry!(
                 "kv_rpc_response_render_latency_ms",
-                "Wall time spent rendering one list response item.",
-                &["method"],
-                prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                "Wall time spent rendering one consumed or emitted List response item. Histogram sums across concurrent render work are not an additive request critical-path waterfall. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.01, 2.0, 24).unwrap(),
                 registry,
             )
             .unwrap(),
             response_page_bytes: register_histogram_vec_with_registry!(
                 "kv_rpc_response_page_bytes",
-                "Protobuf encoded size of one list response frame at emission.",
-                &["method"],
+                "Protobuf encoded size of one List response frame at emission, measured with encoded_len without serializing or copying the response for metrics. The histogram sum reports response-byte throughput. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
                 prometheus::exponential_buckets(1_024.0, 2.0, 17).unwrap(),
                 registry,
             )
             .unwrap(),
             stream_first_item_latency_ms: register_histogram_vec_with_registry!(
                 "kv_rpc_stream_first_item_latency_ms",
-                "Wall time from list stream construction until its first item is ready to yield.",
-                &["method"],
-                prometheus::exponential_buckets(1.0, 2.0, 14).unwrap(),
+                "Wall time from List request start to the first data item. If watermark frames are yielded first, this can include time coupled to downstream polling. Do not treat it as purely server-owned latency or page on it alone without checking yield-wait and backpressure. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(1.0, 2.0, 17).unwrap(),
                 registry,
             )
             .unwrap(),
             stream_item_yield_wait_ms: register_histogram_vec_with_registry!(
                 "kv_rpc_stream_item_yield_wait_ms",
-                "Wall time from yielding one list response item until the stream is polled again.",
-                &["method"],
-                prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                "Wall time from yielding one inner List data item until the handler stream is polled again. It may include mpsc blocking, tonic/protobuf/Hyper/H2 work, executor scheduling, network flow control, and client drain. It is a broad downstream transport-consumption and backpressure signal, not proof of a slow client; correlate it with payload bytes, client telemetry, and network metrics. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.01, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            final_stream_poll_wait_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_final_stream_poll_wait_ms",
+                "Wall time from polling the final resolved response stream until the poll returns data, a watermark, an error, or EOF. Excludes time when downstream backpressure prevents the response producer from being polled. May include hydration, scheduling, and render work performed inside the upstream stream. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.01, 2.0, 24).unwrap(),
                 registry,
             )
             .unwrap(),
@@ -145,31 +154,58 @@ impl KvRpcMetrics {
         })
     }
 
-    fn observe_response_render(&self, method: &'static str, elapsed: std::time::Duration) {
+    fn observe_response_render(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
         self.response_render_latency_ms
-            .with_label_values(&[method])
+            .with_label_values(&[method, resolution])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
 
-    fn observe_response_page_bytes(&self, method: &'static str, bytes: usize) {
+    fn observe_response_page_bytes(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        bytes: usize,
+    ) {
         self.response_page_bytes
-            .with_label_values(&[method])
+            .with_label_values(&[method, resolution])
             .observe(bytes as f64);
     }
 
     fn observe_stream_first_item_latency(
         &self,
         method: &'static str,
+        resolution: &'static str,
         elapsed: std::time::Duration,
     ) {
         self.stream_first_item_latency_ms
-            .with_label_values(&[method])
+            .with_label_values(&[method, resolution])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
 
-    fn observe_stream_item_yield_wait(&self, method: &'static str, elapsed: std::time::Duration) {
+    fn observe_stream_item_yield_wait(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
         self.stream_item_yield_wait_ms
-            .with_label_values(&[method])
+            .with_label_values(&[method, resolution])
+            .observe(elapsed.as_secs_f64() * 1000.0);
+    }
+
+    fn observe_final_stream_poll_wait(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.final_stream_poll_wait_ms
+            .with_label_values(&[method, resolution])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
 
