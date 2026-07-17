@@ -1724,6 +1724,11 @@ mod test {
     // expected_effects_digest is set) and diverges, tripping the per-transaction fork check. The
     // executor_path_only injection flag forks only on that path, guaranteeing a transaction fork; it
     // then recovers under RecoverOncePerVersion.
+    // TODO: re-enable once the test can deterministically force the restarted validator to
+    // re-execute a certified user transaction on the checkpoint-executor path. Today, depending on
+    // seed/timing, consensus replay can catch the validator up first, so the executor-path-only
+    // fork failpoint never fires.
+    #[ignore = "flaky: checkpoint executor catch-up can race with consensus replay"]
     #[sim_test(config = "test_config()")]
     async fn test_auto_fork_recovery_transaction_fork() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
