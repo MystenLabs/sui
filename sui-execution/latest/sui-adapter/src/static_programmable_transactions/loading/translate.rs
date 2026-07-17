@@ -6,6 +6,7 @@ use crate::{
     gas_charger::GasPayment,
     static_programmable_transactions::{
         env::Env,
+        linkage,
         loading::ast::{self as L, PackagePayload},
         metering::{self, translation_meter::TranslationMeter},
     },
@@ -65,7 +66,12 @@ pub fn transaction<Mode: ExecutionMode>(
         commands,
     };
     metering::loading::meter::<Mode::Error>(meter, &loaded_tx)?;
-    Ok(loaded_tx)
+    linkage::refine_linkage::<Mode>(
+        loaded_tx,
+        env.linkage_analysis,
+        env.linkable_store,
+        env.protocol_config,
+    )
 }
 
 fn input<Mode: ExecutionMode>(
@@ -278,14 +284,24 @@ fn command<Mode: ExecutionMode>(
             let resolved_linkage = env
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let payload = PackagePayload::Serialized(items);
+            let payload = if env.protocol_config.enable_unified_linkage() {
+                let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
+                PackagePayload::Deserialized(deserialized_pkg)
+            } else {
+                PackagePayload::Serialized(items)
+            };
             L::Command::Publish(payload, dep_ids, resolved_linkage)
         }
         P::Command::Upgrade(items, dep_ids, object_id, argument) => {
             let resolved_linkage = env
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let payload = PackagePayload::Serialized(items);
+            let payload = if env.protocol_config.enable_unified_linkage() {
+                let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
+                PackagePayload::Deserialized(deserialized_pkg)
+            } else {
+                PackagePayload::Serialized(items)
+            };
             L::Command::Upgrade(payload, dep_ids, object_id, argument, resolved_linkage)
         }
     })

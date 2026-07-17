@@ -10,6 +10,7 @@
 use std::collections::HashSet;
 use std::ops::Range;
 use std::time::Duration;
+use sui_inverted_index::event_seq;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -37,7 +38,7 @@ use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
-use sui_kvstore::tables::{checkpoints, epochs, event_bitmap_index, transactions};
+use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
 use sui_kvstore::testing::create_tables;
@@ -150,6 +151,7 @@ fn bitmap_query_stream(
         spec.bucket_size,
         direction,
         u64::MAX,
+        sui_inverted_index::SkipPolicy::DRAIN_ONLY,
         |_| {},
     );
     use futures::TryStreamExt;
@@ -859,8 +861,8 @@ async fn test_indexer_e2e() -> Result<()> {
             }
         }
 
-        let event_range = event_bitmap_index::event_seq_lo(tx_range.start)
-            ..event_bitmap_index::event_seq_lo(tx_range.end);
+        let event_range =
+            event_seq::event_seq_lo(tx_range.start)..event_seq::event_seq_lo(tx_range.end);
         let matching_event_seqs = bitmap_query_stream(
             harness.bigtable_client(),
             BitmapQuery::scan(sender_dim_key)?,
@@ -885,7 +887,7 @@ async fn test_indexer_e2e() -> Result<()> {
                 clock_event_count += data.event_count;
             }
             for event_idx in 0..data.event_count {
-                let event_seq = event_bitmap_index::encode_event_seq(tx_seq, event_idx);
+                let event_seq = event_seq::encode_event_seq(tx_seq, event_idx);
                 assert!(
                     matching_event_seqs.contains(&event_seq),
                     "event bitmap index should contain event_seq {event_seq} for sender {sender}"

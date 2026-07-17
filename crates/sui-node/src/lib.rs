@@ -19,6 +19,7 @@ use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::future::Future;
+use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
@@ -113,7 +114,6 @@ use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
-use sui_core::rpc_index::RpcIndexStore;
 use sui_core::rpc_store_embed::EmbeddedRpcStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
@@ -132,7 +132,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_macros::fail_point;
-use sui_macros::{fail_point_async, replay_log};
+use sui_macros::{fail_point_arg, fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::endpoint_manager::EndpointManager;
@@ -160,6 +160,7 @@ use typed_store::rocks::default_db_options;
 
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
+pub mod address_prober;
 pub mod admin;
 pub mod db_shell;
 mod handle;
@@ -175,6 +176,7 @@ pub struct ValidatorComponents {
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     admission_queue: Option<AdmissionQueueContext>,
 }
+
 pub struct P2pComponents {
     p2p_network: Network,
     known_peers: HashMap<PeerId, String>,
@@ -276,6 +278,9 @@ pub struct SuiNode {
     /// EndpointManager for updating peer network addresses.
     endpoint_manager: EndpointManager,
 
+    /// Handle to the discovery-shared address prober (`None` when disabled).
+    address_prober: Option<address_prober::Handle>,
+
     backpressure_manager: Arc<BackpressureManager>,
 
     _db_checkpoint_handle: Option<tokio::sync::broadcast::Sender<()>>,
@@ -298,10 +303,10 @@ pub struct SuiNode {
 
     subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 
-    /// The embedded `sui-rpc-store`, present when the node is configured
-    /// with `use_experimental_rpc_store`. Held for the node's lifetime
-    /// so its tip indexer keeps running (dropping it aborts the indexer).
-    /// Exposed through [`SuiNode::embedded_rpc_store`] for introspection.
+    /// The embedded `sui-rpc-store`, present when the node is a fullnode
+    /// with indexing enabled. Held for the node's lifetime so its tip
+    /// indexer keeps running (dropping it aborts the indexer). Exposed
+    /// through [`SuiNode::embedded_rpc_store`] for introspection.
     embedded_rpc_store: Option<EmbeddedRpcStore>,
 }
 
@@ -468,6 +473,11 @@ impl SuiNode {
         registry_service: RegistryService,
         server_version: ServerVersion,
     ) -> Result<Arc<SuiNode>> {
+        // Fail fast on config errors before starting any node components.
+        if let Some(prober_config) = &config.address_prober {
+            prober_config.validate()?;
+        }
+
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
@@ -515,11 +525,26 @@ impl SuiNode {
         );
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
 
+        #[allow(unused_mut)]
+        let mut build_version = server_version.version.to_string();
+        fail_point_arg!("override_binary_version", |version: std::sync::Arc<
+            std::sync::Mutex<String>,
+        >| {
+            #[cfg(msim)]
+            {
+                build_version = version.lock().unwrap().clone();
+            }
+        });
+        // Embedded in any fork marker this run records, so recovery can refuse to clear a fork
+        // under the same binary version that produced it.
+        checkpoint_store.set_binary_version(&build_version);
+
         if node_role.runs_consensus() {
             Self::check_and_recover_forks(
                 &checkpoint_store,
                 &checkpoint_metrics,
                 config.fork_recovery.as_ref(),
+                &build_version,
             )
             .await?;
         }
@@ -687,51 +712,37 @@ impl SuiNode {
 
         let chain_identifier = epoch_store.get_chain_identifier();
 
-        // The embedded `sui-rpc-store` and the legacy `rpc-index` are
-        // mutually exclusive index backends; selecting the experimental
-        // store skips building the old index and serves the index read
-        // paths from the embedded store instead.
-        let (rpc_index, mut embedded_rpc_store) =
+        // The embedded `sui-rpc-store` is the node's index backend: when
+        // indexing is enabled it builds the derived-index and ledger-history
+        // column families (indexed independently of the authority store) and
+        // serves the index read paths from the embedded store. Raw chain data
+        // is still served from the perpetual store.
+        let mut embedded_rpc_store =
             if node_role.is_fullnode() && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
-                if config
-                    .rpc()
-                    .is_some_and(|rpc| rpc.use_experimental_rpc_store())
-                {
-                    info!("creating embedded rpc-store");
-                    // The tip indexer pulls checkpoints from the node's local
-                    // checkpoint / perpetual stores via a dedicated read handle.
-                    let ingestion_source = RocksDbStore::new(
-                        cache_traits.clone(),
-                        committee_store.clone(),
-                        checkpoint_store.clone(),
-                    );
-                    let embedded_rpc_store = EmbeddedRpcStore::bootstrap(
-                        &config,
-                        &store,
-                        &checkpoint_store,
-                        ingestion_source,
-                        chain_identifier,
-                        &prometheus_registry,
-                    )
-                    .await?;
-                    (None, Some(embedded_rpc_store))
-                } else {
-                    info!("creating rpc index store");
-                    let rpc_index = Arc::new(
-                        RpcIndexStore::new(
-                            &config.db_path(),
-                            &store,
-                            &checkpoint_store,
-                            &epoch_store,
-                            &cache_traits.backing_package_store,
-                            config.rpc().cloned().unwrap_or_default(),
-                        )
-                        .await,
-                    );
-                    (Some(rpc_index), None)
-                }
+                info!("creating embedded rpc-store");
+                // The embedded `sui-rpc-store` replaced the legacy `rpc-index`
+                // backend; remove its now-dead on-disk directory if a prior
+                // version left one behind.
+                remove_legacy_rpc_index_store(&config.db_path());
+                // The tip indexer pulls checkpoints from the node's local
+                // checkpoint / perpetual stores via a dedicated read handle.
+                let ingestion_source = RocksDbStore::new(
+                    cache_traits.clone(),
+                    committee_store.clone(),
+                    checkpoint_store.clone(),
+                );
+                let embedded_rpc_store = EmbeddedRpcStore::bootstrap(
+                    &config,
+                    &store,
+                    &checkpoint_store,
+                    ingestion_source,
+                    chain_identifier,
+                    &prometheus_registry,
+                )
+                .await?;
+                Some(embedded_rpc_store)
             } else {
-                (None, None)
+                None
             };
 
         info!("creating archive reader");
@@ -817,7 +828,6 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
-            rpc_index,
             embedded_rpc_store.as_ref().map(|embedded| embedded.store()),
             checkpoint_store.clone(),
             &prometheus_registry,
@@ -966,6 +976,31 @@ impl SuiNode {
             None
         };
 
+        let address_prober = if Self::address_prober_enabled(&config) {
+            let handle = address_prober::Builder::new()
+                .config(config.address_prober.clone().unwrap_or_default())
+                .with_metrics(&prometheus_registry)
+                .build()
+                .start(
+                    p2p_network.clone(),
+                    discovery_handle.sender(),
+                    consensus_config::NetworkKeyPair::new(config.network_key_pair().copy()),
+                );
+            // Seed the current epoch if we are starting as a validator.
+            if node_role.is_validator()
+                && let Some(components) = &validator_components
+            {
+                handle.update_epoch(
+                    epoch_store.epoch(),
+                    epoch_store.epoch_start_state().get_consensus_committee(),
+                    components.consensus_manager.clone(),
+                );
+            }
+            Some(handle)
+        } else {
+            None
+        };
+
         // setup shutdown channel
         let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
 
@@ -988,6 +1023,7 @@ impl SuiNode {
             end_of_epoch_channel,
             endpoint_manager,
             backpressure_manager,
+            address_prober,
 
             _db_checkpoint_handle: db_checkpoint_handle,
 
@@ -1434,6 +1470,37 @@ impl SuiNode {
         .await
     }
 
+    fn address_prober_enabled(config: &NodeConfig) -> bool {
+        let prober_enabled = config
+            .address_prober
+            .as_ref()
+            .map(|c| c.enabled())
+            .unwrap_or(true);
+        let v3_enabled = config
+            .p2p_config
+            .discovery
+            .as_ref()
+            .is_some_and(|d| d.use_get_known_peers_v3());
+        prober_enabled && v3_enabled
+    }
+
+    fn update_address_prober_epoch(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        consensus_manager: &Arc<ConsensusManager>,
+    ) {
+        if !epoch_store.is_validator() {
+            return;
+        }
+        if let Some(handle) = &self.address_prober {
+            handle.update_epoch(
+                epoch_store.epoch(),
+                epoch_store.epoch_start_state().get_consensus_committee(),
+                consensus_manager.clone(),
+            );
+        }
+    }
+
     async fn start_epoch_specific_validator_components(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
@@ -1666,7 +1733,6 @@ impl SuiNode {
                 consensus_adapter.clone(),
                 Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
                 overload_config.admission_queue_capacity_fraction,
-                overload_config.admission_queue_bypass_fraction,
                 overload_config.admission_queue_failover_timeout,
                 inflight_slot_freed_notify,
             ));
@@ -1720,8 +1786,8 @@ impl SuiNode {
         self.state.clone()
     }
 
-    /// The embedded `sui-rpc-store` index backend, when the node runs
-    /// with `use_experimental_rpc_store`. Exposes the startup bootstrap
+    /// The embedded `sui-rpc-store` index backend, when the node is a
+    /// fullnode with indexing enabled. Exposes the startup bootstrap
     /// decision and per-cohort watermarks for introspection (used by
     /// tests to observe restore/resume behavior across restarts without
     /// going through the RPC surface).
@@ -1734,6 +1800,21 @@ impl SuiNode {
         &self,
     ) -> &mysten_network::anemo_connection_monitor::ConnectionMonitorHandle {
         &self._connection_monitor_handle
+    }
+
+    #[cfg(any(test, msim))]
+    pub fn address_prober_metrics_for_testing(
+        &self,
+    ) -> std::sync::Arc<address_prober::AddressProberMetrics> {
+        self.address_prober
+            .as_ref()
+            .expect("address prober should be running in tests")
+            .metrics_for_testing()
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn prometheus_metrics_for_testing(&self) -> Vec<prometheus::proto::MetricFamily> {
+        self.registry_service.default_registry().gather()
     }
 
     pub fn node_role(&self) -> NodeRole {
@@ -1978,6 +2059,10 @@ impl SuiNode {
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
 
+                if let Some(handle) = &self.address_prober {
+                    handle.leave_committee();
+                }
+
                 info!("Epoch store finished reconfiguration.");
 
                 // No other components should be holding a strong reference to state hasher
@@ -1996,30 +2081,33 @@ impl SuiNode {
 
                 if new_role.runs_consensus() {
                     info!("Restarting consensus as {new_role}");
-                    Some(
-                        Self::start_epoch_specific_validator_components(
-                            &self.config,
-                            self.state.clone(),
-                            consensus_adapter,
-                            self.checkpoint_store.clone(),
-                            new_epoch_store.clone(),
-                            self.state_sync_handle.clone(),
-                            self.randomness_handle.clone(),
-                            self.randomness_receiver_handle.clone(),
-                            consensus_manager,
-                            consensus_store_pruner,
-                            weak_hasher,
-                            self.backpressure_manager.clone(),
-                            validator_server_handle,
-                            validator_overload_monitor_handle,
-                            checkpoint_metrics,
-                            self.metrics.clone(),
-                            sui_tx_validator_metrics,
-                            admission_queue,
-                            new_role,
-                        )
-                        .await?,
+                    let components = Self::start_epoch_specific_validator_components(
+                        &self.config,
+                        self.state.clone(),
+                        consensus_adapter,
+                        self.checkpoint_store.clone(),
+                        new_epoch_store.clone(),
+                        self.state_sync_handle.clone(),
+                        self.randomness_handle.clone(),
+                        self.randomness_receiver_handle.clone(),
+                        consensus_manager,
+                        consensus_store_pruner,
+                        weak_hasher,
+                        self.backpressure_manager.clone(),
+                        validator_server_handle,
+                        validator_overload_monitor_handle,
+                        checkpoint_metrics,
+                        self.metrics.clone(),
+                        sui_tx_validator_metrics,
+                        admission_queue,
+                        new_role,
                     )
+                    .await?;
+                    self.update_address_prober_epoch(
+                        &new_epoch_store,
+                        &components.consensus_manager,
+                    );
+                    Some(components)
                 } else {
                     info!(
                         "This node has new role {new_role} and no longer runs consensus after reconfiguration"
@@ -2074,6 +2162,10 @@ impl SuiNode {
                             .set_consensus_address_updater(components.consensus_manager.clone());
                     }
 
+                    self.update_address_prober_epoch(
+                        &new_epoch_store,
+                        &components.consensus_manager,
+                    );
                     Some(components)
                 } else {
                     None
@@ -2184,6 +2276,13 @@ impl SuiNode {
         &self.endpoint_manager
     }
 
+    pub async fn address_prober_report(&self) -> Option<address_prober::ProbeReport> {
+        match &self.address_prober {
+            Some(handle) => handle.probe_report().await,
+            None => None,
+        }
+    }
+
     /// Get a short prefix of a digest for metric labels
     fn get_digest_prefix(digest: impl std::fmt::Display) -> String {
         let digest_str = digest.to_string();
@@ -2201,14 +2300,27 @@ impl SuiNode {
         checkpoint_store: &CheckpointStore,
         checkpoint_metrics: &CheckpointMetrics,
         fork_recovery: Option<&ForkRecoveryConfig>,
+        build_version: &str,
     ) -> Result<()> {
-        // Try to recover from forks if recovery config is provided
+        // Manual recovery from operator-supplied overrides; runs regardless of fork_crash_behavior
+        // and only acts on the checkpoints / transactions explicitly listed in the config.
         if let Some(recovery) = fork_recovery {
             Self::try_recover_checkpoint_fork(checkpoint_store, recovery)?;
             Self::try_recover_transaction_fork(checkpoint_store, recovery)?;
         }
 
-        if let Some((checkpoint_seq, checkpoint_digest)) = checkpoint_store
+        let behavior = fork_recovery
+            .map(|fr| fr.fork_crash_behavior)
+            .unwrap_or_default();
+
+        match behavior {
+            ForkCrashBehavior::RecoverOncePerVersion => {
+                Self::try_recover_forks(checkpoint_store, checkpoint_metrics, build_version)?;
+            }
+            ForkCrashBehavior::AwaitForkRecovery | ForkCrashBehavior::ReturnError => {}
+        }
+
+        if let Some(fork_info) = checkpoint_store
             .get_checkpoint_fork_detected()
             .map_err(|e| {
                 error!("Failed to check for checkpoint fork: {:?}", e);
@@ -2216,14 +2328,14 @@ impl SuiNode {
             })?
         {
             Self::handle_checkpoint_fork(
-                checkpoint_seq,
-                checkpoint_digest,
+                fork_info.checkpoint_seq,
+                fork_info.checkpoint_digest,
                 checkpoint_metrics,
                 fork_recovery,
             )
             .await?;
         }
-        if let Some((tx_digest, expected_effects, actual_effects)) = checkpoint_store
+        if let Some(fork_info) = checkpoint_store
             .get_transaction_fork_detected()
             .map_err(|e| {
                 error!("Failed to check for transaction fork: {:?}", e);
@@ -2231,9 +2343,9 @@ impl SuiNode {
             })?
         {
             Self::handle_transaction_fork(
-                tx_digest,
-                expected_effects,
-                actual_effects,
+                fork_info.tx_digest,
+                fork_info.expected_effects_digest,
+                fork_info.actual_effects_digest,
                 checkpoint_metrics,
                 fork_recovery,
             )
@@ -2243,12 +2355,17 @@ impl SuiNode {
         Ok(())
     }
 
+    /// Manual recovery: for each `seq -> digest` override, if the locally computed checkpoint at
+    /// `seq` differs, clear locally computed checkpoints from `seq` (and the checkpoint fork marker)
+    /// so the node rebuilds toward the operator-specified digest.
     fn try_recover_checkpoint_fork(
         checkpoint_store: &CheckpointStore,
         recovery: &ForkRecoveryConfig,
     ) -> Result<()> {
-        // If configured overrides include a checkpoint whose locally computed digest mismatches,
-        // clear locally computed checkpoints from that sequence (inclusive).
+        if recovery.checkpoint_overrides.is_empty() {
+            return Ok(());
+        }
+
         for (seq, expected_digest_str) in &recovery.checkpoint_overrides {
             let Ok(expected_digest) = CheckpointDigest::from_str(expected_digest_str) else {
                 anyhow::bail!(
@@ -2277,13 +2394,14 @@ impl SuiNode {
             }
         }
 
-        if let Some((checkpoint_seq, checkpoint_digest)) =
-            checkpoint_store.get_checkpoint_fork_detected()?
-            && recovery.checkpoint_overrides.contains_key(&checkpoint_seq)
+        if let Some(fork_info) = checkpoint_store.get_checkpoint_fork_detected()?
+            && recovery
+                .checkpoint_overrides
+                .contains_key(&fork_info.checkpoint_seq)
         {
             info!(
                 "Fork recovery enabled: clearing checkpoint fork at seq {} with digest {:?}",
-                checkpoint_seq, checkpoint_digest
+                fork_info.checkpoint_seq, fork_info.checkpoint_digest
             );
             checkpoint_store
                 .clear_checkpoint_fork_detected()
@@ -2292,6 +2410,8 @@ impl SuiNode {
         Ok(())
     }
 
+    /// Manual recovery: if the forked transaction is listed in transaction_overrides, clear its fork
+    /// marker so the node proceeds on restart.
     fn try_recover_transaction_fork(
         checkpoint_store: &CheckpointStore,
         recovery: &ForkRecoveryConfig,
@@ -2300,19 +2420,125 @@ impl SuiNode {
             return Ok(());
         }
 
-        if let Some((tx_digest, _, _)) = checkpoint_store.get_transaction_fork_detected()?
+        if let Some(fork_info) = checkpoint_store.get_transaction_fork_detected()?
             && recovery
                 .transaction_overrides
-                .contains_key(&tx_digest.to_string())
+                .contains_key(&fork_info.tx_digest.to_string())
         {
             info!(
                 "Fork recovery enabled: clearing transaction fork for tx {:?}",
-                tx_digest
+                fork_info.tx_digest
             );
             checkpoint_store
                 .clear_transaction_fork_detected()
                 .expect("Failed to clear transaction fork detected marker");
         }
+        Ok(())
+    }
+
+    /// Auto-recovery: clear fork markers (the affected seq/tx is read from the markers) so the
+    /// node re-derives canonically. A marker is cleared only if both gates pass:
+    ///
+    /// - Version gate: the marker was recorded by a different binary version than the one now
+    ///   running. The binary that forked would deterministically fork again, so clearing under
+    ///   it would only add a second equivocation; the node hangs until a corrected binary is
+    ///   deployed.
+    /// - Certification gate: the marker records the certified checkpoint the node diverged
+    ///   from. Markers carry it only when detection compared against a certificate already
+    ///   durably persisted locally, so its presence proves the network certified the canonical
+    ///   outcome. Recovery is deliberate equivocation — the node may have already signed the
+    ///   forked result and will sign a different one after re-deriving — which is safe only
+    ///   under that proof: a quorum certificate is irrevocable (a conflicting certificate would
+    ///   require f+1 double-signers), so re-signing can no longer influence what finalizes.
+    ///   Self-divergence markers (the node disagreeing with its own prior result rather than a
+    ///   certificate) carry no certified reference and never pass; the node halts awaiting
+    ///   operator intervention.
+    fn try_recover_forks(
+        checkpoint_store: &CheckpointStore,
+        checkpoint_metrics: &CheckpointMetrics,
+        build_version: &str,
+    ) -> Result<()> {
+        if let Some(fork_info) = checkpoint_store.get_checkpoint_fork_detected()? {
+            if fork_info.binary_version == build_version {
+                error!(
+                    checkpoint_seq = fork_info.checkpoint_seq,
+                    build_version,
+                    "Fork recovery blocked: this binary version produced the checkpoint fork and \
+                     would fork again. Halting; deploy a corrected binary to recover."
+                );
+                checkpoint_metrics
+                    .fork_auto_recovery_awaiting_new_binary
+                    .set(1);
+            } else if fork_info.certified_checkpoint_digest.is_none() {
+                // The builder re-derived a previously computed checkpoint differently: the fork
+                // is against the node's own prior result, not a certified checkpoint, so there
+                // is no canonical outcome to converge toward.
+                error!(
+                    checkpoint_seq = fork_info.checkpoint_seq,
+                    checkpoint_digest = ?fork_info.checkpoint_digest,
+                    "Fork recovery blocked: the builder re-derived its own previous checkpoint \
+                     differently, so there is no certified checkpoint proving the canonical \
+                     outcome to converge toward. Halting awaiting operator intervention."
+                );
+                checkpoint_metrics
+                    .fork_auto_recovery_blocked_uncertified
+                    .set(1);
+            } else {
+                info!(
+                    checkpoint_seq = fork_info.checkpoint_seq,
+                    checkpoint_digest = ?fork_info.checkpoint_digest,
+                    forked_binary_version = ?fork_info.binary_version,
+                    build_version,
+                    "Fork recovery: clearing checkpoint fork and locally computed checkpoints \
+                     from the forked sequence so the builder rebuilds toward the certified \
+                     checkpoint"
+                );
+                checkpoint_store
+                    .clear_locally_computed_checkpoints_from(fork_info.checkpoint_seq)
+                    .context("Failed to clear locally computed checkpoints during fork recovery")?;
+                checkpoint_store.clear_checkpoint_fork_detected()?;
+                checkpoint_metrics.checkpoint_fork_auto_recovered.set(1);
+            }
+        }
+
+        if let Some(fork_info) = checkpoint_store.get_transaction_fork_detected()? {
+            if fork_info.binary_version == build_version {
+                error!(
+                    tx_digest = ?fork_info.tx_digest,
+                    build_version,
+                    "Fork recovery blocked: this binary version produced the transaction fork and \
+                     would fork again. Halting; deploy a corrected binary to recover."
+                );
+                checkpoint_metrics
+                    .fork_auto_recovery_awaiting_new_binary
+                    .set(1);
+            } else if fork_info.certified_checkpoint_seq.is_none() {
+                error!(
+                    tx_digest = ?fork_info.tx_digest,
+                    "Fork recovery blocked: the expected effects of the forked transaction did \
+                     not come from a certified checkpoint (they came from this validator's own \
+                     previously signed effects), so the network has not provably certified the \
+                     canonical outcome. Halting awaiting operator intervention."
+                );
+                checkpoint_metrics
+                    .fork_auto_recovery_blocked_uncertified
+                    .set(1);
+            } else {
+                info!(
+                    tx_digest = ?fork_info.tx_digest,
+                    expected_effects = ?fork_info.expected_effects_digest,
+                    actual_effects = ?fork_info.actual_effects_digest,
+                    certified_checkpoint_seq = ?fork_info.certified_checkpoint_seq,
+                    forked_binary_version = ?fork_info.binary_version,
+                    build_version,
+                    "Fork recovery: clearing transaction fork; re-execution will converge toward \
+                     the canonical certified effects"
+                );
+                checkpoint_store.clear_transaction_fork_detected()?;
+                checkpoint_metrics.transaction_fork_auto_recovered.set(1);
+            }
+        }
+
         Ok(())
     }
 
@@ -2343,7 +2569,7 @@ impl SuiNode {
             .unwrap_or_default();
 
         match behavior {
-            ForkCrashBehavior::AwaitForkRecovery => {
+            ForkCrashBehavior::AwaitForkRecovery | ForkCrashBehavior::RecoverOncePerVersion => {
                 error!(
                     checkpoint_seq = checkpoint_seq,
                     checkpoint_digest = ?checkpoint_digest,
@@ -2389,7 +2615,7 @@ impl SuiNode {
             .unwrap_or_default();
 
         match behavior {
-            ForkCrashBehavior::AwaitForkRecovery => {
+            ForkCrashBehavior::AwaitForkRecovery | ForkCrashBehavior::RecoverOncePerVersion => {
                 error!(
                     tx_digest = ?tx_digest,
                     expected_effects_digest = ?expected_effects_digest,
@@ -2643,6 +2869,31 @@ async fn build_json_rpc_router(
     Ok(server.to_router(server_type).await?)
 }
 
+/// Remove the on-disk directory of the legacy `rpc-index` backend.
+///
+/// The embedded `sui-rpc-store` replaced the `RpcIndexStore` backend, which
+/// wrote to `<db_path>/rpc-index`; that data is now dead. Remove it on startup
+/// so a node upgraded from an older version does not leave it lingering and
+/// wasting disk. Best-effort: a node that never ran the legacy backend has
+/// nothing to remove, and a failure to remove stale data must not block
+/// startup.
+fn remove_legacy_rpc_index_store(db_path: &Path) {
+    let legacy_dir = db_path.join("rpc-index");
+    match std::fs::remove_dir_all(&legacy_dir) {
+        Ok(()) => info!(
+            "removed legacy rpc-index directory {}",
+            legacy_dir.display()
+        ),
+        // The common case: the node never ran the legacy backend, or it was
+        // already cleaned up on a prior startup.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => warn!(
+            "failed to remove legacy rpc-index directory {}: {e:?}",
+            legacy_dir.display()
+        ),
+    }
+}
+
 async fn build_http_servers(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
@@ -2686,12 +2937,27 @@ async fn build_http_servers(
     // index so a client that waits for a checkpoint can immediately read its
     // indexed state (matching the legacy synchronously-committed index).
     let indexed_checkpoint = embedded_rpc_store.map(|embedded| embedded.indexed_checkpoint_fn());
+    let subscription_watermark_interval = config
+        .rpc
+        .as_ref()
+        .and_then(|rpc| rpc.subscription_watermark_interval);
+    let subscription_max_subscribers = config
+        .rpc
+        .as_ref()
+        .and_then(|rpc| rpc.subscription_max_subscribers);
+    let subscription_shards = config.rpc.as_ref().and_then(|rpc| rpc.subscription_shards);
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
-        SubscriptionService::build(prometheus_registry, indexed_checkpoint);
+        SubscriptionService::build(
+            prometheus_registry,
+            indexed_checkpoint,
+            subscription_watermark_interval,
+            subscription_max_subscribers,
+            subscription_shards,
+        );
     let rpc_router = {
         // Serve the index read paths from the embedded rpc-store when it
-        // is enabled, otherwise from the legacy `rpc-index`. Raw chain
-        // data comes from the perpetual / checkpoint stores either way.
+        // is enabled. Raw chain data comes from the perpetual / checkpoint
+        // stores either way.
         let reader: Arc<dyn RpcStateReader> = match embedded_rpc_store {
             Some(embedded) => Arc::new(RpcStoreReadStore::new(
                 state.clone(),
@@ -2738,13 +3004,32 @@ async fn build_http_servers(
 
     router = router.merge(rpc_router).layer(layers);
 
+    // On top of sui-http's hardened defaults (bounded concurrent streams;
+    // transport keepalives stay disabled by default), bound connection
+    // lifetime: GOAWAY at the configured age and force-close after the grace
+    // period. The hard close is the only server-side mechanism that reclaims
+    // streams wedged behind HTTP/2 flow-control windows that a stalled peer
+    // never reopens, and connection age also bounds how long a vanished peer
+    // can pin connection state, which keepalives would otherwise detect.
+    let server_config = {
+        let rpc_config = config.rpc().cloned().unwrap_or_default();
+        let mut server_config = sui_http::Config::default()
+            .max_connection_age_grace(rpc_config.max_connection_age_grace());
+        if let Some(age) = rpc_config.max_connection_age() {
+            server_config = server_config.max_connection_age(age);
+        }
+        server_config
+    };
+
     let https = if let Some((tls_config, https_address)) = config
         .rpc()
         .and_then(|config| config.tls_config().map(|tls| (tls, config.https_address())))
     {
+        let tls_server_config = https_rustls_config(tls_config.cert(), tls_config.key())?;
         let https = sui_http::Builder::new()
-            .tls_single_cert(tls_config.cert(), tls_config.key())
-            .and_then(|builder| builder.serve(https_address, router.clone()))
+            .config(server_config.clone())
+            .tls_config(tls_server_config)
+            .serve(https_address, router.clone())
             .map_err(|e| anyhow::anyhow!(e))?;
 
         info!(
@@ -2759,6 +3044,7 @@ async fn build_http_servers(
     };
 
     let http = sui_http::Builder::new()
+        .config(server_config)
         .serve(&config.json_rpc_address, router)
         .map_err(|e| anyhow::anyhow!(e))?;
 
@@ -2775,6 +3061,33 @@ async fn build_http_servers(
         },
         Some(subscription_service_checkpoint_sender),
     ))
+}
+
+/// Builds the HTTPS RPC server's rustls config from PEM files, pinning the
+/// ring crypto provider.
+///
+/// `sui_http::Builder::tls_single_cert` resolves the provider from rustls
+/// crate features and panics at runtime when more than one provider feature is
+/// enabled in the final binary (e.g. `aws-lc-rs` is pulled in through
+/// `aws-config` in the `sui` CLI), so the provider is pinned explicitly here
+/// instead.
+fn https_rustls_config(cert: &str, key: &str) -> Result<sui_http::rustls::ServerConfig> {
+    use sui_http::rustls;
+    use sui_http::rustls::pki_types::pem::PemObject;
+
+    let certs = rustls::pki_types::CertificateDer::pem_file_iter(cert)
+        .with_context(|| format!("failed to read TLS certificate chain from {cert}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .with_context(|| format!("failed to parse TLS certificate chain from {cert}"))?;
+    let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(key)
+        .with_context(|| format!("failed to read TLS private key from {key}"))?;
+    let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_protocol_versions(rustls::DEFAULT_VERSIONS)?
+    .with_no_client_auth()
+    .with_single_cert(certs, private_key)?;
+    Ok(config)
 }
 
 #[derive(Default)]
@@ -2794,103 +3107,380 @@ mod tests {
     use sui_core::checkpoints::{CheckpointMetrics, CheckpointStore};
     use sui_types::digests::{CheckpointDigest, TransactionDigest, TransactionEffectsDigest};
 
+    // A present legacy `rpc-index` directory is removed, while its siblings
+    // (notably the still-used jsonrpc `indexes` store) are left untouched, and a
+    // missing directory is a no-op.
+    #[test]
+    fn removes_only_the_legacy_rpc_index_directory() {
+        let db = tempfile::tempdir().unwrap();
+        let legacy = db.path().join("rpc-index");
+        let sibling = db.path().join("indexes");
+        std::fs::create_dir(&legacy).unwrap();
+        std::fs::create_dir(&sibling).unwrap();
+        std::fs::write(legacy.join("CURRENT"), b"stale").unwrap();
+
+        remove_legacy_rpc_index_store(db.path());
+        assert!(
+            !legacy.exists(),
+            "legacy rpc-index directory should be gone"
+        );
+        assert!(sibling.exists(), "sibling stores must be left untouched");
+
+        // Idempotent: a second run (nothing to remove) does not error or touch
+        // the siblings.
+        remove_legacy_rpc_index_store(db.path());
+        assert!(!legacy.exists());
+        assert!(sibling.exists());
+    }
+
+    // Halt / ReturnError never clear markers; ReturnError surfaces the fork as a startup error.
     #[tokio::test]
-    async fn test_fork_error_and_recovery_both_paths() {
+    async fn test_return_error_does_not_recover() {
         let checkpoint_store = CheckpointStore::new_for_tests();
         let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
-
-        // ---------- Checkpoint fork path ----------
-        let seq_num = 42;
-        let digest = CheckpointDigest::random();
-        checkpoint_store
-            .record_checkpoint_fork_detected(seq_num, digest)
-            .unwrap();
-
-        let fork_recovery = ForkRecoveryConfig {
+        let cfg = ForkRecoveryConfig {
             transaction_overrides: Default::default(),
             checkpoint_overrides: Default::default(),
             fork_crash_behavior: ForkCrashBehavior::ReturnError,
         };
 
+        // Checkpoint fork.
+        checkpoint_store
+            .record_checkpoint_fork_detected(
+                42,
+                CheckpointDigest::random(),
+                Some(CheckpointDigest::random()),
+            )
+            .unwrap();
         let r = SuiNode::check_and_recover_forks(
             &checkpoint_store,
             &checkpoint_metrics,
-            Some(&fork_recovery),
+            Some(&cfg),
+            "v1",
         )
         .await;
-        assert!(r.is_err());
         assert!(
             r.unwrap_err()
                 .to_string()
                 .contains("Checkpoint fork detected")
         );
+        assert!(
+            checkpoint_store
+                .get_checkpoint_fork_detected()
+                .unwrap()
+                .is_some()
+        );
+        checkpoint_store.clear_checkpoint_fork_detected().unwrap();
 
-        let mut checkpoint_overrides = BTreeMap::new();
-        checkpoint_overrides.insert(seq_num, digest.to_string());
-        let fork_recovery_with_override = ForkRecoveryConfig {
-            transaction_overrides: Default::default(),
-            checkpoint_overrides,
-            fork_crash_behavior: ForkCrashBehavior::ReturnError,
-        };
+        // Transaction fork.
+        checkpoint_store
+            .record_transaction_fork_detected(
+                TransactionDigest::random(),
+                TransactionEffectsDigest::random(),
+                TransactionEffectsDigest::random(),
+                Some(1),
+            )
+            .unwrap();
         let r = SuiNode::check_and_recover_forks(
             &checkpoint_store,
             &checkpoint_metrics,
-            Some(&fork_recovery_with_override),
+            Some(&cfg),
+            "v1",
         )
         .await;
-        assert!(r.is_ok());
+        assert!(
+            r.unwrap_err()
+                .to_string()
+                .contains("Transaction fork detected")
+        );
+    }
+
+    // A fork marker carrying the currently running binary version is never cleared — the binary
+    // that forked would deterministically fork again — so the node hangs until a corrected
+    // binary (different version) runs recovery.
+    #[tokio::test]
+    async fn test_same_binary_version_does_not_recover() {
+        let checkpoint_store = CheckpointStore::new_for_tests();
+        let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
+        let seq = 7;
+        // The fork is recorded by binary "v1", against a certified checkpoint.
+        checkpoint_store.set_binary_version("v1");
+        checkpoint_store
+            .record_checkpoint_fork_detected(
+                seq,
+                CheckpointDigest::random(),
+                Some(CheckpointDigest::random()),
+            )
+            .unwrap();
+
+        // Restarting the same binary: recovery refused despite certification.
+        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v1").unwrap();
+        assert!(
+            checkpoint_store
+                .get_checkpoint_fork_detected()
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            checkpoint_metrics
+                .fork_auto_recovery_awaiting_new_binary
+                .get(),
+            1
+        );
+        assert_eq!(checkpoint_metrics.checkpoint_fork_auto_recovered.get(), 0);
+
+        // Corrected binary (new version): recovers.
+        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v2").unwrap();
         assert!(
             checkpoint_store
                 .get_checkpoint_fork_detected()
                 .unwrap()
                 .is_none()
         );
+        assert_eq!(checkpoint_metrics.checkpoint_fork_auto_recovered.get(), 1);
+    }
 
-        // ---------- Transaction fork path ----------
+    // The default behavior (RecoverOncePerVersion) recovers with no fork-recovery config present.
+    #[tokio::test]
+    async fn test_default_recovers() {
+        let checkpoint_store = CheckpointStore::new_for_tests();
+        let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
+
         let tx_digest = TransactionDigest::random();
-        let expected_effects = TransactionEffectsDigest::random();
-        let actual_effects = TransactionEffectsDigest::random();
+        // The fork was recorded by binary "v1"; its expected effects came from certified
+        // checkpoint 3, so recovery under "v2" is permitted.
+        checkpoint_store.set_binary_version("v1");
         checkpoint_store
-            .record_transaction_fork_detected(tx_digest, expected_effects, actual_effects)
+            .record_transaction_fork_detected(
+                tx_digest,
+                TransactionEffectsDigest::random(),
+                TransactionEffectsDigest::random(),
+                Some(3),
+            )
             .unwrap();
 
-        let fork_recovery = ForkRecoveryConfig {
-            transaction_overrides: Default::default(),
-            checkpoint_overrides: Default::default(),
-            fork_crash_behavior: ForkCrashBehavior::ReturnError,
-        };
-        let r = SuiNode::check_and_recover_forks(
-            &checkpoint_store,
-            &checkpoint_metrics,
-            Some(&fork_recovery),
-        )
-        .await;
-        assert!(r.is_err());
-        assert!(
-            r.unwrap_err()
-                .to_string()
-                .contains("Transaction fork detected")
-        );
-
-        let mut transaction_overrides = BTreeMap::new();
-        transaction_overrides.insert(tx_digest.to_string(), actual_effects.to_string());
-        let fork_recovery_with_override = ForkRecoveryConfig {
-            transaction_overrides,
-            checkpoint_overrides: Default::default(),
-            fork_crash_behavior: ForkCrashBehavior::ReturnError,
-        };
-        let r = SuiNode::check_and_recover_forks(
-            &checkpoint_store,
-            &checkpoint_metrics,
-            Some(&fork_recovery_with_override),
-        )
-        .await;
+        let r =
+            SuiNode::check_and_recover_forks(&checkpoint_store, &checkpoint_metrics, None, "v2")
+                .await;
         assert!(r.is_ok());
         assert!(
             checkpoint_store
                 .get_transaction_fork_detected()
                 .unwrap()
                 .is_none()
+        );
+        assert_eq!(checkpoint_metrics.transaction_fork_auto_recovered.get(), 1);
+    }
+
+    // checkpoint_overrides clears only the checkpoint fork marker (when the forked seq is listed); it
+    // is decoupled from the transaction fork marker, which is cleared by transaction_overrides.
+    #[tokio::test]
+    async fn test_checkpoint_overrides_clear_checkpoint_marker_only() {
+        let checkpoint_store = CheckpointStore::new_for_tests();
+        let seq = 9;
+
+        checkpoint_store
+            .record_checkpoint_fork_detected(
+                seq,
+                CheckpointDigest::random(),
+                Some(CheckpointDigest::random()),
+            )
+            .unwrap();
+        checkpoint_store
+            .record_transaction_fork_detected(
+                TransactionDigest::random(),
+                TransactionEffectsDigest::random(),
+                TransactionEffectsDigest::random(),
+                None,
+            )
+            .unwrap();
+
+        // No overrides: both markers are left intact.
+        SuiNode::try_recover_checkpoint_fork(&checkpoint_store, &ForkRecoveryConfig::default())
+            .unwrap();
+        assert!(
+            checkpoint_store
+                .get_checkpoint_fork_detected()
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            checkpoint_store
+                .get_transaction_fork_detected()
+                .unwrap()
+                .is_some()
+        );
+
+        // Override for the forked seq: clears the checkpoint marker but leaves the transaction marker.
+        let mut checkpoint_overrides = BTreeMap::new();
+        checkpoint_overrides.insert(seq, CheckpointDigest::random().to_string());
+        let cfg = ForkRecoveryConfig {
+            transaction_overrides: Default::default(),
+            checkpoint_overrides,
+            fork_crash_behavior: ForkCrashBehavior::AwaitForkRecovery,
+        };
+        SuiNode::try_recover_checkpoint_fork(&checkpoint_store, &cfg).unwrap();
+        assert!(
+            checkpoint_store
+                .get_checkpoint_fork_detected()
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            checkpoint_store
+                .get_transaction_fork_detected()
+                .unwrap()
+                .is_some(),
+            "checkpoint_overrides must not touch the transaction fork marker"
+        );
+    }
+
+    // transaction_overrides clears the transaction fork marker when the forked tx is listed.
+    #[tokio::test]
+    async fn test_transaction_overrides_clear_transaction_marker() {
+        let checkpoint_store = CheckpointStore::new_for_tests();
+        let tx_digest = TransactionDigest::random();
+        checkpoint_store
+            .record_transaction_fork_detected(
+                tx_digest,
+                TransactionEffectsDigest::random(),
+                TransactionEffectsDigest::random(),
+                None,
+            )
+            .unwrap();
+
+        // Unrelated override: marker stays.
+        let mut transaction_overrides = BTreeMap::new();
+        transaction_overrides.insert(TransactionDigest::random().to_string(), String::new());
+        let cfg = ForkRecoveryConfig {
+            transaction_overrides,
+            checkpoint_overrides: Default::default(),
+            fork_crash_behavior: ForkCrashBehavior::AwaitForkRecovery,
+        };
+        SuiNode::try_recover_transaction_fork(&checkpoint_store, &cfg).unwrap();
+        assert!(
+            checkpoint_store
+                .get_transaction_fork_detected()
+                .unwrap()
+                .is_some()
+        );
+
+        // Override for the forked tx: marker cleared.
+        let mut transaction_overrides = BTreeMap::new();
+        transaction_overrides.insert(tx_digest.to_string(), String::new());
+        let cfg = ForkRecoveryConfig {
+            transaction_overrides,
+            checkpoint_overrides: Default::default(),
+            fork_crash_behavior: ForkCrashBehavior::AwaitForkRecovery,
+        };
+        SuiNode::try_recover_transaction_fork(&checkpoint_store, &cfg).unwrap();
+        assert!(
+            checkpoint_store
+                .get_transaction_fork_detected()
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    // Under RecoverOncePerVersion, a checkpoint override clears the fork via the manual path
+    // even when the auto path would refuse (here: the fork was recorded by the currently running
+    // binary version and the sequence is not certified).
+    #[tokio::test]
+    async fn test_override_clears_fork_auto_recovery_refuses() {
+        let checkpoint_store = CheckpointStore::new_for_tests();
+        let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
+        let seq = 5;
+        checkpoint_store.set_binary_version("v1");
+        checkpoint_store
+            .record_checkpoint_fork_detected(
+                seq,
+                CheckpointDigest::random(),
+                Some(CheckpointDigest::random()),
+            )
+            .unwrap();
+
+        let mut checkpoint_overrides = BTreeMap::new();
+        checkpoint_overrides.insert(seq, CheckpointDigest::random().to_string());
+        let cfg = ForkRecoveryConfig {
+            transaction_overrides: Default::default(),
+            checkpoint_overrides,
+            fork_crash_behavior: ForkCrashBehavior::RecoverOncePerVersion,
+        };
+
+        SuiNode::check_and_recover_forks(&checkpoint_store, &checkpoint_metrics, Some(&cfg), "v1")
+            .await
+            .unwrap();
+
+        assert!(
+            checkpoint_store
+                .get_checkpoint_fork_detected()
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    // A self-divergence checkpoint fork (the builder re-derived its own previous checkpoint
+    // differently; no certified digest in the marker) is never auto-recovered, even under a new
+    // binary version, because neither result is proven canonical. It requires operator
+    // overrides.
+    #[tokio::test]
+    async fn test_self_divergence_checkpoint_fork_blocks_recovery() {
+        let checkpoint_store = CheckpointStore::new_for_tests();
+        let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
+        let seq = 17;
+        checkpoint_store.set_binary_version("v1");
+        checkpoint_store
+            .record_checkpoint_fork_detected(seq, CheckpointDigest::random(), None)
+            .unwrap();
+
+        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v2").unwrap();
+
+        assert!(
+            checkpoint_store
+                .get_checkpoint_fork_detected()
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            checkpoint_metrics
+                .fork_auto_recovery_blocked_uncertified
+                .get(),
+            1
+        );
+        assert_eq!(checkpoint_metrics.checkpoint_fork_auto_recovered.get(), 0);
+    }
+
+    // A transaction fork whose expected effects did not come from a certified checkpoint (i.e.
+    // they came from this validator's own previously signed effects) is never auto-recovered,
+    // even on a new binary version.
+    #[tokio::test]
+    async fn test_uncertified_transaction_fork_blocks_recovery() {
+        let checkpoint_store = CheckpointStore::new_for_tests();
+        let checkpoint_metrics = CheckpointMetrics::new(&Registry::new());
+        checkpoint_store.set_binary_version("v1");
+        checkpoint_store
+            .record_transaction_fork_detected(
+                TransactionDigest::random(),
+                TransactionEffectsDigest::random(),
+                TransactionEffectsDigest::random(),
+                None,
+            )
+            .unwrap();
+
+        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v2").unwrap();
+        SuiNode::try_recover_forks(&checkpoint_store, &checkpoint_metrics, "v3").unwrap();
+
+        assert!(
+            checkpoint_store
+                .get_transaction_fork_detected()
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            checkpoint_metrics
+                .fork_auto_recovery_blocked_uncertified
+                .get(),
+            1
         );
     }
 }

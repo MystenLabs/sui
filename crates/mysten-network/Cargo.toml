@@ -11,6 +11,7 @@ publish = false
 anemo.workspace = true
 anemo-tower.workspace = true
 anyhow.workspace = true
+base64.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 dashmap.workspace = true
@@ -20,7 +21,9 @@ http.workspace = true
 http-body.workspace = true
 mysten-metrics.workspace = true
 multiaddr.workspace = true
+pin-project-lite.workspace = true
 prometheus.workspace = true
+prost-reflect.workspace = true
 quinn-proto.workspace = true
 rand.workspace = true
 serde.workspace = true
@@ -29,14 +32,18 @@ snap.workspace = true
 hyper-rustls.workspace = true
 hyper-util.workspace = true
 rustls.workspace = true
+sui-macros.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-rustls.workspace = true
 tonic.workspace = true
 tower.workspace = true
 tower-http.workspace = true
-pin-project-lite = "0.2.13"
 tracing.workspace = true
 sui-http.workspace = true
 
 [dev-dependencies]
+http-body-util.workspace = true
+prost.workspace = true
 sui-tls.workspace = true
+tonic-health.workspace = true
+tracing-subscriber.workspace = true

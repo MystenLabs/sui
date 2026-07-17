@@ -4,9 +4,9 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use mysten_network::callback::CallbackLayer;
 use reader::StateReader;
 use subscription::SubscriptionServiceHandle;
+use sui_http::middleware::callback::CallbackLayer;
 use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
@@ -149,19 +149,20 @@ impl RpcService {
         let extra_service_names = std::mem::take(&mut self.extra_service_names);
 
         // Single source of truth for every encoded FileDescriptorSet that
-        // backs a gRPC service mounted below. Consumed by both the
-        // reflection services and the metrics allowlist so they cannot drift
-        // out of sync.
-        let file_descriptor_sets: Vec<&[u8]> = [
+        // backs a gRPC service mounted below. Consumed by the reflection
+        // services, the metrics allowlist, and the request-log layer so they
+        // cannot drift out of sync.
+        let built_in_file_descriptor_sets: [&[u8]; 5] = [
             sui_rpc::proto::google::protobuf::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::google::rpc::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET,
             tonic_health::pb::FILE_DESCRIPTOR_SET,
-        ]
-        .into_iter()
-        .chain(std::mem::take(&mut self.extra_file_descriptor_sets))
-        .collect();
+        ];
+        let file_descriptor_sets: Vec<&[u8]> = built_in_file_descriptor_sets
+            .into_iter()
+            .chain(std::mem::take(&mut self.extra_file_descriptor_sets))
+            .collect();
 
         // Allowlist of `/Service/Method` paths used by the metrics middleware
         // to bound prometheus label cardinality.
@@ -170,14 +171,26 @@ impl RpcService {
                 .expect("registered FileDescriptorSet bytes must be valid protobuf"),
         );
 
+        let request_log =
+            mysten_network::request_log::GrpcRequestLogLayer::from_encoded_file_descriptor_sets(
+                file_descriptor_sets.iter().copied(),
+            )
+            .unwrap_or_else(|e| {
+                // Extra sets registered by embedders may not merge cleanly (e.g. missing
+                // imports). Reflection and metrics tolerate that, so don't fail startup —
+                // capture just won't decode those extra services.
+                tracing::warn!(
+                    "request-log descriptor pool falling back to built-in file descriptor sets: {e}"
+                );
+                mysten_network::request_log::GrpcRequestLogLayer::from_encoded_file_descriptor_sets(
+                    built_in_file_descriptor_sets,
+                )
+                .expect("built-in FileDescriptorSet bytes must be valid protobuf")
+            });
+
         let router = {
             let ledger_service =
                 sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer::new(
-                    self.clone(),
-                )
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let ledger_service_v2alpha =
-                sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer::new(
                     self.clone(),
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
@@ -228,7 +241,6 @@ impl RpcService {
                 service_name(&signature_verification_service),
                 service_name(&move_package_service),
                 service_name(&name_service),
-                service_name(&ledger_service_v2alpha),
                 service_name(&proof_service_v2alpha),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
@@ -239,6 +251,7 @@ impl RpcService {
             }
 
             let mut services = grpc::Services::new()
+                .timeout(self.config.grpc_timeout())
                 // V2
                 .add_service(ledger_service)
                 .add_service(transaction_execution_service)
@@ -247,7 +260,6 @@ impl RpcService {
                 .add_service(move_package_service)
                 .add_service(name_service)
                 // V2alpha
-                .add_service(ledger_service_v2alpha)
                 .add_service(proof_service_v2alpha)
                 // Reflection
                 .add_service(reflection_v1)
@@ -275,7 +287,7 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
             services
                 .merge_router(extra_routes)
                 .add_service(health_service)
-                .into_router()
+                .into_router(request_log)
         };
 
         let health_endpoint = axum::Router::new()
@@ -320,5 +332,22 @@ pub enum Direction {
 impl Direction {
     pub fn is_descending(self) -> bool {
         matches!(self, Self::Descending)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// The request-log layer's descriptor pool is built from these sets at server startup with an
+    /// `expect`, so they must always merge into one valid pool.
+    #[test]
+    fn request_log_pool_builds_from_registered_file_descriptor_sets() {
+        mysten_network::request_log::GrpcRequestLogLayer::from_encoded_file_descriptor_sets([
+            sui_rpc::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::google::rpc::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET,
+            tonic_health::pb::FILE_DESCRIPTOR_SET,
+        ])
+        .unwrap();
     }
 }

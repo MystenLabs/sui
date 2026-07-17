@@ -79,8 +79,8 @@ Response: {
   "data": {
     "allCheckpoints": {
       "pageInfo": {
-        "startCursor": "MA==",
-        "endCursor": "Ng==",
+        "startCursor": "KAEyAggA",
+        "endCursor": "KAEyAggG",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -152,8 +152,8 @@ Response: {
     },
     "paginatedCheckpointsAtEpochHasNextPage": {
       "pageInfo": {
-        "startCursor": "NA==",
-        "endCursor": "NQ==",
+        "startCursor": "KAEyAggE",
+        "endCursor": "KAEyAggF",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
@@ -180,8 +180,8 @@ Response: {
     },
     "paginatedCheckpointsAtEpochHasPreviousPage": {
       "pageInfo": {
-        "startCursor": "NQ==",
-        "endCursor": "Ng==",
+        "startCursor": "KAEyAggF",
+        "endCursor": "KAEyAggG",
         "hasPreviousPage": true,
         "hasNextPage": false
       },
@@ -224,8 +224,8 @@ Response: {
   "data": {
     "checkpointsAtEpoch1BeforeCp6FromBackHasNextPage": {
       "pageInfo": {
-        "startCursor": "NQ==",
-        "endCursor": "NQ==",
+        "startCursor": "KAEyAggF",
+        "endCursor": "KAEyAggF",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -250,8 +250,8 @@ Response: {
   "data": {
     "checkpointsAfterCp0HasPreviousPreviousPage": {
       "pageInfo": {
-        "startCursor": "MQ==",
-        "endCursor": "MQ==",
+        "startCursor": "KAEyAggB",
+        "endCursor": "KAEyAggB",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -276,8 +276,8 @@ Response: {
   "data": {
     "checkpointsBeforeCp4FromBack": {
       "pageInfo": {
-        "startCursor": "Mg==",
-        "endCursor": "Mw==",
+        "startCursor": "KAEyAggC",
+        "endCursor": "KAEyAggD",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -311,8 +311,8 @@ Response: {
   "data": {
     "checkpointsAtEpoch0AfterCp0": {
       "pageInfo": {
-        "startCursor": "MQ==",
-        "endCursor": "Mw==",
+        "startCursor": "KAEyAggB",
+        "endCursor": "KAEyAggD",
         "hasPreviousPage": true,
         "hasNextPage": false
       },
@@ -355,8 +355,8 @@ Response: {
   "data": {
     "checkpointsAtEpoch0BeforeCp3": {
       "pageInfo": {
-        "startCursor": "MA==",
-        "endCursor": "Mg==",
+        "startCursor": "KAEyAggA",
+        "endCursor": "KAEyAggC",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
@@ -399,8 +399,8 @@ Response: {
   "data": {
     "checkpointsAtEpoch0BetweenCp03FromFront": {
       "pageInfo": {
-        "startCursor": "MQ==",
-        "endCursor": "MQ==",
+        "startCursor": "KAEyAggB",
+        "endCursor": "KAEyAggB",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -418,8 +418,8 @@ Response: {
     },
     "checkpointsAtEpoch0BetweenCp03FromBack": {
       "pageInfo": {
-        "startCursor": "Mg==",
-        "endCursor": "Mg==",
+        "startCursor": "KAEyAggC",
+        "endCursor": "KAEyAggC",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -444,8 +444,8 @@ Response: {
   "data": {
     "checkpointsAtEpoch1BeforeCp6FromBack": {
       "pageInfo": {
-        "startCursor": "NA==",
-        "endCursor": "NQ==",
+        "startCursor": "KAEyAggE",
+        "endCursor": "KAEyAggF",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
@@ -479,8 +479,8 @@ Response: {
   "data": {
     "checkpointsBeforeCp1": {
       "pageInfo": {
-        "startCursor": "MA==",
-        "endCursor": "MA==",
+        "startCursor": "KAEyAggA",
+        "endCursor": "KAEyAggA",
         "hasPreviousPage": false,
         "hasNextPage": true
       },

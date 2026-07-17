@@ -72,32 +72,26 @@ export function printLeadingComment(path: AstPath<Node>, options: MoveOptions): 
     }
 
     if (options.wrapComments == false) {
-        return [
-            join(
-                hardlineWithoutBreakParent,
-                comments.map((c) =>
-                    c.type == 'line_comment' ? [c.text, /* used to be breakParent */ ''] : [c.text],
-                ),
-            ),
-            hardlineWithoutBreakParent,
-        ];
+        // each comment's `newline` flag says whether a line break separated it
+        // from what follows — inline block comments keep their spacing
+        return comments.map((c) => [c.text, c.newline ? hardlineWithoutBreakParent : (' ' as Doc)]);
     }
 
     // we do not concatenate the comments into a single string, and treat each
     // line separately.
     return comments.map((comment) => {
         if (comment.type == 'line_comment') {
-            const isDoc = comment.text.startsWith('///');
-            const parts = comment.text.slice(isDoc ? 4 : 3).split(' ');
+            const prefix = comment.text.startsWith('///') ? '///' : '//';
+            const parts = comment.text.slice(prefix.length).trimStart().split(' ');
 
             return [
-                isDoc ? '/// ' : '// ',
-                fill(join(ifBreak([softline, isDoc ? '/// ' : '// '], ' '), parts)),
+                prefix + ' ',
+                fill(join(ifBreak([softline, prefix + ' '], ' '), parts)),
                 hardlineWithoutBreakParent,
             ];
         }
 
-        return comment.text;
+        return [comment.text, hardlineWithoutBreakParent];
     });
 }
 
@@ -115,9 +109,31 @@ export function printTrailingComment(path: AstPath<Node>, shouldBreak: boolean =
     if (!path.node.enableTrailingComment) return '';
     const comment = path.node.trailingComment;
     if (!comment) return '';
-    if (comment.type == 'line_comment' && shouldBreak) {
-        return [' ', comment.text, hardline];
+    if (comment.type == 'line_comment') {
+        if (shouldBreak) {
+            return [' ', comment.text, hardline];
+        }
+
+        // a line comment printed inline would swallow any tokens the parent
+        // prints after it on the same line; defer it to the end of the line
+        // and break the enclosing group so the comment stays near its node
+        return [lineSuffix([' ', comment.text]), breakParent];
     }
+
+    return [' ', comment.text];
+}
+
+/**
+ * The raw inline form of the trailing comment (`' ' + text`), with no line
+ * break protection. Callers own the placement and must guarantee that a line
+ * break follows before any sibling token is printed on the same line —
+ * typically by wrapping the result in `lineSuffix` themselves.
+ */
+export function inlineTrailingComment(path: AstPath<Node>): Doc {
+    if (path.node.isEmptyLine) return '';
+    if (!path.node.enableTrailingComment) return '';
+    const comment = path.node.trailingComment;
+    if (!comment) return '';
 
     return [' ', comment.text];
 }
@@ -160,17 +176,10 @@ export function emptyBlockOrList(
     );
 }
 
-/**
- * TODO: use this type for the `block()` function.
- */
 export type BlockOptions = {
     path: AstPath<Node>;
     print: printFn;
     options: ParserOptions;
-    breakDependency?: Symbol;
-
-    lastLine?: boolean;
-    lineEnding?: Doc;
     skipChildren?: number;
     shouldBreak?: boolean;
 };
@@ -316,6 +325,21 @@ export function list({
         }, 'namedChildren');
     }
 
+    // comments that were not claimed as leading/trailing by any element (e.g.
+    // separated from the next element by an empty line) are still children of
+    // the list node; collect them per-element so they are not dropped
+    const danglingBefore: string[][] = path.node.nonFormattingChildren.map(() => []);
+    {
+        let elementIndex = 0;
+        for (const child of path.node.namedChildren) {
+            if (child === path.node.nonFormattingChildren[elementIndex]) {
+                elementIndex++;
+            } else if (elementIndex < length && child.isComment) {
+                danglingBefore[elementIndex]!.push(child.text);
+            }
+        }
+    }
+
     return [
         open,
         indentCb(addWhitespace ? line : softline),
@@ -323,8 +347,17 @@ export function list({
         indentCb(
             path
                 .map((path, i) => {
+                    const dangling = danglingBefore[i]!.map((text) => [text, hardline] as Doc);
                     const leading = printLeadingComment(path, options);
-                    const comment = printTrailingComment(path, false);
+                    // the list provides its own separators after the comment,
+                    // so the padding space baked into block-comment text (see
+                    // `assignTrailingComments`) is stripped here
+                    const trailingBlock =
+                        path.node.enableTrailingComment &&
+                        path.node.trailingComment?.type == 'block_comment'
+                            ? ([' ', path.node.trailingComment.text.trimEnd()] as Doc)
+                            : null;
+                    const comment = trailingBlock ?? printTrailingComment(path, false);
                     let shouldBreak = false;
 
                     // if the node has a trailing comment, we should break
@@ -354,26 +387,25 @@ export function list({
                     const endingExpr = addWhitespace ? line : softline;
                     const isLastChild = i == length - 1;
 
+                    // trailing block comments print inline right after the
+                    // element, BEFORE the comma, preserving the source shape
+                    // (`x /* c */,`); trailing line comments are deferred to
+                    // the end of the line by `lineSuffix`, so they still land
+                    // after the comma
                     if (isLastChild) {
                         return [
+                            dangling,
                             leading,
                             breakExpr,
                             print(path),
+                            comment,
                             ifBreak(','),
-                            shouldBreak ? lineSuffix(comment) : comment,
                             shouldDedent ? dedent(endingExpr) : endingExpr,
                         ];
                     }
 
                     // if we are not at the last child, add a comma
-                    return [
-                        leading,
-                        breakExpr,
-                        print(path),
-                        ',',
-                        shouldBreak ? lineSuffix(comment) : comment,
-                        line,
-                    ];
+                    return [dangling, leading, breakExpr, print(path), comment, ',', line];
                 }, 'nonFormattingChildren')
                 .slice(skipChildren)
                 .concat(

@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+backoff.workspace = true
 bin-version.workspace = true
 clap.workspace = true
 http.workspace = true

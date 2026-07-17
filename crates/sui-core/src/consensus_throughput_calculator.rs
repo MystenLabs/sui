@@ -417,9 +417,7 @@ impl ConsensusThroughputCalculator {
 
             let period = first_element_ts.saturating_sub(last_element_ts);
 
-            if period > 0 {
-                let current_throughput = inner.total_transactions / period;
-
+            if let Some(current_throughput) = inner.total_transactions.checked_div(period) {
                 self.metrics
                     .consensus_calculated_throughput
                     .set(current_throughput as i64);

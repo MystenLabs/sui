@@ -40,7 +40,7 @@ When debugging an onchain transaction, the source code for Move calls executed w
 
 This is a lower level representation of the Move code that is still quite useful to improve one's understanding of the Move code behavior and execution flow. It also has one advantage over the source view: it is a much better match to what is recorded in the execution trace. In presence of Move compiler optimizations, disassembly view is the ultimate source of truth. For example, some variables present in the source might no longer be present in the trace, which you can verify in the disassembly view.
 
-You can still provide [source code for onchain transactions by hand](#source-level-debugging-for-on-chain-transactions) to enable source view. Support for automating source-level debugging for onchain transactions will be available in the future.
+You can still provide source code for onchain transactions using the debugger's UI to enable source view when [debugging onchain transactions](#debugging-onchain-transactions).
 
 If both source code and disassembled bytecode are available, you can toggle between source view and disassembly view through the `Move: Toggle source view` and `Move: Toggle disassembly view` commands from the command palette. You can open these with <kbd>Shift</kbd> + <kbd>⌘</kbd> + <kbd>P</kbd> on macOS, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> on Windows/Linux).
 
@@ -173,15 +173,24 @@ Debugging an onchain transaction is a two-step process:
         The first time you run this command you might be asked to select a debugger type. Select **Move Debugger**.
       :::
 
-## Source-level debugging for onchain transactions
+The chain does not store Move source code and a debugging session for an onchain transaction starts in disassembly mode by default. To enable source-level debugging, you can point the debugger at a local package directory containing package sources. The package must be built locally to also include debugging metadata required to enable source-level debugging.
 
-Data downloaded from the network for debugging a transaction does not contain the source code for Move calls executed throughout the transaction. You can, however, provide the sources along with additional debugging metadata yourself to enable source-level debugging. If you have access to the source code of packages used throughout the transaction, you can build the packages to generate the debugging metadata and make the location of this data visible to the replay tool.
+The source code version of each package should be the same version that was used to build the package used in the transaction. Otherwise, a discrepancy between execution trace (generated from onchain data) and package debugging metadata (generated locally) might result in debugging failures.
 
-The source code version of each package should be the same version that was used to build the package used in the transaction. Otherwise, a discrepancy between execution trace (generated from onchain data) and package debugging metadata (generated locally), might result in debugging failures.
+For example, consider a situation when an onchain transaction executes a call to some public function `foo` which then calls some private function `bar`. The package's source code used to generate the debugging metadata still has public function `foo` but `foo` no longer calls `bar`. When attempting to do source-level debugging in such a case, if a call to `bar` was part of the execution trace, the debugger would have no source for function `bar` to display when the call is reached during the debugging session.
 
-For example, consider a situation when an onchain transaction executes a call to some public function `foo` which then calls some private function `bar`. The package's source code used to generate the debugging metadata still has public function `foo` but `foo` not longer calls `bar`. When attempting to do source-level debugging in such case, if a call to `bar` was part of the execution trace, the debugger would have no source for function `bar` to display when the call is reached during the debugging session.
+Using the newest version of the package sources might still work, particularly for packages whose existing functionality is largely stabilized and whose source code rarely changes, such as the Sui framework package. However, it does not work if someone already upgraded the package onchain after the debugged transaction executed and metadata in its package directory reflects this (in which case you need to obtain package sources from before the upgrade).
 
-Using the newest version of a package might still work, particularly for packages whose existing functionality is largely stabilized and its source code rarely changes, such as Sui framework package. Below are the instructions on how to handle this simplified case, followed by instructions on how to locate precise versions of packages.
+Use the button on top of the window displaying the trace file to add sources to the debugger before starting the debugging session. The following section explains how this machinery works under the hood and how to add sources to the debugger manually, but it is for advanced users only.
+
+## Advanced source-level debugging instructions
+
+:::info
+    These instructions are intended for advanced users. Follow them only if the default method of adding sources to the debugger through the debugger's UI does not work.
+:::
+
+
+The data you download from the network for debugging a transaction does not contain the source code for Move calls executed throughout the transaction. You can, however, provide the sources along with additional debugging metadata by hand to enable source-level debugging, if you have access to the source code of the exact versions of packages that the transaction uses. Below are the instructions on how to handle this simplified case, followed by instructions on how to locate precise versions of packages.
 
 Consider the following: a Mainnet transaction with the digest `95oR1YipjSnqd18K4BMshkLgPijypwzARHV988eRhMDs`. Assume that all commands (unless stated otherwise) are executed in some `$ROOT_DIR` (such as your home directory).
 

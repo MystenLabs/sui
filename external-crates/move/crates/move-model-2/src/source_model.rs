@@ -117,8 +117,8 @@ impl Model {
             .map(|(ident, _)| (ident.module_id(), ident))
             .collect::<BTreeMap<_, _>>();
         let compiled_modules = compiled_units
-            .iter()
-            .flat_map(|(_addr, units)| units.values().map(|unit| &unit.module));
+            .values()
+            .flat_map(|units| units.values().map(|unit| &unit.module));
         let compiled = normalized::Packages::new(compiled_modules);
         let packages = compiled
             .packages

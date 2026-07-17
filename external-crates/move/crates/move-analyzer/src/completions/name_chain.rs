@@ -207,6 +207,7 @@ pub fn name_chain_completions(
         imports_for_name_chain_entry(
             symbols,
             cursor,
+            &info,
             leading_name.loc,
             chain_kind,
             &path_entries,
@@ -703,6 +704,8 @@ fn all_single_name_member_completions(
 
 /// Returns list of completion items that represent module members
 /// auto-imports.
+/// For `B`, when completing `Bar`, the algorithm should end up with
+/// auto-completed `Bar` and auto-inserted `use pkg::foo::Bar;`.
 fn member_auto_imports(
     symbols: &Symbols,
     cursor: &CursorContext,
@@ -726,6 +729,32 @@ fn member_auto_imports(
             addr_to_ide_string(&mod_ident.address),
             mod_ident.module,
             member_name,
+        );
+        add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
+    });
+    member_completions
+}
+
+/// Returns auto-import completions for a member accessed through an unresolved module prefix.
+/// For `foo::B`, when completing `Bar`, the algorithm should end up with
+/// auto-completed `foo::Bar` and auto-inserted `use pkg::foo;`.
+fn member_completions_with_module_import(
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    mod_defs: &ModuleDefs,
+    chain_kind: ChainCompletionKind,
+    auto_import_pos: AutoImportInsertionInfo,
+) -> Vec<CompletionItem> {
+    let mod_ident = sp(mod_defs.name_loc, mod_defs.ident);
+    let mut member_completions = module_member_completions(
+        symbols, cursor, &mod_ident, chain_kind, /* inside_use */ false,
+    );
+    let mod_ident = mod_defs.ident;
+    member_completions.iter_mut().for_each(|item| {
+        let auto_import_text = format!(
+            "use {}::{}",
+            addr_to_ide_string(&mod_ident.address),
+            mod_ident.module,
         );
         add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
     });
@@ -910,6 +939,7 @@ fn next_name_chain_component_kind(
 fn imports_for_name_chain_entry(
     symbols: &Symbols,
     cursor: &CursorContext,
+    info: &AliasAutocompleteInfo,
     prev_loc: Loc,
     chain_kind: ChainCompletionKind,
     path_entries: &[Name],
@@ -941,27 +971,19 @@ fn imports_for_name_chain_entry(
         let P::LeadingNameAccess_::Name(name) = leading_name.value else {
             return;
         };
+        // If the prefix already resolves to a module, regular member completion covers this chain.
+        if info.modules.contains_key(&name.value) {
+            return;
+        }
         for mod_defs in symbols.file_mods.values().flatten() {
             if mod_defs.ident.module.value() == name.value {
-                mod_defs
-                    .functions
-                    .keys()
-                    .chain(
-                        mod_defs
-                            .structs
-                            .keys()
-                            .chain(mod_defs.enums.keys().chain(mod_defs.constants.keys())),
-                    )
-                    .for_each(|member_name| {
-                        completions.extend(member_auto_imports(
-                            symbols,
-                            cursor,
-                            mod_defs,
-                            member_name,
-                            chain_kind,
-                            auto_import_pos,
-                        ))
-                    });
+                completions.extend(member_completions_with_module_import(
+                    symbols,
+                    cursor,
+                    mod_defs,
+                    chain_kind,
+                    auto_import_pos,
+                ));
             }
         }
     }

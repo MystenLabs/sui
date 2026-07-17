@@ -10,7 +10,9 @@ use sui::vec_map::VecMap;
 // empty enum example.
 // gets fomatted but
 // illegal in Move
-public enum Empty {}
+public enum Empty {
+    // We still keep comments
+}
 
 // enum variants will always
 // new line, and end with a

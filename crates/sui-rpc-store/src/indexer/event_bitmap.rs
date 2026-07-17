@@ -4,17 +4,14 @@
 //! Sequential pipeline that populates the
 //! [`schema::event_bitmap`](crate::schema::event_bitmap) CF.
 //!
-//! Mirrors the event-space half of
-//! `write_ledger_history_rows_for_checkpoint` in
-//! `sui-core::rpc_index`. For every event in every transaction
-//! the pipeline:
+//! For every event in every transaction the pipeline:
 //!
 //! 1. Visits dimension candidates via
 //!    [`sui_inverted_index::for_each_event_dimension`].
 //! 2. Encodes the dimension key via
 //!    [`sui_inverted_index::encode_dimension_key`].
 //! 3. Packs `(tx_seq, event_idx)` into the event-seq space the
-//!    schema uses (`pack(tx_seq, event_idx)`), checks the packing
+//!    schema uses (`encode_event_seq(tx_seq, event_idx)`), checks the packing
 //!    doesn't overflow the per-tx event limit (`1 << EVENT_BITS`)
 //!    or the `tx_seq` ceiling (`u64::MAX >> EVENT_BITS`), and
 //!    groups the bit into `(dim_key, packed / EVENT_BUCKET_SIZE)`.
@@ -27,6 +24,7 @@ use roaring::RoaringBitmap;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential;
 use sui_inverted_index::encode_dimension_key;
+use sui_inverted_index::event_seq::{MAX_EVENTS_PER_TX, MAX_TX_SEQ};
 use sui_inverted_index::for_each_event_dimension;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
@@ -35,20 +33,9 @@ use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::indexer::tx_seq_at;
 use crate::schema::event_bitmap;
-use crate::schema::event_bitmap::EVENT_BITS;
 use crate::schema::event_bitmap::bit_of;
 use crate::schema::event_bitmap::bucket_of;
-use crate::schema::event_bitmap::pack;
-
-/// Maximum events a single transaction can contribute before the
-/// packed event-seq space would collide with the next
-/// transaction's range.
-const MAX_EVENTS_PER_TX: u32 = 1 << EVENT_BITS;
-
-/// Maximum `tx_seq` value whose `<< EVENT_BITS` still fits in a
-/// `u64`. Anything beyond this would lose its high bits during
-/// packing.
-const MAX_TX_SEQ: u64 = u64::MAX >> EVENT_BITS;
+use sui_inverted_index::event_seq::encode_event_seq;
 
 /// Pipeline marker for `event_bitmap`.
 pub struct EventBitmap;
@@ -95,7 +82,7 @@ impl Processor for EventBitmap {
                         ));
                         return;
                     }
-                    let packed = pack(tx_seq, event_idx);
+                    let packed = encode_event_seq(tx_seq, event_idx);
                     let bucket = bucket_of(packed);
                     let bit = bit_of(packed);
                     groups

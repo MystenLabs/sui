@@ -4,6 +4,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
+    time::Duration,
 };
 
 use consensus_config::Stake;
@@ -251,6 +252,22 @@ impl CommitFinalizer {
                     .with_label_values(&["indirect"])
                     .inc_by(indirect_finalized_commits.len() as u64);
                 finalized_commits.extend(indirect_finalized_commits);
+            }
+        }
+
+        let utc_now = self.context.clock.timestamp_utc_ms();
+        for commit in &finalized_commits {
+            for block in commit
+                .blocks
+                .iter()
+                .filter(|block| block.author() == self.context.own_index)
+            {
+                let latency_ms = utc_now.saturating_sub(block.timestamp_ms());
+                self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_finalization_latency
+                    .observe(Duration::from_millis(latency_ms).as_secs_f64());
             }
         }
 

@@ -633,8 +633,8 @@ where
                     let mut blocks = Vec::new();
                     for ((requested_block_ref, signed_block), serialized) in request_block_refs
                         .iter()
-                        .zip_debug_eq(signed_blocks.into_iter())
-                        .zip_debug_eq(serialized_blocks.into_iter())
+                        .zip_debug_eq(signed_blocks)
+                        .zip_debug_eq(serialized_blocks)
                     {
                         let signed_block_digest = VerifiedBlock::compute_digest(&serialized);
                         let received_block_ref = BlockRef::new(
@@ -976,7 +976,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             _peer: crate::network::PeerId,
-            _highest_round_per_authority: Vec<u64>,
+            _highest_round_per_authority: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("Unimplemented")

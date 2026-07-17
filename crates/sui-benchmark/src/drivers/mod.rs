@@ -52,6 +52,28 @@ impl Default for SubmissionAmplification {
 }
 
 impl SubmissionAmplification {
+<<<<<<< HEAD
+=======
+    // Default values for the enabled configuration returned by `default_enabled()`.
+    pub const DEFAULT_AMPLIFICATION_PROBABILITY: f64 = 0.05;
+    pub const DEFAULT_AMPLIFICATION_VALIDATORS_PER_TX: usize = 3;
+    pub const DEFAULT_DUPLICATE_PROBABILITY: f64 = 0.02;
+    pub const DEFAULT_DUPLICATE_COPIES_PER_VALIDATOR: usize = 2;
+    pub const DEFAULT_VALIDATOR_SELECTION: ValidatorSelection = ValidatorSelection::Random;
+
+    /// Returns an enabled configuration with the default amplification/duplication values,
+    /// unlike `Default::default()` which returns a disabled (no-op) configuration.
+    pub fn default_enabled() -> Self {
+        Self {
+            amplification_probability: Self::DEFAULT_AMPLIFICATION_PROBABILITY,
+            amplification_validators_per_tx: Self::DEFAULT_AMPLIFICATION_VALIDATORS_PER_TX,
+            duplicate_probability: Self::DEFAULT_DUPLICATE_PROBABILITY,
+            duplicate_copies_per_validator: Self::DEFAULT_DUPLICATE_COPIES_PER_VALIDATOR,
+            validator_selection: Self::DEFAULT_VALIDATOR_SELECTION,
+        }
+    }
+
+>>>>>>> origin/main
     pub fn new(
         amplification_probability: f64,
         amplification_validators_per_tx: usize,
@@ -75,6 +97,17 @@ impl SubmissionAmplification {
             duplicate_copies_per_validator > 0,
             "duplicate copies per validator must be greater than zero"
         );
+<<<<<<< HEAD
+=======
+        ensure!(
+            amplification_probability == 0.0 || amplification_validators_per_tx > 1,
+            "amplification validators per tx must be greater than one when amplification probability is non-zero"
+        );
+        ensure!(
+            duplicate_probability == 0.0 || duplicate_copies_per_validator > 1,
+            "duplicate copies per validator must be greater than one when duplicate probability is non-zero"
+        );
+>>>>>>> origin/main
 
         Ok(Self {
             amplification_probability,
@@ -108,6 +141,15 @@ impl SubmissionAmplification {
         }
     }
 
+<<<<<<< HEAD
+=======
+    /// Approximate expected submissions per logical transaction, for informational logging.
+    /// It slightly undercounts attempted submissions: when amplification triggers, the extra
+    /// direct submissions are sent in addition to the regular TransactionDriver submission,
+    /// which is not counted here. Conversely, delivered copies may be fewer than attempted,
+    /// since extras are aborted once the regular submission completes and the validator set
+    /// is clamped to the committee size.
+>>>>>>> origin/main
     pub fn expected_submission_multiplier(&self) -> f64 {
         (1.0 + self.amplification_probability * (self.amplification_validators_per_tx - 1) as f64)
             * (1.0 + self.duplicate_probability * (self.duplicate_copies_per_validator - 1) as f64)

@@ -624,7 +624,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 /// It extends both ObjectStore and ReadStore by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
 pub trait RpcStateReader:
-    ObjectStore + ReadStore + super::ChildObjectResolver + Send + Sync
+    ObjectStore + ReadStore + super::RuntimeObjectResolver + Send + Sync
 {
     /// Lowest available checkpoint for which object data can be requested.
     ///
@@ -636,6 +636,20 @@ pub trait RpcStateReader:
 
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
+
+    /// The sequence number of the highest executed checkpoint, independent of
+    /// how far any embedded index has caught up.
+    ///
+    /// [`ReadStore::get_latest_checkpoint`] may bound the reported tip to the
+    /// live-object index frontier, so clients never observe a checkpoint whose
+    /// indexed state is not yet readable. The health check, by contrast, needs
+    /// the true executed tip to measure that index lag against, so it reads
+    /// this instead. Defaults to
+    /// [`ReadStore::get_latest_checkpoint_sequence_number`] for backends that
+    /// do not bound their reported tip.
+    fn get_highest_executed_checkpoint_seq_number(&self) -> Result<CheckpointSequenceNumber> {
+        self.get_latest_checkpoint_sequence_number()
+    }
 
     fn get_type_layout(&self, type_tag: &TypeTag) -> Result<Option<MoveTypeLayout>> {
         match type_tag {
@@ -669,8 +683,17 @@ pub trait RpcStateReader:
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub type LedgerTxSeqDigestIterator<'a> =
     Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
-pub type LedgerBitmapBucketIterator<'a> =
-    Box<dyn Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>> + 'a>;
+/// Iterator over ledger bitmap buckets that can skip directly to a bucket.
+pub trait LedgerBitmapBucketIter:
+    Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>>
+{
+    /// Reposition so the next row is the first bucket at or past `bucket_id`
+    /// in the iterator's direction. Implementations never move backward.
+    fn seek_bucket(&mut self, bucket_id: u64);
+}
+
+/// Boxed seekable iterator over ledger bitmap buckets.
+pub type LedgerBitmapBucketIterator<'a> = Box<dyn LedgerBitmapBucketIter + 'a>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LedgerTxSeqDigest {
@@ -698,10 +721,16 @@ pub trait RpcIndexes: Send + Sync {
         cursor: Option<OwnedObjectInfo>,
     ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>;
 
+    /// Iterate the dynamic fields owned by `parent`. Dynamic-field objects live
+    /// in the same owned-object index as address-owned objects (under the
+    /// object-owner key, sorted by `(type, object id)`), so the [`DynamicFieldKey`]
+    /// cursor carries the field's type alongside its id -- the full sort
+    /// position -- letting the scan seek straight to it, as in
+    /// [`owned_objects_iter`](Self::owned_objects_iter).
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
-        cursor: Option<ObjectID>,
+        cursor: Option<DynamicFieldKey>,
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>>;
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
@@ -723,6 +752,25 @@ pub trait RpcIndexes: Send + Sync {
 
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
+
+    /// The highest checkpoint the live-object cohort -- the indexes derivable
+    /// from the live object set (owned objects, types, and balances) -- has
+    /// committed, or `None` if it has not committed any checkpoint yet.
+    ///
+    /// This is the frontier the health check measures against. The live-object
+    /// indexes are restored to the tip and follow it, whereas the
+    /// ledger-history cohort backfills independently after a restore; gating
+    /// health on the latter would report a node unhealthy for the whole
+    /// backfill even though its live-object reads are already caught up.
+    ///
+    /// Defaults to [`Self::get_highest_indexed_checkpoint_seq_number`] for
+    /// backends without a live/history cohort split, where every index tracks
+    /// the tip together.
+    fn get_highest_live_indexed_checkpoint_seq_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>> {
+        self.get_highest_indexed_checkpoint_seq_number()
+    }
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>>;
 
@@ -769,17 +817,22 @@ pub struct OwnedObjectInfo {
     pub version: SequenceNumber,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct DynamicFieldKey {
     pub parent: ObjectID,
     pub field_id: ObjectID,
+    /// The dynamic field object's Move type. The owned-object index sorts by
+    /// `(type, object id)`, so this is needed -- together with `field_id` -- to
+    /// resume a paginated scan at this entry.
+    pub object_type: StructTag,
 }
 
 impl DynamicFieldKey {
-    pub fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID) -> Self {
+    pub fn new<P: Into<ObjectID>>(parent: P, field_id: ObjectID, object_type: StructTag) -> Self {
         Self {
             parent: parent.into(),
             field_id,
+            object_type,
         }
     }
 }

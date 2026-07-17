@@ -1,0 +1,23 @@
+//# print-bytecode
+// Constants take no visibility modifier.
+mvir 0x42::M {
+    public const C: u64 = 1u64;
+}
+
+//# print-bytecode
+// `public(friend)` is not a valid constant modifier.
+mvir 0x42::M {
+    public(friend) const C: u64 = 1u64;
+}
+
+//# print-bytecode
+// `native` is not a valid constant modifier.
+mvir 0x42::M {
+    native const C: u64 = 1u64;
+}
+
+//# print-bytecode
+// `entry` is not a valid constant modifier.
+mvir 0x42::M {
+    entry const C: u64 = 1u64;
+}

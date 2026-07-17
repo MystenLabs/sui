@@ -798,6 +798,9 @@ impl<'a> Context<'a> {
 
     /// Given a named constant, adds it to the pool
     pub fn declare_constant(&mut self, name: ConstantName, constant: Constant) -> Result<()> {
+        if self.named_constants.contains_key(&name) {
+            bail!("Duplicate constant definition for '{}'", name);
+        }
         let idx = self.constant_index(constant)?;
         self.named_constants.insert(name, idx.0);
         Ok(())

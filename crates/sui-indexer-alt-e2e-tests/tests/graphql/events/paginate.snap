@@ -48,8 +48,8 @@ Response: {
   "data": {
     "allEvents": {
       "pageInfo": {
-        "startCursor": "eyJ0IjoyLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo0LCJlIjo5fQ==",
+        "startCursor": "KAFCBggAEAIYAA==",
+        "endCursor": "KAFCBggAEAQYCQ==",
         "hasNextPage": false,
         "hasPreviousPage": false
       },
@@ -149,8 +149,8 @@ Response: {
     },
     "eventsHasNext": {
       "pageInfo": {
-        "startCursor": "eyJ0IjoyLCJlIjowfQ==",
-        "endCursor": "eyJ0IjozLCJlIjowfQ==",
+        "startCursor": "KAFCBggAEAIYAA==",
+        "endCursor": "KAFCBggAEAMYAA==",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -173,8 +173,8 @@ Response: {
     },
     "eventsHasPrevious": {
       "pageInfo": {
-        "startCursor": "eyJ0Ijo0LCJlIjo4fQ==",
-        "endCursor": "eyJ0Ijo0LCJlIjo5fQ==",
+        "startCursor": "KAFCBggAEAQYCA==",
+        "endCursor": "KAFCBggAEAQYCQ==",
         "hasNextPage": false,
         "hasPreviousPage": true
       },
@@ -262,8 +262,8 @@ Response: {
   "data": {
     "eventsAfterTransaction2AndEvent0": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0IjozLCJlIjowfQ==",
+        "startCursor": "KAFCBggAEAMYAA==",
+        "endCursor": "KAFCBggAEAMYAA==",
         "hasNextPage": true,
         "hasPreviousPage": true
       },
@@ -286,8 +286,8 @@ Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent0": {
       "pageInfo": {
-        "startCursor": "eyJ0IjoyLCJlIjowfQ==",
-        "endCursor": "eyJ0IjoyLCJlIjowfQ==",
+        "startCursor": "KAFCBggAEAIYAA==",
+        "endCursor": "KAFCBggAEAIYAA==",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -310,8 +310,8 @@ Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent1FromBack": {
       "pageInfo": {
-        "startCursor": "eyJ0IjoyLCJlIjowfQ==",
-        "endCursor": "eyJ0IjozLCJlIjowfQ==",
+        "startCursor": "KAFCBggAEAIYAA==",
+        "endCursor": "KAFCBggAEAMYAA==",
         "hasNextPage": true,
         "hasPreviousPage": false
       },

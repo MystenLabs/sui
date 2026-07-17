@@ -14,8 +14,8 @@ module Autofix::colon_colon {
         let s: another_dep;
     }
 
-    // only qualifcation should be offered here as importing `Autofix::another_dep::AnotherDepEnum`
-    // does not actually solve the problem
+    // importing the module should be offered here, as importing the member itself
+    // would not resolve the unbound module prefix
     public fun two_names(s: another_dep::AnotherDepStruct) {
     }
 

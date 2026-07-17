@@ -314,7 +314,7 @@ impl Builder {
 
         let protocol_config = get_genesis_protocol_config(ProtocolVersion::new(protocol_version));
 
-        if protocol_config.create_authenticator_state_in_genesis() {
+        if protocol_config.enable_jwk_consensus_updates() {
             let authenticator_state = unsigned_genesis.authenticator_state_object().unwrap();
             assert!(authenticator_state.active_jwks.is_empty());
         } else {
@@ -326,12 +326,12 @@ impl Builder {
         );
 
         assert_eq!(
-            protocol_config.enable_bridge(),
+            protocol_config.bridge(),
             unsigned_genesis.has_bridge_object()
         );
 
         assert_eq!(
-            protocol_config.enable_coin_deny_list_v1(),
+            protocol_config.enable_coin_deny_list(),
             unsigned_genesis.coin_deny_list_state().is_some(),
         );
 
@@ -929,6 +929,7 @@ fn create_genesis_transaction(
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,
+                std::collections::BTreeMap::new(),
                 gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,
@@ -1066,7 +1067,7 @@ pub fn generate_genesis_system_object(
 
         // Step 3: Create ProtocolConfig-controlled system objects, unless disabled (which only
         // happens in tests).
-        if protocol_config.create_authenticator_state_in_genesis() {
+        if protocol_config.enable_jwk_consensus_updates() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 ident_str!("authenticator_state").to_owned(),
@@ -1115,7 +1116,7 @@ pub fn generate_genesis_system_object(
             )?;
         }
 
-        if protocol_config.enable_coin_deny_list_v1() {
+        if protocol_config.enable_coin_deny_list() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 DENY_LIST_MODULE.to_owned(),
@@ -1125,7 +1126,7 @@ pub fn generate_genesis_system_object(
             )?;
         }
 
-        if protocol_config.enable_bridge() {
+        if protocol_config.bridge() {
             let bridge_uid = builder
                 .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))
                 .unwrap();

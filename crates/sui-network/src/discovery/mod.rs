@@ -55,6 +55,11 @@ pub use generated::{
 };
 pub use server::{GetKnownPeersRequestV3, GetKnownPeersResponseV2, GetKnownPeersResponseV3};
 
+/// Per-source P2P addresses for trusted peers, keyed by peer then by address source.
+/// Returned by [`Sender::trusted_peer_p2p_addresses`].
+pub type TrustedPeerP2pAddresses =
+    BTreeMap<PeerId, BTreeMap<AddressSource, Vec<anemo::types::Address>>>;
+
 /// Message types for the discovery system mailbox.
 #[derive(Debug)]
 pub enum DiscoveryMessage {
@@ -73,6 +78,11 @@ pub enum DiscoveryMessage {
     TrustedPeersUpdated,
     /// A peer has been reported as continuously failing, triggering disconnect and cooldown.
     PeerFailureReport { peer_id: PeerId },
+    /// Request a snapshot of per-source P2P addresses, for trusted peers with at least one
+    /// recorded address.
+    GetTrustedPeerP2pAddresses {
+        reply: oneshot::Sender<TrustedPeerP2pAddresses>,
+    },
 }
 
 /// A Handle to the Discovery subsystem. The Discovery system will be shut down once all Handles
@@ -116,6 +126,22 @@ impl Sender {
         let _ = self
             .sender
             .try_send(DiscoveryMessage::PeerFailureReport { peer_id });
+    }
+
+    /// Snapshot of per-source P2P addresses for trusted peers only (configured/seed/allowlisted
+    /// peers and on-chain validators). Used by the address prober to enumerate probe candidates;
+    /// returns an empty map if the discovery event loop has shut down.
+    pub async fn trusted_peer_p2p_addresses(&self) -> TrustedPeerP2pAddresses {
+        let (s, r) = oneshot::channel();
+        if self
+            .sender
+            .send(DiscoveryMessage::GetTrustedPeerP2pAddresses { reply: s })
+            .await
+            .is_err()
+        {
+            return TrustedPeerP2pAddresses::default();
+        }
+        r.await.unwrap_or_default()
     }
 }
 
@@ -443,7 +469,22 @@ impl DiscoveryEventLoop {
             DiscoveryMessage::PeerFailureReport { peer_id } => {
                 self.handle_peer_failure_report(peer_id);
             }
+            DiscoveryMessage::GetTrustedPeerP2pAddresses { reply } => {
+                let _ = reply.send(self.trusted_peer_p2p_addresses());
+            }
         }
+    }
+
+    fn trusted_peer_p2p_addresses(&self) -> TrustedPeerP2pAddresses {
+        let state = self.state.read().unwrap();
+        state
+            .peer_addresses
+            .iter()
+            .filter(|(peer_id, _)| {
+                is_trusted_peer(peer_id, &self.configured_peers, &self.chain_peers)
+            })
+            .map(|(peer_id, sources)| (*peer_id, sources.clone()))
+            .collect()
     }
 
     fn handle_peer_failure_report(&mut self, peer_id: PeerId) {

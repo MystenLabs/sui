@@ -11,7 +11,7 @@ mod consensus_tests {
         NetworkKeyPair, Parameters, ProtocolKeyPair, Stake,
     };
     use consensus_core::NoopTransactionVerifier;
-    use consensus_core::{BlockAPI, BlockStatus, TransactionVerifier, ValidationError};
+    use consensus_core::{BlockAPI, BlockStatus, Priority, TransactionVerifier, ValidationError};
     use consensus_simtests::node::{AuthorityNode, Config};
     use consensus_types::block::{BlockRef, TransactionIndex};
     use fastcrypto::traits::{KeyPair as _, ToFromBytes as _};
@@ -105,7 +105,7 @@ mod consensus_tests {
             for i in 0..NUM_TRANSACTIONS {
                 let txn = vec![i as u8; 16];
                 transaction_clients_clone[i as usize % transaction_clients_clone.len()]
-                    .submit(vec![txn])
+                    .submit(vec![txn], Priority::Normal)
                     .await
                     .unwrap();
             }
@@ -218,7 +218,7 @@ mod consensus_tests {
             let index =
                 (transaction_index - num_of_transactions) as usize % transaction_clients.len();
             let (_block_ref, _indexes, status_waiter) = transaction_clients[index]
-                .submit(transactions)
+                .submit(transactions, Priority::Normal)
                 .await
                 .unwrap();
 
@@ -498,7 +498,7 @@ mod consensus_tests {
         for i in 0..NUM_TRANSACTIONS {
             let txn = vec![i as u8; 16];
             transaction_clients[i as usize % transaction_clients.len()]
-                .submit(vec![txn])
+                .submit(vec![txn], Priority::Normal)
                 .await
                 .unwrap();
             if i % 50 == 0 {

@@ -1,0 +1,17 @@
+//# publish
+// The verifier only checks that a constant's bytes are valid for its declared type.
+// The syntax here for the values carry no type information down to the compiled module. As such, a
+// value with a BCS encoding that coincides with a valid encoding of the declared type passes.
+
+// A `u8` value of 0 serializes to the single byte 0x00 - which is also the
+// encoding of an empty `vector<u8>` (ULEB length 0).
+mvir 0x42::a {
+    const C: vector<u8> = 0u8;
+}
+
+//# publish
+// A 7-element `vector<u8>` serializes to 1 length byte (0x07) + 7 element bytes
+// = 8 bytes, which is exactly the width of a `u64`.
+mvir 0x42::b {
+    const C: u64 = vector(1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8);
+}

@@ -8,7 +8,7 @@
 
 use async_graphql::connection::CursorType;
 use serde_json::json;
-use sui_indexer_alt_graphql::CCheckpoint;
+use sui_indexer_alt_graphql::CheckpointToken;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
@@ -50,7 +50,7 @@ async fn test_subscription_cursor() {
         let edge = &item["data"]["checkpoints"];
         let cursor = edge["cursor"].as_str().unwrap();
         let seq = edge["node"]["sequenceNumber"].as_u64().unwrap();
-        assert_eq!(cursor, CCheckpoint::new(seq).encode_cursor());
+        assert_eq!(cursor, CheckpointToken::cursor(seq).encode_cursor());
     }
 }
 
@@ -471,4 +471,133 @@ async fn test_subscription_recovers_from_upstream_disconnect() {
         received.windows(2).all(|w| w[1] == w[0] + 1),
         "post-resume not contiguous: {received:?}",
     );
+}
+
+// --- Checkpoints resume tests ---
+
+#[tokio::test]
+async fn test_subscription_resume_with_after_cursor() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let resume_seq = cluster.validator_checkpoint_tip();
+    let cursor = CheckpointToken::cursor(resume_seq).encode_cursor();
+    let query = format!(
+        r#"subscription {{ checkpoints(after: "{cursor}") {{ node {{ sequenceNumber }} }} }}"#,
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    let second = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(first, resume_seq + 1);
+    assert_eq!(second, first + 1);
+}
+
+#[tokio::test]
+async fn test_subscription_resume_with_after_checkpoint() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let resume_seq = cluster.validator_checkpoint_tip();
+    let query = format!(
+        "subscription {{ checkpoints(afterCheckpoint: {resume_seq}) {{ node {{ sequenceNumber }} }} }}",
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    let second = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(first, resume_seq + 1);
+    assert_eq!(second, first + 1);
+}
+
+#[tokio::test]
+async fn test_subscription_resume_long_backfill() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let resume_seq = cluster.validator_checkpoint_tip();
+
+    // Let the validator produce ~120 more checkpoints to exercise a substantial Phase 1 scan.
+    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+    let validator_tip = cluster.validator_checkpoint_tip();
+
+    let query = format!(
+        "subscription {{ checkpoints(afterCheckpoint: {resume_seq}) {{ node {{ sequenceNumber }} }} }}",
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    // Drain past `validator_tip` so the contiguity check spans both backfill and live.
+    let mut received = vec![checkpoint_seq(&stream.next().await.unwrap())];
+    while *received.last().unwrap() < validator_tip + 20 {
+        received.push(checkpoint_seq(&stream.next().await.unwrap()));
+    }
+
+    assert_eq!(received[0], resume_seq + 1);
+    assert!(received.windows(2).all(|w| w[1] == w[0] + 1));
+}
+
+#[tokio::test]
+async fn test_subscription_resume_with_both_args_uses_max() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let mut first_stream = cluster
+        .subscribe("subscription { checkpoints { node { sequenceNumber } } }")
+        .await;
+    let lower = checkpoint_seq(&first_stream.next().await.unwrap());
+    let higher = checkpoint_seq(&first_stream.next().await.unwrap());
+    drop(first_stream);
+    assert_eq!(higher, lower + 1);
+
+    // Resume must pick the higher of `after` (lower) and `afterCheckpoint` (higher).
+    let cursor = CheckpointToken::cursor(lower).encode_cursor();
+    let query = format!(
+        r#"subscription {{ checkpoints(after: "{cursor}", afterCheckpoint: {higher}) {{ node {{ sequenceNumber }} }} }}"#,
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(first, higher + 1);
+}
+
+#[tokio::test]
+async fn test_subscription_resume_resolves_packages_in_backfill() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = object_wrapping_harness::publish(&mut cluster.validator).await;
+
+    // Capture the tip BEFORE creating the item so the item lands past `resume_from`.
+    let resume_from = cluster.validator_checkpoint_tip();
+    let (item_digest, _) =
+        object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
+
+    // Wait so the new subscription's receiver pins past the item; it can only arrive via scan.
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+    // Backfilled checkpoints must resolve Move types via the streaming_packages → DB fall-through.
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            checkpoints(afterCheckpoint: {resume_from}) {{
+                node {{
+                    sequenceNumber
+                    transactions(filter: {{ sentAddress: $sender }}) {{
+                        nodes {{
+                            digest
+                            effects {{
+                                objectChanges {{
+                                    nodes {{
+                                        outputState {{ asMoveObject {{ contents {{ json }} }} }}
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, Some(json!({ "sender": sender.to_string() })))
+        .await;
+    let item = wait_for_matching_item(&mut stream, &[item_digest], checkpoint_tx_digests).await;
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("subscription_resume_resolves_packages_in_backfill", item);
+    });
 }

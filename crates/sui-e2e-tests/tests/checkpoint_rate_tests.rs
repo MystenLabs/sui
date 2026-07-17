@@ -10,7 +10,7 @@ use tracing::info;
 #[sim_test]
 async fn test_checkpoint_rate() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.disable_randomize_checkpoint_tx_limit_for_testing();
+        config.set_randomize_checkpoint_tx_limit_in_tests_for_testing(false);
         config
     });
 

@@ -3,6 +3,8 @@
 
 use std::collections::HashMap;
 use sui_crypto::Verifier;
+use sui_crypto::zklogin::ZkLoginCircuitMode;
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk_types::Jwk;
 use sui_sdk_types::JwkId;
 use tap::Pipe;
@@ -174,12 +176,31 @@ fn verify_signature(
         jwks
     };
 
-    let mut zklogin_verifier = match service.chain_id().chain() {
+    let chain = service.chain_id().chain();
+    let mut zklogin_verifier = match chain {
         sui_protocol_config::Chain::Mainnet | sui_protocol_config::Chain::Testnet => {
             sui_crypto::zklogin::ZkloginVerifier::new_mainnet()
         }
         sui_protocol_config::Chain::Unknown => sui_crypto::zklogin::ZkloginVerifier::new_dev(),
     };
+    // Get circuit mode from protocol config and set to verifier.
+    let circuit_mode = {
+        let system_state = service.reader.get_system_state_summary()?;
+        ProtocolConfig::get_for_version_if_supported(system_state.protocol_version.into(), chain)
+            .map(|config| config.zklogin_circuit_mode())
+    };
+    zklogin_verifier.set_circuit_mode(match circuit_mode {
+        Some(0) => ZkLoginCircuitMode::V1Only,
+        Some(1) => ZkLoginCircuitMode::Both,
+        Some(2) => ZkLoginCircuitMode::V2Only,
+        None => ZkLoginCircuitMode::Both,
+        Some(mode) => {
+            return Err(RpcError::new(
+                tonic::Code::Internal,
+                format!("invalid zklogin circuit mode in protocol config: {mode}"),
+            ));
+        }
+    });
     *zklogin_verifier.jwks_mut() = jwks;
     let mut verifier = sui_crypto::UserSignatureVerifier::new();
     verifier.with_zklogin_verifier(zklogin_verifier);

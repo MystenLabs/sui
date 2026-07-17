@@ -301,8 +301,8 @@ impl Checkpoint {
                 .effects
                 .deleted()
                 .into_iter()
-                .chain(tx.effects.wrapped().into_iter())
-                .chain(tx.effects.unwrapped_then_deleted().into_iter())
+                .chain(tx.effects.wrapped())
+                .chain(tx.effects.unwrapped_then_deleted())
             {
                 latest_live_output_objects.remove(&obj_ref.0);
             }
@@ -317,8 +317,8 @@ impl Checkpoint {
                 .effects
                 .deleted()
                 .into_iter()
-                .chain(tx.effects.wrapped().into_iter())
-                .chain(tx.effects.unwrapped_then_deleted().into_iter())
+                .chain(tx.effects.wrapped())
+                .chain(tx.effects.unwrapped_then_deleted())
             {
                 eventually_removed_object_refs.insert(obj_ref.0, obj_ref);
             }
@@ -455,11 +455,7 @@ impl From<CheckpointData> for Checkpoint {
             .transactions
             .into_iter()
             .map(|tx| {
-                for o in tx
-                    .input_objects
-                    .into_iter()
-                    .chain(tx.output_objects.into_iter())
-                {
+                for o in tx.input_objects.into_iter().chain(tx.output_objects) {
                     object_set.insert(o);
                 }
 

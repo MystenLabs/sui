@@ -8,6 +8,9 @@ use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_rpc_cursor::CursorKind;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::CheckpointDigest;
 use sui_types::message_envelope::Message;
@@ -17,7 +20,10 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 
 use crate::api::query::Query;
 use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::uint53::UInt53;
@@ -28,7 +34,6 @@ use crate::api::types::checkpoint::filter::cp_by_epoch;
 use crate::api::types::checkpoint::filter::cp_unfiltered;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas::GasCostSummary;
-use crate::api::types::transaction;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::TransactionConnection;
@@ -71,7 +76,17 @@ struct CheckpointContents {
     streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-pub type CCheckpoint = JsonCursor<u64>;
+/// Validated checkpoint cursor coordinates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckpointToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+}
+
+/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
+/// legacy JSON cursor (secondary).
+pub type CCheckpoint = MultiCursor<OpaqueCursor<CheckpointToken>, JsonCursor<u64>>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -224,7 +239,7 @@ impl CheckpointContents {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError<transaction::Error>>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         async {
             let Some((summary, _, _)) = &self.contents else {
                 return Ok(None);
@@ -244,6 +259,7 @@ impl CheckpointContents {
             if let Some(streamed) = &self.streamed_data {
                 return Ok(Some(Transaction::paginate_preloaded_transactions(
                     self.scope.clone(),
+                    summary.sequence_number,
                     &streamed.transactions,
                     &page,
                     filter,
@@ -339,7 +355,7 @@ impl Checkpoint {
 
         page.paginate_results(
             results,
-            |c| JsonCursor::new(*c),
+            |c| CheckpointToken::cursor(*c),
             |c| Ok(Self::with_sequence_number(scope.clone(), Some(c)).unwrap()),
         )
     }
@@ -381,5 +397,108 @@ impl CheckpointContents {
             )),
             streamed_data: Some(Arc::clone(processed)),
         })
+    }
+}
+
+impl CheckpointToken {
+    /// Mint the edge cursor for the checkpoint at the given sequence number.
+    pub fn cursor(checkpoint: u64) -> CCheckpoint {
+        CCheckpoint::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Item,
+            checkpoint,
+        }))
+    }
+}
+
+impl CCheckpoint {
+    pub(crate) fn sequence_number(&self) -> u64 {
+        match self {
+            CCheckpoint::Primary(c) => c.checkpoint,
+            CCheckpoint::Secondary(c) => **c,
+        }
+    }
+}
+
+impl ByteCursor for CheckpointToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        CursorToken::decode(bytes)?.try_into()
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        CursorToken::from(self).encode()
+    }
+}
+
+impl From<&CheckpointToken> for CursorToken {
+    fn from(token: &CheckpointToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Checkpoints {
+                checkpoint: token.checkpoint,
+            },
+        }
+    }
+}
+
+impl TryFrom<CursorToken> for CheckpointToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Checkpoints { checkpoint } = token.position else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+        })
+    }
+}
+
+impl Eq for CCheckpoint {}
+
+/// Cursors minted by different paths can disagree on the kind, so pagination only compares the
+/// checkpoint coordinate.
+impl PartialEq for CCheckpoint {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence_number() == other.sequence_number()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::connection::CursorType;
+    use fastcrypto::encoding::Base64 as B64;
+    use fastcrypto::encoding::Encoding;
+
+    /// Legacy pg-style cursor: a bare JSON-encoded checkpoint sequence number.
+    fn legacy_cursor(checkpoint: u64) -> CCheckpoint {
+        CCheckpoint::Secondary(JsonCursor::new(checkpoint))
+    }
+
+    #[test]
+    fn primary_cursor_roundtrips() {
+        let cursor = CheckpointToken::cursor(42);
+        let decoded = CCheckpoint::decode_cursor(&cursor.encode_cursor()).expect("valid cursor");
+        assert_eq!(decoded.sequence_number(), 42);
+        assert_eq!(decoded, cursor);
+    }
+
+    /// A legacy cursor paginates the same as a grpc cursor at the same sequence number.
+    #[test]
+    fn legacy_cursor_matches_primary() {
+        assert_eq!(legacy_cursor(42).sequence_number(), 42);
+        assert_eq!(legacy_cursor(42), CheckpointToken::cursor(42));
+    }
+
+    /// A token scoped to another endpoint must not decode as a checkpoint cursor.
+    #[test]
+    fn rejects_wrong_variant_cursor() {
+        let token = CursorToken::item(Position::Transactions {
+            checkpoint: 1,
+            tx_seq: 2,
+        });
+        let encoded = B64::encode(token.encode());
+        assert!(CCheckpoint::decode_cursor(&encoded).is_err());
     }
 }

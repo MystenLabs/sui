@@ -7,11 +7,12 @@ use std::time::Duration;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use sui_inverted_index::BitmapQuery;
+use sui_inverted_index::SkipPolicy;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::tables::event_bitmap_index;
 use sui_kvstore::tables::transaction_bitmap_index;
-use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
+use sui_rpc::proto::sui::rpc::v2::EventFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc_api::RpcError;
 use tokio::time::Instant;
 
@@ -109,6 +110,9 @@ impl QueryContext {
             other => panic!("unknown bitmap index table {other}; add a budget for it"),
         }
     }
+    pub(crate) fn bitmap_skip_policy(&self) -> SkipPolicy {
+        self.ledger_history.bitmap_skip_policy()
+    }
 
     pub(crate) fn observe_response_render(&self, elapsed: std::time::Duration) {
         self.metrics.observe_response_render(self.method, elapsed);
@@ -131,10 +135,8 @@ impl QueryContext {
     }
 
     /// Callback for `eval_bitmap_query_stream`'s `on_metrics`. Fires exactly
-    /// once when the eval pipeline drops (natural end, error, or consumer
-    /// cancel) and records `buckets_evaluated` to the
-    /// `kv_rpc_bitmap_buckets_evaluated` histogram for budget tuning. Also
-    /// emits a debug log line for ad-hoc inspection.
+    /// once when the eval pipeline drops and records charged, discarded, and
+    /// seek counts for budget and gap-policy tuning.
     pub(crate) fn bitmap_scan_observer(
         &self,
     ) -> impl FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static {
@@ -142,9 +144,13 @@ impl QueryContext {
         let method = self.method;
         move |m| {
             metrics.observe_bitmap_buckets_evaluated(method, m.buckets_evaluated);
+            metrics.observe_bitmap_buckets_discarded(method, m.buckets_discarded);
+            metrics.observe_bitmap_leaf_seeks(method, m.leaf_seeks);
             tracing::debug!(
                 method,
                 buckets_evaluated = m.buckets_evaluated,
+                buckets_discarded = m.buckets_discarded,
+                leaf_seeks = m.leaf_seeks,
                 "bitmap scan complete"
             );
         }

@@ -3,7 +3,9 @@
 
 use crate::utils::comma_separated;
 
-use move_binary_format::normalized::{Constant, FieldRef, ModuleId, StructRef, Type, VariantRef};
+use move_binary_format::normalized::{
+    Constant, FieldRef, ModuleId, Signature, StructRef, Type, VariantRef,
+};
 use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue};
 use move_symbol_pool::Symbol;
 
@@ -89,6 +91,7 @@ pub struct Register {
 pub enum RValue {
     Call {
         target: (ModuleId<Symbol>, Symbol),
+        type_arguments: Signature<Symbol>,
         args: Vec<Trivial>,
     },
     Primitive {
@@ -325,8 +328,16 @@ impl std::fmt::Display for LocalOp {
 impl std::fmt::Display for RValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RValue::Call { target, args } => {
-                write!(f, "Call {}::{}(", target.0, target.1)?;
+            RValue::Call {
+                target,
+                type_arguments,
+                args,
+            } => {
+                write!(f, "Call {}::{}", target.0, target.1)?;
+                if !type_arguments.is_empty() {
+                    write!(f, "<{}>", comma_separated(type_arguments))?;
+                }
+                write!(f, "(")?;
                 write!(f, "{}", comma_separated(args))?;
                 write!(f, ")")
             }

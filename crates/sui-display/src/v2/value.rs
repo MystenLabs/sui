@@ -1413,7 +1413,7 @@ pub(crate) mod tests {
             Atom::Bytes(Cow::Borrowed(&[4, 5, 6])),
         ];
 
-        for (value, expect) in values.into_iter().zip_eq(atoms.into_iter()) {
+        for (value, expect) in values.into_iter().zip_eq(atoms) {
             let actual = Atom::try_from(value).unwrap();
             assert_eq!(actual, expect);
         }
@@ -1509,7 +1509,7 @@ pub(crate) mod tests {
             Atom::Bytes(Cow::Borrowed(&[1, 2, 3])),
         ];
 
-        for (value, expect) in values.into_iter().zip_eq(atoms.into_iter()) {
+        for (value, expect) in values.into_iter().zip_eq(atoms) {
             let actual = Atom::try_from(value).unwrap();
             assert_eq!(actual, expect);
         }
@@ -1543,7 +1543,7 @@ pub(crate) mod tests {
             json!("AQID"),
         ];
 
-        for (value, expect) in values.into_iter().zip_eq(json.into_iter()) {
+        for (value, expect) in values.into_iter().zip_eq(json) {
             let used = AtomicUsize::new(0);
             let meter = writer::Meter::new(&used, usize::MAX, usize::MAX);
             let actual = value.format_json::<Json>(meter).unwrap();

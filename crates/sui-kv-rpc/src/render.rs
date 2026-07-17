@@ -4,10 +4,11 @@
 //! Shared proto-rendering layer: turns resolved BigTable data
 //! (`CheckpointData`/`TransactionData` + object maps) into the `sui.rpc.v2`
 //! proto messages, honoring a `FieldMaskTree`. Used by both the v2 point-get
-//! handlers and the v2alpha list handlers so rendering is identical across
+//! handlers and the list handlers so rendering is identical across
 //! them.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use move_core_types::language_storage::StructTag;
 use mysten_common::ZipDebugEqIteratorExt;
@@ -32,6 +33,7 @@ use sui_types::storage::ObjectKey;
 use tracing::warn;
 
 use crate::PackageResolver;
+use crate::object_cache::ObjectMap;
 
 /// Maximum size in bytes for JSON-rendered Move values (1 MiB).
 const MAX_JSON_MOVE_VALUE_SIZE: usize = 1024 * 1024;
@@ -86,11 +88,13 @@ pub(crate) fn checkpoint_to_response(
 /// Build the full proto `Checkpoint` (summary + signatures + contents +
 /// transactions + objects) from resolved BigTable data. `objects` must contain
 /// exactly the objects referenced by this checkpoint's transactions — the whole
-/// map is folded into the rendered `ObjectSet`.
+/// map is folded into the rendered `ObjectSet`. Takes the `ObjectMap` by value
+/// so objects can be moved into the `ObjectSet` when the map is uniquely owned
+/// (the common case: one map per checkpoint); a shared map falls back to a clone.
 pub(crate) fn render_full_checkpoint(
     checkpoint: CheckpointData,
     txs: Vec<TransactionData>,
-    objects: &HashMap<ObjectKey, Object>,
+    objects: ObjectMap,
     read_mask: &FieldMaskTree,
 ) -> Result<Checkpoint, RpcError> {
     let summary = checkpoint
@@ -136,8 +140,12 @@ pub(crate) fn render_full_checkpoint(
         .collect::<Result<Vec<_>, _>>()?;
 
     let mut object_set = ObjectSet::default();
-    for (_, obj) in objects.iter() {
-        object_set.insert(obj.clone());
+    // The map is uniquely owned per checkpoint, so move each `Object` into the
+    // set rather than deep-cloning it; a shared map (refcount > 1) falls back
+    // to a one-time clone.
+    let objects = Arc::try_unwrap(objects).unwrap_or_else(|arc| (*arc).clone());
+    for (_, obj) in objects {
+        object_set.insert(obj);
     }
 
     let full_checkpoint = FullCheckpoint {
@@ -169,19 +177,19 @@ pub(crate) async fn transaction_to_response(
     }
 
     if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
-        && let Some(tx_data) = &source.transaction_data
+        && let Some(tx_data) = source.transaction_data
     {
-        let transaction = sui_sdk_types::Transaction::try_from(tx_data.clone())?;
+        let transaction = sui_sdk_types::Transaction::try_from(tx_data)?;
         message.transaction = Some(Transaction::merge_from(transaction, &submask));
     }
 
     if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
-        && let Some(sigs) = &source.signatures
+        && let Some(sigs) = source.signatures
     {
         message.signatures = sigs
-            .iter()
+            .into_iter()
             .map(|s| {
-                sui_sdk_types::UserSignature::try_from(s.clone())
+                sui_sdk_types::UserSignature::try_from(s)
                     .map(|s| UserSignature::merge_from(s, &submask))
             })
             .collect::<Result<_, _>>()?;

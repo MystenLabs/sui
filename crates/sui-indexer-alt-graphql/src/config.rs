@@ -225,6 +225,7 @@ pub struct ZkLoginLayer {
     pub max_epoch_upper_bound_delta: Option<Option<u64>>,
 }
 
+#[derive(Clone)]
 pub struct SubscriptionConfig {
     /// Number of checkpoints the broadcast channel can buffer before slow subscribers are
     /// dropped. Higher values give subscribers more time to catch up but use more memory,
@@ -238,6 +239,27 @@ pub struct SubscriptionConfig {
 
     /// Number of checkpoints fetched concurrently per chunk during upstream gap recovery.
     pub gap_recovery_chunk_size: usize,
+
+    /// Upper bound on the rate (queries per second) at which a single subscriber's catch-up
+    /// scan issues kv-rpc fetches. Prevents a single client with a large backfill from
+    /// monopolising shared kv-rpc throughput.
+    ///
+    /// This is a per-subscriber cap, so aggregate kv-rpc QPS scales linearly with subscriber
+    /// count; aggregate protection belongs on the kv-rpc server itself.
+    ///
+    /// Increasing this value lets each subscriber catch up faster, at the cost of more
+    /// kv-rpc QPS per subscriber. The aggregate (subscribers * this) shares capacity with
+    /// the main query API, so if kv-rpc saturates, fetch latency rises and the effective
+    /// rate falls below this cap for everyone.
+    pub per_subscriber_scan_max_qps: u32,
+
+    /// Maximum in-flight kv-rpc fetches per subscriber during the catch-up scan. Must be
+    /// large enough to keep the pipeline full at your kv-rpc's fetch latency; otherwise
+    /// actual throughput is limited by concurrency rather than the QPS cap.
+    ///
+    /// Increasing this value keeps the QPS cap saturated under higher-latency kv-rpc, at
+    /// the cost of more per-subscriber memory held.
+    pub per_subscriber_scan_max_concurrent_fetches: usize,
 }
 
 impl Default for SubscriptionConfig {
@@ -246,6 +268,8 @@ impl Default for SubscriptionConfig {
             broadcast_buffer: 256,
             package_eviction_interval_ms: 300_000,
             gap_recovery_chunk_size: 50,
+            per_subscriber_scan_max_qps: 500,
+            per_subscriber_scan_max_concurrent_fetches: 50,
         }
     }
 }
@@ -256,6 +280,8 @@ pub struct SubscriptionLayer {
     pub broadcast_buffer: Option<usize>,
     pub package_eviction_interval_ms: Option<u64>,
     pub gap_recovery_chunk_size: Option<usize>,
+    pub per_subscriber_scan_max_qps: Option<u32>,
+    pub per_subscriber_scan_max_concurrent_fetches: Option<usize>,
 }
 
 impl SubscriptionLayer {
@@ -268,6 +294,12 @@ impl SubscriptionLayer {
             gap_recovery_chunk_size: self
                 .gap_recovery_chunk_size
                 .unwrap_or(base.gap_recovery_chunk_size),
+            per_subscriber_scan_max_qps: self
+                .per_subscriber_scan_max_qps
+                .unwrap_or(base.per_subscriber_scan_max_qps),
+            per_subscriber_scan_max_concurrent_fetches: self
+                .per_subscriber_scan_max_concurrent_fetches
+                .unwrap_or(base.per_subscriber_scan_max_concurrent_fetches),
         }
     }
 }
@@ -576,6 +608,10 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
             broadcast_buffer: Some(value.broadcast_buffer),
             package_eviction_interval_ms: Some(value.package_eviction_interval_ms),
             gap_recovery_chunk_size: Some(value.gap_recovery_chunk_size),
+            per_subscriber_scan_max_qps: Some(value.per_subscriber_scan_max_qps),
+            per_subscriber_scan_max_concurrent_fetches: Some(
+                value.per_subscriber_scan_max_concurrent_fetches,
+            ),
         }
     }
 }
@@ -621,7 +657,7 @@ impl Default for Limits {
             max_query_nodes: 300,
             max_output_nodes: 1_000_000,
             // Add a 30% buffer to the protocol limit, rounded up to account Base64 overhead.
-            max_tx_payload_size: (max_tx_size_bytes * 4).div_ceil(3) as u32,
+            max_tx_payload_size: (max_tx_size_bytes * 4).div_ceil(3),
             max_query_payload_size: 5_000,
             default_page_size: 20,
             max_page_size: 50,

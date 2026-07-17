@@ -82,6 +82,7 @@ const HEALTH_PATH: &str = "/graphql/health";
 mod api;
 pub use crate::api::scalars::cursor::JsonCursor;
 pub use crate::api::types::checkpoint::CCheckpoint;
+pub use crate::api::types::checkpoint::CheckpointToken;
 pub use crate::api::types::event::CEvent;
 pub use crate::api::types::event::EventCursor;
 pub use crate::api::types::transaction::CTransaction;
@@ -391,13 +392,13 @@ pub async fn start_rpc(
             let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
             let readiness =
                 task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
-            let stream_task = task::streaming::CheckpointStreamTask::new(
+            let (stream_task, broadcaster) = task::streaming::CheckpointStreamTask::new(
                 uri,
                 &config.subscription,
                 streaming_packages.clone(),
                 package_eviction_tx,
                 readiness.clone(),
-                ledger_grpc,
+                ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
             );
             let eviction_task = task::streaming::PackageEvictionTask::new(
@@ -406,7 +407,13 @@ pub async fn start_rpc(
                 watermark_task.watermarks(),
                 Duration::from_millis(config.subscription.package_eviction_interval_ms),
             );
-            Some((stream_task, eviction_task, streaming_packages, readiness))
+            Some((
+                stream_task,
+                broadcaster,
+                eviction_task,
+                streaming_packages,
+                readiness,
+            ))
         }
         None => None,
     };
@@ -443,6 +450,10 @@ pub async fn start_rpc(
         rpc = rpc.data(fullnode_client);
     }
 
+    if let Some(ledger_grpc_reader) = ledger_grpc_reader.clone() {
+        rpc = rpc.data(ledger_grpc_reader);
+    }
+
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
@@ -452,21 +463,32 @@ pub async fn start_rpc(
     // Spawn the streaming tasks and wait for subscriptions to be ready before
     // binding the listener, so the schema is only advertised once `kv_packages`
     // has caught up to the first streamed checkpoint.
-    let streaming_handles = if let Some((
-        stream_task,
-        eviction_task,
-        streaming_packages,
-        readiness,
-    )) = streaming_setup
-    {
-        rpc = rpc.data(stream_task.broadcaster()).data(streaming_packages);
-        let s_stream = stream_task.run();
-        let s_eviction = eviction_task.run();
-        readiness.wait_for_ready().await?;
-        Some((s_stream, s_eviction))
-    } else {
-        None
-    };
+    let streaming_handles =
+        if let Some((stream_task, _broadcaster, eviction_task, streaming_packages, readiness)) =
+            streaming_setup
+        {
+            rpc = rpc.data(streaming_packages).data(config.subscription);
+            let s_stream = stream_task.run();
+            let s_eviction = eviction_task.run();
+            readiness.wait_for_ready().await?;
+            // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
+            #[cfg(feature = "staging")]
+            {
+                // `first_live_checkpoint` is the first checkpoint the live upstream stream
+                // broadcast, recorded as readiness fires.
+                let first_live_checkpoint = readiness
+                    .first_live_checkpoint()
+                    .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
+                let subscription_broadcast = Arc::new(task::streaming::SubscriptionBroadcast::new(
+                    _broadcaster,
+                    first_live_checkpoint,
+                ));
+                rpc = rpc.data(subscription_broadcast);
+            }
+            Some((s_stream, s_eviction))
+        } else {
+            None
+        };
 
     let s_rpc = rpc.run().await?;
 

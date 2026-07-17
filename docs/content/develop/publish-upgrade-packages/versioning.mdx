@@ -21,7 +21,7 @@ All three versions are at different IDs and remain callable, including `v1` even
 
 ### Framework packages
 
-Framework packages, such as the [Move standard library](https://move-book.com/reference/) at `0x1`, the [Sui framework](https://docs.sui.io/references/framework/sui_sui) at `0x2`, the [Sui system library](https://docs.sui.io/references/framework/sui_system) at `0x3`, and [DeepBook](/onchain-finance/deepbookv3/deepbook) at `0xdee9`, are a special case. Their IDs must remain stable across upgrades. The network upgrades them through a system transaction at epoch boundaries, preserving IDs while incrementing versions:
+Framework packages, such as the [Move standard library](https://move-book.com/reference/) at `0x1`, the [Sui framework](https://docs.sui.io/references/framework/sui_sui) at `0x2`, the [Sui system library](https://docs.sui.io/references/framework/sui_system) at `0x3`, and [DeepBook](/onchain-finance/deepbook/deepbookv3/deepbook) at `0xdee9`, are a special case. Their IDs must remain stable across upgrades. The network upgrades them through a system transaction at epoch boundaries, preserving IDs while incrementing versions:
 
 ```
 (0x1, 1) => MoveStdlib v1

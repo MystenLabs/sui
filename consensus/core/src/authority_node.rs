@@ -253,8 +253,10 @@ where
             .protocol_version
             .set(context.protocol_config.protocol_version() as i64);
 
-        let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
-        let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (tx_client, tx_receiver, priority_tx_receiver) =
+            TransactionClient::new(context.clone());
+        let tx_consumer =
+            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
@@ -643,7 +645,7 @@ mod tests {
     use crate::{
         CommittedSubDag,
         block::{BlockAPI as _, GENESIS_ROUND},
-        transaction::NoopTransactionVerifier,
+        transaction::{NoopTransactionVerifier, Priority},
     };
 
     #[rstest]
@@ -855,7 +857,7 @@ mod tests {
             submitted_transactions.insert(txn.clone());
             authorities[i as usize % authorities.len()]
                 .transaction_client()
-                .submit(vec![txn])
+                .submit(vec![txn], Priority::Normal)
                 .await
                 .unwrap();
         }
@@ -1036,7 +1038,7 @@ mod tests {
             submitted_transactions.insert(txn.clone());
             authorities[i as usize % authorities.len()]
                 .transaction_client()
-                .submit(vec![txn])
+                .submit(vec![txn], Priority::Normal)
                 .await
                 .unwrap();
         }

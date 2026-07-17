@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! [`ChildObjectResolver`] adapter.
+//! [`RuntimeObjectResolver`] adapter.
 //!
-//! `ChildObjectResolver` is one of the supertrait bounds on
+//! `RuntimeObjectResolver` is one of the supertrait bounds on
 //! [`sui_types::storage::RpcStateReader`]. Its methods feed the
 //! Move runtime's dynamic-field / receive-object paths. **This
 //! adapter is read-only and does not serve Move execution**: it
@@ -21,11 +21,11 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
-use sui_types::storage::ChildObjectResolver;
+use sui_types::storage::RuntimeObjectResolver;
 
 use crate::reader::RpcStoreReader;
 
-impl<R: Reader + Send + Sync> ChildObjectResolver for RpcStoreReader<R> {
+impl<R: Reader + Send + Sync> RuntimeObjectResolver for RpcStoreReader<R> {
     fn read_child_object(
         &self,
         _parent: &ObjectID,

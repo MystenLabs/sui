@@ -42,7 +42,6 @@ mod stream;
 
 pub use iter::eval_bitmap_query_bucket_iter;
 pub use stream::BitmapScanMetrics;
-pub use stream::buckets_with_watermarks;
 pub use stream::eval_bitmap_query_stream;
 pub use stream::flatten_watermarked_buckets;
 
@@ -52,89 +51,107 @@ pub(crate) use stream::BitmapScanBudget;
 #[cfg(test)]
 pub(crate) use stream::eval_bitmap_query_bucket_stream;
 
-/// Terminal signal raised by a bitmap evaluator on the bucket channel's `Err`.
-/// It must be an error rather than a silent end-of-stream: the driver reads a
-/// clean end as "scanned the whole range" and advances the resume cursor to the
-/// terminus, so a budget or cancel stop has to short-circuit the `try_stream!`
-/// pipeline to truncate the scan at the current floor. The variant is chosen at
-/// the source, so each List handler maps it to a wire outcome with one
-/// exhaustive match.
+/// Terminal raised by a single leaf/backend bucket stream. Positionless by
+/// construction — one leaf cannot know the merged multi-term floor. Leaf stops
+/// never reach a List driver: the DNF evaluators consume them and re-raise a
+/// [`ScanStop`] carrying the merged frontier.
 #[derive(Debug, thiserror::Error)]
-pub enum BitmapScanError {
-    /// The per-request bucket-scan limit was reached: a graceful early stop. The
-    /// handler ends the stream with `QUERY_END_REASON_SCAN_LIMIT` and the last
-    /// emitted watermark as the continuation cursor.
+pub enum LeafStop {
+    /// This leaf's share of the bucket-scan budget is exhausted.
     #[error("bitmap scan limit reached")]
-    ScanLimit,
-    /// The scan was cancelled (the request's cancellation token fired). The
-    /// handler ends the stream with a gRPC `Cancelled` status.
+    BudgetExhausted,
+    /// The request's cancellation token fired.
     #[error("bitmap scan cancelled")]
     Cancelled,
-    /// A backend/storage fault. The handler ends the stream with a gRPC
-    /// `Internal` status carrying this error unchanged.
+    /// A backend/storage fault.
     #[error(transparent)]
-    Source(anyhow::Error),
+    Fault(anyhow::Error),
 }
 
-impl BitmapScanError {
-    /// Reduce the terminal errors raised by several leaves in one driver round
-    /// to a single disposition. Precedence: `Source` > `ScanLimit` > `Cancelled`.
-    ///
-    /// - `Source` outranks everything: a real fault must surface as `Internal`,
-    ///   never be masked as a clean `SCAN_LIMIT` end or a `Cancelled` status.
-    /// - `ScanLimit` outranks `Cancelled`: a scan-limit stop already emitted its
-    ///   frontier watermark, so ending the stream cleanly with a continuation
-    ///   cursor is strictly more useful than a `Cancelled` error — the cancel
-    ///   (a deadline/timeout) loses nothing, the resume point is already on the
-    ///   wire.
-    ///
-    /// Multiple concurrent faults are combined into one `Source` so a correlated
-    /// failure keeps every leaf's message instead of an arbitrary one. Panics on
-    /// empty input — the evaluator only collapses when at least one leaf errored.
-    pub(crate) fn collapse(errs: Vec<BitmapScanError>) -> BitmapScanError {
-        assert!(!errs.is_empty(), "BitmapScanError::collapse on empty Vec");
-        let mut cancelled = false;
-        let mut scan_limit = false;
-        let mut faults: Vec<anyhow::Error> = Vec::new();
-        for e in errs {
-            match e {
-                BitmapScanError::Cancelled => cancelled = true,
-                BitmapScanError::ScanLimit => scan_limit = true,
-                BitmapScanError::Source(err) => faults.push(err),
-            }
-        }
-        match faults.len() {
-            0 => {
-                if scan_limit {
-                    BitmapScanError::ScanLimit
-                } else {
-                    debug_assert!(cancelled, "collapse saw only non-erroring leaves");
-                    BitmapScanError::Cancelled
-                }
-            }
-            1 => BitmapScanError::Source(faults.pop().expect("len == 1")),
-            n => {
-                let combined = faults
-                    .iter()
-                    .enumerate()
-                    .map(|(i, err)| format!("  [{i}] {err}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                BitmapScanError::Source(anyhow::anyhow!(
-                    "{n} concurrent bitmap scan faults:\n{combined}"
-                ))
-            }
-        }
-    }
+/// Terminal signal of a merged bitmap eval stream, raised on the error channel
+/// so the `try_stream!` pipeline short-circuits (a clean end-of-stream means
+/// "scanned the whole range"). The List handlers map each variant to a wire
+/// outcome with one exhaustive match.
+///
+/// Mental model: leaves raise positionless [`LeafStop`]s; the evaluator turns
+/// them into a `ScanStop` that ALWAYS carries the resume frontier on
+/// `ScanLimit`; in-band `Watermarked::Watermark`s are only mid-scan progress
+/// beacons, never the resume channel.
+#[derive(Debug, thiserror::Error)]
+pub enum ScanStop {
+    /// Budget exhausted: a graceful early stop. The handler ends the stream
+    /// with `QUERY_END_REASON_SCAN_LIMIT`; the frontier is the resume cursor.
+    #[error("bitmap scan limit reached")]
+    ScanLimit {
+        /// Merged floor position every term provably scanned to when the budget
+        /// died — the exact value the stopping round's progress beacon would
+        /// have carried. It lives in the scanned index's member-id domain
+        /// (tx-seq for transaction/checkpoint indexes; encoded event-seq — see
+        /// `event_seq` — for the event index). Consumers apply their existing
+        /// domain conversion and resume arithmetic.
+        scan_frontier: u64,
+    },
+    /// Cancelled → gRPC `Cancelled` status.
+    #[error("bitmap scan cancelled")]
+    Cancelled,
+    /// Backend/storage fault → gRPC `Internal`, error carried unchanged.
+    #[error(transparent)]
+    Fault(anyhow::Error),
 }
 
-impl From<anyhow::Error> for BitmapScanError {
+impl From<anyhow::Error> for LeafStop {
     fn from(err: anyhow::Error) -> Self {
-        BitmapScanError::Source(err)
+        LeafStop::Fault(err)
     }
 }
 
-pub type BitmapScanResult<T> = std::result::Result<T, BitmapScanError>;
+impl From<anyhow::Error> for ScanStop {
+    fn from(err: anyhow::Error) -> Self {
+        ScanStop::Fault(err)
+    }
+}
+
+/// Reduce the leaf stops raised in one evaluator round to the driver-facing
+/// terminal. Precedence: Fault > BudgetExhausted > Cancelled (a real fault must
+/// surface as Internal; a budget stop with its frontier beats a bare Cancel —
+/// the resume point costs nothing to deliver). `frontier` is the merged floor
+/// the caller computed for this round; it is bound into `ScanLimit` only.
+/// Panics on empty input — evaluators only collapse when a leaf actually erred.
+pub(crate) fn collapse(stops: Vec<LeafStop>, scan_frontier: u64) -> ScanStop {
+    assert!(!stops.is_empty(), "collapse on empty Vec");
+    let mut cancelled = false;
+    let mut budget = false;
+    let mut faults: Vec<anyhow::Error> = Vec::new();
+    for s in stops {
+        match s {
+            LeafStop::Cancelled => cancelled = true,
+            LeafStop::BudgetExhausted => budget = true,
+            LeafStop::Fault(err) => faults.push(err),
+        }
+    }
+    match faults.len() {
+        0 => {
+            if budget {
+                ScanStop::ScanLimit { scan_frontier }
+            } else {
+                debug_assert!(cancelled, "collapse saw only non-erroring leaves");
+                ScanStop::Cancelled
+            }
+        }
+        1 => ScanStop::Fault(faults.pop().expect("len == 1")),
+        n => {
+            let combined = faults
+                .iter()
+                .enumerate()
+                .map(|(i, err)| format!("  [{i}] {err}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            ScanStop::Fault(anyhow::anyhow!(
+                "{n} concurrent bitmap scan faults:\n{combined}"
+            ))
+        }
+    }
+}
 
 /// Item or progress watermark flowing through a bitmap eval pipeline.
 /// `Watermark(p)` means every Item with position strictly before `p`
@@ -142,16 +159,23 @@ pub type BitmapScanResult<T> = std::result::Result<T, BitmapScanError>;
 /// preserve watermark/item ordering — that's what makes the watermark a
 /// safe resume cursor on timeout.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Watermarked<T> {
+pub enum Watermarked<T, P = u64> {
     Item(T),
-    Watermark(u64),
+    Watermark(P),
 }
 
-impl<T> Watermarked<T> {
-    pub fn map_item<U>(self, f: impl FnOnce(T) -> U) -> Watermarked<U> {
+impl<T, P> Watermarked<T, P> {
+    pub fn map_item<U>(self, f: impl FnOnce(T) -> U) -> Watermarked<U, P> {
         match self {
             Watermarked::Item(t) => Watermarked::Item(f(t)),
             Watermarked::Watermark(p) => Watermarked::Watermark(p),
+        }
+    }
+
+    pub fn map_watermark<Q>(self, f: impl FnOnce(P) -> Q) -> Watermarked<T, Q> {
+        match self {
+            Watermarked::Item(t) => Watermarked::Item(t),
+            Watermarked::Watermark(p) => Watermarked::Watermark(f(p)),
         }
     }
 }
@@ -159,19 +183,34 @@ impl<T> Watermarked<T> {
 /// A stream of `(bucket_id, RoaringBitmap)` in the requested bucket order.
 /// Bitmap positions are **relative** to the bucket (u32 offsets `[0, BUCKET_SIZE)`)
 /// - edge trimming against the requested range happens at the flatten step.
-pub type BucketItem = BitmapScanResult<(u64, RoaringBitmap)>;
+pub type BucketItem = Result<(u64, RoaringBitmap), LeafStop>;
 pub type BucketStream = BoxStream<'static, BucketItem>;
 
 /// A bucket stream that interleaves data buckets with progress watermarks.
 /// The flat DNF driver derives each watermark from the slowest leaf's
 /// position, so the output always reflects "every source has scanned past P."
-pub(crate) type WatermarkedBucket = BitmapScanResult<Watermarked<(u64, RoaringBitmap)>>;
+pub(crate) type WatermarkedBucket = Result<Watermarked<(u64, RoaringBitmap)>, ScanStop>;
 pub type WatermarkedBucketStream = BoxStream<'static, WatermarkedBucket>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScanDirection {
     Ascending,
     Descending,
+}
+/// Physical gap-crossing policy. Logical frontier jumps are unconditional;
+/// this only bounds how many charged dead rows a lagging leaf drains from its
+/// open scan per lag episode before seeking past the gap.
+#[derive(Clone, Copy, Debug)]
+pub struct SkipPolicy {
+    /// `None` never seeks and drains dead rows without bound.
+    pub drain_probe_rows: Option<std::num::NonZeroU32>,
+}
+
+impl SkipPolicy {
+    /// Drain dead rows without seeking; logical frontier jumps remain enabled.
+    pub const DRAIN_ONLY: Self = Self {
+        drain_probe_rows: None,
+    };
 }
 
 impl ScanDirection {
@@ -192,22 +231,51 @@ pub fn dense_universe_buckets(
     range: Range<u64>,
     bucket_size: u64,
     direction: ScanDirection,
-) -> impl Iterator<Item = (u64, RoaringBitmap)> + Send + 'static {
+) -> DenseUniverseBuckets {
     let bits = u32::try_from(bucket_size).expect("bucket size fits in u32");
-    let mut buckets = if range.is_empty() {
+    let buckets = if range.is_empty() {
         0..0
     } else {
         (range.start / bucket_size)..(range.end - 1) / bucket_size + 1
     };
-    std::iter::from_fn(move || {
-        let bucket = match direction {
-            ScanDirection::Ascending => buckets.next(),
-            ScanDirection::Descending => buckets.next_back(),
+    DenseUniverseBuckets {
+        buckets,
+        direction,
+        bits,
+    }
+}
+
+/// Synthesized dense-universe bucket iterator.
+pub struct DenseUniverseBuckets {
+    buckets: Range<u64>,
+    direction: ScanDirection,
+    bits: u32,
+}
+
+impl DenseUniverseBuckets {
+    /// Reposition to the first bucket at or past `bucket` in scan direction.
+    pub fn seek_bucket(&mut self, bucket: u64) {
+        match self.direction {
+            ScanDirection::Ascending => self.buckets.start = self.buckets.start.max(bucket),
+            ScanDirection::Descending => {
+                self.buckets.end = self.buckets.end.min(bucket.saturating_add(1))
+            }
+        }
+    }
+}
+
+impl Iterator for DenseUniverseBuckets {
+    type Item = (u64, RoaringBitmap);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let bucket = match self.direction {
+            ScanDirection::Ascending => self.buckets.next(),
+            ScanDirection::Descending => self.buckets.next_back(),
         }?;
         let mut bitmap = RoaringBitmap::new();
-        bitmap.insert_range(0..bits);
+        bitmap.insert_range(0..self.bits);
         Some((bucket, bitmap))
-    })
+    }
 }
 
 /// Storage backend that can scan one bitmap dimension key over a member range.
@@ -224,6 +292,14 @@ pub trait BitmapBucketSource: Clone + Send + 'static {
     ) -> BucketStream;
 }
 
+/// Synchronous bucket iterator that can reposition within its scan bounds.
+pub trait SeekableBucketIterator: Iterator<Item = BucketItem> {
+    /// Reposition so the next bucket is the first at or past `bucket` in scan
+    /// direction. Implementations preserve budget and first-row reservation
+    /// state across seeks.
+    fn seek_bucket(&mut self, bucket: u64);
+}
+
 /// Storage backend that can scan one bitmap dimension key synchronously.
 ///
 /// This is for request-local backends such as RocksDB, where the bucket scan
@@ -231,7 +307,7 @@ pub trait BitmapBucketSource: Clone + Send + 'static {
 /// fully synchronous so these iterators can stay on the blocking task that owns
 /// them.
 pub trait BitmapBucketIteratorSource<'a>: Clone + 'a {
-    type Iter: Iterator<Item = BucketItem> + 'a;
+    type Iter: SeekableBucketIterator + 'a;
 
     fn scan_bucket_iter(
         &self,
@@ -422,6 +498,22 @@ fn bound_in_direction(a: u64, b: u64, direction: ScanDirection) -> u64 {
         ScanDirection::Descending => a.max(b),
     }
 }
+/// The more-advanced of two positions in scan direction: max ascending, min
+/// descending.
+pub(crate) fn advance_in_direction(a: u64, b: u64, direction: ScanDirection) -> u64 {
+    match direction {
+        ScanDirection::Ascending => a.max(b),
+        ScanDirection::Descending => a.min(b),
+    }
+}
+
+/// Whether `a` is strictly before `b` in scan direction.
+pub(crate) fn strictly_before(a: u64, b: u64, direction: ScanDirection) -> bool {
+    match direction {
+        ScanDirection::Ascending => a < b,
+        ScanDirection::Descending => a > b,
+    }
+}
 
 /// Whether emitting `next` as a watermark advances the frontier past the
 /// previously emitted one. Ascending frontiers strictly increase,
@@ -571,6 +663,71 @@ pub(crate) enum LeafHead {
     Eof,
     Error,
 }
+/// Compute the furthest bucket each active leaf can skip to without changing
+/// query results.
+pub(crate) fn leaf_skip_targets(
+    terms: &[TermSpec],
+    class: &[Option<LeafHead>],
+    unreferenced: &[bool],
+    direction: ScanDirection,
+) -> Vec<Option<u64>> {
+    // Go through each conjunction in the top-level query disjunction.
+    let term_not_before: Vec<Option<u64>> = terms
+        .iter()
+        .map(|term| {
+            if term.unsatisfiable {
+                return None;
+            }
+            // For each conjunction, find its furthest-ahead include leaf.
+            // As far as this conjunction is concerned, every leaf it references
+            // can skip to that bucket. A shared leaf may still be constrained by
+            // another conjunction. Excludes don't set this bound. No exclude row
+            // just means nothing to subtract.
+            term.includes
+                .iter()
+                .filter_map(|&i| match class.get(i).and_then(Option::as_ref) {
+                    Some(LeafHead::Bucket(bucket)) => Some(*bucket),
+                    Some(LeafHead::Error | LeafHead::Eof) | None => None,
+                })
+                .reduce(|a, b| advance_in_direction(a, b, direction))
+        })
+        .collect();
+
+    // Now with term-level knowledge, iterate through the deduped leaves. Find the nearest
+    // safe bound that we can skip ahead to among all terms that reference a leaf.
+    class
+        .iter()
+        .enumerate()
+        .map(|(i, head)| {
+            if unreferenced.get(i).copied().unwrap_or(true) {
+                return None;
+            }
+            let Some(LeafHead::Bucket(head)) = head else {
+                return None;
+            };
+
+            let mut target = None;
+            for (term_index, term) in terms.iter().enumerate() {
+                if term.unsatisfiable
+                    || !term
+                        .includes
+                        .iter()
+                        .chain(&term.excludes)
+                        .any(|&leaf| leaf == i)
+                {
+                    continue;
+                }
+
+                let not_before = term_not_before[term_index]?;
+                target = Some(match target {
+                    None => not_before,
+                    Some(current) => bound_in_direction(current, not_before, direction),
+                });
+            }
+            target.filter(|&target| strictly_before(*head, target, direction))
+        })
+        .collect()
+}
 
 #[cfg(test)]
 pub(crate) mod test_utils {
@@ -586,6 +743,34 @@ pub(crate) mod test_utils {
 
     pub(crate) const BUCKET_SIZE: u64 = 100_000;
     pub(crate) type TestBuckets = BTreeMap<Vec<u8>, Vec<(u64, Vec<u32>)>>;
+    type SeekRecorder = (Vec<u8>, Arc<Mutex<HashMap<Vec<u8>, usize>>>);
+    pub(crate) struct VecBucketIter {
+        items: std::vec::IntoIter<BucketItem>,
+        direction: ScanDirection,
+        recorder: Option<SeekRecorder>,
+    }
+
+    impl Iterator for VecBucketIter {
+        type Item = BucketItem;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.items.next()
+        }
+    }
+
+    impl SeekableBucketIterator for VecBucketIter {
+        fn seek_bucket(&mut self, target: u64) {
+            if let Some((key, seek_counts)) = &self.recorder {
+                *seek_counts.lock().unwrap().entry(key.clone()).or_insert(0) += 1;
+            }
+            while matches!(
+                self.items.as_slice().first(),
+                Some(Ok((bucket, _))) if strictly_before(*bucket, target, self.direction)
+            ) {
+                self.items.next();
+            }
+        }
+    }
 
     #[derive(Clone)]
     pub(crate) struct TestBucketSource {
@@ -604,7 +789,7 @@ pub(crate) mod test_utils {
     }
 
     impl<'a> BitmapBucketIteratorSource<'a> for TestBucketSource {
-        type Iter = std::vec::IntoIter<BucketItem>;
+        type Iter = VecBucketIter;
 
         fn scan_bucket_iter(
             &self,
@@ -612,8 +797,13 @@ pub(crate) mod test_utils {
             range: Range<u64>,
             direction: ScanDirection,
         ) -> Self::Iter {
-            self.bucket_items(&dimension_key, range, direction)
-                .into_iter()
+            VecBucketIter {
+                items: self
+                    .bucket_items(&dimension_key, range, direction)
+                    .into_iter(),
+                direction,
+                recorder: None,
+            }
         }
     }
 
@@ -632,6 +822,13 @@ pub(crate) mod test_utils {
                     .collect();
             }
             let mut buckets = self.buckets.get(dimension_key).cloned().unwrap_or_default();
+            if range.is_empty() {
+                buckets.clear();
+            } else {
+                let first_bucket = range.start / BUCKET_SIZE;
+                let last_bucket = (range.end - 1) / BUCKET_SIZE;
+                buckets.retain(|(bucket, _)| first_bucket <= *bucket && *bucket <= last_bucket);
+            }
             if matches!(direction, ScanDirection::Descending) {
                 buckets.reverse();
             }
@@ -685,6 +882,7 @@ pub(crate) mod test_utils {
     pub(crate) struct CountingBucketSource {
         pub(crate) buckets: Arc<TestBuckets>,
         scan_counts: Arc<Mutex<HashMap<Vec<u8>, usize>>>,
+        seek_counts: Arc<Mutex<HashMap<Vec<u8>, usize>>>,
     }
 
     impl CountingBucketSource {
@@ -692,11 +890,20 @@ pub(crate) mod test_utils {
             Self {
                 buckets: Arc::new(buckets),
                 scan_counts: Arc::new(Mutex::new(HashMap::new())),
+                seek_counts: Arc::new(Mutex::new(HashMap::new())),
             }
         }
 
         pub(crate) fn scan_count(&self, key: &[u8]) -> usize {
             self.scan_counts
+                .lock()
+                .unwrap()
+                .get(key)
+                .copied()
+                .unwrap_or(0)
+        }
+        pub(crate) fn seek_count(&self, key: &[u8]) -> usize {
+            self.seek_counts
                 .lock()
                 .unwrap()
                 .get(key)
@@ -725,6 +932,13 @@ pub(crate) mod test_utils {
                     .collect();
             }
             let mut buckets = self.buckets.get(dimension_key).cloned().unwrap_or_default();
+            if range.is_empty() {
+                buckets.clear();
+            } else {
+                let first_bucket = range.start / BUCKET_SIZE;
+                let last_bucket = (range.end - 1) / BUCKET_SIZE;
+                buckets.retain(|(bucket, _)| first_bucket <= *bucket && *bucket <= last_bucket);
+            }
             if matches!(direction, ScanDirection::Descending) {
                 buckets.reverse();
             }
@@ -748,7 +962,7 @@ pub(crate) mod test_utils {
     }
 
     impl<'a> BitmapBucketIteratorSource<'a> for CountingBucketSource {
-        type Iter = std::vec::IntoIter<BucketItem>;
+        type Iter = VecBucketIter;
 
         fn scan_bucket_iter(
             &self,
@@ -757,8 +971,13 @@ pub(crate) mod test_utils {
             direction: ScanDirection,
         ) -> Self::Iter {
             self.record(&dimension_key);
-            self.bucket_items(&dimension_key, range, direction)
-                .into_iter()
+            VecBucketIter {
+                items: self
+                    .bucket_items(&dimension_key, range, direction)
+                    .into_iter(),
+                direction,
+                recorder: Some((dimension_key, self.seek_counts.clone())),
+            }
         }
     }
 
@@ -847,5 +1066,108 @@ mod tests {
         // Term 1: include b (slot 1), exclude a (slot 0) — same slots as term 0.
         assert_eq!(specs[1].includes, vec![1]);
         assert_eq!(specs[1].excludes, vec![0]);
+    }
+    #[test]
+    fn leaf_skip_targets_advance_lagging_include_in_both_directions() {
+        let term = TermSpec {
+            includes: vec![0, 1],
+            excludes: vec![],
+            unsatisfiable: false,
+        };
+        for (direction, heads, expected) in [
+            (ScanDirection::Ascending, [2, 10], vec![Some(10), None]),
+            (ScanDirection::Descending, [10, 2], vec![Some(2), None]),
+        ] {
+            let class = heads.map(|bucket| Some(LeafHead::Bucket(bucket)));
+            assert_eq!(
+                leaf_skip_targets(std::slice::from_ref(&term), &class, &[false; 2], direction),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn leaf_skip_targets_use_least_candidate_across_shared_terms() {
+        let terms = [
+            TermSpec {
+                includes: vec![0],
+                excludes: vec![1],
+                unsatisfiable: false,
+            },
+            TermSpec {
+                includes: vec![1],
+                excludes: vec![],
+                unsatisfiable: false,
+            },
+        ];
+        for (direction, heads) in [
+            (ScanDirection::Ascending, [50, 10]),
+            (ScanDirection::Descending, [10, 50]),
+        ] {
+            let class = heads.map(|bucket| Some(LeafHead::Bucket(bucket)));
+            assert_eq!(
+                leaf_skip_targets(&terms, &class, &[false; 2], direction)[1],
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn leaf_skip_targets_drag_exclude_to_include_candidate() {
+        let term = TermSpec {
+            includes: vec![0],
+            excludes: vec![1],
+            unsatisfiable: false,
+        };
+        for (direction, heads, expected) in [
+            (ScanDirection::Ascending, [50, 10], Some(50)),
+            (ScanDirection::Descending, [10, 50], Some(10)),
+        ] {
+            let class = heads.map(|bucket| Some(LeafHead::Bucket(bucket)));
+            assert_eq!(
+                leaf_skip_targets(std::slice::from_ref(&term), &class, &[false; 2], direction)[1],
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn leaf_skip_targets_drop_error_heads_and_poison_unknown_candidates() {
+        for (direction, a_head, c_head) in [
+            (ScanDirection::Ascending, 0, 9),
+            (ScanDirection::Descending, 9, 0),
+        ] {
+            let terms = [
+                TermSpec {
+                    includes: vec![0, 1],
+                    excludes: vec![],
+                    unsatisfiable: false,
+                },
+                TermSpec {
+                    includes: vec![0, 2],
+                    excludes: vec![],
+                    unsatisfiable: false,
+                },
+            ];
+            let class = [
+                Some(LeafHead::Bucket(a_head)),
+                Some(LeafHead::Error),
+                Some(LeafHead::Bucket(c_head)),
+            ];
+            assert_eq!(
+                leaf_skip_targets(&terms, &class, &[false; 3], direction)[0],
+                None
+            );
+
+            let poisoned_term = TermSpec {
+                includes: vec![1],
+                excludes: vec![0],
+                unsatisfiable: false,
+            };
+            assert_eq!(
+                leaf_skip_targets(&[poisoned_term], &class, &[false; 3], direction)[0],
+                None
+            );
+        }
     }
 }

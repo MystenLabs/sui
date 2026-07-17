@@ -22,6 +22,7 @@ move-core-types.workspace = true
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
+sui-http.workspace = true
 prometheus.workspace = true
 prost-types.workspace = true
 rustls.workspace = true
@@ -51,3 +52,5 @@ tracing.workspace = true
 [dev-dependencies]
 # `test-util` powers `#[tokio::test(start_paused = true)]` in the limiter tests.
 tokio = { workspace = true, features = ["test-util"] }
+# Enables the in-memory mock BigTable server for the real-stage resolver tests.
+sui-kvstore = { workspace = true, features = ["testing"] }

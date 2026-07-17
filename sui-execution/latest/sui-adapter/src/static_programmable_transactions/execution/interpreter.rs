@@ -408,6 +408,7 @@ fn execute_command<Mode: ExecutionMode>(
                 current_package_id,
                 upgrade_ticket.policy,
                 linkage,
+                trace_builder_opt,
             )?;
 
             vec![context.upgrade_receipt(upgrade_ticket, upgraded_package_id)]

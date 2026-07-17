@@ -14,7 +14,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
-    BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject, ParentSync,
+    BackingPackageStore, ObjectStore, PackageObject, ParentSync, RuntimeObjectResolver,
     get_module_by_id,
 };
 use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult, TransactionKey};
@@ -116,7 +116,7 @@ impl BackingPackageStore for InMemoryObjectStore {
     }
 }
 
-impl ChildObjectResolver for InMemoryObjectStore {
+impl RuntimeObjectResolver for InMemoryObjectStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
