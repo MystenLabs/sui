@@ -3469,8 +3469,8 @@ fn truncate_to_max_coins(coin_refs: &mut Vec<ObjectRef>, max_coins: usize) {
 /// own address balance is left untouched: only their coin objects are drained.
 ///
 /// Every coin is merged into one, which is then sent by value. SUI is what pays for gas, so its
-/// coins go into the gas payment, where gas smashing merges them into the gas coin for nothing;
-/// coins of any other type are ordinary inputs, merged into the first of them.
+/// coins go into the gas payment, where gas smashing merges them into the gas coin.
+/// Coins of any other type are ordinary inputs, merged into the last of them.
 async fn send_all_coins(
     context: &mut WalletContext,
     signer: SuiAddress,
@@ -3502,20 +3502,17 @@ async fn send_all_coins(
     let mut coin_refs: Vec<ObjectRef> =
         coins.iter().map(|c| c.compute_object_reference()).collect();
 
-    // Coins that do not fit in the gas payment are merged in by a single `MergeCoins`, so they are
-    // bounded by the per-command argument limit, and each is also a transaction input. For SUI they
-    // are all merge sources; otherwise the first is the merge target, which is not an argument.
+    // Coins that do not fit in the gas payment are merged in with `MergeCoins`. Each such coin is a
+    // transaction input, so the merged set is bounded by the input-object limit; the sources are
+    // split across as many `MergeCoins` commands as it takes to stay under the per-command argument
+    // limit. Gas payment coins are validated separately and do not count against the input limit.
     let limits = coin_limits(&client).await?;
     let smashed = if is_sui {
         limits.max_gas_payment_objects
     } else {
         0
     };
-    let max_merged = limits
-        .max_arguments
-        .saturating_sub(is_sui as usize)
-        .min(limits.max_input_objects);
-    truncate_to_max_coins(&mut coin_refs, smashed + max_merged);
+    truncate_to_max_coins(&mut coin_refs, smashed + limits.max_input_objects);
 
     // Whatever is left in `coin_refs` is the gas payment, which is empty unless the coin is SUI.
     let merged_refs = coin_refs.split_off(std::cmp::min(coin_refs.len(), smashed));
@@ -3527,15 +3524,22 @@ async fn send_all_coins(
         .collect::<Result<Vec<_>, _>>()?;
 
     // Gas smashing has already merged the gas payment into the gas coin, so that is what the rest
-    // merge into; without one, the first coin takes the role. `MergeCoins` only borrows its target,
+    // merge into; without one, the last coin takes the role. `MergeCoins` only borrows its target,
     // so either way it is still ours to send afterwards.
     let target = if is_sui {
         Argument::GasCoin
     } else {
-        merged_args.remove(0)
+        merged_args
+            .pop()
+            .context("non-SUI path always has at least one coin to merge into")?
     };
-    if !merged_args.is_empty() {
-        builder.command(Command::MergeCoins(target, merged_args));
+
+    // `MergeCoins` counts only its source list against `max_arguments` (strict `<`), so at most
+    // `max_arguments - 1` sources fit per command; batch the rest across commands, all merging into
+    // the same target.
+    let max_sources = limits.max_arguments.saturating_sub(1).max(1);
+    for sources in merged_args.chunks(max_sources) {
+        builder.command(Command::MergeCoins(target, sources.to_vec()));
     }
 
     // Moving the coin into `coin::send_funds` by value is understood by the execution layer: when
