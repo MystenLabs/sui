@@ -64,7 +64,7 @@ sui client ptb \
 
 By default, the command selects coins first and falls back to address balance if coins are insufficient. With `--from-address-balance`, it draws exclusively from the address balance, and fails if that balance cannot cover the amount.
 
-Gas is chosen independently of this flag: it is paid from the sender's address balance whenever that balance covers the budget and the transaction does not use the gas coin, in which case the transaction carries no gas payment and gets a `ValidDuring` expiration for replay protection. Otherwise gas is paid from the sender's coins. So a `--from-address-balance` transfer is usually, but not always, free of owned object inputs.
+The network chooses gas independently of this flag: it pays gas from the sender's address balance whenever that balance covers the budget and the transaction does not use the gas coin, in which case the transaction carries no gas payment and gets a `ValidDuring` expiration for replay protection. Otherwise it pays gas from the sender's coins. So a `--from-address-balance` transfer is usually, but not always, free of owned object inputs.
 
 ### Move functions
 
