@@ -13,9 +13,10 @@ use crate::{
         vm_test_adapter::VMTestAdapter,
     },
     execution::values::Value,
-    jit::execution::ast::{MaxPlusFormula, Type},
+    jit::execution::ast::Type,
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
+    shared::type_size_formulae::MaxPlusFormula,
     shared::{
         gas::UnmeteredGasMeter,
         linkage_context::LinkageContext,

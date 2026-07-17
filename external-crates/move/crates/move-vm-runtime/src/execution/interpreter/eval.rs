@@ -16,9 +16,10 @@ use crate::{
             Vector, VectorRef, VectorSpecialization,
         },
     },
-    jit::execution::ast::{Bytecode, CallType, Function, Type, TypeArguments},
+    jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     runtime::telemetry::TransactionTelemetryContext,
+    shared::type_size_formulae::TypeArguments,
     shared::{
         gas::{GasMeter, SimpleInstruction},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
