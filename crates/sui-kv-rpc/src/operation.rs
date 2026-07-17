@@ -4,6 +4,7 @@
 use std::future::Future;
 use std::time::Duration;
 
+use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use sui_inverted_index::BitmapQuery;
@@ -44,7 +45,6 @@ pub(crate) struct QueryContext {
     method: &'static str,
     checkpoint_hi_exclusive: u64,
     ledger_history: LedgerHistoryConfig,
-    request_bigtable_concurrency: usize,
     stages: StagesConfig,
 }
 
@@ -56,7 +56,6 @@ impl QueryContext {
         method: &'static str,
         checkpoint_hi_exclusive: u64,
         ledger_history: LedgerHistoryConfig,
-        request_bigtable_concurrency: usize,
         stages: StagesConfig,
     ) -> Self {
         Self {
@@ -66,7 +65,6 @@ impl QueryContext {
             method,
             checkpoint_hi_exclusive,
             ledger_history,
-            request_bigtable_concurrency,
             stages,
         }
     }
@@ -92,10 +90,6 @@ impl QueryContext {
         self.checkpoint_hi_exclusive
     }
 
-    pub(crate) fn request_bigtable_concurrency(&self) -> usize {
-        self.request_bigtable_concurrency
-    }
-
     /// Per-request evaluated-bucket budget for `spec`. Handlers pass this
     /// into `eval_bitmap_query_stream`, which constructs a
     /// `BitmapScanBudget` internally and reports the resulting
@@ -114,13 +108,55 @@ impl QueryContext {
         self.ledger_history.bitmap_skip_policy()
     }
 
-    pub(crate) fn observe_response_render(&self, elapsed: std::time::Duration) {
-        self.metrics.observe_response_render(self.method, elapsed);
+    pub(crate) fn observe_response_render(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.metrics
+            .observe_response_render(self.method, resolution, elapsed);
     }
 
-    pub(crate) fn observe_stream_item_yield_wait(&self, elapsed: std::time::Duration) {
+    pub(crate) fn observe_response_page_bytes(&self, resolution: &'static str, bytes: usize) {
         self.metrics
-            .observe_stream_item_yield_wait(self.method, elapsed);
+            .observe_response_page_bytes(self.method, resolution, bytes);
+    }
+
+    pub(crate) fn observe_stream_first_frame_latency(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.metrics
+            .observe_stream_first_frame_latency(self.method, resolution, elapsed);
+    }
+
+    pub(crate) fn observe_stream_frame_yield_wait(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.metrics
+            .observe_stream_frame_yield_wait(self.method, resolution, elapsed);
+    }
+
+    pub(crate) fn inc_stream_watermark_frames(&self) {
+        self.metrics.inc_stream_watermark_frames(self.method);
+    }
+
+    pub(crate) async fn next_response_item<T>(
+        &self,
+        resolution: &'static str,
+        stream: &mut BoxStream<'static, T>,
+    ) -> Option<T> {
+        let poll_started_at = Instant::now();
+        let item = stream.next().await;
+        self.metrics.observe_final_stream_poll_wait(
+            self.method,
+            resolution,
+            poll_started_at.elapsed(),
+        );
+        item
     }
 
     pub(crate) fn transaction_filter_query(
@@ -195,7 +231,6 @@ impl KvRpcServer {
             operation,
             self.cached_checkpoint_hi_exclusive().await?,
             self.ledger_history.clone(),
-            self.request_bigtable_concurrency,
             self.stages.clone(),
         ))
     }

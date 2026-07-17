@@ -138,11 +138,10 @@ impl LedgerService for KvRpcServer {
         .map_err(Into::into)
     }
 
-    // The list RPCs carry a per-RPC hard request timeout (from
-    // `LedgerHistoryConfig`). The outer `operation::with_deadline` wrapper
-    // drops the response stream with `DeadlineExceeded` when this fires;
-    // debounced intermediate `Watermark` frames let the client resume from
-    // wherever it got to.
+    // The list RPC hard timeout covers both computation and response delivery.
+    // Expiry drops the stream with `DeadlineExceeded` without emitting a
+    // terminal resume-cursor frame, so a client can resume only from the last
+    // `Watermark` it retained.
     async fn list_checkpoints(
         &self,
         request: tonic::Request<ListCheckpointsRequest>,
@@ -221,6 +220,7 @@ mod test_utils {
     use std::sync::Arc;
 
     use prometheus::Registry;
+    use prometheus::proto::{Counter, Histogram, MetricFamily};
     use sui_kvstore::BigTableClient as InnerBigTableClient;
     use sui_kvstore::testing::MockBigtableServer;
     use sui_package_resolver::PackageStore;
@@ -237,6 +237,68 @@ mod test_utils {
     use crate::operation::QueryContext;
     use crate::package_store::BigTablePackageStore;
 
+    pub(super) const LIST_PIPELINE_METRICS: [&str; 6] = [
+        "kv_rpc_response_render_latency_ms",
+        "kv_rpc_response_page_bytes",
+        "kv_rpc_stream_first_frame_latency_ms",
+        "kv_rpc_stream_frame_yield_wait_ms",
+        "kv_rpc_stream_watermark_frames_total",
+        "kv_rpc_final_stream_poll_wait_ms",
+    ];
+
+    pub(super) fn list_histogram<'a>(
+        families: &'a [MetricFamily],
+        name: &str,
+        method: &str,
+        resolution: &str,
+    ) -> &'a Histogram {
+        let family = families
+            .iter()
+            .find(|family| family.name() == name)
+            .unwrap_or_else(|| panic!("metric family {name} not registered"));
+        let [metric] = family.get_metric() else {
+            panic!("{name} has unexpected series");
+        };
+        assert!(
+            metric
+                .get_label()
+                .iter()
+                .map(|label| (label.name(), label.value()))
+                .eq([("method", method), ("resolution", resolution)]),
+            "{name} has unexpected labels"
+        );
+        metric.get_histogram()
+    }
+    pub(super) fn list_counter<'a>(
+        families: &'a [MetricFamily],
+        name: &str,
+        method: &str,
+    ) -> &'a Counter {
+        let family = families
+            .iter()
+            .find(|family| family.name() == name)
+            .unwrap_or_else(|| panic!("metric family {name} not registered"));
+        let [metric] = family.get_metric() else {
+            panic!("{name} has unexpected series");
+        };
+        assert!(
+            metric
+                .get_label()
+                .iter()
+                .map(|label| (label.name(), label.value()))
+                .eq([("method", method)]),
+            "{name} has unexpected labels"
+        );
+        metric.get_counter()
+    }
+
+    pub(super) fn assert_list_metric_absent(families: &[MetricFamily], name: &str) {
+        assert!(
+            families.iter().all(|family| family.name() != name),
+            "{name} unexpectedly registered"
+        );
+    }
+
     pub(super) fn ascending_options() -> QueryOptions {
         let mut options = QueryOptions::default();
         options.limit = Some(10);
@@ -248,13 +310,37 @@ mod test_utils {
         method: &'static str,
         checkpoint_hi_exclusive: u64,
     ) -> (QueryContext, tokio::task::JoinHandle<()>) {
+        let (ctx, _registry, server) =
+            query_context_with_registry(method, checkpoint_hi_exclusive).await;
+        (ctx, server)
+    }
+
+    pub(super) async fn query_context_with_registry(
+        method: &'static str,
+        checkpoint_hi_exclusive: u64,
+    ) -> (QueryContext, Registry, tokio::task::JoinHandle<()>) {
+        let (ctx, registry, _mock, server) =
+            query_context_with_mock_and_registry(method, checkpoint_hi_exclusive).await;
+        (ctx, registry, server)
+    }
+
+    pub(super) async fn query_context_with_mock_and_registry(
+        method: &'static str,
+        checkpoint_hi_exclusive: u64,
+    ) -> (
+        QueryContext,
+        Registry,
+        MockBigtableServer,
+        tokio::task::JoinHandle<()>,
+    ) {
         let mock = MockBigtableServer::new();
         let (addr, server) = mock.start().await.expect("start mock BigTable");
         let inner = InnerBigTableClient::new_local(addr.to_string(), "test".to_string())
             .await
             .expect("connect to mock BigTable");
 
-        let metrics = KvRpcMetrics::new(&Registry::new());
+        let registry = Registry::new();
+        let metrics = KvRpcMetrics::new(&registry);
         let client =
             BigTableClient::new(inner.clone(), 2, metrics.bigtable_limiter.clone(), method);
         let package_store: Arc<dyn PackageStore> = Arc::new(BigTablePackageStore::new(inner));
@@ -264,6 +350,7 @@ mod test_utils {
             timeout_ms: Some(5_000),
             default_limit_items: Some(10),
             max_limit_items: Some(100),
+            render_ahead: Some(2),
         };
         let ledger_history = LedgerHistoryConfig {
             list_transactions: Some(method_config.clone()),
@@ -293,9 +380,10 @@ mod test_utils {
                 method,
                 checkpoint_hi_exclusive,
                 ledger_history,
-                2,
                 stages,
             ),
+            registry,
+            mock,
             server,
         )
     }
