@@ -1298,7 +1298,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             self.process_end_of_publish_transactions(state, end_of_publish_transactions);
         if timestamp_triggered || collected_eop_quorum {
             let (lock, final_round, abandoned_deferred_txns) =
-                self.advance_eop_state_machine(state, deadline_reached);
+                self.advance_end_of_epoch_state_machine(state, deadline_reached);
             (
                 lock.should_accept_tx(),
                 Some(lock),
@@ -2248,7 +2248,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
     /// Once the timestamp deadline is reached or 2f+1 EndOfPublish messages are collected, we call
     /// this function every round until the epoch ends.
-    fn advance_eop_state_machine(
+    fn advance_end_of_epoch_state_machine(
         &self,
         state: &mut CommitHandlerState,
         deadline_reached: bool,
@@ -3596,7 +3596,7 @@ mod tests {
 
         let (reconfig_state, final_round, abandoned) = setup
             .consensus_handler
-            .advance_eop_state_machine(&mut handler_state, true);
+            .advance_end_of_epoch_state_machine(&mut handler_state, true);
 
         assert!(reconfig_state.is_reject_all_tx());
         assert!(final_round);
@@ -3630,7 +3630,7 @@ mod tests {
 
         let (reconfig_state, final_round, abandoned) = setup
             .consensus_handler
-            .advance_eop_state_machine(&mut handler_state, true);
+            .advance_end_of_epoch_state_machine(&mut handler_state, true);
 
         assert!(reconfig_state.is_reject_all_tx());
         assert!(final_round);
