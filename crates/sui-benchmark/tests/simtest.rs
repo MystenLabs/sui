@@ -1385,11 +1385,7 @@ mod test {
             bank,
             system_state_observer.clone(),
             gas_request_chunk_size,
-<<<<<<< HEAD
-            BTreeMap::new(),
-=======
             submission_amplification_by_group,
->>>>>>> origin/main
         )
         .await
         .unwrap();

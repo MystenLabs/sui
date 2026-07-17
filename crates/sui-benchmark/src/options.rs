@@ -5,11 +5,7 @@ use clap::*;
 
 use strum_macros::EnumString;
 
-<<<<<<< HEAD
-use crate::drivers::{Interval, ValidatorSelection};
-=======
 use crate::drivers::{Interval, SubmissionAmplification, ValidatorSelection};
->>>>>>> origin/main
 use std::str::FromStr;
 
 #[derive(Parser)]
@@ -272,21 +268,6 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
         in_flight_ratio: Vec<u64>,
         // Probability that a logical transaction is submitted to multiple validators.
-<<<<<<< HEAD
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
-        amplification_probability: Vec<f64>,
-        // Number of validators to submit to when amplification_probability triggers.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1])]
-        amplification_validators_per_tx: Vec<usize>,
-        // Probability that each selected validator receives multiple copies.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
-        duplicate_probability: Vec<f64>,
-        // Number of copies sent to each selected validator when duplicate_probability triggers.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1])]
-        duplicate_copies_per_validator: Vec<usize>,
-        // Validator selection strategy for duplicate/amplified submissions.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [ValidatorSelection::Random])]
-=======
         // Defaults to zero, so amplified traffic must be explicitly enabled.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
         amplification_probability: Vec<f64>,
@@ -302,7 +283,6 @@ pub enum RunSpec {
         duplicate_copies_per_validator: Vec<usize>,
         // Validator selection strategy for duplicate/amplified submissions.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [SubmissionAmplification::DEFAULT_VALIDATOR_SELECTION])]
->>>>>>> origin/main
         validator_selection: Vec<ValidatorSelection>,
 
         // Setting the duration of each benchmark. Benchmarks will run in sequence.
