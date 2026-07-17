@@ -7,7 +7,6 @@ use std::net::SocketAddr;
 use std::{fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use std::env;
-#[cfg(not(msim))]
 use std::str::FromStr;
 
 use expect_test::expect;
