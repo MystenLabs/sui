@@ -16,6 +16,8 @@ pub(crate) struct KvMetrics {
     pub kv_get_latency_ms: HistogramVec,
     pub kv_get_batch_size: HistogramVec,
     pub kv_get_latency_ms_per_key: HistogramVec,
+    pub kv_get_stream_poll_wait_ms: HistogramVec,
+    pub kv_get_stream_poll_wait_ms_per_key: HistogramVec,
     pub kv_scan_success: IntCounterVec,
     pub kv_scan_not_found: IntCounterVec,
     pub kv_scan_error: IntCounterVec,
@@ -73,6 +75,26 @@ impl KvMetrics {
             kv_get_latency_ms_per_key: register_histogram_vec_with_registry!(
                 "kv_get_latency_ms_per_key",
                 "Latency of fetches from kv store per key",
+                &["client", "table"],
+                prometheus::exponential_buckets(1.0, 1.6, 24)
+                    .unwrap()
+                    .to_vec(),
+                registry,
+            )
+            .unwrap(),
+            kv_get_stream_poll_wait_ms: register_histogram_vec_with_registry!(
+                "kv_get_stream_poll_wait_ms",
+                "Accumulated demand-visible supply wait for a successfully drained streamed BigTable multi-get: ReadRows RPC open time plus time from downstream polling for a row until that demand returns a row or natural EOF. Excludes idle time after delivering a row and before the next downstream poll. May include BigTable service time, network transit, gRPC decoding, and executor scheduling while demand is pending; pair with kv_bt_chunk_latency_ms for BigTable frontend latency. Observed only after natural successful EOF, so errors, early drops, cancellations, and item-limit truncation are absent and create survivorship bias.",
+                &["client", "table"],
+                prometheus::exponential_buckets(1.0, 1.6, 24)
+                    .unwrap()
+                    .to_vec(),
+                registry,
+            )
+            .unwrap(),
+            kv_get_stream_poll_wait_ms_per_key: register_histogram_vec_with_registry!(
+                "kv_get_stream_poll_wait_ms_per_key",
+                "Accumulated demand-visible supply wait per requested key for a successfully drained streamed BigTable multi-get: ReadRows RPC open time plus downstream-active row poll-to-ready time, divided by requested keys. Excludes idle time between delivered rows and later demand. May include BigTable service time, network transit, gRPC decoding, and executor scheduling; pair with kv_bt_chunk_latency_ms. Observed only after natural successful EOF, so errors, early drops, cancellations, and item-limit truncation are absent and create survivorship bias.",
                 &["client", "table"],
                 prometheus::exponential_buckets(1.0, 1.6, 24)
                     .unwrap()

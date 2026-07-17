@@ -221,6 +221,7 @@ mod test_utils {
     use std::sync::Arc;
 
     use prometheus::Registry;
+    use prometheus::proto::{Histogram, MetricFamily};
     use sui_kvstore::BigTableClient as InnerBigTableClient;
     use sui_kvstore::testing::MockBigtableServer;
     use sui_package_resolver::PackageStore;
@@ -236,6 +237,45 @@ mod test_utils {
     use crate::bigtable_client::BigTableClient;
     use crate::operation::QueryContext;
     use crate::package_store::BigTablePackageStore;
+
+    pub(super) const LIST_PIPELINE_METRICS: [&str; 5] = [
+        "kv_rpc_response_render_latency_ms",
+        "kv_rpc_response_page_bytes",
+        "kv_rpc_stream_first_item_latency_ms",
+        "kv_rpc_stream_item_yield_wait_ms",
+        "kv_rpc_final_stream_poll_wait_ms",
+    ];
+
+    pub(super) fn list_histogram<'a>(
+        families: &'a [MetricFamily],
+        name: &str,
+        method: &str,
+        resolution: &str,
+    ) -> &'a Histogram {
+        let family = families
+            .iter()
+            .find(|family| family.name() == name)
+            .unwrap_or_else(|| panic!("metric family {name} not registered"));
+        let [metric] = family.get_metric() else {
+            panic!("{name} has unexpected series");
+        };
+        assert!(
+            metric
+                .get_label()
+                .iter()
+                .map(|label| (label.name(), label.value()))
+                .eq([("method", method), ("resolution", resolution)]),
+            "{name} has unexpected labels"
+        );
+        metric.get_histogram()
+    }
+
+    pub(super) fn assert_list_histogram_absent(families: &[MetricFamily], name: &str) {
+        assert!(
+            families.iter().all(|family| family.name() != name),
+            "{name} unexpectedly registered"
+        );
+    }
 
     pub(super) fn ascending_options() -> QueryOptions {
         let mut options = QueryOptions::default();
@@ -257,6 +297,20 @@ mod test_utils {
         method: &'static str,
         checkpoint_hi_exclusive: u64,
     ) -> (QueryContext, Registry, tokio::task::JoinHandle<()>) {
+        let (ctx, registry, _mock, server) =
+            query_context_with_mock_and_registry(method, checkpoint_hi_exclusive).await;
+        (ctx, registry, server)
+    }
+
+    pub(super) async fn query_context_with_mock_and_registry(
+        method: &'static str,
+        checkpoint_hi_exclusive: u64,
+    ) -> (
+        QueryContext,
+        Registry,
+        MockBigtableServer,
+        tokio::task::JoinHandle<()>,
+    ) {
         let mock = MockBigtableServer::new();
         let (addr, server) = mock.start().await.expect("start mock BigTable");
         let inner = InnerBigTableClient::new_local(addr.to_string(), "test".to_string())
@@ -308,6 +362,7 @@ mod test_utils {
                 stages,
             ),
             registry,
+            mock,
             server,
         )
     }

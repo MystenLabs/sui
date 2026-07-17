@@ -9,6 +9,7 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
+use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_kvstore::BitmapIndexSpec;
@@ -97,6 +98,9 @@ pub(crate) async fn list_transactions(
         checkpoint_hi_exclusive,
     )?;
     let read_mask = validate_read_mask(request.read_mask)?;
+    let needs_objects = needs_object_types(&read_mask);
+    let render_transaction_contents = should_render_transaction_contents(&read_mask);
+    let resolution = transaction_resolution(needs_objects, render_transaction_contents);
     let options = QueryOptions::transactions_from_proto(
         request.options.as_ref(),
         endpoint.default_limit_items,
@@ -125,7 +129,7 @@ pub(crate) async fn list_transactions(
         );
         // Empty resolved ranges still surface their terminal cursor, but claim
         // no checkpoint coverage.
-        return Ok(futures::stream::iter([Ok(range_end_response(
+        let response = range_end_response(
             &options,
             exhaustion,
             Position::Transactions {
@@ -135,7 +139,11 @@ pub(crate) async fn list_transactions(
             None,
             true,
         )
-        .0)])
+        .0;
+        return Ok(async_stream::try_stream! {
+            ctx.observe_response_page_bytes(resolution, response.encoded_len());
+            yield response;
+        }
         .boxed());
     }
 
@@ -178,11 +186,9 @@ pub(crate) async fn list_transactions(
             scan_tx_seq_digests(client.clone(), tx_range.clone(), limit_items, &options).await?
         };
 
-    let render_transaction_contents = should_render_transaction_contents(&read_mask);
     let transaction_stream: BoxStream<'static, Result<Watermarked<TransactionListItem>, ScanStop>> =
         if render_transaction_contents {
             let columns: Arc<[&'static str]> = transaction_columns(&read_mask).into();
-            let needs_objects = needs_object_types(&read_mask);
 
             // Stage 3: Watermarked<TxSeqDigestData> ->
             // Watermarked<(tx_seq, TransactionData)>.
@@ -233,7 +239,7 @@ pub(crate) async fn list_transactions(
         client.tx_wm_resolver(direction),
         std::convert::identity,
     );
-    let rendered_stream = render_ahead(transaction_stream, endpoint.render_ahead, {
+    let mut rendered_stream = render_ahead(transaction_stream, endpoint.render_ahead, {
         let read_mask = read_mask.clone();
         let resolver = resolver.clone();
         move |item| {
@@ -262,11 +268,13 @@ pub(crate) async fn list_transactions(
     });
 
     Ok(async_stream::try_stream! {
-        futures::pin_mut!(rendered_stream);
         let mut emitted = 0usize;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
-            let Some(item) = rendered_stream.next().await else {
+            let Some(item) = ctx
+                .next_response_item(resolution, &mut rendered_stream)
+                .await
+            else {
                 let (response, reason) = range_end_response(
                     &options,
                     exhaustion,
@@ -277,6 +285,7 @@ pub(crate) async fn list_transactions(
                     covered_checkpoint_bound,
                     false,
                 );
+                ctx.observe_response_page_bytes(resolution, response.encoded_len());
                 yield response;
                 break reason;
             };
@@ -305,7 +314,11 @@ pub(crate) async fn list_transactions(
                     );
                     let mut response = match item {
                         RenderedTransactionItem::Digest(row) => {
-                            transaction_response_from_tx_seq_digest(row, &read_mask, watermark)
+                            let render_started = Instant::now();
+                            let response =
+                                transaction_response_from_tx_seq_digest(row, &read_mask, watermark);
+                            ctx.observe_response_render(resolution, render_started.elapsed());
+                            response
                         }
                         RenderedTransactionItem::Full {
                             tx_offset,
@@ -313,7 +326,7 @@ pub(crate) async fn list_transactions(
                             render_elapsed,
                             ..
                         } => {
-                            ctx.observe_response_render(render_elapsed);
+                            ctx.observe_response_render(resolution, render_elapsed);
                             transaction_item_response(
                                 watermark,
                                 executed,
@@ -323,17 +336,22 @@ pub(crate) async fn list_transactions(
                         }
                     };
                     emitted += 1;
-                    let yield_started = Instant::now();
-                    if emitted == limit_items {
+                    let item_limit = emitted == limit_items;
+                    if item_limit {
                         let mut end = QueryEnd::default();
                         end.reason = Some(QueryEndReason::ItemLimit as i32);
                         response.end = Some(end);
-                        yield response;
-                        ctx.observe_stream_item_yield_wait(yield_started.elapsed());
+                    }
+                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    if emitted == 1 {
+                        ctx.observe_stream_first_item_latency(resolution, started.elapsed());
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_item_yield_wait(resolution, yield_started.elapsed());
+                    if item_limit {
                         break QueryEndReason::ItemLimit;
                     }
-                    yield response;
-                    ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                 }
                 Ok(ResolvedWatermarked::Watermark {
                     position,
@@ -347,16 +365,20 @@ pub(crate) async fn list_transactions(
                         position,
                         Some(checkpoint_at_frontier),
                     )?;
-                    yield watermark_response(watermark);
+                    let response = watermark_response(watermark);
+                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    yield response;
                 }
                 Err(RenderAheadError::Upstream(stop)) => {
-                    yield terminal_response_from_scan_stop(
+                    let response = terminal_response_from_scan_stop(
                         stop,
                         &options,
                         direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
+                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
+                    yield response;
                     break QueryEndReason::ScanLimit;
                 }
                 Err(RenderAheadError::Render(error)) => Err(error)?,
@@ -530,6 +552,14 @@ async fn fetch_transactions(
     .boxed())
 }
 
+fn transaction_resolution(needs_objects: bool, render_transaction_contents: bool) -> &'static str {
+    match (needs_objects, render_transaction_contents) {
+        (true, _) => "full_objects",
+        (false, true) => "full",
+        (false, false) => "digest",
+    }
+}
+
 fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {
     // `digest`, `checkpoint`, and `transaction_index` are all available from the
     // tx_seq_digest index row, so a mask limited to them skips the full
@@ -664,6 +694,7 @@ fn range_end_response(
 
 #[cfg(test)]
 mod tests {
+    use sui_kvstore::testing::insert_checkpoint_rows;
     use sui_rpc::field::FieldMask;
     use sui_rpc::field::FieldMaskUtil;
     use sui_types::digests::TransactionDigest;
@@ -671,12 +702,88 @@ mod tests {
     use super::*;
     use sui_rpc_cursor::CursorToken;
 
-    use crate::v2::test_utils::ascending_options;
-    use crate::v2::test_utils::query_context;
+    use crate::v2::test_utils::{
+        LIST_PIPELINE_METRICS, ascending_options, assert_list_histogram_absent, list_histogram,
+        query_context_with_mock_and_registry, query_context_with_registry,
+    };
 
     #[tokio::test]
-    async fn empty_ledger_tip_emits_one_standalone_transaction_boundary() {
-        let (ctx, server) = query_context("test_list_transactions_natural_end", 0).await;
+    async fn digest_resolution_records_all_metrics_without_hydration() {
+        let outputs = [
+            ["digest"].as_slice(),
+            ["transaction"].as_slice(),
+            ["effects.changed_objects"].as_slice(),
+            ["transaction", "effects.changed_objects"].as_slice(),
+        ]
+        .map(|paths| {
+            let mask =
+                validate_read_mask(Some(FieldMask::from_paths(paths.iter().copied()))).unwrap();
+            transaction_resolution(
+                needs_object_types(&mask),
+                should_render_transaction_contents(&mask),
+            )
+        });
+        assert_eq!(outputs, ["digest", "full", "full_objects", "full_objects"]);
+        let method = "list_transactions";
+        let (ctx, registry, mock, server) = query_context_with_mock_and_registry(method, 1).await;
+        let mut builder = sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(0);
+        builder = builder.start_transaction(1).finish_transaction();
+        builder = builder.start_transaction(2).finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let mut request = ListTransactionsRequest::default();
+        request.start_checkpoint = Some(0);
+        request.end_checkpoint = Some(1);
+        request.read_mask = Some(FieldMask::from_paths(["digest"]));
+        validate_read_mask(request.read_mask.clone()).unwrap();
+        let stream = list_transactions(ctx, request).await.unwrap();
+        let responses: Vec<_> = stream.try_collect().await.unwrap();
+        let emitted_digests = responses
+            .iter()
+            .filter_map(|response| response.transaction.as_ref())
+            .map(|transaction| transaction.digest.clone().unwrap());
+        let expected_digests = checkpoint
+            .transactions
+            .iter()
+            .map(|transaction| transaction.transaction.digest().to_string());
+        assert!(emitted_digests.eq(expected_digests));
+        let families = registry.gather();
+        let data_items = checkpoint.transactions.len() as u64;
+        for (name, sample_count) in [
+            ("kv_rpc_response_render_latency_ms", data_items),
+            ("kv_rpc_response_page_bytes", responses.len() as u64),
+            ("kv_rpc_stream_first_item_latency_ms", 1),
+            ("kv_rpc_stream_item_yield_wait_ms", data_items),
+        ] {
+            let histogram = list_histogram(&families, name, method, "digest");
+            assert_eq!(histogram.get_sample_count(), sample_count);
+        }
+        let page_bytes = list_histogram(&families, "kv_rpc_response_page_bytes", method, "digest");
+        assert_eq!(
+            page_bytes.get_sample_sum(),
+            responses
+                .iter()
+                .map(|response| response.encoded_len() as f64)
+                .sum::<f64>()
+        );
+        let final_poll = list_histogram(
+            &families,
+            "kv_rpc_final_stream_poll_wait_ms",
+            method,
+            "digest",
+        );
+        assert_eq!(final_poll.get_sample_count(), responses.len() as u64);
+        let calls = mock.read_rows_calls().await;
+        assert!(calls.iter().all(|call| {
+            call.table != sui_kvstore::tables::transactions::NAME
+                && call.table != sui_kvstore::tables::objects::NAME
+        }));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn empty_ledger_metric_coverage_records_only_transaction_terminal_page_bytes() {
+        let (ctx, registry, server) = query_context_with_registry("list_transactions", 0).await;
         let mut request = ListTransactionsRequest::default();
         request.read_mask = Some(FieldMask::from_paths(["digest"]));
         request.options = Some(ascending_options());
@@ -710,6 +817,20 @@ mod tests {
         .encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
+        let families = registry.gather();
+        let page_bytes = list_histogram(
+            &families,
+            "kv_rpc_response_page_bytes",
+            "list_transactions",
+            "digest",
+        );
+        assert_eq!(page_bytes.get_sample_count(), 1);
+        assert_eq!(page_bytes.get_sample_sum(), response.encoded_len() as f64);
+        for name in LIST_PIPELINE_METRICS {
+            if name != "kv_rpc_response_page_bytes" {
+                assert_list_histogram_absent(&families, name);
+            }
+        }
     }
 
     #[test]

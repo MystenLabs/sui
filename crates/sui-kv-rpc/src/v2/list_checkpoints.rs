@@ -71,6 +71,14 @@ enum CheckpointListItem {
     Full(resolve::ResolvedCp),
 }
 
+fn checkpoint_resolution(needs_objects: bool, needs_transactions_or_objects: bool) -> &'static str {
+    match (needs_objects, needs_transactions_or_objects) {
+        (true, _) => "objects",
+        (false, true) => "transactions",
+        (false, false) => "summary",
+    }
+}
+
 pub(crate) async fn list_checkpoints(
     ctx: QueryContext,
     request: ListCheckpointsRequest,
@@ -102,6 +110,9 @@ pub(crate) async fn list_checkpoints(
         })?;
         Arc::new(FieldMaskTree::from(read_mask))
     };
+    let needs_objects = read_mask.contains(Checkpoint::OBJECTS_FIELD);
+    let needs_full = needs_transactions_or_objects(&read_mask);
+    let resolution = checkpoint_resolution(needs_objects, needs_full);
     let options = QueryOptions::checkpoints_from_proto(
         request.options.as_ref(),
         endpoint.default_limit_items,
@@ -145,13 +156,12 @@ pub(crate) async fn list_checkpoints(
         )
         .0;
         return Ok(async_stream::try_stream! {
-            ctx.observe_response_page_bytes(response.encoded_len());
+            ctx.observe_response_page_bytes(resolution, response.encoded_len());
             yield response;
         }
         .boxed());
     }
 
-    let needs_full = needs_transactions_or_objects(&read_mask);
     let cp_columns: Arc<[&'static str]> = list_checkpoint_columns(&read_mask, needs_full).into();
 
     // Stage A: discover checkpoint rows for the requested response. Filtered
@@ -280,6 +290,7 @@ pub(crate) async fn list_checkpoints(
     Ok(drive_rendered_checkpoints(
         ctx,
         rendered_stream,
+        resolution,
         options,
         exhaustion,
         range_end_position,
@@ -292,13 +303,14 @@ pub(crate) async fn list_checkpoints(
 
 fn drive_rendered_checkpoints(
     ctx: QueryContext,
-    rendered_stream: BoxStream<
+    mut rendered_stream: BoxStream<
         'static,
         Result<
             ResolvedWatermarked<(u64, Checkpoint, Duration)>,
             RenderAheadError<ResolvedScanStop<u64>, RpcError>,
         >,
     >,
+    resolution: &'static str,
     options: QueryOptions,
     exhaustion: RangeExhaustion,
     range_end_position: u64,
@@ -308,13 +320,12 @@ fn drive_rendered_checkpoints(
     started: Instant,
 ) -> ListCheckpointsStream {
     async_stream::try_stream! {
-        futures::pin_mut!(rendered_stream);
         let limit_items = options.limit_items;
         let ordering = options.ordering;
         let mut emitted = 0usize;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
-            let Some(item) = rendered_stream.next().await else {
+            let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
                 let (response, reason) = range_end_response(
                     &options,
                     exhaustion,
@@ -324,7 +335,7 @@ fn drive_rendered_checkpoints(
                     covered_checkpoint_bound,
                     false,
                 );
-                ctx.observe_response_page_bytes(response.encoded_len());
+                ctx.observe_response_page_bytes(resolution, response.encoded_len());
                 yield response;
                 break reason;
             };
@@ -343,7 +354,7 @@ fn drive_rendered_checkpoints(
                         },
                         covered_checkpoint_bound,
                     );
-                    ctx.observe_response_render(render_duration);
+                    ctx.observe_response_render(resolution, render_duration);
                     emitted += 1;
                     let mut response = response_for(watermark, message);
                     let item_limit = emitted == limit_items;
@@ -352,13 +363,13 @@ fn drive_rendered_checkpoints(
                         end.reason = Some(QueryEndReason::ItemLimit as i32);
                         response.end = Some(end);
                     }
-                    ctx.observe_response_page_bytes(response.encoded_len());
+                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
                     if emitted == 1 {
-                        ctx.observe_stream_first_item_latency(started.elapsed());
+                        ctx.observe_stream_first_item_latency(resolution, started.elapsed());
                     }
                     let yield_started = Instant::now();
                     yield response;
-                    ctx.observe_stream_item_yield_wait(yield_started.elapsed());
+                    ctx.observe_stream_item_yield_wait(resolution, yield_started.elapsed());
                     if item_limit {
                         break QueryEndReason::ItemLimit;
                     }
@@ -375,7 +386,7 @@ fn drive_rendered_checkpoints(
                         &mut covered_checkpoint_bound,
                     );
                     let response = watermark_response(watermark);
-                    ctx.observe_response_page_bytes(response.encoded_len());
+                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
                     yield response;
                 }
                 Err(RenderAheadError::Upstream(stop)) => {
@@ -386,7 +397,7 @@ fn drive_rendered_checkpoints(
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
-                    ctx.observe_response_page_bytes(response.encoded_len());
+                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
                     yield response;
                     break QueryEndReason::ScanLimit;
                 }
@@ -666,55 +677,30 @@ fn clamp_cp_frontier_past_last(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prometheus::proto::MetricFamily;
     use sui_rpc_cursor::CursorToken;
 
-    use crate::v2::test_utils::ascending_options;
-    use crate::v2::test_utils::query_context;
-    use crate::v2::test_utils::query_context_with_registry;
+    use crate::v2::test_utils::{
+        LIST_PIPELINE_METRICS, ascending_options, assert_list_histogram_absent, list_histogram,
+        query_context, query_context_with_registry,
+    };
 
-    fn histogram_family<'a>(families: &'a [MetricFamily], name: &str) -> &'a MetricFamily {
-        families
-            .iter()
-            .find(|family| family.name() == name)
-            .unwrap_or_else(|| panic!("metric family {name} not registered"))
-    }
-
-    fn histogram_sample_count(family: &MetricFamily) -> u64 {
-        family
-            .get_metric()
-            .iter()
-            .map(|metric| metric.get_histogram().get_sample_count())
-            .sum()
-    }
-
-    fn histogram_sample_sum(family: &MetricFamily) -> f64 {
-        family
-            .get_metric()
-            .iter()
-            .map(|metric| metric.get_histogram().get_sample_sum())
-            .sum()
-    }
-
-    fn assert_method_label(family: &MetricFamily, expected_method: &str) {
-        assert_eq!(
-            family.get_metric().len(),
-            1,
-            "expected one method series for {}",
-            family.name()
-        );
-        assert!(
-            family.get_metric()[0]
-                .get_label()
-                .iter()
-                .any(|label| label.name() == "method" && label.value() == expected_method),
-            "{} lacks method={expected_method}",
-            family.name()
-        );
+    #[test]
+    fn resolution_uses_validated_read_mask_predicates() {
+        let mut masks =
+            "sequence_number;transactions.digest;objects;transactions.digest,objects".split(';');
+        let actual: [&str; 4] = std::array::from_fn(|_| {
+            let mask = FieldMask::from_str(masks.next().unwrap());
+            mask.validate::<Checkpoint>()
+                .expect("valid checkpoint mask");
+            let mask = FieldMaskTree::from(mask);
+            let objects = mask.contains(Checkpoint::OBJECTS_FIELD);
+            checkpoint_resolution(objects, needs_transactions_or_objects(&mask))
+        });
+        assert_eq!(actual, ["summary", "transactions", "objects", "objects"]);
     }
 
     #[tokio::test]
-    async fn item_limit_remains_fused_to_limit_item_after_render_ahead() {
+    async fn item_limit_records_complete_metric_matrix_after_render_ahead() {
         let (ctx, registry, server) = query_context_with_registry("list_checkpoints", 10).await;
         let mut proto_options = ascending_options();
         proto_options.limit = Some(3);
@@ -739,6 +725,7 @@ mod tests {
         let responses: Vec<_> = drive_rendered_checkpoints(
             ctx,
             rendered_stream,
+            checkpoint_resolution(true, true),
             options,
             RangeExhaustion::CheckpointBound,
             10,
@@ -782,24 +769,28 @@ mod tests {
             .map(|response| response.encoded_len() as f64)
             .sum::<f64>();
         let families = registry.gather();
-        let render_latency = histogram_family(&families, "kv_rpc_response_render_latency_ms");
-        let yield_wait = histogram_family(&families, "kv_rpc_stream_item_yield_wait_ms");
-        let page_bytes = histogram_family(&families, "kv_rpc_response_page_bytes");
-        let first_item_latency = histogram_family(&families, "kv_rpc_stream_first_item_latency_ms");
-
-        for family in [render_latency, yield_wait, page_bytes, first_item_latency] {
-            assert_method_label(family, "list_checkpoints");
+        for (name, count) in [
+            ("kv_rpc_response_render_latency_ms", 3),
+            ("kv_rpc_stream_item_yield_wait_ms", 3),
+            ("kv_rpc_response_page_bytes", 3),
+            ("kv_rpc_stream_first_item_latency_ms", 1),
+            ("kv_rpc_final_stream_poll_wait_ms", 3),
+        ] {
+            let histogram = list_histogram(&families, name, "list_checkpoints", "objects");
+            assert_eq!(histogram.get_sample_count(), count);
         }
-        assert_eq!(histogram_sample_count(render_latency), 3);
-        assert_eq!(histogram_sample_count(yield_wait), 3);
-        assert_eq!(histogram_sample_count(page_bytes), 3);
-        assert_eq!(histogram_sample_count(first_item_latency), 1);
-        assert_eq!(histogram_sample_sum(page_bytes), expected_page_bytes);
+        let page_bytes = list_histogram(
+            &families,
+            "kv_rpc_response_page_bytes",
+            "list_checkpoints",
+            "objects",
+        );
+        assert_eq!(page_bytes.get_sample_sum(), expected_page_bytes);
     }
 
     #[tokio::test]
-    async fn natural_empty_range_emits_one_standalone_terminal_boundary() {
-        let (ctx, server) = query_context("test_list_checkpoints_natural_end", 10).await;
+    async fn empty_range_metric_coverage_records_only_terminal_page_bytes() {
+        let (ctx, registry, server) = query_context_with_registry("list_checkpoints", 10).await;
         let mut request = ListCheckpointsRequest::default();
         request.start_checkpoint = Some(0);
         request.end_checkpoint = Some(0);
@@ -832,6 +823,20 @@ mod tests {
             CursorToken::boundary(Position::Checkpoints { checkpoint: 0 }).encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
+        let families = registry.gather();
+        let page_bytes = list_histogram(
+            &families,
+            "kv_rpc_response_page_bytes",
+            "list_checkpoints",
+            "summary",
+        );
+        assert_eq!(page_bytes.get_sample_count(), 1);
+        assert_eq!(page_bytes.get_sample_sum(), response.encoded_len() as f64);
+        for name in LIST_PIPELINE_METRICS {
+            if name != "kv_rpc_response_page_bytes" {
+                assert_list_histogram_absent(&families, name);
+            }
+        }
     }
 
     #[tokio::test]

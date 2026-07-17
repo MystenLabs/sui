@@ -4,6 +4,7 @@
 use std::future::Future;
 use std::time::Duration;
 
+use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use sui_inverted_index::BitmapQuery;
@@ -114,22 +115,51 @@ impl QueryContext {
         self.ledger_history.bitmap_skip_policy()
     }
 
-    pub(crate) fn observe_response_render(&self, elapsed: std::time::Duration) {
-        self.metrics.observe_response_render(self.method, elapsed);
-    }
-
-    pub(crate) fn observe_response_page_bytes(&self, bytes: usize) {
-        self.metrics.observe_response_page_bytes(self.method, bytes);
-    }
-
-    pub(crate) fn observe_stream_first_item_latency(&self, elapsed: std::time::Duration) {
+    pub(crate) fn observe_response_render(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
         self.metrics
-            .observe_stream_first_item_latency(self.method, elapsed);
+            .observe_response_render(self.method, resolution, elapsed);
     }
 
-    pub(crate) fn observe_stream_item_yield_wait(&self, elapsed: std::time::Duration) {
+    pub(crate) fn observe_response_page_bytes(&self, resolution: &'static str, bytes: usize) {
         self.metrics
-            .observe_stream_item_yield_wait(self.method, elapsed);
+            .observe_response_page_bytes(self.method, resolution, bytes);
+    }
+
+    pub(crate) fn observe_stream_first_item_latency(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.metrics
+            .observe_stream_first_item_latency(self.method, resolution, elapsed);
+    }
+
+    pub(crate) fn observe_stream_item_yield_wait(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.metrics
+            .observe_stream_item_yield_wait(self.method, resolution, elapsed);
+    }
+
+    pub(crate) async fn next_response_item<T>(
+        &self,
+        resolution: &'static str,
+        stream: &mut BoxStream<'static, T>,
+    ) -> Option<T> {
+        let poll_started_at = Instant::now();
+        let item = stream.next().await;
+        self.metrics.observe_final_stream_poll_wait(
+            self.method,
+            resolution,
+            poll_started_at.elapsed(),
+        );
+        item
     }
 
     pub(crate) fn transaction_filter_query(
