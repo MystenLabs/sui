@@ -32,6 +32,7 @@ pub struct SlowTestPayload {
     system_state_observer: Arc<SystemStateObserver>,
     slow_vectors: u64,
     slow_size: u64,
+    slow_padding_bytes: u64,
 }
 
 impl std::fmt::Display for SlowTestPayload {
@@ -87,6 +88,21 @@ impl SlowTestPayload {
                 vec![n_arg, size_arg],
             );
 
+            // Padding: inflate transaction (and hence block) bytes to slow consensus
+            // sequencing, which lengthens the submit-semaphore permit hold time.
+            if self.slow_padding_bytes > 0 {
+                let pad = builder
+                    .pure(vec![0u8; self.slow_padding_bytes as usize])
+                    .unwrap();
+                builder.programmable_move_call(
+                    self.package_id,
+                    Identifier::new("slow").unwrap(),
+                    Identifier::new("consume").unwrap(),
+                    vec![],
+                    vec![pad],
+                );
+            }
+
             // Mutable shared object input activates congestion control: the transaction's
             // execution time is charged against this object's per-commit budget.
             builder
@@ -107,6 +123,7 @@ pub struct SlowWorkloadBuilder {
     num_payloads: u64,
     slow_vectors: u64,
     slow_size: u64,
+    slow_padding_bytes: u64,
 }
 
 #[async_trait]
@@ -151,6 +168,7 @@ impl WorkloadBuilder<dyn Payload> for SlowWorkloadBuilder {
             payload_gas,
             slow_vectors: self.slow_vectors,
             slow_size: self.slow_size,
+            slow_padding_bytes: self.slow_padding_bytes,
         }))
     }
 }
@@ -163,6 +181,7 @@ impl SlowWorkloadBuilder {
         in_flight_ratio: u64,
         slow_vectors: u64,
         slow_size: u64,
+        slow_padding_bytes: u64,
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
@@ -184,6 +203,7 @@ impl SlowWorkloadBuilder {
                     num_payloads: max_ops,
                     slow_vectors,
                     slow_size,
+                    slow_padding_bytes,
                 }));
             let builder_info = WorkloadBuilderInfo {
                 workload_params,
@@ -206,6 +226,7 @@ pub struct SlowWorkload {
     pub payload_gas: Vec<Gas>,
     slow_vectors: u64,
     slow_size: u64,
+    slow_padding_bytes: u64,
 }
 
 #[async_trait]
@@ -278,6 +299,7 @@ impl Workload<dyn Payload> for SlowWorkload {
                 system_state_observer: system_state_observer.clone(),
                 slow_vectors: self.slow_vectors,
                 slow_size: self.slow_size,
+                slow_padding_bytes: self.slow_padding_bytes,
             })
         }
         payloads

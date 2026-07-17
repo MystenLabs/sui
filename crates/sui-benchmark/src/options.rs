@@ -193,6 +193,10 @@ pub enum RunSpec {
         // Size in bytes of each vector created per slow transaction.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [100])]
         slow_size: Vec<u64>,
+        // Padding bytes added to each slow transaction (inflates tx and block size to slow
+        // consensus sequencing). 0 disables padding.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        slow_padding_bytes: Vec<u64>,
         // relative weight of party transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         party: Vec<u32>,

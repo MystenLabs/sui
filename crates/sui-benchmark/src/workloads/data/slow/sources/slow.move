@@ -26,6 +26,10 @@ module slow::slow {
         };
     }    
 
+    /// Accepts arbitrary padding bytes to inflate transaction (and hence block) size,
+    /// without meaningful execution cost. Used to slow consensus sequencing.
+    public fun consume(_data: vector<u8>) {}
+
     /// bimodal alternates between slow and fast execution every 10 seconds
     public fun bimodal(clock: &clock::Clock) {
         let t = clock.timestamp_ms();
