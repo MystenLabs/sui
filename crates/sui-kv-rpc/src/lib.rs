@@ -473,7 +473,6 @@ impl KvRpcServer {
                     file_descriptor_sets.iter().copied(),
                 )?,
             )
-            .add_service(LedgerServiceServer::new(self));
             .add_service(ledger_service_with_response_compression(self));
 
         if config.enable_reflection {
