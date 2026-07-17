@@ -888,7 +888,7 @@ mod tests {
             None,
         );
 
-        let highest_round_per_authority = vec![0u64; context.committee.size()];
+        let highest_round_per_authority = vec![0 as Round; context.committee.size()];
         let peer = keys[0].0.public().clone();
         let mut stream = observer_service
             .handle_stream_blocks(peer, highest_round_per_authority)
