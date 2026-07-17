@@ -50,10 +50,12 @@ use crate::bigtable_client::BigTableClient;
 use crate::config::PipelineStage;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
+use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
 use crate::render::render_json;
@@ -139,7 +141,6 @@ pub(crate) async fn list_events(
     // Stage A: stream of EventRefs. Filtered requests discover event positions
     // through the event bitmap. Unfiltered requests scan tx_seq_digest rows and
     // expand each row's event_count into concrete EventRefs.
-    let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
     let event_ref_stream: BoxStream<
         'static,
         Result<Watermarked<EventRef, EventPosition>, ScanStop>,
@@ -224,55 +225,47 @@ pub(crate) async fn list_events(
         },
     );
 
-    // Stage D: render. `buffered` (ordered) lets per-event JSON rendering
-    // overlap while preserving input ref order in the output. Frontier
-    // watermarks pass through unchanged.
+    let event_stream = resolve_scan_watermarks(
+        tx_ref_stream,
+        client.event_wm_resolver(direction),
+        frontier_to_position,
+    );
+
+    // Stage D: render. Spawned render tasks are admitted up to this endpoint's
+    // render-ahead bound. Admitted tasks run freely while their results remain
+    // ordered, and frontier watermarks pass through unchanged.
     //
     // Package resolution uses the server-global `PackageResolver`, backed by
     // a cross-request LRU over the raw BigTable client. It is intentionally
     // outside this request's downstream BigTable semaphore: tying a global
     // cache miss to one request's budget would let that request's budget stall
-    // unrelated requests waiting on the same package. The local buffer below
-    // only bounds how many render/package-resolution attempts this request
-    // runs concurrently.
+    // unrelated requests waiting on the same package. The admission bound
+    // limits this request's concurrent render/package-resolution attempts.
     //
     // TODO: add global single-flight dedupe around package cache misses so
     // concurrent requests for the same uncached package share one BigTable
     // fetch.
-    let event_stream = tx_ref_stream
-        .map(move |item| {
+    let rendered_stream = render_ahead(event_stream, endpoint.render_ahead, {
+        let resolver = resolver.clone();
+        let read_mask = read_mask.clone();
+        move |(event_ref, tx)| {
             let resolver = resolver.clone();
             let read_mask = read_mask.clone();
             async move {
-                match item? {
-                    Watermarked::Item((event_ref, tx)) => {
-                        let rendered =
-                            render_event(event_ref, tx, &read_mask, &resolver, wants_json)
-                                .await
-                                .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))?;
-                        Ok::<Watermarked<RenderedEvent, EventPosition>, ScanStop>(
-                            Watermarked::Item(rendered),
-                        )
-                    }
-                    Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
-                }
+                let render_started = Instant::now();
+                let rendered =
+                    render_event(event_ref, tx, &read_mask, &resolver, wants_json).await?;
+                Ok::<_, RpcError>((rendered, render_started.elapsed()))
             }
-        })
-        .buffered(request_bigtable_concurrency)
-        .boxed();
-
-    let event_stream = resolve_scan_watermarks(
-        event_stream,
-        client.event_wm_resolver(direction),
-        frontier_to_position,
-    );
+        }
+    });
 
     Ok(async_stream::try_stream! {
-        futures::pin_mut!(event_stream);
+        futures::pin_mut!(rendered_stream);
         let mut emitted = 0usize;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
-            let Some(item) = event_stream.next().await else {
+            let Some(item) = rendered_stream.next().await else {
                 let terminal_position = Position::Events {
                     checkpoint: range_end_checkpoint,
                     tx_seq: range_end_position.tx_seq,
@@ -289,7 +282,7 @@ pub(crate) async fn list_events(
                 break reason;
             };
             match item {
-                Ok(ResolvedWatermarked::Item(rendered)) => {
+                Ok(ResolvedWatermarked::Item((rendered, render_elapsed))) => {
                     let item_checkpoint = rendered.checkpoint_number;
                     covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
                         covered_checkpoint_bound,
@@ -306,6 +299,7 @@ pub(crate) async fn list_events(
                         covered_checkpoint_bound,
                     );
                     emitted += 1;
+                    ctx.observe_response_render(render_elapsed);
                     let mut response = event_item_response(rendered.event, watermark);
                     if emitted == limit_items {
                         let mut end = QueryEnd::default();
@@ -330,7 +324,7 @@ pub(crate) async fn list_events(
                     )?;
                     yield watermark_response(watermark);
                 }
-                Err(stop) => {
+                Err(RenderAheadError::Upstream(stop)) => {
                     yield terminal_response_from_scan_stop(
                         stop,
                         &options,
@@ -340,6 +334,7 @@ pub(crate) async fn list_events(
                     )?;
                     break QueryEndReason::ScanLimit;
                 }
+                Err(RenderAheadError::Render(error)) => Err(error)?,
             }
         };
         info!(

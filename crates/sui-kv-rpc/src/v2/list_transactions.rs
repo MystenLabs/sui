@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use futures::StreamExt;
@@ -41,10 +42,12 @@ use crate::config::PipelineStage;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
+use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
 use crate::render::transaction_to_response;
@@ -60,6 +63,17 @@ type TransactionWithObjectsStreamItem = (u64, u32, Box<TransactionData>, ObjectM
 enum TransactionListItem {
     Digest(TxSeqDigestData),
     Full(TransactionWithObjectsStreamItem),
+}
+
+enum RenderedTransactionItem {
+    Digest(TxSeqDigestData),
+    Full {
+        tx_seq: u64,
+        checkpoint: u64,
+        tx_offset: u32,
+        executed: ExecutedTransaction,
+        render_elapsed: Duration,
+    },
 }
 
 pub(crate) async fn list_transactions(
@@ -219,13 +233,40 @@ pub(crate) async fn list_transactions(
         client.tx_wm_resolver(direction),
         std::convert::identity,
     );
+    let rendered_stream = render_ahead(transaction_stream, endpoint.render_ahead, {
+        let read_mask = read_mask.clone();
+        let resolver = resolver.clone();
+        move |item| {
+            let read_mask = read_mask.clone();
+            let resolver = resolver.clone();
+            async move {
+                Ok::<_, RpcError>(match item {
+                    TransactionListItem::Digest(row) => RenderedTransactionItem::Digest(row),
+                    TransactionListItem::Full((tx_seq, tx_offset, tx_data, objects)) => {
+                        let checkpoint = tx_data.checkpoint_number;
+                        let render_started = Instant::now();
+                        let executed =
+                            transaction_to_response(*tx_data, &read_mask, &objects, &resolver)
+                                .await?;
+                        RenderedTransactionItem::Full {
+                            tx_seq,
+                            checkpoint,
+                            tx_offset,
+                            executed,
+                            render_elapsed: render_started.elapsed(),
+                        }
+                    }
+                })
+            }
+        }
+    });
 
     Ok(async_stream::try_stream! {
-        futures::pin_mut!(transaction_stream);
+        futures::pin_mut!(rendered_stream);
         let mut emitted = 0usize;
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
-            let Some(item) = transaction_stream.next().await else {
+            let Some(item) = rendered_stream.next().await else {
                 let (response, reason) = range_end_response(
                     &options,
                     exhaustion,
@@ -242,12 +283,12 @@ pub(crate) async fn list_transactions(
             match item {
                 Ok(ResolvedWatermarked::Item(item)) => {
                     let (tx_seq, item_checkpoint) = match &item {
-                        TransactionListItem::Digest(row) => {
+                        RenderedTransactionItem::Digest(row) => {
                             (row.tx_sequence_number, row.checkpoint_number)
                         }
-                        TransactionListItem::Full((tx_seq, _, tx_data, _)) => {
-                            (*tx_seq, tx_data.checkpoint_number)
-                        }
+                        RenderedTransactionItem::Full {
+                            tx_seq, checkpoint, ..
+                        } => (*tx_seq, *checkpoint),
                     };
                     covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
                         covered_checkpoint_bound,
@@ -263,15 +304,16 @@ pub(crate) async fn list_transactions(
                         covered_checkpoint_bound,
                     );
                     let mut response = match item {
-                        TransactionListItem::Digest(row) => {
+                        RenderedTransactionItem::Digest(row) => {
                             transaction_response_from_tx_seq_digest(row, &read_mask, watermark)
                         }
-                        TransactionListItem::Full((_, tx_offset, tx_data, objects)) => {
-                            let render_started = Instant::now();
-                            let executed =
-                                transaction_to_response(*tx_data, &read_mask, &objects, &resolver)
-                                    .await?;
-                            ctx.observe_response_render(render_started.elapsed());
+                        RenderedTransactionItem::Full {
+                            tx_offset,
+                            executed,
+                            render_elapsed,
+                            ..
+                        } => {
+                            ctx.observe_response_render(render_elapsed);
                             transaction_item_response(
                                 watermark,
                                 executed,
@@ -307,7 +349,7 @@ pub(crate) async fn list_transactions(
                     )?;
                     yield watermark_response(watermark);
                 }
-                Err(stop) => {
+                Err(RenderAheadError::Upstream(stop)) => {
                     yield terminal_response_from_scan_stop(
                         stop,
                         &options,
@@ -317,6 +359,7 @@ pub(crate) async fn list_transactions(
                     )?;
                     break QueryEndReason::ScanLimit;
                 }
+                Err(RenderAheadError::Render(error)) => Err(error)?,
             }
         };
 

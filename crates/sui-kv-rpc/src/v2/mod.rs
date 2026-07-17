@@ -274,12 +274,12 @@ mod test_utils {
             timeout_ms: Some(5_000),
             default_limit_items: Some(10),
             max_limit_items: Some(100),
+            render_ahead: Some(2),
         };
         let ledger_history = LedgerHistoryConfig {
             list_transactions: Some(method_config.clone()),
             list_events: Some(method_config.clone()),
             list_checkpoints: Some(method_config),
-            render_ahead: Some(2),
             bitmap_bucket_budget_tx: Some(10),
             bitmap_bucket_budget_event: Some(10),
             bitmap_drain_probe_rows: None,

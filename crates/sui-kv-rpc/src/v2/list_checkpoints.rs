@@ -254,7 +254,7 @@ pub(crate) async fn list_checkpoints(
     );
 
     // Stage E: bounded ordered render-ahead builds the requested Checkpoint shape (CPU-only, with no further IO).
-    let rendered_stream = render_ahead(checkpoint_stream, lh.render_ahead(), {
+    let rendered_stream = render_ahead(checkpoint_stream, endpoint.render_ahead, {
         let read_mask = read_mask.clone();
         move |item| {
             let read_mask = read_mask.clone();
