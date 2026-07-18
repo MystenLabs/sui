@@ -56,7 +56,6 @@ pub mod executable_transaction;
 pub mod execution;
 pub mod execution_params;
 pub mod execution_status;
-pub mod forwarding_address_registry;
 pub mod full_checkpoint_content;
 pub mod funds_accumulator;
 pub mod gas;
