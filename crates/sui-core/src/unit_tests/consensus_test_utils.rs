@@ -330,9 +330,6 @@ where
     let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
     let throughput_calculator = ConsensusThroughputCalculator::new(None, metrics.clone());
     let backpressure_manager = BackpressureManager::new_for_tests();
-    let consensus_adapter =
-        make_consensus_adapter_for_test(authority.clone(), HashSet::new(), false, vec![]);
-
     let last_consensus_stats = ExecutionIndicesWithStatsV2 {
         stats: crate::authority::authority_per_epoch_store::ConsensusStats::new(
             consensus_committee.size(),
@@ -358,7 +355,6 @@ where
         epoch_store.clone(),
         checkpoint_service,
         execution_scheduler_sender,
-        consensus_adapter,
         authority.get_object_cache_reader().clone(),
         consensus_committee,
         metrics,

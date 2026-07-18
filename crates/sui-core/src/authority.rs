@@ -4065,22 +4065,11 @@ impl AuthorityState {
         // Terminate all epoch-specific tasks (those started with within_alive_epoch).
         cur_epoch_store.epoch_terminated().await;
 
-        // Safe to being reconfiguration now. No transactions are being executed,
-        // and no epoch-specific tasks are running.
+        // Record metrics in case the node has not observed epoch close in consensus.
+        cur_epoch_store.record_epoch_close_time_once();
 
-        {
-            let state = cur_epoch_store.get_reconfig_state_write_lock_guard();
-            if state.should_accept_user_certs() {
-                // Need to change this so that consensus adapter do not accept certificates from user.
-                // This can happen if our local validator did not initiate epoch change locally,
-                // but 2f+1 nodes already concluded the epoch.
-                //
-                // This lock is essentially a barrier for
-                // `epoch_store.pending_consensus_certificates` table we are reading on the line after this block
-                cur_epoch_store.close_user_certs(state);
-            }
-            // lock is dropped here
-        }
+        // Safe to begin reconfiguration now. No transactions are being executed,
+        // and no epoch-specific tasks are running.
 
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
