@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 130;
+const MAX_PROTOCOL_VERSION: u64 = 131;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -367,6 +367,7 @@ const MAINNET_USDB: &str =
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
 //              Add an epoch close deadline failsafe for deferred transactions.
+// Version 131: Create the ForwardingAddressRegistry system object on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1057,6 +1058,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     address_aliases: bool,
+
+    // If true, create the forwarding address registry object in the change epoch transaction.
+    #[serde(skip_serializing_if = "is_false")]
+    create_forwarding_address_registry: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
@@ -4527,6 +4532,11 @@ impl ProtocolConfig {
                     // Verify with the v2 then v1 for devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
+                    }
+                }
+                131 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.create_forwarding_address_registry = true;
                     }
                 }
                 // Use this template when making changes:

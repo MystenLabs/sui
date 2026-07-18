@@ -55,6 +55,9 @@ const SUI_DISPLAY_REGISTRY_OBJECT_ID: address = @0xd;
 /// The hardcoded ID for the AddressAliasState Object.
 const SUI_ADDRESS_ALIAS_STATE_ID: address = @0xa;
 
+/// The hardcoded ID for the singleton ForwardingAddressRegistry object.
+const SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID: address = @0xfa;
+
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
@@ -196,6 +199,14 @@ fun bridge(): UID {
 public(package) fun address_alias_state(): UID {
     UID {
         id: ID { bytes: SUI_ADDRESS_ALIAS_STATE_ID },
+    }
+}
+
+/// Create the `UID` for the singleton `ForwardingAddressRegistry` object.
+/// This should only be called once from `forwarding_address`.
+public(package) fun forwarding_address_registry(): UID {
+    UID {
+        id: ID { bytes: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID },
     }
 }
 

@@ -656,6 +656,9 @@ FeatureFlag.key
 FeatureFlag.value
   => {}
 
+ForwardingAddressRegistryCreateTransaction._
+  => {}
+
 GasCoin._
   => {}
 
