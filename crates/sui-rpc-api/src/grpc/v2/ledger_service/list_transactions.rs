@@ -552,9 +552,21 @@ fn render_transaction_rows(
             .iter()
             .map(|row| (row.digest.into(), row.checkpoint_number))
             .collect::<Vec<(Digest, u64)>>();
-        let (reads, _stats) = service.reader.multi_get_transaction_reads(&items)?;
-        let (object_sets, _object_keys_fetched) =
+        let read_started = metrics.map(|_| Instant::now());
+        let (reads, stats) = service.reader.multi_get_transaction_reads(&items)?;
+        let (object_sets, object_keys_fetched) =
             fetch_object_sets_for_chunk(&service.reader, &reads, read_mask)?;
+        if let (Some(metrics), Some(read_started)) = (metrics, read_started) {
+            metrics.observe_chunk_read(read_started.elapsed());
+            metrics.observe_store_read_batch("transactions", rows.len());
+            metrics.observe_store_read_batch("effects", rows.len());
+            metrics.observe_store_read_batch("events", rows.len());
+            metrics.observe_store_read_batch("unchanged_loaded_runtime_objects", rows.len());
+            metrics.observe_store_read_batch("checkpoint_summaries", stats.checkpoint_summary_keys);
+            if mask_requests_object_set(read_mask) {
+                metrics.observe_store_read_batch("objects", object_keys_fetched);
+            }
+        }
         reads.into_iter().zip_debug_eq(object_sets)
     } else {
         Vec::new().into_iter().zip_debug_eq(Vec::new())

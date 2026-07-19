@@ -91,6 +91,8 @@ pub(crate) struct ListApiMetrics {
     list_stream_yield_wait_seconds: HistogramVec,
     list_render_seconds: HistogramVec,
     list_chunk_seconds: HistogramVec,
+    list_store_read_batches_total: IntCounterVec,
+    list_store_read_keys_total: IntCounterVec,
     list_query_ends_total: IntCounterVec,
     list_bitmap_buckets_evaluated: HistogramVec,
 }
@@ -139,9 +141,23 @@ impl ListApiMetrics {
             .unwrap(),
             list_chunk_seconds: register_histogram_vec_with_registry!(
                 "list_chunk_seconds",
-                "Time in seconds for one blocking List chunk phase. queue spans immediately before spawn_blocking through entry into its closure; work spans execution of the blocking chunk and includes chunks that return an error.",
+                "Time in seconds for one blocking List chunk phase. queue spans immediately before spawn_blocking through entry into its closure; work spans execution of the blocking chunk and includes chunks that return an error; read spans the chunk-level batched store reads within work.",
                 &["method", "phase"],
                 prometheus::exponential_buckets(0.0001, 2.0, 20).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_store_read_batches_total: register_int_counter_vec_with_registry!(
+                "list_store_read_batches_total",
+                "Batched store reads issued by List chunk workers, by read kind. Each data-bearing transactions chunk issues exactly one batch per kind; digest-only pages and empty chunks issue none.",
+                &["method", "kind"],
+                registry,
+            )
+            .unwrap(),
+            list_store_read_keys_total: register_int_counter_vec_with_registry!(
+                "list_store_read_keys_total",
+                "Total keys requested across batched store reads issued by List chunk workers, by read kind.",
+                &["method", "kind"],
                 registry,
             )
             .unwrap(),
@@ -189,6 +205,9 @@ impl ListApiMetrics {
                 .list_chunk_seconds
                 .with_label_values(&[method, "queue"]),
             chunk_work: self.list_chunk_seconds.with_label_values(&[method, "work"]),
+            chunk_read: self.list_chunk_seconds.with_label_values(&[method, "read"]),
+            store_read_batches: self.list_store_read_batches_total.clone(),
+            store_read_keys: self.list_store_read_keys_total.clone(),
             query_ends: self.list_query_ends_total.clone(),
             bitmap_buckets_evaluated: self
                 .list_bitmap_buckets_evaluated
@@ -468,6 +487,9 @@ pub(crate) struct ListStreamMetrics {
     render: Histogram,
     chunk_queue: Histogram,
     chunk_work: Histogram,
+    chunk_read: Histogram,
+    store_read_batches: IntCounterVec,
+    store_read_keys: IntCounterVec,
     query_ends: IntCounterVec,
     bitmap_buckets_evaluated: Histogram,
 }
@@ -483,6 +505,19 @@ impl ListStreamMetrics {
 
     pub(crate) fn start_work_timer(&self) -> HistogramTimer {
         self.chunk_work.start_timer()
+    }
+
+    pub(crate) fn observe_chunk_read(&self, elapsed: Duration) {
+        self.chunk_read.observe(elapsed.as_secs_f64());
+    }
+
+    pub(crate) fn observe_store_read_batch(&self, kind: &'static str, keys: usize) {
+        self.store_read_batches
+            .with_label_values(&[self.method, kind])
+            .inc();
+        self.store_read_keys
+            .with_label_values(&[self.method, kind])
+            .inc_by(keys as u64);
     }
 }
 
@@ -1078,7 +1113,7 @@ mod tests {
                 methods
                     .into_iter()
                     .flat_map(|method| {
-                        ["queue", "work"]
+                        ["queue", "work", "read"]
                             .into_iter()
                             .map(move |phase| vec![("method", method), ("phase", phase)])
                     })
@@ -1174,6 +1209,58 @@ mod tests {
             &families,
             "subscription_index_wait_timeouts_total",
             expected_label_sets(vec![vec![]]),
+        );
+    }
+
+    #[test]
+    fn list_store_read_metrics_are_lazy_and_observe_exact_values() {
+        let registry = Registry::new();
+        let metrics = ListApiMetrics::new(&registry);
+
+        metrics.stream_metrics("list_checkpoints", "summary");
+        metrics.stream_metrics("list_events", "json");
+        let families = registry.gather();
+        for name in [
+            "list_store_read_batches_total",
+            "list_store_read_keys_total",
+        ] {
+            assert!(
+                families.iter().all(|family| family.name() != name),
+                "{name} must not create series when stream metrics are constructed"
+            );
+        }
+
+        let handles = metrics.stream_metrics("list_transactions", "full_objects");
+        handles.observe_chunk_read(Duration::from_secs(2));
+        handles.observe_store_read_batch("checkpoint_summaries", 7);
+
+        assert_eq!(handles.chunk_read.get_sample_count(), 1);
+        assert_eq!(handles.chunk_read.get_sample_sum(), 2.0);
+
+        let families = registry.gather();
+        let expected_labels = expected_label_sets(vec![vec![
+            ("method", "list_transactions"),
+            ("kind", "checkpoint_summaries"),
+        ]]);
+        assert_metric_family(
+            &families,
+            "list_store_read_batches_total",
+            expected_labels.clone(),
+        );
+        assert_metric_family(&families, "list_store_read_keys_total", expected_labels);
+        assert_eq!(
+            metrics
+                .list_store_read_batches_total
+                .with_label_values(&["list_transactions", "checkpoint_summaries"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .list_store_read_keys_total
+                .with_label_values(&["list_transactions", "checkpoint_summaries"])
+                .get(),
+            7
         );
     }
 
