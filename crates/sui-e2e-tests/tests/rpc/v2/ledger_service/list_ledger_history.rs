@@ -20,6 +20,7 @@ use sui_rpc::proto::sui::rpc::v2::EventTerm;
 use sui_rpc::proto::sui::rpc::v2::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
+use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
@@ -913,6 +914,101 @@ async fn test_list_transactions_unfiltered_and_sender_filter() {
     assert!(
         transaction_digest_set(&resp).contains(&digest),
         "sender filter should include transfer tx {digest}"
+    );
+}
+
+#[sim_test]
+async fn test_list_transactions_rich_mask_matches_get_transaction() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let first_transfer = transfer_self(&cluster, sender).await;
+    transfer_self(&cluster, sender).await;
+
+    let validator_address = cluster.swarm.config().validator_configs()[0].sui_address();
+    let staking_transaction =
+        sui_test_transaction_builder::make_staking_transaction(&cluster.wallet, validator_address)
+            .await;
+    let staking_transaction_digest = *staking_transaction.digest();
+    cluster
+        .wallet
+        .execute_transaction_must_succeed(staking_transaction)
+        .await;
+    cluster
+        .wait_for_tx_settlement(&[staking_transaction_digest])
+        .await;
+    let staking_digest = staking_transaction_digest.to_string();
+
+    let read_mask = FieldMask::from_paths([
+        "digest",
+        "transaction",
+        "signatures",
+        "effects",
+        "events",
+        "checkpoint",
+        "timestamp",
+        "balance_changes",
+    ]);
+    let mut client = new_ledger_client(&cluster).await;
+    let mut request = ListTransactionsRequest::default();
+    request.read_mask = Some(read_mask.clone());
+    request.start_checkpoint = Some(tx_checkpoint(&first_transfer));
+    request.filter = Some(tx_sender(sender));
+    request.options = Some(query_options(100));
+    let response = list_transactions_result(&mut client, request).await;
+
+    let checkpoints: HashSet<_> = response
+        .transactions
+        .iter()
+        .filter_map(|item| {
+            item.transaction
+                .as_ref()
+                .and_then(|transaction| transaction.checkpoint)
+        })
+        .collect();
+    assert!(
+        checkpoints.len() >= 3,
+        "expected transactions from at least three checkpoints, got {checkpoints:?}"
+    );
+
+    let mut staking_list_transaction = None;
+    for item in response.transactions {
+        let list_transaction = item
+            .transaction
+            .expect("data item should contain an executed transaction");
+        let digest = list_transaction
+            .digest
+            .clone()
+            .expect("rich mask should populate the transaction digest");
+        assert!(
+            list_transaction.timestamp.is_some(),
+            "ListTransactions should populate the timestamp for {digest}"
+        );
+
+        let mut get_request = GetTransactionRequest::default();
+        get_request.digest = Some(digest.clone());
+        get_request.read_mask = Some(read_mask.clone());
+        let get_transaction = client
+            .get_transaction(get_request)
+            .await
+            .unwrap()
+            .into_inner()
+            .transaction
+            .expect("GetTransaction should return the listed transaction");
+        assert_eq!(
+            list_transaction, get_transaction,
+            "ListTransactions and GetTransaction should match for {digest}"
+        );
+
+        if digest == staking_digest {
+            staking_list_transaction = Some(list_transaction);
+        }
+    }
+
+    let staking_list_transaction =
+        staking_list_transaction.expect("ListTransactions should include the staking transaction");
+    assert!(
+        !staking_list_transaction.balance_changes.is_empty(),
+        "staking transaction should have balance changes"
     );
 }
 

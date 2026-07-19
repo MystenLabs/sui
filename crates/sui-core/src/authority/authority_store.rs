@@ -334,6 +334,15 @@ impl AuthorityStore {
             .get(digest)
     }
 
+    pub fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<Vec<ObjectKey>>>, TypedStoreError> {
+        self.perpetual_tables
+            .unchanged_loaded_runtime_objects
+            .multi_get(digests)
+    }
+
     pub fn multi_get_effects<'a>(
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,

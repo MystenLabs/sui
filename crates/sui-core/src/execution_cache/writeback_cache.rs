@@ -2319,6 +2319,24 @@ impl TransactionCacheRead for WritebackCache {
             })
     }
 
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        do_fallback_lookup(
+            digests,
+            |digest| match self.dirty.unchanged_loaded_runtime_objects.get(digest) {
+                Some(objects) => CacheResult::Hit(Some(objects.clone())),
+                None => CacheResult::Miss,
+            },
+            |digests| {
+                self.store
+                    .multi_get_unchanged_loaded_runtime_objects(digests)
+                    .expect("db error")
+            },
+        )
+    }
+
     fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
         self.dirty
             .pending_transaction_writes
