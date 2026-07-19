@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use move_core_types::ident_str;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost::bytes::Bytes;
 use prost_types::FieldMask;
 use sui_macros::sim_test;
@@ -1020,7 +1021,10 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
         .unwrap()
         .into_inner();
     assert_eq!(batch_response.transactions.len(), batch_digests.len());
-    for (digest, result) in batch_digests.iter().zip(batch_response.transactions) {
+    for (digest, result) in batch_digests
+        .iter()
+        .zip_debug_eq(batch_response.transactions)
+    {
         let batch_transaction = result.to_result().unwrap_or_else(|status| {
             panic!(
                 "BatchGetTransactions failed for digest {digest}: {}",
