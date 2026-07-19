@@ -20,7 +20,19 @@ use tracing::warn;
 mod matcher;
 
 const CHECKPOINT_MAILBOX_SIZE: usize = 1024;
-const MAILBOX_SIZE: usize = 128;
+/// Pending admissions are only a [`SubscriptionSpec`] and a oneshot sender,
+/// roughly hundreds of bytes each, and have no stream or delivery semantics
+/// until admitted. This deep lane absorbs cold-join bursts for approximately
+/// 1 MiB at capacity. A full lane remains explicit, retryable backpressure to
+/// the caller.
+const ADMISSION_MAILBOX_SIZE: usize = 4096;
+/// Each admission costs microseconds: a cap check, bounded shard-capacity
+/// probes, and non-awaiting sends. This batch therefore stays well below one
+/// millisecond between checkpoint polls.
+const ADMISSION_BATCH_SIZE: usize = 128;
+/// Pending admissions retry periodically without hot-spinning when every
+/// shard remains saturated. Checkpoint arrival can preempt this timer.
+const RETAINED_ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(1);
 const SUBSCRIPTION_CHANNEL_SIZE: usize = 256;
 const DEFAULT_MAX_SUBSCRIBERS: usize = 1024;
 /// Bound on each shard task's mailbox (registrations, checkpoint fan-out,
@@ -370,6 +382,9 @@ pub struct SubscriptionService {
     // in-order.
     checkpoint_mailbox: broadcast::Receiver<Arc<Checkpoint>>,
     mailbox: mpsc::Receiver<SubscriptionRequest>,
+    /// An admission removed from `mailbox` but waiting for shard capacity.
+    /// This slot is always serviced before receiving a newer request.
+    pending_admission: Option<SubscriptionRequest>,
     /// Round-robin registration targets: one mailbox per shard task, each
     /// owning a partition of the subscribers.
     shards: Vec<mpsc::Sender<ShardMsg>>,
@@ -405,7 +420,7 @@ impl SubscriptionService {
     ) {
         let metrics = SubscriptionMetrics::new(registry);
         let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(CHECKPOINT_MAILBOX_SIZE);
-        let (subscription_request_sender, mailbox) = mpsc::channel(MAILBOX_SIZE);
+        let (subscription_request_sender, mailbox) = mpsc::channel(ADMISSION_MAILBOX_SIZE);
         let handle = SubscriptionServiceHandle {
             sender: subscription_request_sender,
             metrics: metrics.clone(),
@@ -435,6 +450,7 @@ impl SubscriptionService {
             Self {
                 checkpoint_mailbox,
                 mailbox,
+                pending_admission: None,
                 shards: shard_senders,
                 next_shard: 0,
                 counters,
@@ -458,15 +474,7 @@ impl SubscriptionService {
                     match result {
                         Ok(checkpoint) => {
                             self.handle_checkpoint(checkpoint).await;
-                            if admission_open {
-                                match self.mailbox.try_recv() {
-                                    Ok(message) => self.handle_message(message),
-                                    Err(mpsc::error::TryRecvError::Empty) => {}
-                                    Err(mpsc::error::TryRecvError::Disconnected) => {
-                                        admission_open = false;
-                                    }
-                                }
-                            }
+                            self.handle_admission_turn(None, &mut admission_open);
                         }
                         Err(broadcast::error::RecvError::Lagged(skipped)) => {
                             self.handle_lag(skipped).await;
@@ -476,9 +484,19 @@ impl SubscriptionService {
                         Err(broadcast::error::RecvError::Closed) => break,
                     }
                 },
-                maybe_message = self.mailbox.recv(), if admission_open => {
+                // A short timer prevents hot-spinning while every shard stays
+                // full. Checkpoints remain above this branch and can retry the
+                // pending request immediately after fan-out.
+                _ = sleep(RETAINED_ADMISSION_RETRY_INTERVAL),
+                    if self.pending_admission.is_some() =>
+                {
+                    self.handle_admission_turn(None, &mut admission_open);
+                },
+                maybe_message = self.mailbox.recv(),
+                    if admission_open && self.pending_admission.is_none() =>
+                {
                     if let Some(message) = maybe_message {
-                        self.handle_message(message);
+                        self.handle_admission_turn(Some(message), &mut admission_open);
                     } else {
                         // No more admissions can arrive, but established
                         // subscribers remain live until the checkpoint source
@@ -621,7 +639,41 @@ impl SubscriptionService {
         self.metrics.last_recieved_checkpoint.set(0);
     }
 
-    fn handle_message(&mut self, request: SubscriptionRequest) {
+    /// Runs one bounded admission turn. `first` is a request already received
+    /// by the select loop; a retained request, when present, always precedes it.
+    fn handle_admission_turn(
+        &mut self,
+        mut first: Option<SubscriptionRequest>,
+        admission_open: &mut bool,
+    ) {
+        for _ in 0..ADMISSION_BATCH_SIZE {
+            let request = if let Some(request) = self.pending_admission.take() {
+                request
+            } else if let Some(request) = first.take() {
+                request
+            } else if *admission_open {
+                match self.mailbox.try_recv() {
+                    Ok(request) => request,
+                    Err(mpsc::error::TryRecvError::Empty) => break,
+                    Err(mpsc::error::TryRecvError::Disconnected) => {
+                        *admission_open = false;
+                        break;
+                    }
+                }
+            } else {
+                break;
+            };
+
+            if let Err(request) = self.handle_message(request) {
+                self.pending_admission = Some(request);
+                break;
+            }
+        }
+    }
+
+    /// Returns the request only when every shard mailbox is full. The caller
+    /// retains that request and retries it before receiving a newer admission.
+    fn handle_message(&mut self, request: SubscriptionRequest) -> Result<(), SubscriptionRequest> {
         // The guard increments `counters.total` after the client accepts the
         // receiver and owns that admission until the shard finalizes it.
         if self.counters.total.load(Ordering::Relaxed) >= self.max_subscribers {
@@ -631,7 +683,7 @@ impl SubscriptionService {
             );
             // Dropping the oneshot makes `register_subscription` return
             // `None` -> `Status::unavailable`.
-            return;
+            return Ok(());
         }
 
         for offset in 0..self.shards.len() {
@@ -641,7 +693,7 @@ impl SubscriptionService {
                     let (sender, receiver) = mpsc::channel(SUBSCRIPTION_CHANNEL_SIZE);
                     if request.sender.send(receiver).is_err() {
                         trace!("failed to register new subscriber: request was cancelled");
-                        return;
+                        return Ok(());
                     }
 
                     trace!("successfully registered new subscriber");
@@ -659,7 +711,7 @@ impl SubscriptionService {
                         guard,
                     });
                     self.next_shard = (shard + 1) % self.shards.len();
-                    return;
+                    return Ok(());
                 }
                 Err(mpsc::error::TrySendError::Full(())) => {}
                 Err(mpsc::error::TrySendError::Closed(())) => {
@@ -668,8 +720,8 @@ impl SubscriptionService {
             }
         }
 
-        trace!("failed to register new subscriber: all subscription shards are full");
-        // Dropping the oneshot makes `register_subscription` return `None`.
+        trace!("retaining new subscriber until a subscription shard has capacity");
+        Err(request)
     }
 }
 
@@ -739,6 +791,7 @@ mod tests {
         let service = SubscriptionService {
             checkpoint_mailbox,
             mailbox,
+            pending_admission: None,
             shards: shard_senders,
             next_shard: 0,
             counters,
@@ -831,7 +884,11 @@ mod tests {
         spec: SubscriptionSpec,
     ) -> Option<mpsc::Receiver<SubscriptionUpdate>> {
         let (sender, receiver) = oneshot::channel();
-        service.handle_message(SubscriptionRequest { spec, sender });
+        assert!(
+            service
+                .handle_message(SubscriptionRequest { spec, sender })
+                .is_ok()
+        );
         receiver.await.ok()
     }
     fn inflight_subscribers(metrics: &SubscriptionMetrics) -> i64 {
@@ -943,12 +1000,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn post_checkpoint_turn_admits_one_without_starving_ready_checkpoints() {
+    async fn post_checkpoint_turn_batches_admissions_without_starving_ready_checkpoints() {
+        const REQUESTS: usize = 5;
+
         let (service, checkpoint_sender, request_sender, mut shards) =
-            actor_service_with(1, 25, None, 8, 8);
+            actor_service_with(1, 25, None, 8, REQUESTS);
         let metrics = service.metrics.clone();
         let mut replies = Vec::new();
-        for _ in 0..5 {
+        for _ in 0..REQUESTS {
             let (reply_sender, reply_receiver) = oneshot::channel();
             assert!(
                 request_sender
@@ -971,25 +1030,21 @@ mod tests {
         drop(checkpoint_sender);
         actor.await.unwrap();
 
-        let mut replies = replies.into_iter();
-        let mut receiver_1 = replies.next().unwrap().await.unwrap();
-        let mut receiver_2 = replies.next().unwrap().await.unwrap();
-        let mut receiver_3 = replies.next().unwrap().await.unwrap();
-        assert!(replies.next().unwrap().await.is_err());
-        assert!(replies.next().unwrap().await.is_err());
-
+        let mut receivers = Vec::new();
+        for reply in replies {
+            receivers.push(reply.await.unwrap());
+        }
         drain(&mut shards);
-        assert_eq!(matched_sequence_number(receiver_1.recv().await.unwrap()), 2);
-        assert_eq!(matched_sequence_number(receiver_1.recv().await.unwrap()), 3);
-        assert!(receiver_1.recv().await.is_none());
-        assert_eq!(matched_sequence_number(receiver_2.recv().await.unwrap()), 3);
-        assert!(receiver_2.recv().await.is_none());
-        assert!(receiver_3.recv().await.is_none());
+        for mut receiver in receivers {
+            assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 2);
+            assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 3);
+            assert!(receiver.recv().await.is_none());
+        }
         assert_eq!(metrics.last_recieved_checkpoint.get(), 3);
     }
 
     #[tokio::test]
-    async fn shard_admission_spills_over_or_sheds_without_accounting() {
+    async fn shard_admission_spills_over_when_preferred_shard_is_full() {
         let (mut service, mut shards) = test_service(2);
         for _ in 0..SHARD_MAILBOX_SIZE {
             assert!(
@@ -1002,10 +1057,14 @@ mod tests {
         }
 
         let (reply_sender, reply_receiver) = oneshot::channel();
-        service.handle_message(SubscriptionRequest {
-            spec: unfiltered(),
-            sender: reply_sender,
-        });
+        assert!(
+            service
+                .handle_message(SubscriptionRequest {
+                    spec: unfiltered(),
+                    sender: reply_sender,
+                })
+                .is_ok()
+        );
         let receiver = reply_receiver.await.unwrap();
         let registration = shards[1].mailbox.try_recv().unwrap();
         assert!(matches!(registration, ShardMsg::Register { .. }));
@@ -1013,27 +1072,130 @@ mod tests {
         assert_eq!(service.counters.total.load(Ordering::Relaxed), 1);
         assert_eq!(inflight_subscribers(&service.metrics), 1);
         drop(receiver);
+    }
 
-        let (mut full_service, _full_shards) = test_service(2);
-        for shard in &full_service.shards {
-            for _ in 0..SHARD_MAILBOX_SIZE {
-                assert!(
-                    shard
-                        .try_send(ShardMsg::Clear(
-                            SubscriptionTerminationReason::ServiceShutdown
-                        ))
-                        .is_ok()
-                );
-            }
+    #[tokio::test]
+    async fn saturated_admission_is_retained_ahead_of_newer_requests() {
+        let (mut service, _checkpoint_sender, request_sender, mut shards) =
+            actor_service_with(1, 25, None, 4, 4);
+        for _ in 0..SHARD_MAILBOX_SIZE {
+            assert!(
+                service.shards[0]
+                    .try_send(ShardMsg::Clear(
+                        SubscriptionTerminationReason::ServiceShutdown
+                    ))
+                    .is_ok()
+            );
         }
-        let (reply_sender, reply_receiver) = oneshot::channel();
-        full_service.handle_message(SubscriptionRequest {
-            spec: unfiltered(),
-            sender: reply_sender,
-        });
-        assert!(reply_receiver.await.is_err());
-        assert_eq!(full_service.counters.total.load(Ordering::Relaxed), 0);
-        assert_eq!(inflight_subscribers(&full_service.metrics), 0);
+
+        let (first_sender, mut first_reply) = oneshot::channel();
+        let (second_sender, mut second_reply) = oneshot::channel();
+        assert!(
+            request_sender
+                .try_send(SubscriptionRequest {
+                    spec: unfiltered(),
+                    sender: first_sender,
+                })
+                .is_ok()
+        );
+        assert!(
+            request_sender
+                .try_send(SubscriptionRequest {
+                    spec: SubscriptionSpec {
+                        kind: SubscriptionKind::Events,
+                        query: None,
+                    },
+                    sender: second_sender,
+                })
+                .is_ok()
+        );
+
+        let mut admission_open = true;
+        service.handle_admission_turn(None, &mut admission_open);
+        assert!(service.pending_admission.is_some());
+        assert_eq!(service.mailbox.len(), 1);
+        assert!(matches!(
+            first_reply.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+        assert!(matches!(
+            second_reply.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+
+        assert!(matches!(
+            shards[0].mailbox.try_recv(),
+            Ok(ShardMsg::Clear(_))
+        ));
+        service.handle_admission_turn(None, &mut admission_open);
+        let _first_receiver = first_reply.try_recv().unwrap();
+        assert!(matches!(
+            second_reply.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+        assert!(service.pending_admission.is_some());
+        assert_eq!(service.mailbox.len(), 0);
+
+        for _ in 1..SHARD_MAILBOX_SIZE {
+            assert!(matches!(
+                shards[0].mailbox.try_recv(),
+                Ok(ShardMsg::Clear(_))
+            ));
+        }
+        match shards[0].mailbox.try_recv().unwrap() {
+            ShardMsg::Register { spec, .. } => {
+                assert_eq!(spec.kind, SubscriptionKind::Checkpoints);
+            }
+            _ => panic!("expected the retained registration first"),
+        }
+
+        service.handle_admission_turn(None, &mut admission_open);
+        let _second_receiver = second_reply.try_recv().unwrap();
+        assert!(service.pending_admission.is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn retained_admission_retry_parks_between_capacity_probes() {
+        let (service, _checkpoint_sender, request_sender, mut shards) =
+            actor_service_with(1, 25, None, 4, 4);
+        for _ in 0..SHARD_MAILBOX_SIZE {
+            assert!(
+                service.shards[0]
+                    .try_send(ShardMsg::Clear(
+                        SubscriptionTerminationReason::ServiceShutdown
+                    ))
+                    .is_ok()
+            );
+        }
+
+        let (reply_sender, mut reply_receiver) = oneshot::channel();
+        assert!(
+            request_sender
+                .try_send(SubscriptionRequest {
+                    spec: unfiltered(),
+                    sender: reply_sender,
+                })
+                .is_ok()
+        );
+        let actor = tokio::spawn(service.start());
+
+        // Paused time auto-advances only while every task is parked. This
+        // sleep would hang if the pending-admission retry loop hot-spun.
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        assert!(matches!(
+            reply_receiver.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+
+        assert!(matches!(
+            shards[0].mailbox.try_recv(),
+            Ok(ShardMsg::Clear(_))
+        ));
+        tokio::time::advance(RETAINED_ADMISSION_RETRY_INTERVAL).await;
+        let _receiver = reply_receiver.await.unwrap();
+
+        actor.abort();
+        let _ = actor.await;
     }
 
     #[tokio::test]
