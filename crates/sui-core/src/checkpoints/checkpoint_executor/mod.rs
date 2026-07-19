@@ -49,7 +49,7 @@ use tracing::{debug, info, instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
-use crate::authority::{AuthorityState, ExecutionEnv};
+use crate::authority::{AuthorityState, ExecutionEnv, ExpectedEffectsDigest};
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::execution_scheduler_impl::BarrierDependencyBuilder;
 use crate::global_state_hasher::GlobalStateHasher;
@@ -641,7 +641,8 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, WaitForTransactions);
 
         if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
-            self.execute_change_epoch_tx(&tx_data).await;
+            self.execute_change_epoch_tx(&tx_data, ckpt_state.data.checkpoint.sequence_number)
+                .await;
         }
 
         self.finalize_executed_checkpoint_transactions(ckpt_state, &tx_data, pipeline_handle)
@@ -947,7 +948,10 @@ impl CheckpointExecutor {
 
                         let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)
-                            .with_expected_effects_digest(*expected_fx_digest)
+                            .with_expected_effects(ExpectedEffectsDigest::Certified {
+                                digest: *expected_fx_digest,
+                                checkpoint_seq: ckpt_state.data.checkpoint.sequence_number,
+                            })
                             .with_barrier_dependencies(barrier_deps);
 
                         // Check if the expected effects indicate insufficient balance
@@ -974,7 +978,11 @@ impl CheckpointExecutor {
 
     // Execute the change epoch txn
     #[instrument(level = "error", skip_all)]
-    async fn execute_change_epoch_tx(&self, tx_data: &CheckpointTransactionData) {
+    async fn execute_change_epoch_tx(
+        &self,
+        tx_data: &CheckpointTransactionData,
+        checkpoint_seq: CheckpointSequenceNumber,
+    ) {
         let change_epoch_tx = tx_data.transactions.last().unwrap();
         let change_epoch_fx = tx_data.effects.last().unwrap();
         assert_eq!(
@@ -1024,7 +1032,10 @@ impl CheckpointExecutor {
                 change_epoch_tx.clone(),
                 ExecutionEnv::new()
                     .with_assigned_versions(assigned_versions)
-                    .with_expected_effects_digest(change_epoch_fx.digest()),
+                    .with_expected_effects(ExpectedEffectsDigest::Certified {
+                        digest: change_epoch_fx.digest(),
+                        checkpoint_seq,
+                    }),
             )],
             &self.epoch_store,
         );

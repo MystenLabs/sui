@@ -175,10 +175,8 @@ impl CheckerResultObject {
 macro_rules! assert_eq_if_present {
     ($left:expr, $right:expr, $($arg:tt)+) => {
         match (&$left, &$right) {
-            (Some(left_val), right_val) => {
-                 if !(&left_val == right_val) {
-                    panic!("{} does not match, left: {:?}, right: {:?}", $($arg)+, left_val, right_val);
-                }
+            (Some(left_val), right_val) if !(&left_val == right_val) => {
+                panic!("{} does not match, left: {:?}, right: {:?}", $($arg)+, left_val, right_val);
             }
             _ => ()
         }

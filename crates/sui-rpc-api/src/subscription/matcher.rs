@@ -46,12 +46,12 @@ use sui_types::transaction::TransactionDataAPI as _;
 use tokio::sync::mpsc;
 use tracing::trace;
 
-use crate::metrics::SubscriptionMetrics;
-
 use super::MatchedCheckpoint;
 use super::SubscriptionKind;
+use super::SubscriptionLifecycleGuard;
 use super::SubscriptionMatches;
 use super::SubscriptionSpec;
+use super::SubscriptionTerminationReason;
 use super::SubscriptionUpdate;
 
 /// Process-global keyed seed for [`PrehashedKey`] hashes. Keyed hashing is
@@ -220,6 +220,7 @@ fn compile_term(term: &BitmapTerm) -> CompiledTerm {
 struct Subscriber {
     spec: SubscriptionSpec,
     sender: mpsc::Sender<SubscriptionUpdate>,
+    guard: SubscriptionLifecycleGuard,
     /// Checkpoints processed since this subscriber last received any frame.
     checkpoints_since_frame: u32,
     /// Whether a filtered subscriber still needs its initial progress frame.
@@ -240,11 +241,6 @@ pub(crate) struct SubscriptionMatcher {
     /// keys are byte-identical across tx-space and event-space.
     tx_anchor: AnchorTable, // Checkpoints + Transactions subs
     event_anchor: AnchorTable, // Events subs
-    /// Live filtered subscriber counts per key space (maintained by
-    /// insert/remove/clear); shards mirror deltas into the shared
-    /// `SubscriberCounts` that gate dispatcher-side extraction.
-    filtered_tx_subs: usize,
-    filtered_event_subs: usize,
 }
 
 impl SubscriptionMatcher {
@@ -257,14 +253,6 @@ impl SubscriptionMatcher {
         self.subs.is_empty()
     }
 
-    pub(crate) fn filtered_tx_subs(&self) -> usize {
-        self.filtered_tx_subs
-    }
-
-    pub(crate) fn filtered_event_subs(&self) -> usize {
-        self.filtered_event_subs
-    }
-
     /// Register a subscriber. For a filtered subscription every compiled term
     /// is anchored in the kind-appropriate table under its chosen include key;
     /// unfiltered subscriptions register no anchors and match everything.
@@ -272,6 +260,7 @@ impl SubscriptionMatcher {
         &mut self,
         spec: SubscriptionSpec,
         sender: mpsc::Sender<SubscriptionUpdate>,
+        guard: SubscriptionLifecycleGuard,
     ) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
@@ -279,12 +268,6 @@ impl SubscriptionMatcher {
         let mut anchor_keys = Vec::new();
         let mut terms = Vec::new();
         if let Some(query) = &spec.query {
-            match spec.kind {
-                SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
-                    self.filtered_tx_subs += 1
-                }
-                SubscriptionKind::Events => self.filtered_event_subs += 1,
-            }
             let table = match spec.kind {
                 SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
                     &mut self.tx_anchor
@@ -311,6 +294,7 @@ impl SubscriptionMatcher {
             Subscriber {
                 spec,
                 sender,
+                guard,
                 checkpoints_since_frame: 0,
                 needs_start_frame,
                 anchor_keys,
@@ -320,20 +304,12 @@ impl SubscriptionMatcher {
         id
     }
 
-    /// Drop a subscriber and purge its term registrations from the anchor
-    /// tables.
-    fn remove(&mut self, id: u64) {
+    /// Drop a subscriber, purge its term registrations from the anchor tables,
+    /// and finalize its lifecycle guard.
+    fn remove(&mut self, id: u64, reason: SubscriptionTerminationReason) {
         let Some(sub) = self.subs.remove(&id) else {
             return;
         };
-        if sub.spec.query.is_some() {
-            match sub.spec.kind {
-                SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
-                    self.filtered_tx_subs -= 1
-                }
-                SubscriptionKind::Events => self.filtered_event_subs -= 1,
-            }
-        }
         let table = match sub.spec.kind {
             SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => &mut self.tx_anchor,
             SubscriptionKind::Events => &mut self.event_anchor,
@@ -346,17 +322,17 @@ impl SubscriptionMatcher {
                 }
             }
         }
+        sub.guard.terminate(reason);
     }
 
-    /// Drop every subscriber (lag handling). Returns how many were dropped.
-    pub(crate) fn clear(&mut self) -> usize {
-        let dropped = self.subs.len();
-        self.subs.clear();
+    /// Drop every subscriber and finalize all lifecycle guards.
+    pub(crate) fn clear(&mut self, reason: SubscriptionTerminationReason) {
+        let subscribers = std::mem::take(&mut self.subs);
         self.tx_anchor.clear();
         self.event_anchor.clear();
-        self.filtered_tx_subs = 0;
-        self.filtered_event_subs = 0;
-        dropped
+        for subscriber in subscribers.into_values() {
+            subscriber.guard.terminate(reason);
+        }
     }
 
     /// Match `checkpoint` against every subscription and deliver one
@@ -371,7 +347,6 @@ impl SubscriptionMatcher {
         checkpoint: &Arc<Checkpoint>,
         keys: &CheckpointKeys,
         interval: u32,
-        metrics: &SubscriptionMetrics,
     ) -> usize {
         if self.is_empty() {
             return 0;
@@ -502,7 +477,7 @@ impl SubscriptionMatcher {
             // disconnecting. Reap eagerly instead: one atomic load per
             // subscriber per checkpoint.
             if sub.sender.is_closed() {
-                departed.push(id);
+                departed.push((id, SubscriptionTerminationReason::ClientClosed));
                 continue;
             }
 
@@ -517,12 +492,14 @@ impl SubscriptionMatcher {
                             trace!("successfully enqueued start frame for subscriber");
                             sub.checkpoints_since_frame = 0;
                         }
-                        Err(e) => {
-                            // Channel full or closed alike: the subscriber is
-                            // too slow or gone, drop it without attempting the
-                            // current checkpoint's payload.
-                            trace!("unable to enqueue start frame for subscriber: {e}");
-                            departed.push(id);
+                        Err(mpsc::error::TrySendError::Closed(_)) => {
+                            trace!("unable to enqueue start frame for closed subscriber");
+                            departed.push((id, SubscriptionTerminationReason::ClientClosed));
+                            continue;
+                        }
+                        Err(mpsc::error::TrySendError::Full(_)) => {
+                            trace!("unable to enqueue start frame for slow subscriber");
+                            departed.push((id, SubscriptionTerminationReason::SlowConsumer));
                             continue;
                         }
                     }
@@ -568,18 +545,19 @@ impl SubscriptionMatcher {
                     trace!("successfully enqueued update for subscriber");
                     sub.checkpoints_since_frame = 0;
                 }
-                Err(e) => {
-                    // Channel full or closed alike: the subscriber is too
-                    // slow or gone, drop it.
-                    trace!("unable to enqueue update for subscriber: {e}");
-                    departed.push(id);
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    trace!("unable to enqueue update for closed subscriber");
+                    departed.push((id, SubscriptionTerminationReason::ClientClosed));
+                }
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    trace!("unable to enqueue update for slow subscriber");
+                    departed.push((id, SubscriptionTerminationReason::SlowConsumer));
                 }
             }
         }
         let departed_count = departed.len();
-        for id in departed {
-            self.remove(id);
-            metrics.inflight_subscribers.dec();
+        for (id, reason) in departed {
+            self.remove(id, reason);
         }
         departed_count
     }
@@ -641,11 +619,14 @@ mod tests {
     use super::*;
     use crate::ledger_history::filter::event_filter_to_query;
     use crate::ledger_history::filter::transaction_filter_to_query;
+    use crate::metrics::SubscriptionMetrics;
+    use crate::subscription::SubscriberCounts;
     use move_core_types::account_address::AccountAddress;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
+    use std::sync::atomic::Ordering;
     use sui_inverted_index::BitmapQuery;
-    use sui_rpc::proto::sui::rpc::v2alpha as proto;
+    use sui_rpc::proto::sui::rpc::v2 as proto;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
     use sui_types::event::Event;
@@ -710,27 +691,30 @@ mod tests {
         matcher: &mut SubscriptionMatcher,
         kind: SubscriptionKind,
         query: Option<BitmapQuery>,
+        metrics: &SubscriptionMetrics,
     ) -> mpsc::Receiver<SubscriptionUpdate> {
         let (sender, receiver) = mpsc::channel(16);
-        matcher.insert(SubscriptionSpec { kind, query }, sender);
+        let filtered = query.is_some();
+        let guard = SubscriptionLifecycleGuard::new(
+            kind,
+            filtered,
+            Arc::new(SubscriberCounts::default()),
+            metrics,
+        );
+        matcher.insert(SubscriptionSpec { kind, query }, sender, guard);
         receiver
     }
 
     /// Extract this matcher's own keys, then dispatch: the standalone-driver
     /// convenience these unit tests use. Production extracts once in the
     /// dispatcher and calls `dispatch_with_keys` directly.
-    fn dispatch(
-        matcher: &mut SubscriptionMatcher,
-        checkpoint: &Arc<Checkpoint>,
-        interval: u32,
-        metrics: &SubscriptionMetrics,
-    ) {
+    fn dispatch(matcher: &mut SubscriptionMatcher, checkpoint: &Arc<Checkpoint>, interval: u32) {
         let keys = extract_checkpoint_keys(
             checkpoint,
             !matcher.tx_anchor.is_empty(),
             !matcher.event_anchor.is_empty(),
         );
-        matcher.dispatch_with_keys(checkpoint, &keys, interval, metrics);
+        matcher.dispatch_with_keys(checkpoint, &keys, interval);
     }
 
     /// One checkpoint with one transaction per sender index, in order.
@@ -788,17 +772,22 @@ mod tests {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
         let query = tx_query(vec![sender_literal(addr(0), false)]);
-        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, Some(query));
+        let mut receiver = subscribe(
+            &mut matcher,
+            SubscriptionKind::Transactions,
+            Some(query),
+            &metrics,
+        );
 
         // Senders 0, 1, 0: only indices 0 and 2 match, after the filtered
         // subscription's initial progress frame.
         let cp1 = checkpoint(1, &[0, 1, 0]);
-        dispatch(&mut matcher, &cp1, NO_TICK, &metrics);
+        dispatch(&mut matcher, &cp1, NO_TICK);
         recv_start_tick(&mut receiver, &cp1);
         assert_eq!(transaction_indices(recv_matches(&mut receiver)), vec![0, 2]);
 
         // A checkpoint with only sender 1 produces no frame.
-        dispatch(&mut matcher, &checkpoint(2, &[1, 1]), NO_TICK, &metrics);
+        dispatch(&mut matcher, &checkpoint(2, &[1, 1]), NO_TICK);
         assert!(receiver.try_recv().is_err());
     }
 
@@ -807,12 +796,17 @@ mod tests {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
         let query = tx_query(vec![sender_literal(addr(0), false)]);
-        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, Some(query));
+        let mut receiver = subscribe(
+            &mut matcher,
+            SubscriptionKind::Transactions,
+            Some(query),
+            &metrics,
+        );
 
         // Senders 0, 0, 1, 0: adjacent matches 0-1 coalesce into one run,
         // the non-adjacent match 3 opens a new one.
         let cp1 = checkpoint(1, &[0, 0, 1, 0]);
-        dispatch(&mut matcher, &cp1, NO_TICK, &metrics);
+        dispatch(&mut matcher, &cp1, NO_TICK);
         recv_start_tick(&mut receiver, &cp1);
         match recv_matches(&mut receiver) {
             SubscriptionMatches::Transactions(ranges) => {
@@ -827,12 +821,17 @@ mod tests {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
         let query = tx_query(vec![sender_literal(addr(0), false)]);
-        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Checkpoints, Some(query));
+        let mut receiver = subscribe(
+            &mut matcher,
+            SubscriptionKind::Checkpoints,
+            Some(query),
+            &metrics,
+        );
 
         // Two matching txs still yield exactly one checkpoint match, preceded
         // by the filtered subscription's initial progress frame.
         let cp1 = checkpoint(1, &[0, 0]);
-        dispatch(&mut matcher, &cp1, 2, &metrics);
+        dispatch(&mut matcher, &cp1, 2);
         recv_start_tick(&mut receiver, &cp1);
         assert!(matches!(
             recv_matches(&mut receiver),
@@ -841,23 +840,23 @@ mod tests {
         assert!(receiver.try_recv().is_err());
 
         // Non-matching checkpoints tick only once the interval elapses.
-        dispatch(&mut matcher, &checkpoint(2, &[1]), 2, &metrics);
+        dispatch(&mut matcher, &checkpoint(2, &[1]), 2);
         assert!(receiver.try_recv().is_err());
-        dispatch(&mut matcher, &checkpoint(3, &[1]), 2, &metrics);
+        dispatch(&mut matcher, &checkpoint(3, &[1]), 2);
         assert_eq!(recv_tick(&mut receiver), (3, 101));
 
         // A match resets the counter...
-        dispatch(&mut matcher, &checkpoint(4, &[1]), 2, &metrics);
+        dispatch(&mut matcher, &checkpoint(4, &[1]), 2);
         assert!(receiver.try_recv().is_err());
-        dispatch(&mut matcher, &checkpoint(5, &[0]), 2, &metrics);
+        dispatch(&mut matcher, &checkpoint(5, &[0]), 2);
         assert!(matches!(
             recv_matches(&mut receiver),
             SubscriptionMatches::Checkpoint
         ));
         // ...so the next tick again takes a full interval.
-        dispatch(&mut matcher, &checkpoint(6, &[1]), 2, &metrics);
+        dispatch(&mut matcher, &checkpoint(6, &[1]), 2);
         assert!(receiver.try_recv().is_err());
-        dispatch(&mut matcher, &checkpoint(7, &[1]), 2, &metrics);
+        dispatch(&mut matcher, &checkpoint(7, &[1]), 2);
         assert_eq!(recv_tick(&mut receiver), (7, 101));
     }
 
@@ -868,10 +867,15 @@ mod tests {
         // NOT sender=0: compiled with a synthetic TxUniverse include, which
         // dispatch must insert into every transaction's key set.
         let query = tx_query(vec![sender_literal(addr(0), true)]);
-        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, Some(query));
+        let mut receiver = subscribe(
+            &mut matcher,
+            SubscriptionKind::Transactions,
+            Some(query),
+            &metrics,
+        );
 
         let checkpoint = checkpoint(1, &[0, 1]);
-        dispatch(&mut matcher, &checkpoint, NO_TICK, &metrics);
+        dispatch(&mut matcher, &checkpoint, NO_TICK);
         recv_start_tick(&mut receiver, &checkpoint);
         assert_eq!(transaction_indices(recv_matches(&mut receiver)), vec![1]);
     }
@@ -909,12 +913,22 @@ mod tests {
         let metrics = metrics();
         // Include filter: only EventA events, in both transactions.
         let include = event_query(vec![event_type_literal(&type_a, false)]);
-        let mut include_rx = subscribe(&mut matcher, SubscriptionKind::Events, Some(include));
+        let mut include_rx = subscribe(
+            &mut matcher,
+            SubscriptionKind::Events,
+            Some(include),
+            &metrics,
+        );
         // Exclude-only filter: anchored on the natural EventExtant marker.
         let exclude = event_query(vec![event_type_literal(&type_a, true)]);
-        let mut exclude_rx = subscribe(&mut matcher, SubscriptionKind::Events, Some(exclude));
+        let mut exclude_rx = subscribe(
+            &mut matcher,
+            SubscriptionKind::Events,
+            Some(exclude),
+            &metrics,
+        );
 
-        dispatch(&mut matcher, &checkpoint, NO_TICK, &metrics);
+        dispatch(&mut matcher, &checkpoint, NO_TICK);
         recv_start_tick(&mut include_rx, &checkpoint);
         recv_start_tick(&mut exclude_rx, &checkpoint);
 
@@ -933,10 +947,15 @@ mod tests {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
         let query = tx_query(vec![sender_literal(addr(0), false)]);
-        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, Some(query));
+        let mut receiver = subscribe(
+            &mut matcher,
+            SubscriptionKind::Transactions,
+            Some(query),
+            &metrics,
+        );
         let checkpoint = checkpoint(7, &[0]);
 
-        dispatch(&mut matcher, &checkpoint, NO_TICK, &metrics);
+        dispatch(&mut matcher, &checkpoint, NO_TICK);
 
         recv_start_tick(&mut receiver, &checkpoint);
         assert_eq!(transaction_indices(recv_matches(&mut receiver)), vec![0]);
@@ -947,10 +966,10 @@ mod tests {
     fn unfiltered_subscriber_starts_with_match_without_tick() {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
-        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, None);
+        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, None, &metrics);
         let checkpoint = checkpoint(7, &[0]);
 
-        dispatch(&mut matcher, &checkpoint, NO_TICK, &metrics);
+        dispatch(&mut matcher, &checkpoint, NO_TICK);
 
         assert!(matches!(
             recv_matches(&mut receiver),
@@ -963,38 +982,110 @@ mod tests {
     fn departed_subscriber_is_purged_from_anchor_tables() {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
-        metrics.inflight_subscribers.inc();
         let query = tx_query(vec![sender_literal(addr(0), false)]);
-        let receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, Some(query));
+        let receiver = subscribe(
+            &mut matcher,
+            SubscriptionKind::Transactions,
+            Some(query),
+            &metrics,
+        );
         drop(receiver);
 
         // Delivery fails, so the subscriber and its anchors are removed.
-        dispatch(&mut matcher, &checkpoint(1, &[0]), NO_TICK, &metrics);
+        dispatch(&mut matcher, &checkpoint(1, &[0]), NO_TICK);
         assert!(matcher.is_empty());
         assert!(matcher.tx_anchor.is_empty());
-        assert_eq!(metrics.inflight_subscribers.get(), 0);
+        assert_eq!(
+            metrics
+                .inflight_subscribers
+                .with_label_values(&["transaction", "true"])
+                .get(),
+            0
+        );
 
         // A later matching checkpoint dispatches cleanly with no subscriber.
-        dispatch(&mut matcher, &checkpoint(2, &[0]), NO_TICK, &metrics);
+        dispatch(&mut matcher, &checkpoint(2, &[0]), NO_TICK);
     }
 
     #[test]
     fn disconnected_subscriber_is_reaped_without_a_due_frame() {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
-        metrics.inflight_subscribers.inc();
         let query = tx_query(vec![sender_literal(addr(0), false)]);
-        let receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, Some(query));
+        let receiver = subscribe(
+            &mut matcher,
+            SubscriptionKind::Transactions,
+            Some(query),
+            &metrics,
+        );
         drop(receiver);
 
         // A non-matching checkpoint with the tick not yet due never reaches
         // `try_send`, so only the eager closed-channel check can notice the
         // departed client. It must be reaped now, not `interval` checkpoints
         // later.
-        dispatch(&mut matcher, &checkpoint(1, &[1]), NO_TICK, &metrics);
+        dispatch(&mut matcher, &checkpoint(1, &[1]), NO_TICK);
         assert!(matcher.is_empty());
         assert!(matcher.tx_anchor.is_empty());
-        assert_eq!(metrics.inflight_subscribers.get(), 0);
+        assert_eq!(
+            metrics
+                .inflight_subscribers
+                .with_label_values(&["transaction", "true"])
+                .get(),
+            0
+        );
+    }
+
+    #[test]
+    fn full_channel_records_one_slow_consumer_termination() {
+        let mut matcher = SubscriptionMatcher::default();
+        let metrics = metrics();
+        let counters = Arc::new(SubscriberCounts::default());
+        let query = tx_query(vec![sender_literal(addr(0), false)]);
+        let (sender, _receiver) = mpsc::channel(1);
+        let guard = SubscriptionLifecycleGuard::new(
+            SubscriptionKind::Transactions,
+            true,
+            Arc::clone(&counters),
+            &metrics,
+        );
+        matcher.insert(
+            SubscriptionSpec {
+                kind: SubscriptionKind::Transactions,
+                query: Some(query),
+            },
+            sender,
+            guard,
+        );
+
+        // The initial progress frame fills the channel, so the matched
+        // payload in the same dispatch classifies the subscriber as slow.
+        dispatch(&mut matcher, &checkpoint(1, &[0]), NO_TICK);
+        assert!(matcher.is_empty());
+        assert_eq!(
+            metrics
+                .terminations_total
+                .with_label_values(&["transaction", "slow_consumer"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .inflight_subscribers
+                .with_label_values(&["transaction", "true"])
+                .get(),
+            0
+        );
+        assert_eq!(counters.total.load(Ordering::Relaxed), 0);
+
+        drop(matcher);
+        assert_eq!(
+            metrics
+                .terminations_total
+                .with_label_values(&["transaction", "slow_consumer"])
+                .get(),
+            1
+        );
     }
 
     #[test]

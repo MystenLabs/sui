@@ -1,10 +1,20 @@
 ---
 title: Encrypted Social Media
-description: Build a Web3 social platform with encrypted content, Seal-based access control, and Walrus storage on Sui.
-keywords: [example, seal, encryption, walrus, dapp-kit, sponsored-transactions, viewer-token, zklogin]
+description: >-
+  Build a Web3 social platform with encrypted content, Seal-based access
+  control, and Walrus storage on Sui.
+keywords:
+  - example
+  - seal
+  - encryption
+  - walrus
+  - dapp-kit
+  - sponsored-transactions
+  - viewer-token
+  - zklogin
 example_id: onlyfins-example-app
-last_verified: 2026-04-28
-repo: https://github.com/MystenLabs/onlyfins-example-app
+last_verified: 2026-04-28T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/onlyfins-example-app'
 path: /
 concepts:
   - shared_objects
@@ -13,6 +23,44 @@ concepts:
   - sponsored_transactions
   - walrus_storage
   - zklogin
+goal:
+  description: >-
+    Reader can build a Web3 social platform with encrypted content, Seal-based
+    access control, and Walrus storage on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Walrus example app (OnlyFins)
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Walrus example app (OnlyFins)
+    stage: Ship
+questions:
+  - How do I build a content platform with Walrus and Sui?
+  - What does the OnlyFins example demonstrate?
+  - How do I store and retrieve encrypted data with Walrus and Seal?
+answer: >-
+  Build a Web3 social platform with encrypted content, Seal-based access
+  control, and Walrus storage on Sui.
 ---
 
 OnlyFins is a Web3 social platform that demonstrates encrypted content sharing with onchain access control. Creators publish posts with images they store on [Walrus](https://docs.wal.app) and encrypt through [Seal](https://seal-docs.wal.app), while viewers purchase `ViewerToken` capability objects to decrypt and view content. The app uses [Enoki](https://docs.enoki.mystenlabs.com/) for [zkLogin](/sui-stack/zklogin-integration/zklogin) authentication and [sponsored transactions](/develop/transaction-payment/sponsor-txn) so users interact without holding SUI for gas.

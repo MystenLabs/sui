@@ -35,7 +35,12 @@ pub fn exp(
             }
             SI::AssignReg {
                 lhs,
-                rhs: RValue::Call { target, args },
+                rhs:
+                    RValue::Call {
+                        target,
+                        type_arguments: _,
+                        args,
+                    },
             } => {
                 let args = trivials(&mut map, args);
                 let call = Out::Exp::Call((Out::ModuleRef::Qualified(target.0), target.1), args);

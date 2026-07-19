@@ -1,7 +1,55 @@
 ---
 title: Multisig Authentication
-description: Guide on how to create a multisig transaction and then submit it against a local network using the Sui CLI.
-keywords: [ multisig, multi-sig, multisig auth, multi-sig auth, multi signatures, multiple signatures, multisig transaction, multi-sig transaction ]
+description: >-
+  Guide on how to create a multisig transaction and then submit it against a
+  local network using the Sui CLI.
+keywords:
+  - multisig
+  - multi-sig
+  - multisig auth
+  - multi-sig auth
+  - multi signatures
+  - multiple signatures
+  - multisig transaction
+  - multi-sig transaction
+goal:
+  description: >-
+    Reader understands guide on how to create a multisig transaction and then
+    submit it against a local network using the Sui CLI
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Multisig
+    stage: Operations
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Multisig for agent security
+    stage: Authorization
+questions:
+  - What is Multisig Authentication in Sui?
+  - How does multisig authentication work on Sui?
+  - Why should I use multisig authentication?
+answer: >-
+  Guide on how to create a multisig transaction and then submit it against a
+  local network using the Sui CLI.
 ---
 
 Sui supports multi-signature (multisig) transactions, which require multiple keys for authorization rather than a single key signature. Sui supports `k` out of `n` multisig transactions, where `k` is the threshold and `n` is the total weight of all participating parties. The maximum number of parties is 10. To learn more about supported single key signatures, see [Signatures](/develop/transactions/transaction-auth/auth-overview).

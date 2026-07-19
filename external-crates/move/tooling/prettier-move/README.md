@@ -5,12 +5,13 @@ This is a Move language plugin for the
 [parser](https://github.com/tzakian/tree-sitter-move) built on top of the
 [tree-sitter](https://tree-sitter.github.io/) parser generator and maintained by Tim Zakian.
 
-The plugin is platform-independent by utilizing a [WASM](https://webassembly.org/)-ified version of
-the Move parser included in this repository at
-[(./tree-sitter-move.wasm)](./tree-sitter-move.wasm). You can re-generate the WASM-ified version of
-the parser by running the [scripts/treesitter-wasm-gen.sh](scripts/treesitter-wasm-gen.sh) script
-(prerequisites for this are listed in the script itself). You should be careful when doing so, as
-certain changes to the parser may break the plugin (e.g., if parse tree node types are modified).
+The published plugin is platform-independent by utilizing a
+[WASM](https://webassembly.org/)-ified version of the Move parser at `tree-sitter-move.wasm`. The
+WASM file is generated from the sibling `tree-sitter` grammar when the package is published. You
+can generate it locally by running the
+[scripts/treesitter-wasm-gen.sh](scripts/treesitter-wasm-gen.sh) script (prerequisites for this are
+listed in the script itself). You should be careful when doing so, as certain changes to the parser
+may break the plugin (e.g., if parse tree node types are modified).
 
 ## Prerequisites
 

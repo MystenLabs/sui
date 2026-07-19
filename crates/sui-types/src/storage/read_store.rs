@@ -624,7 +624,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 /// It extends both ObjectStore and ReadStore by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
 pub trait RpcStateReader:
-    ObjectStore + ReadStore + super::ChildObjectResolver + Send + Sync
+    ObjectStore + ReadStore + super::RuntimeObjectResolver + Send + Sync
 {
     /// Lowest available checkpoint for which object data can be requested.
     ///
@@ -683,8 +683,17 @@ pub trait RpcStateReader:
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub type LedgerTxSeqDigestIterator<'a> =
     Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
-pub type LedgerBitmapBucketIterator<'a> =
-    Box<dyn Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>> + 'a>;
+/// Iterator over ledger bitmap buckets that can skip directly to a bucket.
+pub trait LedgerBitmapBucketIter:
+    Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>>
+{
+    /// Reposition so the next row is the first bucket at or past `bucket_id`
+    /// in the iterator's direction. Implementations never move backward.
+    fn seek_bucket(&mut self, bucket_id: u64);
+}
+
+/// Boxed seekable iterator over ledger bitmap buckets.
+pub type LedgerBitmapBucketIterator<'a> = Box<dyn LedgerBitmapBucketIter + 'a>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LedgerTxSeqDigest {

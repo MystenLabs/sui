@@ -55,7 +55,7 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_initialization: Option<RpcIndexInitConfig>,
 
-    /// Tunables for the v2alpha ledger-history list APIs (`list_transactions`,
+    /// Tunables for the ledger-history list APIs (`list_transactions`,
     /// `list_events`, `list_checkpoints`). These scan the historical inverted
     /// indexes, unlike the live object-set listings (`list_owned_objects`,
     /// `list_dynamic_fields`), so they carry their own time and scan-cost bounds.
@@ -69,6 +69,10 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription_watermark_interval: Option<u32>,
 
+    /// Maximum number of concurrent RPC subscriptions. Defaults to 1024.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_max_subscribers: Option<usize>,
+
     /// Number of parallel shard tasks that evaluate subscription filters and
     /// deliver updates. Each subscriber lives on one shard; per-checkpoint
     /// filter evaluation parallelizes across shards. Defaults to the host's
@@ -79,7 +83,44 @@ pub struct RpcConfig {
     /// Configuration for rendering Objects based on the Display standard
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display: Option<DisplayConfig>,
+
+    /// Maximum age of an RPC connection, in seconds. When a connection
+    /// reaches this age the server sends GOAWAY and stops accepting new
+    /// streams on it; in-flight requests are allowed to complete within
+    /// `max-connection-age-grace-secs`. Bounding connection lifetime is the
+    /// server-side backstop that reclaims streams wedged behind HTTP/2
+    /// flow-control windows that a stalled peer never reopens.
+    ///
+    /// Defaults to 4 hours. Set to `0` to disable (connections then live
+    /// forever).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_connection_age_secs: Option<u64>,
+
+    /// Grace period, in seconds, that in-flight requests are given to
+    /// complete after a connection begins shutting down (its
+    /// `max-connection-age-secs` expired, or the node is stopping). When
+    /// the grace period expires the connection is closed even if streams
+    /// are still open. Set to `0` to close immediately at shutdown.
+    ///
+    /// Defaults to 10 minutes. Has no effect while
+    /// `max-connection-age-secs` is disabled and the node is running.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_connection_age_grace_secs: Option<u64>,
+
+    /// Server-side timeout for gRPC requests, in milliseconds. Requests
+    /// that carry a `grpc-timeout` header are bounded by the smaller of the
+    /// two values. The timeout covers a unary request's full execution and
+    /// a streaming request's time to first response; it does not bound the
+    /// lifetime of an established stream.
+    ///
+    /// Defaults to 60 seconds. Set to `0` to disable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grpc_timeout_ms: Option<u64>,
 }
+
+const DEFAULT_MAX_CONNECTION_AGE: Duration = Duration::from_secs(4 * 60 * 60);
+const DEFAULT_MAX_CONNECTION_AGE_GRACE: Duration = Duration::from_secs(10 * 60);
+const DEFAULT_GRPC_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl RpcConfig {
     pub fn enable_indexing(&self) -> bool {
@@ -121,6 +162,33 @@ impl RpcConfig {
         self.ledger_history
             .as_ref()
             .unwrap_or(&DEFAULT_LEDGER_HISTORY_CONFIG)
+    }
+
+    /// Maximum age of an RPC connection; `None` means unlimited.
+    pub fn max_connection_age(&self) -> Option<Duration> {
+        match self.max_connection_age_secs {
+            Some(0) => None,
+            Some(secs) => Some(Duration::from_secs(secs)),
+            None => Some(DEFAULT_MAX_CONNECTION_AGE),
+        }
+    }
+
+    /// Grace period for in-flight requests once a connection begins
+    /// shutting down; `Duration::ZERO` closes immediately.
+    pub fn max_connection_age_grace(&self) -> Duration {
+        self.max_connection_age_grace_secs
+            .map(Duration::from_secs)
+            .unwrap_or(DEFAULT_MAX_CONNECTION_AGE_GRACE)
+    }
+
+    /// Server-side default deadline for gRPC requests; `None` means no
+    /// server-imposed deadline (client `grpc-timeout` headers still apply).
+    pub fn grpc_timeout(&self) -> Option<Duration> {
+        match self.grpc_timeout_ms {
+            Some(0) => None,
+            Some(ms) => Some(Duration::from_millis(ms)),
+            None => Some(DEFAULT_GRPC_TIMEOUT),
+        }
     }
 
     /// Validate cross-field invariants. Call once at startup to fail fast on a
@@ -260,6 +328,57 @@ impl DisplayConfig {
     }
 }
 
+#[cfg(test)]
+mod connection_lifecycle_tests {
+    use super::*;
+
+    /// These defaults are availability-relevant: connection age plus grace
+    /// is the server-side backstop that reclaims streams wedged behind
+    /// HTTP/2 flow-control windows, and the gRPC deadline bounds requests
+    /// from clients that set none. Pin them so they cannot silently regress
+    /// to disabled.
+    #[test]
+    fn connection_lifecycle_defaults_are_enabled() {
+        let config = RpcConfig::default();
+        assert_eq!(
+            config.max_connection_age(),
+            Some(Duration::from_secs(4 * 60 * 60))
+        );
+        assert_eq!(
+            config.max_connection_age_grace(),
+            Duration::from_secs(10 * 60)
+        );
+        assert_eq!(config.grpc_timeout(), Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn zero_disables_age_and_timeout() {
+        let config = RpcConfig {
+            max_connection_age_secs: Some(0),
+            max_connection_age_grace_secs: Some(0),
+            grpc_timeout_ms: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(config.max_connection_age(), None);
+        // A zero grace is a valid setting: close immediately at shutdown.
+        assert_eq!(config.max_connection_age_grace(), Duration::ZERO);
+        assert_eq!(config.grpc_timeout(), None);
+    }
+
+    #[test]
+    fn explicit_values_are_used() {
+        let config = RpcConfig {
+            max_connection_age_secs: Some(60),
+            max_connection_age_grace_secs: Some(5),
+            grpc_timeout_ms: Some(1_500),
+            ..Default::default()
+        };
+        assert_eq!(config.max_connection_age(), Some(Duration::from_secs(60)));
+        assert_eq!(config.max_connection_age_grace(), Duration::from_secs(5));
+        assert_eq!(config.grpc_timeout(), Some(Duration::from_millis(1_500)));
+    }
+}
+
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_BITMAP_BUCKET_SCAN_BUDGET: usize = 1_024;
 const DEFAULT_CHUNK_BUCKET_SCAN_BUDGET: usize = 256;
@@ -345,7 +464,7 @@ impl LedgerHistoryMethodConfig {
     }
 }
 
-/// Tunables for the v2alpha ledger-history list APIs. Per-endpoint knobs live in
+/// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
 /// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are global across
 /// all three. Every field is optional and falls back to a built-in default.
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]

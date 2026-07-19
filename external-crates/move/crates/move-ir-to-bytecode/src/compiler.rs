@@ -409,7 +409,7 @@ pub fn compile_module<'a>(
 
     for ir_constant in module.constants {
         // If the constant is an error constant in the source, then add the error constant's name
-        // look up the constant's name, as a constant valeu -- this may be present already,
+        // look up the constant's name, as a constant value -- this may be present already,
         // e.g., in the case of something like `const Foo: vector<u8> = b"Foo"` in which case the
         // new index will not be added and the previous index will be used.
         if ir_constant.is_error_constant {
@@ -1316,6 +1316,11 @@ fn compile_expression(
             push_instr!(exp.loc, load_loc);
             function_frame.push()?;
         }
+        Exp_::Constant(name) => {
+            let idx = context.named_constant_index(&name)?;
+            push_instr!(exp.loc, Bytecode::LdConst(idx));
+            function_frame.push()?;
+        }
         Exp_::BorrowLocal(is_mutable, v) => {
             let loc_idx = function_frame.get_local(&v.value)?;
             if is_mutable {
@@ -1746,7 +1751,7 @@ fn type_to_constant_type_layout(ty: Type) -> Result<MoveTypeLayout> {
             bail!("Type parameters are not supported in constant type layouts")
         }
         Type_::Datatype(_ident, _tys) => {
-            bail!("TODO Structs are not *yet* supported in constant type layouts")
+            bail!("Datatypes are not supported in constant type layouts")
         }
     })
 }

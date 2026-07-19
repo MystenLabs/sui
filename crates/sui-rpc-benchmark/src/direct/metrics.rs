@@ -91,7 +91,7 @@ impl MetricsCollector {
             total_successful += successful;
         }
 
-        table_stats.sort_by(|a, b| b.queries.cmp(&a.queries));
+        table_stats.sort_by_key(|b| std::cmp::Reverse(b.queries));
 
         BenchmarkResult {
             total_queries,

@@ -477,7 +477,7 @@ impl DagState {
             .with_label_values(&["get_blocks"])
             .inc();
 
-        for ((index, _), result) in missing.into_iter().zip_debug_eq(store_results.into_iter()) {
+        for ((index, _), result) in missing.into_iter().zip_debug_eq(store_results) {
             blocks[index] = result;
         }
 
@@ -857,7 +857,7 @@ impl DagState {
             .with_label_values(&["contains_blocks"])
             .inc();
 
-        for ((index, _), result) in missing.into_iter().zip_debug_eq(store_results.into_iter()) {
+        for ((index, _), result) in missing.into_iter().zip_debug_eq(store_results) {
             exist[index] = result;
         }
 

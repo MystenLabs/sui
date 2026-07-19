@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! [`RpcStateReader`] rollup — composes [`ObjectStore`],
-//! [`ReadStore`], [`ChildObjectResolver`], and [`RpcIndexes`] (all
+//! [`ReadStore`], [`RuntimeObjectResolver`], and [`RpcIndexes`] (all
 //! impl'd in sibling modules) into the top-level trait
 //! `sui-rpc-api` consumes.
 //!

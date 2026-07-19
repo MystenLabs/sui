@@ -1,7 +1,53 @@
 ---
 title: Token Policy
-description: A `TokenPolicy` is a shared object that defines a token's allowed actions and conditions. Wallets and other financial services often use `TokenPolicy` objects.
-keywords: [ token policy, tokenpolicy,token::new_policy, treasurycap, token::share_policy, new_policy, allow, disallow, add_rule_for_action, remove_rule_for_action, confirm_request, confirm_request_mut, flush ]
+description: >-
+  A `TokenPolicy` is a shared object that defines a token's allowed actions and
+  conditions. Wallets and other financial services often use `TokenPolicy`
+  objects.
+keywords:
+  - token policy
+  - tokenpolicy
+  - 'token::new_policy'
+  - treasurycap
+  - 'token::share_policy'
+  - new_policy
+  - allow
+  - disallow
+  - add_rule_for_action
+  - remove_rule_for_action
+  - confirm_request
+  - confirm_request_mut
+  - flush
+goal:
+  description: >-
+    Reader understands a `TokenPolicy` is a shared object that defines a token's
+    allowed actions and conditions
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Token Policy in Sui?
+  - How do I create and share a TokenPolicy?
+  - What rules can I add to a TokenPolicy?
+answer: >-
+  A `TokenPolicy` is a shared object that defines a token's allowed actions and
+  conditions. Wallets and other financial services often use `TokenPolicy`
+  objects.
 ---
 
 `TokenPolicy` is a shared object that a token owner can create using the `TreasuryCap`. Having a publicly available `TokenPolicy` enables onchain discovery of allowed actions and their conditions. This is useful for wallets and other services that want to provide a better user experience for token holders.

@@ -10,9 +10,9 @@ use bytes::Bytes;
 use futures::Stream;
 use futures::StreamExt;
 use prometheus::Registry;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
-use sui_rpc::proto::sui::rpc::v2alpha as proto;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Uri;
@@ -23,7 +23,7 @@ use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::metrics::GrpcMetricsLayer;
 use crate::metrics::GrpcMetricsService;
 
-/// A reader backed by the gRPC LedgerService's v2alpha experimental query APIs.
+/// A reader backed by the gRPC LedgerService's streaming list APIs.
 #[derive(Clone)]
 pub struct AlphaLedgerGrpcReader {
     client: LedgerServiceClient<GrpcMetricsService<Channel>>,
@@ -122,11 +122,11 @@ impl<T> StreamPage<T> {
         use proto::QueryEndReason as R;
         match self.end_reason {
             None => true,
-            Some(R::Unspecified | R::ItemLimit | R::ScanLimit) => true,
+            Some(R::Unknown | R::ItemLimit | R::ScanLimit) => true,
             Some(R::LedgerTip | R::CheckpointBound) => false,
             Some(R::CursorBound) => self.last_cursor().is_some(),
             // `QueryEndReason` is non exhaustive — conservatively `true` if a
-            // future variant slips past `apply()`'s `unwrap_or(Unspecified)`.
+            // future variant slips past `apply()`'s `unwrap_or(Unknown)`.
             Some(_) => true,
         }
     }
@@ -177,7 +177,7 @@ impl<T> StreamPage<T> {
         }
         if let Some(reason) = end_reason {
             // `QueryEnd::reason()` folds an absent or unknown reason into
-            // `Unspecified`, so `None` here remains unambiguous shorthand for
+            // `Unknown`, so `None` here remains unambiguous shorthand for
             // "no End frame received" (i.e. the deadline cut the stream short).
             self.end_reason = Some(reason);
             return true;
@@ -486,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_end_with_unknown_reason_folds_to_unspecified() {
+    fn apply_end_with_unknown_reason_folds_to_unknown() {
         let mut end = proto::QueryEnd::default();
         end.reason = Some(i32::MAX);
         let mut response = proto::ListTransactionsResponse::default();
@@ -494,7 +494,7 @@ mod tests {
 
         let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
         page.apply(frame(response));
-        assert_eq!(page.end_reason, Some(proto::QueryEndReason::Unspecified));
+        assert_eq!(page.end_reason, Some(proto::QueryEndReason::Unknown));
     }
 
     #[test]

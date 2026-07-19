@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{StreamExt, future::join_all};
+use fastcrypto_zkp::bn254::zk_login::JwkId;
+use futures::future::join_all;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::fatal;
@@ -18,7 +19,6 @@ use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CO
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, TransactionFilter};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
@@ -60,7 +60,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
-use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{Transaction, TransactionData};
 use tokio::sync::broadcast;
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
@@ -485,6 +485,49 @@ impl TestCluster {
             .expect("timed out waiting for reconfiguration to complete");
     }
 
+    /// Waits until every node advances to a strictly higher epoch than the one it is at when this is
+    /// called. Unlike `wait_for_epoch_all_nodes`, which matches a target epoch exactly, this only
+    /// requires forward progress, so it is safe when the cluster catches up through several epochs at
+    /// once (e.g. recovering from a stall) and would blow past any fixed target.
+    pub async fn wait_for_next_epoch_all_nodes(&self) {
+        let handles: Vec<_> = self
+            .swarm
+            .all_nodes()
+            .map(|node| node.get_node_handle().unwrap())
+            .collect();
+        let tasks: Vec<_> = handles
+            .iter()
+            .map(|handle| {
+                handle.with_async(|node| async {
+                    let start_epoch = node.state().epoch_store_for_testing().epoch();
+                    let mut retries = 0;
+                    loop {
+                        let epoch = node.state().epoch_store_for_testing().epoch();
+                        if epoch > start_epoch {
+                            if let Some(agg) = node.clone_authority_aggregator() {
+                                // Fullnode: also wait for its auth aggregator to reconfigure.
+                                if agg.committee.epoch() > start_epoch {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        retries += 1;
+                        if retries % 5 == 0 {
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting {:?}s for an epoch beyond {:?}; currently at {:?}", retries, start_epoch, epoch);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        timeout(Duration::from_secs(40), join_all(tasks))
+            .await
+            .expect("timed out waiting for all nodes to advance an epoch");
+    }
+
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         // fullnode_handle is not part of swarm and cannot be dropped / killed
         self.fullnode_handle
@@ -532,40 +575,40 @@ impl TestCluster {
         }
     }
 
+    /// Wait until the on-chain authenticator state contains any active JWK.
     pub async fn wait_for_authenticator_state_update(&self) {
-        timeout(
-            Duration::from_secs(60),
-            self.fullnode_handle.sui_node.with_async(|node| async move {
-                let state = node.state();
-                let mut txns = state.subscription_handler.subscribe_transactions(
-                    TransactionFilter::ChangedObject(ObjectID::from_hex_literal("0x7").unwrap()),
-                );
+        self.wait_for_authenticator_state_update_for_providers(&[])
+            .await;
+    }
 
-                // Check if the state was already updated before subscribe_transactions was called
-                // above (after trigger_reconfiguration completes, the AuthenticatorStateUpdate
-                // transaction may have already been committed).
-                let has_active_jwks = get_authenticator_state(state.get_object_store())
-                    .ok()
-                    .flatten()
-                    .is_some_and(|state| !state.active_jwks.is_empty());
-                if has_active_jwks {
+    /// Wait until the on-chain authenticator state contains all the given JWK ids.
+    pub async fn wait_for_authenticator_state_update_for_providers(&self, jwk_ids: &[JwkId]) {
+        timeout(Duration::from_secs(60), async {
+            loop {
+                let active: Vec<JwkId> = self.fullnode_handle.sui_node.with(|node| {
+                    get_authenticator_state(node.state().get_object_store())
+                        .ok()
+                        .flatten()
+                        .map(|state| {
+                            state
+                                .active_jwks
+                                .iter()
+                                .map(|active| active.jwk_id.clone())
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                });
+                let ready = if jwk_ids.is_empty() {
+                    !active.is_empty()
+                } else {
+                    jwk_ids.iter().all(|id| active.contains(id))
+                };
+                if ready {
                     return;
                 }
-
-                while let Some(tx) = txns.next().await {
-                    let digest = *tx.transaction_digest();
-                    let tx = state
-                        .get_transaction_cache_reader()
-                        .get_transaction_block(&digest)
-                        .unwrap();
-                    match &tx.data().intent_message().value.kind() {
-                        TransactionKind::EndOfEpochTransaction(_) => (),
-                        TransactionKind::AuthenticatorStateUpdate(_) => break,
-                        _ => panic!("{:?}", tx),
-                    }
-                }
-            }),
-        )
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        })
         .await
         .expect("Timed out waiting for authenticator state update");
     }
@@ -734,10 +777,7 @@ impl TestCluster {
             .collect();
 
         let wait_responses = join_all(wait_futures).await;
-        for ((index, _), response) in submitted_positions
-            .into_iter()
-            .zip_debug_eq(wait_responses.into_iter())
-        {
+        for ((index, _), response) in submitted_positions.into_iter().zip_debug_eq(wait_responses) {
             match response? {
                 WaitForEffectsResponse::Executed { details, .. } => {
                     let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
@@ -856,7 +896,7 @@ impl TestCluster {
 
         let results: SuiResult<Vec<_>> = digests
             .into_iter()
-            .zip_debug_eq(responses.into_iter())
+            .zip_debug_eq(responses)
             .map(|(digest, response)| Ok((digest, response?)))
             .collect();
 
@@ -991,16 +1031,15 @@ impl TestCluster {
     /// returns raw effects, events and extra objects returned by the validators,
     /// aggregated manually (without authority aggregator).
     /// It also does not check whether the transaction is executed successfully.
-    /// In order to keep the fullnode up-to-date so that latter queries can read consistent
-    /// results, it calls execute_transaction_may_fail again which goes through fullnode.
-    /// This is less efficient and verbose, but can be used if more details are needed
-    /// from the execution results, and if the transaction is expected to fail.
+    /// Before returning, it waits for the transaction to settle on the fullnode so that
+    /// subsequent queries there read consistent results.
     pub async fn execute_transaction_return_raw_effects(
         &self,
         tx: Transaction,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
-        let results = self.submit_and_execute(tx.clone(), None).await?;
-        self.wallet.execute_transaction_may_fail(tx).await.unwrap();
+        let digest = *tx.digest();
+        let results = self.submit_and_execute(tx, None).await?;
+        self.wait_for_tx_settlement(&[digest]).await;
         Ok(results)
     }
 

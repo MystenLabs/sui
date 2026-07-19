@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared `Watermark` construction for the v2alpha list APIs.
+//! Shared `Watermark` construction for the v2 list APIs.
 //!
 //! Both ledger-history backends — the fullnode (`sui-rpc-api`) and bigtable
 //! (`sui-kv-rpc`) — and all three list handlers (`list_transactions`,
@@ -24,8 +24,8 @@
 //! API-specific frontier-to-candidate adapter.
 
 use sui_inverted_index::ScanDirection;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_cursor::{CursorKind, CursorToken, Position};
 
 use crate::ledger_history::query_options::{QueryOptions, RangeExhaustion};
@@ -291,11 +291,11 @@ mod tests {
     use sui_rpc_cursor::{CursorKind, Position};
 
     fn options(ascending: bool) -> QueryOptions {
-        let mut request = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();
+        let mut request = sui_rpc::proto::sui::rpc::v2::QueryOptions::default();
         request.ordering = Some(if ascending {
-            sui_rpc::proto::sui::rpc::v2alpha::Ordering::Ascending as i32
+            sui_rpc::proto::sui::rpc::v2::Ordering::Ascending as i32
         } else {
-            sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32
+            sui_rpc::proto::sui::rpc::v2::Ordering::Descending as i32
         });
         QueryOptions::transactions_from_proto(Some(&request), 100, 100).unwrap()
     }

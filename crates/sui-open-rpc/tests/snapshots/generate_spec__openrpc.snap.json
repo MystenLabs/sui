@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.76.0"
+    "version": "1.77.0"
   },
   "methods": [
     {
@@ -1688,6 +1688,7 @@
                 "ed25519_ed25519_verify_msg_cost_per_byte": {
                   "u64": "2"
                 },
+                "epoch_close_deadline_ms": null,
                 "event_emit_auth_stream_cost": null,
                 "event_emit_cost_base": {
                   "u64": "52"

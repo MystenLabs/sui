@@ -1,17 +1,51 @@
 ---
 title: Using Address Balances
-description: Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. Learn how to send, withdraw, and query address balances.
+description: >-
+  Address balances introduce a canonical balance system for fungible assets tied
+  to Sui addresses. Learn how to send, withdraw, and query address balances.
 keywords:
-  [
-    address balances,
-    coin objects,
-    funds withdrawal,
-    balance transfer,
-    gas payment,
-    SIP-58,
-    fungible assets,
-    sponsored transactions,
-  ]
+  - address balances
+  - coin objects
+  - funds withdrawal
+  - balance transfer
+  - gas payment
+  - SIP-58
+  - fungible assets
+  - sponsored transactions
+goal:
+  description: >-
+    Reader can send, withdraw, pay gas from, and query address balances using
+    the TypeScript SDK, CLI, and Move
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Using address balances
+    stage: Wallets & Funding
+questions:
+  - What is Using Address Balances in Sui?
+  - How do I send funds?
+  - How does using address balances work on Sui?
+answer: >-
+  Address balances introduce a canonical balance system for fungible assets tied
+  to Sui addresses. Learn how to send, withdraw, and query address balances.
 ---
 
 Address balances provide a canonical balance for each coin type tied directly to a Sui address. Funds sent through `sui::coin::send_funds` and `sui::balance::send_funds` merge automatically into a single balance per coin type, with no object management required. For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
@@ -59,10 +93,12 @@ sui client ptb \
 | `--to` | Recipient address. |
 | `--amount` | Amount to send in MIST. |
 | `--coin-type` | Coin type to send. Defaults to `0x2::sui::SUI`. |
-| `--all-coins` | Send all coin balance of the specified type. Cannot combine with `--stateless`. |
-| `--stateless` | Build a stateless transaction using address balance only (no owned object inputs). Uses `ValidDuring` expiration for replay protection. |
+| `--all-coins` | Send all coin balance of the specified type. Cannot combine with `--from-address-balance`. |
+| `--from-address-balance` | Draw the amount from the sender's address balance rather than their coins. |
 
-By default, the command selects coins first and falls back to address balance if coins are insufficient. With `--stateless`, it draws exclusively from the address balance.
+By default, the command selects coins first and falls back to address balance if coins are insufficient. With `--from-address-balance`, it draws exclusively from the address balance, and fails if that balance cannot cover the amount.
+
+The network chooses gas independently of this flag: it pays gas from the sender's address balance whenever that balance covers the budget and the transaction does not use the gas coin, in which case the transaction carries no gas payment and gets a `ValidDuring` expiration for replay protection. Otherwise it pays gas from the sender's coins. So a `--from-address-balance` transfer is usually, but not always, free of owned object inputs.
 
 ### Move functions
 
@@ -364,7 +400,7 @@ All balance values are returned as strings. Use `BigInt(balance.balance)` for nu
 
 ### gRPC
 
-Use [`GetBalance`](/references/fullnode-protocol#sui-rpc-v2-GetBalanceRequest) and [`ListBalances`](/references/fullnode-protocol#sui-rpc-v2-ListBalancesRequest) from `StateService`:
+Use [`GetBalance`](/references/fullnode-protocol) and [`ListBalances`](/references/fullnode-protocol) from `StateService`:
 
 ```bash
 buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService/GetBalance \

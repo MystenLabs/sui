@@ -38,6 +38,7 @@ use sui_consistent_store::restore::RestoreDriver;
 use sui_consistent_store::restore::RestoreDriverConfig;
 use sui_consistent_store::restore::RestoreSource;
 use sui_consistent_store::restore::metrics::RestoreMetrics;
+use sui_consistent_store::restore_state;
 use sui_futures::service::Service;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::storage::ObjectStore;
@@ -92,7 +93,8 @@ pub const LIVE_COHORT: &[&str] = &[ObjectByOwner::NAME, ObjectByType::NAME, Bala
 /// so they are seeded, never restored.
 ///
 /// `object_version_by_checkpoint` and `package_versions` are the
-/// exceptions: they are *both* restored and backfilled.
+/// exceptions: when some prefix of the chain has been pruned
+/// (`L > 0`) they are *both* restored and backfilled.
 /// [`restore_indexes`] bulk-loads their floor rows at the tip `T` (the
 /// versions live in the snapshot but predate the available window, so a
 /// checkpoint-bounded read treats them as having always existed), and
@@ -101,7 +103,14 @@ pub const LIVE_COHORT: &[&str] = &[ObjectByOwner::NAME, ObjectByType::NAME, Bala
 /// `object_version_by_checkpoint`'s per-checkpoint changes, and
 /// `package_versions`'s real publish checkpoint for versions published
 /// in the window. The embedded bootstrap runs the restore before the
-/// seed, so the `L-1` watermark wins.
+/// seed, so the `L-1` watermark wins. When nothing has been pruned
+/// (`L == 0`) the backfill covers the whole chain and rebuilds both
+/// CFs in full, so the embedded bootstrap skips restoring them
+/// entirely ([`RestoreLayer::live_only`]) -- restoring them would
+/// waste bulk-load work and stamp `__watermark = T` rows that would
+/// make them skip `(0, T]`.
+///
+/// [`RestoreLayer::live_only`]: crate::RestoreLayer::live_only
 ///
 /// Matches the history half of
 /// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded).
@@ -115,18 +124,25 @@ pub const HISTORY_COHORT: &[&str] = &[
     EventBitmap::NAME,
 ];
 
+/// The two [`HISTORY_COHORT`] members whose floor rows the bulk
+/// restore also loads when a prefix of the chain has been pruned
+/// (`layer.history_floors`; see [`HISTORY_COHORT`]'s docs).
+const HISTORY_FLOORS: &[&str] = &[ObjectVersionByCheckpoint::NAME, PackageVersions::NAME];
+
 /// Register every [`Restore`]-implementing pipeline opted in by
 /// `layer` on a [`RestoreDriver`] bound to `db` / `schema` and
 /// `source`, then run the resulting [`Service`].
 ///
-/// The live-cohort pipelines are always registered, plus
+/// The live-cohort pipelines are always registered.
 /// `object_version_by_checkpoint` and `package_versions` -- history-
 /// cohort members whose floor rows are bulk-loaded from the live set
-/// here (the history seed separately rewinds their watermarks so they
-/// also backfill `(L, T]`). The raw [`Objects`] pipeline is only
-/// registered when `layer.objects` is set. The returned `Service`'s
-/// primary task completes once every registered pipeline transitions to
-/// [`RestoreState::Complete`].
+/// (the history seed separately rewinds their watermarks so they also
+/// backfill `(L, T]`) -- are registered only when
+/// `layer.history_floors` is set; a caller whose history cohort
+/// replays from genesis leaves them to the backfill. The raw
+/// [`Objects`] pipeline is only registered when `layer.objects` is
+/// set. The returned `Service`'s primary task completes once every
+/// registered pipeline transitions to [`RestoreState::Complete`].
 ///
 /// [`Restore`]: sui_consistent_store::Restore
 /// [`RestoreState::Complete`]: sui_consistent_store::restore_state::Complete
@@ -143,11 +159,13 @@ pub fn restore_indexes<Src: RestoreSource>(
     // object to it.
     let target_checkpoint = source.target_checkpoint();
     let mut driver = RestoreDriver::new(db, schema, source, config, metrics);
-    // History-cohort members, but their floor rows are restored from the
-    // live set; the embedded history seed later rewinds their watermarks
-    // so they also backfill `(L, T]`.
-    driver.register(ObjectVersionByCheckpoint::for_restore(target_checkpoint))?;
-    driver.register(PackageVersions)?;
+    if layer.history_floors {
+        // History-cohort members, but their floor rows are restored
+        // from the live set; the embedded history seed later rewinds
+        // their watermarks so they also backfill `(L, T]`.
+        driver.register(ObjectVersionByCheckpoint::for_restore(target_checkpoint))?;
+        driver.register(PackageVersions)?;
+    }
     driver.register(ObjectByOwner)?;
     driver.register(ObjectByType)?;
     driver.register(Balance)?;
@@ -189,24 +207,18 @@ pub fn floor_unrestored_pipelines(
     target_chain_id: ChainId,
     layer: &RestoreLayer,
 ) -> anyhow::Result<()> {
-    let restored: &[&'static str] = if layer.objects {
-        &[
-            ObjectVersionByCheckpoint::NAME,
-            ObjectByOwner::NAME,
-            ObjectByType::NAME,
-            Balance::NAME,
-            PackageVersions::NAME,
-            Objects::NAME,
-        ]
-    } else {
-        &[
-            ObjectVersionByCheckpoint::NAME,
-            ObjectByOwner::NAME,
-            ObjectByType::NAME,
-            Balance::NAME,
-            PackageVersions::NAME,
-        ]
-    };
+    // The set of pipelines `restore_indexes` registered for this
+    // `layer` -- their watermarks were written by the restore driver's
+    // finalize step and must not be clobbered here.
+    let mut restored: Vec<&'static str> =
+        vec![ObjectByOwner::NAME, ObjectByType::NAME, Balance::NAME];
+    if layer.history_floors {
+        restored.push(ObjectVersionByCheckpoint::NAME);
+        restored.push(PackageVersions::NAME);
+    }
+    if layer.objects {
+        restored.push(Objects::NAME);
+    }
 
     // Every rpc-store pipeline. Kept exhaustive so any new
     // pipeline added to `PipelineLayer` needs an explicit
@@ -447,6 +459,67 @@ pub fn seed_history_cohort(
     Ok(())
 }
 
+/// Whether any embedded-cohort pipeline has a bulk restore in
+/// progress: an `__restore` row in the `InProgress` state, meaning a
+/// restore crashed mid-run and its per-shard cursors are resumable.
+///
+/// Tip indexing never writes `__restore` rows, and the restore
+/// driver's finalize flips every registered row to `Complete` in one
+/// atomic batch, so an `InProgress` row is unambiguous. The embedded
+/// bootstrap uses this to tell a resumable restore apart from other
+/// states that merely lack live watermarks -- a fresh store, or a
+/// from-genesis run that crashed between the live pipelines' first
+/// commits -- which must be cleared before restoring, because the
+/// bulk restore merges and puts on top of whatever rows exist.
+pub fn restore_in_progress(db: &Db) -> anyhow::Result<bool> {
+    let framework = db.framework();
+    for name in LIVE_COHORT.iter().chain(HISTORY_COHORT) {
+        let key = PipelineTaskKey::new(*name);
+        let state = framework
+            .restore
+            .get(&key)
+            .with_context(|| format!("reading restore state for {name}"))?;
+        if let Some(state) = state
+            && matches!(state.state, Some(restore_state::State::InProgress(_)))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Whether the persisted history-cohort state is exactly the
+/// post-restore, pre-seed state: both history-floor pipelines
+/// (`object_version_by_checkpoint` and `package_versions`) carry the
+/// watermark the restore driver's finalize stamped, while no other
+/// history pipeline has ever committed.
+///
+/// This is the only state the embedded bootstrap may repair with
+/// [`seed_history_cohort`] alone (the crash window between the
+/// restore's finalize and the history seed): the floor pipelines'
+/// restored rows anchor checkpoint-pinned reads at the target, and
+/// the seed's rewind makes the backfill cover everything else in
+/// `(L, T]`. Any other history coverage below the available floor
+/// sits behind a pruned gap the backfill can never fill -- seeding
+/// over it would advertise the range above the floor as served while
+/// stale sub-floor rows resolve checkpoint-pinned reads to pre-gap
+/// versions -- so such a store must be cleared and re-restored
+/// instead.
+pub fn history_seed_pending(db: &Db) -> anyhow::Result<bool> {
+    let framework = db.framework();
+    for name in HISTORY_COHORT {
+        let key = PipelineTaskKey::new(*name);
+        let watermark = framework
+            .watermarks
+            .get(&key)
+            .with_context(|| format!("reading watermark for {name}"))?;
+        if watermark.is_some() != HISTORY_FLOORS.contains(name) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -640,6 +713,11 @@ mod tests {
             db.framework().restore.get(&objects_key).unwrap().is_none(),
             "indexes_only should leave the objects pipeline unregistered",
         );
+
+        // A finalized `indexes_only` restore is exactly the state the
+        // history seed repairs.
+        assert!(!restore_in_progress(&db).unwrap());
+        assert!(history_seed_pending(&db).unwrap());
     }
 
     /// `floor_unrestored_pipelines` writes a `__watermark` /
@@ -855,6 +933,194 @@ mod tests {
                 checkpoint_lo: 1_000,
             }),
         );
+    }
+
+    /// `RestoreLayer::live_only` registers only the live-cohort
+    /// pipelines: `object_version_by_checkpoint` and
+    /// `package_versions` get no restore state, no watermark, no
+    /// chain id, and no floor rows, so a from-genesis backfill owns
+    /// them outright and never skips `(0, T]`.
+    #[tokio::test]
+    async fn restore_indexes_live_only_skips_history_floors() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let schema = Arc::new(schema);
+
+        let owner = SuiAddress::random_for_testing_only();
+        let objects: Vec<Object> = (1..=4u8)
+            .map(|i| Object::with_id_owner_for_testing(ObjectID::from_single_byte(i), owner))
+            .collect();
+
+        let chain_id = ChainId([8u8; 32]);
+        let source = VecSource::from_objects(123, chain_id, vec![objects.clone()]);
+
+        restore_indexes(
+            db.clone(),
+            schema.clone(),
+            source,
+            RestoreDriverConfig::default(),
+            RestoreLayer::live_only(),
+            RestoreMetrics::new(None, &prometheus::Registry::new()),
+        )
+        .unwrap()
+        .shutdown()
+        .await
+        .unwrap();
+
+        // The live cohort restored and finalized as usual.
+        for name in LIVE_COHORT {
+            let key = PipelineTaskKey::new(*name);
+            let state = db.framework().restore.get(&key).unwrap().unwrap();
+            assert!(
+                matches!(
+                    state.state.unwrap(),
+                    restore_state::State::Complete(c) if c.restored_at == 123,
+                ),
+                "{name} should complete its restore",
+            );
+            assert_eq!(
+                db.framework().watermarks.get(&key).unwrap(),
+                Some(Watermark::for_checkpoint(123)),
+                "{name} should resume from the restore target",
+            );
+        }
+
+        // The history-floor pipelines were never registered: no
+        // restore state, no watermark (so tip indexing backfills them
+        // from genesis), and no floor rows in their CFs.
+        for name in [ObjectVersionByCheckpoint::NAME, PackageVersions::NAME] {
+            let key = PipelineTaskKey::new(name);
+            assert!(
+                db.framework().restore.get(&key).unwrap().is_none(),
+                "{name} should have no restore state under live_only",
+            );
+            assert!(
+                db.framework().watermarks.get(&key).unwrap().is_none(),
+                "{name} should have no watermark under live_only",
+            );
+        }
+        for o in &objects {
+            assert_eq!(
+                schema
+                    .get_object_version_at_checkpoint(o.id(), 123)
+                    .unwrap(),
+                None,
+                "live_only must write no restore floor rows",
+            );
+        }
+
+        // A `live_only` restore leaves nothing to seed: the whole
+        // history cohort (floors included) belongs to the
+        // from-genesis backfill.
+        assert!(!history_seed_pending(&db).unwrap());
+    }
+
+    /// The bootstrap state predicates track the restore and seed
+    /// lifecycle: a fresh store reports neither, a mid-run restore
+    /// reports `restore_in_progress`, a finalized `indexes_only`
+    /// restore reports `history_seed_pending` until the history seed
+    /// runs, and after the seed both are off.
+    #[tokio::test]
+    async fn state_predicates_track_restore_and_seed_lifecycle() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let schema = Arc::new(schema);
+
+        // Fresh store: nothing in progress, nothing to seed.
+        assert!(!restore_in_progress(&db).unwrap());
+        assert!(!history_seed_pending(&db).unwrap());
+
+        // A registered-but-unfinished restore (the state a mid-run
+        // crash leaves behind): an `InProgress` row with no watermark.
+        let framework = FrameworkSchema::new(db.clone());
+        let in_progress = sui_consistent_store::RestoreState::default().with_in_progress(
+            restore_state::InProgress {
+                target_checkpoint: 123,
+                shards: Default::default(),
+            },
+        );
+        let mut batch = db.batch();
+        batch
+            .put(
+                &framework.restore,
+                &PipelineTaskKey::new(Balance::NAME),
+                &in_progress,
+            )
+            .unwrap();
+        batch.commit().unwrap();
+        assert!(restore_in_progress(&db).unwrap());
+        assert!(!history_seed_pending(&db).unwrap());
+
+        // Run the restore to completion at the same target: every
+        // registered row flips to `Complete` and the store enters the
+        // post-restore, pre-seed state.
+        let owner = SuiAddress::random_for_testing_only();
+        let objects = vec![Object::with_id_owner_for_testing(
+            ObjectID::from_single_byte(1),
+            owner,
+        )];
+        let source = VecSource::from_objects(123, ChainId([3u8; 32]), vec![objects]);
+        restore_indexes(
+            db.clone(),
+            schema.clone(),
+            source,
+            RestoreDriverConfig::default(),
+            RestoreLayer::indexes_only(),
+            RestoreMetrics::new(None, &prometheus::Registry::new()),
+        )
+        .unwrap()
+        .shutdown()
+        .await
+        .unwrap();
+        assert!(!restore_in_progress(&db).unwrap());
+        assert!(history_seed_pending(&db).unwrap());
+
+        // The history seed stamps every history pipeline, closing the
+        // pre-seed window.
+        seed_history_cohort(
+            &db,
+            &schema,
+            Watermark::for_checkpoint(99),
+            ChainId([3u8; 32]),
+            None,
+        )
+        .unwrap();
+        assert!(!restore_in_progress(&db).unwrap());
+        assert!(!history_seed_pending(&db).unwrap());
+    }
+
+    /// `history_seed_pending` requires exactly the post-restore
+    /// watermark shape: floor pipelines watermarked, everything else
+    /// in the history cohort unwatermarked. Partial coverage in
+    /// either direction is not seedable.
+    #[test]
+    fn history_seed_pending_rejects_partial_history_coverage() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, _schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let framework = FrameworkSchema::new(db.clone());
+
+        let stamp = |name: &'static str| {
+            let mut batch = db.batch();
+            batch
+                .put(
+                    &framework.watermarks,
+                    &PipelineTaskKey::new(name),
+                    &Watermark::for_checkpoint(123),
+                )
+                .unwrap();
+            batch.commit().unwrap();
+        };
+
+        // A non-floor history pipeline with prior committed coverage
+        // (and no floor watermarks) is not the pre-seed state.
+        stamp(Epochs::NAME);
+        assert!(!history_seed_pending(&db).unwrap());
+
+        // Both floors watermarked on top of that: still committed
+        // non-floor coverage, still not seedable.
+        stamp(ObjectVersionByCheckpoint::NAME);
+        stamp(PackageVersions::NAME);
+        assert!(!history_seed_pending(&db).unwrap());
     }
 
     /// The live and history cohorts are disjoint and each has the

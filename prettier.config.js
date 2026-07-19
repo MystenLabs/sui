@@ -26,10 +26,13 @@ module.exports = {
 			},
 		},
 		{
-			files: '*.move',
+			files: '**/*.move',
 			options: {
 				parser: 'move',
+				printWidth: 100,
+				wrapComments: false,
 				tabWidth: 4,
+				useTabs: false,
 				useModuleLabel: true,
 				autoGroupImports: 'module',
 			},

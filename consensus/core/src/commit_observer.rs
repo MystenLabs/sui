@@ -284,12 +284,15 @@ impl CommitObserver {
                 .observe(commit.blocks.len() as f64);
 
             for block in &commit.blocks {
-                let latency_ms = utc_now
-                    .checked_sub(block.timestamp_ms())
-                    .unwrap_or_default();
+                let latency_ms = utc_now.saturating_sub(block.timestamp_ms());
                 metrics
                     .block_commit_latency
                     .observe(Duration::from_millis(latency_ms).as_secs_f64());
+                if block.author() == self.context.own_index {
+                    metrics
+                        .proposed_block_commit_latency
+                        .observe(Duration::from_millis(latency_ms).as_secs_f64());
+                }
             }
         }
 
@@ -425,6 +428,31 @@ mod tests {
             }
         }
         assert_eq!(processed_subdag_index, leaders.len());
+
+        // Own block latencies are observed once per committed & finalized block
+        // authored by this authority.
+        let own_committed_blocks = commits
+            .iter()
+            .flat_map(|commit| commit.blocks.iter())
+            .filter(|block| block.author() == context.own_index)
+            .count() as u64;
+        assert!(own_committed_blocks > 0);
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_commit_latency
+                .get_sample_count(),
+            own_committed_blocks
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_finalization_latency
+                .get_sample_count(),
+            own_committed_blocks
+        );
 
         verify_channel_empty(&mut commit_receiver).await;
 

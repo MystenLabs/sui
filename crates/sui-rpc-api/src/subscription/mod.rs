@@ -22,7 +22,7 @@ mod matcher;
 const CHECKPOINT_MAILBOX_SIZE: usize = 1024;
 const MAILBOX_SIZE: usize = 128;
 const SUBSCRIPTION_CHANNEL_SIZE: usize = 256;
-const MAX_SUBSCRIBERS: usize = 1024;
+const DEFAULT_MAX_SUBSCRIBERS: usize = 1024;
 /// Bound on each shard task's mailbox (registrations, checkpoint fan-out,
 /// and lag teardowns from the dispatcher).
 const SHARD_MAILBOX_SIZE: usize = 64;
@@ -61,6 +61,108 @@ pub enum SubscriptionKind {
     Checkpoints,
     Transactions,
     Events,
+}
+
+impl SubscriptionKind {
+    pub(crate) fn metric_label(self) -> &'static str {
+        match self {
+            Self::Checkpoints => "checkpoint",
+            Self::Transactions => "transaction",
+            Self::Events => "event",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SubscriptionTerminationReason {
+    ClientClosed,
+    SlowConsumer,
+    SourceLag,
+    ServiceShutdown,
+}
+
+impl SubscriptionTerminationReason {
+    fn metric_label(self) -> &'static str {
+        match self {
+            Self::ClientClosed => "client_closed",
+            Self::SlowConsumer => "slow_consumer",
+            Self::SourceLag => "source_lag",
+            Self::ServiceShutdown => "service_shutdown",
+        }
+    }
+}
+
+pub(crate) struct SubscriptionLifecycleGuard {
+    kind: SubscriptionKind,
+    filtered: bool,
+    counters: Arc<SubscriberCounts>,
+    inflight_subscribers: prometheus::IntGauge,
+    terminations_total: prometheus::IntCounterVec,
+    termination_reason: SubscriptionTerminationReason,
+}
+
+impl SubscriptionLifecycleGuard {
+    pub(crate) fn new(
+        kind: SubscriptionKind,
+        filtered: bool,
+        counters: Arc<SubscriberCounts>,
+        metrics: &SubscriptionMetrics,
+    ) -> Self {
+        counters.total.fetch_add(1, Ordering::Relaxed);
+        if filtered {
+            match kind {
+                SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
+                    counters.filtered_tx.fetch_add(1, Ordering::Relaxed);
+                }
+                SubscriptionKind::Events => {
+                    counters.filtered_event.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+        let inflight_subscribers = metrics
+            .inflight_subscribers
+            .with_label_values(&[kind.metric_label(), if filtered { "true" } else { "false" }]);
+        inflight_subscribers.inc();
+
+        Self {
+            kind,
+            filtered,
+            counters,
+            inflight_subscribers,
+            terminations_total: metrics.terminations_total.clone(),
+            termination_reason: SubscriptionTerminationReason::ServiceShutdown,
+        }
+    }
+
+    /// Finalizes the subscription now, recording `reason` instead of the
+    /// default `service_shutdown`: consuming `self` runs `Drop`, which
+    /// decrements the counts/gauge and increments the termination counter.
+    pub(crate) fn terminate(mut self, reason: SubscriptionTerminationReason) {
+        self.termination_reason = reason;
+    }
+}
+
+impl Drop for SubscriptionLifecycleGuard {
+    fn drop(&mut self) {
+        self.counters.total.fetch_sub(1, Ordering::Relaxed);
+        if self.filtered {
+            match self.kind {
+                SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
+                    self.counters.filtered_tx.fetch_sub(1, Ordering::Relaxed);
+                }
+                SubscriptionKind::Events => {
+                    self.counters.filtered_event.fetch_sub(1, Ordering::Relaxed);
+                }
+            }
+        }
+        self.inflight_subscribers.dec();
+        self.terminations_total
+            .with_label_values(&[
+                self.kind.metric_label(),
+                self.termination_reason.metric_label(),
+            ])
+            .inc();
+    }
 }
 
 /// What a subscriber asked for. `query: None` = unfiltered (stream
@@ -164,6 +266,7 @@ struct SubscriptionRequest {
 #[derive(Clone)]
 pub struct SubscriptionServiceHandle {
     sender: mpsc::Sender<SubscriptionRequest>,
+    metrics: SubscriptionMetrics,
 }
 
 impl SubscriptionServiceHandle {
@@ -177,6 +280,13 @@ impl SubscriptionServiceHandle {
 
         receiver.await.ok()
     }
+
+    pub(crate) fn stream_metrics(
+        &self,
+        kind: SubscriptionKind,
+    ) -> crate::metrics::SubscriptionStreamMetrics {
+        self.metrics.stream_metrics(kind.metric_label())
+    }
 }
 
 /// Live subscriber counts shared dispatcher-to-shards, and the source of
@@ -184,7 +294,7 @@ impl SubscriptionServiceHandle {
 /// gating expensive per-checkpoint key extraction (the per-space filtered
 /// counts).
 #[derive(Default)]
-struct SubscriberCounts {
+pub(crate) struct SubscriberCounts {
     total: AtomicUsize,
     filtered_tx: AtomicUsize,
     filtered_event: AtomicUsize,
@@ -197,9 +307,10 @@ enum ShardMsg {
     Register {
         spec: SubscriptionSpec,
         sender: mpsc::Sender<SubscriptionUpdate>,
+        guard: SubscriptionLifecycleGuard,
     },
-    /// Lag teardown: drop every subscriber on this shard.
-    Clear,
+    /// Drop every subscriber on this shard with the supplied bounded reason.
+    Clear(SubscriptionTerminationReason),
 }
 
 /// One worker task owning a partition of the subscribers: it evaluates their
@@ -210,60 +321,32 @@ struct SubscriptionShard {
     /// Checkpoints a subscriber may go without any frame before a standalone
     /// watermark tick is delivered (see `RpcConfig::subscription_watermark_interval`).
     watermark_interval: u32,
-    filtered_subscriber_counts: Arc<SubscriberCounts>,
-    metrics: SubscriptionMetrics,
 }
 
 impl SubscriptionShard {
     async fn run(mut self) {
-        // Once the dispatcher drops our sender this yields `None` and the
-        // shard exits, dropping its matcher and closing its client streams.
         while let Some(msg) = self.mailbox.recv().await {
             self.handle_msg(msg);
         }
+        self.matcher
+            .clear(SubscriptionTerminationReason::ServiceShutdown);
     }
 
     fn handle_msg(&mut self, msg: ShardMsg) {
         match msg {
-            ShardMsg::Register { spec, sender } => {
-                self.matcher.insert(spec, sender);
+            ShardMsg::Register {
+                spec,
+                sender,
+                guard,
+            } => {
+                self.matcher.insert(spec, sender, guard);
             }
             ShardMsg::Checkpoint(checkpoint, keys) => {
-                let (before_tx, before_ev) = (
-                    self.matcher.filtered_tx_subs(),
-                    self.matcher.filtered_event_subs(),
-                );
-                let departed = self.matcher.dispatch_with_keys(
-                    &checkpoint,
-                    &keys,
-                    self.watermark_interval,
-                    &self.metrics,
-                );
-                // Mirror departures into the shared counts.
-                self.filtered_subscriber_counts
-                    .total
-                    .fetch_sub(departed, Ordering::Relaxed);
-                self.filtered_subscriber_counts.filtered_tx.fetch_sub(
-                    before_tx - self.matcher.filtered_tx_subs(),
-                    Ordering::Relaxed,
-                );
-                self.filtered_subscriber_counts.filtered_event.fetch_sub(
-                    before_ev - self.matcher.filtered_event_subs(),
-                    Ordering::Relaxed,
-                );
+                self.matcher
+                    .dispatch_with_keys(&checkpoint, &keys, self.watermark_interval);
             }
-            ShardMsg::Clear => {
-                self.filtered_subscriber_counts
-                    .filtered_tx
-                    .fetch_sub(self.matcher.filtered_tx_subs(), Ordering::Relaxed);
-                self.filtered_subscriber_counts
-                    .filtered_event
-                    .fetch_sub(self.matcher.filtered_event_subs(), Ordering::Relaxed);
-                let dropped = self.matcher.clear();
-                self.filtered_subscriber_counts
-                    .total
-                    .fetch_sub(dropped, Ordering::Relaxed);
-                self.metrics.inflight_subscribers.sub(dropped as i64);
+            ShardMsg::Clear(reason) => {
+                self.matcher.clear(reason);
             }
         }
     }
@@ -295,6 +378,8 @@ pub struct SubscriptionService {
     /// Filtered-subscriber counts per key space, shared with the shards;
     /// gates per-checkpoint key extraction.
     counters: Arc<SubscriberCounts>,
+    /// Global admission limit across all shards.
+    max_subscribers: usize,
 
     // When set, delivery of a checkpoint waits until the index has committed
     // it (see [`IndexedCheckpointFn`]). `None` preserves the immediate-delivery
@@ -305,12 +390,14 @@ pub struct SubscriptionService {
 }
 
 impl SubscriptionService {
-    /// `None` defaults `watermark_interval` to 25 checkpoints and `shards` to
-    /// the host's available parallelism, with a minimum of one.
+    /// `None` defaults `watermark_interval` to 25 checkpoints,
+    /// `max_subscribers` to 1024, and `shards` to the host's available
+    /// parallelism, with a minimum of one shard.
     pub fn build(
         registry: &prometheus::Registry,
         indexed_checkpoint: Option<IndexedCheckpointFn>,
         watermark_interval: Option<u32>,
+        max_subscribers: Option<usize>,
         shards: Option<u32>,
     ) -> (
         broadcast::Sender<Arc<Checkpoint>>,
@@ -319,8 +406,13 @@ impl SubscriptionService {
         let metrics = SubscriptionMetrics::new(registry);
         let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(CHECKPOINT_MAILBOX_SIZE);
         let (subscription_request_sender, mailbox) = mpsc::channel(MAILBOX_SIZE);
+        let handle = SubscriptionServiceHandle {
+            sender: subscription_request_sender,
+            metrics: metrics.clone(),
+        };
 
         let counters = Arc::new(SubscriberCounts::default());
+        let max_subscribers = max_subscribers.unwrap_or(DEFAULT_MAX_SUBSCRIBERS);
         let watermark_interval = watermark_interval
             .unwrap_or(DEFAULT_WATERMARK_INTERVAL)
             .max(1);
@@ -333,8 +425,6 @@ impl SubscriptionService {
                     mailbox: shard_mailbox,
                     matcher: matcher::SubscriptionMatcher::default(),
                     watermark_interval,
-                    filtered_subscriber_counts: counters.clone(),
-                    metrics: metrics.clone(),
                 }
                 .run(),
             );
@@ -348,18 +438,14 @@ impl SubscriptionService {
                 shards: shard_senders,
                 next_shard: 0,
                 counters,
+                max_subscribers,
                 indexed_checkpoint,
                 metrics,
             }
             .start(),
         );
 
-        (
-            checkpoint_sender,
-            SubscriptionServiceHandle {
-                sender: subscription_request_sender,
-            },
-        )
+        (checkpoint_sender, handle)
     }
 
     async fn start(mut self) {
@@ -387,6 +473,15 @@ impl SubscriptionService {
                     }
                 },
             }
+        }
+
+        for shard in &self.shards {
+            shard
+                .send(ShardMsg::Clear(
+                    SubscriptionTerminationReason::ServiceShutdown,
+                ))
+                .await
+                .expect("subscription shard terminated unexpectedly");
         }
 
         info!("RPC Subscription Services ended");
@@ -462,13 +557,21 @@ impl SubscriptionService {
             return;
         }
 
-        let deadline = Instant::now() + INDEX_WAIT_TIMEOUT;
+        let wait_started = Instant::now();
+        let deadline = wait_started + INDEX_WAIT_TIMEOUT;
         loop {
             sleep(INDEX_WAIT_POLL_INTERVAL).await;
             if indexed().is_some_and(|hi| hi >= sequence_number) {
+                self.metrics
+                    .index_wait_seconds
+                    .observe(wait_started.elapsed().as_secs_f64());
                 return;
             }
             if Instant::now() >= deadline {
+                self.metrics.index_wait_timeouts_total.inc();
+                self.metrics
+                    .index_wait_seconds
+                    .observe(wait_started.elapsed().as_secs_f64());
                 warn!(
                     checkpoint = sequence_number,
                     "index did not catch up within {INDEX_WAIT_TIMEOUT:?}; \
@@ -492,11 +595,10 @@ impl SubscriptionService {
         );
         // Per-shard FIFO ordering guarantees no shard delivers a post-gap
         // checkpoint to a pre-gap subscriber: Clear is enqueued behind all
-        // pre-gap checkpoints and ahead of all post-gap ones. The shards
-        // decrement the inflight gauge for the subscribers they drop.
+        // pre-gap checkpoints and ahead of all post-gap ones.
         for shard in &self.shards {
             shard
-                .send(ShardMsg::Clear)
+                .send(ShardMsg::Clear(SubscriptionTerminationReason::SourceLag))
                 .await
                 .expect("subscription shard terminated unexpectedly");
         }
@@ -506,14 +608,12 @@ impl SubscriptionService {
     }
 
     async fn handle_message(&mut self, request: SubscriptionRequest) {
-        // Check if we've reached the limit to the number of subscribers we
-        // can have at one time. `counters.total` is incremented here at
-        // admission and decremented by the shards on departure/clear, so it
-        // counts live + in-flight subscribers across every shard.
-        if self.counters.total.load(Ordering::Relaxed) >= MAX_SUBSCRIBERS {
+        // The guard increments `counters.total` after the client accepts the
+        // receiver and owns that admission until the shard finalizes it.
+        if self.counters.total.load(Ordering::Relaxed) >= self.max_subscribers {
             trace!(
                 "failed to register new subscriber: hit maximum number of subscribers {}",
-                MAX_SUBSCRIBERS
+                self.max_subscribers
             );
             // Dropping the oneshot makes `register_subscription` return
             // `None` -> `Status::unavailable`.
@@ -524,24 +624,21 @@ impl SubscriptionService {
         match request.sender.send(reciever) {
             Ok(()) => {
                 trace!("successfully registered new subscriber");
-                self.counters.total.fetch_add(1, Ordering::Relaxed);
-                self.metrics.inflight_subscribers.inc();
-                if request.spec.query.is_some() {
-                    match request.spec.kind {
-                        SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
-                            self.counters.filtered_tx.fetch_add(1, Ordering::Relaxed)
-                        }
-                        SubscriptionKind::Events => {
-                            self.counters.filtered_event.fetch_add(1, Ordering::Relaxed)
-                        }
-                    };
-                }
+                let kind = request.spec.kind;
+                let filtered = request.spec.query.is_some();
+                let guard = SubscriptionLifecycleGuard::new(
+                    kind,
+                    filtered,
+                    Arc::clone(&self.counters),
+                    &self.metrics,
+                );
                 let shard = self.next_shard;
                 self.next_shard = (self.next_shard + 1) % self.shards.len();
                 self.shards[shard]
                     .send(ShardMsg::Register {
                         spec: request.spec,
                         sender,
+                        guard,
                     })
                     .await
                     .expect("subscription shard terminated unexpectedly");
@@ -560,7 +657,7 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
-    use sui_rpc::proto::sui::rpc::v2alpha as proto;
+    use sui_rpc::proto::sui::rpc::v2 as proto;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
     use sui_types::event::Event;
@@ -596,8 +693,6 @@ mod tests {
                 mailbox: shard_mailbox,
                 matcher: matcher::SubscriptionMatcher::default(),
                 watermark_interval,
-                filtered_subscriber_counts: counters.clone(),
-                metrics: metrics.clone(),
             });
         }
 
@@ -607,6 +702,7 @@ mod tests {
             shards: shard_senders,
             next_shard: 0,
             counters,
+            max_subscribers: DEFAULT_MAX_SUBSCRIBERS,
             indexed_checkpoint,
             metrics,
         };
@@ -700,6 +796,30 @@ mod tests {
             .await;
         receiver.await.ok()
     }
+    fn inflight_subscribers(metrics: &SubscriptionMetrics) -> i64 {
+        ["checkpoint", "transaction", "event"]
+            .into_iter()
+            .flat_map(|kind| {
+                ["true", "false"].into_iter().map(move |filtered| {
+                    metrics
+                        .inflight_subscribers
+                        .with_label_values(&[kind, filtered])
+                        .get()
+                })
+            })
+            .sum()
+    }
+
+    fn terminations(
+        metrics: &SubscriptionMetrics,
+        kind: &'static str,
+        reason: &'static str,
+    ) -> u64 {
+        metrics
+            .terminations_total
+            .with_label_values(&[kind, reason])
+            .get()
+    }
 
     /// Synchronously run every shard's pending mailbox messages.
     fn drain(shards: &mut [SubscriptionShard]) {
@@ -733,6 +853,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn labeled_inflight_gauge_covers_all_types_and_filter_states() {
+        let (mut service, mut shards) = test_service(1);
+        let kinds = [
+            SubscriptionKind::Checkpoints,
+            SubscriptionKind::Transactions,
+            SubscriptionKind::Events,
+        ];
+        let mut receivers = Vec::new();
+
+        for kind in kinds {
+            for filtered in [false, true] {
+                let query = filtered.then(|| match kind {
+                    SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
+                        sender_query(addr(0), false)
+                    }
+                    SubscriptionKind::Events => event_type_query(
+                        "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinEvent",
+                    ),
+                });
+                receivers.push(
+                    register(&mut service, SubscriptionSpec { kind, query })
+                        .await
+                        .unwrap(),
+                );
+            }
+        }
+        drain(&mut shards);
+
+        for kind in kinds {
+            for filtered in ["false", "true"] {
+                assert_eq!(
+                    service
+                        .metrics
+                        .inflight_subscribers
+                        .with_label_values(&[kind.metric_label(), filtered])
+                        .get(),
+                    1
+                );
+            }
+        }
+
+        drop(receivers);
+        service.handle_checkpoint(checkpoint(1)).await;
+        drain(&mut shards);
+        assert_eq!(inflight_subscribers(&service.metrics), 0);
+        assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
+
+        shards[0].handle_msg(ShardMsg::Clear(
+            SubscriptionTerminationReason::ServiceShutdown,
+        ));
+        assert_eq!(inflight_subscribers(&service.metrics), 0);
+        assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
+        for kind in ["checkpoint", "transaction", "event"] {
+            assert_eq!(terminations(&service.metrics, kind, "client_closed"), 2);
+        }
+    }
+
+    #[tokio::test]
     async fn handle_checkpoint_fans_out_in_order() {
         let (mut service, mut shards) = test_service(1);
         let mut receiver = register(&mut service, unfiltered()).await.unwrap();
@@ -756,14 +934,17 @@ mod tests {
         drain(&mut shards);
 
         assert!(shards[0].matcher.is_empty());
-        assert_eq!(service.metrics.inflight_subscribers.get(), 0);
+        assert_eq!(inflight_subscribers(&service.metrics), 0);
         assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            terminations(&service.metrics, "checkpoint", "client_closed"),
+            1
+        );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn handle_checkpoint_waits_for_index_before_delivering() {
-        // The index reports it has committed through checkpoint 4; checkpoint 5
-        // is not yet indexed.
+        // The first checkpoint is already indexed and does not count as a wait.
         let indexed = Arc::new(AtomicU64::new(4));
         let gate = indexed.clone();
         let (mut service, mut shards) = test_service_with(
@@ -773,19 +954,64 @@ mod tests {
         );
         let mut receiver = register(&mut service, unfiltered()).await.unwrap();
 
-        // Delivery of checkpoint 5 blocks until the index catches up to it.
-        let mut deliver = std::pin::pin!(service.handle_checkpoint(checkpoint(5)));
-        assert!(
-            futures::poll!(&mut deliver).is_pending(),
-            "delivery should block while checkpoint 5 is unindexed"
-        );
-        assert!(receiver.try_recv().is_err());
-
-        // Once the index reaches 5, delivery completes.
-        indexed.store(5, Ordering::SeqCst);
-        deliver.await;
+        service.handle_checkpoint(checkpoint(4)).await;
         drain(&mut shards);
+        assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 4);
+        assert_eq!(service.metrics.index_wait_seconds.get_sample_count(), 0);
+        assert_eq!(service.metrics.index_wait_timeouts_total.get(), 0);
+
+        // Delivery of checkpoint 5 blocks until the index catches up to it.
+        {
+            let mut deliver = std::pin::pin!(service.handle_checkpoint(checkpoint(5)));
+            assert!(
+                futures::poll!(&mut deliver).is_pending(),
+                "delivery should block while checkpoint 5 is unindexed"
+            );
+            assert!(receiver.try_recv().is_err());
+
+            indexed.store(5, Ordering::SeqCst);
+            tokio::time::advance(INDEX_WAIT_POLL_INTERVAL).await;
+            deliver.await;
+        }
+        drain(&mut shards);
+
         assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 5);
+        assert_eq!(service.metrics.index_wait_seconds.get_sample_count(), 1);
+        assert!(
+            service.metrics.index_wait_seconds.get_sample_sum()
+                >= INDEX_WAIT_POLL_INTERVAL.as_secs_f64()
+        );
+        assert_eq!(service.metrics.index_wait_timeouts_total.get(), 0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn index_wait_timeout_records_and_delivers_with_paused_time() {
+        let indexed = Arc::new(AtomicU64::new(4));
+        let gate = indexed.clone();
+        let (mut service, mut shards) = test_service_with(
+            1,
+            25,
+            Some(Arc::new(move || Some(gate.load(Ordering::SeqCst)))),
+        );
+        let mut receiver = register(&mut service, unfiltered()).await.unwrap();
+
+        {
+            let mut deliver = std::pin::pin!(service.handle_checkpoint(checkpoint(5)));
+            assert!(
+                futures::poll!(&mut deliver).is_pending(),
+                "delivery should block while checkpoint 5 is unindexed"
+            );
+            tokio::time::advance(INDEX_WAIT_TIMEOUT).await;
+            deliver.await;
+        }
+        drain(&mut shards);
+
+        assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 5);
+        assert_eq!(service.metrics.index_wait_seconds.get_sample_count(), 1);
+        assert!(
+            service.metrics.index_wait_seconds.get_sample_sum() >= INDEX_WAIT_TIMEOUT.as_secs_f64()
+        );
+        assert_eq!(service.metrics.index_wait_timeouts_total.get(), 1);
     }
 
     #[tokio::test]
@@ -804,7 +1030,7 @@ mod tests {
         // Clear empties every shard.
         assert!(shards[0].matcher.is_empty());
         assert!(shards[1].matcher.is_empty());
-        assert_eq!(service.metrics.inflight_subscribers.get(), 0);
+        assert_eq!(inflight_subscribers(&service.metrics), 0);
         assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
         // Both subscriptions are torn down, so the client streams close.
         assert!(receiver_1.recv().await.is_some()); // checkpoint 5, then closed
@@ -814,6 +1040,16 @@ mod tests {
         // The tracker is reset so the next, jumped-ahead checkpoint is not
         // mistaken for an out-of-order delivery (which would panic).
         assert_eq!(service.metrics.last_recieved_checkpoint.get(), 0);
+        assert_eq!(
+            terminations(&service.metrics, "checkpoint", "source_lag"),
+            2
+        );
+        service.handle_lag(1).await;
+        drain(&mut shards);
+        assert_eq!(
+            terminations(&service.metrics, "checkpoint", "source_lag"),
+            2
+        );
 
         let mut receiver_3 = register(&mut service, unfiltered()).await.unwrap();
         service.handle_checkpoint(checkpoint(100)).await;
@@ -822,6 +1058,39 @@ mod tests {
             matched_sequence_number(receiver_3.recv().await.unwrap()),
             100
         );
+    }
+
+    #[tokio::test]
+    async fn service_shutdown_records_each_subscription_once() {
+        let (mut service, mut shards) = test_service(2);
+        let receiver_explicit = register(&mut service, unfiltered()).await.unwrap();
+        let receiver_fallback = register(&mut service, unfiltered()).await.unwrap();
+        drain(&mut shards);
+        let metrics = service.metrics.clone();
+        let counters = Arc::clone(&service.counters);
+
+        service.shards[0]
+            .send(ShardMsg::Clear(
+                SubscriptionTerminationReason::ServiceShutdown,
+            ))
+            .await
+            .unwrap();
+        shards[0].drain();
+        assert_eq!(terminations(&metrics, "checkpoint", "service_shutdown"), 1);
+
+        let fallback_shard = shards.pop().unwrap();
+        drop(service);
+        fallback_shard.run().await;
+        assert!(receiver_explicit.is_closed());
+        assert!(receiver_fallback.is_closed());
+        assert_eq!(inflight_subscribers(&metrics), 0);
+        assert_eq!(counters.total.load(Ordering::Relaxed), 0);
+        assert_eq!(counters.filtered_tx.load(Ordering::Relaxed), 0);
+        assert_eq!(counters.filtered_event.load(Ordering::Relaxed), 0);
+        assert_eq!(terminations(&metrics, "checkpoint", "service_shutdown"), 2);
+
+        drop(shards);
+        assert_eq!(terminations(&metrics, "checkpoint", "service_shutdown"), 2);
     }
 
     #[tokio::test]
@@ -902,33 +1171,63 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cap_is_enforced_globally_across_shards() {
+    async fn configured_cap_is_enforced_globally_across_shards() {
         let (mut service, mut shards) = test_service(2);
-        let mut receivers = Vec::with_capacity(MAX_SUBSCRIBERS);
-        for i in 0..MAX_SUBSCRIBERS {
-            // Keep each 64-slot shard mailbox from filling: the dispatcher's
-            // bounded send would otherwise block with no spawned shard task.
-            if i % 32 == 0 {
-                drain(&mut shards);
-            }
+        let max_subscribers = 3;
+        service.max_subscribers = max_subscribers;
+        let mut receivers = Vec::with_capacity(max_subscribers);
+        for _ in 0..max_subscribers {
             receivers.push(register(&mut service, unfiltered()).await.unwrap());
         }
         drain(&mut shards);
         assert_eq!(
             service.counters.total.load(Ordering::Relaxed),
-            MAX_SUBSCRIBERS
+            max_subscribers
         );
         // The gauge mirrors the admission count for observability.
         assert_eq!(
-            service.metrics.inflight_subscribers.get(),
-            MAX_SUBSCRIBERS as i64
+            inflight_subscribers(&service.metrics),
+            max_subscribers as i64
         );
         assert!(!shards[0].matcher.is_empty());
         assert!(!shards[1].matcher.is_empty());
 
         // The cap is global across shards: the next registration is rejected
-        // (the dispatcher drops the reply oneshot).
+        // (the dispatcher drops the reply oneshot). Rejection creates no
+        // guard, so lifecycle accounting is untouched.
         assert!(register(&mut service, unfiltered()).await.is_none());
+        assert_eq!(
+            service.counters.total.load(Ordering::Relaxed),
+            max_subscribers
+        );
+        assert_eq!(
+            inflight_subscribers(&service.metrics),
+            max_subscribers as i64
+        );
+        assert_eq!(
+            terminations(&service.metrics, "checkpoint", "service_shutdown"),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn unprocessed_register_finalizes_guard_when_shard_drops() {
+        let (mut service, shards) = test_service(1);
+        let _receiver = register(&mut service, unfiltered()).await.unwrap();
+        assert_eq!(service.counters.total.load(Ordering::Relaxed), 1);
+        assert_eq!(inflight_subscribers(&service.metrics), 1);
+
+        // Drop the shard with the Register message still queued in its
+        // mailbox: the guard travelling inside the message must finalize
+        // with the default service_shutdown reason and rebalance the
+        // counts and gauge exactly once.
+        drop(shards);
+        assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
+        assert_eq!(inflight_subscribers(&service.metrics), 0);
+        assert_eq!(
+            terminations(&service.metrics, "checkpoint", "service_shutdown"),
+            1
+        );
     }
 
     #[tokio::test]
@@ -974,9 +1273,8 @@ mod tests {
         .unwrap();
         assert_eq!(service.counters.filtered_event.load(Ordering::Relaxed), 1);
 
-        // Departed clients: the next frame (a tick, at interval 1) fails to
-        // send, the shards drop both subscribers and mirror the decrements
-        // back into the shared counters.
+        // Departed clients are finalized by their shard-owned lifecycle
+        // guards when the next dispatch observes the closed channels.
         drop(tx_rx);
         drop(event_rx);
         service.handle_checkpoint(checkpoint(1)).await;
@@ -984,7 +1282,7 @@ mod tests {
 
         assert_eq!(service.counters.filtered_tx.load(Ordering::Relaxed), 0);
         assert_eq!(service.counters.filtered_event.load(Ordering::Relaxed), 0);
-        assert_eq!(service.metrics.inflight_subscribers.get(), 0);
+        assert_eq!(inflight_subscribers(&service.metrics), 0);
     }
 
     #[tokio::test]

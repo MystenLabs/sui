@@ -1,7 +1,61 @@
 ---
 title: Object Model
-description: Everything on the Sui blockchain is an object that has metadata, a type of ownership, and a referencing scheme. 
-keywords: [ object model, objects on sui, sui move package, sui move object, move objects, move packages, objects, packages, referring to objects, object metadata, transaction-objects, transaction objects, relating objects and transactions ]
+description: >-
+  Everything on the Sui blockchain is an object that has metadata, a type of
+  ownership, and a referencing scheme.
+keywords:
+  - object model
+  - objects on sui
+  - sui move package
+  - sui move object
+  - move objects
+  - move packages
+  - objects
+  - packages
+  - referring to objects
+  - object metadata
+  - transaction-objects
+  - transaction objects
+  - relating objects and transactions
+goal:
+  description: >-
+    Reader understands everything on the Sui blockchain is an object that has
+    metadata, a type of ownership, and a referencing scheme
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: 'Object model (ownership, shared)'
+    stage: Environment
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Object model concepts
+    stage: Environment
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - What is Object Model in Sui?
+  - How does object model work on Sui?
+  - Why should I use object model?
+answer: >-
+  Everything on the Sui blockchain is an object that has metadata, a type of
+  ownership, and a referencing scheme.
 ---
 
 An object is a fundamental unit of storage on the network. Every resource, asset, or piece of data onchain is an object. Many other blockchains structure storage around accounts containing key-value stores. Sui's storage is structured around objects addressable by unique IDs onchain.

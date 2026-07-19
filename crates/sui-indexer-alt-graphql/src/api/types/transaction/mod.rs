@@ -21,6 +21,7 @@ use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionC
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
+use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
@@ -73,7 +74,18 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub type CTransaction = MultiCursor<OpaqueCursor<CursorToken>, JsonCursor<u64>>;
+/// Validated transaction cursor coordinates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TransactionToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+    tx_seq: u64,
+}
+
+/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
+/// legacy JSON cursor (secondary).
+pub type CTransaction = MultiCursor<OpaqueCursor<TransactionToken>, JsonCursor<u64>>;
 
 /// Custom `Connection` for transactions to support partially-filled pages.
 pub(crate) struct TransactionConnection {
@@ -307,14 +319,7 @@ impl Transaction {
 
         page.paginate_results(
             filtered,
-            |tx| {
-                MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-                    Position::Transactions {
-                        checkpoint: source_cp_sequence_number,
-                        tx_seq: tx.tx_sequence_number,
-                    },
-                )))
-            },
+            |tx| TransactionToken::cursor(source_cp_sequence_number, tx.tx_sequence_number),
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
         .map(Into::into)
@@ -388,14 +393,7 @@ impl Transaction {
 
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| {
-                MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-                    Position::Transactions {
-                        checkpoint: 0,
-                        tx_seq: *s,
-                    },
-                )))
-            },
+            |(s, _)| TransactionToken::cursor(0, *s),
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
@@ -473,29 +471,60 @@ impl TransactionConnection {
     }
 }
 
+impl TransactionToken {
+    /// Mint the edge cursor for the transaction at the given coordinates.
+    pub(crate) fn cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
+        CTransaction::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Item,
+            checkpoint,
+            tx_seq,
+        }))
+    }
+}
+
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
         match self {
-            CTransaction::Primary(c) => match c.position {
-                Position::Transactions { tx_seq, .. } => tx_seq,
-                _ => unreachable!("validated at decode"),
-            },
+            CTransaction::Primary(c) => c.tx_seq,
             CTransaction::Secondary(c) => **c,
         }
     }
 }
 
-impl ByteCursor for CursorToken {
+impl ByteCursor for TransactionToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let cursor = CursorToken::decode(bytes)?;
-        if !matches!(cursor.position, Position::Transactions { .. }) {
-            anyhow::bail!("invalid cursor");
-        }
-        Ok(cursor)
+        CursorToken::decode(bytes)?.try_into()
     }
 
     fn encode_cursor(&self) -> bytes::Bytes {
-        self.encode()
+        CursorToken::from(self).encode()
+    }
+}
+
+impl From<&TransactionToken> for CursorToken {
+    fn from(token: &TransactionToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Transactions {
+                checkpoint: token.checkpoint,
+                tx_seq: token.tx_seq,
+            },
+        }
+    }
+}
+
+impl TryFrom<CursorToken> for TransactionToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Transactions { checkpoint, tx_seq } = token.position else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+            tx_seq,
+        })
     }
 }
 
@@ -840,24 +869,19 @@ mod tests {
     }
 
     fn primary_cursor(checkpoint: u64, position: u64) -> CTransaction {
-        MultiCursor::new(OpaqueCursor::new(CursorToken::item(
-            Position::Transactions {
-                checkpoint,
-                tx_seq: position,
-            },
-        )))
+        TransactionToken::cursor(checkpoint, position)
     }
 
     /// Legacy pg-style cursor: a bare JSON-encoded `tx_sequence_number`.
     fn legacy_cursor(position: u64) -> CTransaction {
-        MultiCursor::Secondary(JsonCursor::new(position))
+        CTransaction::Secondary(JsonCursor::new(position))
     }
 
     /// Decode an edge cursor back into its `CursorToken`.
     fn edge_token(cursor: &str) -> CursorToken {
         match CTransaction::decode_cursor(cursor).expect("decodable edge cursor") {
-            MultiCursor::Primary(c) => (*c).clone(),
-            MultiCursor::Secondary(_) => panic!("expected grpc cursor, got legacy"),
+            CTransaction::Primary(c) => CursorToken::from(&*c),
+            CTransaction::Secondary(_) => panic!("expected grpc cursor, got legacy"),
         }
     }
 

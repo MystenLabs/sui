@@ -1,7 +1,34 @@
 ---
 title: Localize Sui Documentation
 description: The Sui documentation can be translated into any language using Crowdin.
-keywords: [ translate docs, translate documentation, translate, crowdin, localize, localization, docs localization, docs translations ]
+keywords:
+  - translate docs
+  - translate documentation
+  - translate
+  - crowdin
+  - localize
+  - localization
+  - docs localization
+  - docs translations
+goal:
+  description: Contributor learns that Sui docs are localized through Crowdin
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Localize Sui Documentation in Sui?
+  - Where can I find the localize sui documentation reference?
+  - How does localize sui documentation work on Sui?
+answer: The Sui documentation can be translated into any language using Crowdin.
 ---
 
 The Sui documentation can be localized (translated) into any language of your choosing. The localization platform used is Crowdin. For more information on the localization process, see the [Crowdin introduction](https://support.crowdin.com/crowdin-intro/).

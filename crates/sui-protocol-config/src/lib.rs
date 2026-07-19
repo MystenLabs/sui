@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 130;
+const MAX_PROTOCOL_VERSION: u64 = 131;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -365,6 +365,10 @@ const MAINNET_USDB: &str =
 // Version 130: Record unsettled object-funds withdraws using per-account net amounts
 //              from transaction effects instead of running-max withdraw amounts.
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
+//              Enable zklogin v2 verify (with v1 fallback) for devnet only.
+//              Add an epoch close deadline failsafe for deferred transactions.
+// Version 131: Enable sharing transaction deny configs between validators via consensus
+//              on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -508,6 +512,10 @@ struct FeatureFlags {
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
+    // zkLogin circuit verify mode: 0 = accept v1 circuit proofs only, 1 = try the v2
+    // circuit first and fall back to v1 (migration phase), 2 = accept v2 circuit proofs only.
+    #[serde(skip_serializing_if = "is_zero")]
+    zklogin_circuit_mode: u64,
     // How we order transactions coming out of consensus before sending to execution.
     #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
     consensus_transaction_ordering: ConsensusTransactionOrdering,
@@ -711,9 +719,10 @@ struct FeatureFlags {
     // Controls whether consensus handler should record consensus determined shared object version
     // assignments in consensus commit prologue transaction.
     // The purpose of doing this is to enable replaying transaction without transaction effects.
-    // V2 also records initial shared versions for consensus objects.
     #[serde(skip_serializing_if = "is_false")]
     record_consensus_determined_version_assignments_in_prologue: bool,
+    // V2 also records initial shared versions for consensus objects.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     record_consensus_determined_version_assignments_in_prologue_v2: bool,
 
@@ -827,6 +836,7 @@ struct FeatureFlags {
     minimize_child_object_mutations: bool,
 
     // If true, record the additional state digest in the consensus commit prologue.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     record_additional_state_digest_in_prologue: bool,
 
@@ -947,6 +957,7 @@ struct FeatureFlags {
     allow_private_accumulator_entrypoints: bool,
 
     // If true, include indirect state in the additional consensus digest.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     additional_consensus_digest_indirect_state: bool,
 
@@ -1040,6 +1051,7 @@ struct FeatureFlags {
     consensus_skip_gced_accept_votes: bool,
 
     // If true, include cancelled randomness txns in the consensus commit prologue.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     include_cancelled_randomness_txns_in_prologue: bool,
 
@@ -1049,7 +1061,7 @@ struct FeatureFlags {
     address_aliases: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
-    // TODO: remove old code and deprecate once in mainnet.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     fix_checkpoint_signature_mapping: bool,
 
@@ -1111,6 +1123,7 @@ struct FeatureFlags {
     gasless_transaction_drop_safety: bool,
 
     // When split-checkpoints enabled, merge randomness and non-randomness schedulables together.
+    // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
     merge_randomness_into_checkpoint: bool,
 
@@ -1982,6 +1995,12 @@ pub struct ProtocolConfig {
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 
+    /// Time after the scheduled epoch end (`next_reconfiguration_timestamp_ms`) at which epoch
+    /// close stops waiting for deferred transactions to drain: the epoch is closed even if
+    /// deferred transactions remain unscheduled. They are abandoned and can be resubmitted in the
+    /// next epoch. When unset, epoch close waits indefinitely.
+    epoch_close_deadline_ms: Option<u64>,
+
     /// DEPRECATED. Do not use.
     max_txn_cost_overage_per_object_in_commit: Option<u64>,
 
@@ -2137,6 +2156,12 @@ impl ProtocolConfig {
 
     pub fn zklogin_supported_providers(&self) -> &BTreeSet<String> {
         &self.feature_flags.zklogin_supported_providers
+    }
+
+    /// zkLogin circuit verify mode: 0 = v1 circuit only, 1 = v2 circuit with
+    /// fallback to v1, 2 = v2 circuit only.
+    pub fn zklogin_circuit_mode(&self) -> u64 {
+        self.feature_flags.zklogin_circuit_mode
     }
 
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
@@ -2876,6 +2901,8 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            epoch_close_deadline_ms: None,
 
             max_txn_cost_overage_per_object_in_commit: None,
 
@@ -4493,6 +4520,7 @@ impl ProtocolConfig {
                 130 => {
                     cfg.feature_flags.record_net_unsettled_object_withdraws = true;
                     cfg.feature_flags.enable_init_on_upgrade = true;
+                    cfg.epoch_close_deadline_ms = Some(120_000);
                     cfg.scratch_add_cost_base = Some(13);
                     cfg.scratch_read_cost_base = Some(13);
                     cfg.scratch_read_value_cost = Some(1);
@@ -4502,6 +4530,15 @@ impl ProtocolConfig {
                     cfg.scratch_exists_with_type_type_cost = Some(1);
                     let max_commands = cfg.max_programmable_tx_commands() as u64;
                     cfg.max_scratch_pad_size = Some(16 * max_commands);
+                    // Verify with the v2 then v1 for devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.zklogin_circuit_mode = 1;
+                    }
+                }
+                131 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.share_transaction_deny_config_in_consensus = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -4723,6 +4760,12 @@ impl ProtocolConfig {
 // This is only needed for feature_flags. Please suffix each setter with `_for_testing`.
 // Non-feature_flags should already have test setters defined through macros.
 impl ProtocolConfig {
+    // Not generated by the feature-flags derive because zklogin_circuit_mode is a u64
+    // flag (the macro only generates setters for bool flags).
+    pub fn set_zklogin_circuit_mode_for_testing(&mut self, val: u64) {
+        self.feature_flags.zklogin_circuit_mode = val
+    }
+
     pub fn set_per_object_congestion_control_mode_for_testing(
         &mut self,
         val: PerObjectCongestionControlMode,

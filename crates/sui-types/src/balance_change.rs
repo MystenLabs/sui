@@ -71,16 +71,25 @@ where
     I: IntoIterator<Item = &'a Object> + 'a,
 {
     objects.into_iter().filter_map(|object| {
+        // Balance changes are an address-level view: only coins held
+        // directly by an address count, with `ConsensusAddressOwner`
+        // (the consensus-sequenced form of address ownership) combined
+        // into the same address. Coins held by objects (e.g. in dynamic
+        // fields) are deliberately excluded -- the parent object's id
+        // reinterpreted as an address is not a meaningful balance
+        // owner, and the balance indexes
+        // (`sui-indexer-alt-consistent-store`, `sui-rpc-store`) track
+        // only address-held coins, so including them here would let a
+        // transaction's reported changes disagree with the balances
+        // they change.
         let address = match object.owner() {
             Owner::AddressOwner(sui_address)
-            | Owner::ObjectOwner(sui_address)
             | Owner::ConsensusAddressOwner {
                 owner: sui_address, ..
             } => sui_address,
-            // We could report balance changes for each address? Though that might be confusing
             // TODO(Party WIP)
             Owner::Party { .. } => todo!("Party WIP"),
-            Owner::Shared { .. } | Owner::Immutable => return None,
+            Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => return None,
         };
         let (coin_type, balance) = Coin::extract_balance_if_coin(object).ok().flatten()?;
         Some((address, coin_type, balance))
@@ -501,16 +510,16 @@ mod tests {
     // Tests combining coin objects with accumulator events
 
     fn create_gas_coin_object(owner: SuiAddress, value: u64) -> Object {
+        create_gas_coin_object_with_owner(Owner::AddressOwner(owner), value)
+    }
+
+    fn create_gas_coin_object_with_owner(owner: Owner, value: u64) -> Object {
         use crate::base_types::SequenceNumber;
         use crate::object::MoveObject;
 
         let obj_id = ObjectID::random();
         let move_obj = MoveObject::new_gas_coin(SequenceNumber::new(), obj_id, value);
-        Object::new_move(
-            move_obj,
-            Owner::AddressOwner(owner),
-            TransactionDigest::random(),
-        )
+        Object::new_move(move_obj, owner, TransactionDigest::random())
     }
 
     fn create_custom_coin_object(owner: SuiAddress, coin_type: TypeTag, value: u64) -> Object {
@@ -542,6 +551,58 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].address, address);
         assert_eq!(result[0].amount, -2000); // 3000 - 5000 = -2000
+    }
+
+    /// Coins held by objects (dynamic fields, transfer-to-object) are
+    /// excluded from balance changes: moving a coin from an address
+    /// into an object's custody reports only the address's spend, and
+    /// nothing is ever attributed to the parent object's id
+    /// reinterpreted as an address. This pins the address-level
+    /// contract the balance indexes share.
+    #[test]
+    fn test_derive_balance_changes_excludes_object_owned_coins() {
+        let sender = SuiAddress::random_for_testing_only();
+        let parent = ObjectID::random();
+
+        // The sender's coin moves into a dynamic field of `parent`.
+        let input_coin = create_gas_coin_object(sender, 3000);
+        let output_coin =
+            create_gas_coin_object_with_owner(Owner::ObjectOwner(parent.into()), 3000);
+
+        let effects = create_effects_with_accumulator_writes(vec![]);
+        let result = derive_balance_changes(&effects, &[input_coin], &[output_coin]);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].address, sender);
+        assert_eq!(result[0].amount, -3000);
+    }
+
+    /// Consensus-address-owned coins are combined with address-owned
+    /// coins for the same address: converting between the two forms of
+    /// address custody is not a balance change.
+    #[test]
+    fn test_derive_balance_changes_combines_consensus_address_owner() {
+        use crate::base_types::SequenceNumber;
+
+        let address = SuiAddress::random_for_testing_only();
+
+        let input_coin = create_gas_coin_object(address, 4000);
+        let output_coin = create_gas_coin_object_with_owner(
+            Owner::ConsensusAddressOwner {
+                start_version: SequenceNumber::new(),
+                owner: address,
+            },
+            4000,
+        );
+
+        let effects = create_effects_with_accumulator_writes(vec![]);
+        let result = derive_balance_changes(&effects, &[input_coin], &[output_coin]);
+
+        assert!(
+            result.is_empty(),
+            "moving a coin between fastpath and consensus address custody \
+             is not a balance change"
+        );
     }
 
     #[test]

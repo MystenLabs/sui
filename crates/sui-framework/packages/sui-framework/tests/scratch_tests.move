@@ -145,6 +145,79 @@ fun read_wrong_value_type_same_bytes() {
 }
 
 #[test]
+fun read_opt_present_and_absent() {
+    let mut ctx = tx_context::dummy();
+
+    // absent -> none
+    assert!(ctx.scratch_internal_read_opt!<Marker, u64>(Marker()).is_none());
+    ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
+
+    // present -> some, and the entry persists (read_opt does not remove)
+    assert_eq!(ctx.scratch_internal_read_opt!<Marker, u64>(Marker()), option::some(42));
+    assert!(ctx.scratch_internal_exists!<Marker>(Marker()));
+}
+
+#[test, expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
+fun read_opt_type_mismatch() {
+    let mut ctx = tx_context::dummy();
+    ctx.scratch_internal_add!<Marker, u64>(Marker(), 0);
+    ctx.scratch_internal_read_opt!<Marker, bool>(Marker());
+}
+
+#[test]
+fun remove_opt_present_and_absent() {
+    let mut ctx = tx_context::dummy();
+
+    // absent -> none
+    assert!(ctx.scratch_internal_remove_opt!<Marker, u64>(Marker()).is_none());
+    ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
+
+    // present -> some(value), and the entry is then gone
+    assert_eq!(ctx.scratch_internal_remove_opt!<Marker, u64>(Marker()), option::some(42));
+    assert!(!ctx.scratch_internal_exists!<Marker>(Marker()));
+}
+
+#[test, expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
+fun remove_opt_type_mismatch() {
+    let mut ctx = tx_context::dummy();
+    ctx.scratch_internal_add!<Marker, u64>(Marker(), 0);
+    ctx.scratch_internal_remove_opt!<Marker, bool>(Marker());
+}
+
+#[test]
+fun replace_present_and_absent() {
+    let mut ctx = tx_context::dummy();
+
+    // absent -> none, and the new value is inserted
+    assert!(ctx.scratch_internal_replace!<Marker, u64, u64>(Marker(), 1).is_none());
+    assert_eq!(ctx.scratch_internal_read!<Marker, u64>(Marker()), 1);
+
+    // present -> some(old), and the new value takes its place
+    assert_eq!(ctx.scratch_internal_replace!<Marker, u64, u64>(Marker(), 2), option::some(1));
+    assert_eq!(ctx.scratch_internal_read!<Marker, u64>(Marker()), 2);
+}
+
+// The old and new value types may differ.
+#[test]
+fun replace_changes_value_type() {
+    let mut ctx = tx_context::dummy();
+    ctx.scratch_internal_add!<Marker, u64>(Marker(), 42);
+
+    assert_eq!(ctx.scratch_internal_replace!<Marker, bool, u64>(Marker(), true), option::some(42));
+    assert!(!ctx.scratch_internal_exists_with_type!<Marker, u64>(Marker()));
+    assert!(ctx.scratch_internal_exists_with_type!<Marker, bool>(Marker()));
+    assert_eq!(ctx.scratch_internal_read!<Marker, bool>(Marker()), true);
+}
+
+#[test, expected_failure(abort_code = sui::scratch::EEntryTypeMismatch)]
+fun replace_wrong_old_type() {
+    let mut ctx = tx_context::dummy();
+    ctx.scratch_internal_add!<Marker, u64>(Marker(), 0);
+    // `VOld` does not match the stored value type
+    ctx.scratch_internal_replace!<Marker, bool, bool>(Marker(), true);
+}
+
+#[test]
 fun cleared_across_transactions() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);

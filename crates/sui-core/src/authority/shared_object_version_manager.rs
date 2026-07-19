@@ -14,6 +14,7 @@ use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::base_types::ConsensusObjectSequenceKey;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
@@ -34,26 +35,51 @@ pub struct SharedObjVerManager {}
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AssignedVersions {
     pub shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-    /// Accumulator version number at the beginning of the consensus commit
-    /// that this transaction belongs to. It is used to determine the deterministic
-    /// balance state of the accounts involved in funds withdrawals.
+    /// Versions of system objects, keyed by object ID, that this transaction may read during
+    /// execution but that are not part of its declared shared inputs. Each version is assigned
+    /// deterministically during consensus sequencing, so that every validator reads the same
+    /// version of the object.
     ///
-    /// `None` when no accumulator version applies to this transaction:
-    /// - accumulators are not enabled at the protocol level for this epoch, or
-    /// - the transaction is an end-of-epoch / change-epoch tx, which does not
-    ///   read or write the accumulator root.
-    pub accumulator_version: Option<SequenceNumber>,
+    /// Today this holds at most the accumulator root version (as of the beginning of the consensus
+    /// commit this transaction belongs to). The accumulator root qualifies because it is written at
+    /// the end of every commit, so there is always a well-defined prior version to read from. More
+    /// system objects will be added over time.
+    pub system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
 }
 
 impl AssignedVersions {
     pub fn new(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-        accumulator_version: Option<SequenceNumber>,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
         Self {
             shared_object_versions,
-            accumulator_version,
+            system_object_versions,
         }
+    }
+
+    /// Construct with only the accumulator root as the system object read during execution. The
+    /// accumulator root is the sole such object today; production callers build the full
+    /// `system_object_versions` map directly.
+    #[cfg(test)]
+    pub fn new_for_testing(
+        shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> Self {
+        Self::new(
+            shared_object_versions,
+            accumulator_version
+                .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
+                .into_iter()
+                .collect(),
+        )
+    }
+
+    /// The accumulator root version this transaction reads, if any.
+    pub fn accumulator_version(&self) -> Option<SequenceNumber> {
+        self.system_object_versions
+            .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .copied()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, SequenceNumber)> {
@@ -353,9 +379,13 @@ impl SharedObjVerManager {
                 ?cert_assigned_versions,
                 "assigned consensus object versions from effects"
             );
+            let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = (*accumulator_version)
+                .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
+                .into_iter()
+                .collect();
             assigned_versions.push((
                 tx_key,
-                AssignedVersions::new(cert_assigned_versions, *accumulator_version),
+                AssignedVersions::new(cert_assigned_versions, system_object_versions),
             ));
         }
         AssignedTxAndVersions::new(assigned_versions)
@@ -383,10 +413,15 @@ impl SharedObjVerManager {
         } else {
             None
         };
+        // The accumulator root is the only system object read implicitly during execution today.
+        let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = accumulator_version
+            .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
+            .into_iter()
+            .collect();
 
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to assign versions.
-            return AssignedVersions::new(vec![], accumulator_version);
+            return AssignedVersions::new(vec![], system_object_versions);
         }
 
         let tx_key = assignable.key();
@@ -505,7 +540,7 @@ impl SharedObjVerManager {
             "locking shared objects"
         );
 
-        AssignedVersions::new(assigned_versions, accumulator_version)
+        AssignedVersions::new(assigned_versions, system_object_versions)
     }
 }
 
@@ -617,28 +652,28 @@ mod tests {
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id, init_shared_version), init_shared_version)],
                         Some(expected_accumulator_version)
                     )
                 ),
                 (
                     certs[1].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version)
                     )
                 ),
                 (
                     certs[2].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version)
                     )
                 ),
                 (
                     certs[3].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(10))],
                         Some(expected_accumulator_version)
                     )
@@ -718,7 +753,7 @@ mod tests {
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![(
                             (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                             randomness_obj_version
@@ -729,7 +764,7 @@ mod tests {
                 (
                     certs[1].key(),
                     // It is critical that the randomness object version is updated before the assignment.
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![(
                             (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                             next_randomness_obj_version
@@ -740,7 +775,7 @@ mod tests {
                 (
                     certs[2].key(),
                     // It is critical that the randomness object version is updated before the assignment.
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![(
                             (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                             next_randomness_obj_version
@@ -880,7 +915,7 @@ mod tests {
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![
                             ((id1, init_shared_version_1), init_shared_version_1),
                             ((id2, init_shared_version_2), init_shared_version_2)
@@ -890,7 +925,7 @@ mod tests {
                 ),
                 (
                     certs[1].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![
                             ((id1, init_shared_version_1), SequenceNumber::CONGESTED),
                             ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ),
@@ -900,14 +935,14 @@ mod tests {
                 ),
                 (
                     certs[2].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id1, init_shared_version_1), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version)
                     )
                 ),
                 (
                     certs[3].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![
                             ((id1, init_shared_version_1), SequenceNumber::CANCELLED_READ),
                             ((id2, init_shared_version_2), SequenceNumber::CONGESTED)
@@ -917,7 +952,7 @@ mod tests {
                 ),
                 (
                     certs[4].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![
                             (
                                 (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
@@ -982,28 +1017,28 @@ mod tests {
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id, init_shared_version), init_shared_version)],
                         None
                     )
                 ),
                 (
                     certs[1].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
                         None
                     )
                 ),
                 (
                     certs[2].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
                         None
                     )
                 ),
                 (
                     certs[3].key(),
-                    AssignedVersions::new(
+                    AssignedVersions::new_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(10))],
                         None
                     )
@@ -1181,20 +1216,14 @@ mod tests {
                 assigned_versions: AssignedTxAndVersions::new(vec![
                     (
                         withdraw_key,
-                        AssignedVersions {
-                            shared_object_versions: vec![],
-                            accumulator_version: Some(acc_version),
-                        }
+                        AssignedVersions::new_for_testing(vec![], Some(acc_version))
                     ),
                     (
                         settlement_key,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
-                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                                acc_version
-                            )],
-                            accumulator_version: Some(acc_version),
-                        }
+                        AssignedVersions::new_for_testing(
+                            vec![((SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version), acc_version)],
+                            Some(acc_version)
+                        )
                     ),
                 ]),
                 shared_input_next_versions: HashMap::from([(
@@ -1235,54 +1264,42 @@ mod tests {
                 assigned_versions: AssignedTxAndVersions::new(vec![
                     (
                         withdraw_key1,
-                        AssignedVersions {
-                            shared_object_versions: vec![],
-                            accumulator_version: Some(acc_version),
-                        }
+                        AssignedVersions::new_for_testing(vec![], Some(acc_version))
                     ),
                     (
                         settlement_key1,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
-                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                                acc_version
-                            )],
-                            accumulator_version: Some(acc_version),
-                        }
+                        AssignedVersions::new_for_testing(
+                            vec![((SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version), acc_version)],
+                            Some(acc_version)
+                        )
                     ),
                     (
                         withdraw_key2,
-                        AssignedVersions {
-                            shared_object_versions: vec![],
-                            accumulator_version: Some(acc_version.next()),
-                        }
+                        AssignedVersions::new_for_testing(vec![], Some(acc_version.next()))
                     ),
                     (
                         settlement_key2,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
+                        AssignedVersions::new_for_testing(
+                            vec![(
                                 (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
                                 acc_version.next()
                             )],
-                            accumulator_version: Some(acc_version.next()),
-                        }
+                            Some(acc_version.next())
+                        )
                     ),
                     (
                         withdraw_key3,
-                        AssignedVersions {
-                            shared_object_versions: vec![],
-                            accumulator_version: Some(acc_version.next().next()),
-                        }
+                        AssignedVersions::new_for_testing(vec![], Some(acc_version.next().next()))
                     ),
                     (
                         settlement_key3,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
+                        AssignedVersions::new_for_testing(
+                            vec![(
                                 (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
                                 acc_version.next().next()
                             )],
-                            accumulator_version: Some(acc_version.next().next()),
-                        }
+                            Some(acc_version.next().next())
+                        )
                     ),
                 ]),
                 shared_input_next_versions: HashMap::from([(
@@ -1318,23 +1335,17 @@ mod tests {
                 assigned_versions: AssignedTxAndVersions::new(vec![
                     (
                         withdraw_with_shared_key,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
-                                (shared_obj_id, shared_obj_version),
-                                shared_obj_version
-                            )],
-                            accumulator_version: Some(acc_version),
-                        }
+                        AssignedVersions::new_for_testing(
+                            vec![((shared_obj_id, shared_obj_version), shared_obj_version)],
+                            Some(acc_version)
+                        )
                     ),
                     (
                         settlement_key,
-                        AssignedVersions {
-                            shared_object_versions: vec![(
-                                (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                                acc_version
-                            )],
-                            accumulator_version: Some(acc_version),
-                        }
+                        AssignedVersions::new_for_testing(
+                            vec![((SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version), acc_version)],
+                            Some(acc_version)
+                        )
                     ),
                 ]),
                 shared_input_next_versions: HashMap::from([

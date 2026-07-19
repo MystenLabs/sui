@@ -67,7 +67,8 @@
 //! ## Expressions
 //! ```text
 //! o ∈ VarOp ::=
-//!   | copy(x) // returns value bound to 'x'
+//!   | copy(x) // returns value bound to 'x'; if 'x' begins with an uppercase letter it instead
+//!             // names a constant and loads it (LdConst) -- see ConstantDecl below
 //!   | move(x) // moves the value out of 'x', i.e. returns the value and makes 'x' unusable
 //!
 //! r ∈ ReferenceOp ::=
@@ -86,6 +87,7 @@
 //!                                    // "constructor" for 'n'
 //!                                    // "packs" the values, binding them to the fields, and creates a new instance of 'n'
 //!                                    // 'n' must be declared in the current module
+//!   // (a named constant is loaded with copy(C), where C begins with an uppercase letter)
 //!   // boolean operators
 //!   | !e_1
 //!   | e_1 || e_2
@@ -161,6 +163,11 @@
 //!   | public struct n { f_1: t_1, ..., f_j: t_j } // declaration of a struct;
 //!                                                 // currently `public` is the only supported visibility
 //!
+//! cdecl ∈ ConstantDecl ::=
+//!   | const C: t = v; // a named constant; 'C' must begin with an uppercase letter (locals must
+//!                     // not), and is loaded with copy(C). The value is self-describing and is
+//!                     // not checked against 't' here (the verifier does that)
+//!
 //! body ∈ ProcedureBody ::=
 //!  | let x_1; ... let x_j; s // The locals declared in this procedure, and the code for that procedure
 //!
@@ -172,8 +179,9 @@
 //!                                                             // the procedure may be public, or internal to the module
 //!
 //! mdecl ∈ ModuleDecl ::=
-//!   | mvir m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j pdecl_1 ... pdecl_k } // module declaration; `mvir` (rather than Move source's `module`)
-//!                                                                            // makes it visually obvious that a snippet is IR, not source
+//!   | mvir m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j cdecl_1 ... cdecl_k pdecl_1 ... pdecl_l } // module declaration; `mvir` (rather than Move
+//!                                                                                                // source's `module`) makes it visually obvious
+//!                                                                                                // that a snippet is IR, not source
 //! ```
 //!
 //! ## Transaction Scripts

@@ -32,7 +32,7 @@ use bridge::message::{
     update_asset_price_payload_token_id,
     update_bridge_limit_payload_limit,
     update_bridge_limit_payload_receiving_chain,
-    update_bridge_limit_payload_sending_chain
+    update_bridge_limit_payload_sending_chain,
 };
 use bridge::treasury::{Self, BTC, ETH, USDC};
 use std::ascii;

@@ -10,36 +10,35 @@ use prost_types::FieldMask;
 use sui_macros::sim_test;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
+use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
+use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
+use sui_rpc::proto::sui::rpc::v2::EventFilter;
+use sui_rpc::proto::sui::rpc::v2::EventLiteral;
+use sui_rpc::proto::sui::rpc::v2::EventStreamHeadFilter;
+use sui_rpc::proto::sui::rpc::v2::EventTerm;
+use sui_rpc::proto::sui::rpc::v2::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
-use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient as V2LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::AffectedAddressFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::AffectedObjectFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EmitModuleFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::EventStreamHeadFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::EventTerm;
-use sui_rpc::proto::sui::rpc::v2alpha::EventTypeFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
-use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
-use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
-use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
-use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as AlphaLedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
+use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
+use sui_rpc::proto::sui::rpc::v2::Ordering;
+use sui_rpc::proto::sui::rpc::v2::PackageWriteFilter;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+use sui_rpc::proto::sui::rpc::v2::SenderFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionLiteral;
+use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
+use sui_rpc::proto::sui::rpc::v2::event_literal;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -278,7 +277,7 @@ fn event_digest_set(result: &EventsResult) -> HashSet<String> {
 }
 
 async fn list_transactions_result(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListTransactionsRequest,
 ) -> TransactionsResult {
     let mut stream = client
@@ -317,7 +316,7 @@ async fn list_transactions_result(
 }
 
 async fn list_events_result(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListEventsRequest,
 ) -> EventsResult {
     let mut stream = client.list_events(request).await.unwrap().into_inner();
@@ -352,7 +351,7 @@ async fn list_events_result(
 }
 
 async fn list_checkpoints_result(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListCheckpointsRequest,
 ) -> CheckpointsResult {
     let mut stream = client.list_checkpoints(request).await.unwrap().into_inner();
@@ -388,7 +387,7 @@ async fn list_checkpoints_result(
 }
 
 async fn expect_invalid_list_transactions(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListTransactionsRequest,
 ) {
     let err = client
@@ -399,7 +398,7 @@ async fn expect_invalid_list_transactions(
 }
 
 async fn expect_invalid_list_events(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListEventsRequest,
 ) {
     let err = client
@@ -410,7 +409,7 @@ async fn expect_invalid_list_events(
 }
 
 async fn expect_invalid_list_checkpoints(
-    client: &mut AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     request: ListCheckpointsRequest,
 ) {
     let err = client
@@ -418,6 +417,29 @@ async fn expect_invalid_list_checkpoints(
         .await
         .expect_err("request should be InvalidArgument");
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
+}
+
+/// Expect `OutOfRange`, wherever it surfaces: the serving-floor check
+/// runs in the scan's first chunk, so the status can arrive either on
+/// the call or as the first stream error.
+async fn expect_out_of_range_list_checkpoints(
+    client: &mut LedgerServiceClient<Channel>,
+    request: ListCheckpointsRequest,
+) {
+    let status = match client.list_checkpoints(request).await {
+        Err(status) => status,
+        Ok(response) => {
+            let mut stream = response.into_inner();
+            loop {
+                match stream.message().await {
+                    Ok(Some(_)) => continue,
+                    Ok(None) => panic!("stream ended without OutOfRange"),
+                    Err(status) => break status,
+                }
+            }
+        }
+    };
+    assert_eq!(status.code(), tonic::Code::OutOfRange);
 }
 
 async fn new_cluster() -> TestCluster {
@@ -432,14 +454,14 @@ async fn new_cluster() -> TestCluster {
         .await
 }
 
-async fn new_ledger_client(cluster: &TestCluster) -> AlphaLedgerServiceClient<Channel> {
-    AlphaLedgerServiceClient::connect(cluster.rpc_url().to_owned())
+async fn new_ledger_client(cluster: &TestCluster) -> LedgerServiceClient<Channel> {
+    LedgerServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap()
 }
 
 async fn latest_checkpoint_sequence(cluster: &TestCluster) -> u64 {
-    let mut client = V2LedgerServiceClient::connect(cluster.rpc_url().to_owned())
+    let mut client = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
     client
@@ -2303,6 +2325,83 @@ async fn test_list_checkpoints_query_options() {
     assert!(after_exact.checkpoints.is_empty());
     assert!(after_exact.end);
     assert_eq!(after_exact.end_reason, Some(QueryEndReason::CursorBound));
+}
+
+/// Unfiltered `list_checkpoints` on a pruned store: an open-ended low
+/// end is clamped up to the serving floor (instead of failing the whole
+/// stream with `NotFound` on the first pruned checkpoint); an explicit
+/// sub-floor `start_checkpoint` is `OutOfRange`, matching the tx and
+/// event scans; and a descending scan terminates cleanly at the floor.
+#[sim_test]
+async fn test_list_checkpoints_pruned_serving_floor() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    // Advance the chain a few checkpoints so a floor above genesis
+    // still leaves a nonempty retained suffix.
+    let tx1 = transfer_self(&cluster, sender).await;
+    let tx2 = transfer_self(&cluster, sender).await;
+    let _ = tx1;
+    let floor = tx_checkpoint(&tx2);
+
+    // Raise the served floor by bumping the checkpoint store's pruned
+    // watermark. Nothing is physically deleted — the floor alone gates
+    // rendering (`get_checkpoint` rejects sub-floor sequences), so this
+    // reproduces a pruned node's serving behavior.
+    cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let checkpoint_store = state.get_checkpoint_store();
+        let checkpoint = checkpoint_store
+            .get_checkpoint_by_sequence_number(floor - 1)
+            .unwrap()
+            .expect("checkpoint below the floor should exist");
+        checkpoint_store
+            .update_highest_pruned_checkpoint(&checkpoint)
+            .unwrap();
+    });
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    // Bare ascending request: served from the floor, no error.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.options = Some(query_options(3));
+    let response = list_checkpoints_result(&mut client, req).await;
+    let seqs: Vec<_> = response
+        .checkpoints
+        .iter()
+        .map(checkpoint_sequence)
+        .collect();
+    assert_eq!(
+        seqs.first().copied(),
+        Some(floor),
+        "an open-ended ascending scan should start at the serving floor"
+    );
+
+    // An explicit start below the floor asks for pruned data: OutOfRange.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(0);
+    req.options = Some(query_options(3));
+    expect_out_of_range_list_checkpoints(&mut client, req).await;
+
+    // Descending without bounds: walks down to the floor and terminates
+    // cleanly there instead of erroring below it.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.options = Some(query_options_descending(1_000));
+    let response = list_checkpoints_result(&mut client, req).await;
+    let seqs: Vec<_> = response
+        .checkpoints
+        .iter()
+        .map(checkpoint_sequence)
+        .collect();
+    assert_eq!(
+        seqs.last().copied(),
+        Some(floor),
+        "a descending scan should stop at the serving floor"
+    );
+    assert!(response.end);
+    assert_eq!(response.end_reason, Some(QueryEndReason::CheckpointBound));
 }
 
 #[sim_test]

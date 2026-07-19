@@ -20,6 +20,15 @@ public use fun scratch::exists as TxContext.scratch_exists;
 /// Allows calling `sui::scratch::exists_with_type` as `.scratch_exists_with_type(permit, key)`.
 public use fun scratch::exists_with_type as TxContext.scratch_exists_with_type;
 
+/// Allows calling `sui::scratch::read_opt` as `.scratch_read_opt(permit, key)`.
+public use fun scratch::read_opt as TxContext.scratch_read_opt;
+
+/// Allows calling `sui::scratch::remove_opt` as `.scratch_remove_opt(permit, key)`.
+public use fun scratch::remove_opt as TxContext.scratch_remove_opt;
+
+/// Allows calling `sui::scratch::replace` as `.scratch_replace(permit, key, value)`.
+public use fun scratch::replace as TxContext.scratch_replace;
+
 /// Allows calling `sui::scratch::internal_add` as `.scratch_internal_add!(key, value)`.
 public use fun scratch::internal_add as TxContext.scratch_internal_add;
 
@@ -35,6 +44,15 @@ public use fun scratch::internal_exists as TxContext.scratch_internal_exists;
 /// Allows calling `sui::scratch::internal_exists_with_type` as
 /// `.scratch_internal_exists_with_type!(key)`.
 public use fun scratch::internal_exists_with_type as TxContext.scratch_internal_exists_with_type;
+
+/// Allows calling `sui::scratch::internal_read_opt` as `.scratch_internal_read_opt!(key)`.
+public use fun scratch::internal_read_opt as TxContext.scratch_internal_read_opt;
+
+/// Allows calling `sui::scratch::internal_remove_opt` as `.scratch_internal_remove_opt!(key)`.
+public use fun scratch::internal_remove_opt as TxContext.scratch_internal_remove_opt;
+
+/// Allows calling `sui::scratch::internal_replace` as `.scratch_internal_replace!(key, value)`.
+public use fun scratch::internal_replace as TxContext.scratch_internal_replace;
 
 #[test_only]
 /// Number of bytes in an tx hash (which will be the transaction digest)

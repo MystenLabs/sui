@@ -1,9 +1,52 @@
 ---
 title: Get SUI from Faucet
-description: Use the Sui faucet to obtain free SUI tokens for use on the Sui Devnet and Testnet networks. 
-keywords: [ sui faucet, faucet, token faucet, sui devnet, sui testnet, devnet, testnet, get free tokens, free tokens ]
+description: >-
+  Use the Sui faucet to obtain free SUI tokens for use on the Sui Devnet and
+  Testnet networks.
+keywords:
+  - sui faucet
+  - faucet
+  - token faucet
+  - sui devnet
+  - sui testnet
+  - devnet
+  - testnet
+  - get free tokens
+  - free tokens
 pagination_prev: null
 pagination_next: null
+goal:
+  description: >-
+    Reader can request SUI tokens from the faucet and confirm they arrived in
+    their wallet
+  requires:
+    - pattern: '```'
+      min: 2
+      label: Has command or code examples
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - links_to:
+        - /getting-started/onboarding/hello-world
+      label: Links to next onboarding step
+    - pattern: balance|gas
+      min: 1
+      label: Shows how to verify token receipt
+    - min_words: 300
+      label: Needs more walkthrough depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I get SUI tokens from the faucet?
+  - How do I request Testnet or Devnet SUI tokens?
+  - How do I verify my SUI token balance?
+answer: >-
+  To perform transactions on a Sui network, you need SUI tokens to pay for gas
+  and storage.
 ---
 
 To perform transactions on a Sui network, you need SUI tokens to pay for gas and storage. 

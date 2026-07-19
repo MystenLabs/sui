@@ -139,8 +139,12 @@ pub(super) fn cp_unfiltered(cp_bounds: &RangeInclusive<u64>, page: &Page<CCheckp
     let cp_hi = *cp_bounds.end();
 
     // Inclusive cursor bounds
-    let pg_lo = page.after().map_or(cp_lo, |cursor| cursor.max(cp_lo));
-    let pg_hi_inclusive = page.before().map_or(cp_hi, |cursor| cursor.min(cp_hi));
+    let pg_lo = page
+        .after()
+        .map_or(cp_lo, |cursor| cursor.sequence_number().max(cp_lo));
+    let pg_hi_inclusive = page
+        .before()
+        .map_or(cp_hi, |cursor| cursor.sequence_number().min(cp_hi));
 
     if page.is_from_front() {
         (pg_lo..=pg_hi_inclusive)

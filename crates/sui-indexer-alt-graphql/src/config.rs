@@ -657,7 +657,7 @@ impl Default for Limits {
             max_query_nodes: 300,
             max_output_nodes: 1_000_000,
             // Add a 30% buffer to the protocol limit, rounded up to account Base64 overhead.
-            max_tx_payload_size: (max_tx_size_bytes * 4).div_ceil(3) as u32,
+            max_tx_payload_size: (max_tx_size_bytes * 4).div_ceil(3),
             max_query_payload_size: 5_000,
             default_page_size: 20,
             max_page_size: 50,

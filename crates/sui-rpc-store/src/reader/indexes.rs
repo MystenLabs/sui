@@ -12,6 +12,7 @@
 use std::ops::Bound;
 
 use move_core_types::language_storage::StructTag;
+use sui_consistent_store::Encode;
 use sui_consistent_store::reader::Reader;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -22,6 +23,8 @@ use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIteratorItem;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
+use sui_types::storage::LedgerBitmapBucket;
+use sui_types::storage::LedgerBitmapBucketIter;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
@@ -37,6 +40,83 @@ use typed_store_error::TypedStoreError;
 
 use crate::reader::RpcStoreReader;
 use crate::schema::type_filter::TypeFilter;
+
+enum BoundedBitmapIter<'d, K, V> {
+    Fwd(sui_consistent_store::Iter<'d, K, V>),
+    Rev(sui_consistent_store::RevIter<'d, K, V>),
+}
+
+impl<K, V> BoundedBitmapIter<'_, K, V> {
+    fn seek(&mut self, probe: impl AsRef<[u8]>) {
+        match self {
+            Self::Fwd(iter) => iter.seek(probe),
+            Self::Rev(iter) => iter.seek(probe),
+        }
+    }
+}
+
+struct TransactionBitmapBucketIter<'d> {
+    inner: BoundedBitmapIter<
+        'd,
+        crate::schema::transaction_bitmap::Key,
+        crate::schema::transaction_bitmap::Value,
+    >,
+    dimension_key: Vec<u8>,
+}
+
+impl Iterator for TransactionBitmapBucketIter<'_> {
+    type Item = Result<LedgerBitmapBucket, TypedStoreError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let row = match &mut self.inner {
+            BoundedBitmapIter::Fwd(iter) => iter.next(),
+            BoundedBitmapIter::Rev(iter) => iter.next(),
+        };
+        row.map(project_bitmap_row)
+    }
+}
+
+impl LedgerBitmapBucketIter for TransactionBitmapBucketIter<'_> {
+    fn seek_bucket(&mut self, bucket_id: u64) {
+        let probe = crate::schema::transaction_bitmap::Key {
+            dimension_key: self.dimension_key.clone(),
+            bucket: bucket_id,
+        }
+        .encode()
+        .expect("bitmap key encodes infallibly: raw bytes + u64 BE");
+        self.inner.seek(probe);
+    }
+}
+
+struct EventBitmapBucketIter<'d> {
+    inner:
+        BoundedBitmapIter<'d, crate::schema::event_bitmap::Key, crate::schema::event_bitmap::Value>,
+    dimension_key: Vec<u8>,
+}
+
+impl Iterator for EventBitmapBucketIter<'_> {
+    type Item = Result<LedgerBitmapBucket, TypedStoreError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let row = match &mut self.inner {
+            BoundedBitmapIter::Fwd(iter) => iter.next(),
+            BoundedBitmapIter::Rev(iter) => iter.next(),
+        };
+        row.map(project_event_bitmap_row)
+    }
+}
+
+impl LedgerBitmapBucketIter for EventBitmapBucketIter<'_> {
+    fn seek_bucket(&mut self, bucket_id: u64) {
+        let probe = crate::schema::event_bitmap::Key {
+            dimension_key: self.dimension_key.clone(),
+            bucket: bucket_id,
+        }
+        .encode()
+        .expect("bitmap key encodes infallibly: raw bytes + u64 BE");
+        self.inner.seek(probe);
+    }
+}
 
 fn to_typed_store_err(e: sui_consistent_store::error::Error) -> TypedStoreError {
     TypedStoreError::RocksDBError(format!("{e:#}"))
@@ -294,21 +374,16 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
-        // Min across all registered pipeline watermarks: every CF
-        // has caught up to at least this checkpoint, so reads
-        // against any of them are coherent through here.
-        let framework = sui_consistent_store::FrameworkSchema::new(self.db().clone());
-        let mut min: Option<u64> = None;
-        for entry in framework
-            .watermarks
-            .iter(..)
-            .map_err(sui_types::storage::error::Error::custom)?
-        {
-            let (_, watermark) = entry.map_err(sui_types::storage::error::Error::custom)?;
-            let hi = watermark.checkpoint_hi_inclusive;
-            min = Some(min.map_or(hi, |m| m.min(hi)));
-        }
-        Ok(min)
+        // Min across the registered pipelines' watermarks: every CF
+        // this reader serves has caught up to at least this
+        // checkpoint, so reads against any of them are coherent
+        // through here. Bounded to the registered set -- rather than
+        // every row in the framework CF -- so a stale watermark left
+        // behind by a pipeline that is no longer registered cannot
+        // pin the reported tip forever. `None` while any registered
+        // pipeline has no watermark yet: nothing is fully indexed,
+        // so nothing is served (fail closed).
+        self.min_committed(self.pipelines.iter().copied())
     }
 
     fn get_highest_live_indexed_checkpoint_seq_number(
@@ -389,20 +464,24 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             bucket: start_bucket,
         };
         let upper = crate::schema::transaction_bitmap::Key {
-            dimension_key,
+            dimension_key: dimension_key.clone(),
             bucket: end_bucket_exclusive,
         };
-        if descending {
-            let iter = map
-                .iter_rev(lower..upper)
-                .map_err(sui_types::storage::error::Error::custom)?;
-            Ok(Box::new(iter.map(project_bitmap_row)))
+        let inner = if descending {
+            BoundedBitmapIter::Rev(
+                map.iter_rev(lower..upper)
+                    .map_err(sui_types::storage::error::Error::custom)?,
+            )
         } else {
-            let iter = map
-                .iter(lower..upper)
-                .map_err(sui_types::storage::error::Error::custom)?;
-            Ok(Box::new(iter.map(project_bitmap_row)))
-        }
+            BoundedBitmapIter::Fwd(
+                map.iter(lower..upper)
+                    .map_err(sui_types::storage::error::Error::custom)?,
+            )
+        };
+        Ok(Box::new(TransactionBitmapBucketIter {
+            inner,
+            dimension_key,
+        }))
     }
 
     fn event_bitmap_bucket_iter(
@@ -418,20 +497,24 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             bucket: start_bucket,
         };
         let upper = crate::schema::event_bitmap::Key {
-            dimension_key,
+            dimension_key: dimension_key.clone(),
             bucket: end_bucket_exclusive,
         };
-        if descending {
-            let iter = map
-                .iter_rev(lower..upper)
-                .map_err(sui_types::storage::error::Error::custom)?;
-            Ok(Box::new(iter.map(project_event_bitmap_row)))
+        let inner = if descending {
+            BoundedBitmapIter::Rev(
+                map.iter_rev(lower..upper)
+                    .map_err(sui_types::storage::error::Error::custom)?,
+            )
         } else {
-            let iter = map
-                .iter(lower..upper)
-                .map_err(sui_types::storage::error::Error::custom)?;
-            Ok(Box::new(iter.map(project_event_bitmap_row)))
-        }
+            BoundedBitmapIter::Fwd(
+                map.iter(lower..upper)
+                    .map_err(sui_types::storage::error::Error::custom)?,
+            )
+        };
+        Ok(Box::new(EventBitmapBucketIter {
+            inner,
+            dimension_key,
+        }))
     }
 }
 
@@ -601,6 +684,150 @@ mod tests {
             .collect();
         // Bob's bucket is not visible under Alice's dimension.
         assert_eq!(buckets, vec![0]);
+    }
+
+    /// The indexed tip is bounded by the registered pipeline set: a
+    /// stale watermark from a pipeline that is no longer registered
+    /// (e.g. `transactions`, disabled on the embedded deployment) must
+    /// not pin the reported tip, and a registered pipeline with no
+    /// watermark yet reads as "nothing fully indexed".
+    #[test]
+    fn highest_indexed_bounds_to_registered_pipelines() {
+        use sui_consistent_store::FrameworkSchema;
+        use sui_consistent_store::PipelineTaskKey;
+        use sui_consistent_store::Watermark;
+
+        let (_dir, db, reader) = setup();
+
+        let framework = FrameworkSchema::new(db.clone());
+        let stamp = |names: &[&str], hi: u64| {
+            let mut batch = db.batch();
+            for name in names {
+                batch
+                    .put(
+                        &framework.watermarks,
+                        &PipelineTaskKey::new(*name),
+                        &Watermark::for_checkpoint(hi),
+                    )
+                    .unwrap();
+            }
+            batch.commit().unwrap();
+        };
+
+        // Nothing committed yet: nothing is fully indexed. A stale row
+        // from an unregistered pipeline does not change that.
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            None,
+        );
+        stamp(&["transactions"], 3);
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            None,
+        );
+
+        // Only part of the registered set committed: still nothing
+        // fully indexed (fail closed).
+        stamp(crate::LIVE_COHORT, 40);
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            None,
+        );
+
+        // The whole registered set committed: the slowest registered
+        // pipeline bounds the tip, and the stale `transactions` row at
+        // 3 stays excluded.
+        stamp(crate::HISTORY_COHORT, 40);
+        stamp(&[crate::HISTORY_COHORT[0]], 25);
+        assert_eq!(
+            reader.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            Some(25),
+        );
+
+        // A reader for a different deployment bounds by exactly its
+        // own registered set.
+        let custom = reader.clone().with_pipelines(["transactions"]);
+        assert_eq!(
+            custom.get_highest_indexed_checkpoint_seq_number().unwrap(),
+            Some(3),
+        );
+    }
+
+    #[test]
+    fn transaction_bitmap_bucket_iter_seeks_within_range() {
+        let (_dir, db, reader) = setup();
+        let dimension_key = b"sender:alice".to_vec();
+        let mut batch = db.batch();
+        for bucket in [0, 3, 7] {
+            let (key, value) = transaction_bitmap::store_match(
+                dimension_key.clone(),
+                bucket * transaction_bitmap::TX_BUCKET_SIZE + 1,
+            );
+            batch
+                .merge(&reader.schema().transaction_bitmap, &key, &value)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut iter = reader
+            .transaction_bitmap_bucket_iter(dimension_key, 0, 8, false)
+            .unwrap();
+        iter.seek_bucket(2);
+        assert_eq!(iter.next().unwrap().unwrap().bucket_id, 3);
+        iter.seek_bucket(7);
+        assert_eq!(iter.next().unwrap().unwrap().bucket_id, 7);
+        iter.seek_bucket(9);
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn transaction_bitmap_bucket_iter_seeks_descending() {
+        let (_dir, db, reader) = setup();
+        let dimension_key = b"sender:alice".to_vec();
+        let mut batch = db.batch();
+        for bucket in [0, 3, 7] {
+            let (key, value) = transaction_bitmap::store_match(
+                dimension_key.clone(),
+                bucket * transaction_bitmap::TX_BUCKET_SIZE + 1,
+            );
+            batch
+                .merge(&reader.schema().transaction_bitmap, &key, &value)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut iter = reader
+            .transaction_bitmap_bucket_iter(dimension_key, 0, 8, true)
+            .unwrap();
+        iter.seek_bucket(5);
+        assert_eq!(iter.next().unwrap().unwrap().bucket_id, 3);
+        iter.seek_bucket(0);
+        assert_eq!(iter.next().unwrap().unwrap().bucket_id, 0);
+    }
+
+    #[test]
+    fn bitmap_bucket_iter_seek_respects_dimension_isolation() {
+        let (_dir, db, reader) = setup();
+        let alice = b"sender:alice".to_vec();
+        let bob = b"sender:bob".to_vec();
+        let mut batch = db.batch();
+        for (dimension_key, bucket) in [(&alice, 0), (&alice, 7), (&bob, 3), (&bob, 7)] {
+            let (key, value) = transaction_bitmap::store_match(
+                dimension_key.clone(),
+                bucket * transaction_bitmap::TX_BUCKET_SIZE + 1,
+            );
+            batch
+                .merge(&reader.schema().transaction_bitmap, &key, &value)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut iter = reader
+            .transaction_bitmap_bucket_iter(alice, 0, 8, false)
+            .unwrap();
+        iter.seek_bucket(3);
+        assert_eq!(iter.next().unwrap().unwrap().bucket_id, 7);
+        assert!(iter.next().is_none());
     }
 
     #[test]

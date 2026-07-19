@@ -18,6 +18,7 @@ async-stream.workspace = true
 bcs.workspace = true
 futures.workspace = true
 move-core-types.workspace = true
+mysten-common.workspace = true
 roaring.workspace = true
 sui-types.workspace = true
 thiserror.workspace = true
