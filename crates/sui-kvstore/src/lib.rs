@@ -76,6 +76,7 @@ pub use config::IndexerConfig;
 pub use config::IngestionConfig;
 pub use config::PipelineLayer;
 pub use config::SequentialLayer;
+pub use config::default_committer_config;
 pub use sui_inverted_index::BitmapLiteral;
 pub use sui_inverted_index::BitmapQuery;
 pub use sui_inverted_index::BitmapTerm;

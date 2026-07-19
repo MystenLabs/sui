@@ -113,6 +113,7 @@ impl BigtableReader {
                 Some(registry),
                 bigtable_args.bigtable_app_profile_id,
                 Default::default(),
+                false,
             )
             .await
             .context("Failed to create BigTable client")?,
