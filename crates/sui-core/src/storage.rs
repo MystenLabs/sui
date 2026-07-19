@@ -490,6 +490,14 @@ impl ReadStore for RestReadStore {
             .get_checkpoint_by_sequence_number(sequence_number)
     }
 
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        self.rocks
+            .multi_get_checkpoint_by_sequence_number(sequence_numbers)
+    }
+
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -549,6 +557,14 @@ impl ReadStore for RestReadStore {
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>> {
         self.rocks.get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        self.rocks
+            .multi_get_unchanged_loaded_runtime_objects(digests)
     }
 
     fn get_transaction_checkpoint(
@@ -751,6 +767,14 @@ impl ReadStore for RpcStoreReadStore {
             .get_checkpoint_by_sequence_number(sequence_number)
     }
 
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        self.rocks
+            .multi_get_checkpoint_by_sequence_number(sequence_numbers)
+    }
+
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -810,6 +834,14 @@ impl ReadStore for RpcStoreReadStore {
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>> {
         self.rocks.get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        self.rocks
+            .multi_get_unchanged_loaded_runtime_objects(digests)
     }
 
     fn get_transaction_checkpoint(
