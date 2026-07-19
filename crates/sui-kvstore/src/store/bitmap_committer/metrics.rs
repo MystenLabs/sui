@@ -6,14 +6,18 @@ use std::sync::atomic::Ordering;
 
 use prometheus::Histogram;
 use prometheus::IntCounter;
+use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::register_histogram_with_registry;
 use prometheus::register_int_counter_with_registry;
+use prometheus::register_int_gauge_with_registry;
 
 pub(crate) struct BitmapIndexMetrics {
     pub write_chunk_latency: Histogram,
     pub watermark_lag_ms: Histogram,
     pub retry_rows: IntCounter,
+    pub write_concurrency_limit: IntGauge,
+    pub write_concurrency_inflight: IntGauge,
     /// Size of a row_key in bytes, observed when the shard builds a row
     /// flush.
     pub row_key_size_bytes: Histogram,
@@ -52,6 +56,18 @@ impl BitmapIndexMetrics {
             retry_rows: register_int_counter_with_registry!(
                 format!("bitmap_write_retry_rows_total_{pipeline}"),
                 "Bitmap rows retried by the bitmap writer",
+                registry,
+            )
+            .unwrap(),
+            write_concurrency_limit: register_int_gauge_with_registry!(
+                format!("bitmap_write_concurrency_limit_{pipeline}"),
+                "Current adaptive concurrency limit of the bitmap row writer",
+                registry,
+            )
+            .unwrap(),
+            write_concurrency_inflight: register_int_gauge_with_registry!(
+                format!("bitmap_write_concurrency_inflight_{pipeline}"),
+                "In-flight bitmap row-write chunks",
                 registry,
             )
             .unwrap(),

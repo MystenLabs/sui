@@ -46,6 +46,7 @@ use bytes::Bytes;
 use prometheus::Registry;
 use scoped_futures::ScopedBoxFuture;
 use sui_futures::service::Service;
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_indexer_alt_framework_store_traits::ConcurrentConnection;
 use sui_indexer_alt_framework_store_traits::ConcurrentStore;
@@ -278,7 +279,7 @@ impl BigTableStoreRuntimeBuilder {
     pub(crate) fn with_bitmap_committer<P>(
         mut self,
         write_chunk_size: usize,
-        write_concurrency: usize,
+        write_concurrency: ConcurrencyConfig,
         rate_limiter: Arc<CompositeRateLimiter>,
         registry: Option<&Registry>,
     ) -> Self

@@ -229,10 +229,14 @@ pub struct SequentialLayer {
 
     // sui-kvstore-specific config extensions
 
-    // Fixed concurrency for bitmap BigTable write RPCs. Framework sequential pipelines commit
-    // serially, but bitmap commits only merge rows into the store's in-memory bucket buffers.
-    // Background tasks flush those buffers to BigTable concurrently.
-    pub write_concurrency: Option<usize>,
+    // Concurrency for bitmap BigTable write RPCs, fixed or adaptive. A bare
+    // integer configures fixed concurrency (legacy format); tagged
+    // `{ kind = "fixed" | "adaptive", ... }` forms are also accepted. Framework
+    // sequential pipelines commit serially, but bitmap commits only merge rows
+    // into the store's in-memory bucket buffers. Background tasks flush those
+    // buffers to BigTable concurrently. Defaults to the store committer's
+    // write-concurrency.
+    pub write_concurrency: Option<ConcurrencyConfig>,
     /// Maximum rows per in-handler BigTable write RPC. Same semantic as
     /// `ConcurrentLayer::max_rows`.
     pub max_rows: Option<usize>,
@@ -372,6 +376,26 @@ mod tests {
 
         assert!(enabled.batch_write_flow_control);
         assert!(!IndexerConfig::default().batch_write_flow_control);
+    }
+
+    #[test]
+    fn sequential_layer_accepts_bare_int_write_concurrency() {
+        let layer: SequentialLayer = toml::from_str("write-concurrency = 7").unwrap();
+        assert_eq!(layer.write_concurrency, Some(ConcurrencyConfig::fixed(7)));
+
+        let layer: SequentialLayer = toml::from_str(
+            "write-concurrency = { kind = \"adaptive\", initial = 2, min = 1, max = 8 }",
+        )
+        .unwrap();
+        assert_eq!(
+            layer.write_concurrency,
+            Some(ConcurrencyConfig::Adaptive {
+                initial: 2,
+                min: 1,
+                max: 8,
+                dead_band: None,
+            })
+        );
     }
 
     #[test]

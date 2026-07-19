@@ -10,6 +10,7 @@ use bytes::Bytes;
 use roaring::RoaringBitmap;
 use scoped_futures::ScopedFutureExt;
 use sui_futures::service::Service;
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::sequential::Handler;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_indexer_alt_framework_store_traits::Connection;
@@ -100,7 +101,7 @@ async fn setup_without_init_watermark() -> (MockBigtableServer, BigTableStore, B
 fn register_test_committer_with(
     store: &BigTableStore,
     write_chunk_size: usize,
-    write_concurrency: usize,
+    write_concurrency: ConcurrencyConfig,
 ) -> Service {
     store
         .runtime_builder()
@@ -118,13 +119,16 @@ fn register_test_committer(store: &BigTableStore) -> Service {
     register_test_committer_with(
         store,
         config.max_rows_or_default(),
-        config.write_concurrency.unwrap_or(1),
+        config
+            .write_concurrency
+            .clone()
+            .unwrap_or(ConcurrencyConfig::fixed(1)),
     )
 }
 
 async fn setup_with_committer(
     write_chunk_size: usize,
-    write_concurrency: usize,
+    write_concurrency: ConcurrencyConfig,
 ) -> (
     MockBigtableServer,
     BigTableStore,
@@ -549,7 +553,8 @@ async fn retry_preserves_generation_until_failed_write_lands() {
 /// last at BigTable; the final persisted bitmap must still contain both bits.
 #[tokio::test]
 async fn interleaved_commits_both_persist() {
-    let (mock, store, handler, _service) = setup_with_committer(1, 2).await;
+    let (mock, store, handler, _service) =
+        setup_with_committer(1, ConcurrencyConfig::fixed(2)).await;
     let first_write_gate = mock.pause_next_mutate_rows().await;
     let handler = Arc::new(handler);
 
@@ -607,7 +612,8 @@ async fn interleaved_commits_both_persist() {
 /// ordering must keep the newer cumulative row authoritative.
 #[tokio::test]
 async fn concurrent_retry_of_older_same_row_write_cannot_clobber_newer_bitmap() {
-    let (mock, store, handler, _service) = setup_with_committer(1, 2).await;
+    let (mock, store, handler, _service) =
+        setup_with_committer(1, ConcurrencyConfig::fixed(2)).await;
     let handler = Arc::new(handler);
 
     let row_key: &[u8] = b"v1#dim#0000000000";
@@ -714,7 +720,8 @@ async fn many_shards_all_rows_durable() {
 /// only after every chunk reports durable rows for that generation.
 #[tokio::test]
 async fn generation_waits_for_all_writer_chunks() {
-    let (mock, store, handler, _service) = setup_with_committer(2, 1).await;
+    let (mock, store, handler, _service) =
+        setup_with_committer(2, ConcurrencyConfig::fixed(1)).await;
     let handler = Arc::new(handler);
 
     let target_shard = shard_for(b"v1#chunked#target");
@@ -749,6 +756,61 @@ async fn generation_waits_for_all_writer_chunks() {
         mock.mutate_rows_count.load(Ordering::Relaxed),
         3,
         "five rows with chunk size two should flush as three MutateRows calls",
+    );
+    for (i, rk) in row_keys.iter().enumerate() {
+        let bm = wait_for_bitmap(&mock, rk).await;
+        assert_eq!(bm.len(), 1);
+        assert!(bm.contains(i as u32));
+    }
+    assert_eq!(persisted.checkpoint_hi_inclusive, 1);
+}
+
+#[tokio::test]
+async fn adaptive_write_concurrency_flushes_all_rows() {
+    let (mock, store, handler, _service) = setup_with_committer(
+        1,
+        ConcurrencyConfig::Adaptive {
+            initial: 2,
+            min: 1,
+            max: 8,
+            dead_band: None,
+        },
+    )
+    .await;
+    let handler = Arc::new(handler);
+
+    let target_shard = shard_for(b"v1#adaptive#target");
+    let row_keys: Vec<Vec<u8>> = (0..)
+        .map(|i| format!("v1#adaptive#{i:010}").into_bytes())
+        .filter(|row| shard_for(row) == target_shard)
+        .take(5)
+        .collect();
+    let batch = make_batch(
+        row_keys
+            .iter()
+            .enumerate()
+            .map(|(i, rk)| value(rk, 0, &[i as u32], 1, 1500))
+            .collect(),
+    );
+
+    let h = handler.clone();
+    store
+        .transaction(move |conn| {
+            async move {
+                conn.set_committer_watermark(PIPELINE, watermark(1, 10, 1500))
+                    .await?;
+                h.commit(&batch, conn).await
+            }
+            .scope_boxed()
+        })
+        .await
+        .unwrap();
+
+    let persisted = wait_for_watermark_at_least(&store, 1).await;
+    assert_eq!(
+        mock.mutate_rows_count.load(Ordering::Relaxed),
+        5,
+        "five rows with chunk size one should flush as five MutateRows calls",
     );
     for (i, rk) in row_keys.iter().enumerate() {
         let bm = wait_for_bitmap(&mock, rk).await;

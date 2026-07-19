@@ -449,7 +449,8 @@ impl BigTableIndexer {
                     pipeline
                         .transaction_bitmap_index
                         .write_concurrency
-                        .unwrap_or_else(|| base.committer.write_concurrency.initial()),
+                        .clone()
+                        .unwrap_or_else(|| base.committer.write_concurrency.clone()),
                     tx_bitmap_rate_limiter,
                     Some(registry),
                 );
@@ -626,7 +627,8 @@ impl BigTableIndexer {
                     pipeline
                         .event_bitmap_index
                         .write_concurrency
-                        .unwrap_or_else(|| base.committer.write_concurrency.initial()),
+                        .clone()
+                        .unwrap_or_else(|| base.committer.write_concurrency.clone()),
                     ev_bitmap_rate_limiter,
                     Some(registry),
                 );

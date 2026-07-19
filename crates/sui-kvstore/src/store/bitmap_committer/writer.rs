@@ -13,7 +13,9 @@ use backoff::backoff::Backoff as _;
 use bytes::Bytes;
 use futures::StreamExt;
 use rustc_hash::FxHashSet;
+use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use tokio::sync::mpsc;
 use tracing::info;
 use tracing::warn;
@@ -58,7 +60,7 @@ pub(super) struct Writer {
     pub(super) write_rx: mpsc::Receiver<Batch>,
     pub(super) generation_tx: mpsc::Sender<generation::Event>,
     pub(super) write_chunk_size: usize,
-    pub(super) write_concurrency: usize,
+    pub(super) write_concurrency: ConcurrencyConfig,
     pub(super) rows_written: Arc<AtomicU64>,
     pub(super) metrics: Arc<BitmapIndexMetrics>,
 }
@@ -103,14 +105,14 @@ impl Writer {
         info!(pipeline, "Bitmap row writer started");
 
         let write_chunk_size = write_chunk_size.max(1);
-        let write_concurrency = write_concurrency.max(1);
+        let report_metrics = metrics.clone();
         let context = WriteContext {
             pipeline,
             table,
             column,
             client,
             rate_limiter,
-            generation_tx,
+            generation_tx: generation_tx.clone(),
             rows_written,
             metrics,
         };
@@ -123,10 +125,22 @@ impl Writer {
         .ready_chunks(write_chunk_size);
 
         let result = chunks
-            .try_for_each_spawned(write_concurrency, move |rows| {
-                let context = context.clone();
-                async move { context.write_chunk_retrying(Chunk::new(rows)).await }
-            })
+            .try_for_each_send_spawned(
+                write_concurrency.into(),
+                move |rows| {
+                    let context = context.clone();
+                    async move { context.write_chunk_retrying(Chunk::new(rows)).await }
+                },
+                generation_tx,
+                move |stats| {
+                    report_metrics
+                        .write_concurrency_limit
+                        .set(stats.limit as i64);
+                    report_metrics
+                        .write_concurrency_inflight
+                        .set(stats.inflight as i64);
+                },
+            )
             .await;
 
         if result.is_err() {
@@ -141,7 +155,7 @@ impl Writer {
 }
 
 impl WriteContext {
-    async fn write_chunk_retrying(self, mut chunk: Chunk) -> Result<(), ()> {
+    async fn write_chunk_retrying(self, mut chunk: Chunk) -> Result<generation::Event, Break<()>> {
         let mut backoff = row_write_backoff();
 
         loop {
@@ -150,6 +164,12 @@ impl WriteContext {
             let rows_written: u64 = result.flushed.iter().map(|r| r.count).sum();
             if rows_written != 0 {
                 self.rows_written.fetch_add(rows_written, Ordering::Relaxed);
+            }
+
+            if result.failed.is_empty() {
+                return Ok(generation::Event::RowsFlushed {
+                    counts: result.flushed,
+                });
             }
 
             if !result.flushed.is_empty()
@@ -165,11 +185,7 @@ impl WriteContext {
                     self.pipeline,
                     "Generation task closed while reporting durable bitmap rows"
                 );
-                return Err(());
-            }
-
-            if result.failed.is_empty() {
-                return Ok(());
+                return Err(Break::Break);
             }
 
             let failed = result.failed.len();

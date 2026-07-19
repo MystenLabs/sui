@@ -82,6 +82,7 @@ use std::time::Instant;
 use futures::future::try_join_all;
 use mysten_common::zip_debug_eq::ZipDebugEqIteratorExt;
 use sui_futures::service::Service;
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -222,7 +223,7 @@ pub(crate) struct BitmapCommitter {
     pub client: BigTableClient,
     pub rate_limiter: Arc<CompositeRateLimiter>,
     pub write_chunk_size: usize,
-    pub write_concurrency: usize,
+    pub write_concurrency: ConcurrencyConfig,
     pub metrics: Arc<BitmapIndexMetrics>,
 }
 
