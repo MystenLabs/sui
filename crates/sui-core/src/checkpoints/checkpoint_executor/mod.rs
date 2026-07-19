@@ -428,10 +428,25 @@ impl CheckpointExecutor {
 
         finish_stage!(pipeline_handle, BuildDbBatch);
 
-        let object_funds_checker = self.state.object_funds_checker.load();
-        if let Some(object_funds_checker) = object_funds_checker.as_ref() {
-            object_funds_checker.commit_effects(batch.0.iter().map(|o| &o.effects));
-        }
+        // commit_accumulator_versions can only be called after the checkpoint is fully executed.
+        // This is the earliest point where we can guarantee that no transactions will be reading
+        // the unsettled object withdraws for the committed accumulator versions.
+        let committed_accumulator_versions = batch
+            .0
+            .iter()
+            .filter_map(|outputs| {
+                outputs.effects.object_changes().into_iter().find_map(|o| {
+                    if o.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+                        o.input_version
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        self.state
+            .unsettled_object_withdrawals
+            .commit_accumulator_versions(committed_accumulator_versions);
 
         let mut ckpt_state = tokio::task::spawn_blocking({
             let this = self.clone();
