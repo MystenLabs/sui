@@ -2295,3 +2295,24 @@ pub mod bigtable_server {
         const NAME: &'static str = SERVICE_NAME;
     }
 }
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FeatureFlags {
+    #[prost(bool, tag = "1")]
+    pub reverse_scans: bool,
+    #[prost(bool, tag = "3")]
+    pub mutate_rows_rate_limit: bool,
+    #[prost(bool, tag = "5")]
+    pub mutate_rows_rate_limit2: bool,
+    #[prost(bool, tag = "4")]
+    pub last_scanned_row_responses: bool,
+    #[prost(bool, tag = "6")]
+    pub routing_cookie: bool,
+    #[prost(bool, tag = "7")]
+    pub retry_info: bool,
+    #[prost(bool, tag = "8")]
+    pub client_side_metrics_enabled: bool,
+    #[prost(bool, tag = "9")]
+    pub traffic_director_enabled: bool,
+    #[prost(bool, tag = "10")]
+    pub direct_access_requested: bool,
+}

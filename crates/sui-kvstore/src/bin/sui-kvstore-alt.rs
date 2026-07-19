@@ -118,6 +118,7 @@ async fn main() -> Result<()> {
         Some(&registry),
         args.app_profile_id,
         pool_config,
+        config.batch_write_flow_control,
     )
     .await?;
 

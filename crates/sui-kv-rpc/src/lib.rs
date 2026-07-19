@@ -306,6 +306,7 @@ impl KvRpcServer {
             app_profile_id,
             pool_config,
             credentials_path,
+            false,
         )
         .await?;
         let genesis = client

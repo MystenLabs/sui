@@ -19,7 +19,10 @@ fn main() {
         .unwrap()
         .include_source_info(false)
         .include_imports(true)
-        .open_files(&[proto_dir.join("google/bigtable/v2/bigtable.proto")])
+        .open_files(&[
+            proto_dir.join("google/bigtable/v2/bigtable.proto"),
+            proto_dir.join("google/bigtable/v2/feature_flags.proto"),
+        ])
         .unwrap()
         .file_descriptor_set();
 

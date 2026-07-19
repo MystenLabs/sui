@@ -8,13 +8,32 @@ use std::sync::RwLock;
 use std::task::Context;
 use std::task::Poll;
 
+use base64::Engine as _;
 use gcp_auth::Token;
 use gcp_auth::TokenProvider;
 use http::HeaderValue;
 use http::Request;
 use http::Response;
+use prost::Message as _;
 use tonic::body::Body;
 use tonic::codegen::Service;
+
+use crate::bigtable::proto::bigtable::v2::FeatureFlags;
+
+/// Websafe-base64 [`FeatureFlags`] advertised to Bigtable in the
+/// `bigtable-features` request metadata. Reverse scans are always advertised.
+/// Batch write flow control additionally advertises both MutateRows rate-limit
+/// flags so that partial retries remain supported.
+pub(crate) fn bigtable_features_header(batch_write_flow_control: bool) -> HeaderValue {
+    let feature_flags = FeatureFlags {
+        reverse_scans: true,
+        mutate_rows_rate_limit: batch_write_flow_control,
+        mutate_rows_rate_limit2: batch_write_flow_control,
+        ..Default::default()
+    };
+    let encoded = base64::engine::general_purpose::URL_SAFE.encode(feature_flags.encode_to_vec());
+    HeaderValue::from_str(&encoded).expect("base64 is always a valid header value")
+}
 
 /// Auth middleware that injects credentials onto any inner `Service`.
 #[derive(Clone)]
@@ -22,6 +41,7 @@ pub(crate) struct AuthChannel<S> {
     inner: S,
     policy: String,
     token_provider: Option<Arc<dyn TokenProvider>>,
+    features_header: HeaderValue,
     token: Arc<RwLock<Option<Arc<Token>>>>,
 }
 
@@ -30,11 +50,13 @@ impl<S> AuthChannel<S> {
         inner: S,
         policy: String,
         token_provider: Option<Arc<dyn TokenProvider>>,
+        features_header: HeaderValue,
     ) -> Self {
         Self {
             inner,
             policy,
             token_provider,
+            features_header,
             token: Arc::new(RwLock::new(None)),
         }
     }
@@ -59,6 +81,7 @@ where
         let cloned_token = self.token.clone();
         let policy = self.policy.clone();
         let token_provider = self.token_provider.clone();
+        let features_header = self.features_header.clone();
 
         let mut auth_token = None;
         if token_provider.is_some() {
@@ -90,11 +113,47 @@ where
                     HeaderValue::from_str(format!("Bearer {}", token_string.as_str()).as_str())?;
                 request.headers_mut().insert("authorization", header);
             }
-            // enable reverse scan
-            let header = HeaderValue::from_static("CAE=");
-            request.headers_mut().insert("bigtable-features", header);
+            request
+                .headers_mut()
+                .insert("bigtable-features", features_header);
 
             ready_inner.call(request).await.map_err(Into::into)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use base64::Engine as _;
+    use prost::Message as _;
+
+    use super::*;
+
+    #[test]
+    fn default_features_header_is_byte_compatible() {
+        assert_eq!(
+            bigtable_features_header(false),
+            HeaderValue::from_static("CAE="),
+        );
+    }
+
+    #[test]
+    fn flow_control_features_header_round_trips() {
+        let header = bigtable_features_header(true);
+        let encoded = base64::engine::general_purpose::URL_SAFE
+            .decode(header.as_bytes())
+            .expect("features header should be valid websafe base64");
+        let feature_flags =
+            FeatureFlags::decode(encoded.as_slice()).expect("features header should be valid");
+
+        assert_eq!(
+            feature_flags,
+            FeatureFlags {
+                reverse_scans: true,
+                mutate_rows_rate_limit: true,
+                mutate_rows_rate_limit2: true,
+                ..Default::default()
+            },
+        );
     }
 }

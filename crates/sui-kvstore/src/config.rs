@@ -50,6 +50,11 @@ pub struct IndexerConfig {
     pub bigtable_connection_pool_size: Option<usize>,
     /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000).
     pub bigtable_channel_timeout_ms: Option<u64>,
+    /// Enable Bigtable batch write flow control by advertising the mutate-rows
+    /// rate-limit feature flags and adaptively throttling MutateRows from
+    /// `RateLimitInfo`. Requires a single-cluster-routing app profile and pairs
+    /// with Bigtable autoscaling. Defaults to false.
+    pub batch_write_flow_control: bool,
     /// Bigtable connection pool configuration.
     pub bigtable_pool: BigtablePoolLayer,
 }
@@ -359,6 +364,14 @@ mod tests {
                 dead_band: None,
             }
         );
+    }
+
+    #[test]
+    fn batch_write_flow_control_is_opt_in() {
+        let enabled: IndexerConfig = toml::from_str("batch-write-flow-control = true").unwrap();
+
+        assert!(enabled.batch_write_flow_control);
+        assert!(!IndexerConfig::default().batch_write_flow_control);
     }
 
     #[test]

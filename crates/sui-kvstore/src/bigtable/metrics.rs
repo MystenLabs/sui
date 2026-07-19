@@ -3,11 +3,15 @@
 
 use std::sync::Arc;
 
+use prometheus::GaugeVec;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
+use prometheus::IntGaugeVec;
 use prometheus::Registry;
+use prometheus::register_gauge_vec_with_registry;
 use prometheus::register_histogram_vec_with_registry;
 use prometheus::register_int_counter_vec_with_registry;
+use prometheus::register_int_gauge_vec_with_registry;
 
 pub(crate) struct KvMetrics {
     pub kv_get_success: IntCounterVec,
@@ -26,6 +30,10 @@ pub(crate) struct KvMetrics {
     pub kv_bt_read_rows_started_total: IntCounterVec,
     pub kv_bt_chunk_rows_returned_count: IntCounterVec,
     pub kv_bt_chunk_rows_seen_count: IntCounterVec,
+    pub kv_bt_flow_control_enabled: IntGaugeVec,
+    pub kv_bt_flow_control_target_qps: GaugeVec,
+    pub kv_bt_flow_control_throttle_ms: HistogramVec,
+    pub kv_bt_flow_control_rate_updates: IntCounterVec,
 }
 
 impl KvMetrics {
@@ -161,6 +169,37 @@ impl KvMetrics {
                 "kv_bt_chunk_rows_seen_count",
                 "Reported BigTable rows seen count for a single chunk",
                 &["client", "table"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_enabled: register_int_gauge_vec_with_registry!(
+                "kv_bt_flow_control_enabled",
+                "Whether BigTable adaptive batch-write flow control is enabled",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_target_qps: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_target_qps",
+                "Current target MutateRows requests per second from BigTable flow control",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_throttle_ms: register_histogram_vec_with_registry!(
+                "kv_bt_flow_control_throttle_ms",
+                "Time spent waiting for BigTable adaptive batch-write flow-control admission",
+                &["client"],
+                prometheus::exponential_buckets(1.0, 1.6, 24)
+                    .unwrap()
+                    .to_vec(),
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_rate_updates: register_int_counter_vec_with_registry!(
+                "kv_bt_flow_control_rate_updates",
+                "BigTable adaptive batch-write flow-control rate update events by kind",
+                &["client", "kind"],
                 registry,
             )
             .unwrap(),
