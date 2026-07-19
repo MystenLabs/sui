@@ -34,6 +34,7 @@ use sui_adapter_latest::execution_engine::{
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
+use sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS;
 use sui_types::storage::BackingStore;
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
@@ -189,12 +190,22 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
+        // dev-inspect / dry-run isn't sequenced by consensus, so it has no assigned system-object
+        // versions. Pin each implicitly-read system object at its latest committed version read
+        // directly from the object store, so an implicit read of it during simulation resolves
+        // deterministically. A latest (non-fork-safe) read is fine here because this is a
+        // simulation; the only edge case — that version being pruned mid-execution — surfaces as a
+        // recoverable error rather than a panic. Objects that do not exist (e.g. the accumulator
+        // root with accumulators disabled) are skipped.
+        let system_object_versions = IMPLICITLY_READ_SYSTEM_OBJECTS
+            .iter()
+            .filter_map(|id| store.get_object(id).map(|obj| (*id, obj.version())))
+            .collect::<BTreeMap<_, _>>();
         let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                system_object_versions.clone(),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -214,8 +225,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                system_object_versions,
                 gas,
                 gas_status,
                 transaction_kind,
