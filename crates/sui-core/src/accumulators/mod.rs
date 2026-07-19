@@ -39,6 +39,7 @@ pub mod balances;
 pub mod coin_reservations;
 pub mod object_funds_checker;
 pub(crate) mod transaction_rewriting;
+pub mod unsettled_object_withdrawals;
 
 /// Merged value is the value stored inside accumulator objects.
 /// Each mergeable Move type will map to a single variant as its representation.
