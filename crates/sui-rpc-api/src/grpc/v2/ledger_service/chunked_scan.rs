@@ -414,7 +414,7 @@ mod tests {
             .iter()
             .find(|family| family.name() == "list_chunk_seconds")
             .expect("list chunk metric family");
-        assert_eq!(family.get_metric().len(), 2);
+        assert_eq!(family.get_metric().len(), 3);
         for phase in ["queue", "work"] {
             let metric = family
                 .get_metric()
@@ -428,6 +428,17 @@ mod tests {
                 .unwrap_or_else(|| panic!("missing {phase} metric"));
             assert_eq!(metric.get_histogram().get_sample_count(), 2, "{phase}");
         }
+        let read = family
+            .get_metric()
+            .iter()
+            .find(|metric| {
+                metric
+                    .get_label()
+                    .iter()
+                    .any(|label| label.name() == "phase" && label.value() == "read")
+            })
+            .expect("missing read metric");
+        assert_eq!(read.get_histogram().get_sample_count(), 0, "read");
     }
 
     #[tokio::test]
