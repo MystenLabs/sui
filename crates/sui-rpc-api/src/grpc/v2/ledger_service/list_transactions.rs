@@ -545,17 +545,12 @@ fn render_transaction_rows(
     metrics: Option<&ListStreamMetrics>,
 ) -> Result<Vec<ListTransactionsResponse>, RpcError> {
     let mut transaction_reads = if render_contents {
-        let digests = rows
+        let items = rows
             .iter()
-            .map(|row| {
-                let digest: Digest = row.digest.into();
-                digest
-            })
-            .collect::<Vec<_>>();
-        service
-            .reader
-            .multi_get_transaction_reads(&digests)?
-            .into_iter()
+            .map(|row| (row.digest.into(), row.checkpoint_number))
+            .collect::<Vec<(Digest, u64)>>();
+        let (reads, _stats) = service.reader.multi_get_transaction_reads(&items)?;
+        reads.into_iter()
     } else {
         Vec::new().into_iter()
     };

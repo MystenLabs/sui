@@ -173,7 +173,6 @@ pub(crate) fn render_executed_transaction(
         signatures,
         effects,
         events,
-        checkpoint: _,
         timestamp_ms,
         unchanged_loaded_runtime_objects,
     }: crate::reader::TransactionRead,
