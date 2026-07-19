@@ -93,6 +93,7 @@ pub(crate) struct ListApiMetrics {
     list_chunk_seconds: HistogramVec,
     list_store_read_batches_total: IntCounterVec,
     list_store_read_keys_total: IntCounterVec,
+    list_object_cache_hits_total: IntCounterVec,
     list_query_ends_total: IntCounterVec,
     list_bitmap_buckets_evaluated: HistogramVec,
 }
@@ -161,6 +162,13 @@ impl ListApiMetrics {
                 registry,
             )
             .unwrap(),
+            list_object_cache_hits_total: register_int_counter_vec_with_registry!(
+                "list_object_cache_hits_total",
+                "Object keys served from the request-scoped object cache instead of a batched store read.",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
             list_query_ends_total: register_int_counter_vec_with_registry!(
                 "list_query_ends_total",
                 "Successful List streams by effective protocol QueryEndReason. Errors, cancellation, and dropped streams are excluded.",
@@ -208,6 +216,7 @@ impl ListApiMetrics {
             chunk_read: self.list_chunk_seconds.with_label_values(&[method, "read"]),
             store_read_batches: self.list_store_read_batches_total.clone(),
             store_read_keys: self.list_store_read_keys_total.clone(),
+            object_cache_hits: self.list_object_cache_hits_total.clone(),
             query_ends: self.list_query_ends_total.clone(),
             bitmap_buckets_evaluated: self
                 .list_bitmap_buckets_evaluated
@@ -490,6 +499,7 @@ pub(crate) struct ListStreamMetrics {
     chunk_read: Histogram,
     store_read_batches: IntCounterVec,
     store_read_keys: IntCounterVec,
+    object_cache_hits: IntCounterVec,
     query_ends: IntCounterVec,
     bitmap_buckets_evaluated: Histogram,
 }
@@ -517,6 +527,12 @@ impl ListStreamMetrics {
             .inc();
         self.store_read_keys
             .with_label_values(&[self.method, kind])
+            .inc_by(keys as u64);
+    }
+
+    pub(crate) fn observe_object_cache_hits(&self, keys: usize) {
+        self.object_cache_hits
+            .with_label_values(&[self.method])
             .inc_by(keys as u64);
     }
 }
@@ -1223,6 +1239,7 @@ mod tests {
         for name in [
             "list_store_read_batches_total",
             "list_store_read_keys_total",
+            "list_object_cache_hits_total",
         ] {
             assert!(
                 families.iter().all(|family| family.name() != name),
@@ -1233,6 +1250,7 @@ mod tests {
         let handles = metrics.stream_metrics("list_transactions", "full_objects");
         handles.observe_chunk_read(Duration::from_secs(2));
         handles.observe_store_read_batch("checkpoint_summaries", 7);
+        handles.observe_object_cache_hits(5);
 
         assert_eq!(handles.chunk_read.get_sample_count(), 1);
         assert_eq!(handles.chunk_read.get_sample_sum(), 2.0);
@@ -1248,6 +1266,11 @@ mod tests {
             expected_labels.clone(),
         );
         assert_metric_family(&families, "list_store_read_keys_total", expected_labels);
+        assert_metric_family(
+            &families,
+            "list_object_cache_hits_total",
+            expected_label_sets(vec![vec![("method", "list_transactions")]]),
+        );
         assert_eq!(
             metrics
                 .list_store_read_batches_total
@@ -1261,6 +1284,13 @@ mod tests {
                 .with_label_values(&["list_transactions", "checkpoint_summaries"])
                 .get(),
             7
+        );
+        assert_eq!(
+            metrics
+                .list_object_cache_hits_total
+                .with_label_values(&["list_transactions"])
+                .get(),
+            5
         );
     }
 

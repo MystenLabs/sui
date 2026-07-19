@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ops::Range;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use futures::StreamExt;
@@ -58,6 +59,7 @@ use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
+use super::object_set::RequestObjectCache;
 use super::object_set::fetch_object_sets_for_chunk;
 use super::object_set::mask_requests_object_set;
 
@@ -125,6 +127,7 @@ pub(crate) async fn list_transactions(
     let chunk_metrics = request_metrics.chunk_metrics();
     Ok(async_stream::try_stream! {
         let render_contents = should_render_transaction_contents(&read_mask);
+        let object_cache = Arc::new(Mutex::new(RequestObjectCache::default()));
         let mut scan = ChunkedScan::new(
             initial_state,
             limit_items,
@@ -142,6 +145,7 @@ pub(crate) async fn list_transactions(
                     args.chunk_item_limit,
                     args.remaining_request_item_limit,
                     render_contents,
+                    object_cache.clone(),
                     args.cancel,
                 )
             },
@@ -216,6 +220,7 @@ fn spawn_transaction_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     render_contents: bool,
+    object_cache: Arc<Mutex<RequestObjectCache>>,
     cancel: CancellationToken,
 ) -> JoinHandle<Result<TransactionChunkDone, RpcError>> {
     spawn_list_chunk(metrics, move |metrics| {
@@ -225,6 +230,7 @@ fn spawn_transaction_chunk(
             read_mask,
             options,
             render_contents,
+            &object_cache,
             scan_budget,
             chunk_scan_budget,
             chunk_item_limit,
@@ -268,6 +274,7 @@ fn next_transaction_chunk(
     read_mask: FieldMaskTree,
     options: QueryOptions,
     render_contents: bool,
+    object_cache: &Mutex<RequestObjectCache>,
     scan_budget: usize,
     chunk_scan_budget: usize,
     chunk_item_limit: usize,
@@ -472,6 +479,7 @@ fn next_transaction_chunk(
         &options,
         entry_checkpoint,
         render_contents,
+        object_cache,
         cancel,
         metrics,
     )?;
@@ -540,6 +548,7 @@ fn render_transaction_rows(
     options: &QueryOptions,
     entry_checkpoint: u64,
     render_contents: bool,
+    object_cache: &Mutex<RequestObjectCache>,
     cancel: &CancellationToken,
     metrics: Option<&ListStreamMetrics>,
 ) -> Result<Vec<ListTransactionsResponse>, RpcError> {
@@ -554,8 +563,8 @@ fn render_transaction_rows(
             .collect::<Vec<(Digest, u64)>>();
         let read_started = metrics.map(|_| Instant::now());
         let (reads, stats) = service.reader.multi_get_transaction_reads(&items)?;
-        let (object_sets, object_keys_fetched) =
-            fetch_object_sets_for_chunk(&service.reader, &reads, read_mask)?;
+        let (object_sets, object_fetch_stats) =
+            fetch_object_sets_for_chunk(&service.reader, &reads, read_mask, object_cache)?;
         if let (Some(metrics), Some(read_started)) = (metrics, read_started) {
             metrics.observe_chunk_read(read_started.elapsed());
             metrics.observe_store_read_batch("transactions", rows.len());
@@ -564,7 +573,8 @@ fn render_transaction_rows(
             metrics.observe_store_read_batch("unchanged_loaded_runtime_objects", rows.len());
             metrics.observe_store_read_batch("checkpoint_summaries", stats.checkpoint_summary_keys);
             if mask_requests_object_set(read_mask) {
-                metrics.observe_store_read_batch("objects", object_keys_fetched);
+                metrics.observe_store_read_batch("objects", object_fetch_stats.store_keys);
+                metrics.observe_object_cache_hits(object_fetch_stats.cache_hits);
             }
         }
         reads.into_iter().zip_debug_eq(object_sets)

@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Mutex;
+
+use super::object_set::RequestObjectCache;
 use super::object_set::fetch_transaction_object_set;
 use crate::ErrorReason;
 use crate::RpcError;
@@ -80,7 +83,13 @@ pub fn get_transaction(
     }
 
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
-    let objects = fetch_transaction_object_set(&service.reader, &transaction_read, &read_mask)?;
+    let object_cache = Mutex::new(RequestObjectCache::default());
+    let objects = fetch_transaction_object_set(
+        &service.reader,
+        &transaction_read,
+        &read_mask,
+        &object_cache,
+    )?;
 
     let transaction = render_executed_transaction(
         service,
@@ -126,6 +135,7 @@ pub fn batch_get_transactions(
         .sequence_number;
     let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
 
+    let object_cache = Mutex::new(RequestObjectCache::default());
     let transactions = digests
         .into_iter()
         .enumerate()
@@ -150,8 +160,12 @@ pub fn batch_get_transactions(
             }
 
             let transaction_read = service.reader.get_transaction_read(digest)?;
-            let objects =
-                fetch_transaction_object_set(&service.reader, &transaction_read, &read_mask)?;
+            let objects = fetch_transaction_object_set(
+                &service.reader,
+                &transaction_read,
+                &read_mask,
+                &object_cache,
+            )?;
 
             render_executed_transaction(
                 service,

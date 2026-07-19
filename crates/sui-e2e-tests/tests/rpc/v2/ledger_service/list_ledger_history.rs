@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use move_core_types::ident_str;
@@ -12,6 +12,7 @@ use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
+use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::EventLiteral;
@@ -873,7 +874,7 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
     let cluster = new_cluster().await;
     let sender = cluster.get_address_0();
     let first_transfer = transfer_self(&cluster, sender).await;
-    transfer_self(&cluster, sender).await;
+    let second_transfer = transfer_self(&cluster, sender).await;
 
     let validator_address = cluster.swarm.config().validator_configs()[0].sui_address();
     let staking_transaction =
@@ -952,6 +953,7 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
         "expected transactions from at least three checkpoints, got {checkpoints:?}"
     );
 
+    let mut get_transactions_by_digest = HashMap::new();
     let mut staking_list_transaction = None;
     for item in response.transactions {
         let list_transaction = item
@@ -980,6 +982,7 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
             list_transaction, get_transaction,
             "ListTransactions and GetTransaction should match for {digest}"
         );
+        get_transactions_by_digest.insert(digest.clone(), get_transaction);
 
         if digest == staking_digest {
             staking_list_transaction = Some(list_transaction);
@@ -992,6 +995,46 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
         !staking_list_transaction.balance_changes.is_empty(),
         "staking transaction should have balance changes"
     );
+
+    let batch_digests = vec![
+        first_transfer
+            .digest
+            .clone()
+            .expect("first transfer should have a digest"),
+        first_transfer
+            .digest
+            .clone()
+            .expect("first transfer should have a digest"),
+        second_transfer
+            .digest
+            .clone()
+            .expect("second transfer should have a digest"),
+        staking_digest,
+    ];
+    let mut batch_request = BatchGetTransactionsRequest::default();
+    batch_request.digests = batch_digests.clone();
+    batch_request.read_mask = Some(read_mask);
+    let batch_response = client
+        .batch_get_transactions(batch_request)
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(batch_response.transactions.len(), batch_digests.len());
+    for (digest, result) in batch_digests.iter().zip(batch_response.transactions) {
+        let batch_transaction = result.to_result().unwrap_or_else(|status| {
+            panic!(
+                "BatchGetTransactions failed for digest {digest}: {}",
+                status.message
+            )
+        });
+        let get_transaction = get_transactions_by_digest
+            .get(digest)
+            .unwrap_or_else(|| panic!("missing retained GetTransaction response for {digest}"));
+        assert_eq!(
+            &batch_transaction, get_transaction,
+            "BatchGetTransactions and GetTransaction should match for {digest}"
+        );
+    }
 }
 
 #[sim_test]
