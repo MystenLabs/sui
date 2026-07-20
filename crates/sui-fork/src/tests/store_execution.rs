@@ -619,14 +619,23 @@ async fn test_address_inventory_does_not_resurrect_locally_moved_objects() {
             .collect();
     assert!(owner_infos.is_empty());
 
+    // The recipient's owner-index row is written by the embedded indexer at
+    // checkpoint publication, not synchronously by the local transfer. Before
+    // the indexer runs, the index stays empty while canonical reads already
+    // serve the transferred version.
     let recipient_infos: Vec<_> =
         RpcIndexes::owned_objects_iter(&reader, recipient, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should include local transfer")
+            .expect("owned-object iterator should read initialized address inventory")
             .map(|result| result.expect("owned-object entry should decode"))
             .collect();
-    assert_eq!(recipient_infos.len(), 1);
-    assert_eq!(recipient_infos[0].object_id, first_id);
-    assert_eq!(recipient_infos[0].version, SequenceNumber::from_u64(2));
+    assert!(recipient_infos.is_empty());
+    assert_eq!(
+        DataStore::get_object(&store, &first_id)
+            .expect("current object read should not error")
+            .unwrap()
+            .version(),
+        SequenceNumber::from_u64(2),
+    );
 }
 
 #[test]
@@ -754,20 +763,29 @@ fn test_transfer_sui_executes_and_persists() {
 }
 
 #[test]
-fn test_owned_objects_tracks_address_owner_transfers() {
-    let (_temp, mut store) = test_data_store();
+fn test_owned_objects_reads_seeded_index_across_owner_moves() {
+    let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
 
-    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+    // Pre-fork materialization (the seed/inventory path) writes the owner
+    // index synchronously; `owned_objects` joins those rows against current
+    // canonical state.
+    store
+        .rpc_store()
+        .save_address_owned_seed_object(&object)
+        .unwrap();
     let owner_objects: Vec<_> = SimulatorStore::owned_objects(&store, owner).collect();
     assert_eq!(owner_objects.len(), 1);
     assert_eq!(owner_objects[0].id(), object_id);
 
     let transferred = make_gas_object(object_id, 2, Owner::AddressOwner(recipient));
-    store.update_objects(BTreeMap::from([(object_id, transferred)]), vec![]);
+    store
+        .rpc_store()
+        .save_address_owned_seed_object(&transferred)
+        .unwrap();
 
     assert_eq!(
         SimulatorStore::owned_objects(&store, owner).count(),
@@ -782,7 +800,7 @@ fn test_owned_objects_tracks_address_owner_transfers() {
 
 #[test]
 fn test_owned_objects_tracks_consensus_address_owner_writes() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(
@@ -794,7 +812,12 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
         },
     );
 
-    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+    // The seed/inventory path collapses ConsensusAddressOwner into the
+    // address-owner index kind.
+    store
+        .rpc_store()
+        .save_address_owned_seed_object(&object)
+        .unwrap();
 
     let reader = store.rpc_store().reader().clone();
     let infos: Vec<_> =
@@ -808,29 +831,18 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
     assert_eq!(infos[0].version, SequenceNumber::from_u64(1));
     assert_eq!(infos[0].balance, Some(1_000_000));
 
+    // Indexing a newer non-address-owned version removes the address row.
     let immutable = make_gas_object(object_id, 2, Owner::Immutable);
-    store.update_objects(BTreeMap::from([(object_id, immutable)]), vec![]);
+    store
+        .rpc_store()
+        .save_type_inventory_object(&immutable)
+        .unwrap();
     assert_eq!(
         RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
             .expect("owned-object iterator should build")
             .count(),
         0,
     );
-}
-
-#[test]
-fn test_owned_objects_removes_non_address_owned_transitions() {
-    let (_temp, mut store) = test_data_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let object_id = ObjectID::random();
-    let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
-
-    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
-    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 1);
-
-    let immutable = make_gas_object(object_id, 2, Owner::Immutable);
-    store.update_objects(BTreeMap::from([(object_id, immutable)]), vec![]);
-    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
 }
 
 #[test]
@@ -1011,7 +1023,7 @@ fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
 }
 
 #[test]
-fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
+fn test_unwrapped_write_clears_wrapped_latest() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
@@ -1040,10 +1052,6 @@ fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
             .unwrap(),
         unwrapped,
     );
-    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
-    let recipient_objects: Vec<_> = SimulatorStore::owned_objects(&store, recipient).collect();
-    assert_eq!(recipient_objects.len(), 1);
-    assert_eq!(recipient_objects[0].id(), object_id);
 }
 
 #[test]
@@ -1141,7 +1149,7 @@ fn test_removed_objects_from_effects_maps_to_tombstones() {
 
 #[test]
 fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let other_owner = SuiAddress::random_for_testing_only();
     let first_id = ObjectID::random();
@@ -1151,10 +1159,12 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     let second = make_gas_object(second_id, 1, Owner::AddressOwner(owner));
     let other = make_gas_object(other_id, 1, Owner::AddressOwner(other_owner));
 
-    store.update_objects(
-        BTreeMap::from([(first_id, first), (second_id, second), (other_id, other)]),
-        vec![],
-    );
+    for object in [&first, &second, &other] {
+        store
+            .rpc_store()
+            .save_address_owned_seed_object(object)
+            .unwrap();
+    }
 
     let reader = store.rpc_store().reader().clone();
     let infos: Vec<_> =
@@ -1193,11 +1203,14 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
 
 #[test]
 fn test_cloned_store_shares_owned_object_snapshot_guard() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
-    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+    store
+        .rpc_store()
+        .save_address_owned_seed_object(&object)
+        .unwrap();
 
     let cloned_store = store.clone();
     let local_snapshot_guard = store
