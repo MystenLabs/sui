@@ -62,7 +62,16 @@ answer: >-
 
 <ImportContent source="json-rpc-deprecation" mode="snippet" />
 
-JSON-RPC is deprecated and is planned for deactivation in July 2026. The two replacements are [gRPC](/develop/accessing-data/grpc) for full node access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for indexed, filterable reads.
+JSON-RPC is deprecated and is being decommissioned on the following timeline:
+
+| Milestone | Target date |
+| --- | --- |
+| Disable JSON-RPC on Sui Foundation's mainnet full nodes | Week of August 27, 2026 |
+| Sui Foundation stops publishing JSON-RPC snapshots for full nodes | End of August 2026 |
+| Implicit fallback from JSON-RPC to archival service disconnected | End of September 2026 |
+| Full decommission of JSON-RPC from full nodes, including code removal | Mid-October 2026 |
+
+The two replacements are [gRPC](/develop/accessing-data/grpc) for real-time full node access, archival service access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for rich, structured queries over live and historical blockchain data.
 
 ## Choose your replacement
 

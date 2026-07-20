@@ -380,14 +380,6 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      announcementBar: {
-        id: "json_rpc_deprecation",
-        content:
-          'JSON-RPC public endpoints shutting down: Testnet week of July 6, Mainnet week of July 20. <a href="/develop/accessing-data/json-rpc-migration">Migrate now</a>.',
-        backgroundColor: '#FFF3CD',
-        textColor: '#664D03',
-        isCloseable: true,
-      },
       image: "img/sui-doc-og.png",
       mermaid: {
         theme: {
