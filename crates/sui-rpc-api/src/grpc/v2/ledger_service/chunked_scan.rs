@@ -272,15 +272,19 @@ where
             let queue_timer = metrics.start_queue_timer();
             tokio::task::spawn_blocking(move || {
                 queue_timer.stop_and_record();
-                let run_delay_started = metrics
-                    .schedstat_sample_every()
-                    .and_then(start_schedstat_sample);
-                // Each clock read is one syscall with no allocation or parsing,
-                // about 0.001% of median chunk wall time. The load-test ladder
-                // still includes an instrumentation-off control arm.
-                let cpu_started = thread_cpu_time();
-                let mut setup_timer = metrics.start_setup_timer();
                 let work_started = Instant::now();
+                let probes_enabled = metrics.list_probes_enabled();
+                let (run_delay_started, cpu_started) = if probes_enabled {
+                    (
+                        metrics
+                            .schedstat_sample_every()
+                            .and_then(start_schedstat_sample),
+                        thread_cpu_time(),
+                    )
+                } else {
+                    (None, None)
+                };
+                let mut setup_timer = metrics.start_setup_timer();
                 let result = work(Some(&metrics), &mut setup_timer);
                 let work_elapsed = work_started.elapsed();
                 let cpu_elapsed =

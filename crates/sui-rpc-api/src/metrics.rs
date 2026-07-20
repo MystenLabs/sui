@@ -8,7 +8,7 @@ use std::{
     borrow::Cow,
     collections::HashSet,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     task::{Context, Poll},
     time::{Duration, Instant},
 };
@@ -41,6 +41,38 @@ pub struct RpcMetrics {
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
+
+fn parse_list_probes(value: Option<&str>) -> bool {
+    match value {
+        None | Some("1" | "on" | "true") => true,
+        Some("0" | "off" | "false") => false,
+        Some(_) => true,
+    }
+}
+
+pub(crate) fn list_probes_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+
+    *ENABLED.get_or_init(|| match std::env::var("SUI_RPC_LIST_PROBES") {
+        Ok(value) => {
+            if !matches!(
+                value.as_str(),
+                "1" | "on" | "true" | "0" | "off" | "false"
+            ) {
+                tracing::warn!(
+                    value,
+                    "unrecognized SUI_RPC_LIST_PROBES value; list probes enabled"
+                );
+            }
+            parse_list_probes(Some(&value))
+        }
+        Err(std::env::VarError::NotPresent) => parse_list_probes(None),
+        Err(error) => {
+            tracing::warn!(%error, "unable to read SUI_RPC_LIST_PROBES; list probes enabled");
+            true
+        }
+    })
+}
 
 impl RpcMetrics {
     pub fn new(registry: &Registry) -> Self {
@@ -144,6 +176,9 @@ impl RpcMetrics {
 }
 impl RpcMetrics {
     pub(crate) fn spawn_runtime_metrics_sampler(self: &Arc<Self>) {
+        if !list_probes_enabled() {
+            return;
+        }
         let weak_metrics = Arc::downgrade(self);
         let runtime_metrics = tokio::runtime::Handle::current().metrics();
 
@@ -198,6 +233,7 @@ fn usize_to_i64(value: usize) -> i64 {
 pub(crate) struct GrpcBodyInstrumentationState {
     metrics: Arc<RpcMetrics>,
     grpc_method_allowlist: GrpcMethodAllowlist,
+    list_probes_enabled: bool,
 }
 
 impl GrpcBodyInstrumentationState {
@@ -208,6 +244,7 @@ impl GrpcBodyInstrumentationState {
         Self {
             metrics,
             grpc_method_allowlist,
+            list_probes_enabled: list_probes_enabled(),
         }
     }
 }
@@ -217,6 +254,10 @@ pub(crate) async fn instrument_grpc_response_body(
     request: http::Request<AxumBody>,
     next: Next,
 ) -> http::Response<AxumBody> {
+    if !state.list_probes_enabled {
+        return next.run(request).await;
+    }
+
     let uri_path = request.uri().path();
     let matched_path = request
         .extensions()
@@ -378,10 +419,12 @@ pub(crate) struct ListApiMetrics {
     list_query_ends_total: IntCounterVec,
     list_bitmap_buckets_evaluated: HistogramVec,
     chunk_schedstat_sample_every: Option<u64>,
+    list_probes_enabled: bool,
 }
 
 impl ListApiMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
+        let list_probes_enabled = list_probes_enabled();
         Self {
             list_first_frame_seconds: register_histogram_vec_with_registry!(
                 "list_first_frame_seconds",
@@ -496,7 +539,10 @@ impl ListApiMetrics {
                 registry,
             )
             .unwrap(),
-            chunk_schedstat_sample_every: configured_chunk_schedstat_sample_every(),
+            chunk_schedstat_sample_every: list_probes_enabled
+                .then(configured_chunk_schedstat_sample_every)
+                .flatten(),
+            list_probes_enabled,
         }
     }
 
@@ -527,20 +573,25 @@ impl ListApiMetrics {
                 .with_label_values(&[method, "queue"]),
             chunk_work: self.list_chunk_seconds.with_label_values(&[method, "work"]),
             chunk_read: self.list_chunk_seconds.with_label_values(&[method, "read"]),
-            chunk_setup: self.list_chunk_seconds.with_label_values(&[method, "setup"]),
+            chunk_setup: self
+                .list_probes_enabled
+                .then(|| self.list_chunk_seconds.with_label_values(&[method, "setup"])),
             chunk_work_cpu: self
-                .list_chunk_work_cpu_seconds
-                .with_label_values(&[method]),
+                .list_probes_enabled
+                .then(|| self.list_chunk_work_cpu_seconds.with_label_values(&[method])),
             chunk_run_delay: self
-                .list_chunk_run_delay_seconds
-                .with_label_values(&[method]),
-            chunk_schedstat_probes: self
-                .list_chunk_schedstat_probes_total
-                .with_label_values(&[method]),
-            chunk_buckets_decoded: self
-                .list_chunk_buckets_decoded_total
-                .with_label_values(&[method]),
+                .list_probes_enabled
+                .then(|| self.list_chunk_run_delay_seconds.with_label_values(&[method])),
+            chunk_schedstat_probes: self.list_probes_enabled.then(|| {
+                self.list_chunk_schedstat_probes_total
+                    .with_label_values(&[method])
+            }),
+            chunk_buckets_decoded: self.list_probes_enabled.then(|| {
+                self.list_chunk_buckets_decoded_total
+                    .with_label_values(&[method])
+            }),
             chunk_schedstat_sample_every: self.chunk_schedstat_sample_every,
+            list_probes_enabled: self.list_probes_enabled,
             store_read_batches: self.list_store_read_batches_total.clone(),
             store_read_keys: self.list_store_read_keys_total.clone(),
             object_cache_hits: self.list_object_cache_hits_total.clone(),
@@ -822,14 +873,15 @@ pub(crate) struct ListStreamMetrics {
     yield_wait: Histogram,
     render: Histogram,
     chunk_queue: Histogram,
-    chunk_setup: Histogram,
+    chunk_setup: Option<Histogram>,
     chunk_work: Histogram,
     chunk_read: Histogram,
-    chunk_work_cpu: Histogram,
-    chunk_run_delay: Histogram,
-    chunk_schedstat_probes: IntCounter,
-    chunk_buckets_decoded: IntCounter,
+    chunk_work_cpu: Option<Histogram>,
+    chunk_run_delay: Option<Histogram>,
+    chunk_schedstat_probes: Option<IntCounter>,
+    chunk_buckets_decoded: Option<IntCounter>,
     chunk_schedstat_sample_every: Option<u64>,
+    list_probes_enabled: bool,
     store_read_batches: IntCounterVec,
     store_read_keys: IntCounterVec,
     object_cache_hits: IntCounterVec,
@@ -848,7 +900,7 @@ impl ListStreamMetrics {
 
     pub(crate) fn start_setup_timer(&self) -> ListChunkSetupTimer {
         ListChunkSetupTimer {
-            timer: Some(self.chunk_setup.start_timer()),
+            timer: self.chunk_setup.as_ref().map(Histogram::start_timer),
         }
     }
 
@@ -857,7 +909,13 @@ impl ListStreamMetrics {
     }
 
     pub(crate) fn observe_chunk_work_cpu(&self, elapsed: Duration) {
-        self.chunk_work_cpu.observe(elapsed.as_secs_f64());
+        if let Some(chunk_work_cpu) = &self.chunk_work_cpu {
+            chunk_work_cpu.observe(elapsed.as_secs_f64());
+        }
+    }
+
+    pub(crate) fn list_probes_enabled(&self) -> bool {
+        self.list_probes_enabled
     }
 
     pub(crate) fn schedstat_sample_every(&self) -> Option<u64> {
@@ -865,12 +923,18 @@ impl ListStreamMetrics {
     }
 
     pub(crate) fn observe_chunk_run_delay(&self, elapsed: Duration) {
-        self.chunk_run_delay.observe(elapsed.as_secs_f64());
-        self.chunk_schedstat_probes.inc();
+        if let (Some(chunk_run_delay), Some(chunk_schedstat_probes)) =
+            (&self.chunk_run_delay, &self.chunk_schedstat_probes)
+        {
+            chunk_run_delay.observe(elapsed.as_secs_f64());
+            chunk_schedstat_probes.inc();
+        }
     }
 
     pub(crate) fn observe_chunk_buckets_decoded(&self, buckets: usize) {
-        self.chunk_buckets_decoded.inc_by(buckets as u64);
+        if let Some(chunk_buckets_decoded) = &self.chunk_buckets_decoded {
+            chunk_buckets_decoded.inc_by(buckets as u64);
+        }
     }
 
     pub(crate) fn observe_chunk_read(&self, elapsed: Duration) {
@@ -1153,6 +1217,19 @@ mod tests {
         ListTransactionsResponse, QueryEnd, SubscribeCheckpointsResponse, SubscribeEventsResponse,
         SubscribeTransactionsResponse, Watermark,
     };
+
+    #[test]
+    fn parses_list_probes_values() {
+        for (value, expected) in [
+            (None, true),
+            (Some("1"), true),
+            (Some("junk"), true),
+            (Some("0"), false),
+            (Some("off"), false),
+        ] {
+            assert_eq!(parse_list_probes(value), expected, "{value:?}");
+        }
+    }
 
     fn encode(set: FileDescriptorSet) -> Vec<u8> {
         let mut buf = Vec::with_capacity(set.encoded_len());
