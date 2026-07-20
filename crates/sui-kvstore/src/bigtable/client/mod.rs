@@ -2271,6 +2271,22 @@ mod tests {
             .unwrap();
         assert_eq!(controller.current_qps(), 7.0);
 
+        mock.set_mutate_rows_rate_limit_info(Some(RateLimitInfo {
+            period: Some(prost_types::Duration {
+                seconds: 1,
+                nanos: 0,
+            }),
+            factor: 2.0,
+        }))
+        .await;
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        client
+            .write_entries("flow-control", [make_entry()])
+            .await
+            .unwrap();
+        assert!(controller.is_enabled());
+        assert_eq!(controller.current_qps(), 7.0);
+
         mock.set_mutate_rows_rate_limit_info(None).await;
         tokio::time::sleep(Duration::from_millis(1100)).await;
         client

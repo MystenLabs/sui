@@ -1,5 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+//! Adaptive Bigtable batch-write flow control. Server decreases remain authoritative, while
+//! increases require measured request demand to approach the current target. Sustained idle
+//! targets decay toward observed demand. This deliberately differs from the upstream Java
+//! `RateLimitingServerStreamingCallable`, which applies every valid rate hint.
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -23,11 +27,23 @@ const MIN_QPS: f64 = 0.1;
 const MAX_QPS: f64 = 100_000.0;
 const MIN_FACTOR: f64 = 0.7;
 const MAX_FACTOR: f64 = 1.3;
+const UPWARD_UTILIZATION_THRESHOLD: f64 = 0.8;
+const IDLE_UTILIZATION_THRESHOLD: f64 = 0.2;
+const IDLE_EVALS_BEFORE_DECAY: u32 = 6;
+const IDLE_DECAY_FACTOR: f64 = 0.7;
+const MIN_UTILIZATION_WINDOW: Duration = Duration::from_secs(1);
+
+struct UpdateState {
+    next_update_time: Instant,
+    window_started_at: Instant,
+    underutilized_evals: u32,
+}
 
 pub(crate) struct BatchWriteFlowController {
     enabled: AtomicBool,
     target_qps: AtomicU64,
-    next_update_time: Mutex<Instant>,
+    update_state: Mutex<UpdateState>,
+    window_requests: AtomicU64,
     next_free: AsyncMutex<Instant>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
@@ -39,7 +55,12 @@ impl BatchWriteFlowController {
         let controller = Arc::new(Self {
             enabled: AtomicBool::new(false),
             target_qps: AtomicU64::new(DEFAULT_QPS.to_bits()),
-            next_update_time: Mutex::new(now),
+            update_state: Mutex::new(UpdateState {
+                next_update_time: now,
+                window_started_at: now,
+                underutilized_evals: 0,
+            }),
+            window_requests: AtomicU64::new(0),
             next_free: AsyncMutex::new(now),
             client_name,
             metrics,
@@ -50,6 +71,7 @@ impl BatchWriteFlowController {
     }
 
     pub(crate) async fn acquire(&self) {
+        self.window_requests.fetch_add(1, Ordering::Relaxed);
         if !self.enabled.load(Ordering::Relaxed) {
             return;
         }
@@ -110,30 +132,84 @@ impl BatchWriteFlowController {
 
     fn update_qps(&self, factor: f64, period: Duration) {
         let capped_factor = factor.clamp(MIN_FACTOR, MAX_FACTOR);
-        let current_qps = self.current_qps_value();
-        let new_qps = (current_qps * capped_factor).clamp(MIN_QPS, MAX_QPS);
-        self.try_set_rate(new_qps, period);
-    }
-
-    fn try_set_rate(&self, new_qps: f64, period: Duration) {
         let now = Instant::now();
-        let mut next_update_time = self
-            .next_update_time
+        let mut state = self
+            .update_state
             .lock()
             .expect("flow-control update mutex poisoned");
-        if now < *next_update_time {
+        if now < state.next_update_time {
             self.increment_rate_update("rejected");
             return;
         }
 
-        *next_update_time = now + period;
+        // Each decision consumes one update period, keeping demand windows at least one period
+        // long after the first evaluation.
+        let requests = self.window_requests.swap(0, Ordering::Relaxed);
+        let elapsed = now
+            .saturating_duration_since(state.window_started_at)
+            .max(MIN_UTILIZATION_WINDOW);
+        let demand_qps = requests as f64 / elapsed.as_secs_f64();
+        state.window_started_at = now;
+        state.next_update_time = now + period;
+        if let Some(metrics) = &self.metrics {
+            metrics
+                .kv_bt_flow_control_demand_qps
+                .with_label_values(&[&self.client_name])
+                .set(demand_qps);
+        }
+
+        let current_qps = self.current_qps_value();
+        let utilization = demand_qps / current_qps;
+
+        if capped_factor < 1.0 {
+            self.set_rate(
+                (current_qps * capped_factor).clamp(MIN_QPS, MAX_QPS),
+                "applied",
+            );
+            return;
+        }
+
+        if utilization >= UPWARD_UTILIZATION_THRESHOLD {
+            state.underutilized_evals = 0;
+            self.set_rate(
+                (current_qps * capped_factor).clamp(MIN_QPS, MAX_QPS),
+                "applied",
+            );
+            return;
+        }
+
+        if utilization < IDLE_UTILIZATION_THRESHOLD {
+            state.underutilized_evals = state.underutilized_evals.saturating_add(1);
+        } else if state.underutilized_evals < IDLE_EVALS_BEFORE_DECAY {
+            state.underutilized_evals = 0;
+        }
+
+        // Once sustained idleness starts decay, continue toward the demand floor through the
+        // middle utilization band. A binding target resets this state in the branch above.
+        if state.underutilized_evals >= IDLE_EVALS_BEFORE_DECAY {
+            let floor = DEFAULT_QPS.max(demand_qps / UPWARD_UTILIZATION_THRESHOLD);
+            let decayed = (current_qps * IDLE_DECAY_FACTOR).max(floor);
+            if decayed < current_qps {
+                self.set_rate(decayed, "idle-decay");
+                return;
+            }
+        }
+
+        self.increment_rate_update("suppressed");
+        info!(
+            demand_qps,
+            target_qps = current_qps,
+            factor,
+            "Batch write flow control: upward hint suppressed (target not tested by demand)"
+        );
+    }
+
+    fn set_rate(&self, new_qps: f64, kind: &'static str) {
         let old_qps = self.current_qps_value();
         self.target_qps.store(new_qps.to_bits(), Ordering::Relaxed);
         info!(
             old_qps,
-            new_qps,
-            period_seconds = period.as_secs_f64(),
-            "Batch write flow control: target rate updated"
+            new_qps, kind, "Batch write flow control: target rate updated"
         );
         if let Some(metrics) = &self.metrics {
             metrics
@@ -141,7 +217,7 @@ impl BatchWriteFlowController {
                 .with_label_values(&[&self.client_name])
                 .set(new_qps);
         }
-        self.increment_rate_update("applied");
+        self.increment_rate_update(kind);
     }
 
     fn enable(&self) {
@@ -158,11 +234,11 @@ impl BatchWriteFlowController {
 
     fn try_disable(&self) {
         let now = Instant::now();
-        let next_update_time = self
-            .next_update_time
+        let update_state = self
+            .update_state
             .lock()
             .expect("flow-control update mutex poisoned");
-        if now <= *next_update_time {
+        if now <= update_state.next_update_time {
             return;
         }
 
@@ -224,6 +300,12 @@ mod tests {
         );
     }
 
+    fn seed_demand(controller: &BatchWriteFlowController, requests: u64) {
+        controller
+            .window_requests
+            .fetch_add(requests, Ordering::Relaxed);
+    }
+
     #[tokio::test(start_paused = true)]
     async fn starts_disabled_and_acquire_returns_immediately() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
@@ -243,6 +325,7 @@ mod tests {
         assert_qps(&lower, DEFAULT_QPS * MIN_FACTOR);
 
         let upper = BatchWriteFlowController::new("upper".to_owned(), None);
+        seed_demand(&upper, 1_000);
         upper.on_response(Some(&rate_limit_info(2.0, DEFAULT_PERIOD)));
         assert!(upper.is_enabled());
         assert_qps(&upper, DEFAULT_QPS * MAX_FACTOR);
@@ -251,6 +334,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn rejects_updates_within_period_and_applies_at_period_boundary() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
         let first_qps = DEFAULT_QPS * MAX_FACTOR;
         assert_qps(&controller, first_qps);
@@ -275,6 +359,7 @@ mod tests {
 
         let increasing = BatchWriteFlowController::new("increasing".to_owned(), None);
         for _ in 0..64 {
+            seed_demand(&increasing, 2_000_000);
             increasing.on_response(Some(&rate_limit_info(10.0, DEFAULT_PERIOD)));
             assert!(increasing.current_qps() <= MAX_QPS);
             tokio::time::advance(DEFAULT_PERIOD).await;
@@ -331,6 +416,121 @@ mod tests {
         controller.on_error(&Status::not_found("missing"));
         assert!(!controller.is_enabled());
         assert_qps(&controller, DEFAULT_QPS);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn upward_hint_suppressed_without_demand_then_applies_with_demand() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+
+        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert!(controller.is_enabled());
+        assert_qps(&controller, DEFAULT_QPS);
+
+        tokio::time::advance(DEFAULT_PERIOD).await;
+        seed_demand(&controller, 1_000);
+        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert_qps(&controller, DEFAULT_QPS * MAX_FACTOR);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn suppressed_hint_consumes_update_period() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+
+        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        seed_demand(&controller, 1_000);
+        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert_qps(&controller, DEFAULT_QPS);
+
+        tokio::time::advance(DEFAULT_PERIOD + Duration::from_nanos(1)).await;
+        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert_qps(&controller, DEFAULT_QPS * MAX_FACTOR);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sustained_underutilization_decays_target_to_demand_floor() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller
+            .target_qps
+            .store(5_000.0f64.to_bits(), Ordering::Relaxed);
+        controller.enable();
+        tokio::time::advance(DEFAULT_PERIOD).await;
+
+        for _ in 0..16 {
+            seed_demand(&controller, 800);
+            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+            tokio::time::advance(DEFAULT_PERIOD).await;
+        }
+        assert_qps(&controller, 100.0);
+
+        seed_demand(&controller, 800);
+        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert_qps(&controller, 130.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn decay_without_demand_floors_at_default_qps() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller
+            .target_qps
+            .store(100.0f64.to_bits(), Ordering::Relaxed);
+        controller.enable();
+        tokio::time::advance(DEFAULT_PERIOD).await;
+
+        for _ in 0..12 {
+            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+            tokio::time::advance(DEFAULT_PERIOD).await;
+        }
+        assert_qps(&controller, DEFAULT_QPS);
+
+        for _ in 0..3 {
+            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+            tokio::time::advance(DEFAULT_PERIOD).await;
+            assert_qps(&controller, DEFAULT_QPS);
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn mid_band_utilization_resets_idle_counter() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller
+            .target_qps
+            .store(100.0f64.to_bits(), Ordering::Relaxed);
+        controller.enable();
+        tokio::time::advance(DEFAULT_PERIOD).await;
+
+        for _ in 0..3 {
+            seed_demand(&controller, 100);
+            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+            tokio::time::advance(DEFAULT_PERIOD).await;
+        }
+
+        seed_demand(&controller, 500);
+        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        tokio::time::advance(DEFAULT_PERIOD).await;
+
+        for _ in 0..5 {
+            seed_demand(&controller, 100);
+            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+            tokio::time::advance(DEFAULT_PERIOD).await;
+        }
+        assert_qps(&controller, 100.0);
+
+        seed_demand(&controller, 100);
+        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert_qps(&controller, 70.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn decrease_applies_when_underutilized() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller
+            .target_qps
+            .store(100.0f64.to_bits(), Ordering::Relaxed);
+        controller.enable();
+        tokio::time::advance(DEFAULT_PERIOD).await;
+
+        controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
+        assert_qps(&controller, 70.0);
     }
 
     #[tokio::test(start_paused = true)]

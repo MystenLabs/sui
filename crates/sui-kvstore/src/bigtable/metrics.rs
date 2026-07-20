@@ -32,6 +32,7 @@ pub(crate) struct KvMetrics {
     pub kv_bt_chunk_rows_seen_count: IntCounterVec,
     pub kv_bt_flow_control_enabled: IntGaugeVec,
     pub kv_bt_flow_control_target_qps: GaugeVec,
+    pub kv_bt_flow_control_demand_qps: GaugeVec,
     pub kv_bt_flow_control_throttle_ms: HistogramVec,
     pub kv_bt_flow_control_rate_updates: IntCounterVec,
 }
@@ -186,11 +187,18 @@ impl KvMetrics {
                 registry,
             )
             .unwrap(),
+            kv_bt_flow_control_demand_qps: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_demand_qps",
+                "Observed MutateRows demand in requests per second between BigTable flow-control rate evaluations",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
             kv_bt_flow_control_throttle_ms: register_histogram_vec_with_registry!(
                 "kv_bt_flow_control_throttle_ms",
                 "Time spent waiting for BigTable adaptive batch-write flow-control admission",
                 &["client"],
-                prometheus::exponential_buckets(1.0, 1.6, 24)
+                prometheus::exponential_buckets(1.0, 1.6, 32)
                     .unwrap()
                     .to_vec(),
                 registry,
