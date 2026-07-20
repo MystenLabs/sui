@@ -195,11 +195,24 @@ impl BlockVerifier for SignedBlockVerifier {
         block: SignedBlock,
         serialized_block: Bytes,
     ) -> ConsensusResult<(VerifiedBlock, Vec<TransactionIndex>)> {
+        let verify_block_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .verify_block_latency
+            .start_timer();
         self.verify_block(&block)?;
 
         // If the block verification passed then we can produce the verified block, but we should only return it if the transaction verification passed as well.
         let verified_block = VerifiedBlock::new_verified(block, serialized_block);
+        drop(verify_block_timer);
 
+        let _vote_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .verify_vote_batch_latency
+            .start_timer();
         let rejected_transactions = if self.context.protocol_config.transaction_voting_enabled() {
             self.vote(&verified_block)?
         } else {

@@ -162,8 +162,15 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // TODO: dedup block verifications, here and with fetched blocks.
+        let deserialize_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .handle_send_block_deserialize_latency
+            .start_timer();
         let signed_block: SignedBlock =
             bcs::from_bytes(&serialized_block.block).map_err(ConsensusError::MalformedBlock)?;
+        drop(deserialize_timer);
 
         // Reject blocks not produced by the peer.
         if peer != signed_block.author() {
