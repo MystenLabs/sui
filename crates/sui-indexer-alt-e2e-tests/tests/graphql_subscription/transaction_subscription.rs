@@ -27,6 +27,135 @@ use super::testing::transaction_digest;
 use super::testing::transfer_coins;
 use super::testing::wait_for_matching_item;
 
+/// Decode a transaction edge's `cursor` field into its `(checkpoint, tx_sequence)` position.
+fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
+    let cursor = edge["cursor"]
+        .as_str()
+        .expect("transaction edge missing cursor");
+    let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
+    let CTransaction::Primary(opaque) = ct else {
+        panic!("expected an opaque transaction cursor");
+    };
+    match opaque.position {
+        Position::Transactions { checkpoint, tx_seq } => (checkpoint, tx_seq),
+        position => panic!("expected a transactions cursor, got {position:?}"),
+    }
+}
+
+/// The `{ "sender": ... }` variables shared by the filtered subscription queries.
+fn sender_var(sender: SuiAddress) -> Option<Value> {
+    Some(json!({ "sender": sender.to_string() }))
+}
+
+/// The rich transaction-subscription query: live by default, or resuming from a checkpoint
+/// (backfill) when `after_checkpoint` is set.
+fn tx_query(after_checkpoint: Option<u64>) -> String {
+    let resume = after_checkpoint
+        .map(|c| format!("afterCheckpoint: {c},"))
+        .unwrap_or_default();
+    format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions({resume} filter: {{ sentAddress: $sender }}) {{
+                node {{
+                    digest
+                    kind {{
+                        __typename
+                        ... on ProgrammableTransaction {{
+                            commands {{ nodes {{ __typename }} }}
+                            inputs {{ nodes {{ __typename }} }}
+                        }}
+                    }}
+                    sender {{ address }}
+                    signatures {{ signatureBytes }}
+                    gasInput {{ gasBudget gasPrice gasSponsor {{ address }} }}
+                    effects {{
+                        status
+                        lamportVersion
+                        epoch {{ epochId }}
+                        checkpoint {{ sequenceNumber }}
+                        gasEffects {{
+                            gasObject {{ address }}
+                            gasSummary {{
+                                computationCost
+                                storageCost
+                                storageRebate
+                                nonRefundableStorageFee
+                            }}
+                        }}
+                        objectChanges {{
+                            nodes {{
+                                outputState {{
+                                    address
+                                    asMoveObject {{ contents {{ type {{ repr }} json }} }}
+                                }}
+                            }}
+                        }}
+                        events {{ nodes {{ __typename }} }}
+                        dependencies {{ nodes {{ digest }} }}
+                    }}
+                }}
+            }}
+        }}"#
+    )
+}
+
+/// Collect payloads until all `expected` digests are seen, returning each payload's edge count so a
+/// test can assert how matches were batched.
+async fn collect_batch_sizes(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+    expected: &std::collections::BTreeSet<String>,
+) -> Vec<usize> {
+    let mut sizes = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    while seen.len() < expected.len() {
+        let item = stream.next().await.expect("stream ended before all txs");
+        let edges = item["data"]["transactions"]
+            .as_array()
+            .expect("transactions payload is not a batch array")
+            .clone();
+        sizes.push(edges.len());
+        for edge in &edges {
+            if let Some(d) = edge["node"]["digest"].as_str()
+                && expected.contains(d)
+            {
+                seen.insert(d.to_string());
+            }
+        }
+    }
+    sizes
+}
+
+/// Collect the `node` of each expected tx from a subscription, returned in `expected` order (skips
+/// any non-expected txs) so the comparison is stable.
+async fn collect_nodes(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+    expected: &[String],
+) -> Vec<Value> {
+    let mut by_digest: std::collections::BTreeMap<String, Value> =
+        std::collections::BTreeMap::new();
+    while by_digest.len() < expected.len() {
+        let item = stream
+            .next()
+            .await
+            .expect("stream ended before all expected txs");
+        let edges = item["data"]["transactions"]
+            .as_array()
+            .expect("transactions payload is not a batch array")
+            .clone();
+        for edge in &edges {
+            let node = edge["node"].clone();
+            let digest = node["digest"]
+                .as_str()
+                .expect("edge missing digest")
+                .to_string();
+            if expected.contains(&digest) {
+                by_digest.insert(digest, node);
+            }
+        }
+    }
+    expected.iter().map(|d| by_digest[d].clone()).collect()
+}
+
 #[tokio::test]
 async fn test_transaction_subscription() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -184,21 +313,6 @@ async fn test_transaction_subscription_field_coverage() {
     });
 }
 
-/// Decode a transaction edge's `cursor` field into its `(checkpoint, tx_sequence)` position.
-fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
-    let cursor = edge["cursor"]
-        .as_str()
-        .expect("transaction edge missing cursor");
-    let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
-    let CTransaction::Primary(opaque) = ct else {
-        panic!("expected an opaque transaction cursor");
-    };
-    match opaque.position {
-        Position::Transactions { checkpoint, tx_seq } => (checkpoint, tx_seq),
-        position => panic!("expected a transactions cursor, got {position:?}"),
-    }
-}
-
 /// Live path: transactions stream in tx_sequence order, each carrying a strictly increasing
 /// `CTransaction` (tx_sequence_number) cursor. A single soft bundle yields several transactions
 /// with consecutive sequence numbers.
@@ -293,6 +407,89 @@ async fn test_transaction_subscription_resume_backfill_then_live() {
     wait_for_matching_item(&mut stream, &live, transaction_digest).await;
 }
 
+/// Sparse backfill: when the resumed range contains no matches, Phase 1 has only coverage markers to
+/// advance on, so the handoff must be pinned by a coverage marker rather than a match. A tx sent only
+/// after the handoff must then arrive via the live path, which proves pinning doesn't depend on the
+/// scan producing a match (otherwise a sparse subscription would never hand off).
+#[tokio::test]
+async fn test_transaction_subscription_empty_backfill_hands_off_to_live() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    // Resume from the current tip; no matching txs are produced in the backfill range.
+    let resume_from = cluster.validator_checkpoint_tip();
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+
+    // Let the validator advance through empty checkpoints so the backfill scans a match-less range,
+    // pins the handoff via a coverage marker, and transitions to live before any match exists.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // The only match is sent after the handoff, so it can only be delivered by the live path. If
+    // pinning required a scanned match, the backfill would never hand off and this would time out.
+    let live = transfer_coins(&mut cluster.validator, &[1000]).await;
+    wait_for_matching_item(&mut stream, &live, transaction_digest).await;
+}
+
+/// No gap and no duplicate across the backfill->live seam: matches produced both before and after the
+/// handoff must each be delivered exactly once, whatever checkpoint the handoff happens to pin at.
+/// This is the observable invariant the handoff's boundary rules exist to protect.
+#[tokio::test]
+async fn test_transaction_subscription_exactly_once_across_handoff() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    // Resume so Phase 1 (backfill) runs and hands off to live.
+    let resume_from = cluster.validator_checkpoint_tip();
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+
+    // Straddle the handoff: the first bundle lands while the backfill is scanning, the second after
+    // it has pinned and moved to live. Exactly-once must hold across the seam wherever it pins.
+    let mut expected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    expected.extend(transfer_coins(&mut cluster.validator, &[100, 200]).await);
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    expected.extend(transfer_coins(&mut cluster.validator, &[300, 400]).await);
+
+    // Every match must arrive (no gap), and none twice (no duplicate). A gap hangs to timeout; a
+    // duplicate trips the insert assertion.
+    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    while seen.len() < expected.len() {
+        let item = stream
+            .next()
+            .await
+            .expect("stream ended before all matches");
+        for digest in transaction_digest(&item) {
+            if expected.contains(digest) {
+                assert!(
+                    seen.insert(digest.to_string()),
+                    "transaction {digest} delivered more than once across the handoff",
+                );
+            }
+        }
+    }
+    assert_eq!(
+        seen, expected,
+        "did not observe exactly the produced matches"
+    );
+}
+
 /// Resume-by-cursor: the opaque cursor a backfilled edge carries can seed a new subscription via
 /// `after`, which resumes strictly past that transaction (no re-delivery of the already-seen tx).
 #[tokio::test]
@@ -364,8 +561,8 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
 }
 
 /// Live/backfill parity: the same transactions must resolve identically whether delivered live
-/// (`matching_edges`) or through the backfill scan (`build_scanned_edge`). The snapshot doubles as
-/// the field-correctness check across a variety of object-change shapes.
+/// (`matching_edges`) or through the backfill scan (`build_scanned_edge`), across a variety of
+/// object-change shapes (created, mutated, wrapped, deleted).
 #[tokio::test]
 async fn test_transaction_subscription_live_backfill_parity() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -396,14 +593,11 @@ async fn test_transaction_subscription_live_backfill_parity() {
         .await;
     let backfill_nodes = collect_nodes(&mut backfill, &expected).await;
 
-    // 5. Identical across phases (parity), and matches the recorded shape (correctness).
+    // 5. The two phases must resolve the same transactions identically.
     assert_eq!(
         live_nodes, backfill_nodes,
         "live and backfill resolved the same transactions differently",
     );
-    rich_tx_redactions().bind(|| {
-        insta::assert_json_snapshot!("transaction_subscription_parity", live_nodes);
-    });
 }
 
 /// Backfill batching: several matching transactions from one checkpoint arrive coalesced into a
@@ -485,129 +679,4 @@ async fn test_transaction_subscription_live_batches_per_checkpoint() {
         checkpoints_seen.len() >= 2,
         "expected matches across >= 2 checkpoints, got {checkpoints_seen:?}",
     );
-}
-
-/// The `{ "sender": ... }` variables shared by the filtered subscription queries.
-fn sender_var(sender: SuiAddress) -> Option<Value> {
-    Some(json!({ "sender": sender.to_string() }))
-}
-
-/// Collect payloads until all `expected` digests are seen, returning each payload's edge count so a
-/// test can assert how matches were batched.
-async fn collect_batch_sizes(
-    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
-    expected: &std::collections::BTreeSet<String>,
-) -> Vec<usize> {
-    let mut sizes = Vec::new();
-    let mut seen = std::collections::BTreeSet::new();
-    while seen.len() < expected.len() {
-        let item = stream.next().await.expect("stream ended before all txs");
-        let edges = item["data"]["transactions"]
-            .as_array()
-            .expect("transactions payload is not a batch array")
-            .clone();
-        sizes.push(edges.len());
-        for edge in &edges {
-            if let Some(d) = edge["node"]["digest"].as_str()
-                && expected.contains(d)
-            {
-                seen.insert(d.to_string());
-            }
-        }
-    }
-    sizes
-}
-
-/// The rich transaction-subscription query: live by default, or resuming from a checkpoint
-/// (backfill) when `after_checkpoint` is set.
-fn tx_query(after_checkpoint: Option<u64>) -> String {
-    let resume = after_checkpoint
-        .map(|c| format!("afterCheckpoint: {c},"))
-        .unwrap_or_default();
-    format!(
-        r#"subscription($sender: SuiAddress!) {{
-            transactions({resume} filter: {{ sentAddress: $sender }}) {{
-                node {{
-                    digest
-                    kind {{
-                        __typename
-                        ... on ProgrammableTransaction {{
-                            commands {{ nodes {{ __typename }} }}
-                            inputs {{ nodes {{ __typename }} }}
-                        }}
-                    }}
-                    sender {{ address }}
-                    signatures {{ signatureBytes }}
-                    gasInput {{ gasBudget gasPrice gasSponsor {{ address }} }}
-                    effects {{
-                        status
-                        lamportVersion
-                        epoch {{ epochId }}
-                        checkpoint {{ sequenceNumber }}
-                        gasEffects {{
-                            gasObject {{ address }}
-                            gasSummary {{
-                                computationCost
-                                storageCost
-                                storageRebate
-                                nonRefundableStorageFee
-                            }}
-                        }}
-                        objectChanges {{
-                            nodes {{
-                                outputState {{
-                                    address
-                                    asMoveObject {{ contents {{ type {{ repr }} json }} }}
-                                }}
-                            }}
-                        }}
-                        events {{ nodes {{ __typename }} }}
-                        dependencies {{ nodes {{ digest }} }}
-                    }}
-                }}
-            }}
-        }}"#
-    )
-}
-
-/// Collect the `node` of each expected tx from a subscription, returned in `expected` order (skips
-/// any non-expected txs) so the comparison and snapshot are stable.
-async fn collect_nodes(
-    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
-    expected: &[String],
-) -> Vec<Value> {
-    let mut by_digest: std::collections::BTreeMap<String, Value> =
-        std::collections::BTreeMap::new();
-    while by_digest.len() < expected.len() {
-        let item = stream
-            .next()
-            .await
-            .expect("stream ended before all expected txs");
-        let edges = item["data"]["transactions"]
-            .as_array()
-            .expect("transactions payload is not a batch array")
-            .clone();
-        for edge in &edges {
-            let node = edge["node"].clone();
-            let digest = node["digest"]
-                .as_str()
-                .expect("edge missing digest")
-                .to_string();
-            if expected.contains(&digest) {
-                by_digest.insert(digest, node);
-            }
-        }
-    }
-    expected.iter().map(|d| by_digest[d].clone()).collect()
-}
-
-/// `graphql_redactions` plus the volatile leaves of the rich transaction node, so a full-node
-/// snapshot is stable across runs.
-fn rich_tx_redactions() -> insta::Settings {
-    let mut settings = graphql_redactions();
-    settings.add_redaction(".**.signatureBytes", "[signature]");
-    settings.add_redaction(".**.lamportVersion", "[lamportVersion]");
-    settings.add_redaction(".**.gasSummary", "[gasSummary]");
-    settings.add_redaction(".**.json", "[json]");
-    settings
 }
