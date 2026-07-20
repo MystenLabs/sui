@@ -185,12 +185,25 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // Reject blocks failing parsing and validations.
         let block_verifier = self.block_verifier.clone();
         let serialized = serialized_block.block.clone();
+        let permit_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .handle_send_block_permit_wait_latency
+            .start_timer();
         let permit = self
             .verify_and_vote_semaphore
             .clone()
             .acquire_owned()
             .await
             .expect("verify_and_vote semaphore is never closed");
+        drop(permit_timer);
+        let verify_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .handle_send_block_verify_latency
+            .start_timer();
         let (verified_block, reject_txn_votes) = tokio::task::spawn_blocking(move || {
             let _permit = permit;
             block_verifier.verify_and_vote(signed_block, serialized)
@@ -206,6 +219,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
         })?;
+        drop(verify_timer);
         let excluded_ancestors = self
             .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
             .tap_err(|e| {
@@ -294,11 +308,18 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         }
 
         // Send the block to Core to try accepting it into the DAG.
+        let add_blocks_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .handle_send_block_add_blocks_latency
+            .start_timer();
         let missing_ancestors = self
             .core_dispatcher
             .add_blocks(vec![verified_block.clone()])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
+        drop(add_blocks_timer);
 
         // Schedule fetching missing ancestors from this peer in the background.
         if !missing_ancestors.is_empty() {
