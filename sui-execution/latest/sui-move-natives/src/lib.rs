@@ -371,8 +371,8 @@ impl NativesCostTable {
                     .object_record_new_uid_cost_base()
                     .into(),
                 object_record_new_uid_from_hash_cost_base: protocol_config
-                    .object_record_new_uid_from_hash_cost_base()
-                    .into(),
+                    .object_record_new_uid_from_hash_cost_base_as_option()
+                    .map(Into::into),
             },
 
             // Crypto

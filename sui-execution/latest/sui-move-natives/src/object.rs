@@ -3,6 +3,7 @@
 
 use crate::{NativesCostTable, get_extension, get_extension_mut, object_runtime::ObjectRuntime};
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::safe_unwrap;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{
     execution::{
@@ -84,7 +85,7 @@ pub fn delete_impl(
 #[derive(Clone)]
 pub struct RecordNewIdCostParams {
     pub object_record_new_uid_cost_base: InternalGas,
-    pub object_record_new_uid_from_hash_cost_base: InternalGas,
+    pub object_record_new_uid_from_hash_cost_base: Option<InternalGas>,
 }
 /***************************************************************************************************
  * native fun record_new_uid
@@ -133,14 +134,13 @@ pub fn record_new_uid_from_hash(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    let record_new_id_cost_params = get_extension!(context, NativesCostTable)?
-        .record_new_id_cost_params
-        .clone();
-
-    native_charge_gas_early_exit!(
-        context,
-        record_new_id_cost_params.object_record_new_uid_from_hash_cost_base
+    let object_record_new_uid_from_hash_cost_base = safe_unwrap!(
+        get_extension!(context, NativesCostTable)?
+            .record_new_id_cost_params
+            .object_record_new_uid_from_hash_cost_base
     );
+
+    native_charge_gas_early_exit!(context, object_record_new_uid_from_hash_cost_base);
 
     let uid_bytes = pop_arg!(args, AccountAddress);
     let parent = pop_arg!(args, AccountAddress);
