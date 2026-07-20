@@ -21,8 +21,6 @@ use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionC
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
-use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
