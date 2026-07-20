@@ -47,7 +47,7 @@ async fn transactions(
     before: Option<String>,
 ) -> anyhow::Result<graphql::Connection<TxNode>> {
     let data = graphql::query(
-        cluster,
+        &cluster.graphql_url(),
         TX_QUERY,
         json!({ "first": first, "last": last, "after": after, "before": before }),
     )
