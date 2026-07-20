@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::anyhow;
 use anyhow::bail;
-use anyhow::ensure;
 use chrono::DateTime;
 use chrono::Utc;
 use diesel::QueryableByName;
@@ -69,8 +67,9 @@ pub(crate) struct WatermarkTask {
     /// How long to wait between updating the watermark.
     interval: Duration,
 
-    /// Pipelines that we want to check the watermark for.
-    pg_pipelines: Vec<String>,
+    /// Configuration for which pipelines are enabled, used to determine which pipelines to check
+    /// the watermark for.
+    pipeline: PipelineConfig,
 
     /// Access to metrics to report watermark updates.
     metrics: Arc<RpcMetrics>,
@@ -148,13 +147,6 @@ impl WatermarkTask {
             watermark_polling_interval,
         } = config;
 
-        let pg_pipelines = pipeline
-            .availability
-            .into_iter()
-            .filter(|(_, status)| matches!(status, PipelineAvailability::Enabled))
-            .map(|(name, _)| name)
-            .collect();
-
         let (watermarks_tx, _) = watch::channel(Arc::new(Watermarks::default()));
         Self {
             watermarks: Default::default(),
@@ -164,7 +156,7 @@ impl WatermarkTask {
             ledger_grpc_reader,
             consistent_reader,
             interval: watermark_polling_interval,
-            pg_pipelines,
+            pipeline,
             metrics,
         }
     }
@@ -191,7 +183,7 @@ impl WatermarkTask {
                 ledger_grpc_reader,
                 consistent_reader,
                 interval,
-                pg_pipelines,
+                pipeline,
                 metrics,
             } = self;
 
@@ -200,7 +192,7 @@ impl WatermarkTask {
             loop {
                 interval.tick().await;
 
-                let rows = match WatermarkRow::read(&pg_reader, bigtable_reader.as_ref(), ledger_grpc_reader.as_ref(), &pg_pipelines).await {
+                let rows = match WatermarkRow::read(&pg_reader, bigtable_reader.as_ref(), ledger_grpc_reader.as_ref()).await {
                     Ok(rows) => rows,
                     Err(e) => {
                         warn!("Failed to read watermarks: {e:#}");
@@ -210,6 +202,20 @@ impl WatermarkTask {
 
                 let mut w = Watermarks::default();
                 for row in rows {
+                    // A pipeline missing from `availability` (e.g. one that starts producing
+                    // watermarks after startup) falls back to the configured default, same as a
+                    // discovered one.
+                    let enabled = pipeline
+                        .availability
+                        .get(&row.pipeline)
+                        .copied()
+                        .unwrap_or(pipeline.default_availability)
+                        == PipelineAvailability::Enabled;
+
+                    if !enabled {
+                        continue;
+                    }
+
                     row.record_metrics(&metrics);
                     w.merge(row);
                 }
@@ -357,9 +363,8 @@ impl WatermarkRow {
         pg_reader: &PgReader,
         bigtable_reader: Option<&BigtableReader>,
         ledger_grpc_reader: Option<&LedgerGrpcReader>,
-        pg_pipelines: &[String],
     ) -> anyhow::Result<Vec<WatermarkRow>> {
-        let rows = watermarks_from_pg(pg_reader, pg_pipelines);
+        let rows = watermarks_from_pg(pg_reader);
         let bigtable: OptionFuture<_> = bigtable_reader.map(watermark_from_bigtable).into();
         let ledger_grpc: OptionFuture<_> =
             ledger_grpc_reader.map(watermark_from_ledger_grpc).into();
@@ -496,10 +501,7 @@ async fn watermark_from_ledger_grpc(
     })
 }
 
-async fn watermarks_from_pg(
-    pg_reader: &PgReader,
-    pg_pipelines: &[String],
-) -> anyhow::Result<Vec<WatermarkRow>> {
+async fn watermarks_from_pg(pg_reader: &PgReader) -> anyhow::Result<Vec<WatermarkRow>> {
     let mut conn = pg_reader
         .connect()
         .await
@@ -525,27 +527,10 @@ async fn watermarks_from_pg(
                 cp_sequence_numbers c
             ON (w.reader_lo = c.cp_sequence_number)
             WHERE
-                w.pipeline = ANY({Array<Text>})
-            AND w.reader_lo <= w.checkpoint_hi_inclusive
+                w.reader_lo <= w.checkpoint_hi_inclusive
             "#,
-            pg_pipelines,
         ))
         .await?;
-
-    ensure!(
-        !pg_pipelines.is_empty(),
-        "Indexer not tracking any pipelines"
-    );
-
-    let mut remaining_pipelines = BTreeSet::from_iter(pg_pipelines.iter());
-    for row in &rows {
-        remaining_pipelines.remove(&row.pipeline);
-    }
-
-    ensure!(
-        remaining_pipelines.is_empty(),
-        "Missing watermarks for {remaining_pipelines:?}",
-    );
 
     Ok(rows)
 }
@@ -598,5 +583,187 @@ async fn watermark_from_consistent(
         Err(e) => Err(anyhow!(e).context(format!(
             "Failed to get consistent store watermarks at checkpoint {checkpoint}"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDateTime;
+    use diesel::Insertable;
+    use diesel::insert_into;
+    use diesel_async::RunQueryDsl as _;
+    use prometheus::Registry;
+    use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+    use sui_indexer_alt_schema::MIGRATIONS;
+    use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
+    use sui_indexer_alt_schema::schema::cp_sequence_numbers;
+    use sui_pg_db::Db;
+    use sui_pg_db::DbArgs;
+    use sui_pg_db::schema::watermarks;
+    use sui_pg_db::temp::TempDb;
+
+    use super::*;
+
+    /// Mirrors `sui_pg_db::model::StoredWatermark`, which isn't public outside that crate.
+    #[derive(Insertable)]
+    #[diesel(table_name = watermarks)]
+    struct NewWatermark {
+        pipeline: String,
+        epoch_hi_inclusive: i64,
+        checkpoint_hi_inclusive: i64,
+        tx_hi: i64,
+        timestamp_ms_hi_inclusive: i64,
+        reader_lo: i64,
+        pruner_timestamp: NaiveDateTime,
+        pruner_hi: i64,
+    }
+
+    impl NewWatermark {
+        fn new(pipeline: &str) -> Self {
+            Self {
+                pipeline: pipeline.to_owned(),
+                epoch_hi_inclusive: 0,
+                checkpoint_hi_inclusive: 10,
+                tx_hi: 0,
+                timestamp_ms_hi_inclusive: 0,
+                reader_lo: 0,
+                pruner_timestamp: Utc::now().naive_utc(),
+                pruner_hi: 0,
+            }
+        }
+    }
+
+    /// Set up a temporary database with a watermark row for each of `pipelines` (all sharing one
+    /// `cp_sequence_numbers` row, to satisfy `watermarks_from_pg`'s join), and the readers needed
+    /// to construct a `WatermarkTask` against it.
+    async fn setup(pipelines: &[&str]) -> (TempDb, PgReader, ConsistentReader, Arc<RpcMetrics>) {
+        let registry = Registry::new();
+        let temp_db = TempDb::new().unwrap();
+        let url = temp_db.database().url();
+
+        let writer = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
+        let reader = PgReader::new(None, Some(url.clone()), DbArgs::default(), &registry)
+            .await
+            .unwrap();
+
+        writer.run_migrations(Some(&MIGRATIONS)).await.unwrap();
+
+        let mut conn = writer.connect().await.unwrap();
+
+        insert_into(cp_sequence_numbers::table)
+            .values(StoredCpSequenceNumbers {
+                cp_sequence_number: 0,
+                tx_lo: 0,
+                epoch: 0,
+            })
+            .execute(&mut conn)
+            .await
+            .unwrap();
+
+        if !pipelines.is_empty() {
+            insert_into(watermarks::table)
+                .values(
+                    pipelines
+                        .iter()
+                        .map(|p| NewWatermark::new(p))
+                        .collect::<Vec<_>>(),
+                )
+                .execute(&mut conn)
+                .await
+                .unwrap();
+        }
+
+        let consistent_reader =
+            ConsistentReader::new(None, ConsistentReaderArgs::default(), &registry)
+                .await
+                .unwrap();
+
+        (
+            temp_db,
+            reader,
+            consistent_reader,
+            RpcMetrics::new(&registry),
+        )
+    }
+
+    /// Construct a `WatermarkTask` polling every 20ms, run it, and return the first snapshot it
+    /// publishes.
+    async fn snapshot(
+        pipeline: PipelineConfig,
+        pg_reader: PgReader,
+        consistent_reader: ConsistentReader,
+        metrics: Arc<RpcMetrics>,
+    ) -> Arc<Watermarks> {
+        let task = WatermarkTask::new(
+            WatermarkConfig {
+                watermark_polling_interval: Duration::from_millis(20),
+            },
+            pipeline,
+            pg_reader,
+            None,
+            None,
+            consistent_reader,
+            metrics,
+        );
+
+        let mut rx = task.watermarks_rx();
+        let _service = task.run();
+
+        tokio::time::timeout(Duration::from_secs(5), rx.changed())
+            .await
+            .expect("Timed out waiting for the first watermark snapshot")
+            .unwrap();
+
+        rx.borrow_and_update().clone()
+    }
+
+    #[tokio::test]
+    async fn explicit_enabled_and_disabled_are_respected() {
+        let (_db, pg_reader, consistent_reader, metrics) = setup(&["tx_calls", "kv_objects"]).await;
+
+        let pipeline = PipelineConfig {
+            availability: BTreeMap::from([
+                ("tx_calls".to_string(), PipelineAvailability::Enabled),
+                ("kv_objects".to_string(), PipelineAvailability::Disabled),
+            ]),
+            default_availability: PipelineAvailability::Disabled,
+        };
+
+        let w = snapshot(pipeline, pg_reader, consistent_reader, metrics).await;
+
+        assert!(w.per_pipeline().contains_key("tx_calls"));
+        assert!(!w.per_pipeline().contains_key("kv_objects"));
+    }
+
+    #[tokio::test]
+    async fn unlisted_pipeline_falls_back_to_an_enabled_default() {
+        let (_db, pg_reader, consistent_reader, metrics) = setup(&["tx_calls", "kv_objects"]).await;
+
+        // Neither pipeline is explicitly listed in `availability`, so both fall back to the
+        // default -- this is what lets a pipeline that starts running after boot get tracked
+        // without ever being configured or discovered ahead of time.
+        let pipeline = PipelineConfig {
+            availability: BTreeMap::new(),
+            default_availability: PipelineAvailability::Enabled,
+        };
+
+        let w = snapshot(pipeline, pg_reader, consistent_reader, metrics).await;
+
+        assert!(w.per_pipeline().contains_key("tx_calls"));
+        assert!(w.per_pipeline().contains_key("kv_objects"));
+    }
+
+    #[tokio::test]
+    async fn unlisted_pipeline_respects_a_disabled_default() {
+        let (_db, pg_reader, consistent_reader, metrics) = setup(&["tx_calls"]).await;
+
+        let pipeline = PipelineConfig {
+            availability: BTreeMap::new(),
+            default_availability: PipelineAvailability::Disabled,
+        };
+
+        let w = snapshot(pipeline, pg_reader, consistent_reader, metrics).await;
+
+        assert!(!w.per_pipeline().contains_key("tx_calls"));
     }
 }

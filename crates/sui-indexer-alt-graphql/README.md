@@ -82,16 +82,14 @@ the defaults need to be changed:
 cargo run --bin sui-indexer-alt-graphql -- generate-config > graphql_config.toml
 ```
 
-The config file's `[pipeline-defaults]` and `[pipeline.<name>]` sections tell
-GraphQL which pipelines it can expect to find populated in the database it is
-reading from, so it knows which watermarks to poll for and what features to
-enable. List each pipeline you expect to be populated as `[pipeline.<name>]`
-(e.g. `[pipeline.tx_calls]`); pipelines listed this way are enabled by default.
-Set `enabled = false` under `[pipeline-defaults]` to disable every pipeline
-listed below by default instead, or on a specific `[pipeline.<name>]` entry to
-opt just that one out (or back in, if the default has been flipped to
-disabled). Pipelines that aren't listed at all are never considered enabled.
-See `examples/prod-config/graphql.toml` for an example.
+GraphQL auto-discovers pipelines directly from the database's `watermarks`
+table: any pipeline with a watermark row is picked up on the next poll and
+enabled by default, whether or not it's explicitly listed in the config file.
+The `[pipeline-defaults]` and `[pipeline.<name>]` sections control that
+default and let you override it. Set `enabled = false` under
+`[pipeline-defaults]` to disable every pipeline by default instead, and add a
+`[pipeline.<name>]` entry (e.g. `[pipeline.tx_calls]`) to opt a specific
+pipeline out (or back in, if the default has been flipped to disabled).
 
 ## Running
 

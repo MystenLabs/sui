@@ -80,6 +80,7 @@ sui-types.workspace = true
 
 [dev-dependencies]
 bytes.workspace = true
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 insta.workspace = true
 reqwest.workspace = true
 regex.workspace = true
