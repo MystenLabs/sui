@@ -955,6 +955,7 @@ mod tests {
     use async_graphql::connection::CursorType;
     use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
     use sui_indexer_alt_reader::kv_loader::ExecutedTransactionData;
+    use sui_rpc::field::FieldMaskUtil;
     use sui_rpc_cursor::CursorKind;
     use sui_types::base_types::random_object_ref;
     use sui_types::effects::TransactionEffects as NativeTransactionEffects;
