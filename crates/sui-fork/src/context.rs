@@ -99,6 +99,17 @@ impl Context {
         self.runtime.as_ref()
     }
 
+    /// Resolves when the embedded rpc-store indexer stops; pends forever on
+    /// runtime-less (in-memory) contexts. Used as a liveness watchdog by the
+    /// server loop, so an indexer failure surfaces immediately instead of as
+    /// a publication timeout on the next executed transaction.
+    pub(crate) async fn indexer_stopped(&self) -> anyhow::Result<()> {
+        match &self.runtime {
+            Some(runtime) => runtime.indexer_stopped().await,
+            None => std::future::pending().await,
+        }
+    }
+
     pub(crate) fn chain_identifier(&self) -> &Chain {
         &self.chain_identifier
     }

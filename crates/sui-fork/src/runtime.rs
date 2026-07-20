@@ -85,9 +85,12 @@ pub(crate) struct ForkRuntime {
     live_state: Arc<LiveState>,
     metadata: ForkMetadata,
     indexer_pipelines: Vec<&'static str>,
-    /// Held only to keep the running indexer alive: dropping this `Service` stops
-    /// the background indexing task. Never read (hence the `_` name).
-    _indexer_service: Option<Service>,
+    /// Handle to the running indexer. Holding it keeps the indexer alive
+    /// (dropping the `Service` stops the background tasks), and
+    /// [`Self::indexer_stopped`] joins it to observe failures. Behind an async
+    /// mutex because `Service::join` needs exclusive access while the runtime
+    /// is shared behind the `Context`.
+    indexer_service: Option<tokio::sync::Mutex<Service>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -141,7 +144,7 @@ impl ForkRuntime {
             live_state,
             metadata,
             indexer_pipelines: Vec::new(),
-            _indexer_service: None,
+            indexer_service: None,
         })
     }
 
@@ -183,7 +186,7 @@ impl ForkRuntime {
         registry: &Registry,
     ) -> anyhow::Result<()> {
         ensure!(
-            self._indexer_service.is_none(),
+            self.indexer_service.is_none(),
             "fork rpc-store indexer is already running",
         );
 
@@ -228,12 +231,12 @@ impl ForkRuntime {
             .context("failed to register fork checkpoint broadcast pipeline")?;
 
         self.indexer_pipelines = indexer.pipelines().collect();
-        self._indexer_service = Some(
+        self.indexer_service = Some(tokio::sync::Mutex::new(
             indexer
                 .run()
                 .await
                 .context("failed to start fork rpc-store indexer")?,
-        );
+        ));
         Ok(())
     }
 
@@ -255,6 +258,17 @@ impl ForkRuntime {
 
     pub(crate) fn schema(&self) -> Arc<RpcStoreSchema> {
         self.schema.clone()
+    }
+
+    /// Resolves when the embedded indexer stops: `Ok(())` if all its tasks
+    /// completed (unexpected while the fork is serving), or the task error if
+    /// any pipeline failed or panicked. Pends forever if the indexer was never
+    /// started.
+    pub(crate) async fn indexer_stopped(&self) -> anyhow::Result<()> {
+        let Some(service) = &self.indexer_service else {
+            return std::future::pending().await;
+        };
+        service.lock().await.join().await
     }
 
     pub(crate) async fn wait_for_indexed_checkpoint(
