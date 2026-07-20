@@ -33,6 +33,15 @@ const MIME_TYPES = {
   '.pdf': 'application/pdf',
 };
 
+// Trailing-slash duplicates split analytics and dilute SEO across two URLs for
+// the same page. Redirect the trailing-slash variants to their canonical
+// (non-trailing-slash) paths, mirroring the production edge middleware.
+const TRAILING_SLASH_REDIRECTS = {
+  '/Pricing/': '/Pricing',
+  '/UsingSeal/': '/UsingSeal',
+  '/GettingStarted/': '/GettingStarted',
+};
+
 function getContentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   return MIME_TYPES[ext] || 'application/octet-stream';
@@ -82,6 +91,15 @@ function resolveMarkdownFile(pathname) {
 const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url);
   let pathname = parsedUrl.pathname;
+
+  // Consolidate trailing-slash duplicates onto their canonical paths.
+  const canonical = TRAILING_SLASH_REDIRECTS[pathname];
+  if (canonical) {
+    const location = parsedUrl.search ? canonical + parsedUrl.search : canonical;
+    res.writeHead(301, { Location: location });
+    res.end();
+    return;
+  }
 
   // Content negotiation: serve markdown when Accept: text/markdown
   if (acceptsMarkdown(req)) {
