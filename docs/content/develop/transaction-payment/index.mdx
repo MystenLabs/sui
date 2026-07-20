@@ -75,11 +75,15 @@ Under the hood:
 2. If the address balance covers the amount, it creates a withdrawal — no coin objects needed.
 3. If the address balance is insufficient, it falls back to selecting and splitting coin objects.
 
-This means you can build transactions without knowing which coin objects the sender owns. For SUI gas specifically, passing an empty array to `setGasPayment` tells the network to draw gas from the address balance:
+This means you can build transactions without knowing which coin objects the sender owns.
+
+For SUI gas specifically, passing an empty array to `setGasPayment` tells the network to draw gas from the address balance:
 
 ```tsx
 tx.setGasPayment([]); // Gas paid from address balance — no coin lookup required
 ```
+
+Note that `setGasPayment([])` alone is not enough for fully offline transaction building. You also need to set `gasPrice`, `gasBudget`, and `ValidDuring` expiration, and all transaction inputs must be resolvable without network queries (no unresolved `coinWithBalance` or `tx.coin()` intents that require balance lookups). See [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances) for the full set of requirements.
 
 See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances) for the full API (TypeScript, Rust, CLI, and Move) and [Gas Smashing](/develop/transaction-payment/gas-smashing) for the legacy coin-merge approach.
 
@@ -100,7 +104,7 @@ The sender provides one or more `Coin<SUI>` objects to cover execution and stora
 
 ### Address balance gas
 
-Instead of selecting coin objects, the network withdraws gas from the sender's SUI address balance. This removes the need for coin lookups and enables fully offline transaction construction. Set `tx.setGasPayment([])` and use `ValidDuring` expiration. See [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances) for requirements.
+Instead of selecting coin objects, the network withdraws gas from the sender's SUI address balance. This removes the need for coin lookups at gas-selection time. To use it, set `tx.setGasPayment([])` along with `gasPrice`, `gasBudget`, and `ValidDuring` expiration. When all other transaction inputs are also known at build time (no unresolved `coinWithBalance` intents), the transaction can be built fully offline. See [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances) for requirements.
 
 ### Sponsored transactions
 
@@ -113,7 +117,7 @@ With address balances, sponsored transactions become simpler: no gas coin lockin
 Peer-to-peer transfers of [allowlisted stablecoins](/develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins) (USDC, USDSUI, and others) execute at zero gas cost. Eligibility requires:
 
 - The PTB calls only allowlisted `balance` or `coin` operations (primarily `balance::send_funds`).
-- `gasPayment` is empty and `gasPrice = 0`.
+- `gasPayment` is empty, `gasPrice = 0`, and `gasBudget = 0`.
 - No objects are written.
 
 The gRPC and GraphQL transports detect eligibility automatically during simulation. See [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers) for the full allowlist and integration guide.
@@ -133,7 +137,7 @@ tx.moveCall({
   arguments: [tx.balance({ type: USDC, balance: 1_000_000n }), tx.pure.address(recipient)],
 });
 
-// SDK detects gasless eligibility and sets gasPrice = 0 automatically
+// SDK detects gasless eligibility and sets gasPrice = 0 and gasBudget = 0 automatically
 const result = await client.signAndExecuteTransaction({ transaction: tx, signer: keypair });
 ```
 
@@ -193,10 +197,10 @@ tx.moveCall({
   arguments: [tx.object('0xVAULT'), savePortion],
 });
 
-// 3. Split 100 USDC and send to Alice
+// 3. Split 100 USDC and send to Alice (splitCoins returns Coin<T>, so use coin::send_funds)
 const [sendPortion] = tx.splitCoins(allUsdc, [tx.pure.u64(100_000_000)]);
 tx.moveCall({
-  target: '0x2::balance::send_funds',
+  target: '0x2::coin::send_funds',
   typeArguments: [USDC],
   arguments: [sendPortion, tx.pure.address(aliceAddress)],
 });
