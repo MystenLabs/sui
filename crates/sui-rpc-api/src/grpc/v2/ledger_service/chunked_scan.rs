@@ -153,9 +153,12 @@ fn read_schedstat(file: &File) -> Option<u64> {
     if bytes_read <= 0 {
         return None;
     }
-    let (runtime_ns, run_delay_ns) = parse_schedstat(&buffer[..bytes_read as usize])?;
-    // A completely zero record cannot provide a meaningful delta.
-    (runtime_ns != 0 || run_delay_ns != 0).then_some(run_delay_ns)
+    // An all-zero record is VALID for a freshly spawned thread (zero accounted
+    // runtime and delay so far); only open/read/parse failures indicate the
+    // probe is unusable. Rejecting zeros here would let one fresh blocking
+    // thread permanently disable process-wide sampling via disable_schedstat().
+    let (_runtime_ns, run_delay_ns) = parse_schedstat(&buffer[..bytes_read as usize])?;
+    Some(run_delay_ns)
 }
 
 #[cfg(target_os = "linux")]
