@@ -368,6 +368,9 @@ const MAINNET_USDB: &str =
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
 //              Add an epoch close deadline failsafe for deferred transactions.
 // Version 131: Enable sharing transaction deny configs between validators via consensus.
+//              Enable tx_context_restrictions_verifier: reject system-package
+//              function signatures with `&mut TxContext` + any `&mut _` return
+//              that have no non-`TxContext` `&mut U` parameter.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1019,6 +1022,15 @@ struct FeatureFlags {
     // If true, allow Move functions called in PTBs to return references
     #[serde(skip_serializing_if = "is_false")]
     allow_references_in_ptbs: bool,
+
+    // If true, the tx_context_restrictions_verifier pass runs at Move module
+    // publish time and rejects system-package signatures with `&mut TxContext`
+    // + any `&mut _` return that have no non-`TxContext` `&mut U` parameter.
+    // User packages are exempt: they can express the same shape through
+    // generic instantiation, so PTB arity and auto-injection checks are the
+    // safety mechanism there.
+    #[serde(skip_serializing_if = "is_false")]
+    framework_tx_context_mut_restrictions: bool,
 
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -4536,6 +4548,7 @@ impl ProtocolConfig {
                 }
                 131 => {
                     cfg.feature_flags.share_transaction_deny_config_in_consensus = true;
+                    cfg.feature_flags.framework_tx_context_mut_restrictions = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4647,6 +4660,7 @@ impl ProtocolConfig {
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
             switch_to_regex_reference_safety: false,
+            framework_tx_context_mut_restrictions: self.framework_tx_context_mut_restrictions(),
             disallow_jump_orphans: self.disallow_jump_orphans(),
         }
     }
