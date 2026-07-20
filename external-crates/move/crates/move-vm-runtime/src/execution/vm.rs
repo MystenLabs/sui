@@ -430,7 +430,7 @@ impl<'extensions> MoveVM<'extensions> {
             if ty_args.is_empty() {
                 ty.to_type()
             } else {
-                ty.subst(ty_args)
+                ty.subst_unchecked(ty_args)
             }
         };
 

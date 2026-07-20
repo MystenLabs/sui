@@ -11,8 +11,8 @@ use crate::{
         },
         values::values_impl::{self as values, VMValueCast, Value},
     },
-    jit::execution::ast::{Function, InternedDisplay},
-    shared::type_size_formulae::TypeArguments,
+    jit::execution::ast::{Function, InternedDisplay, Type},
+    shared::type_size_formulae::TypeSize,
     shared::{
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
@@ -77,7 +77,11 @@ pub(crate) struct CallFrame {
     pub(crate) pc: u16,
     pub(crate) function: VMPointer<Function>,
     pub(crate) stack_frame: StackFrame,
-    pub(crate) ty_args: TypeArguments,
+    /// The frame's realized type arguments and their precomputed sizes, stored as parallel
+    /// vectors so both a `&[Type]` and a `&[TypeSize]` can be handed to the dispatch tables
+    /// without projecting or cloning.
+    pub(crate) ty_arg_types: Vec<Type>,
+    pub(crate) ty_arg_sizes: Vec<TypeSize>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -142,11 +146,12 @@ impl MachineState {
     pub fn push_call(
         &mut self,
         function: VMPointer<Function>,
-        ty_args: TypeArguments,
+        ty_arg_types: Vec<Type>,
+        ty_arg_sizes: Vec<TypeSize>,
         args: Vec<Value>,
     ) -> VMResult<()> {
         self.call_stack
-            .push_call(&self.interner, function, ty_args, args)?;
+            .push_call(&self.interner, function, ty_arg_types, ty_arg_sizes, args)?;
         self.callstack_highwatermark = self
             .callstack_highwatermark
             .max(self.call_stack.heap.cur_size());
@@ -189,9 +194,8 @@ impl MachineState {
         debug_write!(buf, "{}::{}::", module.address(), module.name());
 
         debug_write!(buf, "{}", func.name(&vtables.interner));
-        let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
-        for ty in ty_args.types() {
+        for ty in frame.ty_arg_types() {
             ty_tags.push(vtables.type_to_type_tag(ty)?);
         }
         if !ty_tags.is_empty() {
@@ -401,7 +405,8 @@ impl CallStack {
     /// Create a new empty call stack.
     pub fn new(
         function: VMPointer<Function>,
-        ty_args: TypeArguments,
+        ty_arg_types: Vec<Type>,
+        ty_arg_sizes: Vec<TypeSize>,
         args: Vec<Value>,
     ) -> PartialVMResult<Self> {
         let mut heap = MachineHeap::new();
@@ -411,7 +416,8 @@ impl CallStack {
             pc: 0,
             stack_frame,
             function,
-            ty_args,
+            ty_arg_types,
+            ty_arg_sizes,
         };
 
         Ok(Self {
@@ -428,7 +434,8 @@ impl CallStack {
         &mut self,
         interner: &IdentifierInterner,
         function: VMPointer<Function>,
-        ty_args: TypeArguments,
+        ty_arg_types: Vec<Type>,
+        ty_arg_sizes: Vec<TypeSize>,
         args: Vec<Value>,
     ) -> VMResult<()> {
         let stack_frame = self
@@ -439,7 +446,8 @@ impl CallStack {
             pc: 0,
             stack_frame,
             function,
-            ty_args,
+            ty_arg_types,
+            ty_arg_sizes,
         };
         if self.frames.len() < CALL_STACK_SIZE_LIMIT {
             let prev_frame = std::mem::replace(&mut self.current_frame, new_frame);
@@ -476,8 +484,12 @@ impl CallFrame {
         self.function.to_ref()
     }
 
-    pub(super) fn ty_args(&self) -> &TypeArguments {
-        &self.ty_args
+    pub(super) fn ty_arg_types(&self) -> &[Type] {
+        &self.ty_arg_types
+    }
+
+    pub(super) fn ty_arg_sizes(&self) -> &[TypeSize] {
+        &self.ty_arg_sizes
     }
 
     pub(super) fn location(&self, interner: &IdentifierInterner) -> Location {

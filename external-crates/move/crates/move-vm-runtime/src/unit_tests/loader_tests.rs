@@ -16,7 +16,7 @@ use crate::{
     jit::execution::ast::Type,
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
-    shared::type_size_formulae::MaxPlusFormula,
+    shared::type_size_formulae::{MaxPlusForm, MaxPlusTerm},
     shared::{
         gas::UnmeteredGasMeter,
         linkage_context::LinkageContext,
@@ -205,7 +205,7 @@ impl Adapter {
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
-    ) -> MaxPlusFormula {
+    ) -> MaxPlusForm {
         let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
         let key = session
@@ -214,8 +214,9 @@ impl Adapter {
             .unwrap();
         session
             .virtual_tables
-            .datatype_value_depth_formula(&key)
+            .partial_type_size(&key)
             .expect("computing depth of datatype should succeed")
+            .value_depth
     }
 
     fn get_type_tag(&self, ty: &Type) -> TypeTag {
@@ -350,63 +351,84 @@ fn test_depth() {
         (
             "A",
             "Box",
-            MaxPlusFormula {
-                terms: vec![(0, 1)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 1,
             },
         ),
         (
             "A",
             "Box3",
-            MaxPlusFormula {
-                terms: vec![(0, 3)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 3,
+                }],
                 constant: 3,
             },
         ),
         (
             "A",
             "Box7",
-            MaxPlusFormula {
-                terms: vec![(0, 7)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 7,
+                }],
                 constant: 7,
             },
         ),
         (
             "A",
             "Box15",
-            MaxPlusFormula {
-                terms: vec![(0, 15)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 15,
+                }],
                 constant: 15,
             },
         ),
         (
             "A",
             "Box31",
-            MaxPlusFormula {
-                terms: vec![(0, 31)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 31,
+                }],
                 constant: 31,
             },
         ),
         (
             "A",
             "Box63",
-            MaxPlusFormula {
-                terms: vec![(0, 63)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 63,
+                }],
                 constant: 63,
             },
         ),
         (
             "A",
             "Box127",
-            MaxPlusFormula {
-                terms: vec![(0, 127)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 127,
+                }],
                 constant: 127,
             },
         ),
         (
             "A",
             "S",
-            MaxPlusFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 3,
             },
@@ -414,7 +436,7 @@ fn test_depth() {
         (
             "B",
             "S",
-            MaxPlusFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 2,
             },
@@ -422,7 +444,7 @@ fn test_depth() {
         (
             "C",
             "S",
-            MaxPlusFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 2,
             },
@@ -430,7 +452,7 @@ fn test_depth() {
         (
             "D",
             "S",
-            MaxPlusFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 3,
             },
@@ -438,47 +460,74 @@ fn test_depth() {
         (
             "E",
             "S",
-            MaxPlusFormula {
-                terms: vec![(0, 2)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 2,
+                }],
                 constant: 3,
             },
         ),
         (
             "F",
             "S",
-            MaxPlusFormula {
-                terms: vec![(0, 1)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 2,
             },
         ),
         (
             "G",
             "S",
-            MaxPlusFormula {
-                terms: vec![(0, 5), (1, 3)],
+            MaxPlusForm {
+                terms: vec![
+                    MaxPlusTerm {
+                        param: 0,
+                        offset: 5,
+                    },
+                    MaxPlusTerm {
+                        param: 1,
+                        offset: 3,
+                    },
+                ],
                 constant: 6,
             },
         ),
         (
             "H",
             "S",
-            MaxPlusFormula {
-                terms: vec![(0, 2), (1, 4)],
+            MaxPlusForm {
+                terms: vec![
+                    MaxPlusTerm {
+                        param: 0,
+                        offset: 2,
+                    },
+                    MaxPlusTerm {
+                        param: 1,
+                        offset: 4,
+                    },
+                ],
                 constant: 5,
             },
         ),
         (
             "I",
             "L",
-            MaxPlusFormula {
-                terms: vec![(0, 2)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 2,
+                }],
                 constant: 4,
             },
         ),
         (
             "I",
             "G",
-            MaxPlusFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 3,
             },
@@ -486,47 +535,68 @@ fn test_depth() {
         (
             "I",
             "H",
-            MaxPlusFormula {
-                terms: vec![(0, 1)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 2,
             },
         ),
         (
             "I",
             "E",
-            MaxPlusFormula {
-                terms: vec![(0, 2)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 2,
+                }],
                 constant: 3,
             },
         ),
         (
             "I",
             "F",
-            MaxPlusFormula {
-                terms: vec![(0, 1)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 2,
             },
         ),
         (
             "I",
             "S",
-            MaxPlusFormula {
-                terms: vec![(0, 2), (1, 7)],
+            MaxPlusForm {
+                terms: vec![
+                    MaxPlusTerm {
+                        param: 0,
+                        offset: 2,
+                    },
+                    MaxPlusTerm {
+                        param: 1,
+                        offset: 7,
+                    },
+                ],
                 constant: 9,
             },
         ),
         (
             "I",
             "LL",
-            MaxPlusFormula {
-                terms: vec![(1, 2)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 1,
+                    offset: 2,
+                }],
                 constant: 4,
             },
         ),
         (
             "I",
             "N",
-            MaxPlusFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 2,
             },
