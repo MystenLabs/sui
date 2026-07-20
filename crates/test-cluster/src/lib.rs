@@ -1320,6 +1320,9 @@ pub struct TestClusterBuilder {
 
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
 
+    peer_deny_sync_config_callback:
+        Option<sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback>,
+
     #[cfg(msim)]
     inject_synthetic_execution_time: bool,
 }
@@ -1365,6 +1368,7 @@ impl TestClusterBuilder {
             execution_time_observer_config: None,
             validator_observer_config: None,
             state_sync_config: None,
+            peer_deny_sync_config_callback: None,
             #[cfg(msim)]
             inject_synthetic_execution_time: false,
         }
@@ -1372,6 +1376,18 @@ impl TestClusterBuilder {
 
     pub fn with_state_sync_config(mut self, config: sui_config::p2p::StateSyncConfig) -> Self {
         self.state_sync_config = Some(config);
+        self
+    }
+
+    /// Per-validator hook for `peer_deny_sync_config`. The closure receives this
+    /// validator's authority name and the slice of all genesis-committee authority
+    /// names, so callers can compute an allowlist that references peers (e.g.
+    /// "trust everyone but myself").
+    pub fn with_peer_deny_sync_config_per_validator(
+        mut self,
+        f: sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback,
+    ) -> Self {
+        self.peer_deny_sync_config_callback = Some(f);
         self
     }
 
@@ -1753,6 +1769,10 @@ impl TestClusterBuilder {
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {
             builder = builder.with_state_sync_config(state_sync_config);
+        }
+
+        if let Some(cb) = self.peer_deny_sync_config_callback.clone() {
+            builder = builder.with_peer_deny_sync_config_per_validator(cb);
         }
 
         if self.disable_fullnode_pruning {

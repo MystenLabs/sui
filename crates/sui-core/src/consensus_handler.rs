@@ -46,7 +46,7 @@ use sui_types::{
     messages_consensus::{
         AuthorityCapabilitiesV2, AuthorityIndex, ConsensusDeterminedVersionAssignments,
         ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-        ExecutionTimeObservation,
+        ExecutionTimeObservation, SharedTransactionDenyConfig,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
@@ -88,6 +88,7 @@ use crate::{
     gasless_rate_limiter::ConsensusGaslessCounter,
     post_consensus_tx_reorder::PostConsensusTxReorder,
     traffic_controller::{TrafficController, policies::TrafficTally},
+    transaction_deny_config_manager::TransactionDenyConfigManager,
 };
 
 /// Output from filtering consensus transactions.
@@ -179,6 +180,7 @@ impl ConsensusHandlerInitializer {
             self.state.traffic_controller.clone(),
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
+            self.state.transaction_deny_config_manager().clone(),
         )
     }
 }
@@ -725,6 +727,8 @@ pub struct ConsensusHandler<C> {
 
     consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
+    transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
+
     checkpoint_queue: Mutex<CheckpointQueue>,
 }
 
@@ -773,6 +777,7 @@ impl<C> ConsensusHandler<C> {
         traffic_controller: Option<Arc<TrafficController>>,
         congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
         consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
+        transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
     ) -> Self {
         assert_supported_protocol_config(epoch_store.protocol_config());
 
@@ -818,6 +823,7 @@ impl<C> ConsensusHandler<C> {
             traffic_controller,
             congestion_logger,
             consensus_gasless_counter,
+            transaction_deny_config_manager,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -844,6 +850,7 @@ impl<C> ConsensusHandler<C> {
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_subscriber: BackpressureSubscriber,
         traffic_controller: Option<Arc<TrafficController>>,
+        transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
         last_consensus_stats: ExecutionIndicesWithStatsV2,
     ) -> Self {
         assert_supported_protocol_config(epoch_store.protocol_config());
@@ -878,6 +885,7 @@ impl<C> ConsensusHandler<C> {
             traffic_controller,
             congestion_logger: None,
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
+            transaction_deny_config_manager,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -900,6 +908,7 @@ struct CommitHandlerInput {
     randomness_dkg_confirmations: Vec<(AuthorityName, Vec<u8>)>,
     end_of_publish_transactions: Vec<AuthorityName>,
     new_jwks: Vec<(AuthorityName, JwkId, JWK)>,
+    transaction_deny_config_updates: Vec<(AuthorityName, SharedTransactionDenyConfig)>,
 }
 
 struct CommitHandlerState {
@@ -1111,11 +1120,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_dkg_confirmations,
             end_of_publish_transactions,
             new_jwks,
+            transaction_deny_config_updates,
         } = self.build_commit_handler_input(transactions);
 
         self.process_gasless_transactions(&commit_info, &user_transactions);
         self.process_jwks(&mut state, &commit_info, new_jwks);
         self.process_capability_notifications(capability_notifications);
+        self.process_transaction_deny_config_updates(transaction_deny_config_updates);
         self.process_execution_time_observations(&mut state, execution_time_observations);
         self.process_checkpoint_signature_messages(checkpoint_signature_messages);
 
@@ -2043,6 +2054,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
     }
 
+    /// Applies deny-config updates at commit time. The live path already applies them at
+    /// block verification in `SuiTxValidator` (re-application here is dropped as a stale
+    /// generation), but a validator that is catching up can process commits without
+    /// verifying every block in them, so committed updates must also be applied here.
+    fn process_transaction_deny_config_updates(
+        &self,
+        updates: Vec<(AuthorityName, SharedTransactionDenyConfig)>,
+    ) {
+        for (author, update) in updates {
+            self.transaction_deny_config_manager
+                .apply_updates(author, vec![update]);
+        }
+    }
+
     fn process_execution_time_observations(
         &self,
         state: &mut CommitHandlerState,
@@ -2568,7 +2593,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         | ConsensusTransactionKind::EndOfPublish(_)
                         // Note: we no longer have to check protocol_config.ignore_execution_time_observations_after_certs_closed()
                         | ConsensusTransactionKind::ExecutionTimeObservation(_)
-                        | ConsensusTransactionKind::NewJWKFetched(_, _, _) => {
+                        | ConsensusTransactionKind::NewJWKFetched(_, _, _)
+                        | ConsensusTransactionKind::UpdateTransactionDenyConfig(_) => {
                             // Deterministic drop: the reconfig state is derived from prior
                             // commits, so all validators ignore this transaction. Record a
                             // terminal status for user transactions so status waiters are
@@ -2943,6 +2969,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 .checkpoint_signature_messages
                                 .push(*checkpoint_signature_message);
                         }
+                        ConsensusTransactionKind::UpdateTransactionDenyConfig(msg) => {
+                            commit_handler_input
+                                .transaction_deny_config_updates
+                                .push((transaction.certificate_author, *msg));
+                        }
 
                         // Deprecated messages, filtered earlier by filter_consensus_txns()
                         // or rejected by SuiTxValidator. Kept for exhaustiveness.
@@ -3173,6 +3204,9 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
             }
         }
         ConsensusTransactionKind::ExecutionTimeObservation(_) => "execution_time_observation",
+        ConsensusTransactionKind::UpdateTransactionDenyConfig(_) => {
+            "update_transaction_deny_config"
+        }
     }
 }
 
@@ -3766,6 +3800,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            state.transaction_deny_config_manager().clone(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -4349,6 +4384,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            state.transaction_deny_config_manager().clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
@@ -4472,6 +4508,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            state.transaction_deny_config_manager().clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
@@ -4519,6 +4556,102 @@ mod tests {
                 .is_consensus_message_processed(&mismatched_checkpoint_key)
                 .unwrap(),
             "Mismatched CheckpointSignature should NOT have been processed (filtered by verify_consensus_transaction)"
+        );
+    }
+
+    /// Committed deny-config updates are applied by the commit handler even though the
+    /// live path already applies them at block verification: a validator that is
+    /// catching up can process commits without verifying every block. Updates are
+    /// attributed to the consensus block author, so spoofed authority claims are
+    /// still dropped.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_deny_config_updates_applied_at_commit() {
+        telemetry_subscribers::init_for_testing();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_share_transaction_deny_config_in_consensus_for_testing(true);
+            c
+        });
+
+        // A single-validator committee, so block author index 0 maps to `state.name`.
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(std::num::NonZeroUsize::new(1).unwrap())
+                .build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let consensus_committee = epoch_store.epoch_start_state().get_consensus_committee();
+        let manager = state.transaction_deny_config_manager().clone();
+
+        let now_ms = crate::authority::AuthorityState::unixtime_now_ms();
+        let make_update = |authority, generation| {
+            ConsensusTransaction::new_update_transaction_deny_config(
+                SharedTransactionDenyConfig::V1(
+                    sui_types::messages_consensus::SharedTransactionDenyConfigV1 {
+                        authority,
+                        generation,
+                        rules: Some(sui_types::transaction_deny_rules::TransactionDenyRules {
+                            package_publish_disabled: true,
+                            ..Default::default()
+                        }),
+                    },
+                ),
+            )
+        };
+
+        let spoofed = make_update(AuthorityName::ZERO, now_ms + 1);
+        let sane = make_update(state.name, now_ms);
+
+        let to_tx = |ct: &ConsensusTransaction| Transaction::new(bcs::to_bytes(ct).unwrap());
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(100, 0)
+                .set_transactions(vec![to_tx(&spoofed), to_tx(&sane)])
+                .build(),
+        );
+        let commit = CommittedSubDag::new(
+            block.reference(),
+            vec![block.clone()],
+            block.timestamp_ms(),
+            CommitRef::new(10, CommitDigest::MIN),
+        );
+
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let throughput = ConsensusThroughputCalculator::new(None, metrics.clone());
+        let backpressure = BackpressureManager::new_for_tests();
+        let settlement_scheduler = SettlementScheduler::new(
+            state.execution_scheduler().as_ref().clone(),
+            state.get_transaction_cache_reader().clone(),
+            state.metrics.clone(),
+        );
+        let mut handler = ConsensusHandler::new(
+            epoch_store.clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            settlement_scheduler,
+            state.get_object_cache_reader().clone(),
+            consensus_committee.clone(),
+            metrics,
+            Arc::new(throughput),
+            backpressure.subscribe(),
+            state.traffic_controller.clone(),
+            None,
+            state.consensus_gasless_counter.clone(),
+            state.transaction_deny_config_manager().clone(),
+        );
+
+        handler.handle_consensus_commit_for_test(commit).await;
+
+        let snapshot = manager.peer_configs_snapshot();
+        assert_eq!(
+            snapshot.get(&state.name).map(|msg| msg.generation()),
+            Some(now_ms),
+            "committed update from the block author should be applied at commit time"
+        );
+        assert!(
+            !snapshot.contains_key(&AuthorityName::ZERO),
+            "spoofed authority claim should be dropped"
         );
     }
 

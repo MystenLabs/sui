@@ -94,6 +94,7 @@ pub mod supported_protocol_versions;
 pub mod test_checkpoint_data_builder;
 pub mod traffic_control;
 pub mod transaction;
+pub mod transaction_deny_rules;
 pub mod transaction_driver_types;
 pub mod transaction_executor;
 pub mod transfer;

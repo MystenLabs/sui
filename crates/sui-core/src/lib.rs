@@ -52,6 +52,7 @@ pub mod streamer;
 pub mod subscription_handler;
 pub mod test_utils;
 pub mod traffic_controller;
+pub mod transaction_deny_config_manager;
 pub mod transaction_driver;
 mod transaction_input_loader;
 pub mod transaction_orchestrator;

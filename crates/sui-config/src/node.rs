@@ -5,7 +5,7 @@ use crate::certificate_deny_config::CertificateDenyConfig;
 use crate::genesis;
 use crate::object_storage_config::ObjectStoreConfig;
 use crate::p2p::P2pConfig;
-use crate::transaction_deny_config::TransactionDenyConfig;
+use crate::transaction_deny_config::{PeerDenySyncConfig, TransactionDenyConfig};
 use crate::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use crate::verifier_signing_config::VerifierSigningConfig;
 use anyhow::Result;
@@ -170,6 +170,12 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
+
+    /// Configuration for sharing recommended `TransactionDenyConfig` settings with allowlisted
+    /// peers via consensus. Off by default; the empty allowlist + both flags = false means
+    /// no behavior change versus prior versions.
+    #[serde(default)]
+    pub peer_deny_sync_config: PeerDenySyncConfig,
 
     /// Whether dev-inspect transaction execution is disabled on this node.
     #[serde(default)]
