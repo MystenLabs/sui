@@ -515,6 +515,10 @@ buf curl --protocol grpc \
 
 Replace `sui_getCheckpoint` with `LedgerService.GetCheckpoint`.
 
+:::info
+A full node only serves checkpoints within its retention window. If you query an old sequence number and get `NOT_FOUND`, either use a more recent checkpoint or query the [Archival Service](/develop/accessing-data/archival-store) instead.
+:::
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
@@ -525,7 +529,7 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     "jsonrpc": "2.0",
     "id": 1,
     "method": "sui_getCheckpoint",
-    "params": ["164329987"]
+    "params": ["<CHECKPOINT_SEQUENCE_NUMBER>"]
   }'
 ```
 
@@ -537,7 +541,7 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 const { response } = await client.ledgerService.getCheckpoint({
   checkpointId: {
     oneofKind: 'sequenceNumber',
-    sequenceNumber: BigInt('164329987'),
+    sequenceNumber: BigInt('<CHECKPOINT_SEQUENCE_NUMBER>'),
   },
   readMask: { paths: ['digest', 'summary'] },
 });
@@ -552,7 +556,7 @@ console.log('Total transactions:', response.checkpoint?.summary?.totalNetworkTra
 
 ```sh
 grpcurl -d '{
-  "sequence_number": "164329987",
+  "sequence_number": "<CHECKPOINT_SEQUENCE_NUMBER>",
   "read_mask": { "paths": ["digest", "summary"] }
 }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
 ```
@@ -725,7 +729,7 @@ const page = await client.core.listDynamicFields({
 
 for (const field of page.dynamicFields) {
   console.log('Name:', field.name);
-  console.log('Object ID:', field.objectId);
+  console.log('Field ID:', field.fieldId);
 }
 ```
 
@@ -947,10 +951,12 @@ async function startStream() {
 ### Paginating through all owned objects
 
 ```ts
+import type { SuiClientTypes } from '@mysten/sui';
+
 let cursor: string | null = null;
 
 do {
-  const page = await client.core.listOwnedObjects({
+  const page: SuiClientTypes.ListOwnedObjectsResponse = await client.core.listOwnedObjects({
     owner: '0xADDRESS',
     limit: 50,
     cursor,
