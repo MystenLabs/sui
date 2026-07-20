@@ -32,8 +32,6 @@ use sui_types::transaction::TransactionExpiration;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
-use crate::api::scalars::cursor::JsonCursor;
-use crate::api::scalars::cursor::MultiCursor;
 use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -75,7 +73,7 @@ pub(crate) struct TransactionContents {
 }
 
 /// Validated transaction cursor coordinates.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Copy)]
 pub struct TransactionToken {
     /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
     kind: CursorKind,
@@ -83,9 +81,8 @@ pub struct TransactionToken {
     tx_seq: u64,
 }
 
-/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
-/// legacy JSON cursor (secondary).
-pub type CTransaction = MultiCursor<OpaqueCursor<TransactionToken>, JsonCursor<u64>>;
+/// Compatibility dispatch over the on-wire cursor format.
+pub type CTransaction = OpaqueCursor<TransactionToken>;
 
 /// Custom `Connection` for transactions to support partially-filled pages.
 pub(crate) struct TransactionConnection {
@@ -474,20 +471,17 @@ impl TransactionConnection {
 impl TransactionToken {
     /// Mint the edge cursor for the transaction at the given coordinates.
     pub(crate) fn cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
-        CTransaction::new(OpaqueCursor::new(Self {
+        OpaqueCursor::new(Self {
             kind: CursorKind::Item,
             checkpoint,
             tx_seq,
-        }))
+        })
     }
 }
 
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
-        match self {
-            CTransaction::Primary(c) => c.tx_seq,
-            CTransaction::Secondary(c) => **c,
-        }
+        self.tx_seq
     }
 }
 
@@ -528,10 +522,10 @@ impl TryFrom<CursorToken> for TransactionToken {
     }
 }
 
-impl Eq for CTransaction {}
-impl PartialEq for CTransaction {
+impl Eq for TransactionToken {}
+impl PartialEq for TransactionToken {
     fn eq(&self, other: &Self) -> bool {
-        self.tx_sequence_number() == other.tx_sequence_number()
+        self.tx_seq == other.tx_seq
     }
 }
 
@@ -872,17 +866,10 @@ mod tests {
         TransactionToken::cursor(checkpoint, position)
     }
 
-    /// Legacy pg-style cursor: a bare JSON-encoded `tx_sequence_number`.
-    fn legacy_cursor(position: u64) -> CTransaction {
-        CTransaction::Secondary(JsonCursor::new(position))
-    }
-
     /// Decode an edge cursor back into its `CursorToken`.
     fn edge_token(cursor: &str) -> CursorToken {
-        match CTransaction::decode_cursor(cursor).expect("decodable edge cursor") {
-            CTransaction::Primary(c) => CursorToken::from(&*c),
-            CTransaction::Secondary(_) => panic!("expected grpc cursor, got legacy"),
-        }
+        let decoded = CTransaction::decode_cursor(cursor).expect("decodable edge cursor");
+        CursorToken::from(&*decoded)
     }
 
     fn edge_positions(conn: &TransactionConnection) -> Vec<u64> {
@@ -940,25 +927,6 @@ mod tests {
             STREAMED_CP,
             &txs,
             &page_params_for_testing(Some(2), Some(primary_cursor(0, 11)), None, None),
-            TransactionFilter::default(),
-        )
-        .expect("paginated");
-
-        assert_eq!(edge_positions(&conn), [12, 13]);
-        assert!(conn.page_info.has_previous_page);
-        assert!(conn.page_info.has_next_page);
-    }
-
-    /// A legacy pg-style cursor (bare JSON `tx_sequence_number`) resumes the same way as a grpc
-    /// cursor with the same position.
-    #[test]
-    fn paginate_preloaded_resumes_after_legacy_cursor() {
-        let txs = preloaded_txs(10..15);
-        let conn = Transaction::paginate_preloaded_transactions(
-            Scope::for_tests(),
-            STREAMED_CP,
-            &txs,
-            &page_params_for_testing(Some(2), Some(legacy_cursor(11)), None, None),
             TransactionFilter::default(),
         )
         .expect("paginated");
