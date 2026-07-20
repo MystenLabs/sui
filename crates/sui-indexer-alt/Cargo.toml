@@ -10,10 +10,8 @@ edition = "2024"
 name = "sui-indexer-alt"
 path = "src/main.rs"
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(msim)',
-] }
+[lints]
+workspace = true
 
 [dependencies]
 anyhow.workspace = true
