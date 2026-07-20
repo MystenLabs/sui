@@ -28,13 +28,8 @@ pub use move_binary_format::errors::PartialVMError;
 use move_binary_format::{errors::PartialVMResult, file_format::AbilitySet, partial_vm_error};
 pub use move_core_types::vm_status::StatusCode;
 use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value as A,
-    gas_algebra::{AbstractMemorySize, InternalGas},
-    identifier::Identifier,
-    language_storage::TypeTag,
-    runtime_value as R,
-    vm_status::StatusType,
+    account_address::AccountAddress, annotated_value as A, gas_algebra::InternalGas,
+    identifier::Identifier, language_storage::TypeTag, runtime_value as R, vm_status::StatusType,
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use smallvec::{SmallVec, smallvec};
@@ -251,11 +246,6 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
 impl<'b> NativeContext<'_, 'b, '_> {
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
         self.vtables.type_to_type_tag(ty)
-    }
-
-    /// The abstract memory size of a runtime type, for gas metering.
-    pub fn abstract_type_size(&self, ty: &Type) -> AbstractMemorySize {
-        self.vtables.abstract_type_size(ty)
     }
 
     pub fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
