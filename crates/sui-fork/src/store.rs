@@ -95,8 +95,18 @@ pub struct DataStore {
 struct DataStoreInner {
     forked_at_checkpoint: CheckpointSequenceNumber,
     gql: GraphQLClient,
-    local: ForkMetadataStore,
+    metadata: ForkMetadataStore,
     rpc_store: ForkRpcStore,
+    /// Staging area for the in-flight checkpoint. Simulacrum hands the store a
+    /// checkpoint, its transactions, effects, and events piecemeal through the
+    /// `SimulatorStore` insert methods; they are buffered here and flushed into
+    /// the rpc-store as one consistent unit when the checkpoint contents arrive
+    /// (`save_pending_checkpoint_contents`). Reads never consult this buffer:
+    /// sealing completes synchronously inside the checkpoint publication path,
+    /// so by the time an execution returns, its rows are already in the rpc-store.
+    ///
+    /// `RwLock` provides the interior mutability needed behind the shared
+    /// `Arc<DataStoreInner>` that every cloned `DataStore` holds.
     pending_checkpoint: RwLock<Option<VerifiedCheckpoint>>,
     pending_transactions: RwLock<BTreeMap<TransactionDigest, PendingTransaction>>,
     /// Coordinates index initialization across cloned stores.
@@ -123,12 +133,12 @@ impl DataStore {
         rpc_store: ForkRpcStore,
     ) -> Result<Self, anyhow::Error> {
         let gql = GraphQLClient::new(node.clone(), version)?;
-        let local = ForkMetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
+        let metadata = ForkMetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
 
         Ok(Self::from_parts(
             forked_at_checkpoint,
             gql,
-            local,
+            metadata,
             rpc_store,
         ))
     }
@@ -136,14 +146,14 @@ impl DataStore {
     pub(crate) fn from_parts(
         forked_at_checkpoint: CheckpointSequenceNumber,
         gql: GraphQLClient,
-        local: ForkMetadataStore,
+        metadata: ForkMetadataStore,
         rpc_store: ForkRpcStore,
     ) -> Self {
         Self {
             inner: Arc::new(DataStoreInner {
                 forked_at_checkpoint,
                 gql,
-                local,
+                metadata,
                 rpc_store,
                 pending_checkpoint: RwLock::new(None),
                 pending_transactions: RwLock::new(BTreeMap::new()),
@@ -172,8 +182,8 @@ impl DataStore {
         &self.inner.gql
     }
 
-    pub(crate) fn local(&self) -> &ForkMetadataStore {
-        &self.inner.local
+    pub(crate) fn metadata(&self) -> &ForkMetadataStore {
+        &self.inner.metadata
     }
 
     pub(crate) fn rpc_store(&self) -> &ForkRpcStore {
@@ -604,8 +614,8 @@ impl DataStore {
     pub(crate) fn new_for_testing(root: std::path::PathBuf, rpc_store: ForkRpcStore) -> Self {
         let gql = GraphQLClient::new(Node::Custom("http://localhost:1".to_string()), "test")
             .expect("graphql store with localhost url should construct");
-        let local = ForkMetadataStore::new_with_root(root);
-        Self::from_parts(0, gql, local, rpc_store)
+        let metadata = ForkMetadataStore::new_with_root(root);
+        Self::from_parts(0, gql, metadata, rpc_store)
     }
 
     /// Test-only constructor that lets callers point the GraphQL client at an arbitrary URL
@@ -619,8 +629,8 @@ impl DataStore {
     ) -> Self {
         let gql = GraphQLClient::new(Node::Custom(gql_url), "test")
             .expect("graphql store with custom url should construct");
-        let local = ForkMetadataStore::new_with_root(root);
-        Self::from_parts(forked_at_checkpoint, gql, local, rpc_store)
+        let metadata = ForkMetadataStore::new_with_root(root);
+        Self::from_parts(forked_at_checkpoint, gql, metadata, rpc_store)
     }
 
     /// Read the seed/local address-owner index from the RPC store.
@@ -754,13 +764,27 @@ impl DataStore {
         Ok(ReadStore::get_events(self.rpc_store().reader(), digest))
     }
 
+    /// Lazily populate the address-owner index for `owner` from a full GraphQL
+    /// owned-objects scan at the fork checkpoint, then mark it complete so later
+    /// reads hit the local rpc-store index instead of GraphQL. Idempotent: a
+    /// completed owner (including one that legitimately owns nothing) is skipped.
+    /// The snapshot guard serializes this initialization across cloned stores, and
+    /// the marker is re-checked under the guard to avoid a duplicate scan.
     fn initialize_address_owner_inventory(&self, owner: SuiAddress) -> anyhow::Result<()> {
-        if self.inner.local.address_owner_inventory_complete(owner)? {
+        if self
+            .inner
+            .metadata
+            .address_owner_inventory_complete(owner)?
+        {
             return Ok(());
         }
 
         let _local_snapshot_guard = self.write_local_snapshot()?;
-        if self.inner.local.address_owner_inventory_complete(owner)? {
+        if self
+            .inner
+            .metadata
+            .address_owner_inventory_complete(owner)?
+        {
             return Ok(());
         }
 
@@ -777,7 +801,7 @@ impl DataStore {
         if refs.is_empty() {
             return self
                 .inner
-                .local
+                .metadata
                 .mark_address_owner_inventory_complete(owner);
         }
 
@@ -789,17 +813,17 @@ impl DataStore {
         }
 
         self.inner
-            .local
+            .metadata
             .mark_address_owner_inventory_complete(owner)
     }
 
     fn initialize_object_owner_inventory(&self, owner: ObjectID) -> anyhow::Result<()> {
-        if self.inner.local.object_owner_inventory_complete(owner)? {
+        if self.inner.metadata.object_owner_inventory_complete(owner)? {
             return Ok(());
         }
 
         let _local_snapshot_guard = self.write_local_snapshot()?;
-        if self.inner.local.object_owner_inventory_complete(owner)? {
+        if self.inner.metadata.object_owner_inventory_complete(owner)? {
             return Ok(());
         }
 
@@ -814,7 +838,10 @@ impl DataStore {
                 )
             })?;
         if refs.is_empty() {
-            return self.inner.local.mark_object_owner_inventory_complete(owner);
+            return self
+                .inner
+                .metadata
+                .mark_object_owner_inventory_complete(owner);
         }
 
         let rpc_store = self.rpc_store();
@@ -824,7 +851,9 @@ impl DataStore {
             rpc_store.save_object_owner_inventory_object(owner, &object)?;
         }
 
-        self.inner.local.mark_object_owner_inventory_complete(owner)
+        self.inner
+            .metadata
+            .mark_object_owner_inventory_complete(owner)
     }
 
     fn initialize_coin_info_inventory(&self, coin_type: &StructTag) -> anyhow::Result<()> {
@@ -840,12 +869,12 @@ impl DataStore {
 
     fn initialize_type_inventory(&self, object_type: &StructTag) -> anyhow::Result<()> {
         let type_filter = object_type.to_string();
-        if self.inner.local.type_inventory_complete(&type_filter)? {
+        if self.inner.metadata.type_inventory_complete(&type_filter)? {
             return Ok(());
         }
 
         let _local_snapshot_guard = self.write_local_snapshot()?;
-        if self.inner.local.type_inventory_complete(&type_filter)? {
+        if self.inner.metadata.type_inventory_complete(&type_filter)? {
             return Ok(());
         }
 
@@ -863,7 +892,10 @@ impl DataStore {
                 )
             })?;
         if refs.is_empty() {
-            return self.inner.local.mark_type_inventory_complete(&type_filter);
+            return self
+                .inner
+                .metadata
+                .mark_type_inventory_complete(&type_filter);
         }
 
         let rpc_store = self.rpc_store();
@@ -883,7 +915,9 @@ impl DataStore {
             rpc_store.save_type_inventory_object(&object)?;
         }
 
-        self.inner.local.mark_type_inventory_complete(&type_filter)
+        self.inner
+            .metadata
+            .mark_type_inventory_complete(&type_filter)
     }
 
     fn fetch_inventory_objects(

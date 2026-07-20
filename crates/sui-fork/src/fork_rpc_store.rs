@@ -63,9 +63,17 @@ pub(crate) struct ForkRpcStore {
     db: Db,
     schema: Arc<RpcStoreSchema>,
     reader: RpcStoreReader,
-    /// Fork-owned authoritative "current live version" pointer table. Stock
-    /// `sui-rpc-store` has no live-object CF, so the fork keeps this itself; see
-    /// [`crate::live_state`].
+    /// Fork-owned `ObjectID -> current live version` pointer table.
+    ///
+    /// Stock `sui-rpc-store` has no column family keyed by `ObjectID` that answers
+    /// "what is this object's current version, and is it live or removed?".
+    /// `object_by_owner` / `object_by_type` do record the latest *live* version,
+    /// but they are keyed by owner/type (not `ObjectID`) and only cover indexed
+    /// owned objects, so they can't answer that for an arbitrary id. And the fork's
+    /// `objects` CF is *sparse* — it caches arbitrary historical versions on demand
+    /// — so a reverse scan there can't distinguish "removed" from "not cached".
+    /// This table is the fork's authority for [`Self::get_latest_object_status`];
+    /// see [`crate::live_state`].
     live_state: Arc<LiveState>,
 }
 
