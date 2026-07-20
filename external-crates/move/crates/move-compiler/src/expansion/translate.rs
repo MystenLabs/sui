@@ -1317,7 +1317,7 @@ fn module_(
         }
     }
     let mut use_funs = use_funs(context, use_funs_builder);
-    check_visibility_modifiers(context, &functions, &friends, package_name);
+    check_visibility_modifiers(context, &functions, &constants, &friends, package_name);
 
     let stdlib_definitions = stdlib_definitions(context, loc);
 
@@ -1352,6 +1352,7 @@ fn module_(
 fn check_visibility_modifiers(
     context: &mut Context,
     functions: &UniqueMap<FunctionName, E::Function>,
+    constants: &UniqueMap<ConstantName, E::Constant>,
     friends: &UniqueMap<ModuleIdent, E::Friend>,
     package_name: Option<Symbol>,
 ) {
@@ -1411,6 +1412,12 @@ fn check_visibility_modifiers(
             _ => (),
         }
     }
+    for (_, _, constant) in constants {
+        if let E::Visibility::Package(loc) = constant.visibility {
+            context.check_feature(package_name, FeatureGate::CrossModuleConstants, loc);
+            public_package_usage = Some(loc);
+        }
+    }
 
     // Emit any errors.
     if let Some(public_package_usage) = public_package_usage
@@ -1438,6 +1445,17 @@ fn check_visibility_modifiers(
             E::Visibility::FRIEND_IDENT,
             E::Visibility::PACKAGE_IDENT
         );
+        let package_constant_locs = constants.iter().filter_map(|(_, _, c)| match c.visibility {
+            E::Visibility::Package(loc) => Some(loc),
+            _ => None,
+        });
+        for loc in package_constant_locs {
+            context.add_diag(diag!(
+                Declarations::InvalidVisibilityModifier,
+                (loc, package_error_msg.clone()),
+                (friend_usage, friend_error_msg.clone())
+            ));
+        }
         for (_, _, function) in functions {
             match function.visibility {
                 E::Visibility::Friend(loc) => {
@@ -2667,6 +2685,7 @@ fn constant_(
         doc,
         attributes: pattributes,
         loc,
+        visibility: pvisibility,
         name,
         signature: psignature,
         value: pvalue,
@@ -2682,6 +2701,7 @@ fn constant_(
         index,
         attributes,
         loc,
+        visibility: visibility(pvisibility),
         signature,
         value,
     };

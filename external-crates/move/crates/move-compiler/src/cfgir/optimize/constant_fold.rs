@@ -6,7 +6,7 @@ use crate::{
     cfgir::cfg::MutForwardCFG,
     diag,
     diagnostics::DiagnosticReporter,
-    expansion::ast::Mutability,
+    expansion::ast::{ModuleIdent, Mutability},
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
         TypeName_, UnannotatedExp_, Value, Value_, Var,
@@ -18,14 +18,14 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
-use std::{borrow::Cow, convert::TryFrom};
+use std::{borrow::Cow, collections::BTreeMap, convert::TryFrom};
 
 /// returns true if anything changed
 pub fn optimize(
     reporter: &DiagnosticReporter,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &UniqueMap<ConstantName, Value>,
+    constants: &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let context = Context {
@@ -54,7 +54,7 @@ pub fn optimize(
 
 struct Context<'a> {
     reporter: &'a DiagnosticReporter<'a>,
-    constants: &'a UniqueMap<ConstantName, Value>,
+    constants: &'a BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
 }
 
 //**************************************************************************************************
@@ -109,11 +109,11 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
         | E::ErrorConstant { .. }
         | E::Unreachable => false,
 
-        e_ @ E::Constant(_) => {
-            let E::Constant(name) = e_ else {
+        e_ @ E::Constant(_, _) => {
+            let E::Constant(module, name) = e_ else {
                 unreachable!()
             };
-            if let Some(value) = context.constants.get(name) {
+            if let Some(value) = context.constants.get(module).and_then(|cs| cs.get(name)) {
                 *e_ = E::Value(value.clone());
                 true
             } else {
