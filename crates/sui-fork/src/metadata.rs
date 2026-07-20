@@ -35,6 +35,15 @@ const SEED_MANIFEST_FILE: &str = "seed_manifest.json";
 /// JSON file tracking remote inventory scans that have been fully saved into `sui-rpc-store`.
 const INVENTORY_METADATA_FILE: &str = "inventory_metadata.json";
 
+/// Tracks which remote "inventory" scans have completed.
+///
+/// An *inventory* is the one-time, full GraphQL enumeration of every object owned
+/// by an address / owned by an object / matching a type at the fork checkpoint.
+/// It is distinct from the *index* it populates: running an inventory writes the
+/// results into `sui-rpc-store`'s `object_by_owner` / `object_by_type` index CFs.
+/// Each set below records the owners/types whose inventory has finished, so later
+/// reads serve straight from the local index instead of re-scanning GraphQL. An
+/// owner that legitimately owns nothing still counts as completed.
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 struct InventoryMetadata {
     #[serde(default)]

@@ -72,18 +72,21 @@ const INDEXED_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(30);
 
 type ForkedSimulacrum = Simulacrum<OsRng, DataStore>;
 
-/// Opened fork runtime state that is being migrated to `sui-rpc-store`.
+/// Opened fork runtime state backed by `sui-rpc-store`.
 ///
 /// The runtime owns the local RPC store and, once started, keeps the embedded
 /// `sui-rpc-store` indexer alive for local Simulacrum checkpoints.
 pub(crate) struct ForkRuntime {
     db: Db,
     schema: Arc<RpcStoreSchema>,
-    /// Fork-owned authoritative live-object pointer table, kept in its own store
-    /// beside the rpc-store because stock `sui-rpc-store` has no live-object CF.
+    /// Fork-owned `ObjectID -> current live version` pointer table, kept in its
+    /// own store beside the rpc-store; stock `sui-rpc-store` has no `ObjectID`-keyed
+    /// current-version pointer. See [`crate::live_state`] and [`ForkRpcStore`].
     live_state: Arc<LiveState>,
     metadata: ForkMetadata,
     indexer_pipelines: Vec<&'static str>,
+    /// Held only to keep the running indexer alive: dropping this `Service` stops
+    /// the background indexing task. Never read (hence the `_` name).
     _indexer_service: Option<Service>,
 }
 

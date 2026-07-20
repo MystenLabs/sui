@@ -66,6 +66,11 @@ impl Context {
         }
     }
 
+    /// Build a `Context` whose Simulacrum is backed by a started [`ForkRuntime`].
+    ///
+    /// Starts the runtime's embedded `sui-rpc-store` indexer over `checkpoint_sender`
+    /// before returning, so committed local checkpoints get indexed for RPC reads.
+    /// Use [`Context::new`] for the runtime-less (in-memory) test path.
     pub(crate) async fn new_with_runtime(
         simulacrum: Simulacrum<OsRng, DataStore>,
         chain_identifier: Chain,
