@@ -35,7 +35,7 @@ zkLogin is a Sui primitive that lets users send transactions from a Sui address 
 - **Self-custody:** A zkLogin transaction requires the user to approve through OAuth. The OAuth provider cannot transact on the user's behalf.
 - **Two-factor security:** Signing a transaction requires both a recent OAuth credential and a per-user salt. Compromising one factor alone is not enough to move funds.
 - **Privacy by default:** Zero-knowledge proofs prevent third parties from linking a Sui address to its OAuth identity.
-- **Native to Sui:** zkLogin is a protocol-level primitive, not a third-party service. It composes with [multisig](/develop/transactions/transaction-auth/multisig), [sponsored transactions](/develop/transactions/sponsored-transactions), and other Sui features.
+- **Native to Sui:** zkLogin is a protocol-level primitive, not a third-party service. It composes with [multisig](/develop/transactions/transaction-auth/multisig), [sponsored transactions](/develop/transaction-payment/sponsor-txn), and other Sui features.
 - **Audited and verified:** The zkLogin circuits have been [audited](https://github.com/sui-foundation/security-audits/blob/main/docs/zksecurity_zklogin-circuits.pdf) by two firms specializing in zero-knowledge proofs. The trusted setup [ceremony](/sui-stack/zklogin-integration/zklogin#ceremony) included more than 100 participants.
 
 ## How zkLogin works
@@ -101,7 +101,7 @@ Yes. See the [Multisig guide](https://sdk.mystenlabs.com/typescript/cryptography
 | Scenario | Recommended approach |
 | --- | --- |
 | Consumer app with non-crypto users | zkLogin with [Enoki](/onchain-finance/asset-custody/wallets/zk-login-wallets#enoki) for managed salt + sponsored transactions |
-| dApp where users may or may not have a wallet | zkLogin as one connection option alongside traditional wallets via [dApp Kit](/develop/sdks/frontend-apps) |
+| dApp where users may or may not have a wallet | zkLogin as one connection option alongside traditional wallets via [dApp Kit](https://sdk.mystenlabs.com/dapp-kit) |
 | App that needs full control over proving and salt | zkLogin [self-hosted integration](/sui-stack/zklogin-integration/integration-guide) |
 | Backend service or agent identity | zkLogin with a service-owned OAuth credential |
 | Users who already have wallets | Traditional wallet connection through dApp Kit — zkLogin is optional |

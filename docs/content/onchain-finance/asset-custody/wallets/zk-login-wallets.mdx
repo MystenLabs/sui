@@ -88,12 +88,12 @@ Enoki implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wa
   noComments
 />
 
-### Accessing OAuth identity fields
+### Wallet Standard account fields
 
-When using Enoki with dApp Kit, the `useCurrentAccount` hook exposes OAuth identity metadata on the connected account. This lets your app display user-facing information (label, icon) and, for apps that need it, access the user's email or other identity fields from the OAuth provider.
+When using Enoki with dApp Kit, the `useCurrentAccount` hook returns a Wallet Standard account populated by the Enoki wallet. The account exposes `address`, `chains`, `features`, `publicKey`, and `icon` — the standard fields defined by the Wallet Standard, not OAuth-specific identity fields.
 
 ```typescript
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 
 function UserProfile() {
   const account = useCurrentAccount();
@@ -102,9 +102,7 @@ function UserProfile() {
 
   return (
     <div>
-      {/* Display label (e.g., user's name or email from the OAuth provider) */}
-      <span>{account.label}</span>
-      {/* Display the provider icon */}
+      {/* The provider icon registered by the Enoki wallet */}
       {account.icon && <img src={account.icon} alt="Provider" />}
       {/* The Sui address derived from zkLogin */}
       <span>{account.address}</span>
@@ -113,11 +111,11 @@ function UserProfile() {
 }
 ```
 
-On the server side, you can access the OAuth subject identifier (`sub`) through the Enoki API after verifying the user's session. This is useful for gating features based on the authenticated identity or linking onchain addresses to user records in your database. Refer to the [Enoki documentation](https://docs.enoki.mystenlabs.com/) for server-side session verification and identity resolution.
-
 :::info
 
-The OAuth `email` is only available if your OAuth client requests the `email` scope and the provider includes it in the JWT. zkLogin itself does not expose the email onchain — you must read it from the JWT at login time and store it in your application if needed. See [Can my app retrieve a user's email?](/sui-stack/zklogin-integration#can-my-app-retrieve-a-users-email-from-a-zklogin-address)
+The Wallet Standard account does not expose OAuth identity fields like `email` or `sub`. If your app needs the user's email, read it from the JWT claims during the OAuth login flow (request the `email` scope) and store it in your application. zkLogin does not expose identity information onchain or through the wallet interface. See [Can my app retrieve a user's email?](/sui-stack/zklogin-integration#can-my-app-retrieve-a-users-email-from-a-zklogin-address)
+
+For server-side identity resolution, refer to the [Enoki documentation](https://docs.enoki.mystenlabs.com/).
 
 :::
 
