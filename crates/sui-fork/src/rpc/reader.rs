@@ -48,7 +48,9 @@ use typed_store_error::TypedStoreError;
 
 use crate::store::DataStore;
 
-/// Fork-aware RPC reader used by `sui-rpc-node` service wiring.
+/// Fork-aware RPC reader plugged into the `sui-rpc-api` `RpcService` in
+/// [`crate::startup`]. The fork serves RPC directly through `sui-rpc-api`; it
+/// does not use `sui-rpc-node`.
 ///
 /// This is the only adapter that implements the upstream RPC storage traits:
 /// post-fork indexed data is read from `sui-rpc-store` first, while pre-fork

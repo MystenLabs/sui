@@ -124,14 +124,14 @@ pub(crate) async fn prepare_seed_manifest(
     network: String,
     input: &SeedInput,
 ) -> Result<SeedManifest, Error> {
-    if data_store.local().seed_manifest_exists() {
+    if data_store.metadata().seed_manifest_exists() {
         if !input.is_empty() {
             bail!(
                 "A seed manifest already exists at {}. To fork the same checkpoint with different seeds, use a different --data-dir.",
-                data_store.local().seed_manifest_path().display(),
+                data_store.metadata().seed_manifest_path().display(),
             );
         }
-        let manifest = data_store.local().read_seed_manifest()?;
+        let manifest = data_store.metadata().read_seed_manifest()?;
         ensure_seed_manifest_matches(&manifest, &network, Some(data_store.forked_at_checkpoint()))?;
         return Ok(manifest);
     }
@@ -141,7 +141,7 @@ pub(crate) async fn prepare_seed_manifest(
     } else {
         resolve_seeds(input, network, data_store).await?
     };
-    data_store.local().write_seed_manifest(&manifest)?;
+    data_store.metadata().write_seed_manifest(&manifest)?;
     Ok(manifest)
 }
 
@@ -398,7 +398,7 @@ mod tests {
                 entries: Vec::new(),
             }
         );
-        assert_eq!(store.local().read_seed_manifest().unwrap(), manifest);
+        assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
     }
 
     #[tokio::test]
@@ -429,7 +429,7 @@ mod tests {
                 || err.contains("Failed to read response")
                 || err.contains("Missing data")
         );
-        assert!(!store.local().seed_manifest_exists());
+        assert!(!store.metadata().seed_manifest_exists());
     }
 
     #[tokio::test]
@@ -569,7 +569,7 @@ mod tests {
         .expect_err("address seed should fail before object available range");
 
         assert!(err.to_string().contains("address seeding is unavailable"));
-        assert!(!store.local().seed_manifest_exists());
+        assert!(!store.metadata().seed_manifest_exists());
         assert_eq!(
             server
                 .received_requests()

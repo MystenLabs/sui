@@ -214,7 +214,7 @@ fn fork_chain_identifier(chain: Chain, checkpoint: &VerifiedCheckpoint) -> Chain
     }
 }
 
-/// Run the forked network. Spawns the `sui-rpc-node` RPC service bound to
+/// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to
 /// `rpc_addr`, backed by `ForkRpcReader`, then blocks on Ctrl+C.
 pub async fn run(
     context: Context,
