@@ -93,7 +93,9 @@ use sui_types::traffic_control::{
 };
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
-use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_metadata};
+use sui_types::{
+    IMPLICITLY_READ_SYSTEM_OBJECTS, SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_metadata,
+};
 use tap::TapFallible;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::unbounded_channel;
@@ -2693,12 +2695,18 @@ impl AuthorityState {
         };
 
         let loaded_runtime_objects = tracking_store.into_read_objects();
-        let unchanged_loaded_runtime_objects =
+        let mut unchanged_loaded_runtime_objects =
             crate::transaction_outputs::unchanged_loaded_runtime_objects(
                 &transaction,
                 &effects,
                 &loaded_runtime_objects,
             );
+        // Dev-inspect reads implicitly-read system objects only to pin their versions as
+        // system-object versions; the tracking store captures those metadata reads, but they must
+        // not surface as loaded runtime objects. Real execution never records these objects here —
+        // when a transaction actually reads one, it is emitted as an unchanged consensus object
+        // instead.
+        unchanged_loaded_runtime_objects.retain(|k| !IMPLICITLY_READ_SYSTEM_OBJECTS.contains(&k.0));
 
         let object_set = {
             let objects = {

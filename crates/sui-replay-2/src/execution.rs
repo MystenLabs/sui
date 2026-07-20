@@ -129,6 +129,18 @@ pub fn execute_transaction_to_effects(
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
+    // Versions for system objects the original execution read implicitly (e.g. the accumulator
+    // root). Derived from the expected effects the same way checkpoint execution derives them:
+    // every consensus object the transaction accessed, at its recorded version. This is a superset
+    // of the implicitly-read set, which is harmless — the map is only consulted for reads execution
+    // actually performs, and every entry is the deterministic version recorded in effects. Sentinel
+    // versions recorded by cancelled transactions are not read versions and are skipped.
+    let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = expected_effects
+        .accessed_consensus_objects()
+        .into_iter()
+        .map(|iso| iso.id_and_version())
+        .filter(|(_, version)| !version.is_cancelled())
+        .collect();
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
@@ -140,7 +152,7 @@ pub fn execute_transaction_to_effects(
             &epoch,
             epoch_start_timestamp,
             input_objects,
-            std::collections::BTreeMap::new(),
+            system_object_versions,
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),
