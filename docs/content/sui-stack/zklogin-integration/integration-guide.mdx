@@ -1,0 +1,572 @@
+---
+title: zkLogin Integration Guide
+description: Step-by-step guide to implement zkLogin in your application, covering ephemeral keys, JWT handling, salt management, ZK proofs, and signature assembly.
+keywords:
+  - zklogin
+  - integration guide
+  - ephemeral key pair
+  - JWT
+  - salt management
+  - ZK proof
+  - zkLogin signature
+  - oauth
+  - openid
+goal:
+  description: >-
+    Reader can implement the complete zkLogin flow — ephemeral keys, JWT, user salt, and
+    zero-knowledge proof — to enable zkLogin transactions in an app
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: zkLogin integration
+    stage: Auth
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: zkLogin for agent identity
+    stage: Authorization
+questions:
+  - How do I integrate zkLogin into my app?
+  - How do I install and use the zkLogin TypeScript SDK?
+  - How do I manage user salts for zkLogin?
+  - How do I generate a ZK proof for zkLogin?
+  - How do I assemble a zkLogin signature?
+answer: >-
+  This guide walks through the complete zkLogin integration flow: installing the SDK,
+  generating ephemeral keys, obtaining JWTs and ZK proofs, managing user salts,
+  assembling signatures, and submitting transactions.
+---
+
+This guide walks you through implementing zkLogin in your application. Before starting, read [What is zkLogin?](/sui-stack/zklogin-integration) to understand the concepts, and [configure at least one OpenID provider](/sui-stack/zklogin-integration/developer-account).
+
+Here is the high-level flow your application must implement:
+
+1. Generate an ephemeral key pair.
+1. Prompt the user to complete an OAuth login flow with a nonce derived from the ephemeral public key.
+1. After receiving the JSON Web Token (JWT), obtain a zero-knowledge proof.
+1. Obtain a unique user salt. Use the OAuth subject identifier and salt to compute the zkLogin Sui address.
+1. Sign transactions with the ephemeral private key.
+1. Submit the transaction with the ephemeral signature and the zero-knowledge proof.
+
+:::caution Production hardening
+
+Before going to production, harden your integration:
+
+- **Run a production salt service** with proper availability and backups. Losing salts means users permanently lose access to their addresses.
+- **Serve all endpoints over HTTPS** and configure CORS correctly so only your origins can reach your salt and proving backends.
+- **Bind the OAuth `nonce`** to both the JWT and the ephemeral public key, and validate it on return to prevent replay and token-substitution attacks.
+- **Never log JWTs, ZK proofs, or salts** — these are sensitive credentials.
+- **Keep separate Testnet and Mainnet configuration** (OAuth clients, salt service, prover) so test credentials never reach production.
+
+See [Security Best Practices](/develop/security/best-practices).
+
+:::
+
+## Install the zkLogin TypeScript SDK
+
+To use the zkLogin TypeScript SDK in your project, run the following command in your project root:
+
+```sh npm2yarn
+$ npm install @mysten/sui
+```
+
+If you want to use the latest experimental version:
+
+```sh npm2yarn
+$ npm install @mysten/sui@experimental
+```
+
+## Step 1: Generate an ephemeral key pair and nonce
+
+Generate a short-lived key pair, set an expiration epoch, and compute a nonce that binds the key to the OAuth session.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { generateNonce, generateRandomness } from '@mysten/sui/zklogin';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const FULLNODE_URL = 'https://fullnode.testnet.sui.io:443';
+const suiClient = new SuiGrpcClient({ baseUrl: FULLNODE_URL, network: 'testnet' });
+const { epoch } = await suiClient.core.getLatestSuiSystemState();
+
+const maxEpoch = Number(epoch) + 2; // ephemeral key valid for 2 epochs from now
+const ephemeralKeyPair = new Ed25519Keypair();
+const randomness = generateRandomness();
+const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
+```
+
+The `maxEpoch` controls how long this ephemeral key can authorize transactions. The address itself does not expire — only the session does. When the epoch passes `maxEpoch`, generate a new key pair and ZK proof. See [Does my address expire?](/sui-stack/zklogin-integration/zklogin#address-and-session-lifetime) for details.
+
+## Step 2: Direct the user to the OAuth login
+
+Construct the OAuth URL with your configured client ID, redirect URL, and the nonce from the previous step.
+
+<Tabs groupId="oauth-providers">
+
+<TabItem label="Google" value="google">
+
+```
+https://accounts.google.com/o/oauth2/v2/auth
+  ?client_id=$CLIENT_ID
+  &response_type=id_token
+  &redirect_uri=$REDIRECT_URL
+  &scope=openid
+  &nonce=$NONCE
+```
+
+The JWT is returned directly in the redirect URL (`id_token` parameter). No token exchange is needed.
+
+</TabItem>
+
+<TabItem label="Facebook" value="facebook">
+
+```
+https://www.facebook.com/v17.0/dialog/oauth
+  ?client_id=$CLIENT_ID
+  &redirect_uri=$REDIRECT_URL
+  &scope=openid
+  &nonce=$NONCE
+  &response_type=id_token
+```
+
+The JWT is returned directly in the redirect URL. No token exchange is needed.
+
+</TabItem>
+
+<TabItem label="Twitch" value="twitch">
+
+```
+https://id.twitch.tv/oauth2/authorize
+  ?client_id=$CLIENT_ID
+  &force_verify=true
+  &lang=en
+  &login_type=login
+  &redirect_uri=$REDIRECT_URL
+  &response_type=id_token
+  &scope=openid
+  &nonce=$NONCE
+```
+
+The JWT is returned directly in the redirect URL. No token exchange is needed.
+
+</TabItem>
+
+<TabItem label="Kakao" value="kakao">
+
+**Auth URL:**
+
+```
+https://kauth.kakao.com/oauth/authorize
+  ?response_type=code
+  &client_id=$CLIENT_ID
+  &redirect_uri=$REDIRECT_URL
+  &nonce=$NONCE
+```
+
+Kakao returns an authorization code, not a JWT directly. Exchange the code for a JWT:
+
+```
+POST https://kauth.kakao.com/oauth/token
+  ?grant_type=authorization_code
+  &client_id=$CLIENT_ID
+  &redirect_uri=$REDIRECT_URL
+  &code=$AUTH_CODE
+```
+
+</TabItem>
+
+<TabItem label="Apple" value="apple">
+
+```
+https://appleid.apple.com/auth/authorize
+  ?client_id=$CLIENT_ID
+  &redirect_uri=$REDIRECT_URL
+  &scope=email
+  &response_mode=form_post
+  &response_type=code%20id_token
+  &nonce=$NONCE
+```
+
+The JWT is returned directly. No token exchange is needed.
+
+</TabItem>
+
+<TabItem label="Slack" value="slack">
+
+**Auth URL:**
+
+```
+https://slack.com/openid/connect/authorize
+  ?response_type=code
+  &client_id=$CLIENT_ID
+  &redirect_uri=$REDIRECT_URL
+  &nonce=$NONCE
+  &scope=openid
+```
+
+Slack returns an authorization code. Exchange it for a JWT:
+
+```
+POST https://slack.com/api/openid.connect.token
+  ?code=$AUTH_CODE
+  &client_id=$CLIENT_ID
+  &client_secret=$CLIENT_SECRET
+```
+
+</TabItem>
+
+<TabItem label="Microsoft" value="microsoft">
+
+```
+https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+  ?client_id=$CLIENT_ID
+  &scope=openid
+  &response_type=id_token
+  &nonce=$NONCE
+  &redirect_uri=$REDIRECT_URL
+```
+
+The JWT is returned directly in the redirect URL. No token exchange is needed.
+
+</TabItem>
+
+</Tabs>
+
+## Step 3: Decode the JWT
+
+After the OAuth redirect, the JWT appears as a URL parameter. For providers that return it directly, it looks like this:
+
+```
+https://your-app.com/auth?id_token=tokenPartA.tokenPartB.tokenPartC
+```
+
+Decode the JWT to extract the claims you need. The Sui SDK provides a built-in `decodeJwt` utility:
+
+```typescript
+import { decodeJwt } from '@mysten/sui/zklogin';
+
+const decodedJwt = decodeJwt(encodedJWT);
+// decodedJwt.sub — the user's unique identifier
+// decodedJwt.iss — the OAuth provider
+// decodedJwt.aud — your application's client ID
+```
+
+You can validate the structure of the encoded JWT by pasting it in [jwt.io](https://jwt.io).
+
+## Step 4: Manage user salt
+
+The user salt is a 16-byte value (or integer smaller than `2n**128n`) that, combined with the OAuth subject identifier, determines the user's Sui address. **If a user loses their salt, they permanently lose access to that address.**
+
+Choose a salt management strategy:
+
+| Strategy | Description | Trade-offs |
+| --- | --- | --- |
+| **User-provided** | Ask the user to enter and remember the salt. | Simple but poor UX; users forget salts. |
+| **Browser/device storage** | Store in `localStorage` or mobile secure storage. | Easy but lost on device/browser change. Email the salt to the user as a backup. |
+| **Database mapping** | Map user identifier (`sub`) to a salt in your backend database. | Reliable; requires a backend service. Salt is unique per user. |
+| **Derived from master seed** | Use `HKDF(ikm = seed, salt = iss \|\| aud, info = sub)` to derive salts deterministically from a master seed. | No per-user storage needed, but the master seed cannot be rotated and the client ID (`aud`) cannot change without deriving a different address. |
+
+The Mysten Labs [Enoki](https://docs.enoki.mystenlabs.com/) platform provides a managed salt service (using derived salts). Contact Mysten Labs for access. Only JWTs authenticated with allowlisted client IDs are accepted.
+
+```sh
+curl -X POST https://salt.api.mystenlabs.com/get_salt \
+  -H 'Content-Type: application/json' \
+  -d '{"token": "$JWT_TOKEN"}'
+
+# Response: {"salt":"129390038577185583942388216820280642146"}
+```
+
+The salt's purpose is to disconnect the OAuth identifier (`sub`) from the onchain Sui address. Leaking the salt enables linking Web2 and Web3 identities but does not compromise fund control.
+
+## Step 5: Derive the user's Sui address
+
+With the JWT and salt, derive the zkLogin address:
+
+```typescript
+import { jwtToAddress } from '@mysten/sui/zklogin';
+
+const zkLoginUserAddress = jwtToAddress(jwt, userSalt);
+```
+
+The same `sub` + `iss` + `aud` + `user_salt` always produces the same address. See [Address definition](/sui-stack/zklogin-integration/zklogin#address-definition) for the full derivation formula.
+
+## Step 6: Get the zero-knowledge proof
+
+The ZK proof attests that the ephemeral key pair is valid and bound to the user's OAuth identity, without revealing the JWT onchain.
+
+First, generate the extended ephemeral public key:
+
+```typescript
+import { getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';
+
+const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(
+  ephemeralKeyPair.getPublicKey(),
+);
+```
+
+You need a new ZK proof whenever the ephemeral key pair expires or is lost. The proof can be reused for multiple transactions within the same session.
+
+### Option A: Use the Mysten Labs proving service
+
+For Mainnet access, refer to the [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact Mysten Labs. For development, use the public prover endpoint.
+
+You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`:
+
+<Tabs>
+
+<TabItem label="BigInt encoding" value="bigint">
+
+```sh
+curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
+-d '{
+  "jwt": "$JWT_TOKEN",
+  "extendedEphemeralPublicKey": "84029355920633174015103288781128426107680789454168570548782290541079926444544",
+  "maxEpoch": "10",
+  "jwtRandomness": "100681567828351849884072155819400689117",
+  "salt": "248191903847969014646285995941615069143",
+  "keyClaimName": "sub"
+}'
+```
+
+</TabItem>
+
+<TabItem label="Base64 encoding" value="base64">
+
+```sh
+curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
+-d '{
+  "jwt": "$JWT_TOKEN",
+  "extendedEphemeralPublicKey": "ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=",
+  "maxEpoch": "10",
+  "jwtRandomness": "S76Qi8c/SZlmmotnFMr13Q==",
+  "salt": "urgFnwIxJ++Ooswtf0Nn1w==",
+  "keyClaimName": "sub"
+}'
+```
+
+</TabItem>
+
+</Tabs>
+
+The response contains the proof components:
+
+```json
+{
+  "proofPoints": {
+    "a": ["17267520...", "14650660...", "1"],
+    "b": [["21139310...", "10547097..."], ["12744153...", "17883388..."], ["1", "0"]],
+    "c": ["14769767...", "19108054...", "1"]
+  },
+  "issBase64Details": {
+    "value": "wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw",
+    "indexMod4": 2
+  },
+  "headerBase64": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"
+}
+```
+
+#### Handling CORS errors
+
+To avoid CORS errors in frontend apps, proxy the prover call through your backend:
+
+```typescript
+const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
+
+export type PartialZkLoginSignature = Omit<
+  Parameters<typeof getZkLoginSignature>['0']['inputs'],
+  'addressSeed'
+>;
+const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
+```
+
+### Option B: Self-hosted proving service
+
+1. Install [Git Large File Storage](https://git-lfs.com/) before downloading the zkey.
+
+1. Download the Groth16 proving key zkey file:
+
+   <Tabs>
+
+   <TabItem label="Mainnet / Testnet" value="main">
+
+   ```sh
+   wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-main-zkey.sh | bash
+   ```
+
+   Verify the hash: `b2sum zkLogin-main.zkey`
+
+   Expected: `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce`
+
+   </TabItem>
+
+   <TabItem label="Devnet" value="test">
+
+   ```sh
+   wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-test-zkey.sh | bash
+   ```
+
+   Verify the hash: `b2sum zkLogin-test.zkey`
+
+   Expected: `686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2`
+
+   </TabItem>
+
+   </Tabs>
+
+1. Run the prover using Docker Compose. Create a `docker-compose.yml`:
+
+   ```yaml
+   services:
+     backend:
+       image: mysten/zklogin:prover-stable
+       volumes:
+         - ${ZKEY}:/app/binaries/zkLogin.zkey
+       environment:
+         - ZKEY=/app/binaries/zkLogin.zkey
+         - WITNESS_BINARIES=/app/binaries
+
+     frontend:
+       image: mysten/zklogin:prover-fe-stable
+       command: '8080'
+       ports:
+         - '${PROVER_PORT}:8080'
+       environment:
+         - PROVER_URI=http://backend:8080/input
+         - NODE_ENV=production
+         - DEBUG=zkLogin:info,jwks
+         # Default timeout is 15 seconds. Uncomment to change:
+         # - PROVER_TIMEOUT=30
+   ```
+
+   ```sh
+   ZKEY=<path_to_zkLogin.zkey> PROVER_PORT=<port> docker compose up
+   ```
+
+1. The service exposes two endpoints:
+   - `/ping` — health check (returns `pong`)
+   - `/v1` — proof generation (same request/response format as the Mysten Labs service)
+
+:::info Prover resource requirements
+
+The backend service (`mysten/zklogin:prover-stable`) is compute-heavy. Use at least **16 cores and 16 GB RAM**. Weaker instances can cause timeout errors ("Call to rapidsnark service took longer than 15s"). Adjust with `PROVER_TIMEOUT=30` for a 30-second timeout.
+
+Set `DEBUG=zkLogin:info,jwks` in production. Using `DEBUG=*` turns on all logs, some of which contain PII.
+
+If you need better performance, compile the prover from the [rapidsnark fork](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode) and launch it in server mode.
+
+:::
+
+## Step 7: Assemble the zkLogin signature and submit
+
+Sign the transaction with the ephemeral private key, then combine it with the ZK proof to create a zkLogin signature.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Transaction } from '@mysten/sui/transactions';
+import { genAddressSeed, getZkLoginSignature } from '@mysten/sui/zklogin';
+
+// 1. Sign the transaction with the ephemeral key
+const client = new SuiGrpcClient({ baseUrl: '<YOUR_RPC_URL>', network: 'testnet' });
+const txb = new Transaction();
+txb.setSender(zkLoginUserAddress);
+
+const { bytes, signature: userSignature } = await txb.sign({
+  client,
+  signer: ephemeralKeyPair, // must be the same key pair used for the ZK proof
+});
+
+// 2. Generate the address seed
+const addressSeed = genAddressSeed(
+  BigInt(userSalt!),
+  'sub',
+  decodedJwt.sub,
+  decodedJwt.aud,
+).toString();
+
+// 3. Assemble the zkLogin signature
+const zkLoginSignature = getZkLoginSignature({
+  inputs: {
+    ...partialZkLoginSignature,
+    addressSeed,
+  },
+  maxEpoch,
+  userSignature,
+});
+
+// 4. Execute the transaction
+const result = await client.executeTransaction({
+  transaction: bytes,
+  signatures: [zkLoginSignature],
+});
+```
+
+### Alternative: Use ZkLoginSigner
+
+Instead of manually assembling signatures in Step 7, you can use the `ZkLoginSigner` class to handle proof wrapping automatically. This is useful when you want to sign multiple transactions without repeating the signature assembly code.
+
+```typescript
+import { ZkLoginSigner } from '@mysten/sui/zklogin';
+
+const zkSigner = new ZkLoginSigner({
+  ephemeralSigner: ephemeralKeyPair,
+  maxEpoch,
+  inputs: {
+    ...partialZkLoginSignature,
+    addressSeed,
+  },
+  legacyAddress: false,
+  client,
+});
+
+// Sign and execute — proof wrapping happens automatically
+const txb = new Transaction();
+txb.setSender(zkLoginUserAddress);
+const { bytes, signature } = await zkSigner.signTransaction(await txb.build({ client }));
+await client.executeTransaction({ transaction: bytes, signatures: [signature] });
+```
+
+See [ZkLoginSigner](/onchain-finance/asset-custody/wallets/zk-login-wallets#zkloginsigner) for the full API reference.
+
+## Caching the ephemeral key and ZK proof
+
+Each ZK proof is tied to an ephemeral key pair. You can reuse the proof to sign any number of transactions until the current epoch crosses `maxEpoch`.
+
+Cache the ephemeral key pair and ZK proof for the duration of the session. However, treat them as secrets:
+
+- **Use session storage, not local storage** on browsers. Session storage clears automatically when the browser session ends.
+- **Never persist them** in an insecure location on any platform.
+- If both the ephemeral private key and ZK proof are compromised, an attacker can sign transactions on the user's behalf.
+
+## Efficiency considerations
+
+zkLogin proofs take longer to generate than traditional signatures. The Mysten Labs prover typically returns a proof in about three seconds on a machine with 16 vCPUs and 64 GB RAM.
+
+The right capacity metric is **active user sessions**, not individual signatures, because you cache and reuse each proof across a session. For example, one million daily active sessions with evenly distributed traffic requires roughly 1–2 requests per second (RPS) from the prover.
+
+The Mysten Labs prover auto-scales for traffic surges. If you expect a spike in prover requests, reach out on [Discord](https://discord.gg/sui).
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| CORS error when calling prover | Frontend calling prover directly | Proxy prover calls through your backend |
+| `InvalidSignature` from network | Ephemeral key expired (epoch > `maxEpoch`) | Generate a new key pair, re-authenticate, get a new ZK proof |
+| `InvalidSignature` from network | Nonce mismatch between JWT and signing key | Ensure you sign with the same ephemeral key pair used to compute the nonce |
+| Prover timeout ("took longer than 15s") | Prover machine is underpowered | Use at least 16 cores / 16 GB RAM, or increase `PROVER_TIMEOUT` |
+| Salt service returns different address | `aud` or `iss` changed | The address depends on `sub` + `iss` + `aud` + `salt`. Any change produces a different address. |
+| User locked out of address | Salt lost | Salt loss is permanent. Ensure your salt service has backups and recovery procedures. |

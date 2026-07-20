@@ -1,0 +1,76 @@
+---
+title: Consumer App Cookbook
+description: >-
+  Patterns for building consumer applications with invisible crypto onboarding
+  using zkLogin, Enoki, and Seal.
+keywords:
+  - zklogin
+  - enoki
+  - seal
+  - consumer app
+  - onboarding
+  - sponsored transactions
+  - invisible crypto
+  - cookbook
+draft: true
+questions:
+  - How do I build a consumer app on Sui with invisible crypto onboarding?
+  - How do I combine zkLogin with Enoki and Seal?
+  - How do I hide blockchain complexity from end users?
+answer: >-
+  This cookbook shows how to combine zkLogin, Enoki, and Seal to build consumer
+  applications where users never see seed phrases, gas fees, or wallet popups.
+---
+
+{/* TODO: This page is a stub. Full content to be written. */}
+
+This cookbook shows how to combine zkLogin, Enoki, and Seal to build consumer applications where users interact with Sui without seeing seed phrases, gas fees, or wallet popups.
+
+## Overview
+
+Consumer applications targeting non-crypto users need to eliminate every point of friction in the onboarding flow. The Sui stack provides three primitives that, when combined, create an invisible-crypto experience:
+
+| Primitive | What it handles |
+| --- | --- |
+| [zkLogin](/sui-stack/zklogin-integration) | Authentication — users sign in with Google, Apple, or other OAuth providers instead of managing keys |
+| [Enoki](https://docs.enoki.mystenlabs.com/) | Managed infrastructure — handles salt storage, proof generation, and sponsored transactions behind a single API |
+| [Seal](/sui-stack/seal) | Encrypted storage — lets you gate access to content or data based on onchain conditions without exposing it publicly |
+
+## Patterns
+
+### Pattern 1: Zero-friction sign-up
+
+{/* TODO: Complete example showing Enoki + zkLogin sign-up flow where user sees only a Google sign-in button */}
+
+**Goal:** User taps "Sign in with Google" and lands in the app with a funded address, ready to transact.
+
+**Stack:** zkLogin (auth) + Enoki (salt, proof, sponsored gas)
+
+### Pattern 2: Gasless transactions
+
+{/* TODO: Complete example showing sponsored transactions via Enoki so users never see gas fees */}
+
+**Goal:** Users perform onchain actions without holding SUI or understanding gas.
+
+**Stack:** Enoki sponsored transactions + zkLogin
+
+### Pattern 3: Gated content with Seal
+
+{/* TODO: Complete example showing content gating using Seal with zkLogin identity */}
+
+**Goal:** Gate access to premium content, features, or data based on NFT ownership or other onchain conditions, while the user's identity stays private.
+
+**Stack:** zkLogin (identity) + Seal (encryption) + Enoki (gas sponsorship)
+
+## End-to-end example
+
+{/* TODO: Full walkthrough building a consumer app from scratch */}
+
+A complete example combining all three patterns into a single application is planned.
+
+## Related resources
+
+- [zkLogin Integration Guide](/sui-stack/zklogin-integration/integration-guide) — implement zkLogin from scratch
+- [Enoki documentation](https://docs.enoki.mystenlabs.com/) — managed zkLogin and sponsored transactions
+- [zkLogin Wallets](/onchain-finance/asset-custody/wallets/zk-login-wallets) — wallet implementations using zkLogin
+- [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) — how gas sponsorship works on Sui

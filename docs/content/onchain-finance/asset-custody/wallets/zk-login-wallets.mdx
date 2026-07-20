@@ -88,6 +88,39 @@ Enoki implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wa
   noComments
 />
 
+### Accessing OAuth identity fields
+
+When using Enoki with dApp Kit, the `useCurrentAccount` hook exposes OAuth identity metadata on the connected account. This lets your app display user-facing information (label, icon) and, for apps that need it, access the user's email or other identity fields from the OAuth provider.
+
+```typescript
+import { useCurrentAccount } from '@mysten/dapp-kit';
+
+function UserProfile() {
+  const account = useCurrentAccount();
+
+  if (!account) return null;
+
+  return (
+    <div>
+      {/* Display label (e.g., user's name or email from the OAuth provider) */}
+      <span>{account.label}</span>
+      {/* Display the provider icon */}
+      {account.icon && <img src={account.icon} alt="Provider" />}
+      {/* The Sui address derived from zkLogin */}
+      <span>{account.address}</span>
+    </div>
+  );
+}
+```
+
+On the server side, you can access the OAuth subject identifier (`sub`) through the Enoki API after verifying the user's session. This is useful for gating features based on the authenticated identity or linking onchain addresses to user records in your database. Refer to the [Enoki documentation](https://docs.enoki.mystenlabs.com/) for server-side session verification and identity resolution.
+
+:::info
+
+The OAuth `email` is only available if your OAuth client requests the `email` scope and the provider includes it in the JWT. zkLogin itself does not expose the email onchain — you must read it from the JWT at login time and store it in your application if needed. See [Can my app retrieve a user's email?](/sui-stack/zklogin-integration#can-my-app-retrieve-a-users-email-from-a-zklogin-address)
+
+:::
+
 ## Playtron wallet
 
 The [Playtron](https://www.playtron.one/) wallet is the default zkLogin wallet on the [SuiPlay0X1](/sui-stack/suiplay0x1/wallet-integration). Every SuiPlay0X1 user has a Playtron account, and every Playtron account has an associated zkLogin wallet derived from those credentials.
@@ -163,9 +196,39 @@ All zkLogin utilities are exported from `@mysten/sui/zklogin`.
   noComments
 />
 
+### ZkLoginSigner
+
+The `ZkLoginSigner` class wraps an ephemeral signer and automatically transforms every signature into a zkLogin signature. Instead of manually calling `getZkLoginSignature` after each `sign`, you create a `ZkLoginSigner` once and use it like any other signer — it handles the proof wrapping internally.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { ZkLoginSigner } from '@mysten/sui/zklogin';
+
+const zkSigner = new ZkLoginSigner({
+  ephemeralSigner: ephemeralKeyPair,
+  maxEpoch: maxEpoch,
+  inputs: zkLoginInputs, // ZkLoginSignatureInputs including addressSeed
+  legacyAddress: false,  // true only for addresses derived before the fix
+  address: zkLoginUserAddress, // optional: validates derived address matches
+  client: suiClient,     // optional: enables signature verification
+});
+
+// Use it like any signer — zkLogin wrapping happens automatically
+const { bytes, signature } = await zkSigner.signTransaction(txBytes);
+await client.executeTransaction({ transaction: bytes, signatures: [signature] });
+```
+
+Key behavior:
+
+- **`getKeyScheme()`** returns `'ZkLogin'`, distinguishing it from Ed25519, Secp256k1, and other scheme signers.
+- **`getPublicKey()`** returns a `ZkLoginPublicIdentifier` derived from the proof inputs and issuer.
+- **`legacyAddress`** flag controls which address derivation is used. An early implementation had an inconsistency; if your addresses were derived before the fix, pass `true`. For new integrations, use `false`.
+- **`address`** (optional) validates that the derived address matches what you expect. The constructor throws if there's a mismatch, catching `legacyAddress` flag errors early.
+- **`sign()` throws** — use `signTransaction()` or `signPersonalMessage()` instead, because zkLogin signatures require intent context.
+
 ### Proof generation
 
 The Sui TypeScript SDK handles address derivation and signature serialization, but it does not generate ZKPs. Proof generation requires a prover service:
 
-- **Mysten Labs prover:** A publicly accessible proving service maintained by Mysten Labs. Suitable for Testnet and Devnet development. See [zkLogin integration guide](/sui-stack/zklogin-integration) for the endpoint and request format.
+- **Mysten Labs prover:** A publicly accessible proving service maintained by Mysten Labs. Suitable for Testnet and Devnet development. See the [zkLogin integration guide](/sui-stack/zklogin-integration/integration-guide) for the endpoint and request format.
 - **Self-hosted prover:** You run your own prover for production environments where you need full control over the proving infrastructure.

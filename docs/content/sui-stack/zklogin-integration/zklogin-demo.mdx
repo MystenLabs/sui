@@ -223,8 +223,8 @@ $ cp .env.example .env
 Edit `.env` with your values:
 
 ```bash title='.env'
-VITE_NETWORK=devnet
-VITE_SUI_GRPC_URL=https://fullnode.devnet.sui.io:443
+VITE_NETWORK=testnet
+VITE_SUI_GRPC_URL=https://fullnode.testnet.sui.io:443
 VITE_SALT=248191903847969014646285995941615069143
 VITE_EPHEMERAL_KEY_DURATION_EPOCHS=2
 VITE_OAUTH_PROVIDER_NAME=GOOGLE
@@ -344,7 +344,7 @@ The following sections address common issues with this example.
 
 **Cause:** The derived address has not received any SUI. The address is deterministic but starts with no funds.
 
-**Fix:** Use the [Sui faucet](https://faucet.sui.io/) to request Devnet SUI for the derived address. Copy the address from the Step 3 panel and paste it into the faucet.
+**Fix:** Use the [Sui faucet](https://faucet.sui.io/) to request Testnet SUI for the derived address. Copy the address from the Step 3 panel and paste it into the faucet.
 
 ### Transaction fails with `InvalidSignature`
 

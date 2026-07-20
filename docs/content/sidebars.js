@@ -693,9 +693,12 @@ suiStackSidebar: [
       label: 'zkLogin',
       link: { type: 'doc', id: 'sui-stack/zklogin-integration/index' },
       items: [
-        'sui-stack/zklogin-integration/zklogin',
+        'sui-stack/zklogin-integration/integration-guide',
         'sui-stack/zklogin-integration/developer-account',
         'sui-stack/zklogin-integration/zklogin-demo',
+        'sui-stack/zklogin-integration/consumer-app-cookbook',
+        'sui-stack/zklogin-integration/defi-trading-guide',
+        'sui-stack/zklogin-integration/zklogin',
       ],
     },
     {

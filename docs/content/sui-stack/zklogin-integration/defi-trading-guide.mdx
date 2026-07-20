@@ -1,0 +1,92 @@
+---
+title: zkLogin for DeFi
+description: >-
+  End-to-end guide for wiring zkLogin and sponsored transactions into a DeFi
+  trading flow on Sui.
+keywords:
+  - zklogin
+  - defi
+  - trading
+  - sponsored transactions
+  - swap
+  - deepbook
+  - gas sponsorship
+draft: true
+questions:
+  - How do I integrate zkLogin into a DeFi trading app?
+  - How do I combine zkLogin with sponsored transactions for DeFi?
+  - How do I build a gasless trading experience on Sui?
+answer: >-
+  This guide shows how to wire zkLogin authentication and sponsored transactions
+  into a DeFi trading flow, so users can swap tokens without managing wallets or
+  paying gas.
+---
+
+{/* TODO: This page is a stub. Full content to be written. */}
+
+This guide shows how to build a DeFi trading interface where users authenticate with zkLogin, execute swaps, and never manage keys or pay gas directly.
+
+## Overview
+
+DeFi applications on Sui can use zkLogin to onboard users who do not have a Sui wallet. Combined with sponsored transactions, this creates a trading experience where the user signs in with Google, swaps tokens, and the application covers gas fees — eliminating the cold-start problem of needing SUI before you can trade.
+
+## Architecture
+
+{/* TODO: Architecture diagram showing the full flow */}
+
+```
+User → OAuth sign-in → zkLogin address derived
+     → App builds swap transaction (e.g., DeepBook)
+     → Gas station sponsors the transaction
+     → User's ephemeral key signs
+     → zkLogin signature submitted to network
+```
+
+## Implementation
+
+### Step 1: Authenticate with zkLogin
+
+Use the [zkLogin integration guide](/sui-stack/zklogin-integration/integration-guide) or [Enoki](https://docs.enoki.mystenlabs.com/) to authenticate the user and derive their Sui address.
+
+### Step 2: Build the swap transaction
+
+{/* TODO: Complete example building a DeepBook swap PTB */}
+
+Build a programmable transaction block that performs the swap. For example, using [DeepBook](/onchain-finance/deepbook/deepbook-quick-start):
+
+```typescript
+// TODO: Complete example
+const tx = new Transaction();
+// ... build swap commands
+tx.setSender(zkLoginUserAddress);
+```
+
+### Step 3: Sponsor the transaction
+
+{/* TODO: Complete example showing gas sponsorship */}
+
+Use a gas station service to sponsor the transaction so the user does not need SUI for gas:
+
+```typescript
+// TODO: Complete sponsorship example
+```
+
+### Step 4: Sign and execute with zkLogin
+
+{/* TODO: Complete example combining zkLogin signature with sponsored transaction */}
+
+Sign the sponsored transaction with the ephemeral key pair and submit it with the zkLogin signature.
+
+## Considerations
+
+- **Session management:** Cache the ephemeral key pair and ZK proof in session storage. Users should not need to re-authenticate for every trade.
+- **Gas budget:** The sponsor sets the gas budget. Monitor gas costs to avoid sponsoring transactions that exceed your budget.
+- **Price slippage:** DeFi transactions can fail if prices move between building and execution. Set appropriate slippage tolerances.
+- **Multi-coin support:** The zkLogin address starts with no tokens. Consider how users fund their address or integrate with fiat on-ramps.
+
+## Related resources
+
+- [zkLogin Integration Guide](/sui-stack/zklogin-integration/integration-guide) — implement zkLogin from scratch
+- [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) — how gas sponsorship works on Sui
+- [DeepBook](/onchain-finance/deepbook/deepbook-quick-start) — Sui's native orderbook for trading
+- [Programmable Transaction Blocks](/develop/transactions/ptb/building-ptb) — compose multiple operations into one transaction
