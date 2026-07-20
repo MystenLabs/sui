@@ -11,7 +11,7 @@ use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::TryStreamExt;
-use mysten_common::{fatal, random::get_rng};
+use mysten_common::{fatal, in_antithesis, random::get_rng};
 use rand::{Rng, seq::IteratorRandom};
 use sui_config::genesis::Genesis;
 use sui_core::{
@@ -1053,7 +1053,8 @@ impl ValidatorProxy for FullNodeProxy {
         let tx_digest = *tx.digest();
         let start = Instant::now();
         let mut retry_cnt = 0;
-        while retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
+        let max_retries = if in_antithesis() { 20 } else { 10 };
+        while retry_cnt < max_retries || start.elapsed() < Duration::from_secs(60) {
             // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
             // SuiClient times out after 60s
             match self
