@@ -1,6 +1,31 @@
 {
   "redirects": [
     {
+      "source": "/onchain-finance/deepbookv3",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbookv3-sdk",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/deepbookv3-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/deepbook-margin",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin-sdk",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/deepbook-margin-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-predict",
+      "destination": "/onchain-finance/deepbook/deepbook-predict/deepbook-predict",
+      "permanent": true
+    },
+    {
       "source": "/onchain-finance/deepbookv3/:path*",
       "destination": "/onchain-finance/deepbook/deepbookv3/:path*",
       "permanent": true
