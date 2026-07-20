@@ -155,9 +155,25 @@ node scripts/generate-goals.mjs --apply
 
 This detects each page's archetype (onboarding, example, guide, reference, operator, SDK, index) and generates appropriate checks. Review and adjust the generated goals before committing.
 
-### CI enforcement
+### Frontmatter schema
 
-A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx`. It writes a job summary listing any pages missing `title`, `description`, `keywords`, `goal`, `questions`, or `answer` frontmatter, with instructions to auto-generate. Check the workflow's summary tab for results.
+The full frontmatter contract is defined as a JSON Schema at [`docs/site/frontmatter.schema.json`](site/frontmatter.schema.json). It is the canonical, machine-readable source of truth for every field above (`title`, `description`, `keywords`, `goal`, `questions`, `answer`, `builder_paths`, and the optional metadata fields). Downstream tooling — the [evals harness](https://github.com/jessiemongeon1/sui-docs-automation) and the evals dashboard — relies on this shape.
+
+Validate pages locally before pushing:
+
+```sh
+cd docs/site
+pnpm docs:validate-frontmatter          # all pages
+node scripts/validate-frontmatter.mjs ../content/getting-started/tooling.mdx   # specific pages
+```
+
+The validator checks changed pages against the schema and exits non-zero on: wrong types, invalid `builder_paths[].eval` values (must be `covered`/`partial`/`missing`), goal checks missing a `label` or not matching exactly one check type, and missing required fields. Snippets and the generated `sui-graphql` reference are excluded. Unknown top-level frontmatter keys are permitted (to allow Docusaurus-native fields); the nested `goal` and `builder_paths` objects are validated strictly.
+
+### CI
+
+A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx` and writes a job summary listing any pages missing `title`, `description`, `keywords`, `goal`, `questions`, or `answer` frontmatter, with instructions to auto-generate. Check the workflow's summary tab for results.
+
+> **Note:** wiring `validate-frontmatter.mjs` into this workflow as a required, failing check is a follow-up (it edits the workflow file, which needs elevated permissions to land). Until then, schema validation runs locally only via `pnpm docs:validate-frontmatter`; the CI workflow does not yet fail on schema violations.
 
 ## Build the site locally
 
@@ -205,6 +221,7 @@ Key scripts in `docs/site/scripts/`:
 | Script | Purpose |
 |--------|---------|
 | `audit-docs.mjs` | Deterministic docs audit pipeline |
+| `validate-frontmatter.mjs` | Validate page frontmatter against `frontmatter.schema.json` |
 | `generate-goals.mjs` | Generate goal frontmatter by page archetype |
 | `generate-geo.mjs` | Generate questions + answer frontmatter for GEO/AEO |
 | `add-builder-paths.mjs` | Map pages to builder paths with eval status |
