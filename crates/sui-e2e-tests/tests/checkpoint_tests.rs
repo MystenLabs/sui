@@ -87,8 +87,7 @@ async fn test_checkpoint_split_brain() {
                 String,
                 String,
             >::new())),
-            1.0f32, // fork_probability
-            false,  // executor_path_only
+            false, // fork_on_executor_path: consensus/builder path
         ))
     });
 

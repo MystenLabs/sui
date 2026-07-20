@@ -2195,31 +2195,24 @@ impl AuthorityState {
             return ExecutionOutput::RetryLater;
         }
 
-        // (test-only) Inject a fork before the effects-digest check below. Placed here so that a
-        // forked validator executing a *certified* checkpoint (expected_effects_digest is set, i.e.
-        // the checkpoint-executor path) trips the transaction-fork check. On the builder path
-        // (expected_effects_digest is None) the check is skipped, so this still produces a checkpoint
-        // fork as before.
+        // (test-only) Inject a fork before the effects-digest check below. `fork_on_executor_path`
+        // picks the path exclusively — true trips the transaction-fork check below, false yields a
+        // checkpoint fork — so a validator that falls behind can't turn one into the other.
         fail_point_arg!("simulate_fork_during_execution", |(
             forked_validators,
             full_halt,
             effects_overrides,
-            fork_probability,
-            executor_path_only,
+            fork_on_executor_path,
         ): (
             std::sync::Arc<
                 std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
             >,
             bool,
             std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, String>>>,
-            f32,
             bool,
         )| {
             #[cfg(msim)]
-            // When `executor_path_only` is set, fork only while executing a certified checkpoint
-            // (expected_effects_digest is set) so the divergence trips the transaction-fork check
-            // below; otherwise fork on any path (the builder path yields a checkpoint fork).
-            if !executor_path_only || expected_effects_digest.is_some() {
+            if fork_on_executor_path == expected_effects_digest.is_some() {
                 self.simulate_fork_during_execution(
                     certificate,
                     epoch_store,
@@ -2227,7 +2220,6 @@ impl AuthorityState {
                     forked_validators,
                     full_halt,
                     effects_overrides,
-                    fork_probability,
                 );
             }
         });
@@ -2958,7 +2950,6 @@ impl AuthorityState {
         effects_overrides: std::sync::Arc<
             std::sync::Mutex<std::collections::BTreeMap<String, String>>,
         >,
-        fork_probability: f32,
     ) {
         use std::cell::RefCell;
         thread_local! {
@@ -2996,20 +2987,14 @@ impl AuthorityState {
 
                     if let Ok(external_set) = forked_validators.lock() {
                         if external_set.contains(&self.name) {
-                            // If effects_overrides is empty, deterministically select a tx_digest to fork with 1/100 probability.
-                            // Fork this transaction and record the digest and the original effects to original_effects.
-                            // If original_effects is nonempty and contains a key matching this transaction digest (i.e.
-                            // the transaction was forked on a different validator), fork this txn as well.
-
+                            // Fork the first transaction executed by a forked validator after the
+                            // failpoint is armed, recording its digest into effects_overrides. If
+                            // effects_overrides already names this transaction (i.e. it was forked
+                            // on a different validator first), fork it here too so all forked
+                            // validators diverge identically.
                             let tx_digest = certificate.digest().to_string();
                             if let Ok(mut overrides) = effects_overrides.lock() {
-                                if overrides.contains_key(&tx_digest)
-                                    || overrides.is_empty()
-                                        && sui_simulator::random::deterministic_probability(
-                                            &tx_digest,
-                                            fork_probability,
-                                        )
-                                {
+                                if overrides.contains_key(&tx_digest) || overrides.is_empty() {
                                     let original_effects_digest = effects.digest().to_string();
                                     overrides
                                         .insert(tx_digest.clone(), original_effects_digest.clone());
