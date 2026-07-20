@@ -12,7 +12,7 @@ use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
 use tap::TapFallible;
-use tokio::sync::broadcast;
+use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
@@ -47,6 +47,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     dag_state: Arc<RwLock<DagState>>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     block_sync_service: Arc<BlockSyncService>,
+    verify_and_vote_semaphore: Arc<Semaphore>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -63,6 +64,11 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         block_sync_service: Arc<BlockSyncService>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
+        let verify_and_vote_semaphore = Arc::new(Semaphore::new(
+            std::thread::available_parallelism()
+                .map(|p| p.get())
+                .unwrap_or(8),
+        ));
         Self {
             context,
             block_verifier,
@@ -75,6 +81,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
             round_tracker,
             block_sync_service,
+            verify_and_vote_semaphore,
         }
     }
 
@@ -178,7 +185,14 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // Reject blocks failing parsing and validations.
         let block_verifier = self.block_verifier.clone();
         let serialized = serialized_block.block.clone();
+        let permit = self
+            .verify_and_vote_semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("verify_and_vote semaphore is never closed");
         let (verified_block, reject_txn_votes) = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
             block_verifier.verify_and_vote(signed_block, serialized)
         })
         .await
