@@ -26,14 +26,20 @@
 //! guarantees it: the live feed's first checkpoint is always `handoff + 1` or earlier (any overlap
 //! is dropped), never past it. See [`live_transactions`] for the overlap skip and the gap check.
 //!
+//! Pinning is what makes the seam reachable at all. Without a fixed `handoff`, backfill would chase
+//! a tip that keeps advancing and might never converge. Once pinned, the live receiver is already
+//! subscribed and buffering everything past `handoff`, so backfill only has to paginate the now-fixed
+//! range up to `handoff` while the live buffer holds the rest. That buffer is bounded (256
+//! checkpoints, about 60s at 4 cp/s), which is the window backfill has to reach `handoff` before the
+//! live subscriber lags and disconnects; comfortably enough for a bounded range.
+//!
 //! # Empty pages
 //!
 //! Filters can be sparse: a scanned page may cover a range of checkpoints while matching no
 //! transaction. Every page still reports how far it scanned (the boundary derived from its last
 //! cursor) as a coverage marker, separate from any matches, so the handoff can still advance and
-//! Phase 1 can terminate across
-//! stretches that matched nothing. Without it, a sparse subscription would never see its coverage
-//! reach the handoff, and the backfill would never hand off to live.
+//! Phase 1 can terminate across stretches that matched nothing. Without it, a sparse subscription
+//! would never see its coverage reach the handoff, and the backfill would never hand off to live.
 //!
 //! # Cursors
 //!
@@ -141,11 +147,11 @@ pub(super) fn transactions_stream(
                 let Scanned { checkpoint, edge } = scanned?;
 
                 // Resubscribe-first and pin once within threshold of the tip (match or coverage).
-                if pending_receiver.is_none()
-                    && broadcast.network_tip().saturating_sub(checkpoint) <= handoff_threshold
-                {
+                // Sample the tip once so the threshold check and the pinned value can't diverge.
+                let tip = broadcast.network_tip();
+                if pending_receiver.is_none() && tip.saturating_sub(checkpoint) <= handoff_threshold {
                     pending_receiver = Some(broadcast.broadcaster().resubscribe());
-                    handoff = Some(broadcast.network_tip());
+                    handoff = Some(tip);
                 }
 
                 match edge {
