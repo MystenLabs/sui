@@ -145,13 +145,13 @@ impl MoveRuntime {
                 };
 
                 // This is more a sanity check than anything else. The VMDispatchTables should
-                // never have precomputed type depths, as those are computed on-demand.
-                // If for some reason the cached VTables have precomputed type depths, or the
+                // never have precomputed size formulas, as those are computed on-demand.
+                // If for some reason the cached VTables have precomputed size formulas, or the
                 // linkage context does not match the expected linkage context, then we drop the
                 // cached VTables and reload them. This should never happen, but if it does, we
                 // want to recover gracefully rather than erroring out with an invariant violation.
                 if !virtual_tables.size_formulas.is_empty() || link_context != *virtual_tables.link_context {
-                    error!("Cached VTables for linkage context {:?} have precomputed type depths or do not match the expected linkage context. Dropping cached VTables and reloading.", link_context);
+                    error!("Cached VTables for linkage context {:?} have precomputed size formulas or do not match the expected linkage context. Dropping cached VTables and reloading.", link_context);
                     self.cache.drop_all_cached_linkage_tables();
                     virtual_tables = self.load_and_cache_vtables(
                         &package_store, txn_telemetry, &link_context, &linkage_hash

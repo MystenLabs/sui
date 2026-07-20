@@ -61,24 +61,22 @@ pub struct MoveVM<'extensions> {
     pub(crate) telemetry: Arc<TelemetryContext>,
 }
 
+/// `parameters` and `return_type` are already substituted with the queried type arguments.
 pub(crate) struct MoveVMFunction {
     function: VMPointer<Function>,
-    /// The parameter types, instantiated with the type arguments the function was found with.
     pub(crate) parameters: Vec<Type>,
-    /// The return types, instantiated with the type arguments the function was found with.
     pub(crate) return_type: Vec<Type>,
 }
 
 /// Externally visibile information about a function that can be asked and the VM will answer.
+/// `parameters` and `return_` are already substituted with the queried type arguments.
 pub struct LoadedFunctionInformation {
     pub is_entry: bool,
     pub is_native: bool,
     pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
     pub instruction_count: CodeOffset,
-    /// The parameter types, instantiated with the queried type arguments.
     pub parameters: Vec<Type>,
-    /// The return types, instantiated with the queried type arguments.
     pub return_: Vec<Type>,
 }
 
@@ -422,14 +420,12 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
-        // verify type arguments
         self.virtual_tables
             .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
-        // Instantiate the signature with the (verified) type arguments. Substitution is
-        // checked: the predicted sizes of each instantiated type are checked against the
-        // type-traversal limits before it is built.
+        // Substitution is limit-checked: each instantiated type's predicted size is checked
+        // against the type-traversal limits before it is built.
         let instantiate = |ty: &ArenaType| {
             if ty_args.is_empty() {
                 ty.to_type()
