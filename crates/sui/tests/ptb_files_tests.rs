@@ -4,7 +4,7 @@
 #[cfg(not(msim))]
 use std::path::Path;
 #[cfg(not(msim))]
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, Reservation, WithdrawalTypeArg};
 
 #[cfg(not(msim))]
 const TEST_DIR: &str = "tests";
@@ -120,7 +120,14 @@ fn stable_call_arg_display(ca: &CallArg) -> String {
             }
             ObjectArg::Receiving(_) => "Receiving".to_string(),
         },
-        CallArg::FundsWithdrawal(_) => "FundsWithdrawal".to_string(),
+        CallArg::FundsWithdrawal(withdrawal) => {
+            let Reservation::MaxAmountU64(amount) = &withdrawal.reservation;
+            let WithdrawalTypeArg::Balance(type_arg) = &withdrawal.type_arg;
+            format!(
+                "FundsWithdrawal(amount: {amount}, type: Balance<{type_arg}>, source: {:?})",
+                withdrawal.withdraw_from
+            )
+        }
     }
 }
 
