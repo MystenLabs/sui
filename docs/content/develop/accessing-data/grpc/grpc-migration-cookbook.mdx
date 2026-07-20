@@ -96,7 +96,7 @@ Create a client once and reuse it:
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const client = new SuiGrpcClient({
-  url: 'https://fullnode.mainnet.sui.io:443',
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
   network: 'mainnet',
 });
 ```
@@ -128,16 +128,14 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const result = await client.core.getObjects({
-  objectIds: ['0xOBJECT_ID'],
-  include: { content: true, owner: true },
+const { object } = await client.core.getObject({
+  objectId: '0xOBJECT_ID',
+  include: { content: true },
 });
 
-const object = result[0];
-if (object.$kind === 'Exists') {
-  console.log('Owner:', object.Exists.owner);
-  console.log('Content:', object.Exists.content);
-}
+console.log('Owner:', object.owner);
+console.log('Type:', object.type);
+console.log('Content:', object.content);
 ```
 
 </TabItem>
@@ -155,7 +153,7 @@ grpcurl -d '{
 
 **Key differences:**
 - JSON-RPC uses `showContent`, `showOwner` booleans. gRPC uses a `read_mask` with field paths, or the SDK's `include` parameter.
-- The SDK returns a discriminated union with `$kind`. Check for `'Exists'`, `'NotExists'`, or `'Deleted'`.
+- The SDK's `getObject` returns `{ object }` directly. Use `getObjects` (plural) for batch lookups, which returns `{ objects: (Object | Error)[] }`.
 
 ## Batch-fetch objects
 
@@ -182,14 +180,16 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const results = await client.core.getObjects({
+const { objects } = await client.core.getObjects({
   objectIds: ['0xOBJECT_A', '0xOBJECT_B', '0xOBJECT_C'],
   include: { content: true },
 });
 
-for (const obj of results) {
-  if (obj.$kind === 'Exists') {
-    console.log(obj.Exists.objectId, obj.Exists.content);
+for (const obj of objects) {
+  if (obj instanceof Error) {
+    console.error('Failed to fetch:', obj.message);
+  } else {
+    console.log(obj.objectId, obj.content);
   }
 }
 ```
@@ -199,7 +199,11 @@ for (const obj of results) {
 
 ```sh
 grpcurl -d '{
-  "object_ids": ["0xOBJECT_A", "0xOBJECT_B", "0xOBJECT_C"],
+  "requests": [
+    { "object_id": "0xOBJECT_A" },
+    { "object_id": "0xOBJECT_B" },
+    { "object_id": "0xOBJECT_C" }
+  ],
   "read_mask": { "paths": ["content"] }
 }' <full node URL:port> sui.rpc.v2.LedgerService/BatchGetObjects
 ```
@@ -289,15 +293,14 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const results = await client.core.getTransactions({
+// Use the proto client directly for batch transaction lookups
+const { response } = await client.ledgerService.batchGetTransactions({
   digests: ['DIGEST_A', 'DIGEST_B'],
-  include: { effects: true, events: true },
+  readMask: { paths: ['effects', 'events'] },
 });
 
-for (const tx of results) {
-  if (tx.$kind === 'Transaction') {
-    console.log(tx.Transaction.digest, tx.Transaction.effects?.status);
-  }
+for (const tx of response.transactions) {
+  console.log(tx.transaction?.digest, tx.transaction?.effects);
 }
 ```
 
@@ -353,8 +356,8 @@ const result = await client.core.getTransaction({
 
 if (result.$kind === 'Transaction') {
   for (const event of result.Transaction.events ?? []) {
-    console.log('Type:', event.type);
-    console.log('Data:', event.contents);
+    console.log('Type:', event.eventType);
+    console.log('JSON:', event.json);
   }
 }
 ```
@@ -388,23 +391,23 @@ ws.onmessage = (msg) => console.log(JSON.parse(msg.data));
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const client = new SuiGrpcClient({
-  url: 'https://fullnode.mainnet.sui.io:443',
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
   network: 'mainnet',
 });
 
 const TARGET_EVENT_TYPE = '0xPACKAGE::module::MyEvent';
 
 // Stream checkpoints and filter events client-side
-const stream = client.native.subscription.subscribeCheckpoints({
+const { responses } = client.subscriptionService.subscribeCheckpoints({
   readMask: {
     paths: ['transactions'],
   },
 });
 
-for await (const checkpoint of stream) {
-  for (const tx of checkpoint.transactions ?? []) {
-    for (const event of tx.events ?? []) {
-      if (event.type?.repr === TARGET_EVENT_TYPE) {
+for await (const response of responses) {
+  for (const tx of response.checkpoint?.transactions ?? []) {
+    for (const event of tx.events?.events ?? []) {
+      if (event.eventType === TARGET_EVENT_TYPE) {
         console.log('Matched event:', event);
       }
     }
@@ -473,16 +476,17 @@ while (true) {
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const stream = client.native.subscription.subscribeCheckpoints({
+const { responses } = client.subscriptionService.subscribeCheckpoints({
   readMask: {
     paths: ['sequenceNumber', 'digest', 'summary'],
   },
 });
 
-for await (const checkpoint of stream) {
-  console.log('Checkpoint:', checkpoint.sequenceNumber);
-  console.log('Timestamp:', checkpoint.summary?.timestamp);
-  console.log('Tx count:', checkpoint.summary?.totalNetworkTransactions);
+for await (const response of responses) {
+  const cp = response.checkpoint;
+  console.log('Checkpoint:', cp?.sequenceNumber);
+  console.log('Timestamp:', cp?.summary?.timestamp);
+  console.log('Tx count:', cp?.summary?.networkTotalTransactions);
 }
 ```
 
@@ -526,13 +530,15 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const checkpoint = await client.core.getCheckpoint({
-  sequenceNumber: '164329987',
+// Use the proto client directly — no Core API wrapper for checkpoint lookups
+const { response } = await client.ledgerService.getCheckpoint({
+  sequenceNumber: BigInt('164329987'),
+  readMask: { paths: ['digest', 'summary'] },
 });
 
-console.log('Digest:', checkpoint.digest);
-console.log('Timestamp:', checkpoint.timestamp);
-console.log('Total transactions:', checkpoint.networkTotalTransactions);
+console.log('Digest:', response.checkpoint?.digest);
+console.log('Timestamp:', response.checkpoint?.summary?.timestamp);
+console.log('Total transactions:', response.checkpoint?.summary?.networkTotalTransactions);
 ```
 
 </TabItem>
@@ -582,18 +588,20 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 
 ```ts
 // Single coin type
-const balance = await client.core.getBalance({
+const { balance } = await client.core.getBalance({
   owner: '0xADDRESS',
   coinType: '0x2::sui::SUI',
 });
-console.log('Total balance:', balance.totalBalance);
+console.log('Total balance:', balance.balance);
+console.log('Coin balance:', balance.coinBalance);
+console.log('Address balance:', balance.addressBalance);
 
 // All coin types
-const balances = await client.core.listBalances({
+const { balances } = await client.core.listBalances({
   owner: '0xADDRESS',
 });
 for (const b of balances) {
-  console.log(b.coinType, b.totalBalance);
+  console.log(b.coinType, b.balance);
 }
 ```
 
@@ -617,7 +625,7 @@ grpcurl -d '{
 </Tabs>
 
 **Key differences:**
-- gRPC separates `coinBalance` (coin objects) and `addressBalance` (accumulator). Read `totalBalance` for the combined amount. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for reconciliation details.
+- gRPC separates `coinBalance` (coin objects) and `addressBalance` (accumulator). The `balance` field is the combined total. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for reconciliation details.
 
 ## List owned coins
 
@@ -648,19 +656,17 @@ const page = await client.core.listOwnedObjects({
   limit: 50,
 });
 
-for (const obj of page.data) {
-  if (obj.$kind === 'Exists') {
-    console.log('Coin:', obj.Exists.objectId);
-  }
+for (const obj of page.objects) {
+  console.log('Coin:', obj.objectId);
 }
 
 // Paginate with the cursor from the previous response
-if (page.nextCursor) {
+if (page.hasNextPage) {
   const nextPage = await client.core.listOwnedObjects({
     owner: '0xADDRESS',
     type: '0x2::coin::Coin<0x2::sui::SUI>',
     limit: 50,
-    cursor: page.nextCursor,
+    cursor: page.cursor,
   });
 }
 ```
@@ -671,7 +677,7 @@ if (page.nextCursor) {
 ```sh
 grpcurl -d '{
   "owner": "0xADDRESS",
-  "type_filter": "0x2::coin::Coin<0x2::sui::SUI>"
+  "object_type": "0x2::coin::Coin<0x2::sui::SUI>"
 }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
 ```
 
@@ -711,7 +717,7 @@ const page = await client.core.listDynamicFields({
   limit: 50,
 });
 
-for (const field of page.data) {
+for (const field of page.dynamicFields) {
   console.log('Name:', field.name);
   console.log('Object ID:', field.objectId);
 }
@@ -773,8 +779,10 @@ const result = await client.core.executeTransaction({
   include: { effects: true },
 });
 
-console.log('Status:', result.effects?.status);
-console.log('Digest:', result.digest);
+if (result.$kind === 'Transaction') {
+  console.log('Digest:', result.Transaction.digest);
+  console.log('Status:', result.Transaction.effects?.status);
+}
 ```
 
 </TabItem>
@@ -810,8 +818,10 @@ const result = await client.core.simulateTransaction({
   include: { effects: true, events: true },
 });
 
-console.log('Simulated status:', result.effects?.status);
-console.log('Simulated events:', result.events);
+if (result.$kind === 'Transaction') {
+  console.log('Simulated status:', result.Transaction.effects?.status);
+  console.log('Simulated events:', result.Transaction.events);
+}
 ```
 
 </TabItem>
@@ -819,7 +829,7 @@ console.log('Simulated events:', result.events);
 
 ## Get reference gas price
 
-Replace `suix_getReferenceGasPrice` with `LedgerService.GetEpoch`.
+Replace `suix_getReferenceGasPrice` with `getReferenceGasPrice` on the SDK, or `LedgerService.GetEpoch` via grpcurl and read the `reference_gas_price` field.
 
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
@@ -839,15 +849,16 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const epoch = await client.core.getEpoch();
-console.log('Reference gas price:', epoch.referenceGasPrice);
+const { referenceGasPrice } = await client.core.getReferenceGasPrice();
+console.log('Reference gas price:', referenceGasPrice);
 ```
 
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
 
 ```sh
-grpcurl -d '{}' <full node URL:port> sui.rpc.v2.LedgerService/GetEpoch
+grpcurl -d '{ "read_mask": { "paths": ["reference_gas_price"] } }' \
+  <full node URL:port> sui.rpc.v2.LedgerService/GetEpoch
 ```
 
 </TabItem>
@@ -855,7 +866,7 @@ grpcurl -d '{}' <full node URL:port> sui.rpc.v2.LedgerService/GetEpoch
 
 ## Resolve a SuiNS name
 
-Replace JSON-RPC name resolution with `NameService.ResolveName` and `NameService.LookupAddress`.
+Replace JSON-RPC name resolution with `NameService.LookupName` and `NameService.ReverseLookupName`.
 
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
@@ -878,11 +889,11 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 ```sh
 # Name to address
 grpcurl -d '{ "name": "example.sui" }' \
-  <full node URL:port> sui.rpc.v2.NameService/ResolveName
+  <full node URL:port> sui.rpc.v2.NameService/LookupName
 
 # Address to name (reverse lookup)
 grpcurl -d '{ "address": "0xADDRESS" }' \
-  <full node URL:port> sui.rpc.v2.NameService/LookupAddress
+  <full node URL:port> sui.rpc.v2.NameService/ReverseLookupName
 ```
 
 </TabItem>
@@ -895,28 +906,29 @@ grpcurl -d '{ "address": "0xADDRESS" }' \
 If the gRPC stream disconnects, backfill any missed checkpoints before resubscribing:
 
 ```ts
-let lastProcessed = BigInt(0);
+let lastProcessed = 0n;
 
 async function startStream() {
-  const stream = client.native.subscription.subscribeCheckpoints({
+  const { responses } = client.subscriptionService.subscribeCheckpoints({
     readMask: { paths: ['sequenceNumber', 'transactions'] },
   });
 
   try {
-    for await (const checkpoint of stream) {
-      const seq = BigInt(checkpoint.sequenceNumber!);
+    for await (const response of responses) {
+      const seq = response.checkpoint?.sequenceNumber ?? 0n;
 
       // Detect and backfill gaps
       if (seq > lastProcessed + 1n && lastProcessed > 0n) {
         for (let i = lastProcessed + 1n; i < seq; i++) {
-          const missed = await client.core.getCheckpoint({
-            sequenceNumber: i.toString(),
+          const { response: missed } = await client.ledgerService.getCheckpoint({
+            sequenceNumber: i,
+            readMask: { paths: ['transactions'] },
           });
-          processCheckpoint(missed);
+          processCheckpoint(missed.checkpoint);
         }
       }
 
-      processCheckpoint(checkpoint);
+      processCheckpoint(response.checkpoint);
       lastProcessed = seq;
     }
   } catch (err) {
@@ -929,7 +941,7 @@ async function startStream() {
 ### Paginating through all owned objects
 
 ```ts
-let cursor: string | undefined;
+let cursor: string | null = null;
 
 do {
   const page = await client.core.listOwnedObjects({
@@ -938,13 +950,11 @@ do {
     cursor,
   });
 
-  for (const obj of page.data) {
-    if (obj.$kind === 'Exists') {
-      console.log(obj.Exists.objectId);
-    }
+  for (const obj of page.objects) {
+    console.log(obj.objectId);
   }
 
-  cursor = page.nextCursor;
+  cursor = page.hasNextPage ? page.cursor : null;
 } while (cursor);
 ```
 
@@ -956,12 +966,12 @@ A full node returns "not found" for data outside its retention window. Fall back
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const fullNode = new SuiGrpcClient({
-  url: 'https://fullnode.mainnet.sui.io:443',
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
   network: 'mainnet',
 });
 
 const archive = new SuiGrpcClient({
-  url: 'https://archive.mainnet.sui.io:443',
+  baseUrl: 'https://archive.mainnet.sui.io:443',
   network: 'mainnet',
 });
 
