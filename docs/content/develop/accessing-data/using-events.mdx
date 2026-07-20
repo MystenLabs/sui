@@ -64,7 +64,7 @@ answer: >-
   and query events from other packages to trigger logic based on emitted events.
 ---
 
-Move code can interact with objects stored on Sui. Some applications track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates. 
+Move code can interact with objects stored on Sui. Some applications track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates.
 
 Move supports activity monitoring through emitting events. Emitting events consists of three steps:
 
@@ -90,7 +90,7 @@ Use the `sui::event::emit` function to emit an event when the action you want to
 
 After your Move code emits events, you need to process them. There are 2 approaches:
 
-- **Custom indexer**: Stream checkpoints and filter events continuously for real-time processing. 
+- **Custom indexer**: Stream checkpoints and filter events continuously for real-time processing.
 
 - **Polling**: Query the Sui network periodically for emitted events. This approach requires a database to store retrieved data.
 
@@ -116,129 +116,9 @@ When you process events, each event object contains the following attributes:
 
 <ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="lock" noComments />
 
-### Querying events with RPC
+### Querying events with gRPC
 
-The Sui RPC provides a [`queryEvents`](/references/sui-api) method to query onchain packages and return available events. As an example, the following `curl` command queries the DeepBookV3 package on Mainnet for a specific type of event:
-
-```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
--H "Content-Type: application/json" \
--d '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "suix_queryEvents",
-  "params": [
-    {
-      "MoveModule": {
-        "package": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
-        "module": "deepbook_utils",
-        "type": "0xdee9::clob_v2::DepositAsset<0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>"
-      }
-    },
-    null,
-    3,
-    false
-  ]
-}'
-```
-
-<details>
-<summary>
-
-Successful response
-
-</summary>
-
-```json
-{
-	"jsonrpc": "2.0",
-	"result": {
-		"data": [
-			{
-				"id": {
-					"txDigest": "8NB8sXb4m9PJhCyLB7eVH4onqQWoFFzVUrqPoYUhcQe2",
-					"eventSeq": "0"
-				},
-				"packageId": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
-				"transactionModule": "deepbook_utils",
-				"sender": "0x8b35e67a519fffa11a9c74f169228ff1aa085f3a3d57710af08baab8c02211b9",
-				"type": "0xdee9::clob_v2::WithdrawAsset<0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>",
-				"parsedJson": {
-					"owner": "0x704c8c0d8052be7b5ca7174222a8980fb2ad3cd640f4482f931deb6436902627",
-					"pool_id": "0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7",
-					"quantity": "6956"
-				},
-				"bcs": "2szz6igTRuGmD7YATo8BEg81VLaei4od62wehadwMXYJv63UzJE16USL9pHFYBAGbwNkDYLCk53d45eFj3tEZK1vDGqtXcqH5US",
-				"timestampMs": "1691757698019"
-			},
-			{
-				"id": {
-					"txDigest": "8NB8sXb4m9PJhCyLB7eVH4onqQWoFFzVUrqPoYUhcQe2",
-					"eventSeq": "1"
-				},
-				"packageId": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
-				"transactionModule": "deepbook_utils",
-				"sender": "0x8b35e67a519fffa11a9c74f169228ff1aa085f3a3d57710af08baab8c02211b9",
-				"type": "0xdee9::clob_v2::OrderFilled<0x2::sui::SUI, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>",
-				"parsedJson": {
-					"base_asset_quantity_filled": "0",
-					"base_asset_quantity_remaining": "1532800000000",
-					"is_bid": false,
-					"maker_address": "0x78a1ff467e9c15b56caa0dedfcfbdfe47c0c385f28b05fdc120b2de188cc8736",
-					"maker_client_order_id": "1691757243084",
-					"maker_rebates": "0",
-					"order_id": "9223372036854839628",
-					"original_quantity": "1614700000000",
-					"pool_id": "0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7",
-					"price": "605100",
-					"taker_address": "0x704c8c0d8052be7b5ca7174222a8980fb2ad3cd640f4482f931deb6436902627",
-					"taker_client_order_id": "20082022",
-					"taker_commission": "0"
-				},
-				"bcs": "DcVGz85dWTLU4S33N7VYrhgbkm79ENhHVnp5kBfENEWEeMxHQuvsczg94teh6WHdYtwPqdEsPWdvSJ7ne5qiMxxn3kBm36KLyuuzHV1QdzF45GN8ZU1MDGU4XppiaqcMeRpPPiW8JpUDyeQoobKEV8fMqcyYpDq6KWtZ1WMoGvEDxFKDgFvW9Q7bt1JAzQehRkEKEDZ6dTwfiHw92QuFqczmZ5MKJLYzeysUsSw",
-				"timestampMs": "1691757698019"
-			},
-			{
-				"id": {
-					"txDigest": "8b3byDuRojHXqmSz16PsyzfdXJEY5nZBGTM23gMsMAY8",
-					"eventSeq": "0"
-				},
-				"packageId": "0x158f2027f60c89bb91526d9bf08831d27f5a0fcb0f74e6698b9f0e1fb2be5d05",
-				"transactionModule": "deepbook_utils",
-				"sender": "0x8b35e67a519fffa11a9c74f169228ff1aa085f3a3d57710af08baab8c02211b9",
-				"type": "0xdee9::clob_v2::OrderFilled<0x2::sui::SUI, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>",
-				"parsedJson": {
-					"base_asset_quantity_filled": "700000000",
-					"base_asset_quantity_remaining": "0",
-					"is_bid": false,
-					"maker_address": "0x03b86e93d80b27763ee1fc2c37e285465dff835769de9462d9ad4ebcf46ac6df",
-					"maker_client_order_id": "20082022",
-					"maker_rebates": "634",
-					"order_id": "9223372036854839643",
-					"original_quantity": "1000000000",
-					"pool_id": "0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7",
-					"price": "604100",
-					"taker_address": "0x704c8c0d8052be7b5ca7174222a8980fb2ad3cd640f4482f931deb6436902627",
-					"taker_client_order_id": "20082022",
-					"taker_commission": "1058"
-				},
-				"bcs": "DcVGz85dWTLU4S33N7VYrhgbkm79ENhHVnp5kBfENEWEjN45pa9U3AkNhxfTRZbaHTQLugLBXttE32hpJKRsbrZGdryXMPmNA8EpHJnVcnYMXZmWXkNXvY1XjEYnAKU4BnhyJ9BQuxRJDXLA4DEu5uWEpWjLPD2ZHuxqHCn7GpUxvxJjHkKjr9jVVfeR6sN2uRhUXkThEDjCekrqaqwidkyXNmTzmZG4fre3eoZ",
-				"timestampMs": "1691758372427"
-			}
-		],
-		"nextCursor": {
-			"txDigest": "8b3byDuRojHXqmSz16PsyzfdXJEY5nZBGTM23gMsMAY8",
-			"eventSeq": "0"
-		},
-		"hasNextPage": true
-	},
-	"id": 1
-}
-```
-
-</details>
-
-You can use the `getTransaction` method with `include: { events: true }` to retrieve events for a specific transaction:
+Use `getTransaction` with `include: { events: true }` to retrieve events for a specific transaction. For continuous event processing, stream finalized checkpoints with `SubscriptionService.SubscribeCheckpoints` and read events from each checkpoint's transactions. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
 
 ```ts
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -263,7 +143,7 @@ async function getEventsForTransaction(digest: string) {
 
 ### Querying events with GraphQL
 
-You can use GraphQL to query events instead of JSON RPC.
+Use `Query.events` with an `EventFilter` to query events by type, sender, module, or checkpoint range.
 
 <details>
 
@@ -340,11 +220,32 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 ```
 
+### JSON-RPC `suix_queryEvents` (deprecated) {#queryevents-deprecated}
+
+:::warning
+
+The JSON-RPC `suix_queryEvents` method is **deprecated** and is being shut down on the following timeline:
+
+| Milestone | Target date |
+| --- | --- |
+| Disable JSON-RPC on Sui Foundation's mainnet full nodes | Week of August 27, 2026 |
+| Sui Foundation stops publishing JSON-RPC snapshots for full nodes | End of August 2026 |
+| Implicit fallback from JSON-RPC to archival service disconnected | End of September 2026 |
+| Full decommission of JSON-RPC from full nodes, including code removal | Mid-October 2026 |
+
+Migrate to [gRPC](#querying-events-with-grpc) or [GraphQL](#querying-events-with-graphql). See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the full method mapping.
+
+:::
+
 ## Filtering event queries
 
-To filter the events returned from your queries, use the following data structures. 
+To filter the events returned from your queries, use the following data structures.
 
-### RPC
+### JSON-RPC (deprecated) {#rpc-filters-deprecated}
+
+:::warning
+These filters apply to the deprecated `suix_queryEvents` JSON-RPC method. For new code, use [GraphQL `EventFilter`](#filtering-events) or read events from gRPC transaction and checkpoint responses.
+:::
 
 | **Query**         | **Description**                                          | **JSON-RPC parameter example**                                                                        |
 | :---------------- | :------------------------------------------------------- | :---------------------------------------------------------------------------------------------------- |
@@ -357,9 +258,9 @@ To filter the events returned from your queries, use the following data structur
 | `Sender`          | Query by sender address                                  | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`                     |
 | `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  |
 
-### GraphQL 
+### GraphQL
 
-To filter events queried using GraphQL, use one of the following workflows. 
+To filter events queried using GraphQL, use one of the following workflows.
 
 <details>
 <summary>
@@ -543,4 +444,3 @@ Query events from the following public RPC URLs:
 | Devnet  | `https://fullnode.devnet.sui.io:443`   |
 
 For archival data beyond the recent window, see [Archival Store and Service](/develop/accessing-data/archival-store).
-
