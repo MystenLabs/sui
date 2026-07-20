@@ -1108,23 +1108,11 @@ impl DatatypeDescriptor {
 }
 
 impl Type {
-    const LEGACY_BASE_MEMORY_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
-
-    /// Abstract memory size of a non-recursive ("primitive") type. Unlike [`Type::size`], this
-    /// does not traverse into element/field types, so it needs no traversal limits or config. It
-    /// errors if called on a composite type (vector/reference/datatype instantiation).
-    pub fn primitive_size(&self) -> PartialVMResult<AbstractMemorySize> {
-        use Type::*;
-        match self {
-            TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer
-            | Datatype(_) => Ok(Self::LEGACY_BASE_MEMORY_SIZE),
-            Vector(_) | Reference(_) | MutableReference(_) | DatatypeInstantiation(_) => {
-                Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "primitive_size called on a non-primitive type"
-                ))
-            }
-        }
+    /// The abstract memory size of this type — one unit per syntactic node. Kept only for
+    /// legacy gas metering; new applications should not use this. (Fallible for call-site
+    /// compatibility; the syntactic size saturates and never errors.)
+    pub fn size(&self) -> PartialVMResult<AbstractMemorySize> {
+        Ok(AbstractMemorySize::new(self.syntactic_sizes().0))
     }
 
     pub fn check_vec_ref(&self, inner_ty: &Type, is_mut: bool) -> PartialVMResult<Type> {

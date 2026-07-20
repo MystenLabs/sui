@@ -38,7 +38,6 @@ use move_binary_format::{
 };
 use move_core_types::{
     annotated_value,
-    gas_algebra::AbstractMemorySize,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     runtime_value,
@@ -88,17 +87,14 @@ pub struct VMDispatchTables {
     /// [SAFETY] Ordering is not guaranteed
     pub(crate) defining_id_origins: Arc<BTreeMap<DefiningTypeId, OriginalId>>,
     pub(crate) link_context: Arc<LinkageContext>,
-    /// Closed through-field size formulas (`value_depth` and `layout_size`) of datatypes,
-    /// resolved under this table's linkage view and memoized per datatype. This is separate
-    /// from the underlying packages to avoid grabbing write-locks and because a closed formula
-    /// is a property of (datatype, linkage), not of the datatype alone (e.g., type upgrades
-    /// can change a dependency's shape).
-    /// [SAFETY] Ordering of inner maps is not guaranteed
-    /// NB: This cache is mutated during execution (behind the `Mutex`, so shared borrowers of
-    /// the dispatch tables — e.g. natives requesting layouts — can hit it), so we make a new
-    /// one for each VM instantiation.
+    /// Closed through-field size formulas (`value_depth` and `layout_size`) of datatypes under
+    /// this table's linkage view. A closed formula is a property of (datatype, linkage), not of
+    /// the datatype alone (type upgrades can change a dependency's shape), so it lives here
+    /// rather than on the shared packages, and each VM instance gets its own.
     ///
-    /// However, the contents of the cache do not affect execution correctness, only performance.
+    /// Written only by the interpreter's exclusive-borrow paths, which is why it needs no lock;
+    /// shared borrowers (natives) recompute instead — see [`Self::compute_datatype_formula`].
+    /// Its contents affect only performance, never correctness.
     pub(crate) size_formulas: QCache<VirtualTableKey, SizeFormula>,
 }
 
@@ -823,16 +819,6 @@ impl VMDispatchTables {
     /// frame can carry them.
     pub(crate) fn make_type_arguments(&self, types: Vec<Type>) -> PartialVMResult<TypeArguments> {
         TypeArguments::new(types, |ty| self.sizes_of_type(ty))
-    }
-
-    /// The abstract memory size of a runtime type: one unit per type node. Any `Type` was
-    /// bounded by the type-traversal limits when it was built, so no limits are enforced (or
-    /// needed) here.
-    ///
-    /// This is kept only for legacy gas-metering reasons.
-    /// New applications should not use this.
-    pub fn abstract_type_size(&self, ty: &Type) -> AbstractMemorySize {
-        AbstractMemorySize::new(ty.syntactic_sizes().0)
     }
 
     /// Check the `value_depth` of instantiating `formula`'s term with `ty_args` against the
