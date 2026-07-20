@@ -21,9 +21,15 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
-use sui_types::storage::RuntimeObjectResolver;
+use sui_types::storage::{BackingPackageStore, PackageObject, RuntimeObjectResolver};
 
 use crate::reader::RpcStoreReader;
+
+impl<R: Reader + Send + Sync> BackingPackageStore for RpcStoreReader<R> {
+    fn get_package_object(&self, _package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        Ok(None)
+    }
+}
 
 impl<R: Reader + Send + Sync> RuntimeObjectResolver for RpcStoreReader<R> {
     fn read_child_object(

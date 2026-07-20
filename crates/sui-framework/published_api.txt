@@ -2896,6 +2896,12 @@ authorize_upgrade
 commit_upgrade
 	public fun
 	0x2::package
+original_package_id
+	public fun
+	0x2::package
+original_package_id_impl
+	fun
+	0x2::package
 restrict
 	fun
 	0x2::package

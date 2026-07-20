@@ -47,7 +47,7 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::RuntimeObjectResolver,
+    storage::{BackingPackageStore, PackageObject, RuntimeObjectResolver},
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -65,6 +65,15 @@ type Set<K> = IndexSet<K>;
 #[derive(Tid)]
 pub struct InMemoryTestStore(pub RefCell<InMemoryStorage>);
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
+
+impl BackingPackageStore for InMemoryTestStore {
+    fn get_package_object(
+        &self,
+        package_id: &ObjectID,
+    ) -> sui_types::error::SuiResult<Option<PackageObject>> {
+        self.0.borrow().get_package_object(package_id)
+    }
+}
 
 impl RuntimeObjectResolver for InMemoryTestStore {
     fn read_child_object(

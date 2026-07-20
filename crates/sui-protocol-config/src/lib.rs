@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 130;
+const MAX_PROTOCOL_VERSION: u64 = 131;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -1645,6 +1645,9 @@ pub struct ProtocolConfig {
     config_read_setting_impl_cost_base: Option<u64>,
     config_read_setting_impl_cost_per_byte: Option<u64>,
 
+    package_original_package_id_impl_cost_base: Option<u64>,
+    package_original_package_id_impl_cost_per_byte: Option<u64>,
+
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
     dynamic_field_hash_type_and_key_cost_base: Option<u64>,
@@ -2576,6 +2579,9 @@ impl ProtocolConfig {
             // Cost params for the Move native function `read_setting_impl``
             config_read_setting_impl_cost_base: None,
             config_read_setting_impl_cost_per_byte: None,
+
+            package_original_package_id_impl_cost_base: None,
+            package_original_package_id_impl_cost_per_byte: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4528,6 +4534,12 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
                     }
+                }
+                131 => {
+                    cfg.package_original_package_id_impl_cost_base = Some(52);
+                    let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
+                    cfg.package_original_package_id_impl_cost_per_byte =
+                        Some(package_read_cost_per_byte);
                 }
                 // Use this template when making changes:
                 //

@@ -66,6 +66,12 @@ const EAlreadyAuthorized: u64 = 2;
 const ENotAuthorized: u64 = 3;
 /// Trying to commit an upgrade to the wrong `UpgradeCap`.
 const EWrongUpgradeCap: u64 = 4;
+/// Trying to read the current package ID from the `UpgradeCap`
+/// while an upgrade is in progress.
+const EUpgradeInProgress: u64 = 5;
+/// Invalid package version in the `UpgradeCap`, or there was a mismatch
+/// between the package ID and version supplied (in the native).
+const EInvalidPackageVersion: u64 = 6;
 
 /// Update any part of the package (function implementations, add new
 /// functions or types, change dependencies)
@@ -307,6 +313,18 @@ public fun commit_upgrade(cap: &mut UpgradeCap, receipt: UpgradeReceipt) {
     cap.package = package;
     cap.version = cap.version + 1;
 }
+
+/// The original (first-version) ID of the package that this cap authorizes upgrades for.
+public fun original_package_id(cap: &UpgradeCap): ID {
+    let latest = cap.upgrade_package();
+    assert!(latest.to_address() != @0x0, EUpgradeInProgress);
+    assert!(cap.version > 0, EInvalidPackageVersion);
+    object::id_from_address(original_package_id_impl(latest.to_address(), cap.version))
+}
+
+/// Returns the original package id for the given package storage id and version.
+/// The package_id supplied must have the exact `version` otherwise
+native fun original_package_id_impl(package_id: address, version: u64): address;
 
 #[test_only]
 /// Test-only function to claim a Publisher object bypassing OTW check.

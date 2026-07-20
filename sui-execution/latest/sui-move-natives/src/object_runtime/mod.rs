@@ -41,6 +41,7 @@ use sui_types::{
     execution_status::ExecutionErrorKind,
     id::UID,
     metrics::ExecutionMetrics,
+    move_package::MovePackage,
     object::{MoveObject, Owner},
     storage::RuntimeObjectResolver,
 };
@@ -601,6 +602,15 @@ impl<'a> ObjectRuntime<'a> {
             setting_value_object_type,
             value,
         )
+    }
+
+    pub fn get_package_at_version(
+        &self,
+        package_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<MovePackage> {
+        self.child_object_store
+            .get_package_at_version(package_id, version)
     }
 
     // returns None if a child object is still borrowed

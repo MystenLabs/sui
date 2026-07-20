@@ -28,6 +28,7 @@ use self::{
     },
     event::EventEmitCostParams,
     object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
+    package::PackageVersioningOriginalPackageIdImplCostParams,
     scratch::{
         ScratchAddCostParams, ScratchExistsCostParams, ScratchExistsWithTypeCostParams,
         ScratchReadCostParams, ScratchRemoveCostParams,
@@ -90,6 +91,7 @@ pub mod event;
 mod funds_accumulator;
 mod object;
 pub mod object_runtime;
+mod package;
 mod protocol_config;
 mod random;
 pub mod scratch;
@@ -112,6 +114,10 @@ pub struct NativesCostTable {
 
     // Config
     pub config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams,
+
+    // Package versioning
+    pub package_original_package_id_impl_cost_params:
+        PackageVersioningOriginalPackageIdImplCostParams,
 
     // Dynamic field natives
     pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
@@ -241,6 +247,16 @@ impl NativesCostTable {
                     .config_read_setting_impl_cost_per_byte_as_option()
                     .map(Into::into),
             },
+
+            package_original_package_id_impl_cost_params:
+                PackageVersioningOriginalPackageIdImplCostParams {
+                    package_original_package_id_impl_cost_base: protocol_config
+                        .package_original_package_id_impl_cost_base_as_option()
+                        .map(Into::into),
+                    package_original_package_id_impl_cost_per_byte: protocol_config
+                        .package_original_package_id_impl_cost_per_byte_as_option()
+                        .map(Into::into),
+                },
 
             dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
                 dynamic_field_hash_type_and_key_cost_base: protocol_config
@@ -994,6 +1010,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "config",
             "read_setting_impl",
             make_native!(config::read_setting_impl),
+        ),
+        (
+            "package",
+            "original_package_id_impl",
+            make_native!(package::original_package_id_impl),
         ),
         (
             "dynamic_field",
