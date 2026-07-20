@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://docs.sui.io/frontmatter.schema.json",
   "title": "Sui docs page frontmatter",
-  "description": "Canonical schema for the YAML frontmatter on Sui documentation pages (docs/content/**/*.mdx). Enforced in CI by the Docs Frontmatter Check workflow. See docs/README.md for prose documentation of each field.",
+  "description": "Canonical schema for the YAML frontmatter on Sui documentation pages (docs/content/**/*.mdx). Validated locally via `pnpm docs:validate-frontmatter` (wiring it into the Docs Frontmatter Check CI workflow as a failing gate is a follow-up). Unknown top-level keys are allowed (additionalProperties: true) so Docusaurus-native frontmatter fields not enumerated here don't break validation; the nested `goal`, goal-check, and `builder_paths` objects are validated strictly (additionalProperties: false) because downstream tooling relies on their exact shape. See docs/README.md for prose documentation of each field.",
   "type": "object",
   "required": ["title", "description", "keywords"],
   "properties": {
@@ -115,7 +115,7 @@
     },
     "goalCheck": {
       "type": "object",
-      "description": "A single goal check. Every check carries a `label` (shown in failure reports) plus exactly one check-type key.",
+      "description": "A single goal check. Every check carries a `label` (shown in failure reports) plus exactly one check-type key (enforced via oneOf).",
       "required": ["label"],
       "properties": {
         "label": { "type": "string", "minLength": 1 },
@@ -191,7 +191,7 @@
         }
       },
       "additionalProperties": false,
-      "anyOf": [
+      "oneOf": [
         { "required": ["pattern"] },
         { "required": ["headings"] },
         { "required": ["links_to"] },

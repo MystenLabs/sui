@@ -167,14 +167,13 @@ pnpm docs:validate-frontmatter          # all pages
 node scripts/validate-frontmatter.mjs ../content/getting-started/tooling.mdx   # specific pages
 ```
 
-### CI enforcement
+The validator checks changed pages against the schema and exits non-zero on: wrong types, invalid `builder_paths[].eval` values (must be `covered`/`partial`/`missing`), goal checks missing a `label` or not matching exactly one check type, and missing required fields. Snippets and the generated `sui-graphql` reference are excluded. Unknown top-level frontmatter keys are permitted (to allow Docusaurus-native fields); the nested `goal` and `builder_paths` objects are validated strictly.
 
-A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx`. It:
+### CI
 
-1. Writes a job summary listing any pages missing `title`, `description`, `keywords`, `goal`, `questions`, or `answer` frontmatter, with instructions to auto-generate.
-2. Validates every changed page against `frontmatter.schema.json` and **fails the check** if any page's frontmatter does not conform (unknown fields, wrong types, invalid `builder_paths[].eval` values, goal checks missing a `label`, etc.). Snippets and the generated `sui-graphql` reference are excluded.
+A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx` and writes a job summary listing any pages missing `title`, `description`, `keywords`, `goal`, `questions`, or `answer` frontmatter, with instructions to auto-generate. Check the workflow's summary tab for results.
 
-Check the workflow's summary tab for results.
+> **Note:** wiring `validate-frontmatter.mjs` into this workflow as a required, failing check is a follow-up (it edits the workflow file, which needs elevated permissions to land). Until then, schema validation runs locally only via `pnpm docs:validate-frontmatter`; the CI workflow does not yet fail on schema violations.
 
 ## Build the site locally
 

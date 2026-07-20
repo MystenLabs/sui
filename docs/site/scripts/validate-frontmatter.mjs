@@ -80,18 +80,43 @@ function normalizeDates(value) {
 
 function formatErrors(errors) {
   if (!errors) return [];
-  return errors.map((e) => {
+
+  // When a goal check fails the oneOf constraint, Ajv also emits one
+  // "must have required property X" error per unmatched branch. Those are
+  // noise — suppress them at any path that has a oneOf/anyOf failure and
+  // keep only the single clear message.
+  const oneOfPaths = new Set(
+    errors
+      .filter((e) => e.keyword === 'oneOf' || e.keyword === 'anyOf')
+      .map((e) => e.instancePath),
+  );
+
+  const seen = new Set();
+  const out = [];
+  for (const e of errors) {
     const loc = e.instancePath || '(root)';
+    if (
+      oneOfPaths.has(e.instancePath) &&
+      e.keyword === 'required' &&
+      e.params?.missingProperty
+    ) {
+      continue;
+    }
+
     let msg = `${loc} ${e.message}`;
     if (e.keyword === 'additionalProperties' && e.params?.additionalProperty) {
       msg = `${loc} has unknown property "${e.params.additionalProperty}"`;
     } else if (e.keyword === 'enum' && e.params?.allowedValues) {
       msg = `${loc} ${e.message}: ${e.params.allowedValues.join(', ')}`;
-    } else if (e.keyword === 'anyOf') {
-      msg = `${loc} does not match any known goal check type (needs one of pattern, headings, links_to, has_tables, has_images, has_frontmatter, min_words, has_questions, has_answer, answer_in_intro, question_headings, steps_present, code_explanation_ratio)`;
+    } else if (e.keyword === 'oneOf' || e.keyword === 'anyOf') {
+      msg = `${loc} must match exactly one goal check type (one of pattern, headings, links_to, has_tables, has_images, has_frontmatter, min_words, has_questions, has_answer, answer_in_intro, question_headings, steps_present, code_explanation_ratio)`;
     }
-    return msg;
-  });
+    if (!seen.has(msg)) {
+      seen.add(msg);
+      out.push(msg);
+    }
+  }
+  return out;
 }
 
 function main() {
