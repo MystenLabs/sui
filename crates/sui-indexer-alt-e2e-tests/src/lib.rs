@@ -164,6 +164,11 @@ pub struct OffchainClusterConfig {
     pub graphql_config: GraphQlConfig,
     pub bootstrap_genesis: Option<BootstrapGenesis>,
     pub kv_rpc_config: KvRpcConfig,
+    /// Whether the graphql server should be configured to consume the kv-rpc's v2alpha experimental
+    /// query APIs (e.g. bitmap-backed `Query.transactions`). The kv-rpc server itself always serves
+    /// alpha; this flag controls whether the *graphql consumer* asserts the server has it. Default
+    /// false to preserve PG-path behavior for existing tests; flip to true for bitmap-path tests.
+    pub experimental_query_apis: bool,
 }
 
 impl FullCluster {
@@ -355,6 +360,7 @@ impl OffchainCluster {
             graphql_config,
             bootstrap_genesis,
             kv_rpc_config,
+            experimental_query_apis,
         }: OffchainClusterConfig,
         registry: &prometheus::Registry,
     ) -> anyhow::Result<Self> {
@@ -769,6 +775,7 @@ impl Default for OffchainClusterConfig {
             graphql_config: Default::default(),
             bootstrap_genesis: None,
             kv_rpc_config: KvRpcConfig::default(),
+            experimental_query_apis: false,
         }
     }
 }

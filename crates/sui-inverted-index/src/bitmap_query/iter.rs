@@ -894,4 +894,87 @@ mod tests {
         assert_eq!(collect_marked(stream_out), collect_marked(iter_out));
         assert_eq!(source.seek_count(&test_key(b"b")), 1);
     }
+
+    /// Absent-dimension semantics: an include whose key has no rows at all annihilates its
+    /// conjunction (`∩ ∅ = ∅`). Pinned explicitly because this shape only arises when a queried key
+    /// was never written (e.g. a sender with no transactions), which live-cluster tests never
+    /// exercise.
+    #[test]
+    fn absent_include_annihilates_term() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query =
+            BitmapQuery::new(vec![BitmapTerm::new(vec![include(b"ghost")]).unwrap()]).unwrap();
+
+        let out = eval_bitmap_query_bucket_iter(
+            source,
+            query,
+            0..200_000,
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            SkipPolicy::DRAIN_ONLY,
+        )
+        .collect::<Vec<_>>();
+        let items = items_only(&collect_marked(out));
+
+        assert!(
+            items.is_empty(),
+            "absent include must annihilate: {items:?}"
+        );
+    }
+
+    /// A present include cannot rescue a conjunction whose other include is absent — the
+    /// intersection is still empty.
+    #[test]
+    fn absent_include_annihilates_term_despite_present_include() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"ghost")]).unwrap(),
+        ])
+        .unwrap();
+
+        let out = eval_bitmap_query_bucket_iter(
+            source,
+            query,
+            0..200_000,
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            SkipPolicy::DRAIN_ONLY,
+        )
+        .collect::<Vec<_>>();
+        let items = items_only(&collect_marked(out));
+
+        assert!(
+            items.is_empty(),
+            "absent include must annihilate: {items:?}"
+        );
+    }
+
+    /// An exclude whose key has no rows subtracts nothing (`∖ ∅`): the present include's matches
+    /// pass through untouched.
+    #[test]
+    fn absent_exclude_is_noop() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), exclude(b"ghost")]).unwrap(),
+        ])
+        .unwrap();
+
+        let out = eval_bitmap_query_bucket_iter(
+            source,
+            query,
+            0..200_000,
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            SkipPolicy::DRAIN_ONLY,
+        )
+        .collect::<Vec<_>>();
+
+        assert_eq!(items_only(&collect_marked(out)), vec![(0, vec![1, 2])]);
+    }
 }

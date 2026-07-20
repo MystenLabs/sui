@@ -43,7 +43,7 @@ async fn transactions(
         }"#;
 
     let data = graphql::query(
-        cluster,
+        &cluster.graphql_url(),
         query,
         json!({ "sequenceNumber": seq, "first": first, "last": last, "after": after, "before": before }),
     )
