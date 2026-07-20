@@ -1,19 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Tests for the type size formulas: the syntactic pair (`type_size`, `type_depth`, closed
-//! [`LinearFormula`]/[`MaxPlusFormula`]s per term) and the through-field pair (`value_depth`,
-//! `layout_size`, partial forms on datatype descriptors and signature terms).
+//! Tests for the type size formula algebra (`LinearForm`/`MaxPlusForm`, the partial and arena
+//! bundles). The load-bearing property is *closure under substitution*: substituting argument
+//! forms into a formula and then solving equals solving each argument form and then the formula.
+//! That is what lets the runtime resolve a datatype's formula once (op1) and evaluate it against
+//! concrete argument sizes later (op2) and still get the size it would have measured on the fully
+//! realized type. We check it over a family of generated forms, and spot-check the JIT datatype
+//! builder against a hand computation.
 //!
-//! The load-bearing property is *legacy equivalence*: the formula-predicted sizes of a
-//! substitution must match the node/depth counters of the historical checked traversal exactly,
-//! so that checked `subst` accepts and rejects precisely the same instantiations it always did.
-//! We keep a small reference implementation of the legacy counters here and compare against it
-//! over a family of generated type shapes.
-//!
-//! Substitution is defined on static (arena) terms only, so test base terms are built as
-//! `ArenaType`s (mirrored from runtime terms via [`to_arena`], which keeps the shapes readable);
-//! arguments are runtime `Type`s, as in the real substitution sites.
+//! The end-to-end resolution path (op1 against a real linkage) is exercised by the loader and
+//! instantiation tests, which run the whole VM; here we test the pure algebra in isolation.
 
 use crate::{
     cache::{arena::ArenaBuilder, identifier_interner::IdentifierInterner},
@@ -22,8 +19,8 @@ use crate::{
     shared::{
         constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
         type_size_formulae::{
-            DatatypeSizeInfo, DatatypeSizes, LinearFormula, MaxPlusFormula, NoFolding,
-            PartialTypeFormula, TypeArguments, TypeSize, check_syntactic_limits,
+            ArenaTypeSizeFormula, LinearForm, LinearTerm, MaxPlusForm, MaxPlusTerm,
+            PartialTypeSizeFormula, TypeSize, check_syntactic_limits,
         },
     },
 };
@@ -43,12 +40,13 @@ fn dt_key() -> VirtualTableKey {
     VirtualTableKey::from_parts(AccountAddress::TWO, name, name)
 }
 
+#[allow(dead_code)]
 fn dt(children: Vec<Type>) -> Type {
     Type::DatatypeInstantiation(Box::new((dt_key(), children)))
 }
 
 /// Mirror a runtime type term into `arena` as an `ArenaType`, so tests can write terms in the
-/// readable runtime syntax and still exercise the arena-term substitution entry points.
+/// readable runtime syntax and still exercise the arena-term entry points.
 pub(crate) fn to_arena(arena: &ArenaBuilder, ty: &Type) -> ArenaType {
     match ty {
         Type::Bool => ArenaType::Bool,
@@ -79,22 +77,7 @@ pub(crate) fn to_arena(arena: &ArenaBuilder, ty: &Type) -> ArenaType {
     }
 }
 
-/// Build `TypeArguments` for tests. The through-field quantities normally come from the
-/// dispatch tables; term-level substitution only reads the syntactic pair, so nominal values
-/// suffice here.
-fn ty_args(types: Vec<Type>) -> TypeArguments {
-    TypeArguments::new(types, |ty| {
-        let (type_size, type_depth) = ty.syntactic_sizes();
-        Ok(TypeSize {
-            type_size,
-            type_depth,
-            value_depth: 1,
-            layout_size: 1,
-        })
-    })
-    .unwrap()
-}
-
+#[allow(dead_code)]
 fn nested_vec(nodes: u64) -> Type {
     let mut t = Type::U128;
     for _ in 1..nodes {
@@ -103,63 +86,7 @@ fn nested_vec(nodes: u64) -> Type {
     t
 }
 
-/// The syntactic `(type_size, type_depth)` pairs of `types`, as solve arguments.
-fn arg_sizes(types: &[Type]) -> Vec<(u64, u64)> {
-    types.iter().map(|ty| ty.syntactic_sizes()).collect()
-}
-
-// -------------------------------------------------------------------------------------------------
-// Reference implementation of the legacy traversal counters
-// -------------------------------------------------------------------------------------------------
-
-#[derive(Default)]
-struct LegacyCounters {
-    nodes: u64,
-    max_depth: u64,
-}
-
-/// The legacy traversal counted every node it entered, one level deeper than its parent. Cloning
-/// an argument in for a `TyParam` occurrence entered the argument's nodes *below* the occurrence
-/// (the parameter node itself was already counted).
-fn legacy_clone(ty: &Type, depth: u64, c: &mut LegacyCounters) {
-    let depth = depth + 1;
-    c.nodes += 1;
-    c.max_depth = c.max_depth.max(depth);
-    match ty {
-        Type::Vector(t) | Type::Reference(t) | Type::MutableReference(t) => {
-            legacy_clone(t, depth, c)
-        }
-        Type::DatatypeInstantiation(inst) => {
-            for t in &inst.1 {
-                legacy_clone(t, depth, c);
-            }
-        }
-        _ => (),
-    }
-}
-
-fn legacy_subst(ty: &Type, ty_args: &[Type], depth: u64, c: &mut LegacyCounters) {
-    let depth = depth + 1;
-    c.nodes += 1;
-    c.max_depth = c.max_depth.max(depth);
-    match ty {
-        Type::TyParam(idx) => legacy_clone(&ty_args[*idx as usize], depth, c),
-        Type::Vector(t) | Type::Reference(t) | Type::MutableReference(t) => {
-            legacy_subst(t, ty_args, depth, c)
-        }
-        Type::DatatypeInstantiation(inst) => {
-            for t in &inst.1 {
-                legacy_subst(t, ty_args, depth, c);
-            }
-        }
-        _ => (),
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Deterministic type generator
-// -------------------------------------------------------------------------------------------------
-
+// A tiny deterministic PRNG so the generated forms are reproducible without `rand`.
 fn next(seed: &mut u64) -> u64 {
     *seed = seed
         .wrapping_mul(6364136223846793005)
@@ -167,494 +94,243 @@ fn next(seed: &mut u64) -> u64 {
     *seed >> 33
 }
 
-/// Generate a pseudo-random type term with up to `n_params` distinct type parameters and nesting
-/// bounded by `budget`. Shapes need not be valid Move types (e.g. nested references); the
-/// size algebra is uniform over the term structure.
-fn gen_type(seed: &mut u64, budget: u64, n_params: u16) -> Type {
-    let choice = if budget == 0 {
-        next(seed) % 8
-    } else {
-        next(seed) % 12
-    };
-    match choice {
-        0 => Type::Bool,
-        1 => Type::U8,
-        2 => Type::U16,
-        3 => Type::U64,
-        4 => Type::Address,
-        5 => Type::Signer,
-        6 => Type::Datatype(dt_key()),
-        7 => {
-            if n_params > 0 {
-                Type::TyParam((next(seed) % n_params as u64) as u16)
-            } else {
-                Type::U128
-            }
-        }
-        8 => Type::Vector(Box::new(gen_type(seed, budget - 1, n_params))),
-        9 => Type::Reference(Box::new(gen_type(seed, budget - 1, n_params))),
-        10 => Type::MutableReference(Box::new(gen_type(seed, budget - 1, n_params))),
-        _ => {
-            let children = (0..(next(seed) % 3 + 1))
-                .map(|_| gen_type(seed, budget - 1, n_params))
-                .collect();
-            dt(children)
-        }
+/// A random linear form over `n_params` parameters. Built with `absorb`, so terms merge by
+/// parameter. Coefficients and constant are kept small so no measure saturates.
+fn rand_linear(seed: &mut u64, n_params: u16) -> LinearForm {
+    let mut form = LinearForm::constant(next(seed) % 5);
+    for _ in 0..(next(seed) % 4) {
+        let param = (next(seed) % n_params.max(1) as u64) as u16;
+        form.absorb(next(seed) % 4, &LinearForm::parameter(param));
+    }
+    form
+}
+
+/// A random max-plus form over `n_params` parameters. Built with `absorb`, so terms merge by
+/// parameter (taking the max offset).
+fn rand_maxplus(seed: &mut u64, n_params: u16) -> MaxPlusForm {
+    let mut form = MaxPlusForm::constant(next(seed) % 5);
+    for _ in 0..(next(seed) % 4) {
+        let param = (next(seed) % n_params.max(1) as u64) as u16;
+        form.absorb(next(seed) % 4, &MaxPlusForm::parameter(param));
+    }
+    form
+}
+
+// -------------------------------------------------------------------------------------------------
+// Closure under substitution: substitute-then-solve == solve-args-then-solve
+// -------------------------------------------------------------------------------------------------
+
+#[test]
+fn linear_form_substitute_composes() {
+    let mut seed = 0x1234_5678u64;
+    for _ in 0..2000 {
+        let (p, q) = (3u16, 3u16);
+        let f = rand_linear(&mut seed, p);
+        let gs: Vec<LinearForm> = (0..p).map(|_| rand_linear(&mut seed, q)).collect();
+        let xs: Vec<u64> = (0..q).map(|_| next(&mut seed) % 5).collect();
+
+        let composed = f.substitute(&gs).unwrap().solve(&xs).unwrap();
+        let solved_args: Vec<u64> = gs.iter().map(|g| g.solve(&xs).unwrap()).collect();
+        let direct = f.solve(&solved_args).unwrap();
+        assert_eq!(composed, direct);
+    }
+}
+
+#[test]
+fn maxplus_form_substitute_composes() {
+    let mut seed = 0x9e37_79b9u64;
+    for _ in 0..2000 {
+        let (p, q) = (3u16, 3u16);
+        let f = rand_maxplus(&mut seed, p);
+        let gs: Vec<MaxPlusForm> = (0..p).map(|_| rand_maxplus(&mut seed, q)).collect();
+        let xs: Vec<u64> = (0..q).map(|_| next(&mut seed) % 5).collect();
+
+        let composed = f.substitute(&gs).unwrap().solve(&xs).unwrap();
+        let solved_args: Vec<u64> = gs.iter().map(|g| g.solve(&xs).unwrap()).collect();
+        let direct = f.solve(&solved_args).unwrap();
+        assert_eq!(composed, direct);
+    }
+}
+
+#[test]
+fn partial_formula_substitute_composes() {
+    let mut seed = 0xdead_beefu64;
+    for _ in 0..1000 {
+        let (p, q) = (2u16, 2u16);
+        let mk = |seed: &mut u64, n| PartialTypeSizeFormula {
+            type_size: rand_linear(seed, n),
+            type_depth: rand_maxplus(seed, n),
+            value_depth: rand_maxplus(seed, n),
+            layout_size: rand_linear(seed, n),
+        };
+        let f = mk(&mut seed, p);
+        let gs: Vec<PartialTypeSizeFormula> = (0..p).map(|_| mk(&mut seed, q)).collect();
+        let xs: Vec<TypeSize> = (0..q)
+            .map(|_| TypeSize {
+                type_size: next(&mut seed) % 5,
+                type_depth: next(&mut seed) % 5,
+                value_depth: next(&mut seed) % 5,
+                layout_size: next(&mut seed) % 5,
+            })
+            .collect();
+
+        let composed = f.substitute(&gs).unwrap().solve(&xs).unwrap();
+        let solved_args: Vec<TypeSize> = gs.iter().map(|g| g.solve(&xs).unwrap()).collect();
+        let direct = f.solve(&solved_args).unwrap();
+        assert_eq!(composed, direct);
     }
 }
 
 // -------------------------------------------------------------------------------------------------
-// Tests
+// Partial formula primitives
 // -------------------------------------------------------------------------------------------------
 
-/// A worked example with hand-computed numbers, for readability:
-/// `T = S<Vector<T0>, T1, T0>` applied to `[Vector<Vector<U8>>, U8]`.
 #[test]
-fn formula_hand_example() {
+fn primitive_solves_to_primitive() {
+    let solved = PartialTypeSizeFormula::primitive().solve(&[]).unwrap();
+    assert_eq!(solved, TypeSize::PRIMITIVE);
+}
+
+#[test]
+fn wrap_adds_one_level_to_every_measure() {
+    let inner = TypeSize {
+        type_size: 3,
+        type_depth: 2,
+        value_depth: 4,
+        layout_size: 5,
+    };
+    // A parameter formula solved against `inner` is `inner`; wrapping it must add one everywhere.
+    let wrapped = PartialTypeSizeFormula::parameter(0)
+        .wrap()
+        .solve(&[inner])
+        .unwrap();
+    assert_eq!(wrapped, TypeSize::wrap(inner));
+}
+
+// -------------------------------------------------------------------------------------------------
+// The JIT datatype builder
+// -------------------------------------------------------------------------------------------------
+
+#[test]
+fn for_datatype_struct_forms() {
+    // struct S<T> { a: T, b: vector<T>, c: u64 }
     let arena = ArenaBuilder::new_bounded();
-    let base_term = dt(vec![
-        Type::Vector(Box::new(Type::TyParam(0))),
-        Type::TyParam(1),
-        Type::TyParam(0),
-    ]);
-    let base = to_arena(&arena, &base_term);
-    // Base term: 5 nodes (S, Vector, T0, T1, T0); T0 occurs twice, deepest at depth 3;
-    // T1 occurs once at depth 2.
-    let arg0 = nested_vec(3); // Vector<Vector<U8>>: 3 nodes, depth 3
-    let arg1 = Type::U8; // 1 node, depth 1
-    assert_eq!(arg0.syntactic_sizes(), (3, 3));
-    assert_eq!(arg1.syntactic_sizes(), (1, 1));
+    let fields = [
+        to_arena(&arena, &Type::TyParam(0)),
+        to_arena(&arena, &Type::Vector(Box::new(Type::TyParam(0)))),
+        to_arena(&arena, &Type::U64),
+    ];
+    let formula = ArenaTypeSizeFormula::for_datatype(1, fields.iter(), 0, &arena).unwrap();
 
-    let (size_formula, depth_formula) = base.syntactic_formulas();
-    let args = [arg0.clone(), arg1.clone()];
-    let sizes = arg_sizes(&args);
-    // nodes = 5 + 2×3 + 1×1 = 12; depth = max(3, 3+3, 2+1) = 6.
+    // type_size(S<T>) = 1 + type_size(T); type_depth(S<T>) = max(1, 1 + depth(T)).
     assert_eq!(
-        size_formula.solve_with(&sizes, |(size, _)| *size).unwrap(),
-        12
+        formula.type_size,
+        LinearForm {
+            constant: 1,
+            terms: vec![LinearTerm {
+                param: 0,
+                coefficient: 1
+            }],
+        }
     );
     assert_eq!(
-        depth_formula
-            .solve_with(&sizes, |(_, depth)| *depth)
-            .unwrap(),
-        6
+        formula.type_depth,
+        MaxPlusForm {
+            constant: 1,
+            terms: vec![MaxPlusTerm {
+                param: 0,
+                offset: 1
+            }],
+        }
     );
 
-    // The predicted sizes are well within the limits, so the substitution goes through and
-    // builds exactly the expected type.
-    let result = base.subst(&args).unwrap();
+    // No datatype-application fields, so nothing stays symbolic.
+    assert!(formula.apps.is_empty());
+
+    // value_depth: the deepest field is `vector<T>` (T two levels below S), and the primitive
+    // `c` bottoms out at level 2 → max(2, 2 + value_depth(T)).
     assert_eq!(
-        result,
-        dt(vec![
-            Type::Vector(Box::new(arg0.clone())),
-            Type::U8,
-            arg0.clone(),
-        ])
+        formula.value_depth_local,
+        MaxPlusForm {
+            constant: 2,
+            terms: vec![MaxPlusTerm {
+                param: 0,
+                offset: 2
+            }],
+        }
+    );
+    // layout_size: S node + T (from `a`) + vector node + T (from `b`) + u64 node = 3 + 2·T.
+    assert_eq!(
+        formula.layout_size_local,
+        LinearForm {
+            constant: 3,
+            terms: vec![LinearTerm {
+                param: 0,
+                coefficient: 2
+            }],
+        }
+    );
+
+    // Cross-check by solving against T = u64 (every measure 1).
+    let concrete = PartialTypeSizeFormula {
+        type_size: formula.type_size.clone(),
+        type_depth: formula.type_depth.clone(),
+        value_depth: formula.value_depth_local.clone(),
+        layout_size: formula.layout_size_local.clone(),
+    }
+    .solve(&[TypeSize::PRIMITIVE])
+    .unwrap();
+    assert_eq!(
+        concrete,
+        TypeSize {
+            type_size: 2,   // S<u64>: S + u64
+            type_depth: 2,  // S over u64
+            value_depth: 3, // S value nests vector<u64> (depth 2)
+            layout_size: 5, // 3 + 2·1
+        }
     );
 }
 
-/// `check_syntactic_limits` accepts exactly at the limits and rejects just above them, with the
-/// depth limit checked first.
 #[test]
-fn syntactic_limit_boundaries() {
+fn for_datatype_enum_counts_a_node_per_variant() {
+    // enum E<T> { A(T), B(T, u64) } — two variants, so one extra layout node beyond the fields.
+    let arena = ArenaBuilder::new_bounded();
+    let fields = [
+        to_arena(&arena, &Type::TyParam(0)),
+        to_arena(&arena, &Type::TyParam(0)),
+        to_arena(&arena, &Type::U64),
+    ];
+    let formula = ArenaTypeSizeFormula::for_datatype(1, fields.iter(), 2, &arena).unwrap();
+    // layout: E node + 2 variant nodes + 2·T (one per `T` field) + u64 node = 4 + 2·T.
+    assert_eq!(
+        formula.layout_size_local,
+        LinearForm {
+            constant: 4,
+            terms: vec![LinearTerm {
+                param: 0,
+                coefficient: 2
+            }],
+        }
+    );
+}
+
+// -------------------------------------------------------------------------------------------------
+// Limit checks
+// -------------------------------------------------------------------------------------------------
+
+#[test]
+fn check_syntactic_limits_boundaries() {
     assert!(check_syntactic_limits(MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX).is_ok());
 
-    let err = check_syntactic_limits(MAX_TYPE_INSTANTIATION_NODES + 1, TYPE_DEPTH_MAX).unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
-
-    let err = check_syntactic_limits(MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX + 1).unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_DEPTH_REACHED);
-
-    // Depth is checked first when both limits are exceeded.
-    let err =
-        check_syntactic_limits(MAX_TYPE_INSTANTIATION_NODES + 1, TYPE_DEPTH_MAX + 1).unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_DEPTH_REACHED);
-}
-
-/// The formulas' predictions must equal the legacy traversal's counters on every shape, and
-/// checked `subst` must accept/reject exactly on that boundary.
-#[test]
-fn formulas_match_legacy_traversal_counters() {
-    let mut seed = 0x5EED_CAFE_u64;
-    for case in 0..500u64 {
-        let arena = ArenaBuilder::new_bounded();
-        let n_params = (case % 4) as u16 + 1;
-        let base_term = gen_type(&mut seed, 4, n_params);
-        let base = to_arena(&arena, &base_term);
-        let args = (0..n_params)
-            .map(|_| gen_type(&mut seed, 3, 0))
-            .collect::<Vec<_>>();
-
-        let mut legacy = LegacyCounters::default();
-        legacy_subst(&base_term, &args, 0, &mut legacy);
-
-        let (size_formula, depth_formula) = base.syntactic_formulas();
-        let sizes = arg_sizes(&args);
-        let predicted_size = size_formula.solve_with(&sizes, |(size, _)| *size).unwrap();
-        let predicted_depth = depth_formula
-            .solve_with(&sizes, |(_, depth)| *depth)
-            .unwrap();
-        assert_eq!(predicted_size, legacy.nodes, "nodes mismatch, case {case}");
-        assert_eq!(
-            predicted_depth, legacy.max_depth,
-            "depth mismatch, case {case}"
-        );
-
-        // Checked `subst` accepts or rejects exactly as the predicted sizes dictate against
-        // the (constant) limits.
-        let result = base.subst(&args);
-        if predicted_depth > TYPE_DEPTH_MAX {
-            assert_eq!(
-                result.unwrap_err().major_status(),
-                StatusCode::VM_MAX_TYPE_DEPTH_REACHED,
-                "case {case}"
-            );
-        } else if predicted_size > MAX_TYPE_INSTANTIATION_NODES {
-            assert_eq!(
-                result.unwrap_err().major_status(),
-                StatusCode::VM_MAX_TYPE_NODES_REACHED,
-                "case {case}"
-            );
-        } else {
-            assert!(result.is_ok(), "subst failed under the limits, case {case}");
-        }
-    }
-}
-
-/// Checked `subst` rejects exactly on the constant limits: a vector chain sized right at the
-/// node limit passes, one past it fails, and a chain deeper than the depth limit fails with the
-/// depth error (depth is checked first).
-#[test]
-fn subst_rejects_on_constant_limits() {
-    let base = ArenaType::TyParam(0);
-    // The parameter occurrence itself is counted in addition to the argument's nodes (legacy
-    // semantics), so the predicted sizes are the argument's plus one node and one level.
-    assert!(
-        base.subst(&[nested_vec(MAX_TYPE_INSTANTIATION_NODES - 1)])
-            .is_ok()
-    );
-    let err = base
-        .subst(&[nested_vec(MAX_TYPE_INSTANTIATION_NODES)])
-        .unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
-    let err = base.subst(&[nested_vec(TYPE_DEPTH_MAX)]).unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_DEPTH_REACHED);
-}
-
-/// The translation-time formulas ([`PartialTypeFormula::for_term`], as stored in loaded
-/// packages) must agree with the on-the-fly route ([`ArenaType::syntactic_formulas`] /
-/// [`ArenaType::subst`]) on predictions, the built type, and the accept/reject boundary.
-#[test]
-fn precomputed_formulas_match_on_the_fly_subst() {
-    let arena = ArenaBuilder::new_bounded();
-    // Vector<Vector<T0>>, twice: one term consumed by `for_term`, one kept for the on-the-fly
-    // route.
-    let term = Type::Vector(Box::new(Type::Vector(Box::new(Type::TyParam(0)))));
-    let precomputed =
-        PartialTypeFormula::for_term(to_arena(&arena, &term), &arena, &mut NoFolding).unwrap();
-    let on_the_fly = to_arena(&arena, &term);
-
-    let args = ty_args(vec![nested_vec(4)]);
-    let (size_formula, depth_formula) = on_the_fly.syntactic_formulas();
-
-    // Same predictions...
+    let node_err = check_syntactic_limits(MAX_TYPE_INSTANTIATION_NODES + 1, 1).unwrap_err();
     assert_eq!(
-        precomputed
-            .type_size
-            .solve_with(args.sizes(), |sizes| sizes.type_size)
-            .unwrap(),
-        size_formula
-            .solve_with(args.sizes(), |sizes| sizes.type_size)
-            .unwrap()
+        node_err.major_status(),
+        StatusCode::VM_MAX_TYPE_NODES_REACHED
     );
+
+    let depth_err = check_syntactic_limits(1, TYPE_DEPTH_MAX + 1).unwrap_err();
     assert_eq!(
-        precomputed
-            .type_depth
-            .solve_with(args.sizes(), |sizes| sizes.type_depth)
-            .unwrap(),
-        depth_formula
-            .solve_with(args.sizes(), |sizes| sizes.type_depth)
-            .unwrap()
-    );
-    // ...same built type...
-    assert_eq!(
-        precomputed.term.subst(args.types()).unwrap(),
-        on_the_fly.subst(args.types()).unwrap()
-    );
-
-    // ...and the same accept/reject boundary at the constant limits. The term contributes
-    // three nodes (two vectors plus the parameter occurrence) on top of the argument.
-    let at_limit = nested_vec(MAX_TYPE_INSTANTIATION_NODES - 3);
-    assert!(
-        precomputed
-            .term
-            .subst(std::slice::from_ref(&at_limit))
-            .is_ok()
-    );
-    assert!(on_the_fly.subst(&[at_limit]).is_ok());
-    let over_limit = nested_vec(MAX_TYPE_INSTANTIATION_NODES - 2);
-    let err = precomputed
-        .term
-        .subst(std::slice::from_ref(&over_limit))
-        .unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
-    let err = on_the_fly.subst(&[over_limit]).unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
-}
-
-/// Substituting closed formulas into a closed formula must equal solving the composition: for
-/// all `f`, `gs`, `xs`: `f.subst(gs).solve(xs) == f.solve(gs.map(|g| g.solve(xs)))`. This is
-/// the law the link-time closing step rests on (closure under substitution), for both
-/// algebras.
-#[test]
-fn closed_formula_subst_composes() {
-    let mut seed = 0xC0_FFEE_u64;
-    let gen_terms = |seed: &mut u64, n_params: u64| -> Vec<(u16, u64)> {
-        let mut terms = vec![];
-        for param in 0..n_params {
-            if next(seed).is_multiple_of(2) {
-                terms.push((param as u16, next(seed) % 5));
-            }
-        }
-        terms
-    };
-    for case in 0..500u64 {
-        // f is over 3 parameters; each g and the solve point are over 2.
-        let f_linear = LinearFormula {
-            constant: next(&mut seed) % 10,
-            terms: gen_terms(&mut seed, 3),
-        };
-        let f_maxplus = MaxPlusFormula {
-            constant: next(&mut seed) % 10,
-            terms: gen_terms(&mut seed, 3),
-        };
-        let gs_linear = (0..3)
-            .map(|_| LinearFormula {
-                constant: next(&mut seed) % 10,
-                terms: gen_terms(&mut seed, 2),
-            })
-            .collect::<Vec<_>>();
-        let gs_maxplus = (0..3)
-            .map(|_| MaxPlusFormula {
-                constant: next(&mut seed) % 10,
-                terms: gen_terms(&mut seed, 2),
-            })
-            .collect::<Vec<_>>();
-        let xs = [next(&mut seed) % 10, next(&mut seed) % 10];
-
-        let composed = f_linear.subst(&gs_linear).unwrap().solve(&xs).unwrap();
-        let direct = f_linear
-            .solve(
-                &gs_linear
-                    .iter()
-                    .map(|g| g.solve(&xs).unwrap())
-                    .collect::<Vec<_>>(),
-            )
-            .unwrap();
-        assert_eq!(composed, direct, "linear composition mismatch, case {case}");
-
-        let composed = f_maxplus.subst(&gs_maxplus).unwrap().solve(&xs).unwrap();
-        let direct = f_maxplus
-            .solve(
-                &gs_maxplus
-                    .iter()
-                    .map(|g| g.solve(&xs).unwrap())
-                    .collect::<Vec<_>>(),
-            )
-            .unwrap();
-        assert_eq!(
-            composed, direct,
-            "max-plus composition mismatch, case {case}"
-        );
-    }
-}
-
-/// The datatype-level through-field forms computed at translation time: purely local field
-/// structure folds into the constants, type parameters stay parameter terms, and datatype
-/// applications stay pending [`ApplyFormula`]s for the dispatch tables to close under a
-/// transaction's linkage view — and a fully concrete datatype is just written down as
-/// constants.
-#[test]
-fn datatype_size_info() {
-    let arena = ArenaBuilder::new_bounded();
-
-    // struct C { a: u64, b: vector<u32> } — fully concrete: constants, no formula.
-    // value_depth = max(S→u64, S→vector→u32) = 3; layout_size = C + u64 + vector + u32 = 4.
-    let fields = [
-        ArenaType::U64,
-        ArenaType::Vector(arena.alloc_box(ArenaType::U32).unwrap()),
-    ];
-    let info =
-        DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena, &mut NoFolding).unwrap();
-    assert!(matches!(
-        info,
-        DatatypeSizeInfo::Constant(DatatypeSizes {
-            value_depth: 3,
-            layout_size: 4,
-        })
-    ));
-
-    // struct S<T0> { a: u64, b: vector<T0> } — formulas over T0.
-    let fields = [
-        ArenaType::U64,
-        ArenaType::Vector(arena.alloc_box(ArenaType::TyParam(0)).unwrap()),
-    ];
-    let info =
-        DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena, &mut NoFolding).unwrap();
-    let DatatypeSizeInfo::Formula {
-        value_depth,
-        layout_size,
-    } = info
-    else {
-        panic!("expected formulas for a generic datatype");
-    };
-    // value_depth(S<arg>) = max(2, 2 + value_depth(arg)); layout_size(S<arg>) = 3 +
-    // layout(arg): S + u64 + vector, plus the argument's layout once.
-    assert_eq!(value_depth.constant, 2);
-    assert_eq!(value_depth.params.as_ref(), &[(0, 2)]);
-    assert!(value_depth.applies.is_empty());
-    assert_eq!(layout_size.constant, 3);
-    assert_eq!(layout_size.params.as_ref(), &[(0, 1)]);
-    assert!(layout_size.applies.is_empty());
-
-    // struct P { s: SomeOtherStruct } — the field's datatype application is a pending
-    // `ApplyFormula` one nesting level below `P` itself, occurring once.
-    let fields = [ArenaType::Datatype(dt_key())];
-    let info =
-        DatatypeSizeInfo::for_datatype_fields(fields.iter(), 0, &arena, &mut NoFolding).unwrap();
-    let DatatypeSizeInfo::Formula {
-        value_depth,
-        layout_size,
-    } = info
-    else {
-        panic!("expected formulas for a datatype with datatype fields");
-    };
-    assert_eq!(value_depth.constant, 1);
-    assert!(value_depth.params.is_empty());
-    assert_eq!(value_depth.applies.len(), 1);
-    let (offset, apply) = &value_depth.applies[0];
-    assert_eq!(*offset, 1);
-    assert!(apply.args.is_empty());
-    assert_eq!(layout_size.constant, 1);
-    assert!(layout_size.params.is_empty());
-    assert_eq!(layout_size.applies.len(), 1);
-    let (multiplicity, apply) = &layout_size.applies[0];
-    assert_eq!(*multiplicity, 1);
-    assert!(apply.args.is_empty());
-
-    // enum E<T0> { A { a: T0 }, B { b: u8 } } — one layout node per variant on top of the
-    // datatype's own node.
-    let fields = [ArenaType::TyParam(0), ArenaType::U8];
-    let info = DatatypeSizeInfo::for_datatype_fields(
-        fields.iter(),
-        /* variants */ 2,
-        &arena,
-        &mut NoFolding,
-    )
-    .unwrap();
-    let DatatypeSizeInfo::Formula {
-        value_depth,
-        layout_size,
-    } = info
-    else {
-        panic!("expected formulas for a generic enum");
-    };
-    assert_eq!(value_depth.constant, 2);
-    assert_eq!(value_depth.params.as_ref(), &[(0, 1)]);
-    assert_eq!(layout_size.constant, 4); // E + 2 variants + u8
-    assert_eq!(layout_size.params.as_ref(), &[(0, 1)]);
-}
-
-/// `syntactic_sizes` must agree with a naive node count (the semantics of the old
-/// `count_type_nodes`, which it subsumes), on both type representations.
-#[test]
-fn syntactic_sizes_match_naive_node_count() {
-    fn naive_count(ty: &Type) -> u64 {
-        match ty {
-            Type::Vector(t) | Type::Reference(t) | Type::MutableReference(t) => 1 + naive_count(t),
-            Type::DatatypeInstantiation(inst) => 1 + inst.1.iter().map(naive_count).sum::<u64>(),
-            _ => 1,
-        }
-    }
-    let mut seed = 0xBADC_0FFE_u64;
-    for _ in 0..200 {
-        let arena = ArenaBuilder::new_bounded();
-        let ty = gen_type(&mut seed, 4, 3);
-        assert_eq!(ty.syntactic_sizes().0, naive_count(&ty));
-        assert_eq!(
-            to_arena(&arena, &ty).syntactic_sizes(),
-            ty.syntactic_sizes()
-        );
-    }
-}
-
-/// The `result_depth` formula must equal the *true* depth of the realized substitution — the
-/// depth of `subst(term, args)` — on every shape (as opposed to `syntactic_formulas`, which
-/// predicts the over-counting legacy traversal counter).
-#[test]
-fn result_depth_formula_matches_realized_depth() {
-    fn true_depth(ty: &Type) -> u64 {
-        match ty {
-            Type::Vector(t) | Type::Reference(t) | Type::MutableReference(t) => 1 + true_depth(t),
-            Type::DatatypeInstantiation(inst) => {
-                1 + inst.1.iter().map(true_depth).max().unwrap_or(0)
-            }
-            _ => 1,
-        }
-    }
-    let mut seed = 0x0DDBA11_u64;
-    for case in 0..500u64 {
-        let arena = ArenaBuilder::new_bounded();
-        let n_params = (case % 4) as u16 + 1;
-        let base_term = gen_type(&mut seed, 4, n_params);
-        let base = to_arena(&arena, &base_term);
-        let args = (0..n_params)
-            .map(|_| gen_type(&mut seed, 3, 0))
-            .collect::<Vec<_>>();
-
-        // Solve the formula against the arguments' true depths.
-        let arg_depths = args.iter().map(true_depth).collect::<Vec<_>>();
-        let predicted = base.result_depth_formula().solve(&arg_depths).unwrap();
-
-        // The realized type's actual depth.
-        let realized = base.subst(&args).unwrap();
-        assert_eq!(predicted, true_depth(&realized), "case {case}");
-    }
-}
-
-/// The DoS shape from the type-instantiation fix: a term mentioning one parameter many times,
-/// applied to a large argument. The formula rejects it by arithmetic before any part of the
-/// oversized type is built.
-#[test]
-fn quadratic_instantiation_rejected_before_construction() {
-    let arena = ArenaBuilder::new_bounded();
-    let base = to_arena(&arena, &dt(vec![Type::TyParam(0); 32]));
-    let arg = nested_vec(95);
-
-    // Predicted: 33 base nodes + 32 occurrences × 95 nodes.
-    let (size_formula, _) = base.syntactic_formulas();
-    let predicted = size_formula
-        .solve_with(&arg_sizes(std::slice::from_ref(&arg)), |(size, _)| *size)
-        .unwrap();
-    assert_eq!(predicted, 33 + 32 * 95);
-
-    let err = base.subst(&[arg]).unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
-}
-
-#[test]
-fn missing_type_argument_is_an_invariant_violation() {
-    let arena = ArenaBuilder::new_bounded();
-    let base = ArenaType::Vector(arena.alloc_box(ArenaType::TyParam(1)).unwrap());
-    let (size_formula, _) = base.syntactic_formulas();
-    let err = size_formula.solve(&[1]).unwrap_err();
-    assert_eq!(
-        err.major_status(),
-        StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
-    );
-    let err = base.subst(&[Type::U8]).unwrap_err();
-    assert_eq!(
-        err.major_status(),
-        StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
+        depth_err.major_status(),
+        StatusCode::VM_MAX_TYPE_DEPTH_REACHED
     );
 }

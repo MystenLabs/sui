@@ -1392,7 +1392,8 @@ impl VMTracer<'_> {
                 let struct_type = vtables
                     .instantiate_struct_type(
                         struct_inst_ptr,
-                        &machine.call_stack.current_frame.ty_args,
+                        &machine.call_stack.current_frame.ty_arg_types,
+                        &machine.call_stack.current_frame.ty_arg_sizes,
                     )
                     .ok()?;
                 let stack_len = self.type_stack.len();
@@ -1586,7 +1587,11 @@ impl VMTracer<'_> {
             }
             B::VecPack(ty_ptr, n) => {
                 let ty = vtables
-                    .subst_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
+                    .subst_type(
+                        ty_ptr,
+                        &machine.call_stack.current_frame.ty_arg_types,
+                        &machine.call_stack.current_frame.ty_arg_sizes,
+                    )
                     .ok()?;
                 let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
@@ -1747,7 +1752,8 @@ impl VMTracer<'_> {
                         &vtables
                             .instantiate_enum_type(
                                 variant_inst_ptr,
-                                &machine.call_stack.current_frame.ty_args,
+                                &machine.call_stack.current_frame.ty_arg_types,
+                                &machine.call_stack.current_frame.ty_arg_sizes,
                             )
                             .ok()?,
                     )
@@ -1986,7 +1992,7 @@ impl FunctionTypeInfo {
         }
 
         let subst_and_layout_type = |ty: &VMPointer<ArenaType>| -> Option<TagWithLayoutInfoOpt> {
-            let subst_ty = ty.subst(ty_args).ok()?;
+            let subst_ty = ty.subst_unchecked(ty_args).ok()?;
             let (ty, ref_type) = deref_ty(subst_ty)?;
             let tag = vtables.type_to_type_tag(&ty).ok()?;
             // NB: This may fail if the type represents a value greater than the max
