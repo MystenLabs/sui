@@ -268,6 +268,8 @@ pub struct Constant {
     pub index: usize,
     pub attributes: Attributes,
     pub loc: Loc,
+    /// `public(package)` makes the constant usable in other modules of the package
+    pub visibility: Visibility,
     pub signature: Type,
     pub value: Exp,
 }
@@ -1594,6 +1596,7 @@ impl AstDebug for (ConstantName, &Constant) {
                 index,
                 attributes,
                 loc: _loc,
+                visibility,
                 signature,
                 value,
             },
@@ -1601,6 +1604,7 @@ impl AstDebug for (ConstantName, &Constant) {
         doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
+        visibility.ast_debug(w);
         w.write(format!("const#{index} {name}:"));
         signature.ast_debug(w);
         w.write(" = ");

@@ -55,6 +55,7 @@ pub enum FeatureGate {
     ModuleLabel,
     ModuleExtension,
     StringLiterals,
+    CrossModuleConstants,
 }
 
 /// Compiler flavor — selects syntax and semantic rules (e.g. `Core` vs `Sui`).
@@ -148,7 +149,10 @@ pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
 static SUPPORTED_FEATURES: LazyLock<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     LazyLock::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
 
-const E2024_ALPHA_FEATURES: &[FeatureGate] = &[FeatureGate::ModuleExtension];
+const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
+    FeatureGate::ModuleExtension,
+    FeatureGate::CrossModuleConstants,
+];
 
 const E2024_BETA_FEATURES: &[FeatureGate] = &[];
 
@@ -319,6 +323,7 @@ impl FeatureGate {
             FeatureGate::Lambda => "lambda expressions are",
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
             FeatureGate::ModuleExtension => "module extensions are",
+            FeatureGate::CrossModuleConstants => "cross-module constant accesses are",
             FeatureGate::StringLiterals => "string literals (without a leading 'b' or 'x') are",
         }
     }

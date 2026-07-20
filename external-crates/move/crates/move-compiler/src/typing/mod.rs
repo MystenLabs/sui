@@ -7,6 +7,7 @@ pub mod core;
 mod dependency_ordering;
 mod deprecation_warnings;
 mod expand;
+mod generate_constant_functions;
 mod infinite_instantiations;
 mod macro_expand;
 mod match_analysis;

@@ -38,8 +38,8 @@ use crate::{
             self, Context, ModuleContext, PublicForTesting, ResolvedFunctionType, Subst,
             global_use_funs, public_testing_visibility, report_visibility_error,
         },
-        dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
-        recursive_datatypes,
+        dependency_ordering, expand, generate_constant_functions, infinite_instantiations,
+        macro_expand, match_analysis, recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
 };
@@ -69,6 +69,7 @@ pub fn program(
     let all_macro_definitions = extract_macros(compilation_env, &nmodules, &pre_compiled_lib);
     let mut modules = modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
 
+    generate_constant_functions::program(compilation_env, &mut modules);
     dependency_ordering::program(compilation_env, &mut modules);
     recursive_datatypes::modules(compilation_env, &modules);
     infinite_instantiations::modules(compilation_env, &modules);
@@ -586,6 +587,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value: nvalue,
     } = nconstant;
@@ -629,8 +631,10 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value: *value,
+        getter_name: None,
     }
 }
 
@@ -4310,6 +4314,7 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             index: _,
             attributes,
             defined_loc,
+            visibility: _,
             signature: _,
             value: _,
         } = context.constant_info(module_ident, constant_name).clone();
@@ -4324,6 +4329,19 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
                 )));
                 return;
             };
+            if !context.is_current_module(module_ident) {
+                let msg = format!(
+                    "Invalid use of '#[error]' constant '{}::{}' in {}",
+                    module_ident, constant_name, abort_or_assert_str
+                );
+                let defined_msg =
+                    "'#[error]' constants can only be used in the module that defines them";
+                context.add_diag(diag!(
+                    TypeSafety::InvalidErrorUsage,
+                    (*const_loc, msg),
+                    (defined_loc, defined_msg)
+                ));
+            }
             let econst = T::UnannotatedExp_::ErrorConstant {
                 line_number_loc: *const_loc,
                 error_constant: Some(*constant_name),

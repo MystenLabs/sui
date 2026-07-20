@@ -10,11 +10,13 @@ mod simplify_jumps;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 
+use std::collections::BTreeMap;
+
 use crate::{
     cfgir::cfg::MutForwardCFG,
     diagnostics::DiagnosticReporter,
     editions::FeatureGate,
-    expansion::ast::Mutability,
+    expansion::ast::{ModuleIdent, Mutability},
     hlir::ast::*,
     parser::ast::ConstantName,
     shared::{CompilationEnv, unique_map::UniqueMap},
@@ -24,7 +26,7 @@ pub type Optimization = fn(
     &DiagnosticReporter,
     &FunctionSignature,
     &UniqueMap<Var, (Mutability, SingleType)>,
-    &UniqueMap<ConstantName, Value>,
+    &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
     &mut MutForwardCFG,
 ) -> bool;
 
@@ -50,7 +52,7 @@ pub fn optimize(
     package: Option<Symbol>,
     signature: &FunctionSignature,
     locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &UniqueMap<ConstantName, Value>,
+    constants: &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
     cfg: &mut MutForwardCFG,
 ) {
     let mut count = 0;

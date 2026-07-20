@@ -1,0 +1,33 @@
+Command `build -v`:
+INCLUDING DEPENDENCY Defn
+BUILDING Usage
+warning[W09011]: unused constant
+  ┌─ ./sources/usage.move:5:11
+  │
+5 │     const DOUBLE: u64 = defn::MAX * 2;
+  │           ^^^^^^ The constant 'DOUBLE' is never used. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04001]: restricted visibility
+  ┌─ ./sources/usage.move:5:25
+  │
+5 │     const DOUBLE: u64 = defn::MAX * 2;
+  │                         ^^^^^^^^^ Invalid access of 'Defn::defn::MAX'
+  │
+  ┌─ defn/sources/defn.move:2:27
+  │
+2 │     public(package) const MAX: u64 = 100;
+  │                           --- Constants are internal to their package, and cannot be accessed outside of their package
+
+error[E04001]: restricted visibility
+  ┌─ ./sources/usage.move:8:29
+  │
+8 │     public fun max(): u64 { defn::MAX }
+  │                             ^^^^^^^^^ Invalid access of 'Defn::defn::MAX'
+  │
+  ┌─ defn/sources/defn.move:2:27
+  │
+2 │     public(package) const MAX: u64 = 100;
+  │                           --- Constants are internal to their package, and cannot be accessed outside of their package
+

@@ -260,7 +260,7 @@ pub trait CFGIRVisitorContext {
             E::Unit { .. }
             | E::Move { .. }
             | E::Copy { .. }
-            | E::Constant(_)
+            | E::Constant(_, _)
             | E::ErrorConstant { .. }
             | E::BorrowLocal(_, _)
             | E::Unreachable
@@ -777,7 +777,7 @@ pub trait SimpleAbsInt: Sized {
             }
 
             E::Unit { .. } => vec![],
-            E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant { .. } => {
+            E::Value(_) | E::Constant(_, _) | E::UnresolvedError | E::ErrorConstant { .. } => {
                 default_values(1)
             }
 
@@ -961,7 +961,7 @@ fn exp_satisfies_(e: &Exp, p: &mut impl FnMut(&Exp) -> bool) -> bool {
         E::Unit { .. }
         | E::Move { .. }
         | E::Copy { .. }
-        | E::Constant(_)
+        | E::Constant(_, _)
         | E::ErrorConstant { .. }
         | E::BorrowLocal(_, _)
         | E::Unreachable
@@ -1001,7 +1001,7 @@ pub fn same_value_exp_(e1: &H::UnannotatedExp_, e2: &H::UnannotatedExp_) -> bool
 
         (E::Value(v1), E::Value(v2)) => v1 == v2,
         (E::Unit { .. }, E::Unit { .. }) => true,
-        (E::Constant(c1), E::Constant(c2)) => c1 == c2,
+        (E::Constant(m1, c1), E::Constant(m2, c2)) => m1 == m2 && c1 == c2,
         (E::Move { var, .. } | E::Copy { var, .. } | E::BorrowLocal(_, var), other)
         | (other, E::Move { var, .. } | E::Copy { var, .. } | E::BorrowLocal(_, var)) => {
             same_local_(var, other)

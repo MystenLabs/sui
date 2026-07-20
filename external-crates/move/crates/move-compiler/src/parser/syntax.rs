@@ -4049,11 +4049,19 @@ fn parse_constant_decl(
         native,
         macro_,
     } = modifiers;
-    if let Some(vis) = visibility {
-        let msg = "Invalid constant declaration. Constants cannot have visibility modifiers as \
-                   they are always internal";
-        context.add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
-    }
+    let visibility = match visibility {
+        Some(vis @ Visibility::Package(_)) => vis,
+        Some(vis) => {
+            let msg = format!(
+                "Invalid constant declaration. Constants can only be declared with '{}' \
+                 visibility",
+                Visibility::PACKAGE,
+            );
+            context.add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
+            Visibility::Internal
+        }
+        None => Visibility::Internal,
+    };
     check_no_modifier(context, NATIVE_MODIFIER, native, "constant");
     check_no_modifier(context, ENTRY_MODIFIER, entry, "constant");
     check_no_modifier(context, MACRO_MODIFIER, macro_, "constant");
@@ -4082,6 +4090,7 @@ fn parse_constant_decl(
         doc,
         attributes,
         loc,
+        visibility,
         signature,
         name,
         value,

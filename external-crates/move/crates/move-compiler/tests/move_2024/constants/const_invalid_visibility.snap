@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/constants/const_invalid_visibility.move:8:1
+  │
+8 │ public const A: u64 = 0;
+  │ ^^^^^^ Invalid constant declaration. Constants can only be declared with 'public(package)' visibility
+
+error[E01003]: invalid modifier
+   ┌─ tests/move_2024/constants/const_invalid_visibility.move:10:1
+   │
+10 │ public(friend) const B: u64 = 1;
+   │ ^^^^^^^^^^^^^^ Invalid constant declaration. Constants can only be declared with 'public(package)' visibility

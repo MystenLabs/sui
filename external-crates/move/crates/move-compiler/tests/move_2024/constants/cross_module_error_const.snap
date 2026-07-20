@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04035]: invalid constant usage in error context
+   ┌─ tests/move_2024/constants/cross_module_error_const.move:19:11
+   │
+10 │ public(package) const ENotFound: vector<u8> = b"not found";
+   │                       --------- '#[error]' constants can only be used in the module that defines them
+   ·
+19 │     abort a::ENotFound
+   │           ^^^^^^^^^^^^ Invalid use of '#[error]' constant '0x42::a::ENotFound' in abort
+
+error[E04035]: invalid constant usage in error context
+   ┌─ tests/move_2024/constants/cross_module_error_const.move:23:19
+   │
+10 │ public(package) const ENotFound: vector<u8> = b"not found";
+   │                       --------- '#[error]' constants can only be used in the module that defines them
+   ·
+23 │     assert!(cond, a::ENotFound);
+   │                   ^^^^^^^^^^^^ Invalid use of '#[error]' constant '0x42::a::ENotFound' in assertion

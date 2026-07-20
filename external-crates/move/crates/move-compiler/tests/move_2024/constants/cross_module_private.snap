@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/constants/cross_module_private.move:18:21
+   │
+ 8 │ const MAX: u64 = 100;
+   │       --- The constant '0x42::a::MAX' is internal to its module. Declare it 'public(package)' to allow access from other modules in its package
+   ·
+18 │ const DOUBLE: u64 = a::MAX * 2;
+   │                     ^^^^^^ Invalid access of '0x42::a::MAX'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/constants/cross_module_private.move:21:5
+   │
+ 8 │ const MAX: u64 = 100;
+   │       --- The constant '0x42::a::MAX' is internal to its module. Declare it 'public(package)' to allow access from other modules in its package
+   ·
+21 │     a::MAX
+   │     ^^^^^^ Invalid access of '0x42::a::MAX'
