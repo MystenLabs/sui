@@ -1955,26 +1955,55 @@ pub fn make_constant_type(
 ) -> Type {
     let in_current_module = context.is_current_module(m);
     context.emit_warning_if_deprecated(m, c.0, None);
-    let (defined_loc, signature) = {
+    let (defined_loc, visibility, signature) = {
         let ConstantInfo {
             doc: _,
             index: _,
             attributes: _,
             defined_loc,
+            visibility,
             signature,
             value: _,
         } = context.constant_info(m, c);
-        (*defined_loc, signature.clone())
+        (*defined_loc, *visibility, signature.clone())
     };
     if !in_current_module {
+        let supports_cross_module = context
+            .env()
+            .supports_feature(context.current_package(), FeatureGate::CrossModuleConstants);
         let msg = format!("Invalid access of '{}::{}'", m, c);
-        let internal_msg = "Constants are internal to their module, and cannot can be accessed \
-                            outside of their module";
-        context.add_diag(diag!(
-            TypeSafety::Visibility,
-            (loc, msg),
-            (defined_loc, internal_msg)
-        ));
+        if !supports_cross_module {
+            let internal_msg = "Constants are internal to their module, and cannot can be \
+                                accessed outside of their module";
+            context.add_diag(diag!(
+                TypeSafety::Visibility,
+                (loc, msg),
+                (defined_loc, internal_msg)
+            ));
+        } else if !matches!(visibility, Visibility::Package(_)) {
+            let internal_msg = format!(
+                "The constant '{}::{}' is internal to its module. Declare it '{}' to allow \
+                 access from other modules in its package",
+                m,
+                c,
+                Visibility::PACKAGE,
+            );
+            context.add_diag(diag!(
+                TypeSafety::Visibility,
+                (loc, msg),
+                (defined_loc, internal_msg)
+            ));
+        } else if context.module_info(m).package != context.current_package() {
+            // constants are accessed cross-module via `public(package)` getter functions, so
+            // they cannot be referenced outside of their package
+            let internal_msg = "Constants are internal to their package, and cannot be accessed \
+                                outside of their package";
+            context.add_diag(diag!(
+                TypeSafety::Visibility,
+                (loc, msg),
+                (defined_loc, internal_msg)
+            ));
+        }
     }
 
     signature
