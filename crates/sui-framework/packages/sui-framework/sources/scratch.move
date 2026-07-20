@@ -19,6 +19,14 @@ module sui::scratch;
 /// all access to scratch entries.
 public struct Permit<phantom K: copy + drop>() has copy, drop;
 
+/// Occupies a key's slot while `get_do`, `get_fold`, or their mutable variants have the value of
+/// type `V` removed, so nothing can add to or read the slot while the value is being "borrowed".
+/// Each one carries a transaction-unique id, so a marker cannot be forged to match one in use.
+public struct BorrowMarker<phantom V: drop>(u64) has copy, drop;
+
+/// Key for the scratch entry that holds the monotonic counter backing `borrow_marker`.
+public struct BorrowMarkerKey() has copy, drop;
+
 /// Stand-in parent address used when hashing scratch keys.
 const DUMMY_ROOT: address = @0;
 
@@ -30,6 +38,9 @@ const EEntryDoesNotExist: u64 = 1;
 
 /// The scratch store has an entry for this key, but the value type does not match.
 const EEntryTypeMismatch: u64 = 2;
+
+/// A borrow-style macro found a different `BorrowMarker` than it left in the slot.
+const EBorrowMarkerMismatch: u64 = 3;
 
 /// Issues a `Permit<K>` from the privileged `internal::Permit<K>`, granting access to the
 /// scratch entries keyed by values of type `K`.
@@ -105,7 +116,139 @@ public fun replace<K: copy + drop, VNew: drop, VOld: drop>(
     old
 }
 
+/// Not intended for direct usage. Instead, call `get_do`, `get_fold`, or their mutable variants,
+/// which handle the borrow-style usage of the value.
+/// Begins a "borrow" of `key`: removes and returns its value, leaving a unique `BorrowMarker` in
+/// the slot so nothing can add to or read it until `end_borrow` restores the value. Returns the
+/// value and the marker, which must be passed to `end_borrow`.
+/// While it is not verified that the same value is restored, the intended usage is guaranteed
+/// by the borrow-style macros (`get_do`, `get_fold`, and their mutable variants).
+/// Aborts with `EEntryDoesNotExist` if there is no entry for `key`.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `V`.
+public fun begin_borrow<K: copy + drop, V: drop>(
+    ctx: &mut TxContext,
+    permit: Permit<K>,
+    key: K,
+): (V, BorrowMarker<V>) {
+    let value = remove<K, V>(ctx, permit, key);
+    let marker = borrow_marker<V>(ctx);
+    add(ctx, permit, key, marker);
+    (value, marker)
+}
+
+/// Not intended for direct usage. Instead, call `get_do`, `get_fold`, or their mutable variants,
+/// which handle the borrow-style usage of the value.
+/// Ends a "borrow" begun by `begin_borrow`: removes the `BorrowMarker` from `key`'s slot and
+/// restores `value`.
+/// While it is not verified that the same value is restored, the intended usage is guaranteed
+/// by the borrow-style macros (`get_do`, `get_fold`, and their mutable variants).
+/// Aborts with `EEntryDoesNotExist` if the borrow was already ended.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not a `BorrowMarker<V>`.
+/// Aborts with `EBorrowMarkerMismatch` unless the slot still holds `marker`.
+public fun end_borrow<K: copy + drop, V: drop>(
+    ctx: &mut TxContext,
+    permit: Permit<K>,
+    key: K,
+    value: V,
+    marker: BorrowMarker<V>,
+) {
+    assert!(remove<K, BorrowMarker<V>>(ctx, permit, key) == marker, EBorrowMarkerMismatch);
+    add(ctx, permit, key, value);
+}
+
 // === Macro Functions ===
+
+/// If an entry exists for `key`, calls `$f` on an immutable reference to its value; otherwise does
+/// nothing.
+/// Note that the value is not actually borrowed, but a placeholder is used while value is
+/// temporarily removed for the duration of the `$f` operation. As such, the function may abort
+/// if the `$key` is accessed during the `$f` operation.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun get_do<$K: copy + drop, $V: drop, $R: drop>(
+    $ctx: &mut TxContext,
+    $permit: Permit<$K>,
+    $key: $K,
+    $f: |&$V| -> $R,
+) {
+    let ctx = $ctx;
+    let permit = $permit;
+    let key = $key;
+    if (!exists(ctx, permit, key)) return;
+
+    let (value, marker) = begin_borrow<$K, $V>(ctx, permit, key);
+    $f(&value);
+    end_borrow(ctx, permit, key, value, marker);
+}
+
+/// If an entry exists for `key`, calls `$f` on a mutable reference to its value; otherwise does
+/// nothing.
+/// Note that the value is not actually borrowed, but a placeholder is used while value is
+/// temporarily removed for the duration of the `$f` operation. As such, the function may abort
+/// if the `$key` is accessed during the `$f` operation.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun get_mut_do<$K: copy + drop, $V: drop, $R: drop>(
+    $ctx: &mut TxContext,
+    $permit: Permit<$K>,
+    $key: $K,
+    $f: |&mut $V| -> $R,
+) {
+    let ctx = $ctx;
+    let permit = $permit;
+    let key = $key;
+    if (!exists(ctx, permit, key)) return;
+
+    let (mut value, marker) = begin_borrow<$K, $V>(ctx, permit, key);
+    $f(&mut value);
+    end_borrow(ctx, permit, key, value, marker);
+}
+
+/// If an entry exists for `key`, applies `$some` to an immutable reference to its value and returns
+/// the result; otherwise returns `$none`.
+/// Note that the value is not actually borrowed, but a placeholder is used while value is
+/// temporarily removed for the duration of the `$some` operation. As such, the function may abort
+/// if the `$key` is accessed during the `$some` operation.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun get_fold<$K: copy + drop, $V: drop, $R>(
+    $ctx: &mut TxContext,
+    $permit: Permit<$K>,
+    $key: $K,
+    $none: $R,
+    $some: |&$V| -> $R,
+): $R {
+    let ctx = $ctx;
+    let permit = $permit;
+    let key = $key;
+    if (!exists(ctx, permit, key)) return ($none);
+
+    let (value, marker) = begin_borrow<$K, $V>(ctx, permit, key);
+    let r = $some(&value);
+    end_borrow(ctx, permit, key, value, marker);
+    r
+}
+
+/// If an entry exists for `key`, applies `$some` to a mutable reference to its value and returns
+/// the result; otherwise returns `$none`.
+/// Note that the value is not actually borrowed, but a placeholder is used while value is
+/// temporarily removed for the duration of the `$some` operation. As such, the function may abort
+/// if the `$key` is accessed during the `$some` operation.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun get_mut_fold<$K: copy + drop, $V: drop, $R>(
+    $ctx: &mut TxContext,
+    $permit: Permit<$K>,
+    $key: $K,
+    $none: $R,
+    $some: |&mut $V| -> $R,
+): $R {
+    let ctx = $ctx;
+    let permit = $permit;
+    let key = $key;
+    if (!exists(ctx, permit, key)) return ($none);
+
+    let (mut value, marker) = begin_borrow<$K, $V>(ctx, permit, key);
+    let r = $some(&mut value);
+    end_borrow(ctx, permit, key, value, marker);
+    r
+}
 
 /// A wrapper for `add` that constructs the `Permit<$K>` directly.
 /// Aborts with `EEntryAlreadyExists` if there is already an entry for `$key`, regardless of its
@@ -171,6 +314,58 @@ public macro fun internal_replace<$K: copy + drop, $VNew: drop, $VOld: drop>(
     $value: $VNew,
 ): Option<$VOld> {
     replace<$K, $VNew, $VOld>($ctx, permit(internal::permit<$K>()), $key, $value)
+}
+
+/// A wrapper for `get_do` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_get_do<$K: copy + drop, $V: drop, $R: drop>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $f: |&$V| -> $R,
+) {
+    get_do!<$K, $V, $R>($ctx, permit(internal::permit<$K>()), $key, $f)
+}
+
+/// A wrapper for `get_mut_do` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_get_mut_do<$K: copy + drop, $V: drop, $R: drop>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $f: |&mut $V| -> $R,
+) {
+    get_mut_do!<$K, $V, $R>($ctx, permit(internal::permit<$K>()), $key, $f)
+}
+
+/// A wrapper for `get_fold` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_get_fold<$K: copy + drop, $V: drop, $R>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $none: $R,
+    $some: |&$V| -> $R,
+): $R {
+    get_fold!<$K, $V, $R>($ctx, permit(internal::permit<$K>()), $key, $none, $some)
+}
+
+/// A wrapper for `get_mut_fold` that constructs the `Permit<$K>` directly.
+/// Aborts with `EEntryTypeMismatch` if the entry exists, but its value is not of type `$V`.
+public macro fun internal_get_mut_fold<$K: copy + drop, $V: drop, $R>(
+    $ctx: &mut TxContext,
+    $key: $K,
+    $none: $R,
+    $some: |&mut $V| -> $R,
+): $R {
+    get_mut_fold!<$K, $V, $R>($ctx, permit(internal::permit<$K>()), $key, $none, $some)
+}
+
+/// Returns a fresh `BorrowMarker<V>`, unique within the transaction, from a monotonic counter kept
+/// in its own scratch entry.
+fun borrow_marker<V: drop>(ctx: &mut TxContext): BorrowMarker<V> {
+    let permit = permit(internal::permit<BorrowMarkerKey>());
+    let key = BorrowMarkerKey();
+    let n = if (exists(ctx, permit, key)) remove<BorrowMarkerKey, u64>(ctx, permit, key) else 0;
+    add(ctx, permit, key, n + 1);
+    BorrowMarker(n)
 }
 
 /// Hashes the type and value of `k` against `DUMMY_ROOT` to produce the address identifying its
