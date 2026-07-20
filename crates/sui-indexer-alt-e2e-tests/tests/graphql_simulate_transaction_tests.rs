@@ -184,7 +184,6 @@ impl GraphQlTestCluster {
         .await
         .expect("Failed to setup indexer");
 
-        let pipelines: Vec<String> = indexer.pipelines().map(|s| s.to_string()).collect();
         let s_indexer = indexer.run().await.expect("Failed to start indexer");
 
         let s_graphql = start_graphql(
@@ -201,7 +200,6 @@ impl GraphQlTestCluster {
             SubscriptionArgs::default(),
             "0.0.0",
             GraphQlConfig::default(),
-            pipelines,
             &Registry::new(),
         )
         .await

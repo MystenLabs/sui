@@ -475,7 +475,6 @@ impl OffchainCluster {
             SubscriptionArgs::default(),
             "0.0.0",
             graphql_config,
-            pipelines.iter().map(|p| p.to_string()).collect(),
             registry,
         )
         .await

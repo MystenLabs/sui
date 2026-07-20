@@ -495,21 +495,17 @@ Use the following command to run a GraphQL RPC server node:
 ```sh
 sui-indexer-alt-graphql rpc \
     --config <PATH_TO_GRAPHQL_CONFIG_FILE> \
-    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_1> \
-    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_2> \
-    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_3> \
     --ledger-grpc-url <LEDGER_GRPC_URL> \
     --consistent-store-url <CONSISTENT_STORE_URL> \
     --database-url <DATABASE_URL> \
     --fullnode-rpc-url <FULLNODE_RPC_URL>
 ```
 
-Multiple `--indexer-config` parameters can be provided, one for each general-purpose indexer instance.
+The GraphQL config file's `[pipeline-defaults]` and `[pipeline.<name>]` sections declare which pipelines the RPC server should expect to find populated in the database -- see [Generating configuration](#generating-configuration).
 
 | CLI parameter                        | Description                                                                        |
 |----------------------------------|------------------------------------------------------------------------------------|
-| `CONFIG_FILE`                    | Path to the optional GraphQL RPC server configuration file |
-| `INDEXER_CONFIG_FILE`            | Path to general-purpose indexer configuration file; can be set multiple times for different pipelines                 |
+| `CONFIG_FILE`                    | Path to the GraphQL RPC server configuration file, including its `[pipeline-defaults]`/`[pipeline.<name>]` sections |
 | `LEDGER_GRPC_URL`                | URL to Archival service's `LedgerService` gRPC API                                   |
 | `CONSISTENT_STORE_URL`           | URL to [Consistent store](#consistent-store-setup) API                             |
 | `DATABASE_URL`                   | Postgres database connection string                                                |
@@ -520,13 +516,6 @@ Example:
 ```sh
 sui-indexer-alt-graphql rpc \
     --config graphql.toml \
-    --indexer-config events.toml \
-    --indexer-config obj_versions.toml \
-    --indexer-config tx_affected_addresses.toml \
-    --indexer-config tx_affected_objects.toml \
-    --indexer-config tx_calls.toml \
-    --indexer-config tx_kinds.toml \
-    --indexer-config unpruned.toml \
     --ledger-grpc-url https://archive.mainnet.sui.io:443 \
     --consistent-store-url https://localhost:7001 \
     --database-url postgres://username:password@localhost:5432/database \
