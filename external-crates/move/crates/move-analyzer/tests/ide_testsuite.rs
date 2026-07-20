@@ -396,6 +396,15 @@ impl AccessChainQuickFixTest {
         );
         for action in code_actions {
             writeln!(output, "CODE ACTION: {}", action.title)?;
+            if let Some(edit) = action.edit
+                && let Some(changes) = edit.changes
+            {
+                for text_edits in changes.values() {
+                    for text_edit in text_edits {
+                        writeln!(output, "    EDIT: '{}'", text_edit.new_text)?;
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -589,12 +598,12 @@ fn completion_test<F: MoveFlavor + Default>(
 
     // Generate fresh symbols with cursor position using shared cache
     let cursor_path = use_file_path.to_path_buf();
-    let symbols = test_symbols_for_autocomplete::<F>(
+    let (_, symbols) = test_symbols_with_cursor::<F>(
         packages_info,
         ide_files_root,
         project_path.to_path_buf(),
         &cursor_path,
-        use_pos,
+        Some(use_pos),
     )?;
 
     let items = compute_completions_with_symbols(&symbols, &cursor_path, use_pos, auto_import);
@@ -686,16 +695,16 @@ fn test_symbols_with_optional_modifications<F: MoveFlavor + Default>(
     Ok((compiled_pkg_info, symbols))
 }
 
-/// Compute symbols for a specific cursor position in autocomplete tests.
-/// This generates fresh CompilerAutocompleteInfo for the cursor position
-/// while leveraging cached CompilerAnalysisInfo and dependencies.
-fn test_symbols_for_autocomplete<F: MoveFlavor + Default>(
+/// Compute symbols for a specific cursor position needed by tests that use autocomplete
+/// information for the target file. This generates fresh CompilerAutocompleteInfo for
+/// the cursor position while leveraging cached CompilerAnalysisInfo and dependencies.
+fn test_symbols_with_cursor<F: MoveFlavor + Default>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     project_path: PathBuf,
     cursor_path: &PathBuf,
-    cursor_pos: Position,
-) -> anyhow::Result<Symbols> {
+    cursor_pos: Option<Position>,
+) -> anyhow::Result<(CompiledPkgInfo, Symbols)> {
     let move_flavor = Arc::new(F::default());
     // Single compilation with cursor position (no retry loop)
     let (compiled_pkg_info_opt, _) = get_compiled_pkg::<F>(
@@ -710,15 +719,13 @@ fn test_symbols_for_autocomplete<F: MoveFlavor + Default>(
 
     let compiled_pkg_info =
         compiled_pkg_info_opt.ok_or_else(|| anyhow::anyhow!("PACKAGE COMPILATION FAILED"))?;
-
-    // Compute symbols with cursor position
     let symbols = compute_symbols(
         packages_info,
-        compiled_pkg_info,
-        Some((cursor_path, cursor_pos)),
+        compiled_pkg_info.clone(),
+        cursor_pos.map(|pos| (cursor_path, pos)),
     );
 
-    Ok(symbols)
+    Ok((compiled_pkg_info, symbols))
 }
 
 fn use_def_test_suite<F: MoveFlavor + Default>(
@@ -988,14 +995,6 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor + Default>(
     let packages_info = Arc::new(Mutex::new(CachedPackages::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
-    // Compile once at suite level
-    let (mut compiled_pkg_info, mut symbols) = test_symbols_with_optional_modifications::<F>(
-        packages_info.clone(),
-        ide_files_root.clone(),
-        project_path.clone(),
-        None,
-    )?;
-
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
 
@@ -1009,6 +1008,17 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor + Default>(
 
         fpath.push(format!("sources/{file}"));
         let cpath = canonicalize_path(fpath.clone());
+
+        // Compile per file to get autocomplete/alias info for that file. The exact cursor position
+        // is computed later for each diagnostic triggering a quick fix action, so it does not
+        // need to happen per test.
+        let (mut compiled_pkg_info, mut symbols) = test_symbols_with_cursor::<F>(
+            packages_info.clone(),
+            ide_files_root.clone(),
+            project_path.clone(),
+            &cpath,
+            None,
+        )?;
 
         for (idx, test) in tests.iter().enumerate() {
             test.test(idx, &mut compiled_pkg_info, &mut symbols, writer, &cpath)?;
