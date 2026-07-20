@@ -668,17 +668,6 @@ impl DataStore {
             })
     }
 
-    /// Read transaction events from the local RPC store.
-    ///
-    /// Events are saved with transaction data. A direct event lookup does not
-    /// fetch the transaction from the remote endpoint on its own.
-    pub(crate) fn transaction_events(
-        &self,
-        digest: &TransactionDigest,
-    ) -> StorageResult<Option<TransactionEvents>> {
-        Ok(ReadStore::get_events(self.rpc_store().reader(), digest))
-    }
-
     pub(crate) fn save_address_owned_seed_objects(
         &self,
         object_refs: &[ObjectRef],
@@ -904,6 +893,10 @@ impl RuntimeObjectResolver for DataStore {
 // SimulatorStore
 // ============================================================================
 
+/// Write methods are fail-stop: the trait cannot surface errors, and executing
+/// past a failed persist would silently diverge the executor's in-memory view
+/// from durable fork state. Crashing is strictly safer than continuing on top
+/// of unpersisted state.
 impl SimulatorStore for DataStore {
     fn get_checkpoint_by_sequence_number(
         &self,
@@ -1005,20 +998,14 @@ impl SimulatorStore for DataStore {
             return;
         }
         if let Err(err) = self.inner.pending.record_checkpoint(checkpoint) {
-            tracing::error!(
-                sequence_number = sequence,
-                "failed to record pending checkpoint: {err:?}",
-            );
+            panic!("failed to record pending checkpoint {sequence}: {err:?}");
         }
     }
 
     fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
         let digest = *contents.digest();
         if let Err(err) = self.save_pending_checkpoint_contents(&contents) {
-            tracing::error!(
-                contents_digest = %digest,
-                "failed to persist checkpoint contents: {err:?}",
-            );
+            panic!("failed to persist checkpoint contents {digest}: {err:?}");
         }
     }
 
@@ -1039,39 +1026,27 @@ impl SimulatorStore for DataStore {
         self.insert_transaction_effects(effects);
         self.insert_events(&tx_digest, events);
         if let Err(err) = self.apply_object_updates(written_objects, removed_objects) {
-            tracing::error!(
-                tx_digest = %tx_digest,
-                "failed to persist transaction object updates: {err:?}",
-            );
+            panic!("failed to persist transaction object updates for {tx_digest}: {err:?}");
         }
     }
 
     fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
         let digest = *transaction.digest();
         if let Err(err) = self.inner.pending.record_transaction(transaction) {
-            tracing::error!(
-                tx_digest = %digest,
-                "failed to record pending transaction: {err:?}",
-            );
+            panic!("failed to record pending transaction {digest}: {err:?}");
         }
     }
 
     fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
         let digest = *effects.transaction_digest();
         if let Err(err) = self.inner.pending.record_effects(effects) {
-            tracing::error!(
-                tx_digest = %digest,
-                "failed to record pending transaction effects: {err:?}",
-            );
+            panic!("failed to record pending transaction effects for {digest}: {err:?}");
         }
     }
 
     fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
         if let Err(err) = self.inner.pending.record_events(*tx_digest, events) {
-            tracing::error!(
-                tx_digest = %tx_digest,
-                "failed to record pending transaction events: {err:?}",
-            );
+            panic!("failed to record pending transaction events for {tx_digest}: {err:?}");
         }
     }
 
@@ -1089,7 +1064,7 @@ impl SimulatorStore for DataStore {
             })
             .collect();
         if let Err(err) = self.apply_object_updates(written_objects, removed_objects) {
-            tracing::error!("failed to persist object updates: {err:?}");
+            panic!("failed to persist object updates: {err:?}");
         }
     }
 

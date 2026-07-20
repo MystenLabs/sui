@@ -257,14 +257,11 @@ impl ReadStore for ForkRpcReader {
             })
     }
 
-    /// Reads transaction events by digest from the RPC store owned by fork state on a miss.
+    /// Reads transaction events from the rpc-store only. Events are saved
+    /// with their transaction rows and fork state keeps no separate copy, so
+    /// a fork-side fallback would just repeat the same lookup.
     fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
-        self.rpc_store.get_events(event_digest).or_else(|| {
-            optional_store_read(
-                "transaction events lookup",
-                self.store.transaction_events(event_digest),
-            )
-        })
+        self.rpc_store.get_events(event_digest)
     }
 
     /// Reads unchanged runtime-loaded objects from committed `sui-rpc-store` data only.

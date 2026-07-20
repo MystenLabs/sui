@@ -259,6 +259,14 @@ pub async fn run(
             }
             return Err(anyhow!("rpc server task exited unexpectedly"));
         }
+        stopped = context.indexer_stopped() => {
+            // Without this watchdog an indexer failure would only surface as
+            // a 30s publication timeout on the next executed transaction.
+            return match stopped {
+                Ok(()) => Err(anyhow!("embedded rpc-store indexer stopped unexpectedly")),
+                Err(e) => Err(e.context("embedded rpc-store indexer failed")),
+            };
+        }
     }
     Ok(())
 }
