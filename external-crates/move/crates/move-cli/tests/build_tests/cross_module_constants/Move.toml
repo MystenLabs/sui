@@ -1,0 +1,9 @@
+[package]
+name = "A"
+edition = "2024.alpha"
+
+[dependencies]
+std = { local = "../../../../move-stdlib" }
+
+[addresses]
+A = "0x2"
