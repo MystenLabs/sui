@@ -1097,7 +1097,7 @@ fn tn_model_datatype_instantiation(type_params: &[TnType], ty_args: &[TnType]) -
         .iter()
         .map(|ty| {
             super::subst_formula_tests::to_arena(&arena, ty)
-                .subst(ty_args)
+                .subst_unchecked(ty_args)
                 .unwrap()
         })
         .collect::<Vec<_>>();
@@ -1172,6 +1172,17 @@ fn type_node_pack_generic_e2e_poc() {
         "attack pack 3041 nodes: {attack_ms}ms {:?}",
         status(&attack)
     );
+    // The attack (3041 realized nodes) is rejected arithmetically and fast, not via gas
+    // exhaustion.
     assert_eq!(status(&attack), Some(StatusCode::VM_MAX_TYPE_NODES_REACHED));
     assert_ne!(status(&attack), Some(StatusCode::OUT_OF_GAS));
+    // The legitimate pack (S<v63, v63> = 127 nodes, within the 128 budget) must be *admitted*:
+    // it runs the harness loop until it exhausts gas rather than being turned away by the guard.
+    // The guard must bound the *constructed* type's node count, not a running sum that
+    // double-counts an argument once per parameter (which would wrongly reject this at 190).
+    assert_ne!(status(&legit), Some(StatusCode::VM_MAX_TYPE_NODES_REACHED));
+    assert_ne!(
+        status(&baseline),
+        Some(StatusCode::VM_MAX_TYPE_NODES_REACHED)
+    );
 }

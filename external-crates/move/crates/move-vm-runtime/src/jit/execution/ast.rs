@@ -11,9 +11,7 @@ use crate::{
         values::ConstantValue,
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
-    shared::type_size_formulae::{
-        DatatypeSizeInfo, LinearFormula, MaxPlusFormula, PartialTypeFormula, check_syntactic_limits,
-    },
+    shared::type_size_formulae::ArenaTypeSizeFormula,
     shared::{
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
@@ -34,7 +32,6 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::AbstractMemorySize, identifier::Identifier,
     language_storage::ModuleId,
 };
-use std::collections::BTreeMap;
 
 // -------------------------------------------------------------------------------------------------
 // Package / Module Type Definitions
@@ -116,10 +113,9 @@ pub(crate) struct Module {
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     pub field_instantiations: ArenaVec<FieldInstantiation>,
 
-    /// a map from signatures in instantiations to the `ArenaVec<PartialTypeFormula>` that represents
-    /// it, with each type's substitution formula precomputed at translation time.
+    /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that represents it.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub instantiation_signatures: ArenaVec<ArenaVec<PartialTypeFormula>>,
+    pub instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
 
     /// constant references carry an index into a global vector of values.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -238,7 +234,7 @@ pub(crate) struct VariantDef {
 #[derive(Debug)]
 pub(crate) struct FunctionInstantiation {
     pub handle: CallType,
-    pub(crate) instantiation: VMPointer<ArenaVec<PartialTypeFormula>>,
+    pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 #[derive(Debug)]
@@ -246,7 +242,7 @@ pub(crate) struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
-    pub(crate) type_params: VMPointer<ArenaVec<PartialTypeFormula>>,
+    pub(crate) type_params: VMPointer<ArenaVec<ArenaType>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
@@ -270,7 +266,7 @@ pub(crate) struct EnumInstantiation {
     pub variant_count_map: ArenaVec<u16>,
     pub enum_def: VMPointer<EnumDef>,
     pub def_vtable_key: VirtualTableKey,
-    pub type_params: VMPointer<ArenaVec<PartialTypeFormula>>,
+    pub type_params: VMPointer<ArenaVec<ArenaType>>,
 }
 
 // A variant instantiation.
@@ -308,12 +304,11 @@ pub(crate) struct DatatypeDescriptor {
     pub defining_id: ModuleIdKey,
     pub original_id: ModuleIdKey,
     pub datatype_info: ArenaBox<Datatype>,
-    /// The datatype's through-field size information (`value_depth` and `layout_size`),
-    /// computed while the package is JIT'd: plain constants when the datatype is fully
-    /// concrete, otherwise partial formulas whose local field structure is folded into their
-    /// constants, with type parameters and datatype applications remaining symbolic, closed by
-    /// the dispatch tables under a transaction's linkage view.
-    size_info: DatatypeSizeInfo,
+    /// The datatype's size formula over its own type parameters, built in arena form while the
+    /// package is JIT'd. All purely local field structure is already folded into its constants;
+    /// type parameters and cross-package datatype applications remain symbolic, resolved by the
+    /// dispatch tables under a transaction's linkage view (`substitute`).
+    size_formula: ArenaTypeSizeFormula,
 }
 
 #[derive(Debug)]
@@ -738,51 +733,51 @@ pub(crate) enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., e1, e2, ..., eN -> ..., vec[e1, e2, ..., eN]```
-    VecPack(VMPointer<PartialTypeFormula>, u64),
+    VecPack(VMPointer<ArenaType>, u64),
     /// Return the length of the vector,
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., u64_value```
-    VecLen(VMPointer<PartialTypeFormula>),
+    VecLen(VMPointer<ArenaType>),
     /// Acquire an immutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecImmBorrow(VMPointer<PartialTypeFormula>),
+    VecImmBorrow(VMPointer<ArenaType>),
     /// Acquire a mutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecMutBorrow(VMPointer<PartialTypeFormula>),
+    VecMutBorrow(VMPointer<ArenaType>),
     /// Add an element to the end of the vector.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, element -> ...```
-    VecPushBack(VMPointer<PartialTypeFormula>),
+    VecPushBack(VMPointer<ArenaType>),
     /// Pop an element from the end of vector. Aborts if the vector is empty.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., element```
-    VecPopBack(VMPointer<PartialTypeFormula>),
+    VecPopBack(VMPointer<ArenaType>),
     /// Destroy the vector and unpack a statically known number of elements onto the stack. Aborts
     /// if the vector does not have a length N.
     ///
     /// Stack transition:
     ///
     /// ```..., vec[e1, e2, ..., eN] -> ..., e1, e2, ..., eN```
-    VecUnpack(VMPointer<PartialTypeFormula>, u64),
+    VecUnpack(VMPointer<ArenaType>, u64),
     /// Swaps the elements at two indices in the vector. Abort the execution if any of the indices
     /// is out of bounds.
     ///
     /// ```..., vector_reference, u64_value(1), u64_value(2) -> ...```
-    VecSwap(VMPointer<PartialTypeFormula>),
+    VecSwap(VMPointer<ArenaType>),
     /// Push a U16 constant onto the stack.
     ///
     /// Stack transition:
@@ -990,21 +985,16 @@ impl VariantInstantiation {
 }
 
 impl ArenaType {
-    /// Convert to a runtime type by performing a deep copy, after checking the term's
-    /// syntactic sizes against the type-traversal limits. The copy is equivalent to
-    /// substituting each `TyParam` for itself, so this is just an identity substitution kept
-    /// limit-free by the up-front check.
+    /// Convert to a runtime type by performing a deep copy. The copy is equivalent to
+    /// substituting each `TyParam` for itself. Size checking is the dispatch tables' concern
+    /// (the interpreter over types), so this is a straight structural conversion.
     pub fn to_type(&self) -> PartialVMResult<Type> {
-        let (type_size, type_depth) = self.syntactic_sizes();
-        check_syntactic_limits(type_size, type_depth)?;
         Ok(self.to_type_unchecked())
     }
 
-    /// Deep-copy into a runtime type without checking limits. The traversal (and recursion
-    /// depth) is bounded by the size of `self`, which was already bounded when the arena type
-    /// was built at translation time. Crate-private by design: the checked routes
-    /// ([`ArenaType::to_type`], the dispatch tables' `subst_type`) verify the term's sizes
-    /// against the limits first.
+    /// Deep-copy into a runtime type. The traversal (and recursion depth) is bounded by the
+    /// size of `self`, which was already bounded when the arena type was built at translation
+    /// time.
     pub(crate) fn to_type_unchecked(&self) -> Type {
         match self {
             ArenaType::TyParam(idx) => Type::TyParam(*idx),
@@ -1061,20 +1051,21 @@ impl DatatypeDescriptor {
         defining_id: ModuleIdKey,
         original_id: ModuleIdKey,
         datatype_info: ArenaBox<Datatype>,
-        size_info: DatatypeSizeInfo,
+        size_formula: ArenaTypeSizeFormula,
     ) -> Self {
         Self {
             name,
             defining_id,
             original_id,
             datatype_info,
-            size_info,
+            size_formula,
         }
     }
 
-    /// The datatype's through-field size information (see [`DatatypeSizeInfo`]).
-    pub(crate) fn size_info(&self) -> &DatatypeSizeInfo {
-        &self.size_info
+    /// The datatype's arena-form size formula over its own type parameters (see
+    /// [`ArenaTypeSizeFormula`]).
+    pub(crate) fn size_formula(&self) -> &ArenaTypeSizeFormula {
+        &self.size_formula
     }
 
     pub fn type_parameters(&self) -> &[DatatypeTyParameter] {
@@ -1220,172 +1211,10 @@ impl Type {
 }
 
 impl ArenaType {
-    /// The syntactic `(type_size, type_depth)` of this term, counting every node (`TyParam`s
-    /// count as ordinary leaves).
-    pub(crate) fn syntactic_sizes(&self) -> (u64, u64) {
-        match self {
-            ArenaType::Vector(ty) | ArenaType::Reference(ty) | ArenaType::MutableReference(ty) => {
-                let (size, depth) = ty.syntactic_sizes();
-                (size.saturating_add(1), depth.saturating_add(1))
-            }
-            ArenaType::DatatypeInstantiation(inst) => {
-                let (_, ty_args) = &**inst;
-                let mut size = 1u64;
-                let mut depth = 1u64;
-                for ty in ty_args.iter() {
-                    let (arg_size, arg_depth) = ty.syntactic_sizes();
-                    size = size.saturating_add(arg_size);
-                    depth = depth.max(arg_depth.saturating_add(1));
-                }
-                (size, depth)
-            }
-            _ => (1, 1),
-        }
-    }
-
-    /// The closed syntactic formulas of this term: `type_size` and `type_depth` of
-    /// `subst(term, args)` as functions of the arguments' syntactic sizes. The prediction
-    /// matches the counters of the historical checked traversal exactly: that traversal
-    /// counted both the `TyParam` node itself and every node of the argument cloned in for it,
-    /// with the argument's nodes sitting one level *below* the occurrence. Checking the
-    /// prediction therefore accepts and rejects exactly the substitutions the traversal did.
-    /// (This over-counts relative to the true measure of the *result*: the result's true node
-    /// count is the prediction minus the total parameter occurrences.)
-    pub(crate) fn syntactic_formulas(&self) -> (LinearFormula, MaxPlusFormula) {
-        fn visit(
-            ty: &ArenaType,
-            depth: u64,
-            size_constant: &mut u64,
-            depth_constant: &mut u64,
-            terms: &mut BTreeMap<u16, (u64, u64)>,
-        ) {
-            *size_constant = size_constant.saturating_add(1);
-            *depth_constant = (*depth_constant).max(depth);
-            match ty {
-                ArenaType::TyParam(idx) => {
-                    let (occurrences, offset) = terms.entry(*idx).or_insert((0, 0));
-                    *occurrences = occurrences.saturating_add(1);
-                    *offset = (*offset).max(depth);
-                }
-                ArenaType::Vector(ty)
-                | ArenaType::Reference(ty)
-                | ArenaType::MutableReference(ty) => {
-                    visit(
-                        ty,
-                        depth.saturating_add(1),
-                        size_constant,
-                        depth_constant,
-                        terms,
-                    );
-                }
-                ArenaType::DatatypeInstantiation(inst) => {
-                    let (_, ty_args) = &**inst;
-                    for ty in ty_args.iter() {
-                        visit(
-                            ty,
-                            depth.saturating_add(1),
-                            size_constant,
-                            depth_constant,
-                            terms,
-                        );
-                    }
-                }
-                _ => (),
-            }
-        }
-        let mut size_constant = 0u64;
-        let mut depth_constant = 0u64;
-        let mut term_map = BTreeMap::new();
-        visit(
-            self,
-            1,
-            &mut size_constant,
-            &mut depth_constant,
-            &mut term_map,
-        );
-        let mut size_terms = Vec::with_capacity(term_map.len());
-        let mut depth_terms = Vec::with_capacity(term_map.len());
-        for (param, (occurrences, offset)) in term_map {
-            size_terms.push((param, occurrences));
-            depth_terms.push((param, offset));
-        }
-        (
-            LinearFormula {
-                constant: size_constant,
-                terms: size_terms,
-            },
-            MaxPlusFormula {
-                constant: depth_constant,
-                terms: depth_terms,
-            },
-        )
-    }
-
-    /// The closed formula for the *true* `type_depth` of `subst(term, args)` — the depth of the
-    /// realized type, as opposed to the [`syntactic_formulas`](Self::syntactic_formulas) depth,
-    /// which is the (over-counting) legacy checked-traversal counter. Substituting an argument
-    /// of depth `a` for a parameter occurring at nesting depth `d` puts the argument's root at
-    /// depth `d`, so the branch contributes `(d - 1) + a`; the constant is the maximum depth
-    /// over the *non-parameter* leaves (primitives and bare datatype heads), which are the only
-    /// leaves whose depth is not replaced by an argument. Lets a generic call frame's callee
-    /// type-argument depth be solved arithmetically instead of by walking the realized type.
-    pub(crate) fn result_depth_formula(&self) -> MaxPlusFormula {
-        fn visit(ty: &ArenaType, depth: u64, constant: &mut u64, terms: &mut BTreeMap<u16, u64>) {
-            match ty {
-                ArenaType::TyParam(idx) => {
-                    let offset = terms.entry(*idx).or_insert(0);
-                    *offset = (*offset).max(depth);
-                }
-                ArenaType::Vector(ty)
-                | ArenaType::Reference(ty)
-                | ArenaType::MutableReference(ty) => {
-                    visit(ty, depth.saturating_add(1), constant, terms);
-                }
-                ArenaType::DatatypeInstantiation(inst) => {
-                    let (_, ty_args) = &**inst;
-                    for ty in ty_args.iter() {
-                        visit(ty, depth.saturating_add(1), constant, terms);
-                    }
-                }
-                // Non-parameter leaf: its depth is fixed, not replaced by an argument.
-                _ => *constant = (*constant).max(depth),
-            }
-        }
-        let mut constant = 0u64;
-        let mut term_map = BTreeMap::new();
-        visit(self, 1, &mut constant, &mut term_map);
-        MaxPlusFormula {
-            constant,
-            // A parameter's root lands at its occurrence depth `d`, so the argument's own depth
-            // sits atop `d - 1` enclosing levels.
-            terms: term_map
-                .into_iter()
-                .map(|(param, depth)| (param, depth.saturating_sub(1)))
-                .collect(),
-        }
-    }
-
-    /// Checked on-the-fly substitution: compute this term's syntactic formulas, check the
-    /// predicted sizes against the limits, and only then build the result. Used where no
-    /// precomputed formulas exist (function signatures, layout builders, the tracer); hot
-    /// instantiation sites go through the dispatch tables with translation-time formulas
-    /// instead.
-    pub(crate) fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
-        let (size_formula, depth_formula) = self.syntactic_formulas();
-        let arg_sizes = ty_args
-            .iter()
-            .map(|ty| ty.syntactic_sizes())
-            .collect::<Vec<_>>();
-        let type_depth = depth_formula.solve_with(&arg_sizes, |(_, depth)| *depth)?;
-        let type_size = size_formula.solve_with(&arg_sizes, |(size, _)| *size)?;
-        check_syntactic_limits(type_size, type_depth)?;
-        self.subst_unchecked(ty_args)
-    }
-
-    /// Substitute `ty_args` into this term WITHOUT enforcing size or depth limits.
-    /// Crate-private by design: every route to a substituted type ([`ArenaType::subst`], the
-    /// dispatch tables' `subst_type` and `instantiate_generic_function`) checks a predicted
-    /// size against the limits before calling this.
+    /// Substitute `ty_args` into this term. The traversal is bounded by the size of `self`
+    /// (fixed at translation time); size/limit checking against the substituted result is the
+    /// dispatch tables' concern (the interpreter over types), performed before this is called
+    /// on any hot path.
     pub(crate) fn subst_unchecked(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
         Ok(match self {
             ArenaType::TyParam(idx) => match ty_args.get(*idx as usize) {
@@ -2095,12 +1924,6 @@ impl<B: std::fmt::Write> InternedDisplay<B> for CallType {
                 vtable_key.fmt(f, interner)
             }
         }
-    }
-}
-
-impl<B: std::fmt::Write> InternedDisplay<B> for PartialTypeFormula {
-    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
-        self.term.fmt(f, interner)
     }
 }
 
