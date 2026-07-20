@@ -74,6 +74,40 @@ pub(crate) fn list_probes_enabled() -> bool {
     })
 }
 
+fn parse_list_chunks_per_spawn(value: Option<&str>) -> usize {
+    match value {
+        None | Some("1") => 1,
+        Some("2") => 2,
+        Some(_) => 1,
+    }
+}
+
+pub(crate) fn list_chunks_per_spawn() -> usize {
+    static CHUNKS_PER_SPAWN: OnceLock<usize> = OnceLock::new();
+
+    *CHUNKS_PER_SPAWN.get_or_init(
+        || match std::env::var("SUI_RPC_LIST_CHUNKS_PER_SPAWN") {
+            Ok(value) => {
+                if !matches!(value.as_str(), "1" | "2") {
+                    tracing::warn!(
+                        value,
+                        "SUI_RPC_LIST_CHUNKS_PER_SPAWN must be 1 or 2; using 1"
+                    );
+                }
+                parse_list_chunks_per_spawn(Some(&value))
+            }
+            Err(std::env::VarError::NotPresent) => parse_list_chunks_per_spawn(None),
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "unable to read SUI_RPC_LIST_CHUNKS_PER_SPAWN; using 1"
+                );
+                1
+            }
+        },
+    )
+}
+
 impl RpcMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
@@ -412,6 +446,7 @@ pub(crate) struct ListApiMetrics {
     list_chunk_work_cpu_seconds: HistogramVec,
     list_chunk_run_delay_seconds: HistogramVec,
     list_chunk_schedstat_probes_total: IntCounterVec,
+    list_chunk_coalesced_admissions_total: IntCounterVec,
     list_chunk_buckets_decoded_total: IntCounterVec,
     list_store_read_batches_total: IntCounterVec,
     list_store_read_keys_total: IntCounterVec,
@@ -496,6 +531,14 @@ impl ListApiMetrics {
                 registry,
             )
             .unwrap(),
+            list_chunk_coalesced_admissions_total:
+                register_int_counter_vec_with_registry!(
+                    "list_chunk_coalesced_admissions_total",
+                    "Blocking List chunk admissions that executed two response chunks in one spawn_blocking closure. The counter increments once per coalesced admission, not once per chunk.",
+                    &["method"],
+                    registry,
+                )
+                .unwrap(),
             list_chunk_buckets_decoded_total: register_int_counter_vec_with_registry!(
                 "list_chunk_buckets_decoded_total",
                 "Bitmap buckets decoded by blocking List chunk workers. This identifies per-chunk fixed scan costs and sparse-filter amplification.",
@@ -586,6 +629,7 @@ impl ListApiMetrics {
                 self.list_chunk_schedstat_probes_total
                     .with_label_values(&[method])
             }),
+            coalesced_admissions: self.list_chunk_coalesced_admissions_total.clone(),
             chunk_buckets_decoded: self.list_probes_enabled.then(|| {
                 self.list_chunk_buckets_decoded_total
                     .with_label_values(&[method])
@@ -879,6 +923,7 @@ pub(crate) struct ListStreamMetrics {
     chunk_work_cpu: Option<Histogram>,
     chunk_run_delay: Option<Histogram>,
     chunk_schedstat_probes: Option<IntCounter>,
+    coalesced_admissions: IntCounterVec,
     chunk_buckets_decoded: Option<IntCounter>,
     chunk_schedstat_sample_every: Option<u64>,
     list_probes_enabled: bool,
@@ -929,6 +974,12 @@ impl ListStreamMetrics {
             chunk_run_delay.observe(elapsed.as_secs_f64());
             chunk_schedstat_probes.inc();
         }
+    }
+
+    pub(crate) fn observe_coalesced_admission(&self) {
+        self.coalesced_admissions
+            .with_label_values(&[self.method])
+            .inc();
     }
 
     pub(crate) fn observe_chunk_buckets_decoded(&self, buckets: usize) {

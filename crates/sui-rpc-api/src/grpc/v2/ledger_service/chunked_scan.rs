@@ -310,6 +310,85 @@ where
     }
 }
 
+/// Spawns one blocking admission whose closure may execute more than one List
+/// chunk. Queue time covers the admission once; callers use
+/// `run_list_chunk_in_admission` for each chunk's work and setup phases.
+pub(crate) fn spawn_list_chunk_admission<T, F>(
+    metrics: Option<ListStreamMetrics>,
+    work: F,
+) -> JoinHandle<Result<T, RpcError>>
+where
+    T: Send + 'static,
+    F: FnOnce(Option<&ListStreamMetrics>) -> Result<T, RpcError> + Send + 'static,
+{
+    match metrics {
+        Some(metrics) => {
+            let queue_timer = metrics.start_queue_timer();
+            tokio::task::spawn_blocking(move || {
+                queue_timer.stop_and_record();
+                work(Some(&metrics))
+            })
+        }
+        None => tokio::task::spawn_blocking(move || work(None)),
+    }
+}
+
+/// Executes and instruments one chunk within an already-admitted blocking
+/// closure.
+pub(crate) fn run_list_chunk_in_admission<T, F>(
+    metrics: Option<&ListStreamMetrics>,
+    work: F,
+) -> Result<T, RpcError>
+where
+    F: FnOnce(Option<&ListStreamMetrics>, &mut ListChunkSetupTimer) -> Result<T, RpcError>,
+{
+    let Some(metrics) = metrics else {
+        return work(None, &mut ListChunkSetupTimer::disabled());
+    };
+
+    let work_started = Instant::now();
+    let probes_enabled = metrics.list_probes_enabled();
+    let (run_delay_started, cpu_started) = if probes_enabled {
+        (
+            metrics
+                .schedstat_sample_every()
+                .and_then(start_schedstat_sample),
+            thread_cpu_time(),
+        )
+    } else {
+        (None, None)
+    };
+    let mut setup_timer = metrics.start_setup_timer();
+    let result = work(Some(metrics), &mut setup_timer);
+    let work_elapsed = work_started.elapsed();
+    let cpu_elapsed = cpu_started.and_then(|started| thread_cpu_time()?.checked_sub(started));
+    let run_delay_elapsed = run_delay_started.and_then(|started| {
+        finish_schedstat_sample()
+            .map(|finished| Duration::from_nanos(finished.saturating_sub(started)))
+    });
+
+    metrics.observe_chunk_work(work_elapsed);
+    if let Some(cpu_elapsed) = cpu_elapsed {
+        metrics.observe_chunk_work_cpu(cpu_elapsed);
+    }
+    if let Some(run_delay_elapsed) = run_delay_elapsed {
+        metrics.observe_chunk_run_delay(run_delay_elapsed);
+    }
+    result
+}
+
+pub(crate) fn should_coalesce_next_chunk(
+    chunks_per_spawn: usize,
+    exhausted: bool,
+    remaining_item_budget: usize,
+    remaining_scan_budget: usize,
+) -> bool {
+    chunks_per_spawn == 2
+        && !exhausted
+        && remaining_item_budget > 0
+        && remaining_scan_budget > 0
+}
+
 /// Bridges the async gRPC stream to blocking RocksDB reads.
 ///
 /// Each request has at most one blocking chunk worker in flight. A worker builds
@@ -460,6 +539,15 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 
     use crate::metrics::{ListApiMetrics, ListRequestMetrics};
+
+    #[test]
+    fn coalescing_requires_enabled_flag_frontier_and_remaining_budgets() {
+        assert!(should_coalesce_next_chunk(2, false, 1, 1));
+        assert!(!should_coalesce_next_chunk(1, false, 1, 1));
+        assert!(!should_coalesce_next_chunk(2, true, 1, 1));
+        assert!(!should_coalesce_next_chunk(2, false, 0, 1));
+        assert!(!should_coalesce_next_chunk(2, false, 1, 0));
+    }
 
     #[tokio::test]
     async fn chunked_scan_drains_vector_chunks_in_order() {

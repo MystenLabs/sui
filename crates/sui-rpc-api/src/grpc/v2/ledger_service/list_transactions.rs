@@ -36,7 +36,9 @@ use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
-use crate::metrics::{ListChunkSetupTimer, ListRequestMetrics, ListStreamMetrics};
+use crate::metrics::{
+    ListChunkSetupTimer, ListRequestMetrics, ListStreamMetrics, list_chunks_per_spawn,
+};
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::LedgerBitmapKind;
@@ -48,6 +50,9 @@ use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
 use super::chunked_scan::scan_limit_or_range;
+use super::chunked_scan::run_list_chunk_in_admission;
+use super::chunked_scan::should_coalesce_next_chunk;
+use super::chunked_scan::spawn_list_chunk_admission;
 use super::chunked_scan::spawn_list_chunk;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_boundary;
@@ -124,6 +129,94 @@ pub(crate) async fn list_transactions(
 
     let terminal_options = options.clone();
     let chunk_metrics = request_metrics.chunk_metrics();
+    if list_chunks_per_spawn() == 2 {
+        // This experiment intentionally changes first-byte timing and prefetch
+        // overlap: the first chunk is not yielded until both chunks complete.
+        // Campaign results from this arm are architectural sensitivity data only.
+        return Ok(async_stream::try_stream! {
+            let render_contents = should_render_transaction_contents(&read_mask);
+            let object_cache = Arc::new(Mutex::new(RequestObjectCache::default()));
+            let mut scan = ChunkedScan::new(
+                CoalescedTransactionScanState::Ready(initial_state),
+                limit_items,
+                endpoint.chunk_max,
+                bitmap_bucket_scan_budget,
+                move |state, args: ChunkArgs| {
+                    spawn_coalesced_transaction_chunk(
+                        service.clone(),
+                        chunk_metrics.clone(),
+                        state,
+                        read_mask.clone(),
+                        options.clone(),
+                        args.scan_budget,
+                        chunk_bucket_scan_budget,
+                        args.chunk_item_limit,
+                        args.remaining_request_item_limit,
+                        render_contents,
+                        object_cache.clone(),
+                        args.cancel,
+                    )
+                },
+            );
+
+            let mut covered_checkpoint_bound = None;
+            while let Some(mut response) = scan.next_item().await? {
+                if let Some(checkpoint) = response
+                    .watermark
+                    .as_ref()
+                    .and_then(|watermark| watermark.checkpoint)
+                {
+                    covered_checkpoint_bound = Some(checkpoint);
+                }
+                let is_data = response.transaction.is_some();
+                let ends_at_item_limit =
+                    is_data && scan.produced() == limit_items && scan.exhausted();
+                if ends_at_item_limit {
+                    let mut end = QueryEnd::default();
+                    end.reason = Some(QueryEndReason::ItemLimit as i32);
+                    response.end = Some(end);
+                    request_metrics.finish_success(
+                        QueryEndReason::ItemLimit,
+                        filtered.then(|| scan.bitmap_buckets_evaluated()),
+                    );
+                }
+                request_metrics.observe_frame(&response, is_data);
+                let yield_started = request_metrics.yield_clock();
+                yield response;
+                request_metrics.observe_yield_wait(yield_started);
+            }
+
+            let produced = scan.produced();
+            let bitmap_buckets_evaluated = filtered.then(|| scan.bitmap_buckets_evaluated());
+            let chunk_terminal = scan.into_terminal().expect("query emits terminal state");
+            let terminal_reason = super::query_end::effective_terminal_reason(
+                produced,
+                limit_items,
+                chunk_terminal.reason(),
+            );
+            if terminal_reason != QueryEndReason::ItemLimit {
+                let terminal_watermark =
+                    chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
+                let response = end_response(terminal_watermark, terminal_reason);
+                request_metrics.observe_frame(&response, false);
+                request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
+                let yield_started = request_metrics.yield_clock();
+                yield response;
+                request_metrics.observe_yield_wait(yield_started);
+            }
+            info!(
+                filtered,
+                limit_items,
+                ?ordering,
+                emitted = produced,
+                ?terminal_reason,
+                elapsed_ms = started.elapsed().as_millis(),
+                "list_transactions: done"
+            );
+        }
+        .boxed());
+    }
+
     Ok(async_stream::try_stream! {
         let render_contents = should_render_transaction_contents(&read_mask);
         let object_cache = Arc::new(Mutex::new(RequestObjectCache::default()));
@@ -267,6 +360,118 @@ enum TransactionScanState {
 }
 
 type TransactionChunkDone = ScanChunkDone<TransactionScanState, ListTransactionsResponse>;
+
+enum CoalescedTransactionScanState {
+    Ready(TransactionScanState),
+    Prefetched(Box<Result<TransactionChunkDone, RpcError>>),
+}
+
+type CoalescedTransactionChunkDone =
+    ScanChunkDone<CoalescedTransactionScanState, ListTransactionsResponse>;
+
+fn into_coalesced_transaction_chunk_done(
+    done: TransactionChunkDone,
+) -> CoalescedTransactionChunkDone {
+    ScanChunkDone {
+        items: done.items,
+        produced: done.produced,
+        next_state: done.next_state.map(CoalescedTransactionScanState::Ready),
+        terminal: done.terminal,
+        remaining_scan_budget: done.remaining_scan_budget,
+    }
+}
+
+fn spawn_coalesced_transaction_chunk(
+    service: RpcService,
+    metrics: Option<ListStreamMetrics>,
+    state: CoalescedTransactionScanState,
+    read_mask: FieldMaskTree,
+    options: QueryOptions,
+    scan_budget: usize,
+    chunk_scan_budget: usize,
+    chunk_item_limit: usize,
+    remaining_request_item_limit: usize,
+    render_contents: bool,
+    object_cache: Arc<Mutex<RequestObjectCache>>,
+    cancel: CancellationToken,
+) -> JoinHandle<Result<CoalescedTransactionChunkDone, RpcError>> {
+    let state = match state {
+        CoalescedTransactionScanState::Ready(state) => state,
+        CoalescedTransactionScanState::Prefetched(prefetched) => {
+            return tokio::spawn(async move {
+                (*prefetched).map(into_coalesced_transaction_chunk_done)
+            });
+        }
+    };
+
+    spawn_list_chunk_admission(metrics, move |metrics| {
+        let first = run_list_chunk_in_admission(metrics, |metrics, setup_timer| {
+            next_transaction_chunk(
+                service.clone(),
+                state,
+                read_mask.clone(),
+                options.clone(),
+                render_contents,
+                &object_cache,
+                scan_budget,
+                chunk_scan_budget,
+                chunk_item_limit,
+                remaining_request_item_limit,
+                &cancel,
+                metrics,
+                setup_timer,
+            )
+        })?;
+
+        let remaining_item_budget =
+            remaining_request_item_limit.saturating_sub(first.produced);
+        if !should_coalesce_next_chunk(
+            2,
+            first.next_state.is_none(),
+            remaining_item_budget,
+            first.remaining_scan_budget,
+        ) {
+            return Ok(into_coalesced_transaction_chunk_done(first));
+        }
+
+        let mut first = first;
+        let second_state = first
+            .next_state
+            .take()
+            .expect("coalescing decision requires a next chunk state");
+        let second_chunk_item_limit = chunk_item_limit.min(remaining_item_budget);
+        let second = run_list_chunk_in_admission(metrics, |metrics, setup_timer| {
+            next_transaction_chunk(
+                service,
+                second_state,
+                read_mask,
+                options,
+                render_contents,
+                &object_cache,
+                first.remaining_scan_budget,
+                chunk_scan_budget,
+                second_chunk_item_limit,
+                remaining_item_budget,
+                &cancel,
+                metrics,
+                setup_timer,
+            )
+        });
+        if let Some(metrics) = metrics {
+            metrics.observe_coalesced_admission();
+        }
+
+        Ok(ScanChunkDone {
+            items: first.items,
+            produced: first.produced,
+            next_state: Some(CoalescedTransactionScanState::Prefetched(Box::new(
+                second,
+            ))),
+            terminal: first.terminal,
+            remaining_scan_budget: first.remaining_scan_budget,
+        })
+    })
+}
 
 fn next_transaction_chunk(
     service: RpcService,
