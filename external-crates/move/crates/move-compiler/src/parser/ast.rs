@@ -436,6 +436,9 @@ pub struct Constant {
     pub doc: DocComment,
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
+    /// `public(package)` makes the constant usable in other modules of the package; no other
+    /// visibility is valid on constants
+    pub visibility: Visibility,
     pub signature: Type,
     pub name: ConstantName,
     pub value: Exp,
@@ -2098,12 +2101,14 @@ impl AstDebug for Constant {
             doc,
             attributes,
             loc: _loc,
+            visibility,
             name,
             signature,
             value,
         } = self;
         doc.ast_debug(w);
         attributes.ast_debug(w);
+        visibility.ast_debug(w);
         w.write(format!("const {}:", name));
         signature.ast_debug(w);
         w.write(" = ");

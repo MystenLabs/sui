@@ -1226,7 +1226,13 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         }
         E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
 
-        E::Constant(c) => {
+        E::Constant(m, c) => {
+            // cross-module constant references in function bodies are rewritten to getter calls
+            // during HLIR translation
+            assert!(
+                context.current_module() == Some(&m),
+                "ICE cross-module constant should have been rewritten to a getter call"
+            );
             // load the constant by value; it deduplicates onto the pool entry seeded by the
             // constant's definition
             let (ty, value) = context
