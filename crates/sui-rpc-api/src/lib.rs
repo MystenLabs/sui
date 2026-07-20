@@ -305,12 +305,22 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
             ))
             .pipe(|router| {
                 if let Some(metrics) = metrics {
-                    router.layer(CallbackLayer::new(
-                        metrics::RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
-                            metrics,
-                            grpc_method_allowlist,
-                        ),
-                    ))
+                    metrics.spawn_runtime_metrics_sampler();
+                    let body_metrics = metrics::GrpcBodyInstrumentationState::new(
+                        metrics.clone(),
+                        grpc_method_allowlist.clone(),
+                    );
+                    router
+                        .layer(CallbackLayer::new(
+                            metrics::RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+                                metrics,
+                                grpc_method_allowlist,
+                            ),
+                        ))
+                        .layer(axum::middleware::from_fn_with_state(
+                            body_metrics,
+                            metrics::instrument_grpc_response_body,
+                        ))
                 } else {
                     router
                 }

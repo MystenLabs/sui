@@ -32,8 +32,7 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::EventScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedEventRange;
-use crate::metrics::ListRequestMetrics;
-use crate::metrics::ListStreamMetrics;
+use crate::metrics::{ListChunkSetupTimer, ListRequestMetrics, ListStreamMetrics};
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::PendingBitmapBucket;
@@ -213,7 +212,7 @@ fn spawn_event_chunk(
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
 ) -> JoinHandle<Result<EventChunkDone, RpcError>> {
-    spawn_list_chunk(metrics, move |metrics| {
+    spawn_list_chunk(metrics, move |metrics, setup_timer| {
         next_event_chunk(
             service,
             state,
@@ -226,6 +225,7 @@ fn spawn_event_chunk(
             remaining_request_item_limit,
             &cancel,
             metrics,
+            setup_timer,
         )
     })
 }
@@ -276,6 +276,7 @@ fn next_event_chunk(
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
     metrics: Option<&ListStreamMetrics>,
+    setup_timer: &mut ListChunkSetupTimer,
 ) -> Result<EventChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
@@ -346,6 +347,7 @@ fn next_event_chunk(
                 remaining_request_item_limit,
                 cancel,
                 metrics,
+                setup_timer,
             );
         }
         EventScanState::Unfiltered {
@@ -461,6 +463,9 @@ fn next_event_chunk(
                 cancel,
             )?;
             remaining_scan_budget -= hits.buckets_scanned;
+            if let Some(metrics) = metrics {
+                metrics.observe_chunk_buckets_decoded(hits.buckets_scanned);
+            }
             let chunk_scan_limit_reached = hits.chunk_scan_limit_reached;
             let frontier = hits.frontier;
             // A chunk scan-limit only ends the request when the request budget
@@ -539,6 +544,7 @@ fn next_event_chunk(
             (refs, next_state, terminal, scan_watermark, entry_checkpoint)
         }
     };
+    setup_timer.finish_setup();
 
     if cancel.is_cancelled() {
         return Err(cancelled());

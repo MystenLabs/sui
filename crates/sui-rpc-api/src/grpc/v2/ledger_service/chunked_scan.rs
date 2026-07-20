@@ -2,6 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
+
+#[cfg(target_os = "linux")]
+use std::{
+    cell::RefCell,
+    fs::File,
+    os::fd::AsRawFd,
+    sync::{
+        Once,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_cursor::Position;
@@ -12,7 +24,7 @@ use tokio_util::sync::DropGuard;
 use crate::RpcError;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::watermark::ScanTerminal;
-use crate::metrics::ListStreamMetrics;
+use crate::metrics::{ListChunkSetupTimer, ListStreamMetrics};
 
 /// Chunk terminal for a scan that either exhausted its request scan budget
 /// (authoritative frontier watermark, built lazily) or ended at the resolved
@@ -60,24 +72,237 @@ pub(crate) struct ChunkArgs {
 pub(super) fn cancelled() -> RpcError {
     RpcError::new(tonic::Code::Cancelled, "request cancelled")
 }
+#[cfg(unix)]
+fn thread_cpu_time() -> Option<Duration> {
+    let mut value = std::mem::MaybeUninit::<libc::timespec>::uninit();
+    // SAFETY: `clock_gettime` initializes `value` on success.
+    if unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, value.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    // SAFETY: the successful call above initialized the timespec.
+    let value = unsafe { value.assume_init() };
+    let seconds = u64::try_from(value.tv_sec).ok()?;
+    let nanoseconds = u32::try_from(value.tv_nsec).ok()?;
+    (nanoseconds < 1_000_000_000).then(|| Duration::new(seconds, nanoseconds))
+}
+
+#[cfg(not(unix))]
+fn thread_cpu_time() -> Option<Duration> {
+    None
+}
+
+#[cfg(target_os = "linux")]
+static SCHEDSTAT_AVAILABLE: AtomicBool = AtomicBool::new(true);
+#[cfg(target_os = "linux")]
+static SCHEDSTAT_BENCHMARK: Once = Once::new();
+
+#[cfg(target_os = "linux")]
+struct ThreadSchedstat {
+    chunks_seen: u64,
+    file: Option<File>,
+}
+
+#[cfg(target_os = "linux")]
+thread_local! {
+    static THREAD_SCHEDSTAT: RefCell<ThreadSchedstat> = RefCell::new(ThreadSchedstat {
+        chunks_seen: 0,
+        file: None,
+    });
+}
+
+#[cfg(target_os = "linux")]
+fn disable_schedstat() {
+    SCHEDSTAT_AVAILABLE.store(false, Ordering::Relaxed);
+}
+
+#[cfg(target_os = "linux")]
+fn parse_schedstat(bytes: &[u8]) -> Option<(u64, u64)> {
+    let mut values = [0_u64; 2];
+    let mut offset = 0;
+    for value in &mut values {
+        while offset < bytes.len() && bytes[offset].is_ascii_whitespace() {
+            offset += 1;
+        }
+        let start = offset;
+        while offset < bytes.len() && bytes[offset].is_ascii_digit() {
+            *value = value
+                .checked_mul(10)?
+                .checked_add(u64::from(bytes[offset] - b'0'))?;
+            offset += 1;
+        }
+        if offset == start {
+            return None;
+        }
+    }
+    Some((values[0], values[1]))
+}
+
+#[cfg(target_os = "linux")]
+fn read_schedstat(file: &File) -> Option<u64> {
+    let mut buffer = [0_u8; 128];
+    // SAFETY: `buffer` is writable for its full length and `file` remains open
+    // for the duration of the positional read.
+    let bytes_read = unsafe {
+        libc::pread(
+            file.as_raw_fd(),
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+            0,
+        )
+    };
+    if bytes_read <= 0 {
+        return None;
+    }
+    let (runtime_ns, run_delay_ns) = parse_schedstat(&buffer[..bytes_read as usize])?;
+    // A completely zero record cannot provide a meaningful delta.
+    (runtime_ns != 0 || run_delay_ns != 0).then_some(run_delay_ns)
+}
+
+#[cfg(target_os = "linux")]
+fn kernel_schedstats_enabled() -> bool {
+    let Ok(file) = File::open("/proc/sys/kernel/sched_schedstats") else {
+        return false;
+    };
+    let mut buffer = [0_u8; 8];
+    // SAFETY: `buffer` is writable for its full length and `file` remains open
+    // for the duration of the positional read.
+    let bytes_read = unsafe {
+        libc::pread(
+            file.as_raw_fd(),
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+            0,
+        )
+    };
+    bytes_read > 0
+        && buffer[..bytes_read as usize]
+            .iter()
+            .find(|byte| !byte.is_ascii_whitespace())
+            .is_some_and(|byte| *byte == b'1')
+}
+
+#[cfg(target_os = "linux")]
+fn benchmark_schedstat_probe(file: &File) {
+    SCHEDSTAT_BENCHMARK.call_once(|| {
+        if !kernel_schedstats_enabled() {
+            disable_schedstat();
+            return;
+        }
+        const PROBES: u128 = 100;
+        let started = Instant::now();
+        for _ in 0..PROBES {
+            if read_schedstat(file).is_none() {
+                disable_schedstat();
+                return;
+            }
+        }
+        tracing::info!(
+            schedstat_probe_ns = started.elapsed().as_nanos() / PROBES,
+            "List chunk schedstat probe cost"
+        );
+    });
+}
+
+#[cfg(target_os = "linux")]
+fn start_schedstat_sample(sample_every: u64) -> Option<u64> {
+    if !SCHEDSTAT_AVAILABLE.load(Ordering::Relaxed) {
+        return None;
+    }
+    THREAD_SCHEDSTAT.with(|thread_state| {
+        let mut thread_state = thread_state.borrow_mut();
+        let chunk_index = thread_state.chunks_seen;
+        thread_state.chunks_seen = thread_state.chunks_seen.wrapping_add(1);
+        if chunk_index % sample_every != 0 {
+            return None;
+        }
+        if thread_state.file.is_none() {
+            // `/proc/thread-self` binds to this blocking thread when opened.
+            thread_state.file = File::open("/proc/thread-self/schedstat").ok();
+            if thread_state.file.is_none() {
+                disable_schedstat();
+                return None;
+            }
+        }
+        let file = thread_state.file.as_ref().expect("checked above");
+        benchmark_schedstat_probe(file);
+        if !SCHEDSTAT_AVAILABLE.load(Ordering::Relaxed) {
+            return None;
+        }
+        read_schedstat(file).or_else(|| {
+            disable_schedstat();
+            None
+        })
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn finish_schedstat_sample() -> Option<u64> {
+    THREAD_SCHEDSTAT.with(|thread_state| {
+        let thread_state = thread_state.borrow();
+        let file = thread_state.file.as_ref()?;
+        read_schedstat(file).or_else(|| {
+            disable_schedstat();
+            None
+        })
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn start_schedstat_sample(_sample_every: u64) -> Option<u64> {
+    None
+}
+
+#[cfg(not(target_os = "linux"))]
+fn finish_schedstat_sample() -> Option<u64> {
+    None
+}
+
 pub(crate) fn spawn_list_chunk<T, F>(
     metrics: Option<ListStreamMetrics>,
     work: F,
 ) -> JoinHandle<Result<T, RpcError>>
 where
     T: Send + 'static,
-    F: FnOnce(Option<&ListStreamMetrics>) -> Result<T, RpcError> + Send + 'static,
+    F: FnOnce(Option<&ListStreamMetrics>, &mut ListChunkSetupTimer) -> Result<T, RpcError>
+        + Send
+        + 'static,
 {
     match metrics {
         Some(metrics) => {
             let queue_timer = metrics.start_queue_timer();
             tokio::task::spawn_blocking(move || {
                 queue_timer.stop_and_record();
-                let _work_timer = metrics.start_work_timer();
-                work(Some(&metrics))
+                let run_delay_started = metrics
+                    .schedstat_sample_every()
+                    .and_then(start_schedstat_sample);
+                // Each clock read is one syscall with no allocation or parsing,
+                // about 0.001% of median chunk wall time. The load-test ladder
+                // still includes an instrumentation-off control arm.
+                let cpu_started = thread_cpu_time();
+                let mut setup_timer = metrics.start_setup_timer();
+                let work_started = Instant::now();
+                let result = work(Some(&metrics), &mut setup_timer);
+                let work_elapsed = work_started.elapsed();
+                let cpu_elapsed =
+                    cpu_started.and_then(|started| thread_cpu_time()?.checked_sub(started));
+                let run_delay_elapsed = run_delay_started.and_then(|started| {
+                    finish_schedstat_sample()
+                        .map(|finished| Duration::from_nanos(finished.saturating_sub(started)))
+                });
+
+                metrics.observe_chunk_work(work_elapsed);
+                if let Some(cpu_elapsed) = cpu_elapsed {
+                    metrics.observe_chunk_work_cpu(cpu_elapsed);
+                }
+                if let Some(run_delay_elapsed) = run_delay_elapsed {
+                    metrics.observe_chunk_run_delay(run_delay_elapsed);
+                }
+                result
             })
         }
-        None => tokio::task::spawn_blocking(move || work(None)),
+        None => tokio::task::spawn_blocking(move || {
+            work(None, &mut ListChunkSetupTimer::disabled())
+        }),
     }
 }
 
@@ -398,8 +623,8 @@ mod tests {
         let registry = Registry::new();
         let metrics = ListApiMetrics::new(&registry).stream_metrics("list_checkpoints", "summary");
 
-        let success = spawn_list_chunk(Some(metrics.clone()), |_| Ok(()));
-        let error = spawn_list_chunk::<(), _>(Some(metrics), |_| {
+        let success = spawn_list_chunk(Some(metrics.clone()), |_, _| Ok(()));
+        let error = spawn_list_chunk::<(), _>(Some(metrics), |_, _| {
             Err(RpcError::new(
                 tonic::Code::Internal,
                 "synthetic chunk error",
@@ -414,8 +639,8 @@ mod tests {
             .iter()
             .find(|family| family.name() == "list_chunk_seconds")
             .expect("list chunk metric family");
-        assert_eq!(family.get_metric().len(), 3);
-        for phase in ["queue", "work"] {
+        assert_eq!(family.get_metric().len(), 4);
+        for phase in ["queue", "setup", "work"] {
             let metric = family
                 .get_metric()
                 .iter()

@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::http;
+use axum::{body::Body as AxumBody, extract::State, http, middleware::Next};
+use http_body::{Body, Frame};
+use pin_project_lite::pin_project;
 use std::{
     borrow::Cow,
     collections::HashSet,
+    pin::Pin,
     sync::Arc,
+    task::{Context, Poll},
     time::{Duration, Instant},
 };
 
@@ -25,6 +29,13 @@ pub struct RpcMetrics {
     request_latency: HistogramVec,
     request_handler_latency: HistogramVec,
     first_chunk_latency: HistogramVec,
+    grpc_body_poll_gap: HistogramVec,
+    grpc_body_first_poll: HistogramVec,
+    grpc_body_poll_results: IntCounterVec,
+    grpc_body_trailers_gap: HistogramVec,
+    tokio_runtime_num_workers: IntGauge,
+    tokio_runtime_global_queue_depth: IntGauge,
+    tokio_runtime_num_alive_tasks: IntGauge,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -79,8 +90,274 @@ impl RpcMetrics {
                 registry,
             )
             .unwrap(),
+            grpc_body_poll_gap: register_histogram_vec_with_registry!(
+                "grpc_body_poll_gap_seconds",
+                "Elapsed time between consecutive polls of one gRPC response body at the body boundary. It conflates h2 backpressure with connection-task runtime scheduling, so it discriminates their combined downstream delay from producer chunk work but cannot separate them.",
+                &["path"],
+                prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            grpc_body_first_poll: register_histogram_vec_with_registry!(
+                "grpc_body_first_poll_seconds",
+                "Elapsed time from gRPC response-body wrapper creation until its first poll at the body boundary. It measures delay before body consumption begins and helps distinguish consumer scheduling or backpressure from producer chunk work.",
+                &["path"],
+                prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            grpc_body_poll_results: register_int_counter_vec_with_registry!(
+                "grpc_body_poll_results_total",
+                "Response-body poll results observed at the gRPC body boundary. Data and trailers count ready frames; pending identifies body-level stalls and helps separate producer readiness from poll cadence.",
+                &["path", "result"],
+                registry,
+            )
+            .unwrap(),
+            grpc_body_trailers_gap: register_histogram_vec_with_registry!(
+                "grpc_body_trailers_gap_seconds",
+                "Elapsed time from the last data frame polled to the trailers frame polled at the gRPC body boundary. This is not evidence that the terminal frame reached the client; it distinguishes body-production delay from later transport work.",
+                &["path"],
+                prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            tokio_runtime_num_workers: register_int_gauge_with_registry!(
+                "tokio_runtime_num_workers",
+                "Number of Tokio runtime worker threads sampled by the RPC service; provides the scheduler capacity baseline for runtime-congestion attribution.",
+                registry,
+            )
+            .unwrap(),
+            tokio_runtime_global_queue_depth: register_int_gauge_with_registry!(
+                "tokio_runtime_global_queue_depth",
+                "Tasks waiting in the Tokio runtime global queue, sampled once per second; sustained depth identifies runtime scheduling congestion.",
+                registry,
+            )
+            .unwrap(),
+            tokio_runtime_num_alive_tasks: register_int_gauge_with_registry!(
+                "tokio_runtime_num_alive_tasks",
+                "Alive tasks in the Tokio runtime, sampled once per second; growth indicates runtime task pressure that can delay gRPC body polling.",
+                registry,
+            )
+            .unwrap(),
         }
     }
+}
+impl RpcMetrics {
+    pub(crate) fn spawn_runtime_metrics_sampler(self: &Arc<Self>) {
+        let weak_metrics = Arc::downgrade(self);
+        let runtime_metrics = tokio::runtime::Handle::current().metrics();
+
+        // Tokio 1.52's stable RuntimeMetrics surface exposes worker count,
+        // alive tasks, and global queue depth. Blocking thread count, blocking
+        // queue depth, and worker-local queue depth require `tokio_unstable`;
+        // this sampler deliberately does not enable that cfg.
+        let _sampler = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let Some(metrics) = weak_metrics.upgrade() else {
+                    break;
+                };
+                metrics
+                    .tokio_runtime_num_workers
+                    .set(usize_to_i64(runtime_metrics.num_workers()));
+                metrics
+                    .tokio_runtime_global_queue_depth
+                    .set(usize_to_i64(runtime_metrics.global_queue_depth()));
+                metrics
+                    .tokio_runtime_num_alive_tasks
+                    .set(usize_to_i64(runtime_metrics.num_alive_tasks()));
+            }
+        });
+    }
+
+    fn grpc_body_metrics(&self, path: &str) -> GrpcBodyMetricHandles {
+        GrpcBodyMetricHandles {
+            poll_gap: self.grpc_body_poll_gap.with_label_values(&[path]),
+            first_poll: self.grpc_body_first_poll.with_label_values(&[path]),
+            data: self
+                .grpc_body_poll_results
+                .with_label_values(&[path, "data"]),
+            trailers: self
+                .grpc_body_poll_results
+                .with_label_values(&[path, "trailers"]),
+            pending: self
+                .grpc_body_poll_results
+                .with_label_values(&[path, "pending"]),
+            trailers_gap: self.grpc_body_trailers_gap.with_label_values(&[path]),
+        }
+    }
+}
+
+fn usize_to_i64(value: usize) -> i64 {
+    i64::try_from(value).unwrap_or(i64::MAX)
+}
+
+#[derive(Clone)]
+pub(crate) struct GrpcBodyInstrumentationState {
+    metrics: Arc<RpcMetrics>,
+    grpc_method_allowlist: GrpcMethodAllowlist,
+}
+
+impl GrpcBodyInstrumentationState {
+    pub(crate) fn new(
+        metrics: Arc<RpcMetrics>,
+        grpc_method_allowlist: GrpcMethodAllowlist,
+    ) -> Self {
+        Self {
+            metrics,
+            grpc_method_allowlist,
+        }
+    }
+}
+
+pub(crate) async fn instrument_grpc_response_body(
+    State(state): State<GrpcBodyInstrumentationState>,
+    request: http::Request<AxumBody>,
+    next: Next,
+) -> http::Response<AxumBody> {
+    let uri_path = request.uri().path();
+    let matched_path = request
+        .extensions()
+        .get::<axum::extract::MatchedPath>()
+        .map(|path| path.as_str());
+    let body_metrics = uri_path.starts_with("/sui.rpc.v2.").then(|| {
+        let path = compute_metric_label(
+            true,
+            uri_path,
+            matched_path,
+            &state.grpc_method_allowlist,
+        );
+        state.metrics.grpc_body_metrics(path.as_ref())
+    });
+    let response = next.run(request).await;
+
+    match body_metrics {
+        Some(metrics) => response.map(|body| AxumBody::new(InstrumentedBody::new(body, metrics))),
+        None => response,
+    }
+}
+
+#[derive(Clone)]
+struct GrpcBodyMetricHandles {
+    poll_gap: Histogram,
+    first_poll: Histogram,
+    data: IntCounter,
+    trailers: IntCounter,
+    pending: IntCounter,
+    trailers_gap: Histogram,
+}
+
+pin_project! {
+    /// Instruments only the boundary where Hyper polls the response body.
+    ///
+    /// Full attribution requires h2/socket-level instrumentation of
+    /// `poll_capacity`, frame queueing, and write timestamps. That deeper
+    /// instrumentation is deliberately out of scope here.
+    struct InstrumentedBody<B> {
+        #[pin]
+        inner: B,
+        metrics: GrpcBodyMetricHandles,
+        created_at: Instant,
+        previous_poll: Option<Instant>,
+        last_data_poll: Option<Instant>,
+    }
+}
+
+impl<B> InstrumentedBody<B> {
+    fn new(inner: B, metrics: GrpcBodyMetricHandles) -> Self {
+        Self {
+            inner,
+            metrics,
+            created_at: Instant::now(),
+            previous_poll: None,
+            last_data_poll: None,
+        }
+    }
+}
+
+impl<B> Body for InstrumentedBody<B>
+where
+    B: Body,
+{
+    type Data = B::Data;
+    type Error = B::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        let mut this = self.project();
+        let poll_started = Instant::now();
+        if let Some(previous_poll) = this.previous_poll.replace(poll_started) {
+            this.metrics
+                .poll_gap
+                .observe(poll_started.duration_since(previous_poll).as_secs_f64());
+        } else {
+            this.metrics
+                .first_poll
+                .observe(poll_started.duration_since(*this.created_at).as_secs_f64());
+        }
+
+        let result = this.inner.as_mut().poll_frame(cx);
+        match &result {
+            Poll::Pending => this.metrics.pending.inc(),
+            Poll::Ready(Some(Ok(frame))) if frame.is_data() => {
+                this.metrics.data.inc();
+                this.last_data_poll.replace(Instant::now());
+            }
+            Poll::Ready(Some(Ok(frame))) if frame.is_trailers() => {
+                this.metrics.trailers.inc();
+                if let Some(last_data_poll) = this.last_data_poll.as_ref() {
+                    this.metrics
+                        .trailers_gap
+                        .observe(last_data_poll.elapsed().as_secs_f64());
+                }
+            }
+            _ => {}
+        }
+        result
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.inner.size_hint()
+    }
+
+}
+
+#[cfg(target_os = "linux")]
+fn configured_chunk_schedstat_sample_every() -> Option<u64> {
+    use std::sync::LazyLock;
+
+    static SAMPLE_EVERY: LazyLock<Option<u64>> =
+        LazyLock::new(|| match std::env::var("SUI_RPC_CHUNK_SCHEDSTAT") {
+            Ok(value) => match value.parse::<u64>() {
+                Ok(sample_every) if sample_every > 0 => Some(sample_every),
+                _ => {
+                    tracing::warn!(
+                        value,
+                        "SUI_RPC_CHUNK_SCHEDSTAT must be a positive integer; schedstat sampling disabled"
+                    );
+                    None
+                }
+            },
+            Err(std::env::VarError::NotPresent) => None,
+            Err(error) => {
+                tracing::warn!(%error, "unable to read SUI_RPC_CHUNK_SCHEDSTAT; schedstat sampling disabled");
+                None
+            }
+        });
+    *SAMPLE_EVERY
+}
+
+#[cfg(not(target_os = "linux"))]
+fn configured_chunk_schedstat_sample_every() -> Option<u64> {
+    None
 }
 
 #[derive(Clone)]
@@ -91,11 +368,16 @@ pub(crate) struct ListApiMetrics {
     list_stream_yield_wait_seconds: HistogramVec,
     list_render_seconds: HistogramVec,
     list_chunk_seconds: HistogramVec,
+    list_chunk_work_cpu_seconds: HistogramVec,
+    list_chunk_run_delay_seconds: HistogramVec,
+    list_chunk_schedstat_probes_total: IntCounterVec,
+    list_chunk_buckets_decoded_total: IntCounterVec,
     list_store_read_batches_total: IntCounterVec,
     list_store_read_keys_total: IntCounterVec,
     list_object_cache_hits_total: IntCounterVec,
     list_query_ends_total: IntCounterVec,
     list_bitmap_buckets_evaluated: HistogramVec,
+    chunk_schedstat_sample_every: Option<u64>,
 }
 
 impl ListApiMetrics {
@@ -126,7 +408,7 @@ impl ListApiMetrics {
             .unwrap(),
             list_stream_yield_wait_seconds: register_histogram_vec_with_registry!(
                 "list_stream_yield_wait_seconds",
-                "Time from yielding one List response frame (any kind) until the handler stream is polled again; downstream transport consumption and backpressure signal.",
+                "Consumer-driven repoll cadence: time from yielding one List response frame until the handler stream is polled again. It conflates h2 capacity/backpressure, runtime scheduling, and in-flight buildup; it does not measure producer-side blocking.",
                 &["method", "resolution"],
                 prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
                 registry,
@@ -142,9 +424,39 @@ impl ListApiMetrics {
             .unwrap(),
             list_chunk_seconds: register_histogram_vec_with_registry!(
                 "list_chunk_seconds",
-                "Time in seconds for one blocking List chunk phase. queue spans immediately before spawn_blocking through entry into its closure; work spans execution of the blocking chunk and includes chunks that return an error; read spans the chunk-level batched store reads within work.",
+                "Time in seconds for one blocking List chunk phase. queue spans immediately before spawn_blocking through entry into its closure; setup spans closure entry through scan positioning and reference discovery before response-item materialization; work spans the complete blocking chunk and includes chunks that return an error; read spans chunk-level batched store reads within work.",
                 &["method", "phase"],
                 prometheus::exponential_buckets(0.0001, 2.0, 20).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_chunk_work_cpu_seconds: register_histogram_vec_with_registry!(
+                "list_chunk_work_cpu_seconds",
+                "Thread CPU time consumed by one blocking List chunk worker. Compare with the work wall phase: both increasing identifies slower store or computation, while wall increasing with flat CPU identifies descheduling or blocking.",
+                &["method"],
+                prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_chunk_run_delay_seconds: register_histogram_vec_with_registry!(
+                "list_chunk_run_delay_seconds",
+                "Linux scheduler run-delay delta for a sampled blocking List chunk: time runnable but not running, separating OS descheduling from I/O or lock blocking. Requires kernel.sched_schedstats=1; sampling is disabled and no samples are emitted when schedstat fields read as zero.",
+                &["method"],
+                prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_chunk_schedstat_probes_total: register_int_counter_vec_with_registry!(
+                "list_chunk_schedstat_probes_total",
+                "Completed per-chunk /proc/thread-self/schedstat probe pairs. SUI_RPC_CHUNK_SCHEDSTAT=N enables one pair every Nth chunk per blocking thread, allowing run-delay sample density and probe overhead to be interpreted.",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+            list_chunk_buckets_decoded_total: register_int_counter_vec_with_registry!(
+                "list_chunk_buckets_decoded_total",
+                "Bitmap buckets decoded by blocking List chunk workers. This identifies per-chunk fixed scan costs and sparse-filter amplification.",
+                &["method"],
                 registry,
             )
             .unwrap(),
@@ -184,6 +496,7 @@ impl ListApiMetrics {
                 registry,
             )
             .unwrap(),
+            chunk_schedstat_sample_every: configured_chunk_schedstat_sample_every(),
         }
     }
 
@@ -214,6 +527,20 @@ impl ListApiMetrics {
                 .with_label_values(&[method, "queue"]),
             chunk_work: self.list_chunk_seconds.with_label_values(&[method, "work"]),
             chunk_read: self.list_chunk_seconds.with_label_values(&[method, "read"]),
+            chunk_setup: self.list_chunk_seconds.with_label_values(&[method, "setup"]),
+            chunk_work_cpu: self
+                .list_chunk_work_cpu_seconds
+                .with_label_values(&[method]),
+            chunk_run_delay: self
+                .list_chunk_run_delay_seconds
+                .with_label_values(&[method]),
+            chunk_schedstat_probes: self
+                .list_chunk_schedstat_probes_total
+                .with_label_values(&[method]),
+            chunk_buckets_decoded: self
+                .list_chunk_buckets_decoded_total
+                .with_label_values(&[method]),
+            chunk_schedstat_sample_every: self.chunk_schedstat_sample_every,
             store_read_batches: self.list_store_read_batches_total.clone(),
             store_read_keys: self.list_store_read_keys_total.clone(),
             object_cache_hits: self.list_object_cache_hits_total.clone(),
@@ -495,8 +822,14 @@ pub(crate) struct ListStreamMetrics {
     yield_wait: Histogram,
     render: Histogram,
     chunk_queue: Histogram,
+    chunk_setup: Histogram,
     chunk_work: Histogram,
     chunk_read: Histogram,
+    chunk_work_cpu: Histogram,
+    chunk_run_delay: Histogram,
+    chunk_schedstat_probes: IntCounter,
+    chunk_buckets_decoded: IntCounter,
+    chunk_schedstat_sample_every: Option<u64>,
     store_read_batches: IntCounterVec,
     store_read_keys: IntCounterVec,
     object_cache_hits: IntCounterVec,
@@ -513,8 +846,31 @@ impl ListStreamMetrics {
         self.chunk_queue.start_timer()
     }
 
-    pub(crate) fn start_work_timer(&self) -> HistogramTimer {
-        self.chunk_work.start_timer()
+    pub(crate) fn start_setup_timer(&self) -> ListChunkSetupTimer {
+        ListChunkSetupTimer {
+            timer: Some(self.chunk_setup.start_timer()),
+        }
+    }
+
+    pub(crate) fn observe_chunk_work(&self, elapsed: Duration) {
+        self.chunk_work.observe(elapsed.as_secs_f64());
+    }
+
+    pub(crate) fn observe_chunk_work_cpu(&self, elapsed: Duration) {
+        self.chunk_work_cpu.observe(elapsed.as_secs_f64());
+    }
+
+    pub(crate) fn schedstat_sample_every(&self) -> Option<u64> {
+        self.chunk_schedstat_sample_every
+    }
+
+    pub(crate) fn observe_chunk_run_delay(&self, elapsed: Duration) {
+        self.chunk_run_delay.observe(elapsed.as_secs_f64());
+        self.chunk_schedstat_probes.inc();
+    }
+
+    pub(crate) fn observe_chunk_buckets_decoded(&self, buckets: usize) {
+        self.chunk_buckets_decoded.inc_by(buckets as u64);
     }
 
     pub(crate) fn observe_chunk_read(&self, elapsed: Duration) {
@@ -534,6 +890,22 @@ impl ListStreamMetrics {
         self.object_cache_hits
             .with_label_values(&[self.method])
             .inc_by(keys as u64);
+    }
+}
+
+pub(crate) struct ListChunkSetupTimer {
+    timer: Option<HistogramTimer>,
+}
+
+impl ListChunkSetupTimer {
+    pub(crate) fn disabled() -> Self {
+        Self { timer: None }
+    }
+
+    pub(crate) fn finish_setup(&mut self) {
+        if let Some(timer) = self.timer.take() {
+            timer.stop_and_record();
+        }
     }
 }
 
@@ -1129,13 +1501,27 @@ mod tests {
                 methods
                     .into_iter()
                     .flat_map(|method| {
-                        ["queue", "work", "read"]
+                        ["queue", "setup", "work", "read"]
                             .into_iter()
                             .map(move |phase| vec![("method", method), ("phase", phase)])
                     })
                     .collect(),
             ),
         );
+        let method_labels = expected_label_sets(
+            methods
+                .into_iter()
+                .map(|method| vec![("method", method)])
+                .collect(),
+        );
+        for name in [
+            "list_chunk_work_cpu_seconds",
+            "list_chunk_run_delay_seconds",
+            "list_chunk_schedstat_probes_total",
+            "list_chunk_buckets_decoded_total",
+        ] {
+            assert_metric_family(&families, name, method_labels.clone());
+        }
         assert_metric_family(
             &families,
             "list_query_ends_total",

@@ -17,6 +17,9 @@ axum = { workspace = true, features = ["matched-path"] }
 bcs.workspace = true
 rand.workspace = true
 roaring.workspace = true
+http-body.workspace = true
+libc = "0.2"
+pin-project-lite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sui-config.workspace = true

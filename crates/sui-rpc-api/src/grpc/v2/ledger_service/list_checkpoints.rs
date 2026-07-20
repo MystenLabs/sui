@@ -30,8 +30,7 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedRange;
-use crate::metrics::ListRequestMetrics;
-use crate::metrics::ListStreamMetrics;
+use crate::metrics::{ListChunkSetupTimer, ListRequestMetrics, ListStreamMetrics};
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::DrainedBitmapHits;
@@ -216,7 +215,7 @@ fn spawn_checkpoint_chunk(
     cancel: CancellationToken,
     metrics: Option<ListStreamMetrics>,
 ) -> JoinHandle<Result<CheckpointChunkDone, RpcError>> {
-    spawn_list_chunk(metrics, move |metrics| {
+    spawn_list_chunk(metrics, move |metrics, setup_timer| {
         next_checkpoint_chunk(
             service,
             state,
@@ -228,6 +227,7 @@ fn spawn_checkpoint_chunk(
             remaining_request_item_limit,
             &cancel,
             metrics,
+            setup_timer,
         )
     })
 }
@@ -273,6 +273,7 @@ fn next_checkpoint_chunk(
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
     metrics: Option<&ListStreamMetrics>,
+    setup_timer: &mut ListChunkSetupTimer,
 ) -> Result<CheckpointChunkDone, RpcError> {
     match state {
         CheckpointScanState::Init {
@@ -402,6 +403,7 @@ fn next_checkpoint_chunk(
                 remaining_request_item_limit,
                 cancel,
                 metrics,
+                setup_timer,
             )
         }
         CheckpointScanState::Unfiltered {
@@ -421,6 +423,7 @@ fn next_checkpoint_chunk(
             chunk_item_limit,
             cancel,
             metrics,
+            setup_timer,
         ),
         CheckpointScanState::Filtered {
             query,
@@ -453,6 +456,7 @@ fn next_checkpoint_chunk(
             remaining_request_item_limit,
             cancel,
             metrics,
+            setup_timer,
         ),
     }
 }
@@ -469,6 +473,7 @@ fn next_unfiltered_checkpoint_chunk(
     chunk_item_limit: usize,
     cancel: &CancellationToken,
     metrics: Option<&ListStreamMetrics>,
+    setup_timer: &mut ListChunkSetupTimer,
 ) -> Result<CheckpointChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let seqs = checkpoint_seqs_for_range(range.clone(), ascending, chunk_item_limit);
@@ -484,6 +489,7 @@ fn next_unfiltered_checkpoint_chunk(
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
+    setup_timer.finish_setup();
     let items = render_checkpoint_seqs(&service, seqs, &read_mask, &options, cancel, metrics)?;
     let produced = items.len();
     Ok(CheckpointChunkDone {
@@ -521,6 +527,7 @@ fn next_filtered_checkpoint_chunk(
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
     metrics: Option<&ListStreamMetrics>,
+    setup_timer: &mut ListChunkSetupTimer,
 ) -> Result<CheckpointChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let item_limit = chunk_item_limit.min(remaining_request_item_limit);
@@ -578,6 +585,9 @@ fn next_filtered_checkpoint_chunk(
             },
         )?;
         remaining_scan_budget -= hits.buckets_scanned;
+        if let Some(metrics) = metrics {
+            metrics.observe_chunk_buckets_decoded(hits.buckets_scanned);
+        }
         chunk_scan_budget -= hits.buckets_scanned;
         pending_bucket = hits.pending_bucket;
         tx_range = hits.next_range;
@@ -664,6 +674,7 @@ fn next_filtered_checkpoint_chunk(
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
+    setup_timer.finish_setup();
     let mut items =
         render_checkpoint_seqs(&service, cp_seqs, &read_mask, &options, cancel, metrics)?;
     let produced = items.len();

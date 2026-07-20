@@ -36,8 +36,7 @@ use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
-use crate::metrics::ListRequestMetrics;
-use crate::metrics::ListStreamMetrics;
+use crate::metrics::{ListChunkSetupTimer, ListRequestMetrics, ListStreamMetrics};
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::LedgerBitmapKind;
@@ -223,7 +222,7 @@ fn spawn_transaction_chunk(
     object_cache: Arc<Mutex<RequestObjectCache>>,
     cancel: CancellationToken,
 ) -> JoinHandle<Result<TransactionChunkDone, RpcError>> {
-    spawn_list_chunk(metrics, move |metrics| {
+    spawn_list_chunk(metrics, move |metrics, setup_timer| {
         next_transaction_chunk(
             service,
             state,
@@ -237,6 +236,7 @@ fn spawn_transaction_chunk(
             remaining_request_item_limit,
             &cancel,
             metrics,
+            setup_timer,
         )
     })
 }
@@ -281,6 +281,7 @@ fn next_transaction_chunk(
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
     metrics: Option<&ListStreamMetrics>,
+    setup_timer: &mut ListChunkSetupTimer,
 ) -> Result<TransactionChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
@@ -393,6 +394,9 @@ fn next_transaction_chunk(
                     cancel,
                 )?;
                 remaining_scan_budget -= hits.buckets_scanned;
+                if let Some(metrics) = metrics {
+                    metrics.observe_chunk_buckets_decoded(hits.buckets_scanned);
+                }
                 if cancel.is_cancelled() {
                     return Err(cancelled());
                 }
@@ -468,6 +472,7 @@ fn next_transaction_chunk(
             }
         }
     };
+    setup_timer.finish_setup();
 
     if cancel.is_cancelled() {
         return Err(cancelled());

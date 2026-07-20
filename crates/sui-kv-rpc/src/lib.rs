@@ -115,7 +115,7 @@ impl KvRpcMetrics {
             .unwrap(),
             stream_frame_yield_wait_ms: register_histogram_vec_with_registry!(
                 "kv_rpc_stream_frame_yield_wait_ms",
-                "Wall time from yielding one List response frame of any kind until the handler stream is polled again. It may include mpsc blocking, tonic/protobuf/Hyper/H2 work, executor scheduling, network flow control, and client drain. It is a broad downstream transport-consumption and backpressure signal, not proof of a slow client; correlate it with payload bytes, client telemetry, and network metrics. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                "Consumer-driven repoll cadence: wall time from yielding one List response frame until the handler stream is polled again. It conflates mpsc and in-flight buildup, tonic/protobuf/Hyper/H2 capacity and backpressure, runtime scheduling, network flow control, and client drain; it does not measure producer-side blocking or prove a slow client. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
                 &["method", "resolution"],
                 prometheus::exponential_buckets(0.01, 2.0, 24).unwrap(),
                 registry,
