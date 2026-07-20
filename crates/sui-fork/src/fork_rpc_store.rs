@@ -440,46 +440,30 @@ impl ForkRpcStore {
     }
 
     /// Applies local execution object writes and removals to the raw `objects`
-    /// CF, the owner/type/package indexes, and the fork-owned live-state pointer.
+    /// CF and the fork-owned live-state pointer.
     ///
-    /// Raw object rows (live versions and tombstones), live-state pointers, and
-    /// the owner/type/package-version indexes are written here synchronously so
-    /// owner-scoped reads reflect a local execution immediately. The merge-based
-    /// `balance` index is deliberately NOT written here: the embedded indexer
-    /// also re-derives it from the sealed checkpoint, and merge deltas would
-    /// double-count. When the same result both removes and writes an object
-    /// (e.g. wrapped then written again), the write wins and the object stays
-    /// current; an object created and terminally deleted in the same result is
-    /// kept only as a historical row.
+    /// Write-path contract: local execution synchronously writes only
+    /// *canonical* data — object version rows and tombstones here (plus the
+    /// live-state pointer), and checkpoint/transaction/effects/events rows at
+    /// seal time — because the executor needs read-your-writes for its next
+    /// inputs and the embedded indexer ingests each sealed checkpoint from
+    /// these very rows. All *derived* indexes (owner, type, package-version,
+    /// balance, bitmaps) are written by the indexer alone, and checkpoint
+    /// publication blocks on `ForkRuntime::wait_for_indexed_checkpoint`, so
+    /// RPC reads issued after an execution returns always see fully indexed
+    /// state. Pre-fork materialization (seed and inventory saves) still
+    /// writes indexes synchronously because the indexer only processes
+    /// post-fork checkpoints.
     ///
-    /// TODO(fork): the owner/type/package rows are written twice — here and again
-    /// by the embedded indexer (idempotent PUT/DELETE, so correct but redundant).
-    /// We want a single writer for local-checkpoint indexes. Revisit once the
-    /// indexer-driven owner index can back owner-scoped reads without waiting on
-    /// `wait_for_indexed_checkpoint`, then drop these synchronous index writes
-    /// and let the indexer own owner/type/package/balance uniformly.
+    /// When the same result both removes and writes an object (e.g. wrapped
+    /// then written again), the write wins and the object stays current; an
+    /// object created and terminally deleted in the same result is kept only
+    /// as a historical row.
     pub(crate) fn apply_local_object_diff(
         &self,
         written_objects: &BTreeMap<ObjectID, Object>,
         removed_objects: &[ObjectRemoval],
     ) -> anyhow::Result<()> {
-        // Snapshot the current live version of every touched object so we can
-        // remove its stale owner/type index rows before writing the new state
-        // (an owner transfer must delete the old owner's row).
-        let mut previous_objects = BTreeMap::new();
-        for id in written_objects
-            .keys()
-            .copied()
-            .chain(removed_objects.iter().map(|removed| removed.object_id))
-        {
-            if previous_objects.contains_key(&id) {
-                continue;
-            }
-            if let Some((_, Status::Live(object))) = self.get_latest_object_status(id)? {
-                previous_objects.insert(id, object);
-            }
-        }
-
         let terminal_deleted: std::collections::BTreeSet<_> = removed_objects
             .iter()
             .filter_map(|removed| {
@@ -488,10 +472,6 @@ impl ForkRpcStore {
             .collect();
 
         let mut batch = self.db.batch();
-
-        for object in previous_objects.values() {
-            self.stage_delete_object_indexes(&mut batch, object)?;
-        }
 
         for removed in removed_objects {
             batch.put(
@@ -506,12 +486,6 @@ impl ForkRpcStore {
 
         for object in written_objects.values() {
             self.stage_object_version(&mut batch, object)?;
-            if terminal_deleted.contains(&object.id()) {
-                continue;
-            }
-            // `include_balance = false`: the indexer owns the balance index for
-            // local checkpoints (see the TODO above).
-            self.stage_put_object_indexes(&mut batch, object, false)?;
         }
 
         batch
@@ -963,7 +937,7 @@ mod tests {
     }
 
     #[test]
-    fn local_diff_moves_owner_and_type_indexes() {
+    fn local_diff_leaves_derived_indexes_to_the_indexer() {
         let (_dir, store) = fresh_store();
         let id = ObjectID::random();
         let owner = SuiAddress::random_for_testing_only();
@@ -978,35 +952,38 @@ mod tests {
             .apply_local_object_diff(&BTreeMap::from([(id, transferred.clone())]), &[])
             .unwrap();
 
+        // Canonical state is current immediately...
+        assert_eq!(
+            store.get_latest_object_status(id).unwrap(),
+            Some((
+                SequenceNumber::from_u64(2),
+                Status::Live(transferred.clone()),
+            )),
+        );
+
+        // ...but derived index rows belong to the embedded indexer: local
+        // execution must not write owner or type rows synchronously.
+        for address in [owner, recipient] {
+            assert_eq!(
+                store
+                    .schema
+                    .iter_objects_owned_by_address(address)
+                    .unwrap()
+                    .count(),
+                0,
+            );
+        }
+        let object_type: StructTag = transferred.type_().unwrap().clone().into();
         assert_eq!(
             store
                 .schema
-                .iter_objects_owned_by_address(owner)
+                .iter_objects_of_type(&sui_rpc_store::schema::type_filter::TypeFilter::Type(
+                    object_type,
+                ))
                 .unwrap()
                 .count(),
             0,
         );
-        let rows = store
-            .schema
-            .iter_objects_owned_by_address(recipient)
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].0.object_id, id);
-
-        let object_type: StructTag = transferred.type_().unwrap().clone().into();
-        let type_rows = store
-            .schema
-            .iter_objects_of_type(&sui_rpc_store::schema::type_filter::TypeFilter::Type(
-                object_type,
-            ))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert_eq!(type_rows.len(), 1);
-        assert_eq!(type_rows[0].0.object_id, id);
-        assert_eq!(GasCoin::try_from(&transferred).unwrap().value(), 1_000_000);
     }
 
     #[test]
@@ -1019,10 +996,12 @@ mod tests {
         let transferred = make_object(id, 2, Owner::AddressOwner(recipient));
 
         store
-            .apply_local_object_diff(&BTreeMap::from([(id, transferred)]), &[])
+            .apply_local_object_diff(&BTreeMap::from([(id, transferred.clone())]), &[])
             .unwrap();
         store.save_address_owned_seed_object(&base).unwrap();
 
+        // The stale pre-fork version must not be re-indexed for its old owner
+        // or become current again.
         assert_eq!(
             store
                 .schema
@@ -1031,13 +1010,9 @@ mod tests {
                 .count(),
             0,
         );
-        let recipient_rows = store
-            .schema
-            .iter_objects_owned_by_address(recipient)
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert_eq!(recipient_rows.len(), 1);
-        assert_eq!(recipient_rows[0].0.object_id, id);
+        assert_eq!(
+            store.get_latest_object_status(id).unwrap(),
+            Some((SequenceNumber::from_u64(2), Status::Live(transferred))),
+        );
     }
 }
