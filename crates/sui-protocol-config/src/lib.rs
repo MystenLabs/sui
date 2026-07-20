@@ -367,8 +367,7 @@ const MAINNET_USDB: &str =
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
 //              Add an epoch close deadline failsafe for deferred transactions.
-// Version 131: Enable sharing transaction deny configs between validators via consensus
-//              on devnet.
+// Version 131: Enable sharing transaction deny configs between validators via consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4536,9 +4535,7 @@ impl ProtocolConfig {
                     }
                 }
                 131 => {
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.share_transaction_deny_config_in_consensus = true;
-                    }
+                    cfg.feature_flags.share_transaction_deny_config_in_consensus = true;
                 }
                 // Use this template when making changes:
                 //
