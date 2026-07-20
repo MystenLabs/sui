@@ -155,9 +155,26 @@ node scripts/generate-goals.mjs --apply
 
 This detects each page's archetype (onboarding, example, guide, reference, operator, SDK, index) and generates appropriate checks. Review and adjust the generated goals before committing.
 
+### Frontmatter schema
+
+The full frontmatter contract is defined as a JSON Schema at [`docs/site/frontmatter.schema.json`](site/frontmatter.schema.json). It is the canonical, machine-readable source of truth for every field above (`title`, `description`, `keywords`, `goal`, `questions`, `answer`, `builder_paths`, and the optional metadata fields). Downstream tooling — the [evals harness](https://github.com/jessiemongeon1/sui-docs-automation) and the evals dashboard — relies on this shape.
+
+Validate pages locally before pushing:
+
+```sh
+cd docs/site
+pnpm docs:validate-frontmatter          # all pages
+node scripts/validate-frontmatter.mjs ../content/getting-started/tooling.mdx   # specific pages
+```
+
 ### CI enforcement
 
-A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx`. It writes a job summary listing any pages missing `title`, `description`, `keywords`, `goal`, `questions`, or `answer` frontmatter, with instructions to auto-generate. Check the workflow's summary tab for results.
+A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx`. It:
+
+1. Writes a job summary listing any pages missing `title`, `description`, `keywords`, `goal`, `questions`, or `answer` frontmatter, with instructions to auto-generate.
+2. Validates every changed page against `frontmatter.schema.json` and **fails the check** if any page's frontmatter does not conform (unknown fields, wrong types, invalid `builder_paths[].eval` values, goal checks missing a `label`, etc.). Snippets and the generated `sui-graphql` reference are excluded.
+
+Check the workflow's summary tab for results.
 
 ## Build the site locally
 
@@ -205,6 +222,7 @@ Key scripts in `docs/site/scripts/`:
 | Script | Purpose |
 |--------|---------|
 | `audit-docs.mjs` | Deterministic docs audit pipeline |
+| `validate-frontmatter.mjs` | Validate page frontmatter against `frontmatter.schema.json` |
 | `generate-goals.mjs` | Generate goal frontmatter by page archetype |
 | `generate-geo.mjs` | Generate questions + answer frontmatter for GEO/AEO |
 | `add-builder-paths.mjs` | Map pages to builder paths with eval status |
