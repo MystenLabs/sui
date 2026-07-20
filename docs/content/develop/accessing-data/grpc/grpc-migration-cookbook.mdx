@@ -300,7 +300,10 @@ const { response } = await client.ledgerService.batchGetTransactions({
 });
 
 for (const tx of response.transactions) {
-  console.log(tx.transaction?.digest, tx.transaction?.effects);
+  if (tx.result.oneofKind === 'transaction') {
+    const executed = tx.result.transaction;
+    console.log(executed.digest, executed.effects);
+  }
 }
 ```
 
@@ -432,7 +435,7 @@ buf curl --protocol grpc \
   https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints \
   -d '{ "readMask": "transactions" }' \
   --timeout 5m \
-  | jq '.transactions[]?.events[]? | select(.type.repr == "0xPACKAGE::module::MyEvent")'
+  | jq '.checkpoint.transactions[]?.events.events[]? | select(.eventType == "0xPACKAGE::module::MyEvent")'
 ```
 
 </TabItem>
@@ -486,7 +489,7 @@ for await (const response of responses) {
   const cp = response.checkpoint;
   console.log('Checkpoint:', cp?.sequenceNumber);
   console.log('Timestamp:', cp?.summary?.timestamp);
-  console.log('Tx count:', cp?.summary?.networkTotalTransactions);
+  console.log('Tx count:', cp?.summary?.totalNetworkTransactions);
 }
 ```
 
@@ -532,13 +535,16 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 ```ts
 // Use the proto client directly — no Core API wrapper for checkpoint lookups
 const { response } = await client.ledgerService.getCheckpoint({
-  sequenceNumber: BigInt('164329987'),
+  checkpointId: {
+    oneofKind: 'sequenceNumber',
+    sequenceNumber: BigInt('164329987'),
+  },
   readMask: { paths: ['digest', 'summary'] },
 });
 
 console.log('Digest:', response.checkpoint?.digest);
 console.log('Timestamp:', response.checkpoint?.summary?.timestamp);
-console.log('Total transactions:', response.checkpoint?.summary?.networkTotalTransactions);
+console.log('Total transactions:', response.checkpoint?.summary?.totalNetworkTransactions);
 ```
 
 </TabItem>
@@ -770,7 +776,7 @@ import { Transaction } from '@mysten/sui/transactions';
 const tx = new Transaction();
 // ... add commands ...
 const bytes = await tx.build({ client });
-const signature = await keypair.signTransaction(bytes);
+const { signature } = await keypair.signTransaction(bytes);
 
 // Execute
 const result = await client.core.executeTransaction({
@@ -921,7 +927,7 @@ async function startStream() {
       if (seq > lastProcessed + 1n && lastProcessed > 0n) {
         for (let i = lastProcessed + 1n; i < seq; i++) {
           const { response: missed } = await client.ledgerService.getCheckpoint({
-            sequenceNumber: i,
+            checkpointId: { oneofKind: 'sequenceNumber', sequenceNumber: i },
             readMask: { paths: ['transactions'] },
           });
           processCheckpoint(missed.checkpoint);
