@@ -59,7 +59,7 @@ use tracing::instrument;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -99,7 +99,7 @@ pub struct VMDispatchTables {
     /// one for each VM instantiation.
     ///
     /// However, the contents of the cache do not affect execution correctness, only performance.
-    pub(crate) size_formulas: Mutex<QCache<VirtualTableKey, SizeFormula>>,
+    pub(crate) size_formulas: QCache<VirtualTableKey, SizeFormula>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -158,7 +158,7 @@ impl Clone for VMDispatchTables {
             loaded_packages: Arc::clone(&self.loaded_packages),
             defining_id_origins: Arc::clone(&self.defining_id_origins),
             link_context: Arc::clone(&self.link_context),
-            size_formulas: Mutex::new(self.size_formulas().clone()),
+            size_formulas: self.size_formulas.clone(),
         }
     }
 }
@@ -208,7 +208,7 @@ impl VMDispatchTables {
             loaded_packages,
             defining_id_origins,
             link_context,
-            size_formulas: Mutex::new(QCache::new(TYPE_DEPTH_LRU_SIZE)),
+            size_formulas: QCache::new(TYPE_DEPTH_LRU_SIZE),
         })
     }
 
@@ -546,27 +546,15 @@ impl VMDispatchTables {
     // algebra — resolve each pending application's key under this linkage, substitute its
     // (recursively closed) argument forms, and fold it in. No type term is ever traversed.
 
-    /// Lock the formula cache, shrugging off poisoning: the cache is a pure optimization and
-    /// its contents never affect correctness.
-    fn size_formulas(&self) -> std::sync::MutexGuard<'_, QCache<VirtualTableKey, SizeFormula>> {
-        self.size_formulas
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    fn cached_size_formula(&self, datatype: &VirtualTableKey) -> Option<SizeFormula> {
-        self.size_formulas().get(datatype).cloned()
-    }
-
     /// Solve a partial `value_depth` form against the frame-cached argument sizes, folding it
     /// directly to a scalar: each parameter reads its argument's value depth, and each pending
-    /// datatype application resolves its (memoized, closed) formula and solves it against the
-    /// recursively-solved argument depths. This never materializes an owned closed form for the
-    /// term; a form with no pending applications — the common case — touches no cache and
-    /// allocates nothing. Correctness rests on closure under substitution: solving after
-    /// closing equals solving each argument form and then the datatype formula.
+    /// datatype application resolves its closed formula and solves it against the
+    /// recursively-solved argument depths. A form with no pending applications — the common
+    /// case — allocates nothing. This is an interpreter (`&mut self`) path: datatype closures
+    /// are memoized. Correctness rests on closure under substitution: solving after closing
+    /// equals solving each argument form and then the datatype formula.
     fn solve_value_depth(
-        &self,
+        &mut self,
         form: &PartialMaxPlusFormula,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<u64> {
@@ -579,12 +567,11 @@ impl VMDispatchTables {
             acc = acc.max(offset.saturating_add(arg.value_depth));
         }
         for (offset, apply) in form.applies.iter() {
-            let sub = apply
-                .args
-                .iter()
-                .map(|arg| self.solve_value_depth(arg, ty_args))
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            let applied = self.solve_datatype_value_depth(&apply.key, &sub)?;
+            let mut sub = Vec::with_capacity(apply.args.len());
+            for arg in apply.args.iter() {
+                sub.push(self.solve_value_depth(arg, ty_args)?);
+            }
+            let applied = self.cached_solve_datatype_value_depth(&apply.key, &sub)?;
             acc = acc.max(offset.saturating_add(applied));
         }
         Ok(acc)
@@ -593,7 +580,7 @@ impl VMDispatchTables {
     /// Solve a partial `layout_size` form against the frame-cached argument sizes — the linear
     /// analogue of [`VMDispatchTables::solve_value_depth`].
     fn solve_layout_size(
-        &self,
+        &mut self,
         form: &PartialLinearFormula,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<u64> {
@@ -606,92 +593,81 @@ impl VMDispatchTables {
             acc = acc.saturating_add(coeff.saturating_mul(arg.layout_size));
         }
         for (multiplicity, apply) in form.applies.iter() {
-            let sub = apply
-                .args
-                .iter()
-                .map(|arg| self.solve_layout_size(arg, ty_args))
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            let applied = self.solve_datatype_layout_size(&apply.key, &sub)?;
+            let mut sub = Vec::with_capacity(apply.args.len());
+            for arg in apply.args.iter() {
+                sub.push(self.solve_layout_size(arg, ty_args)?);
+            }
+            let applied = self.cached_solve_datatype_layout_size(&apply.key, &sub)?;
             acc = acc.saturating_add(multiplicity.saturating_mul(applied));
         }
         Ok(acc)
     }
 
-    /// Solve a datatype's closed `value_depth` formula against `args` under this table's
-    /// linkage. On a cache hit the formula is solved in place under the lock — no clone;
-    /// only a miss closes it (caching it for next time) and solves the returned form.
-    fn solve_datatype_value_depth(
-        &self,
+    // -------------------------------------------
+    // Datatype formula closing: cached (interpreter) vs. uncached (natives/tracer)
+    // -------------------------------------------
+    // Closing a datatype's through-field formulas — folding the descriptors' precomputed
+    // partial forms under this table's linkage — is pure formula algebra over immutable
+    // package data. The interpreter, holding `&mut self`, *memoizes* the result in
+    // `size_formulas` (the `cached_solve_datatype_*` helpers). Shared-borrow callers — natives
+    // and the tracer, which reach the size machinery through `&VMDispatchTables` while building
+    // type layouts — cannot write the cache, so they *recompute* via `compute_datatype_formula`
+    // (`&self`). Recomputation is cheap: the partials are precomputed at JIT and intra-package
+    // applications are already folded, so most datatypes are `Constant` (O(1)) and the rest
+    // fold a shallow chain of cross-package edges. Reserving the cache for the exclusive-borrow
+    // interpreter is what lets `size_formulas` be a bare (`!Sync`) cache with no lock.
+
+    /// Solve a datatype's closed `value_depth` under this linkage, memoizing the closed formula
+    /// per datatype. Interpreter path (`&mut self`): on a hit the formula is solved through the
+    /// cache entry with no clone.
+    fn cached_solve_datatype_value_depth(
+        &mut self,
         datatype_name: &VirtualTableKey,
         args: &[u64],
     ) -> PartialVMResult<u64> {
-        if let Some(result) = self
-            .size_formulas()
-            .get(datatype_name)
-            .map(|f| f.value_depth.solve(args))
-        {
-            return result;
+        if let Some(formula) = self.size_formulas.get(datatype_name) {
+            return formula.value_depth.solve(args);
         }
-        self.close_datatype_formula(datatype_name, &mut HashSet::new())?
-            .value_depth
-            .solve(args)
+        let formula = self.compute_datatype_formula(datatype_name, &mut HashSet::new())?;
+        let result = formula.value_depth.solve(args);
+        self.size_formulas.insert(datatype_name.clone(), formula);
+        result
     }
 
-    /// Solve a datatype's closed `layout_size` formula against `args` — as
-    /// [`VMDispatchTables::solve_datatype_value_depth`].
-    fn solve_datatype_layout_size(
-        &self,
+    /// Cached `layout_size` solve — the linear analogue of
+    /// [`VMDispatchTables::cached_solve_datatype_value_depth`].
+    fn cached_solve_datatype_layout_size(
+        &mut self,
         datatype_name: &VirtualTableKey,
         args: &[u64],
     ) -> PartialVMResult<u64> {
-        if let Some(result) = self
-            .size_formulas()
-            .get(datatype_name)
-            .map(|f| f.layout_size.solve(args))
-        {
-            return result;
+        if let Some(formula) = self.size_formulas.get(datatype_name) {
+            return formula.layout_size.solve(args);
         }
-        self.close_datatype_formula(datatype_name, &mut HashSet::new())?
-            .layout_size
-            .solve(args)
+        let formula = self.compute_datatype_formula(datatype_name, &mut HashSet::new())?;
+        let result = formula.layout_size.solve(args);
+        self.size_formulas.insert(datatype_name.clone(), formula);
+        result
     }
 
-    /// The closed `value_depth` formula of a datatype under this table's linkage.
+    /// The closed `value_depth` formula of a datatype under this linkage, recomputed from the
+    /// descriptors without touching the cache. This is the **shared-borrow (`&self`) path for
+    /// natives** — see [`VMDispatchTables::compute_datatype_formula`].
     pub fn datatype_value_depth_formula(
         &self,
         datatype_name: &VirtualTableKey,
     ) -> PartialVMResult<MaxPlusFormula> {
-        Ok(self.size_info(datatype_name)?.value_depth)
+        Ok(self
+            .compute_datatype_formula(datatype_name, &mut HashSet::new())?
+            .value_depth)
     }
 
-    /// The closed through-field formulas of a datatype under this table's linkage, memoized
-    /// per datatype. The cache is consulted before any closing state is set up: only an
-    /// actual miss allocates the visiting set and recurses.
-    fn size_info(&self, datatype_name: &VirtualTableKey) -> PartialVMResult<SizeFormula> {
-        if let Some(formula) = self.cached_size_formula(datatype_name) {
-            return Ok(formula);
-        }
-        self.close_datatype_formula(datatype_name, &mut HashSet::new())
-    }
-
-    /// As [`VMDispatchTables::size_info`], for recursive calls that already carry closing
-    /// state.
-    fn size_info_visiting(
-        &self,
-        datatype_name: &VirtualTableKey,
-        visiting: &mut HashSet<VirtualTableKey>,
-    ) -> PartialVMResult<SizeFormula> {
-        if let Some(formula) = self.cached_size_formula(datatype_name) {
-            return Ok(formula);
-        }
-        self.close_datatype_formula(datatype_name, visiting)
-    }
-
-    /// Close a datatype's through-field formulas under this table's linkage (cache miss
-    /// path). Move's verifier guarantees acyclic datatype definitions, so closing terminates
-    /// on well-formed state; `visiting` turns a cycle in corrupt or adversarial store state
-    /// into an invariant violation instead of unbounded recursion.
-    fn close_datatype_formula(
+    /// Close a datatype's through-field formulas under this linkage — pure formula algebra over
+    /// the descriptors' precomputed partial forms, touching **no cache**. The uncached entry
+    /// point for shared-borrow callers (natives, the tracer); the interpreter memoizes via the
+    /// `cached_solve_datatype_*` helpers instead. `visiting` turns a (verifier-impossible)
+    /// definition cycle into an invariant violation rather than unbounded recursion.
+    fn compute_datatype_formula(
         &self,
         datatype_name: &VirtualTableKey,
         visiting: &mut HashSet<VirtualTableKey>,
@@ -703,7 +679,6 @@ impl VMDispatchTables {
                 datatype_name.to_string(&self.interner)
             ));
         }
-
         let datatype = self.resolve_type(datatype_name)?.to_ref();
         let formula = match datatype.size_info() {
             // Fully concrete: the JIT wrote the sizes down.
@@ -712,21 +687,17 @@ impl VMDispatchTables {
                 value_depth,
                 layout_size,
             } => SizeFormula {
-                value_depth: self.close_value_formula(value_depth, visiting)?,
-                layout_size: self.close_layout_formula(layout_size, visiting)?,
+                value_depth: self.compute_value_formula(value_depth, visiting)?,
+                layout_size: self.compute_layout_formula(layout_size, visiting)?,
             },
         };
         visiting.remove(datatype_name);
-        // Insert without checking if it was already present; this is a pure optmization, so
-        // we do not care about overwriting.
-        self.size_formulas()
-            .insert(datatype_name.clone(), formula.clone());
         Ok(formula)
     }
 
-    /// Close a partial `value_depth` form under this table's linkage: pure max-plus algebra
-    /// over the pending applications' (memoized) closed formulas.
-    fn close_value_formula(
+    /// Close a partial `value_depth` form under this linkage: pure max-plus algebra over the
+    /// pending applications' (recomputed) closed formulas.
+    fn compute_value_formula(
         &self,
         partial: &PartialMaxPlusFormula,
         visiting: &mut HashSet<VirtualTableKey>,
@@ -736,11 +707,11 @@ impl VMDispatchTables {
             terms: partial.params.to_vec(),
         };
         for (offset, apply) in partial.applies.iter() {
-            let datatype = self.size_info_visiting(&apply.key, visiting)?;
+            let datatype = self.compute_datatype_formula(&apply.key, visiting)?;
             let args = apply
                 .args
                 .iter()
-                .map(|arg| self.close_value_formula(arg, visiting))
+                .map(|arg| self.compute_value_formula(arg, visiting))
                 .collect::<PartialVMResult<Vec<_>>>()?;
             let applied = datatype.value_depth.subst(&args)?;
             closed.absorb(*offset, &applied);
@@ -749,9 +720,9 @@ impl VMDispatchTables {
         Ok(closed)
     }
 
-    /// Close a partial `layout_size` form under this table's linkage: pure linear algebra
-    /// over the pending applications' (memoized) closed formulas.
-    fn close_layout_formula(
+    /// Close a partial `layout_size` form under this linkage: pure linear algebra over the
+    /// pending applications' (recomputed) closed formulas.
+    fn compute_layout_formula(
         &self,
         partial: &PartialLinearFormula,
         visiting: &mut HashSet<VirtualTableKey>,
@@ -761,11 +732,11 @@ impl VMDispatchTables {
             terms: partial.params.to_vec(),
         };
         for (multiplicity, apply) in partial.applies.iter() {
-            let datatype = self.size_info_visiting(&apply.key, visiting)?;
+            let datatype = self.compute_datatype_formula(&apply.key, visiting)?;
             let args = apply
                 .args
                 .iter()
-                .map(|arg| self.close_layout_formula(arg, visiting))
+                .map(|arg| self.compute_layout_formula(arg, visiting))
                 .collect::<PartialVMResult<Vec<_>>>()?;
             let applied = datatype.layout_size.subst(&args)?;
             closed.absorb(*multiplicity, &applied);
@@ -774,8 +745,9 @@ impl VMDispatchTables {
         Ok(closed)
     }
 
-    /// The through-field pair (`value_depth`, `layout_size`) of a concrete runtime type,    /// The through-field pair (`value_depth`, `layout_size`) of a concrete runtime type,
-    /// resolving datatypes through the formula cache.
+    /// The through-field pair (`value_depth`, `layout_size`) of a concrete runtime type,
+    /// recomputed from the descriptors (uncached — this is reached by native layout requests
+    /// through `&self`).
     fn value_and_layout_of_type(
         &self,
         ty: &Type,
@@ -797,10 +769,14 @@ impl VMDispatchTables {
                         self.value_and_layout_of_type(inner, type_size)?;
                     (value_depth.saturating_add(1), layout_size.saturating_add(1))
                 }
-                Type::Datatype(datatype_key) => (
-                    self.solve_datatype_value_depth(datatype_key, &[])?,
-                    self.solve_datatype_layout_size(datatype_key, &[])?,
-                ),
+                Type::Datatype(datatype_key) => {
+                    let formula =
+                        self.compute_datatype_formula(datatype_key, &mut HashSet::new())?;
+                    (
+                        formula.value_depth.solve(&[])?,
+                        formula.layout_size.solve(&[])?,
+                    )
+                }
                 Type::DatatypeInstantiation(inst) => {
                     let (datatype_key, ty_args) = &**inst;
                     let mut value_depths = Vec::with_capacity(ty_args.len());
@@ -811,9 +787,11 @@ impl VMDispatchTables {
                         value_depths.push(value_depth);
                         layout_sizes.push(layout_size);
                     }
+                    let formula =
+                        self.compute_datatype_formula(datatype_key, &mut HashSet::new())?;
                     (
-                        self.solve_datatype_value_depth(datatype_key, &value_depths)?,
-                        self.solve_datatype_layout_size(datatype_key, &layout_sizes)?,
+                        formula.value_depth.solve(&value_depths)?,
+                        formula.layout_size.solve(&layout_sizes)?,
                     )
                 }
                 Type::TyParam(_) => {
@@ -862,7 +840,7 @@ impl VMDispatchTables {
     /// solved with the frame-cached argument value depths. Used at `VecPack`, where a value of
     /// the instantiated element type is about to be created.
     pub(crate) fn check_instantiated_value_depth(
-        &self,
+        &mut self,
         formula: &PartialTypeFormula,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
@@ -1245,7 +1223,7 @@ impl VMDispatchTables {
     }
 
     pub(crate) fn instantiate_generic_function(
-        &self,
+        &mut self,
         fun_inst: &FunctionInstantiation,
         type_params: &TypeArguments,
     ) -> PartialVMResult<TypeArguments> {
@@ -1348,7 +1326,7 @@ impl VMDispatchTables {
     /// Check a struct instantiation (the `Pack` family of instructions) against the limits
     /// without building anything — see [`VMDispatchTables::check_instantiation`].
     pub(crate) fn check_struct_instantiation(
-        &self,
+        &mut self,
         struct_inst: &StructInstantiation,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
@@ -1362,7 +1340,7 @@ impl VMDispatchTables {
     /// Check an enum variant instantiation (the `PackVariant` family of instructions) against
     /// the limits without building anything — see [`VMDispatchTables::check_instantiation`].
     pub(crate) fn check_variant_instantiation(
-        &self,
+        &mut self,
         variant_inst: &VariantInstantiation,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
@@ -1426,7 +1404,7 @@ impl VMDispatchTables {
     /// formulas. This path serves the `Pack` family of instructions — the instantiated type
     /// itself is never needed, so no part of it is ever built.
     fn check_instantiation(
-        &self,
+        &mut self,
         datatype_key: &VirtualTableKey,
         type_params: &[PartialTypeFormula],
         ty_args: &TypeArguments,
@@ -1477,11 +1455,11 @@ impl VMDispatchTables {
         // type-parameter terms' closed formulas, and the frame-cached argument value depths.
         // Nothing is realized or traversed.
         if let Some(max_depth) = self.vm_config.runtime_limits_config.max_value_nest_depth {
-            let param_depths = type_params
-                .iter()
-                .map(|formula| self.solve_value_depth(&formula.value_depth, ty_args))
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            if self.solve_datatype_value_depth(datatype_key, &param_depths)? > max_depth {
+            let mut param_depths = Vec::with_capacity(type_params.len());
+            for formula in type_params.iter() {
+                param_depths.push(self.solve_value_depth(&formula.value_depth, ty_args)?);
+            }
+            if self.cached_solve_datatype_value_depth(datatype_key, &param_depths)? > max_depth {
                 return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
             }
         }
