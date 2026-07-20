@@ -236,7 +236,7 @@ Use this to pick the right gas strategy for your transaction:
    - Yes → Use address balance gas (`tx.setGasPayment([])`). No coin lookup needed.
    - No → Use standard gas. The SDK auto-selects coin objects.
 
-In all cases, use `coinWithBalance` for non-gas coins in the transaction body. The SDK handles the coin-vs-balance selection for you.
+For most transactions, use `coinWithBalance` for non-gas coins — the SDK handles coin-vs-balance selection for you. The exception is [gasless stablecoin transfers](/develop/transaction-payment/gasless-stablecoin-transfers), which use `tx.balance()` with `balance::send_funds` so the transaction stays eligible for zero gas.
 
 ## Detail pages
 
