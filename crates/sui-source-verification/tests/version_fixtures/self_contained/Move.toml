@@ -1,0 +1,18 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# A self-contained package (its only module returns a literal) used by the version matrix, which
+# publishes it with an old binary and then verifies it with the current CLI.
+#
+# `implicit-dependencies = false` is load-bearing: without it the build fetches the framework from
+# git at a revision pinned into each release binary, and some of those revisions no longer exist on
+# the remote (`framework/mainnet` is force-pushed per release, orphaning the previous tip, which is
+# then garbage-collected). Since this package uses nothing from the framework, skipping the implicit
+# dependency keeps the matrix testing verification rather than the durability of git history.
+#
+# There is deliberately no `[addresses]` section: its presence makes the manifest parse as a legacy
+# one, so an `[environments]` section added for a real publish would be ignored.
+[package]
+name = "matrix_fixture"
+edition = "2024"
+implicit-dependencies = false

@@ -38,7 +38,7 @@ use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
-use move_package_alt::{PackageLoader, schema::ModeName};
+use move_package_alt::{PackageLoader, read_publication, schema::ModeName};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
@@ -55,7 +55,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
-use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies};
+use sui_move_build::{CompiledPackage, PackageDependencies};
 use sui_package_management::LockCommand;
 use sui_rpc_api::{
     Client,
@@ -114,7 +114,7 @@ use move_package_alt::{
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
 use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
-use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
+use sui_source_verification::verify_source;
 use tracing::{debug, info};
 
 /// Concurrency level for fetching coin metadata for balances.
@@ -621,29 +621,22 @@ pub enum SuiClientCommands {
         build_config: MoveBuildConfig,
     },
 
-    /// Verify local Move packages against on-chain packages, and optionally their dependencies.
+    /// Verify that a local Move source package compiles to an on-chain package's bytecode and
+    /// linkage, rebuilding it with the toolchain version it was published with.
     #[clap(name = "verify-source")]
     VerifySource {
         /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
+        #[clap(name = "package_path", default_value = ".")]
         package_path: PathBuf,
 
         /// Package build options
         #[clap(flatten)]
         build_config: MoveBuildConfig,
 
-        /// Verify on-chain dependencies.
+        /// Override the toolchain (compiler) version used to rebuild the package, instead of
+        /// reading it from the package's publish metadata.
         #[clap(long)]
-        verify_deps: bool,
-
-        /// Don't verify source (only valid if --verify-deps is enabled).
-        #[clap(long)]
-        skip_source: bool,
-
-        /// If specified, override the addresses for the package's own modules with this address.
-        /// Only works for unpublished modules (whose addresses are currently 0x0).
-        #[clap(long)]
-        address_override: Option<ObjectID>,
+        toolchain_version: Option<String>,
     },
 
     /// Remove an existing address by its alias or hexadecimal string.
@@ -1839,22 +1832,11 @@ impl SuiClientCommands {
             SuiClientCommands::VerifySource {
                 package_path,
                 build_config,
-                verify_deps,
-                skip_source,
-                address_override,
+                toolchain_version,
             } => {
-                let mode = match (!skip_source, verify_deps, address_override) {
-                    (false, false, _) => {
-                        bail!("Source skipped and not verifying deps: Nothing to verify.")
-                    }
-
-                    (false, true, _) => ValidationMode::deps(),
-                    (true, false, None) => ValidationMode::root(),
-                    (true, true, None) => ValidationMode::root_and_deps(),
-                    (true, false, Some(at)) => ValidationMode::root_at(*at),
-                    (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
-                };
-
+                // Resolve the environment the way the rest of the CLI does, and read the address and
+                // toolchain from the package's own publication, so they are exactly what the package
+                // system would resolve when linking against this package.
                 let environment = find_environment(
                     &package_path,
                     build_config.environment.clone(),
@@ -1863,24 +1845,29 @@ impl SuiClientCommands {
                 )
                 .await?;
 
-                let mut root_pkg =
-                    load_root_pkg_for_publish_upgrade(context, &build_config, &package_path)
-                        .await?;
-                let build_config = BuildConfig {
-                    config: build_config,
-                    run_bytecode_verifier: true,
-                    print_diags_to_stderr: true,
-                    environment: environment.clone(),
-                    flavor: SuiFlavor::with_client(context),
-                };
-                let compiled_package = build_config
-                    .build_async_from_root_pkg(&mut root_pkg)
-                    .await?;
+                let flavor = SuiFlavor::with_client(context);
+                let publication =
+                    read_publication::<SuiFlavor>(&package_path, &environment, &flavor)
+                        .await?
+                        .ok_or_else(|| {
+                            anyhow!(
+                                "package at {} records no publication for environment `{}`; \
+                             nothing to verify against",
+                                package_path.display(),
+                                environment.name(),
+                            )
+                        })?;
 
                 let client = context.grpc_client()?;
-                BytecodeSourceVerifier::new(&client)
-                    .verify(&compiled_package, mode, &environment)
-                    .await?;
+                verify_source(
+                    &package_path,
+                    &publication,
+                    toolchain_version,
+                    &environment,
+                    &client,
+                    Some(context.config.path()),
+                )
+                .await?;
 
                 SuiClientCommandResult::VerifySource
             }
