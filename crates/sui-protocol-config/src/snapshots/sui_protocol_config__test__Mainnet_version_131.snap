@@ -169,6 +169,7 @@ feature_flags:
   early_return_receive_object_mismatched_type: true
   timestamp_based_epoch_close: true
   limit_groth16_pvk_inputs: true
+  share_transaction_deny_config_in_consensus: true
   granular_post_execution_checks: true
   early_exit_on_iffw: true
   enable_unified_linkage: true
