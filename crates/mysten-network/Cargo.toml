@@ -7,6 +7,9 @@ authors = ["Brandon Williams <brandon@mystenlabs.com>"]
 description = "Mysten's network tooling"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true

@@ -33,7 +33,7 @@ cargo check
 cargo simtest -p sui-e2e-tests
 
 # Run Rust unittests. skip simulation tests as they may cause false negatives with `cargo nextest`
-SUI_SKIP_SIMTESTS=1 cargo nextest run
+SUI_SKIP_SIMTESTS=1 cargo nextest run -p <crate-name>
 ```
 
 **Important Notes for Testing:**
@@ -46,19 +46,18 @@ SUI_SKIP_SIMTESTS=1 cargo nextest run
 ### Linting and Formatting
 
 ```bash
-# Formats & lints all Rust & Move, run before commit:
+# Formats & lints all Rust & Move (can be slow).
 ./scripts/lint.sh
 
-# Alternatively, run individual lints on specific crates (much faster than linting the whole repo):
-# For crates in `crates/`: cd into the crate directory and run:
-cargo xclippy
-# For crates in `external-crates/`: cd into the crate directory and run:
-cargo move-clippy
 # For formatting:
 cargo fmt --all -- --check
-```
 
-`cargo xclippy` does not recognize the `-p` option - cd into the crate directory instead.
+# Lint a single crate in `crates/`, `consensus/`, `sui-execution/`:
+cargo xclippy -p <crate-name>
+
+# Linting all crates in `external-crates/`: cd into the crate directory and run:
+cargo move-clippy
+```
 
 ## High-Level Architecture
 
@@ -104,19 +103,13 @@ sui/
 
 Use `#[cfg(test)]` for test-only code used within the same crate. Use `#[cfg(feature = "testing")]` for test-only code that must be callable cross-crate. For the `testing` feature: define `testing = []` in the crate's `Cargo.toml`, and callers must propagate it via `features = ["testing"]` in their dependency declaration.
 
-### Critical Development Notes
-1. **Testing Requirements**:
-   - Always run tests before submitting changes
-   - Framework changes require snapshot updates
+### Development Notes
+1. **Testing**:
+   - Use `#[tokio::test]` for async tests, not `#[test]`, to ensure the tests don't panic in simtest mode.
 2. **Protocol Config Changes**:
    - When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
 3. **Raising a PR**:
    - When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
-4. **CRITICAL - Final Development Steps**:
-   - **ALWAYS run `cargo xclippy` after finishing development** to ensure code passes all linting checks
-   - **NEVER disable or ignore tests** - all tests must pass and be enabled
-   - **NEVER use `#[allow(dead_code)]`, `#[allow(unused)]`, or any other linting suppressions** - fix the underlying issues instead
-   - **All unit tests must work properly** - use `#[tokio::test]` for async tests, not `#[test]`
 
 ### Comment Writing Guidelines
 

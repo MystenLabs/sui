@@ -286,6 +286,14 @@ unexpected_cfgs = { level = "warn", check-cfg = [
   'cfg(fail_points)',
 ] }
 
+# Project-wide clippy lints, applied by `cargo clippy` / `cargo xclippy`. Every workspace
+# member must opt in with `[lints] workspace = true` (enforced by `cargo xlint`).
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+disallowed_macros = "warn"
+disallowed_methods = "warn"
+unnecessary_get_then_check = "allow"
+
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 antithesis_sdk = "0.2.5"

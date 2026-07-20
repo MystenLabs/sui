@@ -20593,6 +20593,7 @@ dependencies = [
  "clap",
  "nexlint",
  "nexlint-lints",
+ "toml 0.7.4",
 ]
 
 [[package]]

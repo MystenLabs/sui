@@ -6,6 +6,9 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 clap = { version = "4.3.1", features = ["derive"] }
