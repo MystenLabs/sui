@@ -36,7 +36,6 @@ impl TestCaseImpl for StakingTest {
         // Pick a validator from the gRPC system-state summary and remember its
         // staking pool so we can correlate the created StakedSui object.
         let system_state = ctx.get_latest_sui_system_state().await;
-        let current_epoch = system_state.epoch;
         let validator = system_state
             .active_validators
             .first()
@@ -101,12 +100,23 @@ impl TestCaseImpl for StakingTest {
             validator_pool_id,
             "StakedSui pool should match the validator's staking pool",
         );
-        // A newly requested stake activates in the NEXT epoch, not the current
-        // one — it must not be reported as active now.
+        // A newly requested stake activates in the epoch AFTER the one the
+        // transaction executed in — it must not be reported as active now.
+        // Derive the execution epoch from the transaction's own checkpoint
+        // (a pre-execution system-state read races epoch boundaries).
+        let checkpoint_seq = response
+            .checkpoint
+            .expect("waited execution should carry a checkpoint");
+        let execution_epoch = ctx
+            .get_grpc_client()
+            .get_checkpoint_summary(checkpoint_seq)
+            .await?
+            .data()
+            .epoch;
         assert_eq!(
             stake.activation_epoch(),
-            current_epoch + 1,
-            "Newly requested stake should activate next epoch, not the current one",
+            execution_epoch + 1,
+            "Newly requested stake should activate in the epoch after execution",
         );
         info!(
             "Staking verified: StakedSui {} principal {} pool {} activates epoch {}",

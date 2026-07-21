@@ -112,10 +112,12 @@ impl NativeTransferTest {
             .check(&balance_changes.remove(0));
 
         // The executed transaction is already checkpointed; read the transferred
-        // object by ID and confirm the new owner (`LedgerService`).
-        let _ = ObjectChecker::new(obj_to_transfer_id)
+        // object by ID and confirm the new owner (`LedgerService`). A failed
+        // read must fail the test — it is the ownership assertion itself.
+        ObjectChecker::new(obj_to_transfer_id)
             .owner(Owner::AddressOwner(recipient))
             .check(&ctx.get_grpc_client())
-            .await;
+            .await
+            .expect("transferred object must be readable and owned by the recipient");
     }
 }
