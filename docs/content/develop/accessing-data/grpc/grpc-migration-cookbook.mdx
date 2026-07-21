@@ -363,58 +363,51 @@ ws.onmessage = (msg) => console.log(JSON.parse(msg.data));
 ```
  
 </TabItem>
-<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+<TabItem value="grpc-proto" label="gRPC (proto client)">
+
+:::info
+The `@mysten/sui` TypeScript SDK does not yet expose `SubscribeEvents`. Use the generated proto client directly until the SDK adds a wrapper. The `grpcurl` and Buf CLI examples below work today.
+:::
+
 ```ts
-import { SuiGrpcClient } from '@mysten/sui/grpc';
- 
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-  network: 'mainnet',
-});
- 
-// Subscribe to events with a server-side filter
-const { responses } = client.subscriptionService.subscribeEvents({
+// Use the generated proto client directly
+const stream = client.subscriptionService.subscribeEvents({
   filter: {
     terms: [{
       literals: [{
-        predicate: {
-          oneofKind: 'eventType',
-          eventType: { eventType: '0xPACKAGE::module::MyEvent' },
-        },
+        eventType: { eventType: '0xPACKAGE::module::MyEvent' },
       }],
     }],
   },
 });
 
-for await (const response of responses) {
+for await (const response of stream.responses) {
   console.log('Matched event:', response.event);
 }
 ```
- 
+
 </TabItem>
 <TabItem value="buf-cli" label="gRPC (Buf CLI)">
 ```sh
 buf curl --protocol grpc \
-  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints \
-  -d '{ "readMask": "transactions" }' \
+  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "event_type": { "event_type": "0xPACKAGE::module::MyEvent" }
+        }]
+      }]
+    }
+  }' \
   --timeout 5m
-```
- 
-Filter the output with `jq` for a specific event type:
- 
-```sh
-buf curl --protocol grpc \
-  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints \
-  -d '{ "readMask": "transactions" }' \
-  --timeout 5m \
-  | jq '.checkpoint.transactions[]?.events.events[]? | select(.eventType == "0xPACKAGE::module::MyEvent")'
 ```
  
 </TabItem>
 </Tabs>
 **Key differences:**
 - JSON-RPC WebSocket subscriptions filtered events server-side. gRPC `SubscribeEvents` also filters server-side using an `EventFilter`, so your client only receives matching events.
-- Subscriptions always begin at the current tip of the chain. They do not support resumption from a prior point. To backfill historical events before subscribing, use `LedgerService.ListEvents` with the same filter. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+- Subscriptions always begin at the current tip of the chain and do not accept a resume point. To avoid missing data between a backfill and a subscription, open the subscription first, note the first `Watermark` you receive, then backfill with `LedgerService.ListEvents` up to that watermark. Once the backfill is complete, begin consuming from the already-open subscription. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
 - For filtered historical event queries over a range, use `LedgerService.ListEvents` or [GraphQL `Query.events`](/develop/accessing-data/using-events#querying-events-with-graphql).
 
 ### Query events over a checkpoint range
@@ -422,26 +415,28 @@ buf curl --protocol grpc \
 Use `LedgerService.ListEvents` to retrieve events matching an `EventFilter` across a range of checkpoints. This replaces the paginated `suix_queryEvents` pattern.
 
 <Tabs groupId="transport">
-<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+<TabItem value="grpc-proto" label="gRPC (proto client)">
+
+:::info
+The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents`. Use the generated proto client directly until the SDK adds a wrapper. The `grpcurl` example below works today.
+:::
+
 ```ts
-// List events of a specific type within a checkpoint range
-const { responses } = client.ledgerService.listEvents({
+// Use the generated proto client directly
+const stream = client.ledgerService.listEvents({
   startCheckpoint: BigInt(1000000),
   endCheckpoint: BigInt(1000100),
   filter: {
     terms: [{
       literals: [{
-        predicate: {
-          oneofKind: 'eventType',
-          eventType: { eventType: '0xPACKAGE::module::MyEvent' },
-        },
+        eventType: { eventType: '0xPACKAGE::module::MyEvent' },
       }],
     }],
   },
   options: { limit: 50 },
 });
 
-for await (const response of responses) {
+for await (const response of stream.responses) {
   console.log('Event:', response.event);
 }
 ```
@@ -523,8 +518,8 @@ buf curl --protocol grpc \
 **Key differences:**
 - No polling loop needed. The gRPC stream pushes checkpoints as they finalize.
 - Use `LedgerService.ListCheckpoints` to query a historical range of checkpoints, optionally filtered by a `TransactionFilter`. Use `SubscriptionService.SubscribeCheckpoints` for live streaming from the current tip.
-- Subscriptions do not support resumption. To backfill missed checkpoints, use `ListCheckpoints` with the appropriate checkpoint range before resubscribing.
-- `grpcurl` does not support server-side streaming. Use the Buf CLI or an SDK client instead.
+- Subscriptions do not support resumption. To avoid gaps, open the subscription first, note the first `Watermark`, then backfill missed checkpoints with `ListCheckpoints` up to that watermark before consuming from the already-open stream.
+- `grpcurl` supports server-side streaming for the `LedgerService.List*` calls shown above. For `SubscriptionService` subscriptions (which are indefinite streams), the Buf CLI or an SDK client provides better control over timeouts and reconnection.
 ## Look up a single checkpoint
  
 Replace `sui_getCheckpoint` with `LedgerService.GetCheckpoint`.

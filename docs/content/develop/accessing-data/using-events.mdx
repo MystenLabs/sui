@@ -124,34 +124,30 @@ gRPC provides three ways to access events:
 - **`SubscriptionService.SubscribeEvents`**: Live streaming of events matching an `EventFilter`. Use this for real-time event-driven applications. Subscriptions start at the current tip of the chain.
 - **`LedgerService.GetTransaction`**: Retrieve events for a specific transaction by digest.
 
-To backfill historical events and then continue in real time, use `ListEvents` to catch up to the current checkpoint, then switch to `SubscribeEvents` with the same filter. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
+To combine historical and real-time data, open a `SubscribeEvents` stream first, note the first `Watermark` you receive, then backfill with `ListEvents` up to that watermark. Once the backfill is complete, begin consuming from the already-open subscription. This avoids missing data between the final list response and the subscription start. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
+
+:::info
+The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents` or `SubscribeEvents`. Use the generated proto client directly until the SDK adds wrappers, or use `grpcurl` / Buf CLI. The `GetTransaction` example below uses the existing SDK.
+:::
 
 ```ts
-import { SuiGrpcClient } from '@mysten/sui/grpc';
+// Use the generated proto client for ListEvents
+import { createGrpcTransport } from '@connectrpc/connect-node';
 
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-  network: 'mainnet',
-});
-
-// Query historical events by type over a checkpoint range
-const { responses } = client.ledgerService.listEvents({
+const stream = client.ledgerService.listEvents({
   startCheckpoint: BigInt(1000000),
   endCheckpoint: BigInt(1000100),
   filter: {
     terms: [{
       literals: [{
-        predicate: {
-          oneofKind: 'eventType',
-          eventType: { eventType: '0xPACKAGE::module::MyEvent' },
-        },
+        eventType: { eventType: '0xPACKAGE::module::MyEvent' },
       }],
     }],
   },
   options: { limit: 50 },
 });
 
-for await (const response of responses) {
+for await (const response of stream.responses) {
   console.log('Event:', response.event);
 }
 ```

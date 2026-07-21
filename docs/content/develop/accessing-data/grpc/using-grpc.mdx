@@ -251,7 +251,7 @@ $ grpcurl -d '{
 
 ## Access streaming data with Buf
 
-`grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [Buf CLI](https://buf.build/docs/cli/) instead.
+`grpcurl` handles server-side streaming for finite calls like `LedgerService.List*`. For indefinite `SubscriptionService` streams, the [Buf CLI](https://buf.build/docs/cli/) provides better timeout and reconnection control.
 
 ### Subscribe to checkpoints
 

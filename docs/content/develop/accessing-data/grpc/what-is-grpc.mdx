@@ -108,7 +108,7 @@ The `SubscriptionService` provides real-time streaming updates for onchain activ
 
 All subscriptions begin at the current tip of the chain as seen by the server. They do not support resumption from a prior checkpoint. Each streamed response includes a `Watermark` that indicates the server's progress, so your application can track how far along the chain the stream has reached.
 
-To backfill historical data before subscribing, use the corresponding `LedgerService` list API (`ListCheckpoints`, `ListTransactions`, or `ListEvents`) with the same filter. The list APIs accept `start_checkpoint` and `end_checkpoint` bounds and return results as a server-side stream with cursor-based pagination through `QueryOptions`. Once you have caught up to the tip, switch to a subscription to continue in real time.
+To combine historical and real-time data without gaps, open the subscription first, note the first `Watermark` in the stream, then backfill with the corresponding list API (`ListCheckpoints`, `ListTransactions`, or `ListEvents`) up to that watermark. The list APIs accept `start_checkpoint` and `end_checkpoint` bounds and return results as a server-side stream with cursor-based pagination through `QueryOptions`. Once the backfill is complete, begin consuming from the already-open subscription.
 
 Streaming APIs are useful for building indexers, dashboards, or bots that need to react to real-time Sui activity with minimal latency.
 
