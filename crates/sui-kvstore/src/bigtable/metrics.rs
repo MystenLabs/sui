@@ -33,6 +33,9 @@ pub(crate) struct KvMetrics {
     pub kv_bt_flow_control_enabled: IntGaugeVec,
     pub kv_bt_flow_control_target_qps: GaugeVec,
     pub kv_bt_flow_control_demand_qps: GaugeVec,
+    pub kv_bt_flow_control_brake: GaugeVec,
+    pub kv_bt_flow_control_write_latency_ms: GaugeVec,
+    pub kv_bt_flow_control_write_latency_baseline_ms: GaugeVec,
     pub kv_bt_flow_control_throttle_ms: HistogramVec,
     pub kv_bt_flow_control_rate_updates: IntCounterVec,
 }
@@ -190,6 +193,27 @@ impl KvMetrics {
             kv_bt_flow_control_demand_qps: register_gauge_vec_with_registry!(
                 "kv_bt_flow_control_demand_qps",
                 "Observed MutateRows demand in requests per second between BigTable flow-control rate evaluations",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_brake: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_brake",
+                "Latency-brake multiplier applied to the BigTable flow-control target rate (1.0 = fully released)",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_write_latency_ms: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_write_latency_ms",
+                "Window-average MutateRows RPC latency observed by BigTable batch-write flow control",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_write_latency_baseline_ms: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_write_latency_baseline_ms",
+                "Learned healthy-baseline MutateRows RPC latency for the flow-control latency brake",
                 &["client"],
                 registry,
             )

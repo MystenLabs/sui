@@ -689,6 +689,7 @@ impl BigTableClient {
         if let Some(flow_controller) = &self.flow_controller {
             flow_controller.acquire().await;
         }
+        let write_started = Instant::now();
         let mut response = match self.client.clone().mutate_rows(request).await {
             Ok(response) => response.into_inner(),
             Err(status) => {
@@ -727,6 +728,9 @@ impl BigTableClient {
                     return Err(status.into());
                 }
             }
+        }
+        if let Some(flow_controller) = &self.flow_controller {
+            flow_controller.record_write_latency(write_started.elapsed());
         }
 
         if !failed_keys.is_empty() {
