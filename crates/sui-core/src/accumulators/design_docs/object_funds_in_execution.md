@@ -1,7 +1,7 @@
 # Object Funds Checking (In-Execution)
 
 This document covers the **in-execution** sufficiency check for object-owned virtual balance
-withdrawals: the `check_sufficient_object_funds` native consulted by
+withdrawals: the `track_object_funds_withdrawal` native consulted by
 `funds_accumulator::withdraw_from_object` while the transaction is running inside the Move VM.
 It is gated by the `check_object_funds_withdraw_in_execution` protocol flag and supersedes the
 post-execution checker described in [`object_funds_checking.md`](./object_funds_checking.md)
@@ -34,7 +34,7 @@ the moment it happens:
   withdraw_from_object<T>(obj, amount)                     (Move, funds_accumulator.move)
         │
         ▼
-  check_sufficient_object_funds native
+  track_object_funds_withdrawal native
         │
         ▼
   ObjectRuntime::check_object_funds_sufficiency            (per-(owner, type) running balance)

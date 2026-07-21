@@ -92,7 +92,7 @@ public(package) fun withdraw_from_object<T: store>(obj: &mut UID, limit: u256): 
         EObjectFundsWithdrawNotEnabled,
     );
     let owner = obj.to_address();
-    check_sufficient_object_funds<T>(owner, limit);
+    track_object_funds_withdrawal<T>(owner, limit);
     Withdrawal { owner, limit }
 }
 
@@ -124,10 +124,11 @@ native fun withdraw_from_accumulator_address<T: store>(
     value: u256,
 ): T;
 
-// Checks during execution that `owner` holds at least `limit` of `T`. If the funds are not yet
-// sufficient, signals that the transaction should be retried later instead of committed. No-op
-// unless the `check_object_funds_withdraw_in_execution` feature is enabled.
-native fun check_sufficient_object_funds<T: store>(owner: address, limit: u256);
+// Tracks a requested withdrawal of `limit` of `T` against `owner`'s running total for this
+// transaction, and checks that the total stays within the funds available to `owner`. Aborts when
+// the funds are insufficient. No-op unless the `check_object_funds_withdraw_in_execution` feature
+// is enabled.
+native fun track_object_funds_withdrawal<T: store>(owner: address, limit: u256);
 
 // TODO remove once Withdrawal is supported in PTBs
 public(package) fun create_withdrawal<T: store>(owner: address, limit: u256): Withdrawal<T> {

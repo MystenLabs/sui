@@ -1089,8 +1089,8 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ),
         (
             "funds_accumulator",
-            "check_sufficient_object_funds",
-            make_native!(funds_accumulator::check_sufficient_object_funds),
+            "track_object_funds_withdrawal",
+            make_native!(funds_accumulator::track_object_funds_withdrawal),
         ),
         (
             "groth16",

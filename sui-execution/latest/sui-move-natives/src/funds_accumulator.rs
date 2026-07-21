@@ -25,9 +25,11 @@ use crate::{
 
 const E_OVERFLOW: u64 = 0;
 const E_ADDRESS_BALANCE_NOT_ENABLED: u64 = 1;
-/// Public so the adapter's `convert_vm_error` can recognize this abort and convert it to
-/// `ExecutionErrorKind::InsufficientObjectFundsForWithdraw`.
-pub const E_OBJECT_FUNDS_INSUFFICIENT: u64 = 2;
+/// REMAPPED, not a normal abort code: this abort never reaches effects as a `MoveAbort`. The
+/// adapter recognizes it (by module and code, in `convert_vm_error`) and converts it into the
+/// dedicated `ExecutionErrorKind::InsufficientObjectFundsForWithdraw`, which is what clients see.
+/// The mapping is pinned by a test in the adapter error module.
+pub const E_OBJECT_FUNDS_INSUFFICIENT_REMAPPED: u64 = 2;
 
 pub fn add_to_accumulator_address(
     context: &mut NativeContext,
@@ -139,7 +141,7 @@ pub fn withdraw_from_accumulator_address(
     Ok(NativeResult::ok(context.gas_used(), smallvec![withdrawn]))
 }
 
-pub fn check_sufficient_object_funds(
+pub fn track_object_funds_withdrawal(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -170,7 +172,7 @@ pub fn check_sufficient_object_funds(
         ObjectFundsSufficiency::Sufficient => Ok(NativeResult::ok(context.gas_used(), smallvec![])),
         ObjectFundsSufficiency::Insufficient => Ok(NativeResult::err(
             context.gas_used(),
-            E_OBJECT_FUNDS_INSUFFICIENT,
+            E_OBJECT_FUNDS_INSUFFICIENT_REMAPPED,
         )),
     }
 }

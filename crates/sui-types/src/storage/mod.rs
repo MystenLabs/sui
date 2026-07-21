@@ -28,7 +28,6 @@ use crate::{
 };
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
-use move_binary_format::errors::PartialVMResult;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::resolver::SerializedPackage;
 pub use object_store_trait::ObjectStore;
@@ -186,16 +185,37 @@ pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
 impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
 /// Outcome of checking whether an object owner holds enough funds for a withdrawal. Both variants
-/// are deterministic Move-level outcomes; the node-local "accumulator root has not caught up yet"
-/// condition is deliberately not representable here — it surfaces as a `PartialVMError` minted
-/// together with the temporary store's retry request (see
-/// `TemporaryStore::check_system_object_available`), so callers cannot observe it as data.
+/// are deterministic Move-level outcomes; non-deterministic conditions (the accumulator root not
+/// yet available locally, load failures) are reported before sufficiency is ever evaluated, as
+/// [`ObjectFundsAvailability`] variants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectFundsSufficiency {
     /// The owner holds at least the requested amount (net of earlier withdrawals in this tx).
     Sufficient,
     /// The owner does not hold the requested amount.
     Insufficient,
+}
+
+/// Outcome of resolving the balance available to an object owner for object-funds withdrawals.
+/// Every way the resolution can go is a variant, so callers must decide each case explicitly;
+/// the single consumer (the object runtime) converts the non-`Available` variants into the
+/// appropriate VM errors in one place.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub enum ObjectFundsAvailability {
+    /// The balance available for withdrawals: the settled balance at the transaction's required
+    /// accumulator version, minus unsettled withdrawals from earlier transactions in the same
+    /// consensus commit.
+    Available(u128),
+    /// The accumulator root has not reached the transaction's required version on this node. The
+    /// retry request has been recorded; execution must unwind so the authority can discard the
+    /// effects and re-enqueue. Never a committed outcome.
+    RootNotYetAvailable,
+    /// The accumulator root has no assigned version — the transaction is reading a system object
+    /// it was not sequenced against. An invariant violation.
+    RequiredVersionNotAssigned,
+    /// A node-local failure loading the balance. An invariant violation (storage error).
+    LoadError(String),
 }
 
 /// An abstraction of the (possibly distributed) store for objects. This
@@ -209,23 +229,18 @@ pub trait RuntimeObjectResolver {
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
 
-    /// The balance `owner` currently has available for `type_` object-funds withdrawals: the
-    /// settled balance at the transaction's required accumulator version, minus withdrawals from
-    /// earlier transactions in the same consensus commit that have not yet settled. In-transaction
-    /// deposits and withdrawals are *not* reflected here — the caller (the object runtime) tracks
-    /// those and only queries this when its in-transaction balance falls short. Only
-    /// `TemporaryStore` computes the real value; other resolvers are never the execution-time
-    /// resolver, so the default reports `u128::MAX` and never blocks.
-    ///
-    /// Returns `PartialVMResult` so the error minted when the accumulator root has not caught up
-    /// locally travels to the calling native unmodified; implementations and callers must
-    /// propagate errors as-is, never rewrap them.
+    /// The balance `owner` currently has available for `type_` object-funds withdrawals, as an
+    /// [`ObjectFundsAvailability`] covering every resolution outcome. In-transaction deposits and
+    /// withdrawals are *not* reflected here — the caller (the object runtime) tracks those and
+    /// only queries this when its in-transaction balance falls short. Only `TemporaryStore`
+    /// computes the real value; other resolvers are never the execution-time resolver, so the
+    /// default reports `u128::MAX` and never blocks.
     fn object_available_balance(
         &self,
         _owner: SuiAddress,
         _type_: &TypeTag,
-    ) -> PartialVMResult<u128> {
-        Ok(u128::MAX)
+    ) -> ObjectFundsAvailability {
+        ObjectFundsAvailability::Available(u128::MAX)
     }
 
     /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.

@@ -1927,7 +1927,7 @@ add_to_accumulator_address
 withdraw_from_accumulator_address
 	fun
 	0x2::funds_accumulator
-check_sufficient_object_funds
+track_object_funds_withdrawal
 	fun
 	0x2::funds_accumulator
 create_withdrawal

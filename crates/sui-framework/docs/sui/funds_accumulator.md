@@ -17,7 +17,7 @@ A module for accumulating funds, i.e. Balance-like types.
 -  [Function `withdraw_impl`](#sui_funds_accumulator_withdraw_impl)
 -  [Function `add_to_accumulator_address`](#sui_funds_accumulator_add_to_accumulator_address)
 -  [Function `withdraw_from_accumulator_address`](#sui_funds_accumulator_withdraw_from_accumulator_address)
--  [Function `check_sufficient_object_funds`](#sui_funds_accumulator_check_sufficient_object_funds)
+-  [Function `track_object_funds_withdrawal`](#sui_funds_accumulator_track_object_funds_withdrawal)
 -  [Function `create_withdrawal`](#sui_funds_accumulator_create_withdrawal)
 
 
@@ -281,7 +281,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
         <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EObjectFundsWithdrawNotEnabled">EObjectFundsWithdrawNotEnabled</a>,
     );
     <b>let</b> owner = obj.to_address();
-    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_check_sufficient_object_funds">check_sufficient_object_funds</a>&lt;T&gt;(owner, limit);
+    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_track_object_funds_withdrawal">track_object_funds_withdrawal</a>&lt;T&gt;(owner, limit);
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a> { owner, limit }
 }
 </code></pre>
@@ -388,13 +388,13 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 </details>
 
-<a name="sui_funds_accumulator_check_sufficient_object_funds"></a>
+<a name="sui_funds_accumulator_track_object_funds_withdrawal"></a>
 
-## Function `check_sufficient_object_funds`
+## Function `track_object_funds_withdrawal`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_check_sufficient_object_funds">check_sufficient_object_funds</a>&lt;T: store&gt;(owner: <b>address</b>, limit: u256)
+<pre><code><b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_track_object_funds_withdrawal">track_object_funds_withdrawal</a>&lt;T: store&gt;(owner: <b>address</b>, limit: u256)
 </code></pre>
 
 
@@ -403,7 +403,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_check_sufficient_object_funds">check_sufficient_object_funds</a>&lt;T: store&gt;(owner: <b>address</b>, limit: u256);
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_track_object_funds_withdrawal">track_object_funds_withdrawal</a>&lt;T: store&gt;(owner: <b>address</b>, limit: u256);
 </code></pre>
 
 

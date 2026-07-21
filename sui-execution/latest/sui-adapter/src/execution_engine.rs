@@ -215,11 +215,12 @@ mod checked {
     }
 
     /// The temporary store's retry request and the `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` unwind
-    /// error are minted together (`TemporaryStore::check_system_object_available`), so observing
-    /// either one alone means some path fabricated, swallowed, or replaced one of them. Checked
-    /// after the final execution result is settled and before effects are built; behavior past the
-    /// `debug_fatal` stays keyed off the retry request.
-    fn enforce_retry_invariant<R, E: ExecutionErrorTrait>(
+    /// (which the object runtime mints when converting `ObjectFundsAvailability::RootNotYetAvailable`)
+    /// must only appear together; observing either one alone means some path fabricated, swallowed,
+    /// or replaced one of them. Detection only, checked after the final execution result is settled
+    /// and before effects are built: `debug_fatal` panics in tests but merely alerts in release,
+    /// where behavior stays keyed off the retry request — the safe direction for both mismatches.
+    fn debug_check_retry_invariant<R, E: ExecutionErrorTrait>(
         temporary_store: &TemporaryStore<'_>,
         execution_result: &Result<R, E>,
     ) {
@@ -571,7 +572,7 @@ mod checked {
                 execution_result = Err(e);
             }
 
-            enforce_retry_invariant(&temporary_store, &execution_result);
+            debug_check_retry_invariant(&temporary_store, &execution_result);
 
             let status = if let Err(error) = &execution_result {
                 ExecutionStatus::new_failure(error.to_execution_failure())

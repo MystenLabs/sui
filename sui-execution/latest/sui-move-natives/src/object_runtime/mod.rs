@@ -43,7 +43,7 @@ use sui_types::{
     id::UID,
     metrics::ExecutionMetrics,
     object::{MoveObject, Owner},
-    storage::{ObjectFundsSufficiency, RuntimeObjectResolver},
+    storage::{ObjectFundsAvailability, ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 use tracing::error;
 
@@ -257,11 +257,38 @@ impl<'a> ObjectRuntime<'a> {
         // Only reach out to the store (which does the system-object-availability check) if the
         // in-transaction balance cannot already cover this withdrawal, and only once per account.
         if entry.available < amount && !entry.queried {
-            // Pure pass-through of the store error: it may be the system-object-unavailable retry
-            // unwind, whose status code is load-bearing and must reach the VM unmodified.
-            let settled_available = self
+            // The single place each availability outcome becomes its error.
+            let settled_available = match self
                 .child_object_store
-                .object_available_balance(owner, type_)?;
+                .object_available_balance(owner, type_)
+            {
+                ObjectFundsAvailability::Available(balance) => balance,
+                // The accumulator root has not reached the version this transaction requires on
+                // this node. The temporary store has recorded the retry request; this unwinds the
+                // VM so the authority discards the effects and re-enqueues.
+                // `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` is minted nowhere else; the end of
+                // execution (`debug_check_retry_invariant`) checks that it and the retry request
+                // only appear together.
+                ObjectFundsAvailability::RootNotYetAvailable => {
+                    return Err(PartialVMError::new(
+                        StatusCode::SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY,
+                    )
+                    .with_message(
+                        "accumulator root not yet available at its required version".to_owned(),
+                    ));
+                }
+                ObjectFundsAvailability::RequiredVersionNotAssigned => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(
+                                "accumulator root read without an assigned version".to_owned(),
+                            ),
+                    );
+                }
+                ObjectFundsAvailability::LoadError(msg) => {
+                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(msg));
+                }
+            };
             entry.available = entry
                 .available
                 .checked_add(U256::from(settled_available))

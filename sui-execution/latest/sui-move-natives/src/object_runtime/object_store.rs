@@ -18,7 +18,7 @@ use sui_types::{
     execution::DynamicallyLoadedObjectMetadata,
     metrics::ExecutionMetrics,
     object::{Data, MoveObject, Object, Owner},
-    storage::RuntimeObjectResolver,
+    storage::{ObjectFundsAvailability, RuntimeObjectResolver},
 };
 
 pub(super) struct ChildObject {
@@ -440,7 +440,7 @@ impl<'a> ChildObjectStore<'a> {
         &self,
         owner: SuiAddress,
         type_: &TypeTag,
-    ) -> PartialVMResult<u128> {
+    ) -> ObjectFundsAvailability {
         self.inner.resolver.object_available_balance(owner, type_)
     }
 

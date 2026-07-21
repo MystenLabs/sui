@@ -3763,7 +3763,7 @@ async fn test_simulate_object_funds_insufficient() {
 }
 
 /// Same as `test_simulate_object_funds_sufficient`, but with the in-execution funds check enabled.
-/// This exercises the in-VM path (`check_sufficient_object_funds` native → `check_system_object_available`)
+/// This exercises the in-VM path (`track_object_funds_withdrawal` native → `check_system_object_available`)
 /// under simulation: the accumulator-root version is sourced from the object store by the dev-inspect
 /// path rather than from consensus assignment. Before that support existed, simulating any
 /// object-funds withdrawal with the flag on tripped the "no assigned version" guard.

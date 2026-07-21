@@ -30,13 +30,12 @@ pub(crate) fn convert_vm_error_impl(
             // this is a Move VM invariant violation, the code should always be there
             ExecutionErrorKind::VMInvariantViolation
         }
-        // The abort minted by the `check_sufficient_object_funds` native on an overdraw. The raw
-        // code is unambiguous within `0x2::funds_accumulator`: the module's own Move-level aborts
-        // use clever-encoded error constants (or `EOverflow = 0`), so a plain
-        // `E_OBJECT_FUNDS_INSUFFICIENT` there can only come from the native. Converted to a
-        // dedicated kind so clients see a legible status instead of an opaque abort code.
+        // The `track_object_funds_withdrawal` native's insufficiency abort, remapped to a
+        // dedicated kind for legibility. Unambiguous: the module's other aborts are clever-encoded
+        // or 0/1.
         (StatusCode::ABORTED, Some(code), Location::Module(id))
-            if code == sui_move_natives::funds_accumulator::E_OBJECT_FUNDS_INSUFFICIENT
+            if code
+                == sui_move_natives::funds_accumulator::E_OBJECT_FUNDS_INSUFFICIENT_REMAPPED
                 && id.address() == &SUI_FRAMEWORK_ADDRESS
                 && id.name() == FUNDS_ACCUMULATOR_MODULE_NAME =>
         {
@@ -99,4 +98,32 @@ pub(crate) fn convert_vm_error_impl(
         },
     };
     ExecutionError::new_with_source(kind, error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_binary_format::errors::PartialVMError;
+    use move_core_types::{ident_str, language_storage::ModuleId};
+    use sui_types::SUI_FRAMEWORK_ADDRESS;
+
+    /// Pins the remap that `E_OBJECT_FUNDS_INSUFFICIENT_REMAPPED` relies on: the native abort must
+    /// surface as the dedicated kind, never as a `MoveAbort`.
+    #[test]
+    fn test_object_funds_insufficient_abort_is_remapped() {
+        let module = ModuleId::new(
+            SUI_FRAMEWORK_ADDRESS,
+            ident_str!("funds_accumulator").to_owned(),
+        );
+        let vm_error = PartialVMError::new(StatusCode::ABORTED)
+            .with_sub_status(
+                sui_move_natives::funds_accumulator::E_OBJECT_FUNDS_INSUFFICIENT_REMAPPED,
+            )
+            .finish(Location::Module(module));
+        let converted = convert_vm_error_impl(vm_error, &|id| id.clone(), &|_, _| None);
+        assert_eq!(
+            converted.kind(),
+            &ExecutionErrorKind::InsufficientObjectFundsForWithdraw
+        );
+    }
 }

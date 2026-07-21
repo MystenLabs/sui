@@ -307,7 +307,7 @@ pub enum ExecutionErrorKind {
     SystemObjectNotAvailableLocally,
 
     // An object-funds withdrawal exceeded the funds available to the object, detected by the
-    // in-execution sufficiency check (the `check_sufficient_object_funds` native). The
+    // in-execution sufficiency check (the `track_object_funds_withdrawal` native). The
     // address-funds counterpart is `InsufficientFundsForWithdraw`, produced by the scheduler
     // before execution.
     #[error("Insufficient object funds for funds accumulator withdrawal")]
