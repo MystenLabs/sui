@@ -91,12 +91,26 @@ use crate::{
     transaction_deny_config_manager::TransactionDenyConfigManager,
 };
 
+/// Tracks the nature of intra-commit owned object lock conflicts for a winning transaction.
+#[derive(Default)]
+struct ConflictInfo {
+    /// Number of conflicts on gas payment objects.
+    gas_object_conflicts: u64,
+    /// Number of conflicts on non-gas owned objects.
+    non_gas_object_conflicts: u64,
+    /// Index of the block authority that sequenced the winning (lock holder) transaction.
+    winner_author: usize,
+}
+
 /// Output from filtering consensus transactions.
 /// Contains the filtered transactions and any owned object locks acquired post-consensus.
 struct FilteredConsensusOutput {
     transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
     dropped_transaction_keys: Vec<ConsensusTransactionKey>,
+    // When multiple transactions in the same commit try to lock the same owned object, the transaction
+    // that managed to lock it first is tracked here with the conflict info.
+    contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
 }
 
 pub struct ConsensusHandlerInitializer {
@@ -919,6 +933,9 @@ struct CommitHandlerState {
     initial_reconfig_state: ReconfigState,
     // Occurrence counts for user transactions, used for unpaid amplification detection.
     occurrence_counts: HashMap<TransactionDigest, u32>,
+    // Transactions involved in same commit owned object lock contention (double-spend),
+    // mapped to conflict info (gas vs non-gas breakdown).
+    contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
 }
 
 impl CommitHandlerState {
@@ -930,6 +947,7 @@ impl CommitHandlerState {
             indirect_state_observer: Some(IndirectStateObserver::new()),
             initial_reconfig_state: epoch_store.get_reconfig_state_read_lock_guard().clone(),
             occurrence_counts: HashMap::new(),
+            contested_transaction_digests: HashMap::new(),
         }
     }
 
@@ -1091,11 +1109,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transactions,
             owned_object_locks,
             dropped_transaction_keys,
+            contested_transaction_digests,
         } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
             transactions,
         );
+        state.contested_transaction_digests = contested_transaction_digests;
         // Buffer owned object locks for batch write.
         if !owned_object_locks.is_empty() {
             state.output.set_owned_object_locks(owned_object_locks);
@@ -1744,13 +1764,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         execution_time_estimator: &ExecutionTimeEstimator,
     ) {
+        let tx_digest = *transaction.tx().digest();
+
         // Check for unpaid amplification before other deferral checks.
         // SIP-45: Paid amplification allows (gas_price / RGP + 1) submissions.
         // Transactions with more duplicates than paid for are deferred.
         if protocol_config.defer_unpaid_amplification() {
             let occurrence_count = state
                 .occurrence_counts
-                .get(transaction.tx().digest())
+                .get(&tx_digest)
                 .copied()
                 .unwrap_or(0);
 
@@ -1764,7 +1786,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .inc();
 
                 let deferred_from_round = previously_deferred_tx_digests
-                    .get(transaction.tx().digest())
+                    .get(&tx_digest)
                     .map(|k| k.deferred_from_round())
                     .unwrap_or(commit_info.round);
 
@@ -1780,9 +1802,64 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     assert_reachable!("unpaid amplification deferral");
                     debug!(
                         "Deferring transaction {:?} due to unpaid amplification (count={}, allowed={})",
-                        transaction.tx().digest(),
-                        occurrence_count,
-                        allowed_count
+                        tx_digest, occurrence_count, allowed_count
+                    );
+                    deferred_txns
+                        .entry(deferral_key)
+                        .or_default()
+                        .push(transaction);
+                    return;
+                }
+            }
+        }
+
+        // Check for owned object double-spend: if this transaction won an owned object
+        // lock while another transaction in the same commit tried to lock the same object,
+        // defer it as a penalty.
+        if let Some(conflict_info) = state.contested_transaction_digests.get(&tx_digest) {
+            self.metrics.consensus_handler_double_spend_deferrals.inc();
+            self.metrics
+                .consensus_handler_double_spend_conflict_count
+                .with_label_values(&["gas_object"])
+                .observe(conflict_info.gas_object_conflicts as f64);
+            self.metrics
+                .consensus_handler_double_spend_conflict_count
+                .with_label_values(&["non_gas_object"])
+                .observe(conflict_info.non_gas_object_conflicts as f64);
+            // Attribute the winning side of the conflict to the authority that sequenced the
+            // contested holder transaction.
+            self.metrics
+                .consensus_handler_double_spend_conflicting_authority
+                .with_label_values(&[
+                    self.authority_hostname(conflict_info.winner_author),
+                    "winner",
+                ])
+                .inc();
+
+            if protocol_config.defer_owned_object_double_spend() {
+                let deferred_from_round = previously_deferred_tx_digests
+                    .get(&tx_digest)
+                    .map(|k| k.deferred_from_round())
+                    .unwrap_or(commit_info.round);
+
+                let deferral_key = DeferralKey::new_for_consensus_round(
+                    commit_info.round + 1,
+                    deferred_from_round,
+                );
+
+                if transaction_deferral_within_limit(
+                    &deferral_key,
+                    protocol_config.max_deferral_rounds_for_congestion_control(),
+                ) {
+                    debug!(
+                        "Deferring transaction {:?} due to owned object double-spend contention \
+                        (gas_conflicts={}, non_gas_conflicts={})",
+                        tx_digest,
+                        conflict_info.gas_object_conflicts,
+                        conflict_info.non_gas_object_conflicts,
+                    );
+                    assert_reachable!(
+                        "Successfully deferred transaction attempting to double spend owned object."
                     );
                     deferred_txns
                         .entry(deferral_key)
@@ -1811,8 +1888,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         if let Some((deferral_key, deferral_reason)) = deferral_info {
             debug!(
                 "Deferring consensus certificate for transaction {:?} until {:?}",
-                transaction.tx().digest(),
-                deferral_key
+                tx_digest, deferral_key
             );
 
             match deferral_reason {
@@ -1845,12 +1921,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // Cancel the transaction that has been deferred for too long.
                         debug!(
                             "Cancelling consensus transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
-                            transaction.tx().digest(),
-                            deferral_key,
-                            congested_objects
+                            tx_digest, deferral_key, congested_objects
                         );
                         cancelled_txns.insert(
-                            *transaction.tx().digest(),
+                            tx_digest,
                             CancelConsensusCertificateReason::CongestionOnObjects(
                                 congested_objects,
                             ),
@@ -2440,6 +2514,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
     }
 
+    // Returns the hostname of the block author at the given committee index, used as a metric
+    // label. Falls back to "unknown" if the index is out of bounds.
+    fn authority_hostname(&self, author: usize) -> &str {
+        self.committee
+            .to_authority_index(author)
+            .map(|index| self.committee.authority(index).hostname.as_str())
+            .unwrap_or("unknown")
+    }
+
     // Filters out rejected or deprecated transactions.
     // Returns FilteredConsensusOutput containing transactions and owned_object_locks.
     #[instrument(level = "trace", skip_all)]
@@ -2457,6 +2540,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // single batched write (one lock acquisition, notifications outside the lock)
         // at the end of the commit, rather than one write+notify per transaction.
         let mut status_updates: Vec<(ConsensusPosition, ConsensusTxStatus)> = Vec::new();
+        let mut contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo> =
+            HashMap::new();
+        // Block author for each transaction that successfully acquired owned object locks, so we
+        // can attribute the winning side of a double-spend conflict to the authority that
+        // sequenced it.
+        let mut lock_holder_authors: HashMap<TransactionDigest, usize> = HashMap::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
@@ -2715,11 +2804,48 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         ) {
                         Ok(new_locks) => {
                             owned_object_locks.extend(new_locks.into_iter());
+                            lock_holder_authors.entry(*tx.digest()).or_insert(author);
                             // Lock acquisition succeeded - now set Finalized status
                             status_updates.push((position, ConsensusTxStatus::Finalized));
                             num_finalized_user_transactions[author] += 1;
                         }
                         Err(e) => {
+                            // Flag intra-commit double-spend: if the conflict is with
+                            // a transaction in this commit (in owned_object_locks), the
+                            // holder should be deferred as penalty.
+                            let gas_object_ids: HashSet<ObjectID> = tx
+                                .transaction_data()
+                                .gas()
+                                .iter()
+                                .map(|obj_ref| obj_ref.0)
+                                .collect();
+                            let mut is_intra_commit_conflict = false;
+                            for obj_ref in &owned_object_refs {
+                                if let Some(holder_digest) = owned_object_locks.get(obj_ref) {
+                                    is_intra_commit_conflict = true;
+                                    let info = contested_transaction_digests
+                                        .entry(*holder_digest)
+                                        .or_default();
+                                    info.winner_author = lock_holder_authors
+                                        .get(holder_digest)
+                                        .copied()
+                                        .unwrap_or(author);
+                                    if gas_object_ids.contains(&obj_ref.0) {
+                                        info.gas_object_conflicts += 1;
+                                    } else {
+                                        info.non_gas_object_conflicts += 1;
+                                    }
+                                }
+                            }
+                            // Attribute the losing side of the conflict to the authority that
+                            // sequenced this dropped transaction. Counted once per loser, even
+                            // if it conflicted on multiple objects.
+                            if is_intra_commit_conflict {
+                                self.metrics
+                                    .consensus_handler_double_spend_conflicting_authority
+                                    .with_label_values(&[self.authority_hostname(author), "loser"])
+                                    .inc();
+                            }
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
                             self.metrics
                                 .consensus_handler_dropped_transactions
@@ -2771,6 +2897,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transactions,
             owned_object_locks,
             dropped_transaction_keys,
+            contested_transaction_digests,
         }
     }
 
