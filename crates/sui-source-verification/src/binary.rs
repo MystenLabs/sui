@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ffi::OsStr;
-use std::fs::{self, File};
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -56,10 +56,10 @@ pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
     Ok(canonical)
 }
 
-/// Download the `sui` release tarball for `version`, extract the `sui` binary from it, and install it
-/// atomically into `version_dir`. The download and extraction happen in a temporary directory that is
-/// renamed into place only once complete, so concurrent installs of the same version cannot observe a
-/// partial tree.
+/// Download the `sui` release tarball for `version`, streaming out just the `sui` binary, and install
+/// it atomically into `version_dir`. The binary is written under a temporary directory that is renamed
+/// into place only once complete, so concurrent installs of the same version cannot observe a partial
+/// tree, and nothing but the `sui` binary is ever written to disk.
 fn download_and_install(
     version: &str,
     platform: &str,
@@ -75,25 +75,15 @@ fn download_and_install(
     fs::create_dir_all(&tmp).context("creating temporary install directory")?;
 
     let result = (|| {
-        // Unpack into a scratch subdirectory: a release archive carries every shipped binary
-        // (`sui-debug`, `sui-node`, ...), which is well over a gigabyte, and only `sui` is wanted.
-        let extract = tmp.join("extract");
-        fs::create_dir_all(&extract).context("creating extraction directory")?;
-        download_and_extract(version, platform, &extract)?;
-
-        // Locate the `sui` binary in the extracted archive (its layout varies by release) and
-        // install it under the canonical cache path.
-        let found = find_binary(&extract, platform)
-            .ok_or_else(|| anyhow!("no sui binary found in the {version} release archive"))?;
-
+        // Stream the release archive into the temp tree, writing only the `sui` binary. A release
+        // archive carries every shipped binary (`sui-debug`, `sui-node`, ...), well over a gigabyte,
+        // so streaming keeps everything but `sui` off disk. The completed tree is renamed into place
+        // below, so the install stays atomic.
         let release_dir = tmp.join("target").join("release");
         fs::create_dir_all(&release_dir).context("creating release directory")?;
-        let canonical = release_dir.join(binary_name);
-        fs::rename(&found, &canonical).context("installing extracted binary")?;
-        set_executable_permission(canonical.as_os_str())?;
-
-        // Drop the archive and the binaries we do not use.
-        fs::remove_dir_all(&extract).context("cleaning up extracted archive")?;
+        let staged_binary = release_dir.join(binary_name);
+        stream_sui_binary(version, platform, &staged_binary)?;
+        set_executable_permission(staged_binary.as_os_str())?;
         Ok(())
     })();
 
@@ -122,20 +112,28 @@ fn download_and_install(
     }
 }
 
-/// Download the release tarball for `version` (trying the mainnet release, then the testnet
-/// release) and extract it into `dest`.
-fn download_and_extract(version: &str, platform: &str, dest: &Path) -> anyhow::Result<()> {
+/// Download the `sui` release tarball for `version` and stream it, extracting only the `sui` binary
+/// to `dest`.
+fn stream_sui_binary(version: &str, platform: &str, dest: &Path) -> anyhow::Result<()> {
+    let reader = download_reader(version, platform)?;
+    extract_sui_from_stream(reader, version, platform, dest)
+}
+
+/// Open a streaming reader over the `sui` release tarball for `version`, trying the mainnet release
+/// first and falling back to the testnet release on a 404.
+fn download_reader(version: &str, platform: &str) -> anyhow::Result<impl io::Read> {
     let mainnet_url = format!(
         "https://github.com/MystenLabs/sui/releases/download/mainnet-v{version}/sui-mainnet-v{version}-{platform}.tgz",
     );
 
-    println!(
+    // Progress goes to stderr so it does not corrupt a `--json` verification result on stdout.
+    eprintln!(
         "{} sui compiler @ {} (this may take a while)",
         "DOWNLOADING".bold().green(),
         version.yellow()
     );
 
-    let reader = match ureq::get(&mainnet_url).call() {
+    let response = match ureq::get(&mainnet_url).call() {
         Ok(response) => response,
         Err(ureq::Error::Status(404, _)) => {
             debug!("no mainnet release for {version}, trying testnet");
@@ -145,51 +143,51 @@ fn download_and_extract(version: &str, platform: &str, dest: &Path) -> anyhow::R
             ureq::get(&testnet_url).call()?
         }
         Err(e) => return Err(e.into()),
-    }
-    .into_reader();
-
-    let tarball = dest.join("sui.tgz");
-    let mut file = File::create(&tarball).context("creating tarball file")?;
-    io::copy(&mut { reader }, &mut file).context("downloading tarball")?;
-
-    let tar_gz = File::open(&tarball).context("reopening tarball")?;
-    let tar = flate2::read::GzDecoder::new(tar_gz);
-    Archive::new(tar)
-        .unpack(dest)
-        .map_err(|e| anyhow!("failed to untar compiler binary: {e}"))?;
-    Ok(())
+    };
+    Ok(response.into_reader())
 }
 
-/// Locate the `sui` executable within an extracted release archive, accepting either the modern
-/// root-level `sui` or the older `target/release/sui-<platform>`. Other shipped binaries
-/// (`sui-node`, `sui-tool`, ...) are not matched.
-fn find_binary(root: &Path, platform: &str) -> Option<PathBuf> {
+/// Read a gzipped tar archive from `reader` and unpack only the `sui` binary to `dest`, discarding
+/// every other entry as it streams. Errors if the archive for `version` contains no `sui` binary.
+fn extract_sui_from_stream(
+    reader: impl io::Read,
+    version: &str,
+    platform: &str,
+    dest: &Path,
+) -> anyhow::Result<()> {
+    let tar = flate2::read::GzDecoder::new(reader);
+    let mut archive = Archive::new(tar);
+    let entries = archive.entries().context("reading release archive")?;
+
+    for entry in entries {
+        let mut entry = entry.context("reading release archive entry")?;
+        let is_sui = {
+            let path = entry.path().context("reading archive entry path")?;
+            matches_sui(&path, platform)
+        };
+        if is_sui {
+            entry.unpack(dest).context("unpacking the sui binary")?;
+            return Ok(());
+        }
+    }
+    Err(anyhow!(
+        "no sui binary found in the {version} release archive"
+    ))
+}
+
+/// Whether `path`, the path of an entry in a release archive, is the `sui` executable — either the
+/// modern root-level `sui` or the older `target/release/sui-<platform>`. Other shipped binaries
+/// (`sui-node`, `sui-tool`, ...) do not match.
+fn matches_sui(path: &Path, platform: &str) -> bool {
     let suffix = if platform == "windows-x86_64" {
         ".exe"
     } else {
         ""
     };
     let names = [format!("sui{suffix}"), format!("sui-{platform}{suffix}")];
-
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| names.iter().any(|candidate| candidate == n))
-            {
-                return Some(path);
-            }
-        }
-    }
-    None
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| names.iter().any(|candidate| candidate == n))
 }
 
 /// A platform for which `sui` release binaries are published.
@@ -267,32 +265,75 @@ fn set_executable_permission(_path: &OsStr) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use super::*;
 
-    /// `find_binary` locates the `sui` binary in both the modern (root-level) and older
-    /// (`target/release/sui-<platform>`) archive layouts, and ignores other shipped binaries.
+    /// Build a gzipped tar archive from `(path, contents)` entries, as the release download stream
+    /// would deliver it.
+    fn make_tgz(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut tar = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut tar);
+            for (name, data) in entries {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(data.len() as u64);
+                header.set_mode(0o755);
+                builder.append_data(&mut header, name, *data).unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        gz.write_all(&tar).unwrap();
+        gz.finish().unwrap()
+    }
+
+    /// `matches_sui` accepts the modern root-level `sui` and the older `target/release/sui-<platform>`
+    /// layouts, ignores other shipped binaries, and honours the windows `.exe` suffix.
     #[test]
-    fn find_binary_handles_both_layouts() {
-        let platform = "macos-arm64";
+    fn matches_sui_by_layout() {
+        assert!(matches_sui(Path::new("sui"), "macos-arm64"));
+        assert!(matches_sui(
+            Path::new("target/release/sui-macos-arm64"),
+            "macos-arm64"
+        ));
+        assert!(!matches_sui(Path::new("sui-node"), "macos-arm64"));
+        assert!(!matches_sui(
+            Path::new("target/release/sui-tool"),
+            "macos-arm64"
+        ));
+        assert!(matches_sui(Path::new("sui.exe"), "windows-x86_64"));
+        assert!(!matches_sui(Path::new("sui"), "windows-x86_64"));
+    }
 
-        // Modern layout: `sui` at the archive root, alongside binaries we do not want.
-        let modern = tempfile::tempdir().unwrap();
-        fs::write(modern.path().join("sui-node"), b"").unwrap();
-        fs::write(modern.path().join("sui"), b"").unwrap();
-        let found = find_binary(modern.path(), platform).expect("modern layout");
-        assert_eq!(found.file_name().unwrap(), "sui");
+    /// Streaming extraction writes only the `sui` binary (with its exact bytes) and nothing else,
+    /// even when other binaries precede and follow it in the archive.
+    #[test]
+    fn extract_takes_only_sui() {
+        let tgz = make_tgz(&[
+            ("sui-node", b"NODE"),
+            ("sui", b"SUI-BINARY"),
+            ("sui-tool", b"TOOL"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("sui");
 
-        // Older layout: nested `target/release/sui-<platform>`.
-        let old = tempfile::tempdir().unwrap();
-        let nested = old.path().join("target").join("release");
-        fs::create_dir_all(&nested).unwrap();
-        fs::write(nested.join("sui-macos-arm64"), b"").unwrap();
-        let found = find_binary(old.path(), platform).expect("older layout");
-        assert_eq!(found.file_name().unwrap(), "sui-macos-arm64");
+        extract_sui_from_stream(tgz.as_slice(), "1.0.0", "macos-arm64", &dest).unwrap();
 
-        // Only other artifacts present: no match.
-        let none = tempfile::tempdir().unwrap();
-        fs::write(none.path().join("sui-tool"), b"").unwrap();
-        assert!(find_binary(none.path(), platform).is_none());
+        assert_eq!(fs::read(&dest).unwrap(), b"SUI-BINARY");
+        // Nothing but `sui` landed on disk.
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// An archive with no `sui` binary is an error rather than a silent success.
+    #[test]
+    fn extract_errors_without_sui() {
+        let tgz = make_tgz(&[("sui-node", b"NODE"), ("sui-tool", b"TOOL")]);
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("sui");
+
+        let err =
+            extract_sui_from_stream(tgz.as_slice(), "1.0.0", "macos-arm64", &dest).unwrap_err();
+        assert!(err.to_string().contains("no sui binary"));
     }
 }
