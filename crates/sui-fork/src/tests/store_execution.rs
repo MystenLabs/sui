@@ -11,7 +11,6 @@ use std::path::Path;
 use std::time::Duration;
 
 use fastcrypto::encoding::Base64 as FastCryptoBase64;
-use fastcrypto::encoding::Encoding as _;
 use rand::rngs::OsRng;
 use wiremock::Mock;
 use wiremock::MockServer;

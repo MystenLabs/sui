@@ -246,7 +246,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path, description: &str) -> 
         .with_context(|| format!("Failed to deserialize {description}: {}", path.display()))
 }
 
-fn write_json_exclusive<T: serde::Serialize>(
+pub(crate) fn write_json_exclusive<T: serde::Serialize>(
     path: &Path,
     value: &T,
     description: &str,

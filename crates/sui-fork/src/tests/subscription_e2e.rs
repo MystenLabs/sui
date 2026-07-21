@@ -18,7 +18,6 @@ use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
-use sui_protocol_config::Chain;
 use sui_rpc_api::RpcService;
 use sui_rpc_api::ServerVersion;
 use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
@@ -98,7 +97,7 @@ impl ServerHarness {
         let (checkpoint_sender, subscription_handle) =
             SubscriptionService::build(&registry, None, None, None, None);
 
-        let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
+        let context = Arc::new(Context::new(sim, checkpoint_sender));
 
         let reader: Arc<dyn RpcStateReader> =
             Arc::new(ForkRpcReader::new(runtime.reader(), data_store));

@@ -69,16 +69,9 @@ pub(crate) enum ForkLiveState {
 }
 
 impl ForkLiveState {
-    /// The version this state refers to (the live version, or the version at
-    /// which the object was removed).
-    pub(crate) fn version(&self) -> SequenceNumber {
-        match self {
-            ForkLiveState::Live(version) | ForkLiveState::Removed { version, .. } => *version,
-        }
-    }
-
     /// Whether this state represents a removed object. Removed objects must not
     /// be resurrected from a remote GraphQL fallback.
+    #[cfg(test)]
     pub(crate) fn is_removed(&self) -> bool {
         matches!(self, ForkLiveState::Removed { .. })
     }

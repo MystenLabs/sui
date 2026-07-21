@@ -3,8 +3,6 @@
 
 //! Building blocks for the experimental `sui-fork` tool.
 
-#![allow(unused)]
-
 pub mod cli;
 pub(crate) mod context;
 pub(crate) mod fork_rpc_store;
@@ -41,7 +39,6 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
-use sui_types::supported_protocol_versions::ProtocolConfig;
 use sui_types::transaction::VerifiedTransaction;
 
 // ============================================================================
@@ -78,13 +75,11 @@ pub(crate) struct ObjectKey {
 }
 
 /// Query options for an object.
-/// `Version` request an object at a specific version, or latest if no version is provided
 /// `RootVersion` request an object at a given version at most (<=)
-/// `AtCheckpoint` request an object at a given checkpoint. Useful for unknown `Version`.
+/// `AtCheckpoint` request an object at a given checkpoint. Useful for an unknown version.
 /// `VersionAtCheckpoint` requests an exact version, but only if it existed by the given checkpoint.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum VersionQuery {
-    Version(u64),
     RootVersion(u64),
     AtCheckpoint(u64),
     VersionAtCheckpoint { version: u64, checkpoint: u64 },

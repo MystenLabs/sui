@@ -13,7 +13,6 @@ use tokio::sync::RwLock;
 use tokio::sync::broadcast;
 
 use simulacrum::Simulacrum;
-use sui_protocol_config::Chain;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -41,25 +40,25 @@ struct CheckpointPublication {
     payload: Checkpoint,
 }
 
-/// Shared context for the forked network: the simulacrum, chain identifier,
-/// and the producer half of the checkpoint subscription channel.
+/// Shared context for the forked network: the simulacrum, the optional
+/// runtime, and the producer half of the checkpoint subscription channel.
 pub struct Context {
     simulacrum: Arc<RwLock<ForkedSimulacrum>>,
-    chain_identifier: Chain,
     runtime: Option<ForkRuntime>,
     checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
     checkpoint_publication_lock: Mutex<()>,
 }
 
 impl Context {
+    /// Runtime-less construction for in-memory tests; production always goes
+    /// through [`Self::new_with_runtime`].
+    #[cfg(test)]
     pub(crate) fn new(
         simulacrum: Simulacrum<OsRng, DataStore>,
-        chain_identifier: Chain,
         checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
     ) -> Self {
         Self {
             simulacrum: Arc::new(RwLock::new(simulacrum)),
-            chain_identifier,
             runtime: None,
             checkpoint_sender,
             checkpoint_publication_lock: Mutex::new(()),
@@ -70,10 +69,9 @@ impl Context {
     ///
     /// Starts the runtime's embedded `sui-rpc-store` indexer over `checkpoint_sender`
     /// before returning, so committed local checkpoints get indexed for RPC reads.
-    /// Use [`Context::new`] for the runtime-less (in-memory) test path.
+    /// Tests use the runtime-less `Context::new` instead.
     pub(crate) async fn new_with_runtime(
         simulacrum: Simulacrum<OsRng, DataStore>,
-        chain_identifier: Chain,
         mut runtime: ForkRuntime,
         checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
         registry: &Registry,
@@ -84,7 +82,6 @@ impl Context {
             .await?;
         Ok(Self {
             simulacrum,
-            chain_identifier,
             runtime: Some(runtime),
             checkpoint_sender,
             checkpoint_publication_lock: Mutex::new(()),
@@ -108,10 +105,6 @@ impl Context {
             Some(runtime) => runtime.indexer_stopped().await,
             None => std::future::pending().await,
         }
-    }
-
-    pub(crate) fn chain_identifier(&self) -> &Chain {
-        &self.chain_identifier
     }
 
     /// Execute `operation`, create a checkpoint afterward, and publish that
