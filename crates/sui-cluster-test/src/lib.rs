@@ -57,13 +57,22 @@ impl TestContext {
     /// workaround for any missing service.
     async fn get_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
         let addr = self.get_wallet_address();
+        let minimum_coins = minimum_coins.unwrap_or(1);
 
-        let faucet_response = self.faucet.request_sui_coins(addr).await;
-        if let RequestStatus::Failure(e) = faucet_response.status {
-            panic!("Failed to get coins from faucet: {e}");
+        // Coins-per-request varies by faucet (the local test faucet sends
+        // several; gas-station-backed remote faucets send exactly one), so
+        // accumulate requests until the minimum is met.
+        let mut coin_info = Vec::new();
+        for _ in 0..minimum_coins {
+            let faucet_response = self.faucet.request_sui_coins(addr).await;
+            if let RequestStatus::Failure(e) = faucet_response.status {
+                panic!("Failed to get coins from faucet: {e}");
+            }
+            coin_info.extend(faucet_response.coins_sent.unwrap_or_default());
+            if coin_info.len() >= minimum_coins {
+                break;
+            }
         }
-
-        let coin_info = faucet_response.coins_sent.unwrap_or_default();
 
         let digests = coin_info
             .iter()
@@ -75,8 +84,6 @@ impl TestContext {
         self.wait_for_txns(&digests).await;
 
         let gas_coins = self.check_owner_and_into_gas_coin(coin_info, addr).await;
-
-        let minimum_coins = minimum_coins.unwrap_or(1);
 
         if gas_coins.len() < minimum_coins {
             panic!(
