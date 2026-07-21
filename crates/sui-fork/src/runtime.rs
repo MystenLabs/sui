@@ -252,14 +252,6 @@ impl ForkRuntime {
         )
     }
 
-    pub(crate) fn db(&self) -> Db {
-        self.db.clone()
-    }
-
-    pub(crate) fn schema(&self) -> Arc<RpcStoreSchema> {
-        self.schema.clone()
-    }
-
     /// Resolves when the embedded indexer stops: `Ok(())` if all its tasks
     /// completed (unexpected while the fork is serving), or the task error if
     /// any pipeline failed or panicked. Pends forever if the indexer was never
@@ -344,10 +336,10 @@ impl ForkRuntime {
             return Ok(());
         }
 
-        let bytes =
-            serde_json::to_vec_pretty(expected).context("failed to serialize fork metadata")?;
-        fs::write(&path, bytes)
-            .with_context(|| format!("failed to write fork metadata {}", path.display()))
+        // Temp-file + rename, like the other metadata sidecars: a crash
+        // mid-write must not leave a truncated fork_metadata.json, which
+        // open() would reject as a mismatched fork on every later launch.
+        crate::metadata::write_json_exclusive(&path, expected, "fork metadata")
     }
 
     fn seed_chain_identifier(db: &Db, expected: [u8; 32]) -> anyhow::Result<()> {
