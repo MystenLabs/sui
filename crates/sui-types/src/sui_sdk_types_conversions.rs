@@ -954,6 +954,11 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             crate::execution_status::ExecutionErrorKind::SystemObjectNotAvailableLocally => {
                 panic!("SystemObjectNotAvailableLocally is never committed to effects")
             }
+            // The SDK has no dedicated variant for object-funds insufficiency yet; surface it as
+            // the general insufficient-funds error.
+            crate::execution_status::ExecutionErrorKind::InsufficientObjectFundsForWithdraw => {
+                Self::InsufficientFundsForWithdraw
+            }
         }
     }
 }

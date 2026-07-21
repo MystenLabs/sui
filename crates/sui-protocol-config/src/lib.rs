@@ -365,6 +365,7 @@ const MAINNET_USDB: &str =
 // Version 130: Record unsettled object-funds withdraws using per-account net amounts
 //              from transaction effects instead of running-max withdraw amounts.
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
+//              Enable check_object_funds_withdraw_in_execution on devnet and testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1161,6 +1162,11 @@ struct FeatureFlags {
     // If true enable unified linkage
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
+
+    // If true, object funds-withdraw sufficiency is checked inside the Move VM during execution
+    // (requesting a retry when insufficient) instead of in a post-execution check.
+    #[serde(skip_serializing_if = "is_false")]
+    check_object_funds_withdraw_in_execution: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4498,6 +4504,9 @@ impl ProtocolConfig {
                     cfg.scratch_exists_with_type_type_cost = Some(1);
                     let max_commands = cfg.max_programmable_tx_commands() as u64;
                     cfg.max_scratch_pad_size = Some(16 * max_commands);
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

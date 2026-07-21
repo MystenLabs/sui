@@ -3,8 +3,6 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
@@ -14,7 +12,9 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::{
+    AccumulatorObjId, AccumulatorValue as AccumulatorRootValue, UnsettledObjectFundsRead,
+};
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
@@ -29,11 +29,11 @@ use sui_types::execution::{
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
-use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsAvailability, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
-    SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -116,9 +116,17 @@ pub struct TemporaryStore<'backing> {
     /// (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
+    /// Source of object-funds withdrawals that have executed in the current consensus commit but
+    /// have not yet settled. The settled balance read from the accumulator root does not include
+    /// these, so the in-execution funds check subtracts them. `None` when the authority did not
+    /// provide one (e.g. dev-inspect, genesis, replay), in which case no in-flight withdrawals are
+    /// accounted for.
+    unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
+
     /// Recorded when execution determines the transaction must be retried later rather than
     /// committed. Set only by `check_system_object_available`, in the same expression that returns
-    /// the `PartialVMError` unwinding the VM, so the two signals cannot drift apart. Execution
+    /// `SystemObjectAvailability::NotYetAvailable` — the variant the object runtime converts into
+    /// the VM unwind — so the two signals cannot drift apart. Execution
     /// still runs to completion and produces effects; this signal is carried out on
     /// `InnerTemporaryStore` so the authority can discard those effects and re-enqueue. A
     /// `OnceCell` rather than a lock: execution is single-threaded, and the condition is detected
@@ -126,6 +134,19 @@ pub struct TemporaryStore<'backing> {
     /// recorded at most once (the first detection, after which execution unwinds), which
     /// `OnceCell` enforces.
     retry_request: OnceCell<ExecutionRetryError>,
+}
+
+/// Availability of a system object at the version the executing transaction requires. All
+/// outcomes are variants so the consumer decides each case explicitly.
+pub enum SystemObjectAvailability {
+    /// Present locally at the required version (the read is recorded into effects).
+    Available(SequenceNumber),
+    /// Not yet at the required version on this node; the retry request has been recorded and
+    /// execution must unwind.
+    NotYetAvailable,
+    /// No assigned version — the transaction was not sequenced against this object. An invariant
+    /// violation.
+    NoAssignedVersion,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -139,6 +160,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -183,55 +205,45 @@ impl<'backing> TemporaryStore<'backing> {
             invariants: InvariantChecker::new(),
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
+            unsettled_object_funds,
             retry_request: OnceCell::new(),
         }
     }
 
     /// Checks that the system object `object_id` is available at the version this transaction
     /// requires, i.e. its latest committed version has caught up to that version, and records the
-    /// read so it can be emitted into effects and reproduced on replay. When the object has not
-    /// caught up, this method records the retry request on the store and returns the
-    /// `PartialVMError` that unwinds the VM as one atomic act: callers must propagate the error
-    /// (`?`) unmodified rather than observe unavailability as data. This is the only place allowed
-    /// to construct that error, which is what keeps the error and `retry_request` in lockstep —
-    /// neither can appear without the other.
-    pub fn check_system_object_available(&self, object_id: &ObjectID) -> PartialVMResult<()> {
+    /// read so it can be emitted into effects and reproduced on replay. Every outcome is a
+    /// [`SystemObjectAvailability`] variant; when the object has not caught up, the retry request
+    /// is recorded in the same expression that returns `NotYetAvailable`, keeping the two signals
+    /// in lockstep.
+    pub fn check_system_object_available(&self, object_id: &ObjectID) -> SystemObjectAvailability {
         // Every system object read during execution must have an assigned version. Its absence
         // here means the transaction is reading a system object it was not sequenced against,
         // which is an invariant violation.
         let Some(required_version) = self.system_object_versions.get(object_id).copied() else {
             debug_fatal!("system object {object_id} read without an assigned version");
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!("system object {object_id} read without an assigned version"),
-                ),
-            );
+            return SystemObjectAvailability::NoAssignedVersion;
         };
         // Load the object at exactly the version this transaction was sequenced against.
         // `required_version` is the freshly-assigned version at the frontier, so it is never pruned:
         // its absence means the local node has not yet committed that version.
         let Some(object_at_required) = self.store.get_object_by_key(object_id, required_version)
         else {
-            // Not yet caught up to the version this transaction requires: record the retry request
-            // and return the error that unwinds the VM, together. The retry payload is carried
-            // out-of-band via this interior-mutable state (the Move error can't hold it) and
-            // surfaces as `ExecutionRetryError` on the inner temporary store. The authority then
-            // waits for `object_id` to reach `required_version` and re-enqueues; it recovers the
-            // object's initial shared version from the epoch start config, so the id and version
-            // carried here are enough.
+            // Not yet caught up to the version this transaction requires: record the retry request.
+            // The retry payload is carried out-of-band via this interior-mutable state (the VM
+            // unwind can't hold it) and surfaces as `ExecutionRetryError` on the inner temporary
+            // store. The authority then waits for `object_id` to reach `required_version` and
+            // re-enqueues; it recovers the object's initial shared version from the epoch start
+            // config, so the id and version carried here are enough.
             // First detection wins; a second would only be recorded if execution continued past the
-            // returned error, which it does not.
-            let retry = ExecutionRetryError::SystemObjectUnavailable {
-                object_id: *object_id,
-                version: required_version,
-            };
-            let message = retry.to_string();
-            let _ = self.retry_request.set(retry);
-            // `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` is minted nowhere else.
-            return Err(
-                PartialVMError::new(StatusCode::SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY)
-                    .with_message(message),
-            );
+            // unwind this variant becomes, which it does not.
+            let _ = self
+                .retry_request
+                .set(ExecutionRetryError::SystemObjectUnavailable {
+                    object_id: *object_id,
+                    version: required_version,
+                });
+            return SystemObjectAvailability::NotYetAvailable;
         };
 
         // Available: record the read at `required_version` (which is what the transaction depends
@@ -242,7 +254,21 @@ impl<'backing> TemporaryStore<'backing> {
         self.loaded_system_objects
             .borrow_mut()
             .insert(*object_id, (required_version, object_at_required.digest()));
-        Ok(())
+        SystemObjectAvailability::Available(required_version)
+    }
+
+    /// The source of unsettled object-funds withdrawals for the current consensus commit, if the
+    /// authority provided one. The in-execution object-funds sufficiency check consults this to
+    /// discount withdrawals that have executed but not yet settled.
+    pub fn unsettled_object_funds(&self) -> Option<&dyn UnsettledObjectFundsRead> {
+        self.unsettled_object_funds
+    }
+
+    /// Whether execution has recorded a retry request. Used at the end of execution to enforce
+    /// that the retry request and the `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` unwind error only
+    /// ever appear together (see `debug_check_retry_invariant`).
+    pub fn has_retry_request(&self) -> bool {
+        self.retry_request.get().is_some()
     }
 
     // Helpers to access private fields
@@ -1104,6 +1130,58 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             receive_object_at_version,
             epoch_id,
         )
+    }
+
+    fn object_available_balance(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+    ) -> ObjectFundsAvailability {
+        // The accumulator root must be available at the version this transaction requires.
+        // Settlement advances the root only after the per-account fields are mutated, so the root
+        // reaching its required version implies every account is settled to at least it.
+        let required_version =
+            match self.check_system_object_available(&SUI_ACCUMULATOR_ROOT_OBJECT_ID) {
+                SystemObjectAvailability::Available(version) => version,
+                SystemObjectAvailability::NotYetAvailable => {
+                    return ObjectFundsAvailability::RootNotYetAvailable;
+                }
+                SystemObjectAvailability::NoAssignedVersion => {
+                    return ObjectFundsAvailability::RequiredVersionNotAssigned;
+                }
+            };
+
+        // Settled balance at the required accumulator version.
+        let settled = match AccumulatorRootValue::load(self, Some(required_version), owner, type_) {
+            Ok(value) => value.and_then(|v| v.as_u128()).unwrap_or(0),
+            Err(e) => return ObjectFundsAvailability::LoadError(e.to_string()),
+        };
+
+        // Discount withdrawals from earlier transactions in this consensus commit that executed
+        // against the same accumulator version but have not yet settled — the settled balance does
+        // not reflect them. Read from the `UnsettledObjectWithdrawals` store, which the authority
+        // records each transaction's object withdrawals into after it executes, and which is
+        // garbage-collected once the accumulator version settles (`commit_effects`).
+        // Same-account withdrawals never execute concurrently,
+        // so this read is stable, and it is reproduced under in-order re-execution — both live and
+        // state-sync execution run the commit's transactions in object-dependency order,
+        // accumulating the same totals.
+        //
+        // TODO: this is not reconstructed for isolated or partial re-execution — `sui-replay`/`-2`
+        // pass no checker (so `unsettled = 0`), which can then diverge from the original execution.
+        // Reconstruct the per-account in-commit withdrawal total from the earlier transactions'
+        // effects.
+        let unsettled = match self.unsettled_object_funds {
+            Some(reader) => {
+                let account = match AccumulatorRootValue::get_field_id(owner, type_) {
+                    Ok(account) => account,
+                    Err(e) => return ObjectFundsAvailability::LoadError(e.to_string()),
+                };
+                reader.get_unsettled_object_withdraw(&account, required_version)
+            }
+            None => 0,
+        };
+        ObjectFundsAvailability::Available(settled.saturating_sub(unsettled))
     }
 }
 

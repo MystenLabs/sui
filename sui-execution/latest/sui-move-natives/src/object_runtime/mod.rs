@@ -19,6 +19,7 @@ use move_core_types::{
     annotated_visitor as AV,
     language_storage::StructTag,
     runtime_value as R,
+    u256::U256,
     vm_status::StatusCode,
 };
 use move_vm_runtime::execution::values::{GlobalValue, Value};
@@ -42,7 +43,7 @@ use sui_types::{
     id::UID,
     metrics::ExecutionMetrics,
     object::{MoveObject, Owner},
-    storage::RuntimeObjectResolver,
+    storage::{ObjectFundsAvailability, ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 use tracing::error;
 
@@ -117,6 +118,26 @@ pub(crate) struct ObjectRuntimeState {
     settlement_output_sui: u64,
     accumulator_merge_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
     accumulator_split_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
+    /// Per-account running balance for the in-execution object-funds sufficiency check. Only
+    /// populated when `check_object_funds_withdraw_in_execution` is enabled.
+    object_funds_available: BTreeMap<(AccountAddress, TypeTag), ObjectFundsAvailable>,
+}
+
+/// Per-account balance tracked during the in-execution object-funds check. `available` is the
+/// amount currently spendable in this transaction: in-transaction deposits minus withdrawals, plus
+/// the settled-minus-unsettled balance from the store once it has been queried (`queried`). Seeded
+/// at zero and only augmented with the store balance on the first withdrawal it cannot cover, so a
+/// withdrawal covered by in-transaction deposits never reads the store (and never triggers a
+/// system-object-availability retry).
+#[derive(Clone, Copy, Default)]
+struct ObjectFundsAvailable {
+    available: U256,
+    queried: bool,
+}
+
+fn object_funds_available_overflow() -> PartialVMError {
+    PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
+        .with_message("object funds available balance overflow".to_string())
 }
 
 #[derive(Tid)]
@@ -207,11 +228,81 @@ impl<'a> ObjectRuntime<'a> {
                 settlement_output_sui: 0,
                 accumulator_merge_totals: BTreeMap::new(),
                 accumulator_split_totals: BTreeMap::new(),
+                object_funds_available: BTreeMap::new(),
             },
             is_metered,
             protocol_config,
             metrics,
         }
+    }
+
+    /// Checks whether `owner` holds at least `amount` of `type_`, tracking the running available
+    /// balance across this transaction's withdrawals and deposits. Only consults the store (the
+    /// temporary store) for the settled balance when the in-transaction balance falls short — so a
+    /// withdrawal covered by earlier in-transaction deposits neither reads the store nor triggers a
+    /// system-object-availability retry.
+    pub fn check_object_funds_sufficiency(
+        &mut self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+        amount: U256,
+    ) -> PartialVMResult<ObjectFundsSufficiency> {
+        let key = (owner.into(), type_.clone());
+        let mut entry = self
+            .state
+            .object_funds_available
+            .get(&key)
+            .copied()
+            .unwrap_or_default();
+        // Only reach out to the store (which does the system-object-availability check) if the
+        // in-transaction balance cannot already cover this withdrawal, and only once per account.
+        if entry.available < amount && !entry.queried {
+            // The single place each availability outcome becomes its error.
+            let settled_available = match self
+                .child_object_store
+                .object_available_balance(owner, type_)
+            {
+                ObjectFundsAvailability::Available(balance) => balance,
+                // The accumulator root has not reached the version this transaction requires on
+                // this node. The temporary store has recorded the retry request; this unwinds the
+                // VM so the authority discards the effects and re-enqueues.
+                // `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` is minted nowhere else; the end of
+                // execution (`debug_check_retry_invariant`) checks that it and the retry request
+                // only appear together.
+                ObjectFundsAvailability::RootNotYetAvailable => {
+                    return Err(PartialVMError::new(
+                        StatusCode::SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY,
+                    )
+                    .with_message(
+                        "accumulator root not yet available at its required version".to_owned(),
+                    ));
+                }
+                ObjectFundsAvailability::RequiredVersionNotAssigned => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(
+                                "accumulator root read without an assigned version".to_owned(),
+                            ),
+                    );
+                }
+                ObjectFundsAvailability::LoadError(msg) => {
+                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(msg));
+                }
+            };
+            entry.available = entry
+                .available
+                .checked_add(U256::from(settled_available))
+                .ok_or_else(object_funds_available_overflow)?;
+            entry.queried = true;
+        }
+        let sufficiency = if entry.available >= amount {
+            entry.available -= amount;
+            ObjectFundsSufficiency::Sufficient
+        } else {
+            ObjectFundsSufficiency::Insufficient
+        };
+        self.state.object_funds_available.insert(key, entry);
+        Ok(sufficiency)
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
@@ -429,6 +520,22 @@ impl<'a> ObjectRuntime<'a> {
                             )));
                     }
                     self.state.accumulator_merge_totals.insert(key, new_total);
+                    // Credit the in-execution funds-check available balance so a later withdrawal
+                    // from the same account can be covered by this deposit without reading the store.
+                    if self
+                        .protocol_config
+                        .check_object_funds_withdraw_in_execution()
+                    {
+                        let entry = self
+                            .state
+                            .object_funds_available
+                            .entry((target_addr, target_ty.clone()))
+                            .or_default();
+                        entry.available = entry
+                            .available
+                            .checked_add(U256::from(amount as u128))
+                            .ok_or_else(object_funds_available_overflow)?;
+                    }
                 }
                 MoveAccumulatorAction::Split => {
                     let current = self
@@ -734,6 +841,7 @@ impl ObjectRuntimeState {
             settlement_output_sui,
             accumulator_merge_totals: _,
             accumulator_split_totals: _,
+            object_funds_available: _,
             total_events_emitted: _,
         } = self;
 
