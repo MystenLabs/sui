@@ -129,7 +129,7 @@ query {
     address
     owner {
       ... on AddressOwner {
-        owner { address }
+        address { address }
       }
       ... on Shared {
         initialSharedVersion
@@ -276,7 +276,7 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 
 ```graphql
 query {
-  multiGetTransactions(digests: ["DIGEST_A", "DIGEST_B"]) {
+  multiGetTransactions(keys: ["DIGEST_A", "DIGEST_B"]) {
     digest
     effects {
       status
@@ -430,7 +430,7 @@ query {
 </Tabs>
 
 **Key differences:**
-- GraphQL supports server-side event filtering by `type`, `module`, `sender`, and `transaction`. No client-side filtering needed.
+- GraphQL supports server-side event filtering by `type`, `module`, `sender`, and checkpoint bounds (`afterCheckpoint`, `beforeCheckpoint`, `atCheckpoint`). No client-side filtering needed.
 - JSON-RPC's `MoveEventType` filter becomes `type` in the GraphQL `EventFilter`.
 - For events from a known transaction, query the transaction directly and select `events`.
 
@@ -897,9 +897,8 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 <TabItem value="graphql" label="GraphQL">
 
 ```graphql
-mutation ($tx: String!, $sigs: [String!]!) {
+mutation ($tx: Base64!, $sigs: [Base64!]!) {
   executeTransaction(transactionDataBcs: $tx, signatures: $sigs) {
-    errors
     effects {
       status
       epoch {
@@ -1221,9 +1220,9 @@ query {
 
 ## Migration gotchas
 
-### No streaming subscriptions
+### Use gRPC for production streaming
 
-GraphQL does not support real-time streaming. For WebSocket-like event subscriptions (`sui_subscribeEvent`, `sui_subscribeTransaction`), use [gRPC `SubscriptionService.SubscribeCheckpoints`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints) instead. For historical event queries, use `Query.events` with an `EventFilter`.
+The GraphQL service has subscription infrastructure but it is not yet generally available for production use. For real-time streaming of events and transactions (`sui_subscribeEvent`, `sui_subscribeTransaction`), use [gRPC `SubscriptionService.SubscribeCheckpoints`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints) today. For historical event queries over a range, use `Query.events` with an `EventFilter`.
 
 ### Pagination uses typed cursors
 
