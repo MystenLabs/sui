@@ -203,17 +203,15 @@ fn dedupe_object_ids(object_ids: &[ObjectID]) -> Vec<ObjectID> {
         .collect()
 }
 
-fn ensure_address_seeding_available(
-    gql: &GraphQLClient,
-    checkpoint: CheckpointSequenceNumber,
-) -> Result<(), Error> {
-    let lowest_available = gql.get_lowest_available_checkpoint_objects()?;
-    if checkpoint < lowest_available {
-        bail!(
-            "address seeding is unavailable at checkpoint {checkpoint}; object ownership enumeration is available starting at checkpoint {lowest_available}. Use --object for older checkpoints.",
-        );
-    }
-    Ok(())
+/// Returns the lowest checkpoint at which the remote can still enumerate
+/// object ownership.
+///
+/// The remote only retains ownership enumeration for a recent window of
+/// checkpoints (`serviceConfig.availableRange` for objects — roughly the last
+/// hour on the hosted GraphQL endpoints). Fork checkpoints below this bound
+/// cannot be address-seeded; genuine query failures surface as errors.
+fn lowest_enumerable_checkpoint(gql: &GraphQLClient) -> Result<CheckpointSequenceNumber, Error> {
+    gql.get_lowest_available_checkpoint_objects()
 }
 
 async fn resolve_address_seed(
@@ -270,11 +268,30 @@ async fn resolve_seeds(
     let checkpoint = store.forked_at_checkpoint();
     let mut entries = BTreeMap::new();
 
-    if !input.addresses.is_empty() {
-        ensure_address_seeding_available(store.gql(), checkpoint)?;
-    }
-
-    let addresses = dedupe_addresses(&input.addresses);
+    // Address seeds are ignored (not fatal) when the fork checkpoint is older
+    // than the remote's ownership-enumeration window: the scan is impossible,
+    // but explicit object seeds still work. The skipped addresses must NOT be
+    // recorded in the manifest — recording them would mark their owner
+    // inventories complete without a scan ever having run.
+    let addresses = if input.addresses.is_empty() {
+        Vec::new()
+    } else {
+        let lowest_available = lowest_enumerable_checkpoint(store.gql())?;
+        if checkpoint < lowest_available {
+            warn!(
+                addresses = ?input.addresses,
+                checkpoint,
+                lowest_available,
+                "ignoring --address seeds: checkpoint {checkpoint} is older than the remote's \
+                 object-ownership window (available from checkpoint {lowest_available}, roughly \
+                 the last hour). If the object IDs are known, seed them directly with --object \
+                 instead.",
+            );
+            Vec::new()
+        } else {
+            dedupe_addresses(&input.addresses)
+        }
+    };
     for address in addresses.iter().copied() {
         let address_entries = resolve_address_seed(store.gql(), address, checkpoint).await?;
         if address_entries.is_empty() {
@@ -579,36 +596,73 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn prepare_seed_manifest_rejects_address_seed_before_object_available_range() {
+    async fn prepare_seed_manifest_skips_address_seed_before_object_available_range() {
+        // Fork checkpoint 11 is below the remote's ownership-enumeration
+        // window (available from 12): address seeds are warned about and
+        // ignored — not fatal — while explicit object seeds still resolve.
         let server = MockServer::start().await;
+        let skipped_address = SuiAddress::random_for_testing_only();
+        let owner = SuiAddress::random_for_testing_only();
+        let object = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(3),
+            Owner::AddressOwner(owner),
+        );
+
         Mock::given(method("POST"))
             .and(path("/"))
+            .and(body_string_contains("availableRange"))
             .respond_with(ResponseTemplate::new(200).set_body_json(available_range_response(12)))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "keys": [{
+                        "address": object.id().to_string(),
+                        "atCheckpoint": 11,
+                    }]
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(object_seed_response_body(
+                    &object,
+                    owner,
+                    "AddressOwner",
+                )),
+            )
             .mount(&server)
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
         let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
-        let err = prepare_seed_manifest(
+        let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![SuiAddress::random_for_testing_only()],
-                object_ids: vec![],
+                addresses: vec![skipped_address],
+                object_ids: vec![object.id()],
             },
         )
         .await
-        .expect_err("address seed should fail before object available range");
+        .expect("out-of-window address seed should be skipped, not fatal");
 
-        assert!(err.to_string().contains("address seeding is unavailable"));
-        assert!(!store.metadata().seed_manifest_exists());
+        // The skipped address is NOT recorded as fully scanned (recording it
+        // would wrongly mark its owner inventory complete), while the object
+        // seed still lands.
+        assert!(manifest.addresses.is_empty());
+        assert_eq!(manifest.entries.len(), 1);
         assert_eq!(
-            server
-                .received_requests()
-                .await
-                .expect("wiremock should record requests")
-                .len(),
-            1,
+            manifest.entries[0].object_ref,
+            object.compute_object_reference()
+        );
+        assert!(
+            !store
+                .metadata()
+                .address_owner_inventory_complete(skipped_address)
+                .unwrap(),
+            "skipped address must not be marked inventory-complete",
         );
     }
 
