@@ -18,11 +18,12 @@ use tracing::info;
 
 pub struct CoinIndexTest;
 
-/// A decoded coin object owned by an address: its ID and current value.
+/// A decoded coin object owned by an address: its ID and current balance in
+/// MIST (the coin's `Coin::value`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct OwnedCoin {
     id: ObjectID,
-    value: u64,
+    balance: u64,
 }
 
 #[async_trait]
@@ -79,14 +80,12 @@ impl TestCaseImpl for CoinIndexTest {
         // The recipient balance change comes from the (already-checkpointed)
         // effects and is authoritative.
         assert!(recipient_change.1 > 0);
-        // NOTE (behavior change): under the current protocol, transferring SUI to
-        // an address credits the recipient's *address balance* accumulator rather
-        // than creating a distinct `Coin<SUI>` object, so the old JSON-RPC
-        // assertion `recipient coin_object_count == 1` no longer holds (the
-        // recipient owns 0 coin objects). We assert on the recipient's balance
-        // instead, which is the meaningful, protocol-accurate check and is served
-        // by `StateService::GetBalance`. The balance may lag the checkpoint by a
-        // moment, so retry until it settles.
+        // Classic `TransferSui` sends the recipient a distinct `Coin<SUI>`
+        // object (address-balance accumulator crediting only applies to
+        // `send_funds`-style transfers), so the legacy assertion holds: the
+        // recipient owns exactly one SUI coin worth the transferred amount.
+        // The index may lag the checkpoint by a moment, so settle on the
+        // balance first, then enumerate the owned coins.
         let recipient_total = Self::balance_until(ctx, recipient, &GAS::type_(), |b| {
             b == recipient_change.1 as u128
         })
@@ -96,6 +95,13 @@ impl TestCaseImpl for CoinIndexTest {
             recipient_change.1
         );
         assert_eq!(recipient_total, recipient_change.1 as u128);
+        let recipient_coins = Self::sui_coins(ctx, recipient).await;
+        assert_eq!(
+            recipient_coins.len(),
+            1,
+            "classic TransferSui must yield exactly one recipient Coin<SUI>"
+        );
+        assert_eq!(recipient_coins[0].balance, recipient_change.1 as u64);
 
         // 3. Publish a new token package MANAGED.
         let (package, cap, envelope) = publish_managed_coin_package(ctx, gas_coin_id).await?;
@@ -120,7 +126,7 @@ impl TestCaseImpl for CoinIndexTest {
 
         let managed_coins = Self::coins_of_type(ctx, account, &managed_type).await;
         assert_eq!(managed_coins.len(), 1); // minted one object
-        assert_eq!(managed_coins[0].value, 10000);
+        assert_eq!(managed_coins[0].balance, 10000);
         assert_eq!(Self::coin_balance(ctx, account, &managed_type).await, 10000);
         // Require the StateService coin-balance index to reflect the freshly
         // published custom coin (verified live: settles at t=0, no lag).
@@ -174,8 +180,12 @@ impl TestCaseImpl for CoinIndexTest {
             "ListBalances(MANAGED) should equal the sum of owned MANAGED coins",
         );
         assert_eq!(managed_coins.len(), 2);
-        let managed_coin_id = managed_coins.iter().find(|c| c.value == 10).unwrap().id;
-        let managed_coin_id_10k = managed_coins.iter().find(|c| c.value == 10000).unwrap().id;
+        let managed_coin_id = managed_coins.iter().find(|c| c.balance == 10).unwrap().id;
+        let managed_coin_id_10k = managed_coins
+            .iter()
+            .find(|c| c.balance == 10000)
+            .unwrap()
+            .id;
 
         // 6. Put the balance-10 MANAGED coin into the envelope (wrap).
         add_to_envelope(ctx, package.0, envelope.0, managed_coin_id, gas_coin_id).await;
@@ -279,7 +289,7 @@ impl TestCaseImpl for CoinIndexTest {
         let sui_balance = Self::sui_balance(ctx, account).await;
         assert_eq!(
             sui_balance,
-            sui_coins.iter().map(|c| c.value as u128).sum::<u128>(),
+            sui_coins.iter().map(|c| c.balance as u128).sum::<u128>(),
             "SUI balance should equal the sum of SUI coin values",
         );
 
@@ -300,7 +310,7 @@ impl TestCaseImpl for CoinIndexTest {
 
         let managed_coins = Self::coins_of_type(ctx, account, &managed_type).await;
         assert_eq!(managed_coins.len(), 40);
-        assert!(managed_coins.iter().all(|c| c.value == 5));
+        assert!(managed_coins.iter().all(|c| c.balance == 5));
 
         // Completeness: all-coins == sui-coins + managed-coins (counts).
         let sui_coins = Self::sui_coins(ctx, account).await;
@@ -376,7 +386,7 @@ impl CoinIndexTest {
         Self::coins_of_type(ctx, owner, coin_type)
             .await
             .iter()
-            .map(|c| c.value)
+            .map(|c| c.balance)
             .sum()
     }
 
@@ -427,13 +437,13 @@ impl CoinIndexTest {
                 .await
                 .unwrap();
             for object in &page.items {
-                let value = sui_types::coin::Coin::extract_balance_if_coin(object)
+                let balance = sui_types::coin::Coin::extract_balance_if_coin(object)
                     .unwrap()
                     .expect("owned object should be a coin")
                     .1;
                 out.push(OwnedCoin {
                     id: object.id(),
-                    value,
+                    balance,
                 });
             }
             token = page.next_page_token;
@@ -493,13 +503,13 @@ impl CoinIndexTest {
                 first_page = false;
             }
             for object in &page.items {
-                let value = sui_types::coin::Coin::extract_balance_if_coin(object)
+                let balance = sui_types::coin::Coin::extract_balance_if_coin(object)
                     .unwrap()
                     .expect("owned object should be a coin")
                     .1;
                 out.push(OwnedCoin {
                     id: object.id(),
-                    value,
+                    balance,
                 });
             }
             token = page.next_page_token;
