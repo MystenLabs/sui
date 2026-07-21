@@ -297,6 +297,22 @@ impl ForkStore {
     }
 
     /// Get the latest object version at or below the given root version.
+    ///
+    /// TODO(fork): this trusts the highest *local* row at or below the bound,
+    /// which is only the true highest-≤-bound if the local history is complete
+    /// below the bound. A sparse cache polluted by an exact-historical-version
+    /// read (e.g. an RPC client fetching an old dynamic-field version) can hold
+    /// a lower live row than the chain's true highest-≤-bound; that stale row
+    /// then wins here without the remote ever being consulted. Reachable from
+    /// `read_child_object` on both the RPC and the executor paths, so it can
+    /// skew execution, not just reads. Candidate fix (undecided): short-circuit
+    /// only on live-state authority (`Live(v)` with `v <= bound`) or on an
+    /// authoritative tombstone; otherwise query the remote `RootVersion(bound)`
+    /// and take the max-version of the remote result and the local candidate.
+    /// Optionally let executor-driven bounds (always the parent's current root
+    /// version, which Lamport-dominates the child) set the live pointer on
+    /// fetch so each child pays the remote round-trip once. Tracked in
+    /// design/storage.md § "Crash consistency and known gaps".
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,
