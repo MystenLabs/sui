@@ -173,6 +173,7 @@ export default {
           items: [
             'develop/accessing-data/grpc/what-is-grpc',
             'develop/accessing-data/grpc/using-grpc',
+            'develop/accessing-data/grpc/grpc-migration-cookbook',
           ],
         },
         {
