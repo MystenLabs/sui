@@ -57,10 +57,10 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::fork_rpc_store::ForkRpcStore;
 use crate::ingestion::SimulacrumIngestion;
 use crate::live_state::LiveState;
-use crate::store::DataStore;
+use crate::local_store::LocalStore;
+use crate::store::ForkStore;
 
 const RPC_STORE_DIR: &str = "rpc_store";
 const FORK_METADATA_FILE: &str = "fork_metadata.json";
@@ -70,7 +70,7 @@ const METRICS_PREFIX: &str = "sui_fork_rpc_store";
 const INDEXED_CHECKPOINT_POLL_INTERVAL: Duration = Duration::from_millis(20);
 const INDEXED_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(30);
 
-type ForkedSimulacrum = Simulacrum<OsRng, DataStore>;
+type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
 
 /// Opened fork runtime state backed by `sui-rpc-store`.
 ///
@@ -81,7 +81,7 @@ pub(crate) struct ForkRuntime {
     schema: Arc<RpcStoreSchema>,
     /// Fork-owned `ObjectID -> current live version` pointer table, kept in its
     /// own store beside the rpc-store; stock `sui-rpc-store` has no `ObjectID`-keyed
-    /// current-version pointer. See [`crate::live_state`] and [`ForkRpcStore`].
+    /// current-version pointer. See [`crate::live_state`] and [`LocalStore`].
     live_state: Arc<LiveState>,
     metadata: ForkMetadata,
     indexer_pipelines: Vec<&'static str>,
@@ -244,8 +244,8 @@ impl ForkRuntime {
         RpcStoreReader::new(self.db.clone(), self.schema.clone())
     }
 
-    pub(crate) fn fork_rpc_store(&self) -> ForkRpcStore {
-        ForkRpcStore::new(
+    pub(crate) fn local_store(&self) -> LocalStore {
+        LocalStore::new(
             self.db.clone(),
             self.schema.clone(),
             self.live_state.clone(),

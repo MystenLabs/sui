@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Transaction fallback tests for [`crate::store::DataStore`]. Covers the local-hit
+//! Transaction fallback tests for [`crate::store::ForkStore`]. Covers the local-hit
 //! path and the remote-fallback pre-fork guard. Wired in from `store.rs` via a
 //! `#[path]` module so it has `super::*` access to `pub(crate)` items.
 
@@ -138,9 +138,9 @@ fn open_test_runtime(root: &Path, forked_at_checkpoint: CheckpointSequenceNumber
     .expect("fork runtime should open")
 }
 
-fn test_data_store(root: &Path) -> (DataStore, ForkRuntime) {
+fn test_data_store(root: &Path) -> (ForkStore, ForkRuntime) {
     let runtime = open_test_runtime(root, 0);
-    let store = DataStore::new_for_testing(root.to_path_buf(), runtime.fork_rpc_store());
+    let store = ForkStore::new_for_testing(root.to_path_buf(), runtime.local_store());
     (store, runtime)
 }
 
@@ -148,13 +148,13 @@ fn test_data_store_with_remote(
     root: &Path,
     gql_url: String,
     forked_at_checkpoint: CheckpointSequenceNumber,
-) -> (DataStore, ForkRuntime) {
+) -> (ForkStore, ForkRuntime) {
     let runtime = open_test_runtime(root, forked_at_checkpoint);
-    let store = DataStore::new_for_testing_with_remote(
+    let store = ForkStore::new_for_testing_with_remote(
         root.to_path_buf(),
         gql_url,
         forked_at_checkpoint,
-        runtime.fork_rpc_store(),
+        runtime.local_store(),
     );
     (store, runtime)
 }
@@ -271,11 +271,11 @@ async fn rpc_store_hit_returns_transaction_without_remote() {
 
     // Pre-populate rpc-store; the fake GraphQL URL in `new_for_testing`
     // would fail if the remote path were reached.
-    let rpc_store = runtime.fork_rpc_store();
-    rpc_store
+    let local_store = runtime.local_store();
+    local_store
         .save_checkpoint(&checkpoint, &contents)
         .expect("checkpoint should be saved");
-    rpc_store
+    local_store
         .save_transaction(
             &checkpoint,
             &contents,
@@ -285,12 +285,12 @@ async fn rpc_store_hit_returns_transaction_without_remote() {
         )
         .expect("transaction should be saved");
 
-    let got = DataStore::get_transaction(&store, &digest)
+    let got = ForkStore::get_transaction(&store, &digest)
         .expect("local hit should not error")
         .expect("transaction should be saved");
     assert_eq!(*got.digest(), digest);
 
-    let got_effects = DataStore::get_transaction_effects(&store, &digest)
+    let got_effects = ForkStore::get_transaction_effects(&store, &digest)
         .expect("local hit should not error")
         .expect("effects should be saved");
     assert_eq!(got_effects, executed.effects);
@@ -316,7 +316,7 @@ async fn remote_fallback_saves_pre_fork_transaction_in_rpc_store() {
     let temp = tempfile::tempdir().expect("tempdir");
     let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), 10);
 
-    let got = DataStore::get_transaction(&store, &digest)
+    let got = ForkStore::get_transaction(&store, &digest)
         .expect("remote fetch should succeed")
         .expect("transaction should be fetched");
     assert_eq!(*got.digest(), digest);
@@ -337,23 +337,23 @@ async fn remote_fallback_saves_pre_fork_transaction_in_rpc_store() {
     );
 
     let fallback_temp = tempfile::tempdir().expect("tempdir");
-    let fallback_store = DataStore::new_for_testing_with_remote(
+    let fallback_store = ForkStore::new_for_testing_with_remote(
         fallback_temp.path().to_path_buf(),
         "http://localhost:1".to_owned(),
         store.forked_at_checkpoint(),
-        runtime.fork_rpc_store(),
+        runtime.local_store(),
     );
 
-    let fallback_tx = DataStore::get_transaction(&fallback_store, &digest)
+    let fallback_tx = ForkStore::get_transaction(&fallback_store, &digest)
         .expect("rpc-store transaction lookup should succeed")
         .expect("transaction should be read from rpc store");
     assert_eq!(*fallback_tx.digest(), digest);
-    let fallback_effects = DataStore::get_transaction_effects(&fallback_store, &digest)
+    let fallback_effects = ForkStore::get_transaction_effects(&fallback_store, &digest)
         .expect("rpc-store effects lookup should succeed")
         .expect("effects should be read from rpc store");
     assert_eq!(fallback_effects, executed.effects);
     assert_eq!(
-        DataStore::get_transaction_checkpoint(&fallback_store, &digest)
+        ForkStore::get_transaction_checkpoint(&fallback_store, &digest)
             .expect("rpc-store checkpoint lookup should succeed"),
         Some(checkpoint.data().sequence_number),
     );
@@ -385,7 +385,7 @@ async fn remote_fallback_errors_when_required_events_fail_to_fetch() {
     let temp = tempfile::tempdir().expect("tempdir");
     let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), 10);
 
-    let err = DataStore::get_transaction(&store, &digest)
+    let err = ForkStore::get_transaction(&store, &digest)
         .expect_err("required event fetch failure should fail transaction save");
     assert!(
         err.to_string()
@@ -418,7 +418,7 @@ async fn remote_fallback_rejects_post_fork_transaction() {
     let temp = tempfile::tempdir().expect("tempdir");
     let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 10);
 
-    let got = DataStore::get_transaction(&store, &digest)
+    let got = ForkStore::get_transaction(&store, &digest)
         .expect("remote fetch should not error on post-fork digest");
     assert!(got.is_none(), "post-fork transaction must not be returned");
 }

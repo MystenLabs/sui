@@ -23,7 +23,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::DataStore;
+use crate::ForkStore;
 use crate::gql::AddressOwnedObject;
 use crate::gql::GraphQLClient;
 use crate::gql::ObjectSeedMetadata;
@@ -130,28 +130,28 @@ pub(crate) fn ensure_seed_manifest_matches(
 
 /// Load or create the seed manifest for the current fork directory.
 pub(crate) async fn prepare_seed_manifest(
-    data_store: &DataStore,
+    store: &ForkStore,
     network: String,
     input: &SeedInput,
 ) -> Result<SeedManifest, Error> {
-    if data_store.metadata().seed_manifest_exists() {
+    if store.metadata().seed_manifest_exists() {
         if !input.is_empty() {
             bail!(
                 "A seed manifest already exists at {}. To fork the same checkpoint with different seeds, use a different --data-dir.",
-                data_store.metadata().seed_manifest_path().display(),
+                store.metadata().seed_manifest_path().display(),
             );
         }
-        let manifest = data_store.metadata().read_seed_manifest()?;
-        ensure_seed_manifest_matches(&manifest, &network, Some(data_store.forked_at_checkpoint()))?;
+        let manifest = store.metadata().read_seed_manifest()?;
+        ensure_seed_manifest_matches(&manifest, &network, Some(store.forked_at_checkpoint()))?;
         return Ok(manifest);
     }
 
     let manifest = if input.is_empty() {
-        SeedManifest::empty(network, data_store.forked_at_checkpoint())
+        SeedManifest::empty(network, store.forked_at_checkpoint())
     } else {
-        resolve_seeds(input, network, data_store).await?
+        resolve_seeds(input, network, store).await?
     };
-    data_store.metadata().write_seed_manifest(&manifest)?;
+    store.metadata().write_seed_manifest(&manifest)?;
     Ok(manifest)
 }
 
@@ -167,7 +167,7 @@ pub(crate) async fn prepare_seed_manifest(
 /// initialization. Explicit object-id seeds never mark their owners: they are
 /// not a complete scan.
 pub(crate) fn save_seed_manifest_objects(
-    data_store: &DataStore,
+    store: &ForkStore,
     manifest: &SeedManifest,
 ) -> Result<(), Error> {
     let object_refs: Vec<_> = manifest
@@ -175,10 +175,10 @@ pub(crate) fn save_seed_manifest_objects(
         .iter()
         .map(|entry| entry.object_ref)
         .collect();
-    data_store.save_address_owned_seed_objects(&object_refs)?;
+    store.save_address_owned_seed_objects(&object_refs)?;
 
     for address in &manifest.addresses {
-        data_store
+        store
             .metadata()
             .mark_address_owner_inventory_complete(*address)?;
     }
@@ -265,18 +265,18 @@ async fn resolve_object_seeds(
 async fn resolve_seeds(
     input: &SeedInput,
     network: String,
-    data_store: &DataStore,
+    store: &ForkStore,
 ) -> Result<SeedManifest, Error> {
-    let checkpoint = data_store.forked_at_checkpoint();
+    let checkpoint = store.forked_at_checkpoint();
     let mut entries = BTreeMap::new();
 
     if !input.addresses.is_empty() {
-        ensure_address_seeding_available(data_store.gql(), checkpoint)?;
+        ensure_address_seeding_available(store.gql(), checkpoint)?;
     }
 
     let addresses = dedupe_addresses(&input.addresses);
     for address in addresses.iter().copied() {
-        let address_entries = resolve_address_seed(data_store.gql(), address, checkpoint).await?;
+        let address_entries = resolve_address_seed(store.gql(), address, checkpoint).await?;
         if address_entries.is_empty() {
             warn!(%address, checkpoint, "address seed resolved no owned objects");
         }
@@ -289,7 +289,7 @@ async fn resolve_seeds(
         .into_iter()
         .filter(|object_id| !entries.contains_key(object_id))
         .collect();
-    for entry in resolve_object_seeds(data_store.gql(), checkpoint, &remaining_object_ids).await? {
+    for entry in resolve_object_seeds(store.gql(), checkpoint, &remaining_object_ids).await? {
         entries.insert(entry.object_ref.0, entry);
     }
 
@@ -326,7 +326,7 @@ mod tests {
         root: &Path,
         gql_url: String,
         forked_at_checkpoint: CheckpointSequenceNumber,
-    ) -> (DataStore, ForkRuntime) {
+    ) -> (ForkStore, ForkRuntime) {
         let runtime = ForkRuntime::open(
             root,
             "custom".to_owned(),
@@ -334,11 +334,11 @@ mod tests {
             CheckpointDigest::new([9; 32]).into(),
         )
         .expect("fork runtime should open");
-        let store = DataStore::new_for_testing_with_remote(
+        let store = ForkStore::new_for_testing_with_remote(
             root.to_path_buf(),
             gql_url,
             forked_at_checkpoint,
-            runtime.fork_rpc_store(),
+            runtime.local_store(),
         );
         (store, runtime)
     }
@@ -734,7 +734,10 @@ mod tests {
             SequenceNumber::from_u64(3),
             Owner::AddressOwner(owner),
         );
-        store.rpc_store().save_object_version_only(&object).unwrap();
+        store
+            .local_store()
+            .save_object_version_only(&object)
+            .unwrap();
 
         let manifest = SeedManifest {
             network: "custom".to_owned(),

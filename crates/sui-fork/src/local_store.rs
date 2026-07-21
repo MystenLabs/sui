@@ -59,7 +59,7 @@ use crate::live_state::LiveState;
 /// `sui-rpc-store` rows in the shapes needed by fork-specific reads and local
 /// execution.
 #[derive(Clone)]
-pub(crate) struct ForkRpcStore {
+pub(crate) struct LocalStore {
     db: Db,
     schema: Arc<RpcStoreSchema>,
     reader: RpcStoreReader,
@@ -85,7 +85,7 @@ pub(crate) struct ObjectRemoval {
     pub(crate) kind: TombstoneKind,
 }
 
-impl ForkRpcStore {
+impl LocalStore {
     /// Creates a fork store handle over an already-open `sui-rpc-store` DB and
     /// schema, plus the fork-owned live-state pointer table.
     pub(crate) fn new(db: Db, schema: Arc<RpcStoreSchema>, live_state: Arc<LiveState>) -> Self {
@@ -727,16 +727,16 @@ mod tests {
 
     use super::*;
 
-    fn fresh_store() -> (tempfile::TempDir, ForkRpcStore) {
+    fn fresh_store() -> (tempfile::TempDir, LocalStore) {
         let dir = tempfile::tempdir().unwrap();
         let store = reopen_store(&dir);
         (dir, store)
     }
 
-    fn reopen_store(dir: &tempfile::TempDir) -> ForkRpcStore {
+    fn reopen_store(dir: &tempfile::TempDir) -> LocalStore {
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
         let live_state = Arc::new(LiveState::open(dir.path()).unwrap());
-        ForkRpcStore::new(db, Arc::new(schema), live_state)
+        LocalStore::new(db, Arc::new(schema), live_state)
     }
 
     fn make_object(id: ObjectID, version: u64, owner: Owner) -> Object {
