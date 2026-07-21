@@ -9,7 +9,7 @@ use anyhow::Context;
 use anyhow::anyhow;
 use futures::Stream;
 use futures::TryStreamExt;
-use futures::future::try_join_all;
+use futures::future::join_all;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
@@ -33,6 +33,18 @@ use crate::metrics::CohortMetrics;
 /// checkpoints ahead of where ingestion currently is, skip streaming and let the ingestion
 /// path catch up first.
 const STREAMING_CATCHUP_THRESHOLD: u64 = 1_000;
+
+/// Outcome of a streaming task, distinguishing why it stopped so the main loop knows whether to
+/// keep going (falling back to ingestion to fill any gap) or shut down entirely.
+enum StreamOutcome {
+    /// Streaming stopped at this watermark (error, gap, disconnect, or range complete). The
+    /// caller should retry, falling back to ingestion starting here.
+    Continue(u64),
+    /// A subscriber's channel was closed after every checkpoint up to (but excluding) this
+    /// watermark was delivered to every subscriber that was still open. The broadcaster should
+    /// shut down, matching the ingestion side's handling of a closed subscriber.
+    Closed(u64),
+}
 
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
 /// via either streaming or ingesting, or both.
@@ -138,9 +150,18 @@ where
                 }
             }
 
-            // Update checkpoint_hi from streaming, or shutdown on error
+            // Update checkpoint_hi from streaming, or shutdown on error or a closed subscriber.
             checkpoint_hi =
-                streaming_result.context("Streaming task panicked, stopping broadcaster")?;
+                match streaming_result.context("Streaming task panicked, stopping broadcaster")? {
+                    StreamOutcome::Continue(checkpoint_hi) => checkpoint_hi,
+                    StreamOutcome::Closed(checkpoint_hi) => {
+                        info!(
+                            checkpoint_hi,
+                            "A subscriber's channel closed, stopping broadcaster"
+                        );
+                        break;
+                    }
+                };
 
             info!(
                 checkpoint_hi,
@@ -201,7 +222,7 @@ async fn setup_streaming_task(
     config: &IngestionConfig,
     subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
     cohort_metrics: &Arc<CohortMetrics>,
-) -> (TaskGuard<u64>, u64) {
+) -> (TaskGuard<StreamOutcome>, u64) {
     // No streaming client configured so we ingest all the way to end_cp.
     let Some(streaming_client) = streaming_client else {
         return (noop_streaming_task(end_cp), end_cp);
@@ -286,14 +307,16 @@ async fn setup_streaming_task(
 /// `mpsc::Sender::send` honors that subscriber's channel capacity, so a slow consumer
 /// naturally stalls the streaming side. If we encounter any streaming error or out-of-order
 /// checkpoint greater than the current `lo`, we stop streaming and return `lo` so the main
-/// loop can reconnect and fill in the gap using ingestion.
+/// loop can reconnect and fill in the gap using ingestion. If a subscriber's channel is closed,
+/// we stop streaming and signal the main loop to shut down, rather than falling back to
+/// ingestion, which would just re-deliver this checkpoint to the subscribers that already got it.
 async fn stream_and_broadcast_range(
     mut lo: u64,
     hi: u64,
     mut stream: impl Stream<Item = Result<CheckpointEnvelope, Error>> + Unpin,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     cohort_metrics: Arc<CohortMetrics>,
-) -> u64 {
+) -> StreamOutcome {
     let latest_streamed = cohort_metrics.latest_streamed_checkpoint.clone();
     let latest_skipped = cohort_metrics.latest_skipped_streamed_checkpoint.clone();
     let skipped_streamed = cohort_metrics.total_skipped_streamed_checkpoints.clone();
@@ -302,6 +325,7 @@ async fn stream_and_broadcast_range(
         .clone();
     let streamed = cohort_metrics.total_streamed_checkpoints.clone();
     let stream_disconnections = cohort_metrics.total_stream_disconnections.clone();
+    let mut closed = false;
     while lo < hi {
         let Some(item) = stream.next().await else {
             warn!(lo, "Streaming ended unexpectedly");
@@ -337,40 +361,55 @@ async fn stream_and_broadcast_range(
 
         assert_eq!(sequence_number, lo);
 
-        if send_checkpoint(Arc::new(checkpoint_envelope), &subscribers)
-            .await
-            .is_err()
-        {
-            break;
-        }
+        // Deliver to every subscriber, waiting for all sends to finish so a subscriber with a
+        // closed channel can't prevent the checkpoint reaching the subscribers still listening.
+        let all_delivered = send_checkpoint(Arc::new(checkpoint_envelope), &subscribers).await;
 
         debug!(checkpoint = lo, "Streamed checkpoint");
         streamed.inc();
         latest_streamed.set(lo as i64);
         lo += 1;
+
+        if all_delivered.is_err() {
+            closed = true;
+            break;
+        }
     }
 
     // We exit the loop either due to cancellation, error or completion of the range,
     // in all cases we disconnect the stream and return the current watermark.
     stream_disconnections.inc();
-    lo
+    if closed {
+        StreamOutcome::Closed(lo)
+    } else {
+        StreamOutcome::Continue(lo)
+    }
 }
 
 // A noop streaming task that just returns the provided checkpoint_hi, used to simplify
 // join logic when streaming is not used.
-fn noop_streaming_task(checkpoint_hi: u64) -> TaskGuard<u64> {
-    TaskGuard::new(tokio::spawn(async move { checkpoint_hi }))
+fn noop_streaming_task(checkpoint_hi: u64) -> TaskGuard<StreamOutcome> {
+    TaskGuard::new(tokio::spawn(async move {
+        StreamOutcome::Continue(checkpoint_hi)
+    }))
 }
 
-/// Send a checkpoint to all subscribers. Returns an error if any subscriber's channel is closed.
+/// Send a checkpoint to all subscribers, waiting for every send to finish regardless of whether
+/// an earlier one failed. This is important: a short-circuiting join would leave subscribers
+/// later in the list un-sent-to when an earlier one's channel is closed, and could silently drop
+/// checkpoints for them. Returns an error if any subscriber's channel was closed.
 async fn send_checkpoint(
     checkpoint_envelope: Arc<CheckpointEnvelope>,
     subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
-) -> Result<Vec<()>, mpsc::error::SendError<Arc<CheckpointEnvelope>>> {
-    let futures = subscribers
+) -> Result<(), ()> {
+    let sends = subscribers
         .iter()
         .map(|s| s.send(checkpoint_envelope.clone()));
-    try_join_all(futures).await
+    if join_all(sends).await.into_iter().any(|r| r.is_err()) {
+        Err(())
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1422,5 +1461,68 @@ mod tests {
         );
 
         svc.join().await.unwrap();
+    }
+
+    // =============== Part 5: Multiple subscribers, one closes mid-stream ==================
+
+    #[tokio::test]
+    async fn streaming_closed_subscriber_stops_without_duplicate_delivery() {
+        // Regression test: when one of several subscribers closes mid-stream, every checkpoint
+        // already delivered must reach each subscriber that's still open exactly once - not
+        // skipped (if a short-circuiting send skips subscribers positioned after the closed one
+        // in the list) and not duplicated (if the broadcaster falls back to ingestion and
+        // re-delivers a checkpoint that already went out to the survivors). Capacity 1 on each
+        // subscriber lets the test pace streaming one checkpoint at a time. B sits between A and
+        // C in the subscriber list, so this exercises both directions.
+        let (tx_a, rx_a) = mpsc::channel(1);
+        let (tx_b, rx_b) = mpsc::channel(1);
+        let (tx_c, rx_c) = mpsc::channel(1);
+        let mut rx_a = tokio_stream::wrappers::ReceiverStream::new(rx_a);
+        let mut rx_b = tokio_stream::wrappers::ReceiverStream::new(rx_b);
+        let mut rx_c = tokio_stream::wrappers::ReceiverStream::new(rx_c);
+
+        // Streaming starts at checkpoint 0 (matching checkpoint_hi), so ingestion's range is
+        // empty and only the streaming path is exercised.
+        let streaming_client = MockStreamingClient::new(0..10, None);
+        let metrics = test_ingestion_metrics();
+        let mut svc = broadcaster(
+            0..10,
+            Some(Arc::new(streaming_client)),
+            test_config(),
+            mock_client_with_range(0..10, metrics.clone()),
+            vec![tx_a, tx_b, tx_c],
+        );
+
+        // Drain checkpoints 0 and 1 from every subscriber, pacing streaming one checkpoint at a
+        // time. Checkpoint 2 is now fully delivered and buffered in all three.
+        for expected in 0..2u64 {
+            assert_eq!(recv_vec(&mut rx_a, 1).await, vec![expected]);
+            assert_eq!(recv_vec(&mut rx_b, 1).await, vec![expected]);
+            assert_eq!(recv_vec(&mut rx_c, 1).await, vec![expected]);
+        }
+
+        // Drain checkpoint 2 from A and C only, then close B while checkpoint 3 is about to be
+        // attempted.
+        assert_eq!(recv_vec(&mut rx_a, 1).await, vec![2]);
+        assert_eq!(recv_vec(&mut rx_c, 1).await, vec![2]);
+        drop(rx_b);
+
+        // Checkpoint 3 should still reach A and C - not be skipped because B (earlier in the
+        // subscriber list) is closed - and the broadcaster should then shut down rather than
+        // retrying via ingestion, which would re-deliver checkpoints 0-3 a second time.
+        assert_eq!(recv_vec(&mut rx_a, 1).await, vec![3]);
+        assert_eq!(recv_vec(&mut rx_c, 1).await, vec![3]);
+
+        timeout(Duration::from_secs(2), svc.join())
+            .await
+            .expect("broadcaster should stop after a subscriber closes")
+            .unwrap();
+
+        // No further checkpoints should ever arrive - confirms the broadcaster didn't fall back
+        // to ingestion and re-send checkpoints 0-3 to the survivors.
+        assert!(
+            rx_a.next().await.is_none(),
+            "subscriber A received an unexpected extra checkpoint after shutdown"
+        );
     }
 }
