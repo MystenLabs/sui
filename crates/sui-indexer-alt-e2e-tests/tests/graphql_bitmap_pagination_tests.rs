@@ -7,6 +7,7 @@ use std::time::Duration;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
+use move_core_types::identifier::Identifier;
 use serde_json::Value;
 use serde_json::json;
 use sui_framework::BuiltInFramework;
@@ -22,6 +23,9 @@ use sui_indexer_alt_schema::epochs::StoredEpochStart;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::event::Event;
+use sui_types::parse_sui_struct_tag;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::mock;
 use sui_types::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
@@ -299,6 +303,71 @@ fn restamp_cursor_checkpoint(cursor: &str, checkpoint: u64) -> String {
         }
         .encode(),
     )
+}
+
+fn test_event(package: ObjectID, module: &str, sender: SuiAddress, type_str: &str) -> Event {
+    Event::new(
+        &package,
+        &Identifier::new(module).expect("valid module name"),
+        sender,
+        parse_sui_struct_tag(type_str).expect("valid struct tag"),
+        vec![],
+    )
+}
+
+async fn events_page(
+    cluster: &OffchainCluster,
+    filter: &Value,
+    first: Option<usize>,
+    after: Option<String>,
+    last: Option<usize>,
+    before: Option<String>,
+) -> (Vec<(String, String, u64)>, Value) {
+    let query = r#"query($filter: EventFilter, $first: Int, $after: String, $last: Int, $before: String) {
+        events(filter: $filter, first: $first, after: $after, last: $last, before: $before) {
+            edges { cursor node { sequenceNumber transaction { digest } } }
+            pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
+        }
+    }"#;
+
+    let resp = graphql(
+        cluster,
+        query,
+        json!({ "filter": filter, "first": first, "after": after, "last": last, "before": before }),
+    )
+    .await;
+
+    let edges = resp
+        .pointer("/events/edges")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("expected edges array in {resp}"));
+    let page = edges
+        .iter()
+        .map(|e| {
+            (
+                e["cursor"].as_str().expect("edge cursor").to_string(),
+                e["node"]["transaction"]["digest"]
+                    .as_str()
+                    .expect("edge node transaction digest")
+                    .to_string(),
+                e["node"]["sequenceNumber"]
+                    .as_u64()
+                    .expect("edge node sequenceNumber"),
+            )
+        })
+        .collect();
+    let page_info = resp
+        .pointer("/events/pageInfo")
+        .cloned()
+        .unwrap_or_else(|| panic!("expected pageInfo in {resp}"));
+
+    (page, page_info)
+}
+
+/// All `(digest, sequenceNumber)` positions matching `filter`, in one big forward page.
+async fn all_event_positions(cluster: &OffchainCluster, filter: &Value) -> Vec<(String, u64)> {
+    let (page, _) = events_page(cluster, filter, Some(50), None, None, None).await;
+    page.into_iter().map(|(_, d, s)| (d, s)).collect()
 }
 
 #[tokio::test]
@@ -981,5 +1050,295 @@ async fn test_sent_address_and_system_kind() {
     assert!(
         digests.is_empty(),
         "contradictory Include(Sender=Alice) AND Include(Sender=0x0) must return empty, got {digests:?}"
+    );
+}
+
+#[tokio::test]
+async fn events_cursor_round_trips_across_pages() {
+    // cp 1 has three transactions: Alice emits 3 events in tx 0 and 2 events in tx 2; Bob emits 1
+    // event in tx 1. Filtering by sender = Alice must recover exactly Alice's five events in
+    // (tx, event index) order, paginating forwards and backwards with page size 2 — exercising
+    // resume from a mid-transaction cursor (the event-index coordinate) in both directions.
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let bob = TestCheckpointBuilder::derive_address(2);
+    let pkg = ObjectID::from_single_byte(0x42);
+
+    let ev = |sender| test_event(pkg, "m", sender, "0x42::m::T");
+    let checkpoint = TestCheckpointBuilder::new(1)
+        .with_network_total_transactions(1)
+        .start_transaction(1)
+        .with_events(vec![ev(alice), ev(alice), ev(alice)])
+        .create_owned_object(0)
+        .finish_transaction()
+        .start_transaction(2)
+        .with_events(vec![ev(bob)])
+        .create_owned_object(1)
+        .finish_transaction()
+        .start_transaction(1)
+        .with_events(vec![ev(alice), ev(alice)])
+        .create_owned_object(2)
+        .finish_transaction()
+        .build_checkpoint();
+
+    let digest = |i: usize| Base58::encode(checkpoint.transactions[i].transaction.digest());
+    let expected: Vec<(String, u64)> = vec![
+        (digest(0), 0),
+        (digest(0), 1),
+        (digest(0), 2),
+        (digest(2), 0),
+        (digest(2), 1),
+    ];
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    let filter = json!({ "sender": alice.to_string() });
+
+    // ----- Forward pagination -----
+    let mut forward = Vec::new();
+    let mut after: Option<String> = None;
+    loop {
+        let (page, page_info) =
+            events_page(&cluster, &filter, Some(2), after.clone(), None, None).await;
+        forward.extend(page.into_iter().map(|(_, d, s)| (d, s)));
+        if !page_info["hasNextPage"].as_bool().unwrap_or(false) {
+            break;
+        }
+        after = page_info["endCursor"].as_str().map(String::from);
+        assert!(after.is_some(), "hasNextPage implies endCursor");
+    }
+    assert_eq!(forward, expected);
+
+    // ----- Backward pagination -----
+    // Pages arrive latest-first with edges ascending within each page; reverse the page order so
+    // flattening yields ascending order.
+    let mut pages = Vec::new();
+    let mut before: Option<String> = None;
+    loop {
+        let (page, page_info) =
+            events_page(&cluster, &filter, None, None, Some(2), before.clone()).await;
+        let positions: Vec<_> = page.into_iter().map(|(_, d, s)| (d, s)).collect();
+        if !positions.is_empty() {
+            pages.push(positions);
+        }
+        if !page_info["hasPreviousPage"].as_bool().unwrap_or(false) {
+            break;
+        }
+        before = page_info["startCursor"].as_str().map(String::from);
+        assert!(before.is_some(), "hasPreviousPage implies startCursor");
+    }
+    let backward: Vec<(String, u64)> = pages.into_iter().rev().flatten().collect();
+    assert_eq!(backward, expected);
+}
+
+/// Three single-event transactions emitting from 0x42::m, 0x42::n, and 0x43::m: the package-level
+/// filter must select the two 0x42 events, and the module-level filter exactly one.
+#[tokio::test]
+async fn test_events_module() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+
+    let checkpoint = TestCheckpointBuilder::new(1)
+        .with_network_total_transactions(1)
+        .start_transaction(1)
+        .with_events(vec![test_event(
+            ObjectID::from_single_byte(0x42),
+            "m",
+            alice,
+            "0x42::m::T",
+        )])
+        .create_owned_object(0)
+        .finish_transaction()
+        .start_transaction(1)
+        .with_events(vec![test_event(
+            ObjectID::from_single_byte(0x42),
+            "n",
+            alice,
+            "0x42::n::T",
+        )])
+        .create_owned_object(1)
+        .finish_transaction()
+        .start_transaction(1)
+        .with_events(vec![test_event(
+            ObjectID::from_single_byte(0x43),
+            "m",
+            alice,
+            "0x43::m::T",
+        )])
+        .create_owned_object(2)
+        .finish_transaction()
+        .build_checkpoint();
+
+    let digest = |i: usize| Base58::encode(checkpoint.transactions[i].transaction.digest());
+    let (in_m, in_n, other_pkg) = (digest(0), digest(1), digest(2));
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    let by_package = all_event_positions(&cluster, &json!({ "module": "0x42" })).await;
+    assert_eq!(by_package, vec![(in_m.clone(), 0), (in_n, 0)]);
+
+    let by_module = all_event_positions(&cluster, &json!({ "module": "0x42::m" })).await;
+    assert_eq!(by_module, vec![(in_m, 0)]);
+
+    let other = all_event_positions(&cluster, &json!({ "module": "0x43" })).await;
+    assert_eq!(other, vec![(other_pkg, 0)]);
+}
+
+/// Test predicate matching at every specificity level.
+#[tokio::test]
+async fn test_events_type() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let pkg = ObjectID::from_single_byte(0x42);
+
+    let types = [
+        "0x42::m::T",
+        "0x42::m::U",
+        "0x42::m::T<0x2::sui::SUI>",
+        "0x42::n::T",
+        "0x43::m::T",
+    ];
+    let mut builder = TestCheckpointBuilder::new(1).with_network_total_transactions(1);
+    for (i, type_str) in types.iter().enumerate() {
+        builder = builder
+            .start_transaction(1)
+            .with_events(vec![test_event(pkg, "m", alice, type_str)])
+            .create_owned_object(i as u64)
+            .finish_transaction();
+    }
+    let checkpoint = builder.build_checkpoint();
+
+    let digest = |i: usize| Base58::encode(checkpoint.transactions[i].transaction.digest());
+    let digests: Vec<String> = (0..types.len()).map(digest).collect();
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    let positions = |idxs: &[usize]| -> Vec<(String, u64)> {
+        idxs.iter().map(|&i| (digests[i].clone(), 0)).collect()
+    };
+
+    // Address level: everything whose type is defined at 0x42.
+    let by_address = all_event_positions(&cluster, &json!({ "type": "0x42" })).await;
+    assert_eq!(by_address, positions(&[0, 1, 2, 3]));
+
+    // Module level.
+    let by_module = all_event_positions(&cluster, &json!({ "type": "0x42::m" })).await;
+    assert_eq!(by_module, positions(&[0, 1, 2]));
+
+    // Name level matches any instantiation.
+    let by_name = all_event_positions(&cluster, &json!({ "type": "0x42::m::T" })).await;
+    assert_eq!(by_name, positions(&[0, 2]));
+
+    // Exact generic instantiation.
+    let by_instantiation =
+        all_event_positions(&cluster, &json!({ "type": "0x42::m::T<0x2::sui::SUI>" })).await;
+    assert_eq!(by_instantiation, positions(&[2]));
+}
+
+#[tokio::test]
+async fn test_events_sender_joins_module_and_type() {
+    // Proves `sender` combines with `module` / `type` as an AND within a single term. Alice and
+    // Bob both emit the same event shape; Alice also emits from a second package. Joining sender
+    // with either predicate must select only the intersection.
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let bob = TestCheckpointBuilder::derive_address(2);
+
+    let checkpoint = TestCheckpointBuilder::new(1)
+        .with_network_total_transactions(1)
+        .start_transaction(1)
+        .with_events(vec![test_event(
+            ObjectID::from_single_byte(0x42),
+            "m",
+            alice,
+            "0x42::m::T",
+        )])
+        .create_owned_object(0)
+        .finish_transaction()
+        .start_transaction(2)
+        .with_events(vec![test_event(
+            ObjectID::from_single_byte(0x42),
+            "m",
+            bob,
+            "0x42::m::T",
+        )])
+        .create_owned_object(1)
+        .finish_transaction()
+        .start_transaction(1)
+        .with_events(vec![test_event(
+            ObjectID::from_single_byte(0x43),
+            "n",
+            alice,
+            "0x43::n::U",
+        )])
+        .create_owned_object(2)
+        .finish_transaction()
+        .build_checkpoint();
+
+    let digest = |i: usize| Base58::encode(checkpoint.transactions[i].transaction.digest());
+    let alice_in_m = digest(0);
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    let sender_and_module = all_event_positions(
+        &cluster,
+        &json!({ "sender": alice.to_string(), "module": "0x42::m" }),
+    )
+    .await;
+    assert_eq!(sender_and_module, vec![(alice_in_m.clone(), 0)]);
+
+    let sender_and_type = all_event_positions(
+        &cluster,
+        &json!({ "sender": alice.to_string(), "type": "0x42::m::T" }),
+    )
+    .await;
+    assert_eq!(sender_and_type, vec![(alice_in_m, 0)]);
+
+    // Contradictory join: Bob never emitted from 0x43.
+    let empty = all_event_positions(
+        &cluster,
+        &json!({ "sender": bob.to_string(), "type": "0x43::n::U" }),
+    )
+    .await;
+    assert!(empty.is_empty(), "expected no matches, got {empty:?}");
+}
+
+#[tokio::test]
+async fn test_events_module_and_type_rejected() {
+    // Parity with the Postgres path: combining `module` and `type` is rejected as a feature
+    // unavailable error rather than served as a (supported) bitmap conjunction.
+    let (cluster, _temp_dir) = alpha_cluster().await;
+    cluster
+        .wait_for_graphql(0, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 0");
+
+    let query = r#"query($filter: EventFilter) {
+        events(first: 10, filter: $filter) {
+            edges { node { sequenceNumber } }
+        }
+    }"#;
+    let err = sui_indexer_alt_e2e_tests::graphql::query(
+        &cluster.graphql_url(),
+        query,
+        json!({ "filter": { "module": "0x42::m", "type": "0x42::m::T" } }),
+    )
+    .await
+    .expect_err("module + type filter must be rejected");
+    assert!(
+        err.to_string().contains("not supported"),
+        "unexpected error: {err:#}"
     );
 }

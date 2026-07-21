@@ -96,8 +96,10 @@ impl AlphaLedgerGrpcReader {
         &self,
         request: proto::ListEventsRequest,
     ) -> anyhow::Result<StreamPage<proto::Event>> {
-        let mut client = self.client.clone();
-        let stream = client
+        let stream = self
+            .client
+            .clone()
+            .ledger_client()
             .list_events(self.request(request))
             .await
             .context("ListEvents stream open failed")?
