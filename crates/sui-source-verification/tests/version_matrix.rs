@@ -354,7 +354,8 @@ async fn verify_legacy(config: &Path, sandbox: &Path, chain_id: &str) -> Result<
         Some(config),
     )
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Run `verify-source .` with the current CLI. Returns `Ok` on a zero exit.
