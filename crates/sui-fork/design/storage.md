@@ -80,7 +80,7 @@ Key roles:
   numbers) go stock-reader first with `ForkStore` on a miss — a cached row
   cannot be wrong, and the miss-path double point-get is accepted for the
   simpler layering. **Latest-semantics reads** (`get_object`) go through
-  `ForkStore` only: the stock reverse scan assumes a complete version
+  `ForkStore` only: the reverse scan assumes a complete version
   history, which the fork's sparse `objects` CF violates, so a bare cached
   historical row must never be served as current.
 
