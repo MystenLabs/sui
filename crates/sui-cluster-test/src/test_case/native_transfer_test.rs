@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use jsonrpsee::rpc_params;
 use tracing::info;
 
-use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
@@ -36,38 +35,48 @@ impl TestCaseImpl for NativeTransferTest {
 
         let signer = ctx.get_wallet_address();
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
-        // Test transfer object
+        let gas_budget = 2_000_000;
+
+        // Test transfer object: move a whole SUI coin object to the recipient,
+        // paying for gas with a separate explicit gas coin. Explicit gas keeps
+        // the high-level gRPC transaction builder on `LedgerService` (no
+        // `StateService` coin enumeration), so this works against the public
+        // gateway.
         let obj_to_transfer: ObjectID = *sui_objs.swap_remove(0).id();
-        let params = rpc_params![
-            signer,
-            obj_to_transfer,
-            Some(*gas_obj.id()),
-            (2_000_000).to_string(),
-            recipient_addr
-        ];
-        let data = ctx
-            .build_transaction_remotely("unsafe_transferObject", params)
+        let gas_ref = ctx.current_object_ref(*gas_obj.id()).await;
+        let builder = ctx.get_grpc_client().transaction_builder();
+        let data = builder
+            .transfer_object(
+                signer,
+                obj_to_transfer,
+                Some(gas_ref.0),
+                gas_budget,
+                recipient_addr,
+            )
             .await?;
-        let mut response = ctx.sign_and_execute(data, "coin transfer").await;
+        let response = ctx.sign_and_execute(data, "coin transfer").await;
+        Self::examine_response(ctx, &response, signer, recipient_addr, obj_to_transfer).await;
 
-        Self::examine_response(ctx, &mut response, signer, recipient_addr, obj_to_transfer).await;
-
+        // Test transfer of a second, distinct SUI coin object.
         let mut sui_objs_2 = ctx.get_sui_from_faucet(Some(1)).await;
-        // Test transfer sui
         let obj_to_transfer_2 = *sui_objs_2.swap_remove(0).id();
-        let params = rpc_params![
-            signer,
-            obj_to_transfer_2,
-            (2_000_000).to_string(),
-            recipient_addr,
-            None::<u64>
-        ];
-        let data = ctx
-            .build_transaction_remotely("unsafe_transferSui", params)
+        // Refresh the gas ref: its version/digest changed after the first tx.
+        let gas_ref = ctx.current_object_ref(*gas_obj.id()).await;
+        let builder = ctx.get_grpc_client().transaction_builder();
+        let data = builder
+            .transfer_object(
+                signer,
+                obj_to_transfer_2,
+                Some(gas_ref.0),
+                gas_budget,
+                recipient_addr,
+            )
             .await?;
-        let mut response = ctx.sign_and_execute(data, "coin transfer").await;
+        let response = ctx.sign_and_execute(data, "coin transfer").await;
 
-        Self::examine_response(ctx, &mut response, signer, recipient_addr, obj_to_transfer).await;
+        // Verify the SECOND transferred object (previously this asserted the
+        // first object's ID, which was already a no-op bug).
+        Self::examine_response(ctx, &response, signer, recipient_addr, obj_to_transfer_2).await;
         Ok(())
     }
 }
@@ -75,38 +84,40 @@ impl TestCaseImpl for NativeTransferTest {
 impl NativeTransferTest {
     async fn examine_response(
         ctx: &TestContext,
-        response: &mut SuiTransactionBlockResponse,
+        response: &ExecutedTransaction,
         signer: SuiAddress,
         recipient: SuiAddress,
         obj_to_transfer_id: ObjectID,
     ) {
-        let balance_changes = &mut response.balance_changes.as_mut().unwrap();
-        // for transfer we only expect 2 balance changes, one for sender and one for recipient.
+        let mut balance_changes = response.balance_changes.clone();
+        // for transfer we only expect 2 balance changes, one for sender and one
+        // for recipient.
         assert_eq!(
             balance_changes.len(),
             2,
             "Expect 2 balance changes emitted, but got {}",
             balance_changes.len()
         );
-        // Order of balance change is not fixed so need to check who's balance come first.
-        // this make sure recipient always come first
-        if balance_changes[0].owner.get_owner_address().unwrap() == signer {
+        // Order of balance change is not fixed so need to check whose balance
+        // comes first. This makes sure the recipient always comes first.
+        let signer_sdk: sui_sdk_types::Address = signer.into();
+        if balance_changes[0].address == signer_sdk {
             balance_changes.reverse()
         }
         BalanceChangeChecker::new()
-            .owner(Owner::AddressOwner(recipient))
+            .address(recipient)
             .coin_type("0x2::sui::SUI")
             .check(&balance_changes.remove(0));
         BalanceChangeChecker::new()
-            .owner(Owner::AddressOwner(signer))
+            .address(signer)
             .coin_type("0x2::sui::SUI")
             .check(&balance_changes.remove(0));
-        // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.digest], 5).await;
 
+        // The executed transaction is already checkpointed; read the transferred
+        // object by ID and confirm the new owner (`LedgerService`).
         let _ = ObjectChecker::new(obj_to_transfer_id)
             .owner(Owner::AddressOwner(recipient))
-            .check(ctx.get_fullnode_client())
+            .check(&ctx.get_grpc_client())
             .await;
     }
 }
