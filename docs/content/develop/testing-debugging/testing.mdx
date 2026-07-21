@@ -176,7 +176,7 @@ Key operations:
 | `scenario.ctx()` | Get the current transaction context |
 | `scenario.end()` | End the scenario and clean up |
 
-Always pair `take_shared` with `return_shared` and `take_from_sender` with `return_to_sender` within the same transaction block. Failing to return objects causes the test to abort.
+Always pair `take_shared` with `return_shared` within the same transaction block. Owned objects taken with `take_from_sender` can be returned, transferred, or destroyed — they do not need to be returned to the sender.
 
 For a complete walkthrough with access control, cross-module interactions, and transaction effects inspection, see the [Scenario Testing](/getting-started/examples/scenario-testing) example.
 
@@ -186,14 +186,13 @@ The Sui framework provides several modules that simplify common testing tasks:
 
 | Module | Purpose |
 |---|---|
-| [`sui::test_utils`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_utils.move) | `destroy` function for cleaning up objects in tests without implementing custom destructors |
-| [`std::unit_test`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/unit_test.move) | `assert_eq!` and `assert_ref_eq!` macros for better error messages |
+| [`std::unit_test`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/unit_test.move) | `destroy` function for cleaning up objects in tests, plus `assert_eq!` and `assert_ref_eq!` macros for better error messages |
 | [`std::debug`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/debug.move) | `print` function for debug output during test runs |
 
-Example using `test_utils::destroy` to clean up an object without writing a custom destructor:
+Example using `std::unit_test::destroy` to clean up an object without writing a custom destructor:
 
 ```move
-use sui::test_utils;
+use std::unit_test;
 
 #[test]
 fun test_with_cleanup() {
@@ -202,7 +201,7 @@ fun test_with_cleanup() {
 
     // ... test assertions ...
 
-    test_utils::destroy(obj);
+    unit_test::destroy(obj);
 }
 ```
 
@@ -274,7 +273,7 @@ For the full list of CLI options, see the [`sui move` CLI reference](/references
 When a test fails, the [Move Trace Debugger](/references/ide/debugger) lets you step through execution line by line in VS Code. Generate a trace and open it in the debugger:
 
 ```bash
-$ sui move test --trace-execution
+$ sui move test --trace
 ```
 
 Then open the trace file in VS Code with the Move extension installed. You can set breakpoints, inspect variables, and step through each instruction to find where the logic diverges from your expectations.
