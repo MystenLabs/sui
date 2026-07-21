@@ -3282,7 +3282,7 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
                 err_str
             );
         }
-        Ok(()) => {
+        Ok(_) => {
             panic!(
                 "Expected handle_vote_transaction to fail for transaction executed in previous epoch"
             );

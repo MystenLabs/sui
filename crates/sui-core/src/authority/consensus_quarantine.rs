@@ -27,6 +27,8 @@ use sui_types::executable_transaction::{
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::AuthorityIndex;
+use sui_types::storage::ObjectStore;
+use sui_types::transaction::{InputObjectKind, TransactionDataAPI};
 use sui_types::{
     base_types::{ConsensusObjectSequenceKey, ObjectID},
     digests::TransactionDigest,
@@ -68,6 +70,14 @@ pub(crate) struct ConsensusCommitOutput {
     next_shared_object_versions: Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
 
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>,
+
+    // Previously-deferred transactions reloaded by this commit that did not re-defer
+    // (scheduled or cancelled - both execute). Their deferred-locks map entries are
+    // removed when this commit flushes: the flush gate guarantees they are executed by
+    // then, so the objects table takes over conflict coverage with no gap. (Removing at
+    // reload would open a window - reload until flush - where the locks are in no
+    // in-memory layer and the transaction may not have executed yet.)
+    finalized_reloaded_deferred_txns: Vec<TransactionDigest>,
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
     // checkpoint state
@@ -215,6 +225,11 @@ impl ConsensusCommitOutput {
         self.deferred_txns.clear();
     }
 
+    pub fn set_finalized_reloaded_deferred_txns(&mut self, digests: Vec<TransactionDigest>) {
+        assert!(self.finalized_reloaded_deferred_txns.is_empty());
+        self.finalized_reloaded_deferred_txns = digests;
+    }
+
     pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpoint) {
         self.pending_checkpoints.push(checkpoint);
     }
@@ -271,6 +286,12 @@ impl ConsensusCommitOutput {
     pub fn set_owned_object_locks(&mut self, locks: HashMap<ObjectRef, LockDetails>) {
         assert!(self.owned_object_locks.is_empty());
         self.owned_object_locks = locks;
+    }
+
+    /// Locks acquired by this commit's transactions (deferral bookkeeping derives a
+    /// deferred transaction's lock set from this map).
+    pub fn owned_object_locks(&self) -> &HashMap<ObjectRef, LockDetails> {
+        &self.owned_object_locks
     }
 
     pub fn write_to_batch(
@@ -412,6 +433,50 @@ impl ConsensusCommitOutput {
     }
 }
 
+/// Owned-object lock refs held by currently-deferred transactions.
+///
+/// Deferred transactions are the one class of finalized transactions whose locks the
+/// objects table cannot reproduce: they hold locks from their first appearance but have
+/// not executed, so their inputs are still at the claimed versions. This map keeps those
+/// locks in memory so post-consensus conflict detection does not need a durable lock
+/// table for them. Entries are inserted by the consensus handler on deferral and removed
+/// when the commit that reloaded the transaction for scheduling *flushes* (by which
+/// point the transaction is executed and the objects table takes over coverage) —
+/// mirroring the lifetime of the durable deferred-transactions table entry, whose
+/// deletion is part of that same flush.
+#[derive(Default)]
+pub(crate) struct DeferredTransactionLocks {
+    by_ref: HashMap<ObjectRef, TransactionDigest>,
+    by_tx: HashMap<TransactionDigest, Vec<ObjectRef>>,
+}
+
+impl DeferredTransactionLocks {
+    pub fn insert(&mut self, digest: TransactionDigest, refs: Vec<ObjectRef>) {
+        for obj_ref in &refs {
+            self.by_ref.insert(*obj_ref, digest);
+        }
+        self.by_tx.insert(digest, refs);
+    }
+
+    /// Removes and returns the lock refs held by `digest`. The caller decides whether
+    /// they re-enter this map (re-deferral) or the current commit's locks (scheduling).
+    pub fn remove_tx(&mut self, digest: &TransactionDigest) -> Option<Vec<ObjectRef>> {
+        let refs = self.by_tx.remove(digest)?;
+        for obj_ref in &refs {
+            self.by_ref.remove(obj_ref);
+        }
+        Some(refs)
+    }
+
+    pub fn get(&self, obj_ref: &ObjectRef) -> Option<TransactionDigest> {
+        self.by_ref.get(obj_ref).copied()
+    }
+
+    pub fn contains_tx(&self, digest: &TransactionDigest) -> bool {
+        self.by_tx.contains_key(digest)
+    }
+}
+
 /// ConsensusOutputCache holds outputs of consensus processing that do not need to be committed to disk.
 /// Data quarantining guarantees that all of this data will be used (e.g. for building checkpoints)
 /// before the consensus commit from which it originated is marked as processed. Therefore we can rely
@@ -421,6 +486,10 @@ pub(crate) struct ConsensusOutputCache {
     // - hence no need for a DashMap.
     pub(crate) deferred_transactions:
         Mutex<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>>>,
+
+    // Read by the consensus handler and the transaction submission path; written only by
+    // the consensus handler.
+    pub(crate) deferred_transaction_locks: Mutex<DeferredTransactionLocks>,
 
     // user_signatures_for_checkpoints is written to by consensus handler and read from by checkpoint builder
     // The critical sections are small in both cases so a DashMap is probably not helpful.
@@ -433,15 +502,33 @@ pub(crate) struct ConsensusOutputCache {
 }
 
 impl ConsensusOutputCache {
-    pub(crate) fn new(tables: &AuthorityEpochTables) -> Self {
+    pub(crate) fn new(tables: &AuthorityEpochTables, object_store: &dyn ObjectStore) -> Self {
         let deferred_transactions = tables
             .get_all_deferred_transactions()
             .expect("load deferred transactions cannot fail");
+
+        // Rebuild the in-memory locks of deferred transactions. The stored transactions do
+        // not carry their immutable-object claims, so the lock set is re-derived from live
+        // objects: a deferred transaction's owned inputs are still live at their claimed
+        // versions (it holds their locks and has not executed - and its commit was flushed,
+        // so all producing transactions have been executed locally), which makes
+        // immutability decidable per ref. A byzantine under-claim can make this a subset of
+        // the originally-acquired set for immutable refs only - quorum-unreachable once
+        // strict vote-time claims verification is universal.
+        let mut deferred_transaction_locks = DeferredTransactionLocks::default();
+        for transactions in deferred_transactions.values() {
+            for tx in transactions {
+                let digest = *tx.tx().digest();
+                let refs = derive_deferred_owned_lock_refs(object_store, tx);
+                deferred_transaction_locks.insert(digest, refs);
+            }
+        }
 
         let executed_in_epoch_cache_capacity = 50_000;
 
         Self {
             deferred_transactions: Mutex::new(deferred_transactions),
+            deferred_transaction_locks: Mutex::new(deferred_transaction_locks),
             user_signatures_for_checkpoints: Default::default(),
             executed_in_epoch: RwLock::new(DashMap::with_shard_amount(2048)),
             executed_in_epoch_cache: MokaCache::builder(8)
@@ -483,6 +570,34 @@ impl ConsensusOutputCache {
             executed_in_epoch.remove(tx_digest);
         }
     }
+}
+
+/// The owned-object lock refs a deferred transaction holds, re-derived from live objects:
+/// every non-immutable `ImmOrOwnedMoveObject` input (immutable inputs were claimed at vote
+/// time and excluded from lock acquisition). Any ref in an unexpected state (missing, or
+/// not live at the claimed version - which the held lock should preclude) is included
+/// conservatively: the durable lock table holds every originally-acquired ref, so
+/// over-inclusion here can only reproduce a lock that really exists.
+fn derive_deferred_owned_lock_refs(
+    object_store: &dyn ObjectStore,
+    tx: &VerifiedExecutableTransactionWithAliases,
+) -> Vec<ObjectRef> {
+    let Ok(input_objects) = tx.tx().transaction_data().input_objects() else {
+        // Finalized transactions have valid input objects; stay conservative if not.
+        return Vec::new();
+    };
+    input_objects
+        .iter()
+        .filter_map(|kind| match kind {
+            InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => {
+                match object_store.get_object(&obj_ref.0) {
+                    Some(object) if object.version() == obj_ref.1 && object.is_immutable() => None,
+                    _ => Some(*obj_ref),
+                }
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// ConsensusOutputQuarantine holds outputs of consensus processing in memory until the checkpoints
@@ -663,6 +778,44 @@ impl ConsensusOutputQuarantine {
                 self.remove_shared_object_next_versions(&output);
                 self.remove_processed_consensus_messages(&output);
                 self.remove_congestion_control_debts(&output);
+                // Lock refs dropped by this flush belong to executed transactions (the
+                // flush gate requires the commit's checkpoints executed), so their
+                // consumed version-bounds are recorded in the live-object cache BEFORE
+                // the in-memory lock entries disappear. Any conflict resolution that
+                // misses the memory layers therefore sees the bumps - this ordering is
+                // what makes cached bounds decisive verdicts and keeps steady-state
+                // resolution off the DB. (This runs under the quarantine write lock, so
+                // for quarantined locks the bumps are visible to any reader that
+                // observes the removal.)
+                //
+                // Exception: refs of transactions that this commit DEFERRED have not
+                // executed - their entries in the deferred-locks map shield them from
+                // resolution, and their bumps happen at the flush of the commit that
+                // eventually schedules them (below).
+                let live_object_cache = epoch_store.live_object_cache();
+                {
+                    let mut deferred_locks = epoch_store
+                        .consensus_output_cache
+                        .deferred_transaction_locks
+                        .lock();
+                    for obj_ref in output.owned_object_locks.keys() {
+                        if deferred_locks.get(obj_ref).is_none() {
+                            live_object_cache.record_consumed(obj_ref);
+                        }
+                    }
+                    // Reloaded deferred transactions covered by this commit are
+                    // executed by now as well; bump their refs and release their
+                    // deferred-locks entries. Both happen inside the map's critical
+                    // section, so readers observe either the entry or the bump - never
+                    // neither.
+                    for digest in &output.finalized_reloaded_deferred_txns {
+                        if let Some(refs) = deferred_locks.remove_tx(digest) {
+                            for obj_ref in &refs {
+                                live_object_cache.record_consumed(obj_ref);
+                            }
+                        }
+                    }
+                }
                 self.remove_owned_object_locks(&output);
                 output.write_to_batch(epoch_store, batch)?;
             }
@@ -798,6 +951,16 @@ impl ConsensusOutputQuarantine {
                     .expect("db error")
             },
         ))
+    }
+
+    /// In-memory-only lock lookup: locks acquired by commits that are still quarantined
+    /// (not yet flushed to the epoch DB). Used by the objects-table-based conflict
+    /// resolution, which covers flushed commits via the objects table instead of the DB.
+    pub(crate) fn get_owned_object_lock_in_memory(
+        &self,
+        obj_ref: &ObjectRef,
+    ) -> Option<LockDetails> {
+        self.owned_object_locks.get(obj_ref).copied()
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
@@ -1172,5 +1335,128 @@ mod tests {
         // C2 has height=5 <= 5, drained=true => drain boundary at index 1.
         // Both outputs drained.
         assert_eq!(quarantine.output_queue_len_for_testing(), 0);
+    }
+
+    // Regression test: transaction T defers in commit C1 (locks in C1's output and the
+    // deferred-locks map) and is reloaded for scheduling in a later commit C2. C1 can
+    // flush before C2; T's conflict coverage must survive that window even though the
+    // flat quarantine map drops C1's entries at C1's flush — the deferred-locks entry
+    // lives until C2 flushes, by which point T is executed and the objects table covers
+    // its consumed inputs.
+    #[tokio::test]
+    async fn test_deferred_lock_coverage_survives_deferring_commit_flush() {
+        use sui_types::base_types::ObjectDigest;
+
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let metrics = epoch_store.metrics.clone();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, metrics);
+
+        let t_digest = TransactionDigest::random();
+        let lock_ref: ObjectRef = (
+            ObjectID::random(),
+            SequenceNumber::from_u64(1),
+            ObjectDigest::random(),
+        );
+
+        // C1: T is finalized and deferred - locks acquired into the output, refs into
+        // the deferred-locks map (as the deferral bookkeeping does).
+        let mut c1 = make_output(1, 1, true);
+        c1.set_owned_object_locks([(lock_ref, t_digest)].into_iter().collect());
+        epoch_store
+            .consensus_output_cache
+            .deferred_transaction_locks
+            .lock()
+            .insert(t_digest, vec![lock_ref]);
+        quarantine.push_consensus_output(c1, &epoch_store).unwrap();
+
+        assert_eq!(
+            quarantine.get_owned_object_lock_in_memory(&lock_ref),
+            Some(t_digest)
+        );
+
+        // C2: reloads T for scheduling (T does not re-defer).
+        let mut c2 = make_output(2, 2, true);
+        c2.set_finalized_reloaded_deferred_txns(vec![t_digest]);
+        quarantine.push_consensus_output(c2, &epoch_store).unwrap();
+
+        // Flush C1 only.
+        let pc = epoch_store.protocol_config();
+        quarantine.insert_builder_summary(1, make_builder_summary(1, 1, pc));
+        let mut batch = epoch_store.db_batch_for_test();
+        quarantine
+            .update_highest_executed_checkpoint(1, &epoch_store, &mut batch)
+            .unwrap();
+        batch.write().unwrap();
+        assert_eq!(quarantine.output_queue_len_for_testing(), 1);
+
+        // The flat map dropped C1's entry, but the deferred-locks map still covers T.
+        assert_eq!(quarantine.get_owned_object_lock_in_memory(&lock_ref), None);
+        assert_eq!(
+            epoch_store.get_deferred_transaction_lock(&lock_ref),
+            Some(t_digest)
+        );
+
+        // Flush C2: T is executed by then (flush gate), so the deferred entry is
+        // released and the objects table takes over.
+        quarantine.insert_builder_summary(2, make_builder_summary(2, 2, pc));
+        let mut batch = epoch_store.db_batch_for_test();
+        quarantine
+            .update_highest_executed_checkpoint(2, &epoch_store, &mut batch)
+            .unwrap();
+        batch.write().unwrap();
+        assert_eq!(quarantine.output_queue_len_for_testing(), 0);
+        assert_eq!(epoch_store.get_deferred_transaction_lock(&lock_ref), None);
+
+        // The flush bumped the live-object cache bound past the consumed version, so
+        // conflict resolution derives "consumed" from memory.
+        assert_eq!(
+            epoch_store.live_object_cache().get(&lock_ref.0),
+            Some(crate::live_object_cache::VersionLowerBound::Version {
+                version: lock_ref.1.next(),
+                immutable: None,
+            })
+        );
+    }
+}
+
+#[cfg(test)]
+mod deferred_locks_tests {
+    use super::*;
+    use sui_types::base_types::{ObjectDigest, SequenceNumber};
+
+    fn obj_ref(version: u64) -> ObjectRef {
+        (
+            ObjectID::random(),
+            SequenceNumber::from_u64(version),
+            ObjectDigest::random(),
+        )
+    }
+
+    #[test]
+    fn test_deferred_transaction_locks() {
+        let mut locks = DeferredTransactionLocks::default();
+        let tx1 = TransactionDigest::random();
+        let tx2 = TransactionDigest::random();
+        let (a, b, c) = (obj_ref(1), obj_ref(2), obj_ref(3));
+
+        locks.insert(tx1, vec![a, b]);
+        locks.insert(tx2, vec![c]);
+        assert_eq!(locks.get(&a), Some(tx1));
+        assert_eq!(locks.get(&b), Some(tx1));
+        assert_eq!(locks.get(&c), Some(tx2));
+
+        // Removal returns the refs and clears both indexes.
+        let removed = locks.remove_tx(&tx1).unwrap();
+        assert_eq!(removed, vec![a, b]);
+        assert_eq!(locks.get(&a), None);
+        assert_eq!(locks.get(&b), None);
+        assert_eq!(locks.get(&c), Some(tx2));
+        assert_eq!(locks.remove_tx(&tx1), None);
+
+        // Re-deferral cycle: insert again after removal.
+        locks.insert(tx1, vec![a]);
+        assert_eq!(locks.get(&a), Some(tx1));
     }
 }

@@ -122,6 +122,7 @@ use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_cache::ObjectCacheRead;
 use crate::execution_cache::cache_types::CacheResult;
 use crate::fallback_fetch::do_fallback_lookup;
+use crate::live_object_cache::LiveObjectCache;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::*;
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
@@ -325,6 +326,12 @@ pub struct AuthorityPerEpochStore {
     pub(crate) consensus_quarantine: RwLock<ConsensusOutputQuarantine>,
     /// Holds variouis data from consensus_quarantine in a more easily accessible form.
     pub(crate) consensus_output_cache: ConsensusOutputCache,
+
+    /// Lower bounds on latest object versions, shared with `AuthorityState` and the
+    /// consensus components (vote-time warming, conflict resolution). Held here so the
+    /// quarantine flush can bump bounds for consumed lock refs before dropping their
+    /// in-memory lock entries.
+    live_object_cache: Arc<LiveObjectCache>,
 
     protocol_config: ProtocolConfig,
 
@@ -855,6 +862,7 @@ impl AuthorityPerEpochStore {
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
         fullnode_sync_mode: Option<FullNodeSyncMode>,
+        live_object_cache: Arc<LiveObjectCache>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -970,7 +978,7 @@ impl AuthorityPerEpochStore {
 
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
-        let consensus_output_cache = ConsensusOutputCache::new(&tables);
+        let consensus_output_cache = ConsensusOutputCache::new(&tables, &*object_store);
 
         let execution_time_observations = tables
             .execution_time_observations
@@ -1020,6 +1028,7 @@ impl AuthorityPerEpochStore {
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
             consensus_output_cache,
+            live_object_cache,
             consensus_quarantine: RwLock::new(ConsensusOutputQuarantine::new(
                 highest_executed_checkpoint,
                 metrics.clone(),
@@ -1260,6 +1269,7 @@ impl AuthorityPerEpochStore {
             epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
             fullnode_sync_mode,
+            self.live_object_cache.clone(),
         )
     }
 
@@ -1664,12 +1674,25 @@ impl AuthorityPerEpochStore {
 
     #[cfg(test)]
     pub fn insert_object_locks_for_test(&self, locks: &[(ObjectRef, TransactionDigest)]) {
+        // Simulates a finalized-but-unexecuted lock holder. Written both to the durable
+        // table (the pre-objects-table representation) and to the deferred-locks map
+        // (where the in-memory resolution finds locks whose holder has not executed and
+        // whose commit is no longer quarantined).
+        let mut by_digest: HashMap<TransactionDigest, Vec<ObjectRef>> = HashMap::new();
         for (object, digest) in locks {
             self.tables()
                 .expect("test should not cross epoch boundary")
                 .owned_object_locked_transactions
                 .insert(object, &LockDetailsWrapper::from(*digest))
                 .unwrap();
+            by_digest.entry(*digest).or_default().push(*object);
+        }
+        let mut deferred_locks = self
+            .consensus_output_cache
+            .deferred_transaction_locks
+            .lock();
+        for (digest, refs) in by_digest {
+            deferred_locks.insert(digest, refs);
         }
     }
 
@@ -1807,6 +1830,37 @@ impl AuthorityPerEpochStore {
             .get_owned_object_locks(&tables, obj_refs)
     }
 
+    /// Lock held on `obj_ref` by a commit that is still quarantined (not yet flushed).
+    /// Locks of flushed commits are derivable from the objects table (their holders are
+    /// durably executed) and from the deferred-locks map. Production resolution reads
+    /// through held guards instead (see `resolve_owned_object_lock_states`).
+    #[cfg(test)]
+    pub fn get_owned_object_lock_in_memory(&self, obj_ref: &ObjectRef) -> Option<LockDetails> {
+        self.consensus_quarantine
+            .read()
+            .get_owned_object_lock_in_memory(obj_ref)
+    }
+
+    /// Lock held on `obj_ref` by a currently-deferred transaction.
+    #[cfg(test)]
+    pub fn get_deferred_transaction_lock(&self, obj_ref: &ObjectRef) -> Option<TransactionDigest> {
+        self.consensus_output_cache
+            .deferred_transaction_locks
+            .lock()
+            .get(obj_ref)
+    }
+
+    /// Direct epoch-DB read of the lock table, bypassing the quarantine. Used only as the
+    /// backstop for refs whose object is immutable at the claimed version (see
+    /// docs/objects_locking.md §3.6a); the quarantine layer has already been consulted
+    /// for these refs.
+    pub fn multi_get_owned_object_locks_from_db(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        self.tables()?.multi_get_locked_transactions(obj_refs)
+    }
+
     /// Batched read of existing owned-object locks, returned as a map containing only
     /// the refs that are currently locked. The consensus commit handler prefetches the
     /// cross-commit lock state (constant for the duration of a commit) once with this,
@@ -1825,24 +1879,39 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
+    pub fn live_object_cache(&self) -> &Arc<LiveObjectCache> {
+        &self.live_object_cache
+    }
+
     /// Attempts to acquire owned object locks for a transaction post-consensus.
     ///
-    /// Checks whether the object versions are already locked by searching:
+    /// Checks whether the object versions are already claimed by searching:
     /// 1. The current commit (`current_commit_locks`, accumulated as earlier
     ///    transactions in this commit acquire locks).
-    /// 2. `existing_locks`: locks from earlier commits in this epoch (and the DB after
-    ///    crash recovery). These are constant for the duration of a commit, so the
-    ///    caller prefetches them once via `get_owned_object_locks_map` rather than
-    ///    reading per transaction.
+    /// 2. `existing_locks`: the resolved cross-commit lock state (quarantined commits,
+    ///    deferred transactions, objects-table verdicts). Constant for the duration of a
+    ///    commit, so the caller resolves it once for all refs of the commit.
     ///
-    /// Returns the new locks to add on success, or error if a conflict exists.
+    /// A `ConsumedSinceClaim` resolution means some transaction consumed the ref earlier
+    /// in this epoch; that is a conflict unless the consumer was this very transaction —
+    /// a duplicate sequencing of an already-executed transaction (possible across a
+    /// restart, where the first sequencing's commit was flushed and is not replayed).
+    /// The old lock table resolved that case by digest equality; here it is resolved by
+    /// "this digest already executed in this epoch", which is durably true wherever the
+    /// in-memory layers no longer hold the first sequencing's locks.
+    ///
+    /// Returns Ok(()) when all locks are acquirable, or error if a conflict exists.
+    /// Pure check: the caller records the acquired locks.
     pub fn try_acquire_owned_object_locks_post_consensus(
         &self,
         owned_object_refs: &[ObjectRef],
         tx_digest: TransactionDigest,
         current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
-        existing_locks: &HashMap<ObjectRef, LockDetails>,
-    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
+        existing_locks: &HashMap<ObjectRef, LockResolution>,
+        object_cache: &dyn ObjectCacheRead,
+    ) -> SuiResult<()> {
+        // Lazily computed: only would-be conflicts on consumed refs need it.
+        let mut already_executed: Option<bool> = None;
         for obj_ref in owned_object_refs {
             // Conflict with a transaction earlier in the same commit.
             if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
@@ -1854,7 +1923,76 @@ impl AuthorityPerEpochStore {
                 }
                 .into());
             }
-            // Conflict with a lock from an earlier commit (or crash recovery).
+            match existing_locks.get(obj_ref) {
+                Some(LockResolution::LockedBy(locked_tx_digest))
+                    if *locked_tx_digest != tx_digest =>
+                {
+                    return Err(SuiErrorKind::ObjectLockConflict {
+                        obj_ref: *obj_ref,
+                        pending_transaction: *locked_tx_digest,
+                    }
+                    .into());
+                }
+                Some(LockResolution::ConsumedSinceClaim) => {
+                    let executed = match already_executed {
+                        Some(executed) => executed,
+                        None => {
+                            // Propagated on failure (e.g. EpochEnded racing this check
+                            // on the submission path); a verdict cannot be derived from
+                            // a failed read. The consensus handler treats non-conflict
+                            // errors as fatal (it must not guess either way).
+                            let executed =
+                                self.transactions_executed_in_cur_epoch(&[tx_digest])?[0];
+                            already_executed = Some(executed);
+                            executed
+                        }
+                    };
+                    if !executed {
+                        // Winner digest is best-effort error enrichment: the transaction
+                        // that produced the current live version (which for multi-hop
+                        // consumption may be downstream of the actual first consumer).
+                        let pending_transaction = object_cache
+                            .get_object(&obj_ref.0)
+                            .map(|o| o.previous_transaction)
+                            .unwrap_or(TransactionDigest::ZERO);
+                        return Err(SuiErrorKind::ObjectLockConflict {
+                            obj_ref: *obj_ref,
+                            pending_transaction,
+                        }
+                        .into());
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        // No conflicts, so the consumed owned object versions are valid (from
+        // preconsensus validation) and available (from the checks above).
+        Ok(())
+    }
+
+    /// The pre-objects-table lock acquisition check, over lock state read from the
+    /// quarantine + epoch DB (`get_owned_object_locks_map`). Kept for differential
+    /// validation of the objects-table-based resolution: debug builds run both and
+    /// assert the verdicts match.
+    #[cfg(debug_assertions)]
+    pub fn try_acquire_owned_object_locks_post_consensus_table_based(
+        &self,
+        owned_object_refs: &[ObjectRef],
+        tx_digest: TransactionDigest,
+        current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
+        existing_locks: &HashMap<ObjectRef, LockDetails>,
+    ) -> SuiResult<()> {
+        for obj_ref in owned_object_refs {
+            if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
             if let Some(locked_tx_digest) = existing_locks.get(obj_ref)
                 && *locked_tx_digest != tx_digest
             {
@@ -1865,13 +2003,7 @@ impl AuthorityPerEpochStore {
                 .into());
             }
         }
-
-        // No conflicts, so the consumed owned object versions are valid (from preconsensus validation)
-        // and available (from the checks above). Return the new locks to add.
-        Ok(owned_object_refs
-            .iter()
-            .map(|obj_ref| (*obj_ref, tx_digest))
-            .collect())
+        Ok(())
     }
 
     /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
@@ -3489,6 +3621,20 @@ impl LockDetailsWrapper {
 }
 
 pub type LockDetails = TransactionDigest;
+
+/// Resolved cross-commit claim state of an owned object ref, produced by
+/// `resolve_owned_object_lock_states` (quarantined locks + deferred-transaction locks +
+/// objects-table version verdict) and consumed by
+/// `try_acquire_owned_object_locks_post_consensus`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LockResolution {
+    /// The ref is locked by a known transaction that has not consumed it yet.
+    LockedBy(TransactionDigest),
+    /// The objects table shows a latest version above the claimed version: the ref was
+    /// consumed earlier in this epoch by some finalized, executed transaction (whose
+    /// digest the objects table does not record).
+    ConsumedSinceClaim,
+}
 
 impl From<LockDetails> for LockDetailsWrapper {
     fn from(details: LockDetails) -> Self {

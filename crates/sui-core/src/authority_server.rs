@@ -70,7 +70,7 @@ use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusOverloadChecker},
-    consensus_handler::SequencedConsensusTransactionKey,
+    consensus_handler::{SequencedConsensusTransactionKey, resolve_owned_object_lock_states},
     traffic_controller::{TrafficController, parse_ip, policies::TrafficTally},
 };
 use crate::{
@@ -973,11 +973,11 @@ impl ValidatorService {
                 // error lets the client stop retrying instead of polling for effects that
                 // will never come.
                 //
-                // First check the epoch owned-object lock table with the same conflict
-                // logic the consensus handler uses post-consensus. Locks are never
-                // released within an epoch, so this reports the conflict even before the
-                // winner executes, while the loser's input versions still validate as
-                // live.
+                // First resolve the claim state of the owned inputs with the same
+                // conflict logic the consensus handler uses post-consensus. Locks are
+                // never released within an epoch, so this reports the conflict even
+                // before the winner executes, while the loser's input versions still
+                // validate as live.
                 if let Ok(input_objects) = verified_transaction
                     .tx()
                     .data()
@@ -998,13 +998,17 @@ impl ValidatorService {
                             _ => None,
                         })
                         .collect();
-                    let existing_locks =
-                        epoch_store.get_owned_object_locks_map(&owned_object_refs)?;
+                    let (existing_locks, _stats) = resolve_owned_object_lock_states(
+                        &epoch_store,
+                        state.get_object_cache_reader().as_ref(),
+                        &owned_object_refs,
+                    );
                     if let Err(error) = epoch_store.try_acquire_owned_object_locks_post_consensus(
                         &owned_object_refs,
                         tx_digest,
                         &HashMap::new(),
                         &existing_locks,
+                        state.get_object_cache_reader().as_ref(),
                     ) {
                         debug!(
                             ?tx_digest,
