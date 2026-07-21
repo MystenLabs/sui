@@ -10,7 +10,6 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-bytes.workspace = true
 futures.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
@@ -35,7 +34,6 @@ sui-json.workspace = true
 sui-config.workspace = true
 sui-rpc-api.workspace = true
 sui-sdk-types.workspace = true
-sui-transaction-builder.workspace = true
 sui-test-transaction-builder.workspace = true
 telemetry-subscribers.workspace = true
 

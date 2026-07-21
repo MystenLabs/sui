@@ -51,9 +51,10 @@ pub struct TestContext {
 impl TestContext {
     /// Request coins from the faucet, wait for every faucet transfer to be
     /// visible over gRPC (`LedgerService`), then read each funded coin object by
-    /// ID and verify ownership. Gas/coin enumeration is deliberately avoided:
-    /// the faucet response already gives the exact object IDs, and coin/balance
-    /// enumeration (`StateService`) is not served on public fullnodes.
+    /// ID and verify ownership. Gas/coin object IDs come straight from the faucet
+    /// response (which returns the exact IDs), so we never depend on owner
+    /// enumeration to fund a transaction — good practice for determinism, not a
+    /// workaround for any missing service.
     async fn get_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
         let addr = self.get_wallet_address();
 
@@ -135,8 +136,8 @@ impl TestContext {
 
     /// Build up to `max_txn_num` simple transfer-SUI transactions, each paying a
     /// tiny amount to a fresh recipient. Gas is sourced explicitly from the
-    /// faucet-funded coins (one coin per transaction) so this works against the
-    /// public gateway without coin enumeration (`StateService`).
+    /// faucet-funded coins (one coin per transaction), keeping construction
+    /// deterministic without relying on gas enumeration.
     pub async fn make_transactions(&self, max_txn_num: usize) -> Vec<Transaction> {
         let sender = self.get_wallet_address();
         let gas_price = self.get_reference_gas_price().await;

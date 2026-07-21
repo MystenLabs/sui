@@ -14490,7 +14490,6 @@ version = "1.77.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bytes",
  "clap",
  "derive_more 1.0.0",
  "fastcrypto",
@@ -14511,7 +14510,6 @@ dependencies = [
  "sui-swarm",
  "sui-swarm-config",
  "sui-test-transaction-builder",
- "sui-transaction-builder",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",

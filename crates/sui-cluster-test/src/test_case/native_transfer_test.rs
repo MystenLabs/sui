@@ -38,10 +38,8 @@ impl TestCaseImpl for NativeTransferTest {
         let gas_budget = 2_000_000;
 
         // Test transfer object: move a whole SUI coin object to the recipient,
-        // paying for gas with a separate explicit gas coin. Explicit gas keeps
-        // the high-level gRPC transaction builder on `LedgerService` (no
-        // `StateService` coin enumeration), so this works against the public
-        // gateway.
+        // paying for gas with a separate, explicitly-supplied gas coin (from the
+        // faucet response) so transaction construction is deterministic.
         let obj_to_transfer: ObjectID = *sui_objs.swap_remove(0).id();
         let gas_ref = ctx.current_object_ref(*gas_obj.id()).await;
         let builder = ctx.get_grpc_client().transaction_builder();

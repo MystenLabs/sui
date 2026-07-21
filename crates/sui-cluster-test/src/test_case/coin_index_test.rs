@@ -113,16 +113,25 @@ impl TestCaseImpl for CoinIndexTest {
         // The mint's gas cost reduces the SUI balance; just check it did not grow.
         assert!(total_balance <= old_total_balance);
 
+        // Balance APIs (`GetBalance`/`ListBalances`) key on the coin's INNER type
+        // `pkg::managed::MANAGED`, whereas owned-object enumeration keys on the
+        // object type `Coin<MANAGED>`.
+        let managed_inner = managed_inner_type(package.0);
+
         let managed_coins = Self::coins_of_type(ctx, account, &managed_type).await;
         assert_eq!(managed_coins.len(), 1); // minted one object
         assert_eq!(managed_coins[0].value, 10000);
         assert_eq!(Self::coin_balance(ctx, account, &managed_type).await, 10000);
+        // Require the StateService coin-balance index to reflect the freshly
+        // published custom coin (verified live: settles at t=0, no lag).
+        assert_eq!(
+            Self::balance_of_type(ctx, account, &managed_inner).await,
+            10000,
+            "GetBalance(MANAGED) should equal the minted amount",
+        );
 
-        // Verify list_balances (StateService::ListBalances) reports SUI. The
-        // coin-balance index on the embedded node reliably tracks SUI; a
-        // custom coin type published mid-test may not be aggregated in the
-        // balance index (see `coin_balance` above), so we only require MANAGED to
-        // be *consistent* if it is reported, and always require SUI.
+        // ListBalances (StateService::ListBalances) must report both SUI and the
+        // MANAGED custom coin (each keyed on its inner type).
         let all_balances = Self::all_balances(ctx, account).await;
         assert!(
             all_balances
@@ -130,15 +139,15 @@ impl TestCaseImpl for CoinIndexTest {
                 .any(|(t, _)| Self::type_matches(t, &GAS::type_())),
             "list_balances should include SUI",
         );
-        if let Some((_, managed_reported)) = all_balances
+        let managed_reported = all_balances
             .iter()
-            .find(|(t, _)| Self::type_matches(t, &managed_type))
-        {
-            assert_eq!(
-                *managed_reported, 10000,
-                "if list_balances reports MANAGED, it must equal the minted amount",
-            );
-        }
+            .find(|(t, _)| Self::type_matches(t, &managed_inner))
+            .map(|(_, b)| *b)
+            .expect("list_balances should include the MANAGED custom coin");
+        assert_eq!(
+            managed_reported, 10000,
+            "list_balances MANAGED should equal the minted amount",
+        );
 
         // 5. Mint another MANAGED coin to account, balance 10.
         Self::mint_managed(ctx, package.0, cap.0, 10, account, gas_coin_id).await;
@@ -147,6 +156,12 @@ impl TestCaseImpl for CoinIndexTest {
         assert_eq!(
             Self::coin_balance(ctx, account, &managed_type).await,
             10000 + 10
+        );
+        // StateService GetBalance must also reflect the two owned MANAGED coins.
+        assert_eq!(
+            Self::balance_of_type(ctx, account, &managed_inner).await,
+            10000 + 10,
+            "GetBalance(MANAGED) should equal the sum of owned MANAGED coins",
         );
         assert_eq!(managed_coins.len(), 2);
         let managed_coin_id = managed_coins.iter().find(|c| c.value == 10).unwrap().id;
@@ -212,6 +227,12 @@ impl TestCaseImpl for CoinIndexTest {
         )
         .await;
         assert_eq!(Self::coin_balance(ctx, account, &managed_type).await, 0);
+        // GetBalance must report zero once all MANAGED coins are burned.
+        assert_eq!(
+            Self::balance_of_type(ctx, account, &managed_inner).await,
+            0,
+            "GetBalance(MANAGED) should be zero after burning all MANAGED coins",
+        );
         assert_eq!(
             Self::coins_of_type(ctx, account, &managed_type).await.len(),
             0
@@ -325,11 +346,10 @@ impl CoinIndexTest {
             .unwrap_or_default()
     }
 
-    /// Balance of a coin type derived from the owned coin *objects* (sum of BCS-
-    /// decoded values via `ListOwnedObjects`). This is authoritative for
-    /// arbitrary coin types on the embedded node, whose `GetBalance` coin-balance
-    /// index is only reliably populated for SUI; custom types published mid-test
-    /// are not aggregated there.
+    /// Balance of a coin *object* type (e.g. `Coin<MANAGED>`) derived by summing
+    /// the BCS-decoded values of owned coin objects (`ListOwnedObjects`). Used to
+    /// cross-check the `GetBalance`/`ListBalances` aggregates against the actual
+    /// owned objects; both must agree.
     async fn coin_balance(ctx: &TestContext, owner: SuiAddress, coin_type: &StructTag) -> u64 {
         Self::coins_of_type(ctx, owner, coin_type)
             .await
@@ -569,14 +589,22 @@ fn all_coin_filter() -> StructTag {
 }
 
 /// `Coin<pkg::managed::MANAGED>`.
+/// The object type `Coin<pkg::managed::MANAGED>` (used for owned-object
+/// enumeration via `ListOwnedObjects`).
 fn managed_coin_type(pkg: ObjectID) -> StructTag {
-    let managed = StructTag {
+    sui_types::coin::Coin::type_(TypeTag::Struct(Box::new(managed_inner_type(pkg))))
+}
+
+/// The inner coin type `pkg::managed::MANAGED` (the `T` used by
+/// `GetBalance`/`ListBalances`, which key on the coin's inner type, not
+/// `Coin<T>`).
+fn managed_inner_type(pkg: ObjectID) -> StructTag {
+    StructTag {
         address: pkg.into(),
         module: Identifier::new("managed").unwrap(),
         name: Identifier::new("MANAGED").unwrap(),
         type_params: vec![],
-    };
-    sui_types::coin::Coin::type_(TypeTag::Struct(Box::new(managed)))
+    }
 }
 
 async fn publish_managed_coin_package(
