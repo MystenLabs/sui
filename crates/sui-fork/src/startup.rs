@@ -149,6 +149,14 @@ pub async fn initialize(
         crate::seed::prepare_seed_manifest(&data_store, network_name, &seed_input).await?;
     save_seed_manifest_objects(&data_store, &seed_manifest)?;
 
+    // Resume support: the Simulacrum must build its next checkpoint on the
+    // fork's own local tip. On a fresh fork that tip is the fork-point
+    // checkpoint persisted just above; on a resumed fork that has advanced,
+    // it is the highest locally sealed checkpoint — re-seeding from the fork
+    // point would rebuild an already-persisted sequence number with different
+    // contents and fail the seal.
+    let base_checkpoint = resume_base_checkpoint(&data_store)?;
+
     // 3. Read system state — fetches object 0x5 + dynamic fields from remote via ObjectStore.
     let system_state =
         sui_types::sui_system_state::get_sui_system_state(&data_store).map_err(|e| {
@@ -165,7 +173,7 @@ pub async fn initialize(
     let mut rng = OsRng;
     let config = ConfigBuilder::new_with_temp_dir()
         .rng(&mut rng)
-        .with_chain_start_timestamp_ms(checkpoint.timestamp_ms)
+        .with_chain_start_timestamp_ms(base_checkpoint.timestamp_ms)
         .deterministic_committee_size(NonZeroUsize::MIN)
         .with_protocol_version(ProtocolVersion::new(protocol_version))
         .with_chain_override(node.chain())
@@ -180,7 +188,7 @@ pub async fn initialize(
     // 7. Create Simulacrum from custom state.
     let simulacrum = Simulacrum::new_from_custom_state(
         keystore,
-        checkpoint,
+        base_checkpoint,
         system_state,
         &config,
         data_store,
@@ -212,6 +220,17 @@ fn fork_chain_identifier(chain: Chain, checkpoint: &VerifiedCheckpoint) -> Chain
         Chain::Testnet => get_testnet_chain_identifier(),
         Chain::Unknown => ChainIdentifier::from(*checkpoint.digest()),
     }
+}
+
+/// Return the checkpoint the Simulacrum should build on: the highest locally
+/// persisted checkpoint. On a fresh fork this is the fork-point checkpoint
+/// (persisted before this is called); on a resumed fork it is the local tip,
+/// so the next sealed checkpoint gets the correct sequence number and
+/// previous-digest chain instead of colliding with an already-persisted one.
+pub(crate) fn resume_base_checkpoint(data_store: &DataStore) -> Result<VerifiedCheckpoint> {
+    data_store
+        .get_highest_verified_checkpoint()?
+        .ok_or_else(|| anyhow!("no local checkpoint available to resume from"))
 }
 
 /// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to
