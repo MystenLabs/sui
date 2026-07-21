@@ -17,13 +17,6 @@ pub(crate) const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql
 pub(crate) const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
 /// GraphQL endpoint for Sui devnet.
 pub(crate) const DEVNET_GQL_URL: &str = "https://graphql.devnet.sui.io/graphql";
-/// gRPC endpoint for Sui mainnet.
-pub(crate) const MAINNET_RPC_URL: &str = "https://fullnode.mainnet.sui.io:443";
-/// gRPC endpoint for Sui testnet.
-pub(crate) const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
-/// gRPC endpoint for Sui devnet.
-pub(crate) const DEVNET_RPC_URL: &str = "https://fullnode.devnet.sui.io:443";
-
 /// Represents a Sui network node configuration.
 ///
 /// Used to specify which network the data store should connect to.
@@ -66,17 +59,6 @@ impl Node {
             Node::Mainnet => MAINNET_GQL_URL,
             Node::Testnet => TESTNET_GQL_URL,
             Node::Devnet => DEVNET_GQL_URL,
-            Node::Custom(url) => url.as_str(),
-        }
-    }
-
-    /// Returns the gRPC endpoint URL for this node.
-    pub(crate) fn node_url(&self) -> &str {
-        match self {
-            Node::Mainnet => MAINNET_RPC_URL,
-            Node::Testnet => TESTNET_RPC_URL,
-            Node::Devnet => DEVNET_RPC_URL,
-            // For custom, assume it's already an RPC URL
             Node::Custom(url) => url.as_str(),
         }
     }

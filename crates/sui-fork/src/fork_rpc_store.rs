@@ -719,7 +719,6 @@ mod tests {
     use sui_consistent_store::DbOptions;
     use sui_types::base_types::SuiAddress;
     use sui_types::gas_coin::GAS;
-    use sui_types::gas_coin::GasCoin;
     use sui_types::object::Data;
     use sui_types::object::MoveObject;
     use sui_types::object::ObjectInner;

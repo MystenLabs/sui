@@ -59,7 +59,6 @@ use sui_types::transaction::VerifiedTransaction;
 use typed_store_error::TypedStoreError;
 
 use crate::GraphQLClient;
-use crate::Node;
 use crate::TransactionInfo;
 use crate::fork_rpc_store::ForkRpcStore;
 use crate::fork_rpc_store::ObjectRemoval;
@@ -102,28 +101,6 @@ struct DataStoreInner {
 }
 
 impl DataStore {
-    /// Create a new `DataStore` for the given network, anchored at `forked_at_checkpoint`.
-    ///
-    /// The local metadata root is selected by `ForkMetadataStore`. The GraphQL client is
-    /// constructed eagerly but no remote requests are made until reads happen.
-    pub(crate) async fn new(
-        node: Node,
-        forked_at_checkpoint: CheckpointSequenceNumber,
-        version: &str,
-        data_dir: Option<std::path::PathBuf>,
-        rpc_store: ForkRpcStore,
-    ) -> Result<Self, anyhow::Error> {
-        let gql = GraphQLClient::new(node.clone(), version)?;
-        let metadata = ForkMetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
-
-        Ok(Self::from_parts(
-            forked_at_checkpoint,
-            gql,
-            metadata,
-            rpc_store,
-        ))
-    }
-
     pub(crate) fn from_parts(
         forked_at_checkpoint: CheckpointSequenceNumber,
         gql: GraphQLClient,
@@ -247,19 +224,6 @@ impl DataStore {
             Ok(checkpoint) => Ok(Some(checkpoint)),
             Err(_) => Ok(None),
         }
-    }
-
-    /// Eagerly populate the RPC store with the startup checkpoint so any
-    /// bootstrap failure surfaces now instead of on first access.
-    pub(crate) fn save_startup_checkpoint(&self) -> anyhow::Result<()> {
-        self.get_checkpoint_by_sequence_number(self.inner.forked_at_checkpoint)?
-            .ok_or_else(|| {
-                anyhow!(
-                    "checkpoint {} not found on remote",
-                    self.inner.forked_at_checkpoint
-                )
-            })?;
-        Ok(())
     }
 
     /// Get the highest checkpoint sequence number available in the RPC store.
@@ -517,8 +481,11 @@ impl DataStore {
     /// pre-populate the attached RPC store with the data they need.
     #[cfg(test)]
     pub(crate) fn new_for_testing(root: std::path::PathBuf, rpc_store: ForkRpcStore) -> Self {
-        let gql = GraphQLClient::new(Node::Custom("http://localhost:1".to_string()), "test")
-            .expect("graphql store with localhost url should construct");
+        let gql = GraphQLClient::new(
+            crate::Node::Custom("http://localhost:1".to_string()),
+            "test",
+        )
+        .expect("graphql store with localhost url should construct");
         let metadata = ForkMetadataStore::new_with_root(root);
         Self::from_parts(0, gql, metadata, rpc_store)
     }
@@ -532,7 +499,7 @@ impl DataStore {
         forked_at_checkpoint: CheckpointSequenceNumber,
         rpc_store: ForkRpcStore,
     ) -> Self {
-        let gql = GraphQLClient::new(Node::Custom(gql_url), "test")
+        let gql = GraphQLClient::new(crate::Node::Custom(gql_url), "test")
             .expect("graphql store with custom url should construct");
         let metadata = ForkMetadataStore::new_with_root(root);
         Self::from_parts(forked_at_checkpoint, gql, metadata, rpc_store)
