@@ -46,7 +46,7 @@ use crate::runtime::ForkRuntime;
 use crate::seed::SeedInput;
 use crate::seed::ensure_seed_manifest_matches;
 use crate::seed::save_seed_manifest_objects;
-use crate::store::DataStore;
+use crate::store::ForkStore;
 
 /// Checkpoint selected for startup, plus whether existing local fork state was found.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -119,7 +119,7 @@ pub async fn initialize(
     data_dir: Option<PathBuf>,
     seed_input: SeedInput,
 ) -> Result<(Context, SubscriptionServiceHandle)> {
-    // 1. Prepare metadata and GraphQL, then open the RPC store before constructing DataStore.
+    // 1. Prepare metadata and GraphQL, then open the RPC store before constructing ForkStore.
     let gql = GraphQLClient::new(node.clone(), version)?;
     let chain_identifier = gql.chain();
     let local = ForkMetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
@@ -127,7 +127,7 @@ pub async fn initialize(
     crate::seed::ensure_seed_policy(&local, &seed_input)?;
 
     // 2. Fetch the startup checkpoint, open the RPC store using its chain identity,
-    //    then construct the DataStore with the RPC store already attached.
+    //    then construct the ForkStore with the RPC store already attached.
     let (checkpoint, checkpoint_contents) = gql
         .get_checkpoint(Some(forked_at_checkpoint))?
         .ok_or_else(|| anyhow!("checkpoint {} not found", forked_at_checkpoint))?;
@@ -138,16 +138,11 @@ pub async fn initialize(
         forked_at_checkpoint,
         rpc_chain_identifier,
     )?;
-    let data_store = DataStore::from_parts(
-        forked_at_checkpoint,
-        gql,
-        local,
-        fork_runtime.fork_rpc_store(),
-    );
-    data_store.save_checkpoint(&checkpoint, &checkpoint_contents)?;
+    let store = ForkStore::from_parts(forked_at_checkpoint, gql, local, fork_runtime.local_store());
+    store.save_checkpoint(&checkpoint, &checkpoint_contents)?;
     let seed_manifest =
-        crate::seed::prepare_seed_manifest(&data_store, network_name, &seed_input).await?;
-    save_seed_manifest_objects(&data_store, &seed_manifest)?;
+        crate::seed::prepare_seed_manifest(&store, network_name, &seed_input).await?;
+    save_seed_manifest_objects(&store, &seed_manifest)?;
 
     // Resume support: the Simulacrum must build its next checkpoint on the
     // fork's own local tip. On a fresh fork that tip is the fork-point
@@ -155,17 +150,16 @@ pub async fn initialize(
     // it is the highest locally sealed checkpoint — re-seeding from the fork
     // point would rebuild an already-persisted sequence number with different
     // contents and fail the seal.
-    let base_checkpoint = resume_base_checkpoint(&data_store)?;
+    let base_checkpoint = resume_base_checkpoint(&store)?;
 
     // 3. Read system state — fetches object 0x5 + dynamic fields from remote via ObjectStore.
-    let system_state =
-        sui_types::sui_system_state::get_sui_system_state(&data_store).map_err(|e| {
-            anyhow!(
-                "failed to read system state at checkpoint {}: {}",
-                forked_at_checkpoint,
-                e
-            )
-        })?;
+    let system_state = sui_types::sui_system_state::get_sui_system_state(&store).map_err(|e| {
+        anyhow!(
+            "failed to read system state at checkpoint {}: {}",
+            forked_at_checkpoint,
+            e
+        )
+    })?;
 
     let protocol_version = system_state.protocol_version();
 
@@ -191,7 +185,7 @@ pub async fn initialize(
         base_checkpoint,
         system_state,
         &config,
-        data_store,
+        store,
         rng,
     );
 
@@ -221,8 +215,8 @@ fn fork_chain_identifier(chain: Chain, checkpoint: &VerifiedCheckpoint) -> Chain
 /// (persisted before this is called); on a resumed fork it is the local tip,
 /// so the next sealed checkpoint gets the correct sequence number and
 /// previous-digest chain instead of colliding with an already-persisted one.
-pub(crate) fn resume_base_checkpoint(data_store: &DataStore) -> Result<VerifiedCheckpoint> {
-    data_store
+pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckpoint> {
+    store
         .get_highest_verified_checkpoint()?
         .ok_or_else(|| anyhow!("no local checkpoint available to resume from"))
 }

@@ -46,7 +46,7 @@ use sui_types::storage::error::Result as StorageResult;
 use sui_types::transaction::VerifiedTransaction;
 use typed_store_error::TypedStoreError;
 
-use crate::store::DataStore;
+use crate::store::ForkStore;
 
 /// Fork-aware RPC reader plugged into the `sui-rpc-api` `RpcService` in
 /// [`crate::startup`]. The fork serves RPC directly through `sui-rpc-api`; it
@@ -54,10 +54,10 @@ use crate::store::DataStore;
 ///
 /// This is the only adapter that implements the upstream RPC storage traits:
 /// post-fork indexed data is read from `sui-rpc-store` first, while pre-fork
-/// sparse reads are delegated to [`DataStore`].
+/// sparse reads are delegated to [`ForkStore`].
 pub(crate) struct ForkRpcReader {
     rpc_store: RpcStoreReader,
-    store: DataStore,
+    store: ForkStore,
 }
 
 impl ForkRpcReader {
@@ -65,7 +65,7 @@ impl ForkRpcReader {
     ///
     /// `rpc_store` handles native RPC-store reads. `store` owns fork-specific
     /// misses, including checkpoint-scoped remote fetches and index initialization.
-    pub(crate) fn new(rpc_store: RpcStoreReader, store: DataStore) -> Self {
+    pub(crate) fn new(rpc_store: RpcStoreReader, store: ForkStore) -> Self {
         Self { rpc_store, store }
     }
 }
@@ -79,7 +79,7 @@ impl ObjectStore for ForkRpcReader {
         self.rpc_store.get_object(object_id).or_else(|| {
             optional_store_read(
                 "object lookup",
-                DataStore::get_object(&self.store, object_id).map_err(to_storage_error),
+                ForkStore::get_object(&self.store, object_id).map_err(to_storage_error),
             )
         })
     }
@@ -167,7 +167,7 @@ impl ReadStore for ForkRpcReader {
     ///
     /// This value is not derived from the fork's local store.
     fn get_lowest_available_checkpoint(&self) -> StorageResult<CheckpointSequenceNumber> {
-        DataStore::get_lowest_available_checkpoint(&self.store).map_err(to_storage_error)
+        ForkStore::get_lowest_available_checkpoint(&self.store).map_err(to_storage_error)
     }
 
     /// Reads a checkpoint summary by checkpoint digest with optional fork-state lookup.
@@ -175,7 +175,7 @@ impl ReadStore for ForkRpcReader {
         self.rpc_store.get_checkpoint_by_digest(digest).or_else(|| {
             optional_store_read(
                 "checkpoint digest lookup",
-                DataStore::get_checkpoint_by_digest(&self.store, digest).map_err(to_storage_error),
+                ForkStore::get_checkpoint_by_digest(&self.store, digest).map_err(to_storage_error),
             )
         })
     }
@@ -192,7 +192,7 @@ impl ReadStore for ForkRpcReader {
             .or_else(|| {
                 optional_store_read(
                     "checkpoint sequence lookup",
-                    DataStore::get_checkpoint_by_sequence_number(&self.store, sequence_number)
+                    ForkStore::get_checkpoint_by_sequence_number(&self.store, sequence_number)
                         .map_err(to_storage_error),
                 )
             })
@@ -208,7 +208,7 @@ impl ReadStore for ForkRpcReader {
             .or_else(|| {
                 optional_store_read(
                     "checkpoint contents digest lookup",
-                    DataStore::get_checkpoint_contents_by_digest(&self.store, digest)
+                    ForkStore::get_checkpoint_contents_by_digest(&self.store, digest)
                         .map_err(to_storage_error),
                 )
             })
@@ -224,7 +224,7 @@ impl ReadStore for ForkRpcReader {
             .or_else(|| {
                 optional_store_read(
                     "checkpoint contents sequence lookup",
-                    DataStore::get_checkpoint_contents_by_sequence_number(
+                    ForkStore::get_checkpoint_contents_by_sequence_number(
                         &self.store,
                         sequence_number,
                     )
@@ -238,7 +238,7 @@ impl ReadStore for ForkRpcReader {
         self.rpc_store.get_transaction(tx_digest).or_else(|| {
             optional_store_read(
                 "transaction lookup",
-                DataStore::get_transaction(&self.store, tx_digest).map_err(to_storage_error),
+                ForkStore::get_transaction(&self.store, tx_digest).map_err(to_storage_error),
             )
             .map(Arc::new)
         })
@@ -251,7 +251,7 @@ impl ReadStore for ForkRpcReader {
             .or_else(|| {
                 optional_store_read(
                     "transaction effects lookup",
-                    DataStore::get_transaction_effects(&self.store, tx_digest)
+                    ForkStore::get_transaction_effects(&self.store, tx_digest)
                         .map_err(to_storage_error),
                 )
             })
@@ -285,7 +285,7 @@ impl ReadStore for ForkRpcReader {
             .or_else(|| {
                 optional_store_read(
                     "transaction checkpoint lookup",
-                    DataStore::get_transaction_checkpoint(&self.store, digest)
+                    ForkStore::get_transaction_checkpoint(&self.store, digest)
                         .map_err(to_storage_error),
                 )
             })
@@ -310,7 +310,7 @@ impl RpcStateReader for ForkRpcReader {
     ///
     /// This is remote-chain availability metadata, not fork-local state.
     fn get_lowest_available_checkpoint_objects(&self) -> StorageResult<CheckpointSequenceNumber> {
-        DataStore::get_lowest_available_checkpoint_objects(&self.store).map_err(to_storage_error)
+        ForkStore::get_lowest_available_checkpoint_objects(&self.store).map_err(to_storage_error)
     }
 
     /// Reads the chain identifier, deriving it from fork state when it is missing locally.
@@ -514,7 +514,7 @@ mod tests {
     use sui_types::transaction::Transaction as SuiTransaction;
 
     use crate::runtime::ForkRuntime;
-    use crate::store::DataStore;
+    use crate::store::ForkStore;
 
     use super::*;
 
@@ -578,7 +578,7 @@ mod tests {
             CheckpointDigest::new([9; 32]).into(),
         )
         .expect("fork runtime should open");
-        let store = DataStore::new_for_testing(temp.path().to_path_buf(), runtime.fork_rpc_store());
+        let store = ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
 
         let (checkpoint, contents, executed) = checkpoint_with_transaction(1);
         let transaction = signed_transaction(&executed);
@@ -593,11 +593,11 @@ mod tests {
         let tx_offset = u32::try_from(tx_offset).expect("checkpoint offset fits in u32");
 
         runtime
-            .fork_rpc_store()
+            .local_store()
             .save_checkpoint(&checkpoint, &contents)
             .expect("checkpoint should persist");
         runtime
-            .fork_rpc_store()
+            .local_store()
             .save_transaction(
                 &checkpoint,
                 &contents,

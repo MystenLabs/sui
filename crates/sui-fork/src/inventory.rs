@@ -25,20 +25,20 @@ use sui_types::coin::CoinMetadata;
 use sui_types::coin::RegulatedCoinMetadata;
 use sui_types::coin::TreasuryCap;
 
-use crate::fork_rpc_store::ForkRpcStore;
+use crate::local_store::LocalStore;
 use crate::metadata::ForkMetadataStore;
 use crate::remote::RemoteSource;
 
 /// Runs inventory scans on first use and marks them complete.
 ///
-/// Holds the same snapshot lock as `DataStore`'s local object writes, so an
+/// Holds the same snapshot lock as `ForkStore`'s local object writes, so an
 /// inventory scan never interleaves with a local execution's raw-object and
 /// live-state writes (derived index rows are the embedded indexer's job), and
 /// concurrent scans of the same owner run once.
 pub(crate) struct InventoryInitializer {
     remote: RemoteSource,
     metadata: ForkMetadataStore,
-    rpc_store: ForkRpcStore,
+    local_store: LocalStore,
     snapshot_lock: Arc<RwLock<()>>,
 }
 
@@ -46,13 +46,13 @@ impl InventoryInitializer {
     pub(crate) fn new(
         remote: RemoteSource,
         metadata: ForkMetadataStore,
-        rpc_store: ForkRpcStore,
+        local_store: LocalStore,
         snapshot_lock: Arc<RwLock<()>>,
     ) -> Self {
         Self {
             remote,
             metadata,
-            rpc_store,
+            local_store,
             snapshot_lock,
         }
     }
@@ -94,7 +94,7 @@ impl InventoryInitializer {
             .remote
             .objects_at_fork(&object_refs, "address-owned objects")?;
         for object in objects {
-            self.rpc_store
+            self.local_store
                 .save_address_owner_inventory_object(owner, &object)?;
         }
 
@@ -128,7 +128,7 @@ impl InventoryInitializer {
             .remote
             .objects_at_fork(&object_refs, "object-owned objects")?;
         for object in objects {
-            self.rpc_store
+            self.local_store
                 .save_object_owner_inventory_object(parent, &object)?;
         }
 
@@ -184,7 +184,7 @@ impl InventoryInitializer {
                     object_struct_tag,
                 );
             }
-            self.rpc_store.save_type_inventory_object(&object)?;
+            self.local_store.save_type_inventory_object(&object)?;
         }
 
         self.metadata.mark_type_inventory_complete(&type_filter)

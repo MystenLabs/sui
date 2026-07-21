@@ -88,7 +88,7 @@ impl TransactionExecutor for ForkedTransactionExecutor {
             None
         };
 
-        // Input/output objects are resolved via the `DataStore`, which is
+        // Input/output objects are resolved via the `ForkStore`, which is
         // the same `ObjectStore` the gRPC reader serves from — after
         // execution it holds the pre-execution input versions (from the
         // fork snapshot / sparse RPC-store saves) and the newly
