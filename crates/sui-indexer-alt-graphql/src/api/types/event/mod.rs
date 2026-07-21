@@ -7,6 +7,9 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
+use async_graphql::connection::Edge;
+use async_graphql::connection::EmptyFields;
+use async_graphql::connection::PageInfo;
 use diesel::prelude::QueryableByName;
 use diesel::sql_types::BigInt;
 use itertools::Itertools;
@@ -86,6 +89,12 @@ pub(crate) struct Event {
     pub(crate) timestamp_ms: Option<u64>,
 }
 
+/// Custom `Connection` for events to support partially-filled pages.
+pub(crate) struct EventConnection {
+    pub edges: Vec<Edge<String, Event, EmptyFields>>,
+    pub page_info: PageInfo,
+}
+
 #[Object]
 impl Event {
     /// The Move value emitted for this event.
@@ -148,6 +157,24 @@ impl Event {
     }
 }
 
+#[Object]
+impl EventConnection {
+    /// Information to aid in pagination.
+    async fn page_info(&self) -> &PageInfo {
+        &self.page_info
+    }
+
+    /// A list of edges.
+    async fn edges(&self) -> &[Edge<String, Event, EmptyFields>] {
+        &self.edges
+    }
+
+    /// A list of nodes.
+    async fn nodes(&self) -> Vec<&Event> {
+        self.edges.iter().map(|e| &e.node).collect()
+    }
+}
+
 impl Event {
     /// Paginates events based on the provided filters and page parameters.
     ///
@@ -157,7 +184,7 @@ impl Event {
         scope: Scope,
         page: Page<CEvent>,
         filter: EventFilter,
-    ) -> Result<Connection<String, Event>, RpcError> {
+    ) -> Result<EventConnection, RpcError> {
         query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
@@ -170,7 +197,7 @@ impl Event {
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(Connection::new(false, false));
+            return Ok(EventConnection::empty());
         };
 
         #[derive(QueryableByName)]
@@ -213,6 +240,7 @@ impl Event {
             |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number),
             |(_, e)| Ok(e),
         )
+        .map(Into::into)
     }
 }
 
@@ -233,6 +261,20 @@ impl CEvent {
         match self {
             CEvent::Primary(c) => c.event_index,
             CEvent::Secondary(c) => c.ev_sequence_number,
+        }
+    }
+}
+
+impl EventConnection {
+    fn empty() -> Self {
+        Self {
+            edges: vec![],
+            page_info: PageInfo {
+                has_previous_page: false,
+                has_next_page: false,
+                start_cursor: None,
+                end_cursor: None,
+            },
         }
     }
 }
@@ -297,6 +339,25 @@ impl TxBoundsCursor for CEvent {
         match self {
             CEvent::Primary(c) => c.tx_seq,
             CEvent::Secondary(c) => c.tx_sequence_number,
+        }
+    }
+}
+
+impl From<Connection<String, Event>> for EventConnection {
+    /// Convert a stock async-graphql `Connection` (as produced by the PG path's
+    /// `Page::paginate_results`) into the custom shape. Cursors are derived from edges, matching
+    /// stock semantics.
+    fn from(conn: Connection<String, Event>) -> Self {
+        let start_cursor = conn.edges.first().map(|e| e.cursor.clone());
+        let end_cursor = conn.edges.last().map(|e| e.cursor.clone());
+        Self {
+            edges: conn.edges,
+            page_info: PageInfo {
+                has_previous_page: conn.has_previous_page,
+                has_next_page: conn.has_next_page,
+                start_cursor,
+                end_cursor,
+            },
         }
     }
 }
