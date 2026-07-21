@@ -387,6 +387,8 @@ The response contains the proof components:
 To avoid CORS errors in frontend apps, proxy the prover call through your backend:
 
 ```typescript
+import { getZkLoginSignature } from '@mysten/sui/zklogin';
+
 const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
 
 export type PartialZkLoginSignature = Omit<
