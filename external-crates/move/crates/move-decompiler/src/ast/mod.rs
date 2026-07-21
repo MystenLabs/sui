@@ -68,6 +68,10 @@ pub struct Function {
     /// `// Did not structure and emit blocks N, K, ...` notice so the reader knows part of
     /// the bytecode is missing from this function's source view.
     pub unstructured_blocks: Vec<u64>,
+    /// Labels of `Structured::Jump` nodes that survived every refinement pass and reach
+    /// emission as `unstructured { goto 'label_N }`. The body is still complete, but the
+    /// jumps are unstructured residue. Non-empty triggers a second notice line.
+    pub residual_jumps: Vec<u64>,
 }
 
 #[derive(Debug, Clone)]

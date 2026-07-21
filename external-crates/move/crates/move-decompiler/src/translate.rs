@@ -251,7 +251,11 @@ fn function<S: SourceKind>(
         print_heading("input");
         println!("{input:?}");
     }
-    let (structured, unstructured_blocks) = crate::structuring::structure(config, input, entry);
+    let (structured, report) = crate::structuring::structure(config, input, entry);
+    let crate::structuring::UnstructuredReport {
+        dropped_blocks: unstructured_blocks,
+        residual_jumps,
+    } = report;
     if config.debug_print.structured {
         print_heading("structured");
         println!("{}", structured.to_test_string());
@@ -278,6 +282,7 @@ fn function<S: SourceKind>(
         returns,
         code,
         unstructured_blocks,
+        residual_jumps,
     }
 }
 
@@ -677,23 +682,6 @@ fn generate_output_inner(
             // the corpus driver can break down residue by category.
             eprintln!("GOTO[{}] -> label_{}", src.as_tag(), label);
             Out::Exp::Unstructured(vec![Out::UnstructuredNode::Goto(label)])
-        }
-        D::Structured::Let(name) => Out::Exp::Declare(vec![name]),
-        D::Structured::AssignTag(name, value) => Out::Exp::Assign(
-            vec![name],
-            Box::new(Out::Exp::Value(
-                move_core_types::runtime_value::MoveValue::U32(value),
-            )),
-        ),
-        D::Structured::SelectorMatch(name, arms) => {
-            let translated_arms: Vec<(crate::ast::DispatchTag, Out::Exp)> = arms
-                .into_iter()
-                .map(|(tag, body)| {
-                    let mut arm_terms = terms.clone();
-                    (tag, generate_output_inner(&mut arm_terms, body))
-                })
-                .collect();
-            Out::Exp::MatchLit(Box::new(Out::Exp::Variable(name)), translated_arms)
         }
     }
 }
