@@ -429,11 +429,22 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             )
         };
 
-        const MAX_BLOCKS_PER_POLL: usize = 1;
+        // How many queued blocks a subscription stream may hand to the transport per
+        // poll. At 1 (historical behavior), a stream cannot yield block N+1 until the
+        // transport accepts block N, so per-peer send queues convert block bytes into
+        // delivery latency (measured ~0.4 ms/KB, Test 16). Larger values drain the
+        // broadcast backlog in batches, removing the per-block wakeup serialization.
+        static MAX_BLOCKS_PER_POLL: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| {
+            std::env::var("CONSENSUS_SUBSCRIPTION_MAX_BLOCKS_PER_POLL")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1)
+        });
+        let max_blocks_per_poll = *MAX_BLOCKS_PER_POLL;
         let broadcasted_blocks = BroadcastedBlockStream::new(
             PeerId::Validator(peer),
             self.rx_block_broadcast.resubscribe(),
-            MAX_BLOCKS_PER_POLL,
+            max_blocks_per_poll,
             self.subscription_counter.clone(),
         );
 
@@ -442,7 +453,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         Ok(Box::pin(past_proposed_blocks.chain(
             broadcasted_blocks.flat_map(move |items| {
                 debug_assert!(
-                    items.len() <= MAX_BLOCKS_PER_POLL,
+                    items.len() <= max_blocks_per_poll,
                     "Too many blocks received from broadcast"
                 );
                 for item in &items {
