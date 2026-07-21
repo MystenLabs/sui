@@ -27,8 +27,6 @@ const CHECKPOINT_MAILBOX_SIZE: usize = 1024;
 /// 1 MiB at capacity. A full lane remains explicit, retryable backpressure to
 /// the caller.
 const ADMISSION_MAILBOX_SIZE: usize = 4096;
-/// Fixed upper bound on admission work performed between checkpoint polls.
-const ADMISSION_BATCH_SIZE: usize = 128;
 const SUBSCRIPTION_CHANNEL_SIZE: usize = 256;
 const DEFAULT_MAX_SUBSCRIBERS: usize = 1024;
 /// Bound on each shard task's mailbox (registrations, checkpoint fan-out,
@@ -275,11 +273,6 @@ enum AdmissionState {
     Accepting,
     WaitingForShard(SubscriptionRequest),
     Closed,
-}
-
-enum AdmissionAttempt {
-    Handled,
-    ShardsFull(SubscriptionRequest),
 }
 
 enum SubscriptionServiceEvent {
@@ -544,7 +537,7 @@ impl SubscriptionService {
                     break;
                 }
                 SubscriptionServiceEvent::AdmissionRequest(request) => {
-                    admission_state = self.admit_batch(request, ADMISSION_BATCH_SIZE);
+                    admission_state = self.try_admit(request);
                 }
                 SubscriptionServiceEvent::AdmissionClosed => {
                     // Established subscribers remain live until the checkpoint
@@ -556,7 +549,7 @@ impl SubscriptionService {
                         unreachable!("shard capacity requires a waiting admission");
                     };
                     self.complete_admission(shard, permit, request);
-                    admission_state = self.admit_queued(ADMISSION_BATCH_SIZE - 1);
+                    admission_state = AdmissionState::Accepting;
                 }
                 SubscriptionServiceEvent::AdmissionCanceled => {
                     let AdmissionState::WaitingForShard(_) = admission_state else {
@@ -797,10 +790,10 @@ impl SubscriptionService {
         self.next_shard = (shard + 1) % self.shards.len();
     }
 
-    fn try_admit(&mut self, request: SubscriptionRequest) -> AdmissionAttempt {
+    fn try_admit(&mut self, request: SubscriptionRequest) -> AdmissionState {
         if request.response_sender.is_closed() {
             trace!("failed to register new subscriber: request was cancelled");
-            return AdmissionAttempt::Handled;
+            return AdmissionState::Accepting;
         }
 
         if self.counters.total.load(Ordering::Relaxed) >= self.max_subscribers {
@@ -808,49 +801,16 @@ impl SubscriptionService {
                 "failed to register new subscriber: hit maximum number of subscribers {}",
                 self.max_subscribers
             );
-            return AdmissionAttempt::Handled;
+            return AdmissionState::Accepting;
         }
 
         let Some((shard, permit)) = self.try_reserve_least_backlogged_shard() else {
             trace!("waiting for a subscription shard to have capacity");
-            return AdmissionAttempt::ShardsFull(request);
+            return AdmissionState::WaitingForShard(request);
         };
 
         self.complete_admission(shard, permit, request);
-        AdmissionAttempt::Handled
-    }
-
-    fn admit_batch(&mut self, first_request: SubscriptionRequest, budget: usize) -> AdmissionState {
-        debug_assert!(budget > 0);
-
-        let mut request = first_request;
-        for admitted in 0..budget {
-            match self.try_admit(request) {
-                AdmissionAttempt::Handled => {}
-                AdmissionAttempt::ShardsFull(request) => {
-                    return AdmissionState::WaitingForShard(request);
-                }
-            }
-
-            if admitted + 1 == budget {
-                return AdmissionState::Accepting;
-            }
-            request = match self.admission_mailbox.try_recv() {
-                Ok(request) => request,
-                Err(mpsc::error::TryRecvError::Empty) => return AdmissionState::Accepting,
-                Err(mpsc::error::TryRecvError::Disconnected) => return AdmissionState::Closed,
-            };
-        }
-
         AdmissionState::Accepting
-    }
-
-    fn admit_queued(&mut self, budget: usize) -> AdmissionState {
-        match self.admission_mailbox.try_recv() {
-            Ok(request) => self.admit_batch(request, budget),
-            Err(mpsc::error::TryRecvError::Empty) => AdmissionState::Accepting,
-            Err(mpsc::error::TryRecvError::Disconnected) => AdmissionState::Closed,
-        }
     }
 }
 
@@ -1017,7 +977,7 @@ mod tests {
                 spec,
                 response_sender,
             }),
-            AdmissionAttempt::Handled
+            AdmissionState::Accepting
         ));
         response_receiver.await.ok()
     }
@@ -1092,6 +1052,8 @@ mod tests {
 
     #[tokio::test]
     async fn full_public_admission_queue_returns_none_promptly() {
+        // Occupy the only ingress slot so the next registration must take the
+        // public overload path.
         let (sender, _mailbox) = mpsc::channel(1);
         let (occupied_sender, _occupied_receiver) = oneshot::channel();
         assert!(
@@ -1107,6 +1069,8 @@ mod tests {
             metrics: SubscriptionMetrics::new(&prometheus::Registry::new()),
         };
 
+        // The timeout guards against regressing from immediate rejection to
+        // waiting for admission capacity.
         let result = tokio::time::timeout(
             Duration::from_secs(1),
             handle.register_subscription(unfiltered()),
@@ -1118,6 +1082,8 @@ mod tests {
 
     #[tokio::test]
     async fn checkpoint_backlog_drains_before_registration() {
+        // Queue one admission and two checkpoints before starting the actor,
+        // making both select branches ready on its first poll.
         let (service, checkpoint_sender, request_sender, mut shards) =
             actor_service_with(1, 25, None, 4, 4);
         let metrics = service.metrics.clone();
@@ -1133,6 +1099,8 @@ mod tests {
         assert_eq!(checkpoint_sender.send(checkpoint(1)).unwrap(), 1);
         assert_eq!(checkpoint_sender.send(checkpoint(2)).unwrap(), 1);
 
+        // The biased select must process both checkpoints before acknowledging
+        // the registration.
         let actor = tokio::spawn(service.start());
         let mut receiver = tokio::time::timeout(Duration::from_secs(1), reply_receiver)
             .await
@@ -1140,6 +1108,8 @@ mod tests {
             .unwrap();
         assert_eq!(metrics.last_recieved_checkpoint.get(), 2);
 
+        // The subscriber was admitted after checkpoints 1 and 2, so its first
+        // deliverable checkpoint is 3.
         assert_eq!(checkpoint_sender.send(checkpoint(3)).unwrap(), 1);
         drop(checkpoint_sender);
         actor.await.unwrap();
@@ -1151,6 +1121,8 @@ mod tests {
 
     #[tokio::test]
     async fn admission_prefers_least_backlogged_shard() {
+        // Seed mailbox depths of two, one, and zero. Immediate admission should
+        // choose shard 2 because it has the greatest remaining capacity.
         let (mut service, mut shards) = test_service(3);
         for _ in 0..2 {
             assert!(
@@ -1169,6 +1141,8 @@ mod tests {
                 .is_ok()
         );
 
+        // Processing the selected registration also verifies that admission
+        // installed its lifecycle accounting.
         let receiver = register(&mut service, unfiltered()).await.unwrap();
         let registration = shards[2].mailbox.try_recv().unwrap();
         assert!(matches!(registration, ShardMsg::Register { .. }));
@@ -1179,99 +1153,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn saturated_admission_preserves_fifo() {
-        let (mut service, _checkpoint_sender, request_sender, mut shards) =
-            actor_service_with(1, 25, None, 4, 4);
-        for _ in 0..SHARD_MAILBOX_SIZE {
-            assert!(
-                service.shards[0]
-                    .try_send(ShardMsg::Clear(
-                        SubscriptionTerminationReason::ServiceShutdown
-                    ))
-                    .is_ok()
-            );
-        }
-
-        let (checkpoint_sender, mut checkpoint_reply) = oneshot::channel();
-        let (event_sender, mut event_reply) = oneshot::channel();
-        assert!(
-            request_sender
-                .try_send(SubscriptionRequest {
-                    spec: unfiltered(),
-                    response_sender: checkpoint_sender,
-                })
-                .is_ok()
-        );
-        assert!(
-            request_sender
-                .try_send(SubscriptionRequest {
-                    spec: SubscriptionSpec {
-                        kind: SubscriptionKind::Events,
-                        query: None,
-                    },
-                    response_sender: event_sender,
-                })
-                .is_ok()
-        );
-
-        let checkpoint_request = match service.admit_queued(ADMISSION_BATCH_SIZE) {
-            AdmissionState::WaitingForShard(request) => request,
-            _ => panic!("expected the checkpoint admission to wait for shard capacity"),
-        };
-        assert_eq!(checkpoint_request.spec.kind, SubscriptionKind::Checkpoints);
-        assert_eq!(service.admission_mailbox.len(), 1);
-        assert!(matches!(
-            checkpoint_reply.try_recv(),
-            Err(oneshot::error::TryRecvError::Empty)
-        ));
-        assert!(matches!(
-            event_reply.try_recv(),
-            Err(oneshot::error::TryRecvError::Empty)
-        ));
-
-        assert!(matches!(
-            shards[0].mailbox.try_recv(),
-            Ok(ShardMsg::Clear(_))
-        ));
-        let (shard, permit) = service.try_reserve_least_backlogged_shard().unwrap();
-        service.complete_admission(shard, permit, checkpoint_request);
-        let _checkpoint_receiver = checkpoint_reply.try_recv().unwrap();
-
-        let event_request = match service.admit_queued(ADMISSION_BATCH_SIZE - 1) {
-            AdmissionState::WaitingForShard(request) => request,
-            _ => panic!("expected the event admission to wait for shard capacity"),
-        };
-        assert_eq!(event_request.spec.kind, SubscriptionKind::Events);
-        assert_eq!(service.admission_mailbox.len(), 0);
-        assert!(matches!(
-            event_reply.try_recv(),
-            Err(oneshot::error::TryRecvError::Empty)
-        ));
-
-        assert!(matches!(
-            shards[0].mailbox.try_recv(),
-            Ok(ShardMsg::Clear(_))
-        ));
-        let (shard, permit) = service.try_reserve_least_backlogged_shard().unwrap();
-        service.complete_admission(shard, permit, event_request);
-        let _event_receiver = event_reply.try_recv().unwrap();
-
-        for _ in 2..SHARD_MAILBOX_SIZE {
-            assert!(matches!(
-                shards[0].mailbox.try_recv(),
-                Ok(ShardMsg::Clear(_))
-            ));
-        }
-        for expected_kind in [SubscriptionKind::Checkpoints, SubscriptionKind::Events] {
-            match shards[0].mailbox.try_recv().unwrap() {
-                ShardMsg::Register { spec, .. } => assert_eq!(spec.kind, expected_kind),
-                _ => panic!("expected queued registrations in admission order"),
-            }
-        }
-    }
-
-    #[tokio::test]
     async fn saturated_admission_waits_for_any_shard() {
+        // Fill every shard mailbox so the request enters WaitingForShard rather
+        // than taking the immediate admission path.
         let (service, _checkpoint_sender, request_sender, mut shards) =
             actor_service_with(2, 25, None, 4, 4);
         for shard in &service.shards {
@@ -1286,6 +1170,8 @@ mod tests {
             }
         }
 
+        // Wait until the actor has removed the request from ingress and is
+        // blocked on shard permits.
         let (reply_sender, reply_receiver) = oneshot::channel();
         assert!(
             request_sender
@@ -1298,6 +1184,8 @@ mod tests {
         let actor = tokio::spawn(service.start());
         wait_for_admission_capacity(&request_sender, 4).await;
 
+        // Free only shard 1. Waiting on all shard permits must wake and route
+        // the registration there even though the cursor starts at shard 0.
         assert!(matches!(
             shards[1].mailbox.try_recv(),
             Ok(ShardMsg::Clear(_))
@@ -1307,6 +1195,8 @@ mod tests {
             .expect("admission did not wake when shard capacity became available")
             .unwrap();
 
+        // The registration follows the existing shard 1 messages, while shard
+        // 0 remains full and untouched.
         for _ in 1..SHARD_MAILBOX_SIZE {
             assert!(matches!(
                 shards[1].mailbox.try_recv(),
@@ -1324,7 +1214,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn canceled_saturated_admission_does_not_block_newer_request() {
+    async fn saturated_head_blocks_newer_request_until_canceled() {
+        // Fill every shard, then queue a head request followed by a newer one.
         let (service, _checkpoint_sender, request_sender, mut shards) =
             actor_service_with(2, 25, None, 4, 4);
         for shard in &service.shards {
@@ -1358,11 +1249,16 @@ mod tests {
                 .is_ok()
         );
 
+        // Capacity 3 means only the head left the four-slot admission lane; the
+        // newer request remains queued while the head waits for a shard.
         let actor = tokio::spawn(service.start());
         wait_for_admission_capacity(&request_sender, 3).await;
+        // Canceling the head returns the actor to Accepting. Capacity 4 proves
+        // it then received the newer request, which becomes the saturated head.
         drop(first_reply);
         wait_for_admission_capacity(&request_sender, 4).await;
 
+        // Free one shard slot so the newer request can complete admission.
         assert!(matches!(
             shards[0].mailbox.try_recv(),
             Ok(ShardMsg::Clear(_))
@@ -1378,11 +1274,15 @@ mod tests {
 
     #[tokio::test]
     async fn run_loop_lag_clears_subscribers_and_resets_sequence_tracker() {
+        // Register a subscriber, then overflow a one-slot checkpoint broadcast.
+        // The actor first observes Lagged and then the retained checkpoint 2.
         let (mut service, checkpoint_sender, _request_sender, mut shards) =
             actor_service_with(1, 25, None, 1, 4);
         let mut receiver = register(&mut service, unfiltered()).await.unwrap();
         let counters = Arc::clone(&service.counters);
         let metrics = service.metrics.clone();
+        // A deliberately incompatible prior sequence proves lag handling resets
+        // the tracker before checkpoint 2 is processed.
         metrics.last_recieved_checkpoint.set(99);
 
         assert_eq!(checkpoint_sender.send(checkpoint(1)).unwrap(), 1);
@@ -1391,6 +1291,8 @@ mod tests {
         drop(checkpoint_sender);
         actor.await.unwrap();
 
+        // Draining applies the queued registration, source-lag clear, retained
+        // checkpoint, and shutdown clear in shard FIFO order.
         drain(&mut shards);
         assert!(receiver.recv().await.is_none());
         assert_eq!(counters.total.load(Ordering::Relaxed), 0);
