@@ -17,8 +17,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use anyhow::Context as _;
 use anyhow::bail;
@@ -42,8 +40,6 @@ struct Watermark {
     tx_hi: u64,
     timestamp_ms_hi_inclusive: u64,
     reader_lo: u64,
-    pruner_timestamp: u64,
-    pruner_hi: u64,
     chain_id: Option<[u8; 32]>,
 }
 
@@ -61,13 +57,6 @@ impl NdjsonConnection<'_> {
     pub(crate) fn store(&self) -> &NdjsonStore {
         self.0
     }
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 impl NdjsonStore {
@@ -128,8 +117,6 @@ impl Connection for NdjsonConnection<'_> {
             .or_insert_with(|| Watermark {
                 checkpoint_hi_inclusive,
                 reader_lo: checkpoint_hi_inclusive.map_or(0, |c| c + 1),
-                pruner_timestamp: now_ms(),
-                pruner_hi: checkpoint_hi_inclusive.map_or(0, |c| c + 1),
                 ..Default::default()
             });
         Ok(Some(InitWatermark {
@@ -214,57 +201,32 @@ impl ConcurrentConnection for NdjsonConnection<'_> {
             }))
     }
 
+    // The backtest runs a single tasked pipeline with no pruner or reader-watermark task (see the
+    // "Skipping pruner task" / "Skipping reader watermark task" startup logs), so the framework
+    // never calls the methods below. They are left unimplemented rather than carrying dead
+    // book-keeping.
     async fn pruner_watermark(
         &mut self,
-        pipeline: &'static str,
-        delay: Duration,
+        _pipeline: &'static str,
+        _delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>> {
-        let watermarks = self.0.watermarks.lock().unwrap();
-        let Some(watermark) = watermarks.get(pipeline) else {
-            return Ok(None);
-        };
-        if watermark.checkpoint_hi_inclusive.is_none() {
-            return Ok(None);
-        }
-        let elapsed_ms = watermark.pruner_timestamp as i64 - now_ms() as i64;
-        Ok(Some(PrunerWatermark {
-            pruner_hi: watermark.pruner_hi,
-            reader_lo: watermark.reader_lo,
-            wait_for_ms: delay.as_millis() as i64 + elapsed_ms,
-        }))
+        unimplemented!("backtest pipeline does not prune")
     }
 
     async fn set_reader_watermark(
         &mut self,
-        pipeline: &'static str,
-        reader_lo: u64,
+        _pipeline: &'static str,
+        _reader_lo: u64,
     ) -> anyhow::Result<bool> {
-        let mut watermarks = self.0.watermarks.lock().unwrap();
-        let Some(watermark) = watermarks.get_mut(pipeline) else {
-            return Ok(false);
-        };
-        if reader_lo <= watermark.reader_lo {
-            return Ok(false);
-        }
-        watermark.reader_lo = reader_lo;
-        watermark.pruner_timestamp = now_ms();
-        Ok(true)
+        unimplemented!("backtest pipeline does not prune")
     }
 
     async fn set_pruner_watermark(
         &mut self,
-        pipeline: &'static str,
-        pruner_hi: u64,
+        _pipeline: &'static str,
+        _pruner_hi: u64,
     ) -> anyhow::Result<bool> {
-        let mut watermarks = self.0.watermarks.lock().unwrap();
-        let Some(watermark) = watermarks.get_mut(pipeline) else {
-            return Ok(false);
-        };
-        if pruner_hi <= watermark.pruner_hi {
-            return Ok(false);
-        }
-        watermark.pruner_hi = pruner_hi;
-        Ok(true)
+        unimplemented!("backtest pipeline does not prune")
     }
 }
 

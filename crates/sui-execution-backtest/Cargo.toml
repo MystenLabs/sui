@@ -9,18 +9,19 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
-[[bin]]
-name = "sui-execution-backtest"
-path = "src/main.rs"
+[lints]
+workspace = true
 
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+backoff.workspace = true
 bcs.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 diesel = { workspace = true, features = ["postgres_backend", "chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
+futures.workspace = true
 object_store.workspace = true
 prometheus.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -41,3 +42,8 @@ sui-indexer-alt-framework = { workspace = true, default-features = false, featur
 sui-rpc.workspace = true
 
 sui-execution = { path = "../../sui-execution" }
+
+[[bin]]
+name = "sui-execution-backtest"
+path = "src/main.rs"
+

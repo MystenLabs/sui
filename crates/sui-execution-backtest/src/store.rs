@@ -22,7 +22,7 @@ use sui_types::full_checkpoint_content::{Checkpoint, ObjectSet};
 use sui_types::is_system_package;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
-    BackingPackageStore, ChildObjectResolver, ObjectKey, ObjectStore, PackageObject, ParentSync,
+    BackingPackageStore, ObjectKey, ObjectStore, PackageObject, ParentSync, RuntimeObjectResolver,
 };
 use sui_types::transaction::{
     InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind, TransactionData,
@@ -339,7 +339,7 @@ impl BackingPackageStore for ScanStore {
     }
 }
 
-impl ChildObjectResolver for ScanStore {
+impl RuntimeObjectResolver for ScanStore {
     fn read_child_object(
         &self,
         _parent: &ObjectID,

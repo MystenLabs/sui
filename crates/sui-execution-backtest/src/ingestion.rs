@@ -5,11 +5,13 @@
 //! derived by fetching genesis.
 //!
 //! The framework's store client derives the chain id with `checkpoint(0)` — fetching and decoding
-//! mainnet genesis, a large, slow (tens of seconds), one-time startup cost on the critical path
-//! (every checkpoint fetch `try_join`s the chain-id `OnceCell`). We already know the chain id
-//! cheaply from the fullnode's `GetServiceInfo` (see [`crate::grpc::RpcClient::chain_id`]), so we
-//! wrap the store client and return that, never touching genesis. Only the remote-store source has
-//! this problem; the gRPC source already uses `GetServiceInfo`, and a local store is fast.
+//! mainnet genesis. Because every checkpoint fetch `try_join`s the chain-id `OnceCell` and the
+//! derivation is slow (and repeatedly retried), this throttles the whole ingestion pipeline well
+//! past startup, not just once — measured (mainnet, remote-store source) as a sustained ~4x
+//! throughput drop. We already know the chain id cheaply from the fullnode's
+//! `GetServiceInfo` (see [`crate::grpc::RpcClient::chain_id`]), so we wrap the store client and
+//! return that, never touching genesis. Only the remote-store source has this problem; the gRPC
+//! source already uses `GetServiceInfo`, and a local store is fast.
 
 use std::sync::Arc;
 

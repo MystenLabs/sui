@@ -58,9 +58,13 @@ cargo run --release -p sui-execution-backtest -- \
   --task my-linkage-change
 ```
 
-- **Checkpoint source.** Prefer a remote object store (`--remote-store-url
-  https://checkpoints.<network>.sui.io`) — the fast archival path. A fullnode for epoch + package
-  resolution must then be supplied separately with `--fullnode-url`. Alternatively a single
+- **Checkpoint source.** Prefer a remote object store — the fast archival path — with a
+  `--fullnode-url` supplied separately for epoch + package resolution. The HTTP endpoint
+  (`--remote-store-url https://checkpoints.<network>.sui.io`) is the zero-setup option but **only
+  retains roughly the last 30 days**, so backtesting older epochs needs the GCS bucket directly via
+  `--remote-store-gcs <bucket>` (see [accessing checkpoint
+  data](https://docs.sui.io/guides/developer/advanced/custom-indexer#remote-reader)); running
+  colocated with the bucket also avoids egress cost and latency. Alternatively a single
   `--rpc-api-url` fullnode can serve as both (slower; see the rate-limit caveat below).
 - `--start-epoch` / `--end-epoch` select the inclusive epoch range.
 - `--max-checkpoints-per-epoch N` caps each epoch at its first `N` checkpoints (for bounded

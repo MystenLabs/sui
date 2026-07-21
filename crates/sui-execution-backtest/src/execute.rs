@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 use move_core_types::language_storage::TypeTag;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
@@ -121,6 +123,11 @@ enum GasPlan {
 /// argument list.
 struct PreparedTx {
     input_objects: CheckedInputObjects,
+    /// The versions of the system (consensus-sequenced) objects this transaction read, taken from
+    /// its recorded effects. The executor loads each system object at exactly this version and
+    /// treats a system read with no assigned version as an invariant violation, so it must cover
+    /// every such object the transaction touched.
+    system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
     gas_data: GasData,
     gas_status: SuiGasStatus,
     txn_kind: TransactionKind,
@@ -204,6 +211,20 @@ pub(crate) fn execute_one_transaction(
         }
     };
 
+    // The versions the transaction's system (consensus) objects were sequenced against, recovered
+    // from its effects (mirrors the per-transaction map a live node assigns). Cancelled inputs carry
+    // no live version and are excluded above, so only mutated/read-only entries remain.
+    let system_object_versions = executed
+        .effects
+        .input_consensus_objects()
+        .into_iter()
+        .filter_map(|ico| match ico {
+            InputConsensusObject::Mutate((id, v, _))
+            | InputConsensusObject::ReadOnly((id, v, _)) => Some((id, v)),
+            _ => None,
+        })
+        .collect();
+
     let gas_data = txn_data.gas_data().clone();
     let signer = txn_data.sender();
     // Execution must be *metered*: unmetered execution routes storage rebate through the 0x5
@@ -239,6 +260,7 @@ pub(crate) fn execute_one_transaction(
 
     let prepared_tx = PreparedTx {
         input_objects,
+        system_object_versions,
         gas_data,
         gas_status,
         txn_kind: TransactionKind::ProgrammableTransaction(pt),
@@ -453,6 +475,7 @@ fn run_execution(
 ) -> (bool, Result<(), ExecutionError>) {
     let PreparedTx {
         input_objects,
+        system_object_versions,
         gas_data,
         gas_status,
         txn_kind,
@@ -471,6 +494,7 @@ fn run_execution(
             &ctx.epoch,
             ctx.epoch_start_timestamp_ms,
             input_objects,
+            system_object_versions,
             gas_data,
             gas_status,
             txn_kind,

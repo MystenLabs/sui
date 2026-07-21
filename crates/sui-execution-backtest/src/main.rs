@@ -36,7 +36,6 @@ use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::TaskArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
-use sui_indexer_alt_framework::ingestion::IngestionService;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
@@ -128,11 +127,11 @@ struct Args {
     store: StoreKind,
 
     /// Postgres connection url (required for `--store postgres`).
-    #[clap(long)]
+    #[clap(long, required_if_eq("store", "postgres"))]
     database_url: Option<Url>,
 
     /// Output file for `--store ndjson` (required for that store).
-    #[clap(long)]
+    #[clap(long, required_if_eq("store", "ndjson"))]
     output: Option<PathBuf>,
 
     /// Run identifier. Namespaces both the output rows (the `task` column, part of the primary key)
@@ -180,10 +179,10 @@ async fn main() -> Result<()> {
     )?);
 
     // The chain identifier comes from the fullnode's GetServiceInfo (cheap), not by fetching
-    // genesis. For a remote object store we wrap the ingestion client so it never derives the chain
-    // id from genesis (see [`ingestion`]); the gRPC source already uses GetServiceInfo and a local
-    // store is fast. This one client serves both the upfront epoch resolution and the indexer, so
-    // genesis is never fetched.
+    // genesis. For a remote object store we wrap the ingestion client with this id (see
+    // [`ingestion`]) so it never derives it from genesis; the gRPC source already uses
+    // GetServiceInfo and a local store is fast. Epoch resolution below uses the same fullnode
+    // (`rpc`), so genesis is never fetched on any path.
     let chain_id = rpc.chain_id().await.context("fetching chain id")?;
     let chain: Chain = chain_id.chain();
     let ingestion_client = match &args.client.remote_store_url {
@@ -239,37 +238,24 @@ async fn main() -> Result<()> {
             .map(|value| ConcurrencyConfig::Fixed { value }),
     };
 
-    // We hand-build the ingestion service (rather than the simpler `Indexer::new`, which constructs
-    // one internally from `ClientArgs`) for two reasons, both of which would regress if we switched:
-    //   1. The remote-store source needs our `FixedChainId` wrapper (see [`ingestion`]) to avoid
-    //      deriving the chain id from genesis. `Indexer::new` builds the store client without it, so
-    //      every concurrent fetch `try_join`s a slow, repeatedly-retried genesis download — measured
-    //      as a sustained ~4x throughput drop (not just a startup cost), worst on bounded samples.
-    //   2. `Indexer::new` takes `ClientArgs` (= ingestion + streaming args), which would re-add the
-    //      streaming flags to the CLI that we deliberately dropped; we only flatten
-    //      `IngestionClientArgs`.
-    // If the remote-store source is ever retired (leaving only gRPC, which already gets the chain id
-    // from `GetServiceInfo`), this wiring — and the `ingestion` module — could collapse into
-    // `Indexer::new`.
-    let ingestion_service = IngestionService::with_clients(
-        ingestion_client,
-        None,
-        IngestionConfig::default(),
-        ingestion_metrics,
-    );
-
+    // We build the ingestion client ourselves — wrapping the remote store in `FixedChainId` (see
+    // [`ingestion`]) so it never derives the chain id from a slow genesis fetch — and hand it to
+    // `Indexer::with_ingestion_clients`. The turnkey `Indexer::new` would instead build the client
+    // from `ClientArgs`, which (a) reintroduces the genesis chain-id fetch on the remote-store path
+    // (measured as a sustained ~4x throughput drop, worst on bounded samples) and (b) re-adds the
+    // streaming CLI flags we deliberately dropped (we only flatten `IngestionClientArgs`).
     match args.store {
         StoreKind::Ndjson => {
-            let output = args
-                .output
-                .context("--output is required for --store ndjson")?;
+            // clap's `required_if_eq` guarantees `--output` is present for this store.
+            let output = args.output.expect("--output required for --store ndjson");
             let store = NdjsonStore::create(&output)?;
-            run_backtest(store, ingestion_service, registry, plan).await
+            run_backtest(store, ingestion_client, registry, plan).await
         }
         StoreKind::Postgres => {
+            // clap's `required_if_eq` guarantees `--database-url` is present for this store.
             let database_url = args
                 .database_url
-                .context("--database-url is required for --store postgres")?;
+                .expect("--database-url required for --store postgres");
             let store = Db::for_write(database_url, DbArgs::default())
                 .await
                 .context("connecting to postgres")?;
@@ -277,7 +263,7 @@ async fn main() -> Result<()> {
                 .run_migrations(Some(&MIGRATIONS))
                 .await
                 .context("running migrations")?;
-            run_backtest(store, ingestion_service, registry, plan).await
+            run_backtest(store, ingestion_client, registry, plan).await
         }
     }
 }
@@ -369,7 +355,7 @@ struct BacktestPlan {
 /// paths share all the wiring.
 async fn run_backtest<S: CommitRows>(
     store: S,
-    ingestion_service: IngestionService,
+    ingestion_client: IngestionClient,
     registry: Registry,
     plan: BacktestPlan,
 ) -> Result<()> {
@@ -380,9 +366,16 @@ async fn run_backtest<S: CommitRows>(
         task: plan.indexer_task,
     };
 
-    let mut indexer =
-        Indexer::with_ingestion_service(store, indexer_args, ingestion_service, None, &registry)
-            .await?;
+    let mut indexer = Indexer::with_ingestion_clients(
+        store,
+        indexer_args,
+        ingestion_client,
+        None,
+        IngestionConfig::default(),
+        None,
+        &registry,
+    )
+    .await?;
 
     let handler = Backtest::new(
         plan.epochs,
@@ -399,9 +392,6 @@ async fn run_backtest<S: CommitRows>(
     indexer.concurrent_pipeline(handler, config).await?;
 
     let service = indexer.run().await?;
-    service
-        .main()
-        .await
-        .map_err(|e| anyhow::anyhow!("indexer terminated: {e:?}"))?;
+    service.main().await.context("indexer terminated")?;
     Ok(())
 }

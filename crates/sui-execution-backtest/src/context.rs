@@ -5,7 +5,7 @@
 //! protocol config, epoch-start timestamp, RGP) and the per-checkpoint [`PreparedCheckpoint`] that
 //! execution runs against, plus [`resolve_epoch_work`] which resolves an epoch range into the
 //! [`EpochCtx`] map and the overall checkpoint range to hand to the framework `Indexer`. The
-//! streaming/concurrency machinery itself now lives in that `Indexer` (see [`crate::handler`]).
+//! ingestion and concurrency machinery itself lives in that `Indexer` (see [`crate::handler`]).
 
 use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
@@ -54,8 +54,9 @@ pub(crate) struct PreparedCheckpoint {
     pub(crate) chain_id: ChainIdentifier,
     /// The full checkpoint (shared); we iterate its `transactions` during execution.
     pub(crate) checkpoint: Arc<Checkpoint>,
-    /// The checkpoint's object index, shared with the execute stage's [`ScanStore`]. Read directly
-    /// to find candidate coin types and to triage divergences against the materialized read set.
+    /// The checkpoint's object index, shared with the execute stage's
+    /// [`ScanStore`](crate::store::ScanStore). Read directly to find candidate coin types and to
+    /// triage divergences against the materialized read set.
     pub(crate) objects: Arc<BTreeMap<ObjectKey, Object>>,
 }
 
