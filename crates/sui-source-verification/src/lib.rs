@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use colored::Colorize;
 use move_package_alt::schema::{Environment, Publication};
+use serde::Serialize;
 use sui_package_alt::SuiFlavor;
 use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
@@ -21,8 +22,24 @@ mod toolchain_version;
 pub use binary::ensure_binary;
 pub use error::{AggregateError, Error};
 
+/// The publication metadata a successful [`verify_source`] run relied on: the addresses it checked
+/// against, the toolchain it rebuilt with, and the `sui` binary it used.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifiedMetadata {
+    /// The package's original (first-published) id.
+    pub original_id: ObjectID,
+    /// The on-chain address whose bytecode the rebuild was compared against.
+    pub published_at: ObjectID,
+    /// The `sui` toolchain version the source was rebuilt with.
+    pub toolchain_version: String,
+    /// The path to the `sui` binary used for the rebuild.
+    pub binary_path: PathBuf,
+}
+
 /// Verify that the Move source package at `source_path` compiles to the on-chain package described
-/// by `publication`, matching both its module bytecode and its linkage.
+/// by `publication`, matching both its module bytecode and its linkage. On success, returns the
+/// [`VerifiedMetadata`] the verification relied on.
 ///
 /// The package is rebuilt with the `sui` binary of the publication's recorded toolchain version, or
 /// of `toolchain_override` when one is given (downloaded and cached if necessary), against `env`. The
@@ -36,7 +53,7 @@ pub async fn verify_source(
     env: &Environment,
     client: &Client,
     client_config: Option<&Path>,
-) -> Result<(), AggregateError> {
+) -> Result<VerifiedMetadata, AggregateError> {
     let toolchain = resolve_toolchain(
         publication.metadata.toolchain_version.clone(),
         source_path,
@@ -68,7 +85,14 @@ pub async fn verify_source(
 
     compare::check(client, generated, onchain)
         .await
-        .map_err(|e| explain_unpinned_dependencies(source_path, e))
+        .map_err(|e| explain_unpinned_dependencies(source_path, e))?;
+
+    Ok(VerifiedMetadata {
+        original_id: ObjectID::from_address(original_id),
+        published_at,
+        toolchain_version: toolchain,
+        binary_path: binary,
+    })
 }
 
 /// Determine which toolchain version to rebuild with.
@@ -184,5 +208,27 @@ mod tests {
         assert!(suggestion("1.65.2").is_none());
         assert!(suggestion("1.50.0").is_none());
         assert!(suggestion("nightly").is_none());
+    }
+
+    /// The `--json` output uses stable, camelCase keys and renders addresses as `0x` strings.
+    #[test]
+    fn metadata_serializes_with_camel_case_keys() {
+        use super::{ObjectID, PathBuf, VerifiedMetadata};
+
+        let metadata = VerifiedMetadata {
+            original_id: ObjectID::from_hex_literal("0x1").unwrap(),
+            published_at: ObjectID::from_hex_literal("0x2").unwrap(),
+            toolchain_version: "1.71.1".to_string(),
+            binary_path: PathBuf::from("/cache/1.71.1/target/release/sui"),
+        };
+
+        insta::assert_json_snapshot!(metadata, @r###"
+        {
+          "originalId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "publishedAt": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "toolchainVersion": "1.71.1",
+          "binaryPath": "/cache/1.71.1/target/release/sui"
+        }
+        "###);
     }
 }

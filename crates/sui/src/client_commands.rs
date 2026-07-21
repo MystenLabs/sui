@@ -114,7 +114,7 @@ use move_package_alt::{
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
 use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
-use sui_source_verification::verify_source;
+use sui_source_verification::{VerifiedMetadata, verify_source};
 use tracing::{debug, info};
 
 /// Concurrency level for fetching coin metadata for balances.
@@ -1859,7 +1859,7 @@ impl SuiClientCommands {
                         })?;
 
                 let client = context.grpc_client()?;
-                verify_source(
+                let metadata = verify_source(
                     &package_path,
                     &publication,
                     toolchain_version,
@@ -1869,7 +1869,7 @@ impl SuiClientCommands {
                 )
                 .await?;
 
-                SuiClientCommandResult::VerifySource
+                SuiClientCommandResult::VerifySource(metadata)
             }
             SuiClientCommands::PartyTransfer {
                 to,
@@ -2403,8 +2403,20 @@ impl Display for SuiClientCommandResult {
                 table.with(TableStyle::rounded());
                 write!(f, "{}", table)?
             }
-            SuiClientCommandResult::VerifySource => {
+            SuiClientCommandResult::VerifySource(metadata) => {
                 writeln!(writer, "Source verification succeeded!")?;
+                writeln!(writer, "  original ID:       {}", metadata.original_id)?;
+                writeln!(writer, "  published at:      {}", metadata.published_at)?;
+                writeln!(
+                    writer,
+                    "  toolchain version: {}",
+                    metadata.toolchain_version
+                )?;
+                writeln!(
+                    writer,
+                    "  binary:            {}",
+                    metadata.binary_path.display()
+                )?;
             }
             SuiClientCommandResult::VerifyBytecodeMeter {
                 success,
@@ -2971,7 +2983,7 @@ pub enum SuiClientCommandResult {
         max_function_ticks: Option<u128>,
         used_ticks: Accumulator,
     },
-    VerifySource,
+    VerifySource(VerifiedMetadata),
 }
 
 #[derive(Serialize, Clone)]
