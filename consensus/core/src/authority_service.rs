@@ -392,12 +392,24 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         );
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
+        let dispatch_metrics = self.context.clone();
         Ok(Box::pin(past_proposed_blocks.chain(
-            broadcasted_blocks.flat_map(|items| {
+            broadcasted_blocks.flat_map(move |items| {
                 debug_assert!(
                     items.len() <= MAX_BLOCKS_PER_POLL,
                     "Too many blocks received from broadcast"
                 );
+                for item in &items {
+                    let age_ms = dispatch_metrics
+                        .clock
+                        .timestamp_utc_ms()
+                        .saturating_sub(item.block.timestamp_ms());
+                    dispatch_metrics
+                        .metrics
+                        .node_metrics
+                        .subscription_dispatch_age
+                        .observe(age_ms as f64 / 1000.0);
+                }
                 stream::iter(items.into_iter().map(ExtendedSerializedBlock::from))
             }),
         )))
