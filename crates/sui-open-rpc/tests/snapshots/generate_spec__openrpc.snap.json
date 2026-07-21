@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "131",
+              "maxSupportedProtocolVersion": "132",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1339,6 +1339,7 @@
                 "correct_gas_payment_limit_check": false,
                 "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
+                "defer_owned_object_double_spend": false,
                 "defer_unpaid_amplification": false,
                 "dependency_linkage_error": false,
                 "deprecate_global_storage_ops": false,
@@ -2178,6 +2179,7 @@
                 "create_root_accumulator_object": false,
                 "crypto_invalid_arguments_cost": "100",
                 "debug_fatal_on_move_invariant_violation": false,
+                "defer_owned_object_double_spend": false,
                 "defer_unpaid_amplification": false,
                 "dependency_linkage_error": false,
                 "deprecate_global_storage_ops": false,

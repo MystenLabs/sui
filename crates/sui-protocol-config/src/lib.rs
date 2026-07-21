@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 131;
+const MAX_PROTOCOL_VERSION: u64 = 132;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -371,6 +371,7 @@ const MAINNET_USDB: &str =
 //              Enable tx_context_restrictions_verifier: reject system-package
 //              function signatures with `&mut TxContext` + any `&mut _` return
 //              that have no non-`TxContext` `&mut U` parameter.
+// Version 132: Enable defer_owned_object_double_spend on devnet.
 //              Add the `object::record_new_uid_from_hash` native and its cost, tracking the
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 
@@ -1127,6 +1128,11 @@ struct FeatureFlags {
     // (where duplicate count exceeds gas_price / RGP + 1)
     #[serde(skip_serializing_if = "is_false")]
     defer_unpaid_amplification: bool,
+
+    // If true, defer transactions that won an owned object lock when other transactions
+    // in the same commit attempted to lock the same object (double-spend attempt).
+    #[serde(skip_serializing_if = "is_false")]
+    defer_owned_object_double_spend: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
@@ -4557,6 +4563,11 @@ impl ProtocolConfig {
                 131 => {
                     cfg.feature_flags.share_transaction_deny_config_in_consensus = true;
                     cfg.feature_flags.framework_tx_context_mut_restrictions = true;
+                }
+                132 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.defer_owned_object_double_spend = true;
+                    }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                 }
                 // Use this template when making changes:
