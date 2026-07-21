@@ -81,11 +81,14 @@ Key roles:
   rpc-store plus the `LiveState` pointer table: object materialization,
   checkpoint/transaction persistence, and `get_latest_object_status`.
 - **`ForkRpcReader`** (`rpc/reader.rs`) implements the upstream RPC storage
-  traits: stock-reader first, `ForkStore` on a miss (which may consult
-  GraphQL for pre-fork data). Note the deliberate cost: on a miss the
-  rpc-store is read twice (once by the stock reader, once inside
-  `ForkStore`) before any remote call — a cheap point-get, accepted for the
-  simpler layering.
+  traits, routing each method by key semantics: **immutably-keyed reads**
+  (exact object versions, checkpoint/transaction digests and sequence
+  numbers) go stock-reader first with `ForkStore` on a miss — a cached row
+  cannot be wrong, and the miss-path double point-get is accepted for the
+  simpler layering. **Latest-semantics reads** (`get_object`) go through
+  `ForkStore` only: the stock reverse scan assumes a complete version
+  history, which the fork's sparse `objects` CF violates, so a bare cached
+  historical row must never be served as current.
 
 ## Data-dir layout
 
@@ -186,3 +189,12 @@ initialization.
   not yet seeded or served; the balance index only reflects coin objects
   materialized pre-fork plus indexer-derived post-fork state.
 - `simulate_transaction` is stubbed (no Simulacrum entrypoint yet).
+- **Bounded child reads can serve stale history** (known, unfixed):
+  `get_object_lt_or_eq_version` trusts the highest *local* row at or below
+  the bound, but a sparse cache polluted by an exact-*historical*-version
+  read (e.g. an RPC client fetching an old dynamic-field version) can hold a
+  lower row than the true highest-≤-bound, which then wins without
+  consulting the remote. Affects `read_child_object` on both the RPC and
+  executor paths. Fix direction: short-circuit only on live-state authority
+  or an authoritative tombstone; otherwise merge the remote
+  `RootVersion(bound)` result with the local candidate by max version.
