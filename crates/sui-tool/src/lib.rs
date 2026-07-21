@@ -871,6 +871,7 @@ pub async fn download_formal_snapshot(
                 epoch,
                 ingestion_url,
                 num_parallel_downloads,
+                max_retries,
                 m,
                 end_of_epoch_checkpoint_seq_nums,
             )
@@ -1072,6 +1073,7 @@ async fn backfill_epoch_transaction_digests(
     epoch: EpochId,
     ingestion_url: String,
     concurrency: usize,
+    max_retries: usize,
     m: MultiProgress,
     end_of_epoch_checkpoint_seq_nums: Vec<u64>,
 ) -> Result<()> {
@@ -1144,9 +1146,34 @@ async fn backfill_epoch_transaction_digests(
         .map(|sq| {
             let client = client.clone();
             async move {
-                fetch_checkpoint(&client, sq)
-                    .await
-                    .map(|c| Arc::new(CheckpointData::from(c)))
+                // Retry with backoff. This backfill runs concurrently with the CPU-bound state
+                // accumulation; on a busy host the async runtime can be starved long enough that a
+                // single checkpoint fetch times out, and the `.try_for_each().await?` below then
+                // aborts the entire (multi-hour) snapshot restore, discarding all progress. Retry
+                // (up to `max_retries`) so the fetch waits out the contention and completes instead.
+                let mut attempt: usize = 0;
+                loop {
+                    match fetch_checkpoint(&client, sq).await {
+                        Ok(c) => break Ok(Arc::new(CheckpointData::from(c))),
+                        Err(e) => {
+                            attempt += 1;
+                            if attempt >= max_retries {
+                                break Err(e);
+                            }
+                            tracing::warn!(
+                                "backfill: checkpoint {} fetch failed (attempt {}/{}): {}; retrying",
+                                sq,
+                                attempt,
+                                max_retries,
+                                e
+                            );
+                            tokio::time::sleep(Duration::from_millis(
+                                (200 * attempt as u64).min(30_000),
+                            ))
+                            .await;
+                        }
+                    }
+                }
             }
         })
         .buffer_unordered(concurrency)
