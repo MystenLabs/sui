@@ -2,7 +2,7 @@
 title: zkLogin for DeFi
 description: >-
   End-to-end guide for wiring zkLogin and sponsored transactions into a DeFi
-  trading flow on Sui.
+  trading flow on Sui using Enoki.
 keywords:
   - zklogin
   - defi
@@ -10,6 +10,7 @@ keywords:
   - sponsored transactions
   - swap
   - deepbook
+  - enoki
   - gas sponsorship
 draft: true
 questions:
@@ -17,76 +18,181 @@ questions:
   - How do I combine zkLogin with sponsored transactions for DeFi?
   - How do I build a gasless trading experience on Sui?
 answer: >-
-  This guide shows how to wire zkLogin authentication and sponsored transactions
-  into a DeFi trading flow, so users can swap tokens without managing wallets or
-  paying gas.
+  This guide shows how to wire zkLogin authentication and Enoki-sponsored
+  transactions into a DeFi trading flow, so users can swap tokens without
+  managing wallets or paying gas.
 ---
 
-{/* TODO: This page is a stub. Full content to be written. */}
-
-This guide shows how to build a DeFi trading interface where users authenticate with zkLogin, execute swaps, and never manage keys or pay gas directly.
+This guide shows how to build a DeFi trading interface where users authenticate with zkLogin through Enoki, execute DeepBook swaps, and never manage keys or pay gas directly.
 
 ## Overview
 
-DeFi applications on Sui can use zkLogin to onboard users who do not have a Sui wallet. Combined with sponsored transactions, this creates a trading experience where the user signs in with Google, swaps tokens, and the application covers gas fees — eliminating the cold-start problem of needing SUI before you can trade.
+DeFi applications on Sui can use zkLogin to onboard users who do not have a Sui wallet. Combined with Enoki's sponsored transactions, this creates a trading experience where the user signs in with Google, swaps tokens, and the application covers gas fees — eliminating the cold-start problem of needing SUI before you can trade.
 
-## Architecture
+The flow uses Enoki end-to-end: `createSponsoredTransaction` builds and sponsors the transaction server-side, the wallet signs the returned bytes client-side, and `executeSponsoredTransaction` submits the signed result.
 
-{/* TODO: Architecture diagram showing the full flow */}
+## Step 1: Set up dApp Kit with Enoki wallets
 
-```
-User → OAuth sign-in → zkLogin address derived
-     → App builds swap transaction (e.g., DeepBook)
-     → Gas station sponsors the transaction
-     → User's ephemeral key signs
-     → zkLogin signature submitted to network
-```
-
-## Implementation
-
-### Step 1: Authenticate with zkLogin
-
-Use the [zkLogin integration guide](/sui-stack/zklogin-integration/integration-guide) or [Enoki](https://docs.enoki.mystenlabs.com/) to authenticate the user and derive their Sui address.
-
-### Step 2: Build the swap transaction
-
-{/* TODO: Complete example building a DeepBook swap PTB */}
-
-Build a programmable transaction block that performs the swap. For example, using [DeepBook](/onchain-finance/deepbookv3/design):
+Register Enoki wallets with dApp Kit so users can connect through the standard wallet UI.
 
 ```typescript
-// TODO: Complete example
+import { createDAppKit } from '@mysten/dapp-kit-react';
+import { registerEnokiWallets } from '@mysten/enoki';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const GRPC_URLS = {
+  mainnet: 'https://fullnode.mainnet.sui.io:443',
+  testnet: 'https://fullnode.testnet.sui.io:443',
+} as const;
+
+export const dAppKit = createDAppKit({
+  networks: ['mainnet', 'testnet'],
+  defaultNetwork: 'testnet',
+  createClient(network) {
+    return new SuiGrpcClient({ network, baseUrl: GRPC_URLS[network] });
+  },
+});
+
+registerEnokiWallets({
+  apiKey: process.env.NEXT_PUBLIC_ENOKI_API_KEY!,
+  providers: {
+    google: {
+      clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+    },
+  },
+  clients: dAppKit.networks.map((network) => dAppKit.getClient(network)),
+  getCurrentNetwork: () => dAppKit.stores.$currentNetwork.get(),
+});
+```
+
+In your UI, use the standard connect button:
+
+```typescript
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
+import { ConnectButton } from '@mysten/dapp-kit-react/ui';
+```
+
+## Step 2: Build the swap transaction (client)
+
+Build a DeepBook swap PTB client-side, then serialize the transaction kind bytes for the sponsor.
+
+```typescript
+import { deepbook } from '@mysten/deepbook-v3';
+import { Transaction } from '@mysten/sui/transactions';
+import { toBase64 } from '@mysten/sui/utils';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
+
+const network = 'testnet' as const;
+const account = useCurrentAccount();
+const dAppKit = useDAppKit();
+
+if (!account) throw new Error('Connect first');
+
+const client = dAppKit.getClient(network).$extend(
+  deepbook({ address: account.address }),
+);
+
 const tx = new Transaction();
-// ... build swap commands
-tx.setSender(zkLoginUserAddress);
+
+const [baseOut, quoteOut, deepOut] = tx.add(
+  client.deepbook.deepBook.swapExactBaseForQuote({
+    poolKey: 'SUI_DBUSDC',
+    amount: 0.1,
+    deepAmount: 0,
+    minOut: 0,
+  }),
+);
+
+tx.transferObjects([baseOut, quoteOut, deepOut], account.address);
+tx.setSender(account.address);
+
+const txKindBytes = toBase64(
+  await tx.build({ client, onlyTransactionKind: true }),
+);
 ```
 
-### Step 3: Sponsor the transaction
+## Step 3: Sponsor the transaction (server)
 
-{/* TODO: Complete example showing gas sponsorship */}
-
-Use a gas station service to sponsor the transaction so the user does not need SUI for gas:
+Send the serialized transaction kind bytes to your backend, which calls Enoki to create a sponsored transaction.
 
 ```typescript
-// TODO: Complete sponsorship example
+import { EnokiClient } from '@mysten/enoki';
+
+const enoki = new EnokiClient({
+  apiKey: process.env.ENOKI_SECRET_KEY!,
+});
+
+const DEEPBOOK_PACKAGE_ID = {
+  testnet: '0x22be4cade64bf2d02412c7e8d0e8beea2f78828b948118d46735315409371a3c',
+  mainnet: '0x0e735f8c93a95722efd73521aca7a7652c0bb71ed1daf41b26dfd7d1ff71f748',
+} as const;
+
+export async function sponsorSwap({
+  network,
+  sender,
+  txKindBytes,
+}: {
+  network: 'testnet' | 'mainnet';
+  sender: string;
+  txKindBytes: string;
+}) {
+  const deepbookPackage = DEEPBOOK_PACKAGE_ID[network];
+
+  return enoki.createSponsoredTransaction({
+    network,
+    sender,
+    transactionKindBytes: txKindBytes,
+    allowedMoveCallTargets: [
+      `${deepbookPackage}::pool::swap_exact_base_for_quote`,
+      `${deepbookPackage}::pool::swap_exact_quote_for_base`,
+    ],
+    allowedAddresses: [sender],
+  });
+}
+
+export async function executeSponsored({
+  digest,
+  signature,
+}: {
+  digest: string;
+  signature: string;
+}) {
+  return enoki.executeSponsoredTransaction({ digest, signature });
+}
 ```
 
-### Step 4: Sign and execute with zkLogin
+## Step 4: Sign and execute (client)
 
-{/* TODO: Complete example combining zkLogin signature with sponsored transaction */}
+The client receives the sponsored transaction bytes and digest from the server, signs with the wallet, and sends the signature back for execution.
 
-Sign the sponsored transaction with the ephemeral key pair and submit it with the zkLogin signature.
+```typescript
+const { bytes, digest } = await post('/api/sponsor-swap', {
+  network,
+  sender: account.address,
+  txKindBytes,
+});
+
+const { signature } = await dAppKit.signTransaction({
+  transaction: bytes,
+  network,
+});
+
+await post('/api/execute-sponsored', { digest, signature });
+```
+
+The server calls `enoki.executeSponsoredTransaction({ digest, signature })` to submit the signed transaction.
 
 ## Considerations
 
-- **Session management:** Cache the ephemeral key pair and ZK proof in session storage. Users should not need to re-authenticate for every trade.
-- **Gas budget:** The sponsor sets the gas budget. Monitor gas costs to avoid sponsoring transactions that exceed your budget.
-- **Price slippage:** DeFi transactions can fail if prices move between building and execution. Set appropriate slippage tolerances.
-- **Multi-coin support:** The zkLogin address starts with no tokens. Consider how users fund their address or integrate with fiat on-ramps.
+- **Session management:** Cache the ephemeral key pair and ZK proof in session storage. Users should not need to re-authenticate for every trade within a session.
+- **Gas budget:** Enoki sets the gas budget for sponsored transactions. Monitor costs and configure per-transaction or per-user caps in the Enoki Developer Portal.
+- **Price slippage:** DeFi transactions can fail if prices move between building and execution. Set appropriate `minOut` values in the swap parameters.
+- **Funding the address:** The zkLogin address starts with no tokens. Users need to receive tokens before they can trade (via fiat on-ramp, transfer from another address, or an airdrop).
 
 ## Related resources
 
 - [zkLogin Integration Guide](/sui-stack/zklogin-integration/integration-guide) — implement zkLogin from scratch
+- [Enoki documentation](https://docs.enoki.mystenlabs.com/) — managed zkLogin and sponsored transactions
 - [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) — how gas sponsorship works on Sui
-- [DeepBook](/onchain-finance/deepbookv3/design) — Sui's native orderbook for trading
+- [DeepBook](/onchain-finance/deepbookv3/design) — Sui's native orderbook
 - [Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) — compose multiple operations into one transaction
