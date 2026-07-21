@@ -247,7 +247,7 @@ query {
 </Tabs>
 
 **Key differences:**
-- JSON-RPC uses `showEffects`, `showEvents` booleans. GraphQL uses field selection — request `effects`, `events`, `gasInput`, or any combination.
+- JSON-RPC uses `showEffects`, `showEvents` booleans. GraphQL uses field selection: request `effects`, `events`, `gasInput`, or any combination.
 - GraphQL returns structured, typed data. For example, `effects.checkpoint` gives you the checkpoint directly without needing a separate lookup.
 
 ## Multi-get transactions
@@ -1139,7 +1139,7 @@ query {
   }
 }
 
-# Next page — pass endCursor as the $after variable
+# Next page: pass endCursor as the $after variable
 query ($after: String!) {
   address(address: "0xADDRESS") {
     objects(first: 50, after: $after) {
@@ -1238,10 +1238,10 @@ The public URLs at `https://graphql.<network>.sui.io/graphql` are rate-limited a
 
 ## Related resources
 
-- [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) — full method mapping and decision criteria
-- [GraphQL for Sui RPC](/develop/accessing-data/graphql/graphql-rpc) — concepts, headers, pagination, scope, and limits
-- [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql) — additional query examples
-- [GraphQL API reference](/references/sui-graphql) — complete schema documentation
-- [gRPC Migration Cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook) — side-by-side gRPC migration examples
-- [Building PTBs](/develop/transactions/ptbs/building-ptb) — transaction construction for the `executeTransaction` path
-- [Emitting Events](/develop/accessing-data/using-events) — event struct definitions, querying, and filtering
+- [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration): full method mapping and decision criteria
+- [GraphQL for Sui RPC](/develop/accessing-data/graphql/graphql-rpc): concepts, headers, pagination, scope, and limits
+- [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql): additional query examples
+- [GraphQL API reference](/references/sui-graphql): complete schema documentation
+- [gRPC Migration Cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook): side-by-side gRPC migration examples
+- [Building PTBs](/develop/transactions/ptbs/building-ptb): transaction construction for the `executeTransaction` path
+- [Emitting Events](/develop/accessing-data/using-events): event struct definitions, querying, and filtering
