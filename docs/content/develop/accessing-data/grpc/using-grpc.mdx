@@ -201,12 +201,96 @@ $ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b
 $ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <full node URL:port> sui.rpc.v2.StateService/ListDynamicFields
 ```
 
+### List transactions matching a filter
+
+Use `LedgerService.ListTransactions` to query transactions over a checkpoint range with a `TransactionFilter`. The response is a server-side stream.
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "sender": { "address": "0xADDRESS" }
+      }]
+    }]
+  }
+}' <full node URL:port> sui.rpc.v2.LedgerService/ListTransactions
+```
+
+### List events matching a filter
+
+Use `LedgerService.ListEvents` to query events over a checkpoint range with an `EventFilter`.
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "event_type": { "event_type": "0xPACKAGE::module::MyEvent" }
+      }]
+    }]
+  }
+}' <full node URL:port> sui.rpc.v2.LedgerService/ListEvents
+```
+
+### List checkpoints
+
+Use `LedgerService.ListCheckpoints` to query a range of checkpoints.
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000010",
+  "read_mask": { "paths": ["digest", "summary"] }
+}' <full node URL:port> sui.rpc.v2.LedgerService/ListCheckpoints
+```
+
 ## Access streaming data with Buf
 
 `grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [Buf CLI](https://buf.build/docs/cli/) instead.
 
+### Subscribe to checkpoints
+
 ```shell
 $ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
+```
+
+### Subscribe to transactions with a filter
+
+```shell
+$ buf curl --protocol grpc \\
+  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeTransactions \\
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "sender": { "address": "0xADDRESS" }
+        }]
+      }]
+    }
+  }' \\
+  --timeout 5m
+```
+
+### Subscribe to events with a filter
+
+```shell
+$ buf curl --protocol grpc \\
+  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \\
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "event_type": { "event_type": "0xPACKAGE::module::MyEvent" }
+        }]
+      }]
+    }
+  }' \\
+  --timeout 5m
 ```
 
 

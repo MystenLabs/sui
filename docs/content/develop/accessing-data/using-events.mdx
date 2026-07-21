@@ -118,7 +118,13 @@ When you process events, each event object contains the following attributes:
 
 ### Querying events with gRPC
 
-Use `getTransaction` with `include: { events: true }` to retrieve events for a specific transaction. For continuous event processing, stream finalized checkpoints with `SubscriptionService.SubscribeCheckpoints` and read events from each checkpoint's transactions. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
+gRPC provides three ways to access events:
+
+- **`LedgerService.ListEvents`**: Paginated, filtered queries over a checkpoint range. Use an `EventFilter` to match by event type, sender, or emitting module. This is the direct replacement for `suix_queryEvents`.
+- **`SubscriptionService.SubscribeEvents`**: Live streaming of events matching an `EventFilter`. Use this for real-time event-driven applications. Subscriptions start at the current tip of the chain.
+- **`LedgerService.GetTransaction`**: Retrieve events for a specific transaction by digest.
+
+To backfill historical events and then continue in real time, use `ListEvents` to catch up to the current checkpoint, then switch to `SubscribeEvents` with the same filter. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
 
 ```ts
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -128,8 +134,33 @@ const client = new SuiGrpcClient({
   network: 'mainnet',
 });
 
+// Query historical events by type over a checkpoint range
+const { responses } = client.ledgerService.listEvents({
+  startCheckpoint: BigInt(1000000),
+  endCheckpoint: BigInt(1000100),
+  filter: {
+    terms: [{
+      literals: [{
+        predicate: {
+          oneofKind: 'eventType',
+          eventType: { eventType: '0xPACKAGE::module::MyEvent' },
+        },
+      }],
+    }],
+  },
+  options: { limit: 50 },
+});
+
+for await (const response of responses) {
+  console.log('Event:', response.event);
+}
+```
+
+To get events for a single known transaction:
+
+```ts
 async function getEventsForTransaction(digest: string) {
-  const result = await client.getTransaction({
+  const result = await client.core.getTransaction({
     digest,
     include: { events: true },
   });
@@ -185,7 +216,7 @@ Event connection
 
 ### Querying events in Rust
 
-Use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate to read events over gRPC. Fetch a transaction with its events through the `LedgerService` client, or stream checkpoints through `SubscriptionService` and read events from each checkpoint's transactions. See the [sui-rust-sdk README](https://github.com/MystenLabs/sui-rust-sdk) for client setup and the [gRPC service reference](/references/fullnode-protocol) for the available RPCs.
+Use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate to read events over gRPC. Use `LedgerService.ListEvents` with an `EventFilter` for paginated historical queries, `SubscriptionService.SubscribeEvents` for live streaming, or fetch a specific transaction's events through `LedgerService.GetTransaction`. See the [sui-rust-sdk README](https://github.com/MystenLabs/sui-rust-sdk) for client setup and the [gRPC service reference](/references/fullnode-protocol) for the available RPCs.
 
 :::info
 The legacy `sui_sdk::SuiClientBuilder` JSON-RPC client is deprecated. Use `sui-rust-sdk` for new integrations.

@@ -304,7 +304,7 @@ grpcurl -d '{
 - Same `read_mask` rules as batch objects: only the top-level mask is respected.
 ## Query events
  
-JSON-RPC offered `suix_queryEvents` with filters like `MoveModule`, `MoveEventType`, `Sender`, and `Transaction`. gRPC does not have a direct filtered-event query. Instead, read events from transaction data or stream them from checkpoints.
+JSON-RPC offered `suix_queryEvents` with filters like `MoveModule`, `MoveEventType`, `Sender`, and `Transaction`. gRPC now provides `LedgerService.ListEvents` for paginated, filtered historical queries and `SubscriptionService.SubscribeEvents` for live streaming with the same filters. You can also read events from a specific transaction.
  
 ### Events from a known transaction
  
@@ -344,9 +344,9 @@ if (result.$kind === 'Transaction') {
  
 </TabItem>
 </Tabs>
-### Live event streaming from checkpoints
+### Live event streaming
  
-Replace `sui_subscribeEvent` (WebSocket) with `SubscriptionService.SubscribeCheckpoints`. Stream finalized checkpoints, then filter events client-side by type, module, or sender.
+Replace `sui_subscribeEvent` (WebSocket) with `SubscriptionService.SubscribeEvents`. The server filters events before sending them, so your client only receives matching events.
  
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC WebSocket (deprecated)">
@@ -372,23 +372,22 @@ const client = new SuiGrpcClient({
   network: 'mainnet',
 });
  
-const TARGET_EVENT_TYPE = '0xPACKAGE::module::MyEvent';
- 
-// Stream checkpoints and filter events client-side
-const { responses } = client.subscriptionService.subscribeCheckpoints({
-  readMask: {
-    paths: ['transactions'],
+// Subscribe to events with a server-side filter
+const { responses } = client.subscriptionService.subscribeEvents({
+  filter: {
+    terms: [{
+      literals: [{
+        predicate: {
+          oneofKind: 'eventType',
+          eventType: { eventType: '0xPACKAGE::module::MyEvent' },
+        },
+      }],
+    }],
   },
 });
- 
+
 for await (const response of responses) {
-  for (const tx of response.checkpoint?.transactions ?? []) {
-    for (const event of tx.events?.events ?? []) {
-      if (event.eventType === TARGET_EVENT_TYPE) {
-        console.log('Matched event:', event);
-      }
-    }
-  }
+  console.log('Matched event:', response.event);
 }
 ```
  
@@ -414,12 +413,60 @@ buf curl --protocol grpc \
 </TabItem>
 </Tabs>
 **Key differences:**
-- JSON-RPC WebSocket subscriptions filtered events server-side. gRPC streams entire checkpoints and you filter client-side.
-- The gRPC stream is ordered and gapless. If your stream disconnects, resume from the last processed checkpoint sequence number. Backfill any missed range with `LedgerService.GetCheckpoint` before resubscribing. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
-- For filtered historical event queries over a range, use [GraphQL `Query.events`](/develop/accessing-data/using-events#querying-events-with-graphql) instead.
+- JSON-RPC WebSocket subscriptions filtered events server-side. gRPC `SubscribeEvents` also filters server-side using an `EventFilter`, so your client only receives matching events.
+- Subscriptions always begin at the current tip of the chain. They do not support resumption from a prior point. To backfill historical events before subscribing, use `LedgerService.ListEvents` with the same filter. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+- For filtered historical event queries over a range, use `LedgerService.ListEvents` or [GraphQL `Query.events`](/develop/accessing-data/using-events#querying-events-with-graphql).
+
+### Query events over a checkpoint range
+
+Use `LedgerService.ListEvents` to retrieve events matching an `EventFilter` across a range of checkpoints. This replaces the paginated `suix_queryEvents` pattern.
+
+<Tabs groupId="transport">
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+```ts
+// List events of a specific type within a checkpoint range
+const { responses } = client.ledgerService.listEvents({
+  startCheckpoint: BigInt(1000000),
+  endCheckpoint: BigInt(1000100),
+  filter: {
+    terms: [{
+      literals: [{
+        predicate: {
+          oneofKind: 'eventType',
+          eventType: { eventType: '0xPACKAGE::module::MyEvent' },
+        },
+      }],
+    }],
+  },
+  options: { limit: 50 },
+});
+
+for await (const response of responses) {
+  console.log('Event:', response.event);
+}
+```
+
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
+```sh
+grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "event_type": { "event_type": "0xPACKAGE::module::MyEvent" }
+      }]
+    }]
+  }
+}' <full node URL:port> sui.rpc.v2.LedgerService/ListEvents
+```
+
+</TabItem>
+</Tabs>
 ## Stream checkpoints
  
-Replace `sui_getCheckpoints` polling with `SubscriptionService.SubscribeCheckpoints` for a real-time, ordered stream.
+Replace `sui_getCheckpoints` polling with `SubscriptionService.SubscribeCheckpoints` for a real-time, ordered stream, or `LedgerService.ListCheckpoints` for paginated queries over a checkpoint range.
  
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC polling (deprecated)">
@@ -475,7 +522,8 @@ buf curl --protocol grpc \
 </Tabs>
 **Key differences:**
 - No polling loop needed. The gRPC stream pushes checkpoints as they finalize.
-- Checkpoints arrive in order with no gaps. Track the last processed `sequenceNumber` to resume after a disconnect.
+- Use `LedgerService.ListCheckpoints` to query a historical range of checkpoints, optionally filtered by a `TransactionFilter`. Use `SubscriptionService.SubscribeCheckpoints` for live streaming from the current tip.
+- Subscriptions do not support resumption. To backfill missed checkpoints, use `ListCheckpoints` with the appropriate checkpoint range before resubscribing.
 - `grpcurl` does not support server-side streaming. Use the Buf CLI or an SDK client instead.
 ## Look up a single checkpoint
  
