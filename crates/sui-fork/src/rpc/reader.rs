@@ -71,17 +71,24 @@ impl ForkRpcReader {
 }
 
 impl ObjectStore for ForkRpcReader {
-    /// Reads the current object from `sui-rpc-store`, then asks fork state on a miss.
+    /// Reads the current object through fork state only.
+    ///
+    /// Latest-semantics reads must consult the fork's currency authority
+    /// (`live_state`, with a checkpoint-pinned remote fallback): the stock
+    /// reader's reverse scan assumes a complete version history, but the
+    /// fork's sparse `objects` CF may hold a cached *historical* row as its
+    /// highest entry, which the scan would wrongly serve as current.
+    /// Stock-first delegation remains correct only for immutably-keyed reads
+    /// (exact versions, digests, sequence numbers), such as
+    /// [`Self::get_object_by_key`] below.
     ///
     /// Store errors are logged and converted to `None` because the
     /// `ObjectStore` trait has no error channel.
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.rpc_store.get_object(object_id).or_else(|| {
-            optional_store_read(
-                "object lookup",
-                ForkStore::get_object(&self.store, object_id).map_err(to_storage_error),
-            )
-        })
+        optional_store_read(
+            "object lookup",
+            ForkStore::get_object(&self.store, object_id).map_err(to_storage_error),
+        )
     }
 
     /// Reads one object version from `sui-rpc-store`, then asks fork state on a miss.

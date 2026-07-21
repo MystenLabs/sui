@@ -635,6 +635,61 @@ async fn test_address_inventory_does_not_resurrect_locally_moved_objects() {
     );
 }
 
+#[tokio::test]
+async fn test_rpc_reader_latest_ignores_stale_cached_history() {
+    // A pre-fork object whose true current-at-fork version is 9, while the
+    // local store holds only a cached historical row at version 5 (the exact
+    // state a bounded child read or exact-version read leaves behind: raw row,
+    // no live-state pointer). A latest read through the RPC reader must not
+    // trust the sparse objects CF's highest row — it must consult the fork's
+    // currency authority and fetch the real current version.
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let stale = make_gas_object(object_id, 5, Owner::AddressOwner(owner));
+    let current = make_gas_object(object_id, 9, Owner::AddressOwner(owner));
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "keys": [{
+                    "address": object_id.to_string(),
+                    "atCheckpoint": checkpoint,
+                }]
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[Some(&current)])))
+        .mount(&server)
+        .await;
+
+    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    store
+        .local_store()
+        .save_object_version_only(&stale)
+        .expect("historical row should save");
+
+    let reader = fork_rpc_reader(&store);
+    let got = sui_types::storage::ObjectStore::get_object(&reader, &object_id)
+        .expect("latest read should resolve the current version");
+    assert_eq!(
+        got.version(),
+        SequenceNumber::from_u64(9),
+        "reader must serve the current-at-fork version, not cached history",
+    );
+
+    // The fetch-and-persist leg must also have recorded currency.
+    assert_eq!(
+        store
+            .local_store()
+            .get_latest_object_status(object_id)
+            .unwrap(),
+        Some((SequenceNumber::from_u64(9), Status::Live(current))),
+    );
+}
+
 #[test]
 fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp) = test_simulacrum();
