@@ -319,7 +319,7 @@ Each subsystem keeps the two paths consistent without path-specific code:
   hook in `process_certificate`, which fires regardless of which path produced the barrier.
   See [`object_funds_checking.md`](./object_funds_checking.md) §3.
 - **Garbage collection** for unsettled withdraws is tied to effects commitment
-  (`ObjectFundsChecker::commit_effects`), which is also path-agnostic.
+  (`UnsettledObjectWithdrawals::commit_effects`), which is also path-agnostic.
 
 In short: the validator path uses richer in-process notifications; the checkpoint-executor
 path uses just on-chain effects. The schedulers are designed so that "I observed the on-chain

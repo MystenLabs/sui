@@ -7,9 +7,7 @@ use std::{
 };
 
 use mysten_common::{assert_reachable, debug_fatal};
-use parking_lot::RwLock;
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     accumulator_root::AccumulatorObjId,
     base_types::SequenceNumber,
     effects::{TransactionEffects, TransactionEffectsAPI},
@@ -24,7 +22,9 @@ use tokio::{
 use tracing::{debug, instrument};
 
 use crate::{
-    accumulators::funds_read::AccountFundsRead,
+    accumulators::{
+        funds_read::AccountFundsRead, unsettled_object_withdrawals::UnsettledObjectWithdrawals,
+    },
     authority::{ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore},
     execution_scheduler::ExecutionScheduler,
 };
@@ -45,36 +45,24 @@ pub enum ObjectFundsWithdrawStatus {
     Pending(oneshot::Receiver<FundsWithdrawStatus>),
 }
 
+/// The post-execution object-funds sufficiency checker: decides after execution whether a
+/// transaction's object withdrawals are covered, waiting for settlement when the answer is not yet
+/// deterministic. The unsettled-withdrawal bookkeeping lives in [`UnsettledObjectWithdrawals`];
+/// this type holds only the checking logic and the settlement-version watch that its pending-wait
+/// machinery needs.
 pub struct ObjectFundsChecker {
     /// Watchers to keep track the last settled accumulator version.
     /// This is updated whenever the settlement barrier transaction is executed.
     last_settled_version_sender: watch::Sender<SequenceNumber>,
     last_settled_version_receiver: watch::Receiver<SequenceNumber>,
-    inner: RwLock<Inner>,
+    unsettled: Arc<UnsettledObjectWithdrawals>,
     metrics: Arc<metrics::ObjectFundsCheckerMetrics>,
-}
-
-#[derive(Default)]
-struct Inner {
-    /// Tracks the amount of pending unsettled withdraws for each account at each accumulator version.
-    /// When we check object funds sufficiency, we read the balance bounded by the withdraw accumulator version.
-    /// Balance are updated only by settlement transactions, not when we withdraw funds.
-    /// Hence when we are checking object funds, on top of the settled balance, we also need to account for
-    /// the amount of withdraws from the same consensus commit (that all reads from the same accumulator version).
-    /// When `record_net_unsettled_object_withdraws` is enabled, the recorded amounts are the per-account
-    /// net withdraws from effects (what settlement will actually deduct); otherwise they are the
-    /// running max withdraws.
-    unsettled_withdraws: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>,
-    /// Tracks the accounts that have pending withdraws at each accumulator version.
-    /// This information is not required for functional correctness, but needed to garbage collect
-    /// unused entries in unsettled_withdraws that are now fully committed. Without doing so unsettled_withdraws
-    /// may grow unbounded.
-    unsettled_accounts: BTreeMap<SequenceNumber, BTreeSet<AccumulatorObjId>>,
 }
 
 impl ObjectFundsChecker {
     pub fn new(
         starting_accumulator_version: SequenceNumber,
+        unsettled: Arc<UnsettledObjectWithdrawals>,
         metrics: Arc<metrics::ObjectFundsCheckerMetrics>,
     ) -> Self {
         let (last_settled_version_sender, last_settled_version_receiver) =
@@ -82,9 +70,28 @@ impl ObjectFundsChecker {
         Self {
             last_settled_version_sender,
             last_settled_version_receiver,
-            inner: RwLock::new(Inner::default()),
+            unsettled,
             metrics,
         }
+    }
+
+    /// Construct with a store of its own, for tests that exercise the checker in isolation.
+    #[cfg(test)]
+    pub fn new_for_testing(
+        starting_accumulator_version: SequenceNumber,
+        metrics: Arc<metrics::ObjectFundsCheckerMetrics>,
+    ) -> Self {
+        Self::new(
+            starting_accumulator_version,
+            Arc::new(UnsettledObjectWithdrawals::new(metrics.clone())),
+            metrics,
+        )
+    }
+
+    /// The shared unsettled-withdrawal store (owned by `AuthorityState`).
+    #[cfg(test)]
+    fn unsettled(&self) -> &Arc<UnsettledObjectWithdrawals> {
+        &self.unsettled
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
@@ -319,16 +326,11 @@ impl ObjectFundsChecker {
     ) -> bool {
         for (obj_id, amount) in object_running_max_withdraws {
             let funds = funds_read.get_account_amount_at_version(obj_id, accumulator_version);
-            // Reading inner without a top-level lock is safe because no two transactions can be withdrawing
-            // from the same account at the same time.
+            // Reading without holding a lock across check-and-record is safe because no two
+            // transactions can be withdrawing from the same account at the same time.
             let unsettled_withdraw = self
-                .inner
-                .read()
-                .unsettled_withdraws
-                .get(obj_id)
-                .and_then(|withdraws| withdraws.get(&accumulator_version))
-                .copied()
-                .unwrap_or_default();
+                .unsettled
+                .get_unsettled_object_withdraw(obj_id, accumulator_version);
             debug!(
                 ?obj_id,
                 ?funds,
@@ -342,32 +344,17 @@ impl ObjectFundsChecker {
                 return false;
             }
         }
-        let mut inner = self.inner.write();
-        for (obj_id, amount) in unsettled_withdraw_updates {
-            let entry = inner
-                .unsettled_withdraws
-                .entry(*obj_id)
-                .or_default()
-                .entry(accumulator_version)
-                .or_default();
-            debug!(?obj_id, ?amount, ?entry, "Updating unsettled withdraws");
-            *entry = entry.checked_add(*amount).unwrap();
-
-            inner
-                .unsettled_accounts
-                .entry(accumulator_version)
-                .or_default()
-                .insert(*obj_id);
-        }
-        self.metrics
-            .unsettled_accounts
-            .set(inner.unsettled_withdraws.len() as i64);
-        self.metrics
-            .unsettled_versions
-            .set(inner.unsettled_accounts.len() as i64);
+        self.unsettled
+            .record_unsettled_withdraws(unsettled_withdraw_updates.iter(), accumulator_version);
         true
     }
 
+    /// Advances the last-settled accumulator version, unblocking funds checks that were
+    /// waiting for this version to settle. This runs when the barrier settle tx *executes*, which
+    /// may be concurrent with other transactions in the same checkpoint — so it only advances the
+    /// watch (safe: it just enables reads of the now-settled balance) and does not garbage-collect
+    /// unsettled entries. GC happens later, at checkpoint commit (`commit_effects`), once every
+    /// transaction that could still read those entries has executed.
     pub fn settle_accumulator_version(&self, next_accumulator_version: SequenceNumber) {
         // unwrap is safe because a receiver is always alive as part of self.
         self.last_settled_version_sender
@@ -378,57 +365,8 @@ impl ObjectFundsChecker {
             .set(next_accumulator_version.value() as i64);
     }
 
-    pub fn commit_effects<'a>(
-        &self,
-        committed_effects: impl Iterator<Item = &'a TransactionEffects>,
-    ) {
-        let committed_accumulator_versions = committed_effects
-            .filter_map(|effects| {
-                effects.object_changes().into_iter().find_map(|o| {
-                    if o.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
-                        o.input_version
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect::<Vec<_>>();
-        self.commit_accumulator_versions(committed_accumulator_versions);
-    }
-
-    fn commit_accumulator_versions(&self, committed_accumulator_versions: Vec<SequenceNumber>) {
-        let mut inner = self.inner.write();
-        for accumulator_version in committed_accumulator_versions {
-            let accounts = inner
-                .unsettled_accounts
-                .remove(&accumulator_version)
-                .unwrap_or_default();
-            for account in accounts {
-                let withdraws = inner.unsettled_withdraws.get_mut(&account);
-                if let Some(withdraws) = withdraws {
-                    withdraws.remove(&accumulator_version);
-                    if withdraws.is_empty() {
-                        inner.unsettled_withdraws.remove(&account);
-                    }
-                }
-            }
-        }
-        self.metrics
-            .unsettled_accounts
-            .set(inner.unsettled_withdraws.len() as i64);
-        self.metrics
-            .unsettled_versions
-            .set(inner.unsettled_accounts.len() as i64);
-    }
-
     #[cfg(test)]
     pub fn get_current_accumulator_version(&self) -> SequenceNumber {
         *self.last_settled_version_receiver.borrow()
-    }
-
-    #[cfg(test)]
-    pub fn is_empty(&self) -> bool {
-        let inner = self.inner.read();
-        inner.unsettled_withdraws.is_empty() && inner.unsettled_accounts.is_empty()
     }
 }
