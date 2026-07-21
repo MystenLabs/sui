@@ -1,0 +1,329 @@
+---
+title: P2P Payments Reference App
+description: >-
+  End-to-end walkthrough of a peer-to-peer payments application on Sui that
+  stitches together authentication, gas sponsorship, token transfers, and
+  transaction history.
+sidebar_label: P2P Reference App
+keywords:
+  - P2P payments
+  - reference app
+  - peer-to-peer
+  - payments example
+  - zkLogin
+  - sponsored transactions
+  - transaction history
+  - payment flow
+goal:
+  description: >-
+    Reader can build a complete P2P payments app on Sui with auth, sponsored
+    gas, transfers, and transaction history
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: P2P reference app
+    stage: End to End
+questions:
+  - How do I build a P2P payments app on Sui?
+  - What does an end-to-end payment flow look like on Sui?
+  - How do I combine zkLogin, sponsored gas, and transfers in one app?
+answer: >-
+  A P2P payments app on Sui combines zkLogin for wallet-free authentication,
+  sponsored transactions for gasless UX, address balance transfers for the
+  actual payment, and gRPC queries for transaction history — all composable
+  within a single programmable transaction block.
+---
+
+This walkthrough builds a peer-to-peer payments flow that lets users send stablecoins to each other without holding SUI or managing private keys. It stitches together four primitives:
+
+1. **Authentication** — zkLogin or wallet connection
+2. **Gas sponsorship** — a gas station pays the fee
+3. **Transfer** — address balance `send_funds` for the actual payment
+4. **Transaction history** — gRPC query for past payments
+
+Each section is self-contained. You can adopt individual pieces or wire the full flow.
+
+## Architecture
+
+```
+┌──────────┐     ┌──────────┐     ┌─────────────┐     ┌──────────┐
+│  User    │────>│ Frontend │────>│ Gas Station  │     │ Sui Node │
+│ (browser)│     │ (React)  │     │ (Express.js) │     │ (gRPC)   │
+└──────────┘     └─────┬────┘     └──────┬───────┘     └────┬─────┘
+                       │                 │                   │
+                  1. zkLogin auth        │                   │
+                  2. Build PTB ──────────┼──────────────────>│
+                  3. Request gas ───────>│                   │
+                  4. Sponsor signs       │                   │
+                  5. User signs ─────────┼──────────────────>│
+                  6. Submit dual-signed  │              Execute tx
+                  7. Query history ──────┼──────────────────>│
+```
+
+## Prerequisites
+
+- Node.js 18+
+- `@mysten/sui` SDK installed (`npm install @mysten/sui`)
+- A [testnet faucet](/getting-started/onboarding/get-coins) SUI balance for the gas station sponsor address
+- An OAuth client ID (Google) for zkLogin, or use wallet connection instead
+
+## Step 1: Authentication
+
+Users authenticate with [zkLogin](/sui-stack/zklogin-integration/zklogin) for a wallet-free experience, or connect an existing wallet with [dApp Kit](/getting-started/onboarding/app-frontends).
+
+With zkLogin, the user signs in with their Google (or other OAuth provider) account. The app derives a Sui address from the OAuth JWT — no seed phrase, no wallet extension.
+
+```typescript
+// After OAuth redirect, you have a JWT.
+// Use the Enoki SDK or roll your own zkLogin flow
+// to derive the user's Sui address and create an ephemeral keypair.
+//
+// See: https://docs.sui.io/sui-stack/zklogin-integration/zklogin
+```
+
+The key outcome of this step is a `signer` (keypair or ZkLoginSigner) and the user's Sui address.
+
+## Step 2: Read the sender's balance
+
+Before building the transfer, check the sender's available balance.
+
+```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.testnet.sui.io:443',
+  network: 'testnet',
+});
+
+const USDC = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
+
+const { balance } = await client.core.getBalance({
+  owner: senderAddress,
+  coinType: USDC,
+});
+
+console.log(`Available USDC: ${balance.balance}`);
+// balance.coinBalance = coin objects, balance.addressBalance = accumulator
+```
+
+## Step 3: Build the transfer PTB
+
+Build a programmable transaction block that sends USDC from the sender's address balance to the recipient. Using `send_funds` makes the transfer eligible for [gasless stablecoin transfers](/develop/transaction-payment/gasless-stablecoin-transfers).
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+const amount = 5_000_000n; // 5 USDC (6 decimals)
+
+const tx = new Transaction();
+tx.setSender(senderAddress);
+
+tx.moveCall({
+  target: '0x2::balance::send_funds',
+  typeArguments: [USDC],
+  arguments: [
+    tx.balance({ type: USDC, balance: amount }),
+    tx.pure.address(recipientAddress),
+  ],
+});
+```
+
+:::tip Gasless stablecoin transfers
+
+If the transfer uses an [eligible stablecoin](/develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins) and the `SuiGrpcClient` detects eligibility, the SDK automatically sets `gasPrice = 0`. In this case, you do not need a gas station at all. The gasless path is the simplest integration.
+
+:::
+
+## Step 4: Sponsor the transaction (if needed)
+
+If the transfer is not eligible for gasless execution (non-stablecoin, or includes other operations), request gas sponsorship from your [gas station](/onchain-finance/gas-station).
+
+```typescript
+import { toBase64, fromBase64 } from '@mysten/sui/utils';
+
+// Build transaction kind bytes (without gas)
+const txKindBytes = await tx.build({ client, onlyTransactionKind: true });
+
+// Request sponsorship
+const sponsorResponse = await fetch('https://your-gas-station.com/sponsor', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ txBytes: toBase64(txKindBytes) }),
+});
+
+const { txBytes: sponsoredBytes, sponsorSignature, gasCoinId } = await sponsorResponse.json();
+
+// Sign with the user's key
+const finalBytes = fromBase64(sponsoredBytes);
+const userSig = await signer.signTransaction(finalBytes);
+
+// Submit with both signatures
+const result = await client.core.executeTransaction({
+  transaction: finalBytes,
+  signatures: [userSig.signature, sponsorSignature],
+  include: { effects: true },
+});
+
+// Confirm to the gas station so it can release the coin.
+// Always confirm — even on failure — because gas is still charged.
+const digest =
+  result.$kind === 'Transaction'
+    ? result.Transaction.digest
+    : result.FailedTransaction.digest;
+
+await fetch('https://your-gas-station.com/sponsor/confirm', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ gasCoinId, digest }),
+});
+```
+
+For gasless-eligible transfers, skip the gas station and submit directly:
+
+```typescript
+const result = await client.signAndExecuteTransaction({
+  transaction: tx,
+  signer,
+});
+```
+
+## Step 5: Confirm the transaction
+
+Wait for finality and verify the transaction effects before showing success to the user.
+
+```typescript
+if (result.$kind === 'FailedTransaction') {
+  console.error('Payment failed:', result.FailedTransaction.status.error?.message);
+  // Show error UI
+} else {
+  // Wait for the transaction to be indexed
+  await client.waitForTransaction({ digest: result.Transaction.digest });
+  console.log('Payment confirmed:', result.Transaction.digest);
+  // Show success UI
+}
+```
+
+## Step 6: Query transaction history
+
+Display the user's past payments by querying transactions involving their address.
+
+```typescript
+// Query transaction history using GraphQL (the TypeScript SDK does not
+// expose a high-level transaction-listing wrapper over gRPC).
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
+
+const gqlClient = new SuiGraphQLClient({
+  url: 'https://sui-testnet.mystenlabs.com/graphql',
+  network: 'testnet',
+});
+
+const { data } = await gqlClient.query({
+  query: `{
+    address(address: "${senderAddress}") {
+      transactions(last: 20) {
+        nodes {
+          digest
+          effects {
+            balanceChanges {
+              nodes {
+                owner { address }
+                amount
+                coinType { repr }
+              }
+            }
+          }
+        }
+      }
+    }
+  }`,
+});
+
+for (const tx of data?.address?.transactions?.nodes ?? []) {
+  const changes = tx.effects?.balanceChanges?.nodes ?? [];
+
+  // Pair the sender's negative change with the recipient's positive change
+  const sent = changes.find(
+    (c) =>
+      c.coinType?.repr === USDC &&
+      c.owner?.address === senderAddress &&
+      BigInt(c.amount) < 0n,
+  );
+  const received = changes.find(
+    (c) =>
+      c.coinType?.repr === USDC &&
+      c.owner?.address !== senderAddress &&
+      BigInt(c.amount) > 0n,
+  );
+
+  if (sent && received) {
+    console.log(
+      `Sent ${Math.abs(Number(sent.amount)) / 1_000_000} USDC`,
+      `to ${received.owner?.address}`,
+    );
+  }
+}
+```
+
+For higher-volume history queries or filtered views (by coin type, date range, or amount), consider building a [custom indexer](/develop/accessing-data/custom-indexer/custom-indexers) that listens for payment events and stores them in a queryable database.
+
+## Putting it together
+
+The full flow in a single function:
+
+```typescript
+async function sendPayment(
+  client: SuiGrpcClient,
+  signer: Signer,
+  senderAddress: string,
+  recipientAddress: string,
+  amount: bigint,
+  coinType: string,
+) {
+  // Build the transfer
+  const tx = new Transaction();
+  tx.setSender(senderAddress);
+  tx.moveCall({
+    target: '0x2::balance::send_funds',
+    typeArguments: [coinType],
+    arguments: [
+      tx.balance({ type: coinType, balance: amount }),
+      tx.pure.address(recipientAddress),
+    ],
+  });
+
+  // Submit (SDK auto-detects gasless eligibility with gRPC)
+  const result = await signer.signAndExecuteTransaction({ transaction: tx, client });
+
+  if (result.$kind === 'FailedTransaction') {
+    throw new Error(`Payment failed: ${result.FailedTransaction.status.error?.message}`);
+  }
+
+  // Wait for indexing
+  await client.waitForTransaction({ digest: result.Transaction.digest });
+
+  return result.Transaction;
+}
+```
+
+## Next steps
+
+- [Choose Your Payments Model](/onchain-finance/choose-payments-model) — decide between simple transfers, Payment Kit, or custom Move
+- [Self-Hosted Gas Station](/onchain-finance/gas-station) — deploy your own gas station service
+- [Payment Intents](/onchain-finance/payment-intents) — compose multiple operations into a single atomic transaction
+- [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers) — eligible stablecoins and how gasless works
+- [zkLogin](/sui-stack/zklogin-integration/zklogin) — wallet-free authentication for your users

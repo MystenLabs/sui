@@ -1,0 +1,245 @@
+---
+title: Agent Wallet and Signer Setup
+description: >-
+  Create and manage a headless keypair for autonomous backend agents that sign
+  Sui transactions without human interaction, with patterns for key storage,
+  rotation, and cloud KMS.
+sidebar_label: Agent Wallet Setup
+keywords:
+  - agent wallet
+  - headless signer
+  - keypair management
+  - Ed25519
+  - cloud KMS
+  - key rotation
+  - agent keypair
+  - backend signing
+goal:
+  description: >-
+    Reader can set up a headless agent keypair and sign Sui transactions from a
+    backend service
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Agent wallet setup
+    stage: Authorization
+questions:
+  - How do I create a keypair for a backend agent on Sui?
+  - How do I store agent keys securely for production?
+  - How do I rotate an agent's keypair without downtime?
+answer: >-
+  An agent wallet is a headless keypair that signs Sui transactions without
+  human interaction. Generate a keypair with the TypeScript SDK, store the
+  secret in a cloud KMS or secrets manager, derive the agent's Sui address, and
+  sign transactions programmatically.
+---
+
+An agent is a backend process that signs Sui transactions without human interaction. It needs a keypair, not a wallet UI. This page covers keypair generation, secure storage, signing, and key rotation for headless agents.
+
+## Keypair generation
+
+The TypeScript SDK supports three ways to create a keypair.
+
+### Generate a new keypair
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+
+const keypair = new Ed25519Keypair();
+const address = keypair.toSuiAddress();
+
+console.log('Agent address:', address);
+console.log('Secret key:', keypair.getSecretKey()); // Bech32: suiprivkey1...
+```
+
+`getSecretKey()` returns a Bech32-encoded string prefixed with `suiprivkey`. Store it securely (see next section). The address is the agent's onchain identity.
+
+### From a mnemonic
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+
+const mnemonic = 'word1 word2 word3 ... word12';
+const keypair = Ed25519Keypair.deriveKeypair(mnemonic);
+```
+
+Use a mnemonic when you need to recover the keypair from a backup. Store the mnemonic with the same security as a private key.
+
+### From a private key
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+
+// fromSecretKey accepts the Bech32 suiprivkey... string directly
+const keypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
+```
+
+This is the most common pattern for production agents: load the key from an environment variable or secrets manager at startup.
+
+## Key storage
+
+Never store private keys in source code, config files committed to version control, or unencrypted environment files.
+
+### Environment variables (simple)
+
+Set the key as an environment variable on the host. This is acceptable for development and simple deployments.
+
+```bash
+export AGENT_SECRET_KEY="suiprivkey1..."
+```
+
+```typescript
+const keypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
+```
+
+### Cloud KMS (production)
+
+For production, use a cloud KMS (AWS KMS, GCP Cloud KMS, Azure Key Vault) so the private key never leaves the HSM. The `@mysten/sui` SDK defines a `Signer` interface that cloud KMS implementations can satisfy.
+
+Cloud KMS signers are available as separate packages:
+
+- **AWS KMS:** `@mysten/aws-kms-signer`
+- **GCP KMS:** `@mysten/gcp-kms-signer`
+- **Ledger:** `@mysten/ledger-signer`
+
+```typescript
+// Example: AWS KMS signer
+import { AwsKmsSigner } from '@mysten/aws-kms-signer';
+
+const signer = await AwsKmsSigner.fromKeyId(
+  'arn:aws:kms:us-east-1:123456789:key/your-key-id',
+  { region: 'us-east-1' },
+);
+
+// Use like any other signer
+const result = await client.signAndExecuteTransaction({
+  transaction: tx,
+  signer,
+});
+```
+
+See [Signers](https://sdk.mystenlabs.com/sui/cryptography/signers) for the full list of available signer packages.
+
+### Secrets managers
+
+If you do not use KMS-based signing, store the raw key in a secrets manager (AWS Secrets Manager, HashiCorp Vault, Doppler) and load it at startup. The key is decrypted in memory — never written to disk.
+
+## Deriving the agent address
+
+Every keypair maps to a Sui address. This address is where the agent receives objects, holds coins, and is identified onchain.
+
+```typescript
+const agentAddress = keypair.toSuiAddress();
+```
+
+Before the agent can submit transactions, its address needs either:
+- SUI for gas payments, or
+- A [gas station](/onchain-finance/gas-station) that sponsors transactions on its behalf
+
+For agents that exclusively use sponsored transactions, the agent address never needs to hold SUI.
+
+## Signing transactions
+
+An agent signs transactions the same way a wallet does, but without user approval prompts.
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.testnet.sui.io:443',
+  network: 'testnet',
+});
+
+const tx = new Transaction();
+tx.setSender(keypair.toSuiAddress());
+tx.moveCall({ target: '0xPACKAGE::module::function' });
+
+// Sign and execute in one step
+const result = await client.signAndExecuteTransaction({
+  transaction: tx,
+  signer: keypair,
+});
+```
+
+For sponsored transactions where the gas station provides a co-signature, the agent signs the transaction bytes separately:
+
+```typescript
+const bytes = await tx.build({ client });
+const { signature } = await keypair.signTransaction(bytes);
+```
+
+See [Offline Signing](/develop/transactions/transaction-auth/offline-signing) for the full dual-signature flow.
+
+## Key rotation
+
+Rotating an agent's keypair changes its Sui address. Plan the rotation carefully to avoid disrupting operations.
+
+### Rotation procedure
+
+1. **Generate a new keypair.** Create the new keypair and derive its address.
+
+2. **Transfer objects.** Move any objects the agent owns (spending mandates, coins, capability objects) from the old address to the new address.
+
+3. **Update configuration.** Update the gas station's allowlist, any onchain mandates, and the agent's environment variables to use the new keypair.
+
+4. **Verify.** Submit a test transaction with the new keypair to confirm everything works.
+
+5. **Destroy old key material.** Delete the old secret key from the secrets manager. If using KMS, schedule key deletion.
+
+```typescript
+// Step 2: Transfer all owned objects to the new address
+const ownedObjects = await client.listOwnedObjects({
+  owner: oldAddress,
+});
+
+const tx = new Transaction();
+tx.setSender(oldAddress);
+for (const obj of ownedObjects.objects) {
+  tx.transferObjects(
+    [tx.object(obj.objectId)],
+    newAddress,
+  );
+}
+
+await oldKeypair.signAndExecuteTransaction({ transaction: tx, client });
+```
+
+### Zero-downtime rotation
+
+For zero-downtime rotation, run both old and new keypairs simultaneously during a transition window:
+
+1. Deploy the new keypair alongside the old one.
+2. Grant the new address the same permissions (mandates, gas station access).
+3. Switch traffic to the new keypair.
+4. Wait for all inflight transactions from the old keypair to confirm.
+5. Revoke the old keypair's permissions and destroy the key.
+
+## Multisig for agent security
+
+When a single agent key is too risky — for example, an agent that manages large balances — use a [multisig](/develop/transactions/transaction-auth/multisig) setup where the agent holds one key and a human operator holds an override key.
+
+A 1-of-2 multisig lets the agent operate autonomously (it can sign alone), but the operator can also sign transactions from the same address to revoke mandates or transfer objects in an emergency.
+
+For higher security, use a 2-of-3 multisig where both the agent and an operator must sign. This prevents the agent from acting unilaterally but adds latency to every transaction.
+
+## Next steps
+
+- [Spending Policies and Mandates](/onchain-finance/agentic-payments/spending-policies) — limit what the agent can spend
+- [Self-Hosted Gas Station](/onchain-finance/gas-station) — sponsor the agent's transactions
+- [Production Hardening](/onchain-finance/agentic-payments/production-hardening) — kill-switches, retries, and monitoring

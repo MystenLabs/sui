@@ -38,55 +38,60 @@ answer: >-
 Integrate payment flows into your application, from reading and managing address balances to sponsoring gasless transactions for your users.
 
 import DocCardList from '@theme/DocCardList';
- 
+
 <DocCardList items={[
 {
 type: 'link',
-label: 'Address Balances', 
-href: '/onchain-finance/asset-custody/address-balances',
-description: 'Overview of address balance management on Sui.', 
+label: 'Choose a Payments Model',
+href: '/onchain-finance/choose-payments-model',
+description: 'Decide between simple transfers, Payment Kit, and custom Move for your payment integration.',
 },
 {
 type: 'link',
-label: 'Using Address Balances',
-href: '/onchain-finance/asset-custody/address-balances/using-address-balances',
-description: 'Learn how to use address balances for asset custody.',
-}, 
-{
-type: 'link',
-label: 'Migrate Address Balances', 
-href: 
-'/onchain-finance/asset-custody/address-balances/migrate-address-balances',
-description: 'Guide to migrating from `Coin` to address balances.', 
+label: 'Payment Kit',
+href: '/onchain-finance/payment-kit',
+description: 'Structured payment processing with registries, receipts, and duplicate prevention.',
 },
 {
 type: 'link',
 label: 'Payment Intents',
 href: '/onchain-finance/payment-intents',
-description: 'Use programmable transaction blocks to compile multi-step payment workflows into a single atomic transaction.',
-}, 
-{
-type: 'link',
-label: 'Transaction Payment',
-href: '/develop/transaction-payment',
-description: 'Overview of transaction payment options on Sui.',
-}, 
-{
-type: 'link',
-label: 'Sponsored Transactions', 
-href: '/develop/transaction-payment/sponsor-txn',
-description: 'Learn how to sponsor transactions so users pay no gas.',
-}, 
-{
-type: 'link',
-label: 'Gasless Stablecoin Transfers', 
-href: '/develop/transaction-payment/gasless-stablecoin-transfers',
-description: 'Learn about transactions that are eligible for zero gas fees.',
+description: 'Compose multi-step payment workflows into a single atomic transaction.',
 },
 {
 type: 'link',
-label: 'Payment Kit', 
-href: '/onchain-finance/payment-kit',
-description: 'The Sui Payment Kit is a robust, open-source payment processing toolkit that provides secure payment verification, receipt management, and duplicate prevention for applications built on the Sui blockchain.',
+label: 'Self-Hosted Gas Station',
+href: '/onchain-finance/gas-station',
+description: 'Deploy a gas station service that sponsors transactions for users or agents.',
+},
+{
+type: 'link',
+label: 'P2P Reference App',
+href: '/onchain-finance/p2p-reference-app',
+description: 'End-to-end walkthrough combining auth, sponsorship, transfers, and history.',
+},
+{
+type: 'link',
+label: 'Agentic Payments',
+href: '/onchain-finance/agentic-payments',
+description: 'Agent wallet setup, spending mandates, settlement verification, and production hardening.',
+},
+{
+type: 'link',
+label: 'Address Balances',
+href: '/onchain-finance/asset-custody/address-balances',
+description: 'Overview of address balance management on Sui.',
+},
+{
+type: 'link',
+label: 'Sponsored Transactions',
+href: '/develop/transaction-payment/sponsor-txn',
+description: 'Protocol-level details of how sponsored transactions work.',
+},
+{
+type: 'link',
+label: 'Gasless Stablecoin Transfers',
+href: '/develop/transaction-payment/gasless-stablecoin-transfers',
+description: 'Eligible stablecoins that can be sent with zero gas fees.',
 },
 ]} />
