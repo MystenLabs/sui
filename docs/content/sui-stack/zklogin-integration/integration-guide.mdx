@@ -300,7 +300,9 @@ With the JWT and salt, derive the zkLogin address:
 ```typescript
 import { jwtToAddress } from '@mysten/sui/zklogin';
 
-const zkLoginUserAddress = jwtToAddress(jwt, userSalt);
+// The third argument (legacyAddress) is required.
+// Pass false for new integrations; pass true only for addresses created before the derivation fix.
+const zkLoginUserAddress = jwtToAddress(jwt, userSalt, false);
 ```
 
 The same `sub` + `iss` + `aud` + `user_salt` always produces the same address. See [Address definition](/sui-stack/zklogin-integration/zklogin#address-definition) for the full derivation formula.

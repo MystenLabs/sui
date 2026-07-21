@@ -97,7 +97,7 @@ This example teaches:
 
 - **ZK proof generation:** The prover service takes the JWT, extended ephemeral public key, max epoch, randomness, and salt, and returns a zero-knowledge proof. This proof lets the network verify the transaction was authorized by the OAuth identity holder without seeing the JWT.
 
-- **Address derivation:** `jwtToAddress(jwt, salt)` deterministically maps an OAuth identity to a Sui address. The same user with the same salt always gets the same address, enabling persistent wallet identity across sessions.
+- **Address derivation:** `jwtToAddress(jwt, salt, false)` deterministically maps an OAuth identity to a Sui address. The third argument (`legacyAddress`) is required; pass `false` for new integrations. The same user with the same salt always gets the same address, enabling persistent wallet identity across sessions.
 
 - **zkLogin transaction signing:** The ephemeral key pair signs the transaction bytes, then `getZkLoginSignature` combines the ephemeral signature with the ZK proof and address seed to produce a composite signature the network accepts.
 
