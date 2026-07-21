@@ -558,7 +558,7 @@ query ($after: String) {
 **Key differences:**
 - GraphQL uses cursor-based pagination. Pass `pageInfo.endCursor` as the `$after` variable for the next page.
 - For reverse order, use `last` and `before` instead of `first` and `after`.
-- For real-time streaming, use [gRPC `SubscriptionService.SubscribeCheckpoints`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints) instead. GraphQL does not support streaming subscriptions.
+- For real-time streaming, use [gRPC `SubscriptionService.SubscribeCheckpoints`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints) instead. GraphQL has subscription infrastructure but gRPC is the production streaming path today.
 
 ## Get balances
 
