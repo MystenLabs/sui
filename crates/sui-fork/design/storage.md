@@ -8,12 +8,6 @@ SPDX-License-Identifier: Apache-2.0
 This document describes the storage architecture **as implemented** after the
 migration from the filesystem cache onto stock `sui-rpc-store`.
 
-It replaces the pre-implementation planning drafts (`sui-rpc-store.md`,
-`sui-rpc-store-v2.md`, `owned_objects_dbmap_plan.md`, now deleted) and
-supersedes the storage-level details in `owned_objects_design.md` and
-`seeding_design.md`, whose problem statements still apply but whose mechanics
-predate this migration.
-
 ## Constraints and goals
 
 - **No upstream changes.** `sui-rpc-store` and `sui-rpc-node` are untouched;
@@ -103,7 +97,7 @@ Key roles:
 
 ## `LiveState`: the current-version authority
 
-Stock `sui-rpc-store` has no column family keyed by `ObjectID` that answers
+`sui-rpc-store` has no column family keyed by `ObjectID` that answers
 "what is this object's current version, and is it live or removed?".
 `object_by_owner`/`object_by_type` record latest live versions but are keyed
 by owner/type and only cover indexed objects; and the fork's `objects` CF is
@@ -113,15 +107,14 @@ authority for latest-reads and remote-fallback decisions:
 
 - `Live(version)` — read `objects[(id, version)]` locally, never fall back.
 - `Removed { version, kind }` — authoritative tombstone, never fall back.
-- absent — unknown: bare object rows are only cached history; consult
-  GraphQL (pre-fork pinned), then `save_live_object_if_current`.
+- absent — no local knowledge; fall back to remote.
 
-Ordering discipline: rpc-store rows commit **before** the pointer update
+Data storage ordering: rpc-store rows commit **before** the pointer update
 (a reader can transiently miss the pointer, which degrades to "unknown");
 within one `apply_checkpoint`, removals stage **before** writes so a
 wrap-then-rewrite in the same result lands `Live`.
 
-## The write-path contract
+## Executing transactions and indexing
 
 **Sync = canonical data.** Each locally executed transaction synchronously
 writes its object version rows + tombstones and the `LiveState` pointers
@@ -137,7 +130,7 @@ balance, and bitmap indexes for local checkpoints are written by the indexer
 alone (`first_checkpoint = forked_at + 1`). Checkpoint publication blocks on
 `ForkRuntime::wait_for_indexed_checkpoint` (min watermark across all
 pipelines), so by the time an execution returns, its checkpoint is fully
-indexed — RPC reads issued afterwards always see complete derived state.
+indexed. RPC reads issued afterwards always see complete derived state.
 Subscribers receive checkpoints from the indexer's broadcast pipeline, so
 their ordering is inherited from indexing.
 
@@ -146,12 +139,12 @@ indexer, so its derived rows are written synchronously: seed and inventory
 saves (`save_indexed_live_object`) write owner/type/package/balance rows, and
 lazy latest-object materialization (`save_live_object_if_current`) writes the
 package-version row for fetched packages. These cover versions at or before
-the fork point — ranges the indexer never touches — so every row still has
+the fork point, ranges the indexer never touches, so every row still has
 exactly one writer.
 
-**Failures are fail-stop.** The `SimulatorStore` write surface cannot return
+**Failures handling.** The `SimulatorStore` write surface cannot return
 errors; a failed persist panics rather than letting execution continue on a
-state that diverges from disk. An indexer death is surfaced immediately by
+state that diverges from disk. An indexer stoppage is surfaced immediately by
 the `indexer_stopped()` watchdog branch in `startup::run`, not as a delayed
 publication timeout.
 
@@ -161,7 +154,7 @@ An *inventory* is a one-time complete remote enumeration (per address-owner,
 object-owner, or type) at the fork checkpoint that backfills the stock index
 CFs and records a completion marker in `inventory_metadata.json`; later
 owner-scoped reads serve from the local index. Inventories run lazily on
-first read, double-checked under the snapshot lock.
+first read.
 
 Seeding (`--address`, `--object-id`) resolves an immutable manifest at
 startup. An address seed performs the *same* complete scan as inventory
