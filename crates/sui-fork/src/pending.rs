@@ -46,7 +46,7 @@ pub(crate) struct StagedTransaction {
 /// Staging buffer for the in-flight checkpoint and its transactions.
 ///
 /// `RwLock` provides the interior mutability needed behind the shared
-/// `Arc<DataStoreInner>` that every cloned `DataStore` holds.
+/// `Arc<ForkStoreInner>` that every cloned `ForkStore` holds.
 #[derive(Default)]
 pub(crate) struct PendingCheckpointBuffer {
     checkpoint: RwLock<Option<VerifiedCheckpoint>>,

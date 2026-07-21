@@ -16,9 +16,9 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait
 use sui_types::digests::ChainIdentifier;
 use sui_types::storage::ReadStore as _;
 
-use crate::store::DataStore;
+use crate::store::ForkStore;
 
-type ForkedSimulacrum = Simulacrum<OsRng, DataStore>;
+type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
 
 /// Pull-side checkpoint source for the fork's embedded `sui-rpc-store`
 /// indexer.

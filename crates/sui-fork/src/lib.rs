@@ -5,11 +5,11 @@
 
 pub mod cli;
 pub(crate) mod context;
-pub(crate) mod fork_rpc_store;
 mod gql;
 pub(crate) mod ingestion;
 pub(crate) mod inventory;
 pub(crate) mod live_state;
+pub(crate) mod local_store;
 pub(crate) mod metadata;
 mod node;
 pub(crate) mod pending;
@@ -28,7 +28,7 @@ pub use proto::forking::AdvanceClockRequest;
 pub use proto::forking::GetStatusRequest;
 pub use proto::forking::forking_service_client::ForkingServiceClient;
 pub use seed::SeedInput;
-pub use store::DataStore;
+pub use store::ForkStore;
 
 use anyhow::Error;
 use anyhow::Result;
@@ -46,7 +46,7 @@ use sui_types::transaction::VerifiedTransaction;
 // ============================================================================
 
 /// Signed transaction envelope paired with its execution effects and the checkpoint
-/// it was finalized in. The checkpoint is used by [`crate::store::DataStore`] as a
+/// it was finalized in. The checkpoint is used by [`crate::store::ForkStore`] as a
 /// pre-fork guard: remote results whose `checkpoint > forked_at_checkpoint` must not
 /// leak into a fork that has already diverged from the upstream chain.
 #[derive(Clone, Debug)]
