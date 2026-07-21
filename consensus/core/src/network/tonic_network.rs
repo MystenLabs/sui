@@ -146,7 +146,9 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             .filter_map(move |b| async move {
                 match b {
                     Ok(response) => Some(ExtendedSerializedBlock {
-                        block: response.block,
+                        // Copy out of the h2 receive buffer so retaining the block
+                        // does not pin the multi-MB network buffer chunk.
+                        block: Bytes::from(response.block.to_vec()),
                         excluded_ancestors: response.excluded_ancestors,
                     }),
                     Err(e) => {
@@ -221,7 +223,12 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     for b in &response.blocks {
                         total_fetched_bytes += b.len();
                     }
-                    blocks.extend(response.blocks);
+                    blocks.extend(
+                        response
+                            .blocks
+                            .into_iter()
+                            .map(|b| Bytes::from(b.to_vec())),
+                    );
                     if total_fetched_bytes > max_allowed_bytes {
                         info!(
                             "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
@@ -317,7 +324,12 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     for b in &response.blocks {
                         total_fetched_bytes += b.len();
                     }
-                    blocks.extend(response.blocks);
+                    blocks.extend(
+                        response
+                            .blocks
+                            .into_iter()
+                            .map(|b| Bytes::from(b.to_vec())),
+                    );
                     if total_fetched_bytes > max_allowed_bytes {
                         info!(
                             "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
@@ -556,7 +568,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         else {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
-        let block = request.into_inner().block;
+        let block = Bytes::from(request.into_inner().block.to_vec());
         let block = ExtendedSerializedBlock {
             block,
             excluded_ancestors: vec![],
