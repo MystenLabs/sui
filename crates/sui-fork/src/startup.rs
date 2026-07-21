@@ -311,6 +311,7 @@ mod tests {
             .write_seed_manifest(&SeedManifest {
                 network: network.to_owned(),
                 checkpoint,
+                addresses: Vec::new(),
                 entries: Vec::new(),
             })
             .expect("seed manifest should write");

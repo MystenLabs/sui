@@ -76,6 +76,7 @@ fn seed_manifest_round_trips_and_is_immutable() {
     let manifest = SeedManifest {
         network: "custom".to_owned(),
         checkpoint: 42,
+        addresses: Vec::new(),
         entries: Vec::new(),
     };
 
