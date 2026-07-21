@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::bail;
+use anyhow::{Context, bail};
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::TryStreamExt;
@@ -60,7 +60,10 @@ use sui_types::{
 };
 use sui_types::{gas_coin::GAS, sui_system_state::sui_system_state_summary::SuiSystemStateSummary};
 use tokio::task::JoinSet;
-use tokio::time::{sleep, timeout};
+use tokio::{
+    process::Command,
+    time::{sleep, timeout},
+};
 use tracing::{debug, info, instrument, warn};
 
 use crate::drivers::{SubmissionAmplification, SubmissionAmplificationSample, ValidatorSelection};
@@ -932,6 +935,128 @@ pub struct FullNodeProxy {
     td: Arc<TransactionDriver<NetworkAuthorityClient>>,
 }
 
+const MIN_TRANSACTION_RETRIES: u32 = 10;
+const TRANSACTION_RETRY_TIMEOUT: Duration = Duration::from_secs(60);
+const ANTITHESIS_RECOVERY_TIMEOUT: Duration = Duration::from_secs(30);
+// Leave enough quiet time for a full recovery window plus an in-flight
+// execute-and-wait request, which can itself take up to 30 seconds.
+const ANTITHESIS_QUIET_PERIOD: Duration = Duration::from_secs(60);
+
+struct TransactionRetryState {
+    initial_deadline: Instant,
+    retry_count: u32,
+    recovery_deadline: Option<Instant>,
+}
+
+impl TransactionRetryState {
+    fn new() -> Self {
+        Self {
+            initial_deadline: Instant::now() + TRANSACTION_RETRY_TIMEOUT,
+            retry_count: 0,
+            recovery_deadline: None,
+        }
+    }
+
+    fn record_retry(&mut self) {
+        self.retry_count += 1;
+    }
+
+    fn should_retry_submission_at(&self, now: Instant) -> bool {
+        match self.recovery_deadline {
+            Some(deadline) => now < deadline,
+            None => self.retry_count < MIN_TRANSACTION_RETRIES || now < self.initial_deadline,
+        }
+    }
+
+    fn start_recovery_at(&mut self, now: Instant) {
+        self.recovery_deadline = Some(now + ANTITHESIS_RECOVERY_TIMEOUT);
+    }
+
+    async fn ensure_submission_retry_window(
+        &mut self,
+        tx_digest: TransactionDigest,
+    ) -> anyhow::Result<bool> {
+        if self.should_retry_submission_at(Instant::now()) {
+            return Ok(true);
+        }
+
+        if self.recovery_deadline.is_some() || !request_antithesis_fault_stop().await? {
+            return Ok(false);
+        }
+
+        // The stop-fault command's successful exit is the acknowledgement
+        // that faults have stopped. Start the recovery deadline only now.
+        self.start_recovery_at(Instant::now());
+        info!(
+            ?tx_digest,
+            recovery_seconds = ANTITHESIS_RECOVERY_TIMEOUT.as_secs(),
+            quiet_period_seconds = ANTITHESIS_QUIET_PERIOD.as_secs(),
+            "Confirmed Antithesis fault stoppage; starting transaction recovery deadline"
+        );
+        Ok(true)
+    }
+}
+
+async fn request_antithesis_fault_stop() -> anyhow::Result<bool> {
+    let Some(stop_faults) =
+        std::env::var_os("ANTITHESIS_STOP_FAULTS").filter(|value| !value.is_empty())
+    else {
+        return Ok(false);
+    };
+
+    let status = Command::new(&stop_faults)
+        .arg(ANTITHESIS_QUIET_PERIOD.as_secs().to_string())
+        .status()
+        .await
+        .with_context(|| {
+            format!(
+                "failed to invoke Antithesis stop-fault command {:?}",
+                stop_faults
+            )
+        })?;
+    if !status.success() {
+        bail!("Antithesis stop-fault command exited with {status}");
+    }
+
+    Ok(true)
+}
+
+#[cfg(test)]
+mod transaction_retry_tests {
+    use super::*;
+
+    #[test]
+    fn minimum_retry_count_applies_before_recovery() {
+        let now = Instant::now();
+        let mut state = TransactionRetryState {
+            initial_deadline: now,
+            retry_count: MIN_TRANSACTION_RETRIES - 1,
+            recovery_deadline: None,
+        };
+
+        assert!(state.should_retry_submission_at(now));
+        state.record_retry();
+        assert!(!state.should_retry_submission_at(now));
+    }
+
+    #[test]
+    fn recovery_deadline_replaces_expired_initial_window() {
+        let now = Instant::now();
+        let mut state = TransactionRetryState {
+            initial_deadline: now,
+            retry_count: MIN_TRANSACTION_RETRIES,
+            recovery_deadline: None,
+        };
+
+        assert!(!state.should_retry_submission_at(now));
+        state.start_recovery_at(now);
+        assert!(state.should_retry_submission_at(
+            now + ANTITHESIS_RECOVERY_TIMEOUT - Duration::from_nanos(1)
+        ));
+        assert!(!state.should_retry_submission_at(now + ANTITHESIS_RECOVERY_TIMEOUT));
+    }
+}
+
 impl FullNodeProxy {
     pub async fn from_url(
         http_url: &str,
@@ -1051,9 +1176,8 @@ impl ValidatorProxy for FullNodeProxy {
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
-        let start = Instant::now();
-        let mut retry_cnt = 0;
-        while retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
+        let mut retry_state = TransactionRetryState::new();
+        loop {
             // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
             // SuiClient times out after 60s
             match self
@@ -1073,6 +1197,14 @@ impl ValidatorProxy for FullNodeProxy {
                             err
                         ));
                     }
+                    let retry_cnt = retry_state.retry_count;
+                    retry_state.record_retry();
+                    if !retry_state
+                        .ensure_submission_retry_window(tx_digest)
+                        .await?
+                    {
+                        break;
+                    }
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
                         ?tx_digest,
@@ -1081,14 +1213,14 @@ impl ValidatorProxy for FullNodeProxy {
                         err,
                         delay,
                     );
-                    retry_cnt += 1;
                     sleep(delay).await;
                 }
             }
         }
         Err(anyhow::anyhow!(
-            "Transaction {:?} failed for {retry_cnt} times",
-            tx_digest
+            "Transaction {:?} failed for {} times",
+            tx_digest,
+            retry_state.retry_count,
         ))
     }
 
