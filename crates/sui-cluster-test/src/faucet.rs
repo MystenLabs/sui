@@ -89,13 +89,26 @@ impl FaucetClient for RemoteFaucetClient {
                     panic!("Failed to talk to remote faucet {:?}: {:?}", gas_url, e)
                 });
             let status = response.status();
+            let retry_after_secs = response
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u64>().ok());
             let full_bytes = response.bytes().await.unwrap();
 
             if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
                 let body = String::from_utf8_lossy(&full_bytes);
-                let wait_secs = body
-                    .split_whitespace()
-                    .find_map(|tok| tok.strip_suffix('s').and_then(|n| n.parse::<u64>().ok()))
+                if attempt == MAX_ATTEMPTS {
+                    break;
+                }
+                // Prefer the standard Retry-After header; fall back to the
+                // advised wait in the plain-text body.
+                let wait_secs = retry_after_secs
+                    .or_else(|| {
+                        body.split_whitespace().find_map(|tok| {
+                            tok.strip_suffix('s').and_then(|n| n.parse::<u64>().ok())
+                        })
+                    })
                     .unwrap_or(5)
                     .clamp(1, 60);
                 info!(
