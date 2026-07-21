@@ -1,19 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
-use mysten_common::{assert_reachable, debug_fatal};
+use mysten_common::assert_reachable;
 use sui_types::{
     accumulator_root::AccumulatorObjId,
     base_types::SequenceNumber,
     effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
-    transaction::TransactionDataAPI,
 };
 use tokio::{
     sync::{oneshot, watch},
@@ -23,7 +19,10 @@ use tracing::{debug, instrument};
 
 use crate::{
     accumulators::{
-        funds_read::AccountFundsRead, unsettled_object_withdrawals::UnsettledObjectWithdrawals,
+        funds_read::AccountFundsRead,
+        unsettled_object_withdrawals::{
+            UnsettledObjectWithdrawals, compute_unsettled_withdraw_updates,
+        },
     },
     authority::{ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore},
     execution_scheduler::ExecutionScheduler,
@@ -110,81 +109,28 @@ impl ObjectFundsChecker {
             // whether it has sufficient object funds or not.
             return true;
         }
-        let address_funds_reservations: BTreeSet<_> = certificate
-            .transaction_data()
-            .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier())
-            .into_keys()
-            .collect();
-        // All withdraws will show up as accumulator events with integer values.
-        // Among them, addresses that do not have funds reservations are object
-        // withdraws.
-        let object_running_max_withdraws: BTreeMap<_, _> = accumulator_running_max_withdraws
-            .clone()
-            .into_iter()
-            .filter(|(account, _)| !address_funds_reservations.contains(account))
-            .collect();
-        // If there are no object withdraws, we can skip checking object funds.
-        if object_running_max_withdraws.is_empty() {
-            return true;
-        }
-        // A tx with object withdraws can only exist when accumulators are enabled
-        // for the epoch, and every production path that produces such a tx also
-        // assigns an accumulator version. The `None` paths (accumulator-disabled
-        // epoch, end-of-epoch tx) never produce withdraws and so never reach here.
+        // A transaction with object withdraws can only exist when accumulators are enabled for
+        // the epoch, and every production path that produces such a transaction also assigns an
+        // accumulator version. When there is none — a transaction from before accumulators were
+        // enabled, or an end-of-epoch transaction — no object withdraws are possible and there
+        // is nothing to check.
         let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version()
         else {
-            debug_fatal!("accumulator_version must be set for a tx with object withdraws");
-            return false;
+            return true;
         };
-        // The sufficiency check must use the running max withdraws (the peak withdraw
-        // exposure at any point during execution), but the amount that settlement will
-        // actually deduct from each account is the net amount recorded in the effects.
-        // E.g. a tx that withdraws 10 and deposits 10 back has a running max of 10 but
-        // nets to 0. Recording the running max as unsettled would over-count against
-        // other withdraws in the same consensus commit.
-        let unsettled_withdraw_updates = if epoch_store
-            .protocol_config()
-            .record_net_unsettled_object_withdraws()
-        {
-            let updates: BTreeMap<_, _> = effects
-                .accumulator_events()
-                .into_iter()
-                .filter(|event| !address_funds_reservations.contains(&event.accumulator_obj))
-                .filter_map(|event| {
-                    event
-                        .write
-                        .get_fund_withdraw_amount()
-                        // A zero-amount withdraw emits a single Split(0) accumulator event,
-                        // which survives effects folding as a Split (the fold's Merge
-                        // tie-break only applies when an account has multiple writes).
-                        // It contributes nothing to the running max nor to settlement,
-                        // so recording it would be a no-op; skip it.
-                        .filter(|amount| *amount > 0)
-                        .map(|amount| (event.accumulator_obj, amount))
-                })
-                .collect();
-            // A positive net withdraw in effects implies a positive peak, so the account
-            // must have a running max entry that the net cannot exceed. Recording more
-            // than what the sufficiency check covered could break the
-            // funds >= unsettled_withdraw invariant in try_withdraw.
-            debug_assert!(
-                updates.iter().all(|(obj_id, net)| {
-                    object_running_max_withdraws
-                        .get(obj_id)
-                        .is_some_and(|max| net <= max)
-                }),
-                "net withdraw exceeds running max: tx={:?} updates={:?} running_max={:?}",
-                certificate.digest(),
-                updates,
-                object_running_max_withdraws,
-            );
-            updates
-        } else {
-            object_running_max_withdraws.clone()
-        };
+        let updates = compute_unsettled_withdraw_updates(
+            certificate,
+            effects,
+            accumulator_running_max_withdraws,
+            epoch_store,
+        );
+        // If there are no object withdraws, we can skip checking object funds.
+        if updates.object_running_max_withdraws.is_empty() {
+            return true;
+        }
         match self.check_object_funds(
-            object_running_max_withdraws,
-            unsettled_withdraw_updates,
+            updates.object_running_max_withdraws,
+            updates.unsettled_withdraw_updates,
             accumulator_version,
             funds_read.as_ref(),
         ) {
