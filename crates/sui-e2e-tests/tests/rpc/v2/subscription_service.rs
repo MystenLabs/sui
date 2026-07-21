@@ -246,7 +246,12 @@ async fn subscribe_transactions_sender_filter() {
 
     let mut client = alpha_subscription_client(&cluster).await;
     let mut request = v2::SubscribeTransactionsRequest::default();
-    request.read_mask = Some(FieldMask::from_paths(["digest", "transaction_index"]));
+    request.read_mask = Some(FieldMask::from_paths([
+        "digest",
+        "transaction.digest",
+        "effects.transaction_digest",
+        "transaction_index",
+    ]));
     request.filter = Some(sender_tx_filter(sender, false));
     let mut stream = client
         .subscribe_transactions(request)
@@ -255,7 +260,24 @@ async fn subscribe_transactions_sender_filter() {
         .into_inner();
 
     let tx = transfer_self(&cluster, sender).await;
-    let expected_digest = tx.digest().to_owned();
+    let execution_digest = tx.digest.as_deref().expect("executed tx has a digest");
+    let execution_transaction_digest = tx
+        .transaction
+        .as_ref()
+        .expect("executed tx has a transaction")
+        .digest
+        .as_deref()
+        .expect("executed transaction has a digest");
+    let execution_effects_digest = tx
+        .effects
+        .as_ref()
+        .expect("executed tx has effects")
+        .transaction_digest
+        .as_deref()
+        .expect("executed effects have a transaction digest");
+    assert_eq!(execution_transaction_digest, execution_digest);
+    assert_eq!(execution_effects_digest, execution_digest);
+    let expected_digest = execution_digest.to_owned();
 
     let mut last_hi = None;
     let mut found = false;
@@ -275,7 +297,27 @@ async fn subscribe_transactions_sender_filter() {
             .digest
             .as_deref()
             .expect("digest requested in read mask");
-        assert_eq!(digest, expected_digest, "only sender-filtered items");
+        let nested_transaction_digest = transaction
+            .transaction
+            .as_ref()
+            .expect("transaction requested in read mask")
+            .digest
+            .as_deref()
+            .expect("transaction digest requested in read mask");
+        let effects_transaction_digest = transaction
+            .effects
+            .as_ref()
+            .expect("effects requested in read mask")
+            .transaction_digest
+            .as_deref()
+            .expect("effects transaction digest requested in read mask");
+        assert_eq!(
+            digest,
+            expected_digest.as_str(),
+            "only sender-filtered items"
+        );
+        assert_eq!(nested_transaction_digest, expected_digest.as_str());
+        assert_eq!(effects_transaction_digest, expected_digest.as_str());
         found = true;
         break;
     }

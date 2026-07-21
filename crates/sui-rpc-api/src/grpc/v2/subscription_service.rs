@@ -40,6 +40,7 @@ use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
 use sui_rpc_cursor::Position;
 use sui_types::balance_change::derive_balance_changes_2;
+use sui_types::effects::TransactionEffectsAPI;
 use tokio::sync::mpsc;
 use tonic::codegen::BoxStream;
 
@@ -267,7 +268,7 @@ impl SubscriptionService for RpcService {
                             }
                             if read_mask.contains(ProtoEvent::TRANSACTION_DIGEST_FIELD.name) {
                                 proto_event.transaction_digest =
-                                    Some(tx.transaction.digest().to_string());
+                                    Some(tx.effects.transaction_digest().base58_encode());
                             }
                             if read_mask.contains(ProtoEvent::TRANSACTION_INDEX_FIELD.name) {
                                 proto_event.transaction_index = Some(tx_idx as u64);
