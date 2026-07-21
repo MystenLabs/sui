@@ -152,11 +152,17 @@ impl StakingTest {
     }
 
     /// Count of owned `Coin<SUI>` objects (`StateService::ListOwnedObjects`
-    /// filtered by the object type `Coin<0x2::sui::SUI>`).
+    /// filtered by the object type `Coin<0x2::sui::SUI>`). Stream errors are
+    /// propagated (not counted as objects), so an RPC or decoding failure fails
+    /// the test rather than inflating the count.
     async fn sui_coin_count(ctx: &TestContext, owner: SuiAddress) -> usize {
-        use futures::StreamExt;
+        use futures::TryStreamExt;
         let client = ctx.get_grpc_client();
-        let stream = client.list_owned_objects(owner, Some(GasCoin::type_()));
-        stream.count().await
+        let objects: Vec<_> = client
+            .list_owned_objects(owner, Some(GasCoin::type_()))
+            .try_collect()
+            .await
+            .expect("failed to enumerate owned Coin<SUI> objects");
+        objects.len()
     }
 }

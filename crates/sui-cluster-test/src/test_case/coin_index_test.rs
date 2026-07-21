@@ -157,11 +157,21 @@ impl TestCaseImpl for CoinIndexTest {
             Self::coin_balance(ctx, account, &managed_type).await,
             10000 + 10
         );
-        // StateService GetBalance must also reflect the two owned MANAGED coins.
+        // StateService GetBalance and ListBalances must also reflect the two
+        // owned MANAGED coins.
         assert_eq!(
             Self::balance_of_type(ctx, account, &managed_inner).await,
             10000 + 10,
             "GetBalance(MANAGED) should equal the sum of owned MANAGED coins",
+        );
+        assert_eq!(
+            Self::all_balances(ctx, account)
+                .await
+                .iter()
+                .find(|(t, _)| Self::type_matches(t, &managed_inner))
+                .map(|(_, b)| *b),
+            Some(10000 + 10),
+            "ListBalances(MANAGED) should equal the sum of owned MANAGED coins",
         );
         assert_eq!(managed_coins.len(), 2);
         let managed_coin_id = managed_coins.iter().find(|c| c.value == 10).unwrap().id;
@@ -232,6 +242,18 @@ impl TestCaseImpl for CoinIndexTest {
             Self::balance_of_type(ctx, account, &managed_inner).await,
             0,
             "GetBalance(MANAGED) should be zero after burning all MANAGED coins",
+        );
+        // ListBalances must agree: MANAGED is either absent from the listing or
+        // reported as zero.
+        assert_eq!(
+            Self::all_balances(ctx, account)
+                .await
+                .iter()
+                .find(|(t, _)| Self::type_matches(t, &managed_inner))
+                .map(|(_, b)| *b)
+                .unwrap_or(0),
+            0,
+            "ListBalances(MANAGED) should be zero/absent after burning all MANAGED coins",
         );
         assert_eq!(
             Self::coins_of_type(ctx, account, &managed_type).await.len(),
