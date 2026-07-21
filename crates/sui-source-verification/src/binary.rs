@@ -38,6 +38,7 @@ pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
     let canonical = version_dir.join("target").join("release").join(binary_name);
 
     if canonical.exists() {
+        touch_last_used(&version_dir);
         return Ok(canonical);
     }
 
@@ -53,7 +54,75 @@ pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
         message: e.to_string(),
     })?;
 
+    touch_last_used(&version_dir);
+    evict_stale(&cache_root, cache_limit());
+
     Ok(canonical)
+}
+
+/// Name of the per-version marker file recording when a cached binary was last used, for LRU
+/// eviction.
+const LAST_USED_FILE: &str = ".last_used";
+
+/// The number of downloaded `sui` binaries to keep cached. After each install the least-recently-used
+/// versions beyond this are evicted, so the cache stays small in disk-scarce environments (enclaves).
+/// Overridable with `SUI_BINARY_CACHE_LIMIT`.
+const DEFAULT_CACHE_LIMIT: usize = 5;
+
+fn cache_limit() -> usize {
+    std::env::var("SUI_BINARY_CACHE_LIMIT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_CACHE_LIMIT)
+}
+
+/// Record that the binary under `version_dir` was just used. Best-effort: a failure here (for
+/// example, a read-only cache) must not fail verification.
+fn touch_last_used(version_dir: &Path) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let _ = fs::write(version_dir.join(LAST_USED_FILE), now.to_string());
+}
+
+/// The recorded last-used timestamp for a cached version, or `0` when it has none (a directory
+/// predating this bookkeeping), which sorts it as the oldest.
+fn last_used(version_dir: &Path) -> u64 {
+    fs::read_to_string(version_dir.join(LAST_USED_FILE))
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// Evict least-recently-used cached binaries, keeping at most `limit`. Best-effort: eviction failures
+/// do not fail verification. Only whole other-version directories are removed; the version in hand
+/// keeps its own path, and on unix an executing binary survives removal of its directory. In-progress
+/// `.tmp-*` installs (hidden entries) are never touched.
+fn evict_stale(cache_root: &Path, limit: usize) {
+    let Ok(entries) = fs::read_dir(cache_root) else {
+        return;
+    };
+    let mut versions: Vec<(u64, PathBuf)> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir() && !is_hidden(path))
+        .map(|dir| (last_used(&dir), dir))
+        .collect();
+
+    // Newest first; keep the first `limit`, remove the rest.
+    versions.sort_by_key(|(last_used, _)| std::cmp::Reverse(*last_used));
+    for (_, dir) in versions.into_iter().skip(limit) {
+        let _ = fs::remove_dir_all(&dir);
+    }
+}
+
+/// Whether a cache entry is hidden (dot-prefixed) — an in-progress `.tmp-*` install rather than a
+/// cached version, so not a candidate for eviction.
+fn is_hidden(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with('.'))
 }
 
 /// Download the `sui` release tarball for `version`, streaming out just the `sui` binary, and install
@@ -335,5 +404,32 @@ mod tests {
         let err =
             extract_sui_from_stream(tgz.as_slice(), "1.0.0", "macos-arm64", &dest).unwrap_err();
         assert!(err.to_string().contains("no sui binary"));
+    }
+
+    /// Eviction keeps the most-recently-used versions and leaves an in-progress install untouched.
+    #[test]
+    fn evict_keeps_most_recently_used() {
+        let cache = tempfile::tempdir().unwrap();
+        let seed = |name: &str, last_used: u64| {
+            let dir = cache.path().join(name);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join(LAST_USED_FILE), last_used.to_string()).unwrap();
+        };
+        seed("1.0.0", 100);
+        seed("1.1.0", 300);
+        seed("1.2.0", 200);
+        seed("1.3.0", 50);
+        // A concurrent install's temp directory must survive eviction despite having no marker.
+        fs::create_dir_all(cache.path().join(".tmp-9.9.9-1")).unwrap();
+
+        evict_stale(cache.path(), 2);
+
+        // The two most recently used remain; the two oldest are gone.
+        assert!(cache.path().join("1.1.0").exists());
+        assert!(cache.path().join("1.2.0").exists());
+        assert!(!cache.path().join("1.0.0").exists());
+        assert!(!cache.path().join("1.3.0").exists());
+        // The in-progress install is never evicted.
+        assert!(cache.path().join(".tmp-9.9.9-1").exists());
     }
 }
