@@ -16,7 +16,6 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
-use sui_types::supported_protocol_versions::ProtocolConfig;
 
 use crate::CheckpointRead;
 use crate::Node;
@@ -426,8 +425,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_objects() {
+        // Exercises the multiGetObjects batch path, which serves the
+        // "standard" key kinds. `VersionAtCheckpoint` keys are routed to a
+        // separate checkpoint-scoped query and are covered elsewhere.
         let server = MockServer::start().await;
-        let versioned_object = Object::immutable_with_id_for_testing(ObjectID::random());
         let root_version_object = Object::immutable_with_id_for_testing(ObjectID::random());
         let missing_object_id = ObjectID::random();
 
@@ -437,10 +438,6 @@ mod tests {
             .and(body_partial_json(json!({
                 "variables": {
                     "keys": [
-                        {
-                            "address": versioned_object.id().to_string(),
-                            "version": versioned_object.version().value(),
-                        },
                         {
                             "address": root_version_object.id().to_string(),
                             "rootVersion": 17,
@@ -453,11 +450,8 @@ mod tests {
                 }
             })))
             .respond_with(
-                ResponseTemplate::new(200).set_body_json(object_response_body(&[
-                    Some(&versioned_object),
-                    Some(&root_version_object),
-                    None,
-                ])),
+                ResponseTemplate::new(200)
+                    .set_body_json(object_response_body(&[Some(&root_version_object), None])),
             )
             .mount(&server)
             .await;
@@ -465,10 +459,6 @@ mod tests {
         let store = mock_store(&server);
         let objects = store
             .get_objects(&[
-                ObjectKey {
-                    object_id: versioned_object.id(),
-                    version_query: VersionQuery::Version(versioned_object.version().value()),
-                },
                 ObjectKey {
                     object_id: root_version_object.id(),
                     version_query: VersionQuery::RootVersion(17),
@@ -483,7 +473,6 @@ mod tests {
         assert_eq!(
             objects,
             vec![
-                Some((versioned_object.clone(), versioned_object.version().value())),
                 Some((
                     root_version_object.clone(),
                     root_version_object.version().value(),

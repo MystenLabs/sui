@@ -8,7 +8,6 @@
 use std::path::Path;
 
 use fastcrypto::encoding::Base64 as FastCryptoBase64;
-use fastcrypto::encoding::Encoding;
 use move_core_types::ident_str;
 use serde_json::json;
 use sui_types::base_types::ObjectID;

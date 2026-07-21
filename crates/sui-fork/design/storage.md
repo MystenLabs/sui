@@ -129,18 +129,22 @@ the executor needs read-your-writes for its next inputs, and the embedded
 indexer's `SimulacrumIngestion` reads each sealed checkpoint back out of
 these very rows.
 
-**Async = everything derived.** Owner, type, package-version, balance, and
-bitmap indexes are written by the indexer alone (`first_checkpoint =
-forked_at + 1`). Checkpoint publication blocks on
+**Async = everything derived (post-fork).** Owner, type, package-version,
+balance, and bitmap indexes for local checkpoints are written by the indexer
+alone (`first_checkpoint = forked_at + 1`). Checkpoint publication blocks on
 `ForkRuntime::wait_for_indexed_checkpoint` (min watermark across all
 pipelines), so by the time an execution returns, its checkpoint is fully
 indexed — RPC reads issued afterwards always see complete derived state.
 Subscribers receive checkpoints from the indexer's broadcast pipeline, so
 their ordering is inherited from indexing.
 
-**Pre-fork is the exception.** Seed and inventory saves
-(`save_indexed_live_object`) write owner/type/package/balance rows
-synchronously, because pre-fork state never flows through the indexer.
+**Pre-fork is the exception.** Pre-fork state never flows through the
+indexer, so its derived rows are written synchronously: seed and inventory
+saves (`save_indexed_live_object`) write owner/type/package/balance rows, and
+lazy latest-object materialization (`save_live_object_if_current`) writes the
+package-version row for fetched packages. These cover versions at or before
+the fork point — ranges the indexer never touches — so every row still has
+exactly one writer.
 
 **Failures are fail-stop.** The `SimulatorStore` write surface cannot return
 errors; a failed persist panics rather than letting execution continue on a

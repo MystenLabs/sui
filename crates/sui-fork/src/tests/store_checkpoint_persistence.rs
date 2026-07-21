@@ -9,7 +9,6 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 
 use fastcrypto::encoding::Base64 as FastCryptoBase64;
-use fastcrypto::encoding::Encoding;
 use rand::rngs::OsRng;
 use serde_json::json;
 use simulacrum::Simulacrum;

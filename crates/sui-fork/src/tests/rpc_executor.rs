@@ -19,7 +19,6 @@ use prometheus::Registry;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
-use sui_protocol_config::Chain;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
@@ -29,7 +28,6 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::get_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::gas_coin::GAS;
@@ -130,7 +128,7 @@ impl TestHarness {
         let gas_object = Self::find_gas_coin(&config, sender);
 
         let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(4);
-        let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
+        let context = Arc::new(Context::new(sim, checkpoint_sender));
         let executor = ForkedTransactionExecutor::new(context.clone());
 
         Self {
@@ -202,7 +200,7 @@ impl TestHarness {
         let registry = Registry::new();
         let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(4);
         let context = Arc::new(
-            Context::new_with_runtime(sim, Chain::Unknown, runtime, checkpoint_sender, &registry)
+            Context::new_with_runtime(sim, runtime, checkpoint_sender, &registry)
                 .await
                 .expect("runtime-backed context should initialize"),
         );
