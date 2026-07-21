@@ -64,6 +64,8 @@ impl ValueFrame {
     ) -> VMResult<Self> {
         let mut frame = Self::empty();
         let fun = vm.find_function(original_id, function_name, &ty_args)?;
+        // `find_function` already substitutes `ty_args` into the parameter types, so they are
+        // concrete here — no second substitution is needed (or possible: `Type` has none).
         let arg_types = fun.parameters;
         frame
             .deserialize_args(&vm.virtual_tables, arg_types, serialized_args)

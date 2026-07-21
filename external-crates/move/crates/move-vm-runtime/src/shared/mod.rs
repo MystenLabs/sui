@@ -18,7 +18,7 @@ pub mod gas;
 pub mod linkage_context;
 pub mod logging;
 pub mod safe_ops;
-pub mod type_size_formulae;
+pub(crate) mod type_size_formulae;
 pub mod types;
 pub mod views;
 pub mod vm_pointer;
