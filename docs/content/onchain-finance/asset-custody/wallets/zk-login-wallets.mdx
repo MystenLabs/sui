@@ -90,7 +90,7 @@ Enoki implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wa
 
 ### Wallet Standard account fields
 
-When using Enoki with dApp Kit, the `useCurrentAccount` hook returns a Wallet Standard account populated by the Enoki wallet. The account exposes `address`, `chains`, `features`, `publicKey`, and `icon` — the standard fields defined by the Wallet Standard, not OAuth-specific identity fields.
+When using Enoki with dApp Kit, the `useCurrentAccount` hook returns a Wallet Standard account populated by the Enoki wallet. The account exposes `address`, `chains`, `features`, `publicKey`, and `icon` (the standard fields defined by the Wallet Standard, not OAuth-specific identity fields).
 
 ```typescript
 import { useCurrentAccount } from '@mysten/dapp-kit-react';
@@ -196,7 +196,7 @@ All zkLogin utilities are exported from `@mysten/sui/zklogin`.
 
 ### ZkLoginSigner
 
-The `ZkLoginSigner` class wraps an ephemeral signer and automatically transforms every signature into a zkLogin signature. Instead of manually calling `getZkLoginSignature` after each `sign`, you create a `ZkLoginSigner` once and use it like any other signer — it handles the proof wrapping internally.
+The `ZkLoginSigner` class wraps an ephemeral signer and automatically transforms every signature into a zkLogin signature. Instead of manually calling `getZkLoginSignature` after each `sign`, you create a `ZkLoginSigner` once and use it like any other signer. It handles the proof wrapping internally.
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -222,7 +222,7 @@ Key behavior:
 - **`getPublicKey()`** returns a `ZkLoginPublicIdentifier` derived from the proof inputs and issuer.
 - **`legacyAddress`** flag controls which address derivation is used. An early implementation had an inconsistency; if your addresses were derived before the fix, pass `true`. For new integrations, use `false`.
 - **`address`** (optional) validates that the derived address matches what you expect. The constructor throws if there's a mismatch, catching `legacyAddress` flag errors early.
-- **`sign()` throws** — use `signTransaction()` or `signPersonalMessage()` instead, because zkLogin signatures require intent context.
+- **`sign()` throws.** Use `signTransaction()` or `signPersonalMessage()` instead, because zkLogin signatures require intent context.
 
 ### Proof generation
 

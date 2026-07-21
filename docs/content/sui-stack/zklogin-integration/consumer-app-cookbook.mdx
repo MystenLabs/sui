@@ -30,13 +30,13 @@ Consumer applications targeting non-crypto users need to eliminate every point o
 
 | Primitive | What it handles |
 | --- | --- |
-| [zkLogin](/sui-stack/zklogin-integration) | Authentication — users sign in with Google, Apple, or other OAuth providers instead of managing keys |
-| [Enoki](https://docs.enoki.mystenlabs.com/) | Managed infrastructure — handles salt storage, proof generation, and sponsored transactions behind a single API |
-| [Seal](/sui-stack/seal) | Encrypted storage — lets you gate access to content or data based on onchain conditions without exposing it publicly |
+| [zkLogin](/sui-stack/zklogin-integration) | Authentication: users sign in with Google, Apple, or other OAuth providers instead of managing keys |
+| [Enoki](https://docs.enoki.mystenlabs.com/) | Managed infrastructure: handles salt storage, proof generation, and sponsored transactions behind a single API |
+| [Seal](/sui-stack/seal) | Encrypted storage: lets you gate access to content or data based on onchain conditions without exposing it publicly |
 
 ## Pattern 1: Zero-friction sign-up
 
-**Goal:** User taps "Sign in with Google" and lands in the app with a funded address, ready to transact.
+**Goal:** User taps **Sign in with Google** and lands in the app with a funded address, ready to transact.
 
 **Stack:** zkLogin (auth) + Enoki (salt, proof, sponsored gas)
 
@@ -76,7 +76,7 @@ registerEnokiWallets({
 
 ### Add the connect button
 
-The `ConnectButton` renders a "Sign in with Google" flow through Enoki. After sign-in, `useCurrentAccount` returns the user's zkLogin address.
+The `ConnectButton` renders a **Sign in with Google** flow through Enoki. After sign-in, `useCurrentAccount` returns the user's zkLogin address.
 
 ```typescript
 import { useCurrentAccount } from '@mysten/dapp-kit-react';
@@ -169,8 +169,8 @@ const decrypted = await sealClient.decrypt({
 
 ## Related resources
 
-- [zkLogin Integration Guide](/sui-stack/zklogin-integration/integration-guide) — implement zkLogin from scratch
-- [Enoki documentation](https://docs.enoki.mystenlabs.com/) — managed zkLogin and sponsored transactions
-- [Seal documentation](/sui-stack/seal) — encrypted storage and access control
-- [zkLogin Wallets](/onchain-finance/asset-custody/wallets/zk-login-wallets) — wallet implementations using zkLogin
-- [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) — how gas sponsorship works on Sui
+- [zkLogin Integration Guide](/sui-stack/zklogin-integration/integration-guide): implement zkLogin from scratch
+- [Enoki documentation](https://docs.enoki.mystenlabs.com/): managed zkLogin and sponsored transactions
+- [Seal documentation](/sui-stack/seal): encrypted storage and access control
+- [zkLogin Wallets](/onchain-finance/asset-custody/wallets/zk-login-wallets): wallet implementations using zkLogin
+- [Sponsored Transactions](/develop/transaction-payment/sponsor-txn): how gas sponsorship works on Sui

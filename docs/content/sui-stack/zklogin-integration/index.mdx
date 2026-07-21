@@ -27,7 +27,7 @@ answer: >-
   to authorize transactions, without revealing the identity onchain.
 ---
 
-zkLogin is a Sui primitive that lets users send transactions from a Sui address using an OAuth credential (Google, Apple, Facebook, and others) without publicly linking the two. Users sign in with a provider they already use, and the application derives a Sui address from that credential — no seed phrases, no persistent private keys.
+zkLogin is a Sui primitive that lets users send transactions from a Sui address using an OAuth credential (Google, Apple, Facebook, and others) without publicly linking the two. Users sign in with a provider they already use, and the application derives a Sui address from that credential. No seed phrases, no persistent private keys.
 
 ## Why zkLogin
 
@@ -52,7 +52,7 @@ A proving service takes the JWT, the ephemeral public key, a per-user salt, and 
 
 **3. Address derivation**
 
-The user's Sui address is derived deterministically from `sub` (the provider's user identifier), `iss` (the provider), `aud` (the application's client ID), and `user_salt`. The same inputs always produce the same address. See [Address definition](/sui-stack/zklogin-integration/zklogin#address-definition) for the full formula.
+The user's Sui address derives deterministically from `sub` (the provider's user identifier), `iss` (the provider), `aud` (the application's client ID), and `user_salt`. The same inputs always produce the same address. See [Address definition](/sui-stack/zklogin-integration/zklogin#address-definition) for the full formula.
 
 **4. Transaction signing and submission**
 
@@ -70,7 +70,7 @@ For the detailed step-by-step protocol, see [How zkLogin works](/sui-stack/zklog
 
 ### Can my app retrieve a user's email from a zkLogin address?
 
-No. A zkLogin address is derived from `sub`, `iss`, `aud`, and `user_salt` — it exposes no identifying information. You cannot recover an email from an address, a zero-knowledge proof, or onchain data. If you need the email, read it from the JWT claims during the OAuth login flow (request the `email` scope) and store it in your application.
+No. A zkLogin address is derived from `sub`, `iss`, `aud`, and `user_salt`. It exposes no identifying information. You cannot recover an email from an address, a zero-knowledge proof, or onchain data. If you need the email, read it from the JWT claims during the OAuth login flow (request the `email` scope) and store it in your application.
 
 ### Does the zkLogin address change or expire?
 
@@ -82,15 +82,15 @@ If the user signs in with a different OAuth provider or a different application,
 
 ### What happens if the salt is lost?
 
-The user permanently loses access to that zkLogin address. Even with a valid OAuth login, the address cannot be derived without the correct salt. Plan salt persistence, backup, and recovery accordingly. See [Salt management](/sui-stack/zklogin-integration/integration-guide#step-4-manage-user-salt) in the integration guide.
+The user permanently loses access to that zkLogin address. Even with a valid OAuth login, you cannot derive the address without the correct salt. Plan salt persistence, backup, and recovery accordingly. See [Salt management](/sui-stack/zklogin-integration/integration-guide#step-4-manage-user-salt) in the integration guide.
 
 ### Is a zkLogin wallet custodial?
 
-No. A zkLogin wallet is non-custodial. It functions as a 2-of-2 scheme where the two credentials are the OAuth login and the salt. No third party — not the OAuth provider, the wallet vendor, the proving service, or the salt service — holds both factors.
+No. A zkLogin wallet is non-custodial. It functions as a 2-of-2 scheme where the two credentials are the OAuth login and the salt. No third party (not the OAuth provider, the wallet vendor, the proving service, or the salt service) holds both factors.
 
 ### How is zkLogin different from MPC or multisig wallets?
 
-MPC and multisig wallets split or distribute private keys and define a threshold for signing. zkLogin does not split any keys. Instead, it registers a fresh ephemeral key through the OAuth nonce at each login. The advantage is that no persistent private key exists anywhere — not even in an MPC or multisig setup. You can also include a zkLogin signer inside a Sui [multisig wallet](/develop/transactions/transaction-auth/multisig) for additional security.
+MPC and multisig wallets split or distribute private keys and define a threshold for signing. zkLogin does not split any keys. Instead, it registers a fresh ephemeral key through the OAuth nonce at each login. The advantage is that no persistent private key exists anywhere, not even in an MPC or multisig setup. You can also include a zkLogin signer inside a Sui [multisig wallet](/develop/transactions/transaction-auth/multisig) for additional security.
 
 ### Can I use zkLogin inside a multisig wallet?
 
@@ -101,10 +101,10 @@ Yes. See the [Multisig guide](https://sdk.mystenlabs.com/typescript/cryptography
 | Scenario | Recommended approach |
 | --- | --- |
 | Consumer app with non-crypto users | zkLogin with [Enoki](/onchain-finance/asset-custody/wallets/zk-login-wallets#enoki) for managed salt + sponsored transactions |
-| dApp where users may or may not have a wallet | zkLogin as one connection option alongside traditional wallets via [dApp Kit](https://sdk.mystenlabs.com/dapp-kit) |
+| App where users might or might not have a wallet | zkLogin as one connection option alongside traditional wallets through [dApp Kit](https://sdk.mystenlabs.com/dapp-kit) |
 | App that needs full control over proving and salt | zkLogin [self-hosted integration](/sui-stack/zklogin-integration/integration-guide) |
 | Backend service or agent identity | zkLogin with a service-owned OAuth credential |
-| Users who already have wallets | Traditional wallet connection through dApp Kit — zkLogin is optional |
+| Users who already have wallets | Traditional wallet connection through dApp Kit. zkLogin is optional. |
 
 ## Next steps
 

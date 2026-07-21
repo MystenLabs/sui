@@ -52,7 +52,7 @@ An OAuth 2.0 authorization server that authenticates an end-user and provides cl
 
 ### Relying party (RP) or client
 
-An OAuth 2.0 client application that requires end-user authentication. Assigned by an OP when you register your application. Identified by the `aud` field in the JWT payload — this is your zkLogin-enabled wallet or application.
+An OAuth 2.0 client application that requires end-user authentication. Assigned by an OP when you register your application. Identified by the `aud` field in the JWT payload. This is your zkLogin-enabled wallet or application.
 
 ### Subject identifier (sub)
 
@@ -112,7 +112,7 @@ The protocol works in three stages:
 
 3. The transaction is submitted onchain with the ephemeral signature and ZK proof. Validators verify both before executing.
 
-4. The zkLogin address is derived from `sub` (user identifier), `iss` (provider), `aud` (application), and `user_salt` — not from a public key.
+4. The zkLogin address is derived from `sub` (user identifier), `iss` (provider), `aud` (application), and `user_salt`, not from a public key.
 
 ![zkLogin flow diagram](./images/zklogin-steps_zklogin_v1.png 'zkLogin steps 0-7')
 
@@ -139,12 +139,12 @@ The protocol works in three stages:
 
 The address is computed from:
 
-1. `zk_login_flag = 0x05` — domain separator for zkLogin addresses.
-2. `kc_name_F = hashBytesToField(kc_name, maxKCNameLen)` — key claim name (e.g., `sub`) mapped to a BN254 field element.
-3. `kc_value_F = hashBytesToField(kc_value, maxKCValueLen)` — key claim value mapped to a field element.
-4. `aud_F = hashBytesToField(aud, maxAudValueLen)` — relying party identifier.
-5. `iss` — OpenID provider identifier.
-6. `user_salt` — value that unlinks the OAuth identifier from the address.
+1. `zk_login_flag = 0x05`: domain separator for zkLogin addresses.
+2. `kc_name_F = hashBytesToField(kc_name, maxKCNameLen)`: key claim name (for example, `sub`) mapped to a BN254 field element.
+3. `kc_value_F = hashBytesToField(kc_value, maxKCValueLen)`: key claim value mapped to a field element.
+4. `aud_F = hashBytesToField(aud, maxAudValueLen)`: relying party identifier.
+5. `iss`: OpenID provider identifier.
+6. `user_salt`: value that unlinks the OAuth identifier from the address.
 
 The final address:
 
@@ -190,7 +190,7 @@ The following analysis covers each zkLogin artifact and the consequences of loss
 
 ### JWT
 
-The JWT's validity is scoped to the client ID (`aud`), preventing phishing attacks — a JWT obtained for a malicious application cannot be used for your app's zkLogin. The JWT is sent directly to the application frontend through the redirect URL.
+The JWT's validity is scoped to the client ID (`aud`), preventing phishing attacks. A JWT obtained for a malicious application cannot be used for your app's zkLogin. The JWT is sent directly to the application frontend through the redirect URL.
 
 A leaked JWT can compromise user privacy (JWTs often contain usernames and emails) and, if a backend salt server uses JWTs for authentication, could be used to retrieve the user's salt.
 
@@ -198,7 +198,7 @@ A leaked JWT can compromise user privacy (JWTs often contain usernames and email
 
 ### User salt
 
-The salt is required for both ZK proof generation and address derivation. A leaked salt does not enable fund theft, but it allows an attacker to link the user's `sub` to their Sui address. The impact depends on whether the provider uses pairwise identifiers (e.g., Facebook — unique per app, low risk) or public reusable identifiers (e.g., Google, Twitch — globally unique `sub`, higher privacy risk).
+The salt is required for both ZK proof generation and address derivation. A leaked salt does not enable fund theft, but it allows an attacker to link the user's `sub` to their Sui address. The impact depends on whether the provider uses pairwise identifiers (for example, Facebook, which is unique per app, low risk) or public reusable identifiers (for example, Google, Twitch, which have a globally unique `sub`, higher privacy risk).
 
 **Losing the salt means permanent loss of access** to that zkLogin address.
 
@@ -208,7 +208,7 @@ The ephemeral key's lifespan is tied to `max_epoch`. If lost, generate a new key
 
 ### ZK proof
 
-The proof alone cannot create a valid transaction — an ephemeral signature over the transaction is also required.
+The proof alone cannot create a valid transaction. An ephemeral signature over the transaction is also required.
 
 ### Privacy
 
@@ -260,7 +260,7 @@ No. zkLogin is a two-factor system. An attacker who compromises the OAuth accoun
 
 #### If I lose access to my OAuth account, do I lose access to the address?
 
-Yes. You must produce a current JWT to use zkLogin. If recovery from a lost OAuth account is a concern, use a Sui [multisig wallet](/develop/transactions/transaction-auth/multisig) with a backup signer — even another zkLogin signer from a different provider (for example, a 1-of-2 multisig with Google and Facebook).
+Yes. You must produce a current JWT to use zkLogin. If recovery from a lost OAuth account is a concern, use a Sui [multisig wallet](/develop/transactions/transaction-auth/multisig) with a backup signer, even another zkLogin signer from a different provider (for example, a 1-of-2 multisig with Google and Facebook).
 
 #### How is zkLogin different from Web3Auth, Magic, or Privy?
 

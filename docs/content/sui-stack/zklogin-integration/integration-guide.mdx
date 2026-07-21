@@ -69,7 +69,7 @@ Before going to production, harden your integration:
 - **Run a production salt service** with proper availability and backups. Losing salts means users permanently lose access to their addresses.
 - **Serve all endpoints over HTTPS** and configure CORS correctly so only your origins can reach your salt and proving backends.
 - **Bind the OAuth `nonce`** to both the JWT and the ephemeral public key, and validate it on return to prevent replay and token-substitution attacks.
-- **Never log JWTs, ZK proofs, or salts** — these are sensitive credentials.
+- **Never log JWTs, ZK proofs, or salts.** These are sensitive credentials.
 - **Keep separate Testnet and Mainnet configuration** (OAuth clients, salt service, prover) so test credentials never reach production.
 
 See [Security Best Practices](/develop/security/best-practices).
@@ -110,7 +110,7 @@ const randomness = generateRandomness();
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 ```
 
-The `maxEpoch` controls how long this ephemeral key can authorize transactions. The address itself does not expire — only the session does. When the epoch passes `maxEpoch`, generate a new key pair and ZK proof. See [Does my address expire?](/sui-stack/zklogin-integration/zklogin#address-and-session-lifetime) for details.
+The `maxEpoch` controls how long this ephemeral key can authorize transactions. The address itself does not expire; only the session does. When the epoch passes `maxEpoch`, generate a new key pair and ZK proof. See [Does my address expire?](/sui-stack/zklogin-integration/zklogin#address-and-session-lifetime) for details.
 
 ## Step 2: Direct the user to the OAuth login
 
@@ -276,7 +276,7 @@ Choose a salt management strategy:
 
 | Strategy | Description | Trade-offs |
 | --- | --- | --- |
-| **User-provided** | Ask the user to enter and remember the salt. | Simple but poor UX; users forget salts. |
+| **User-provided** | Ask the user to enter and remember the salt. | Basic but poor UX; users forget salts. |
 | **Browser/device storage** | Store in `localStorage` or mobile secure storage. | Easy but lost on device/browser change. Email the salt to the user as a backup. |
 | **Database mapping** | Map user identifier (`sub`) to a salt in your backend database. | Reliable; requires a backend service. Salt is unique per user. |
 | **Derived from master seed** | Use `HKDF(ikm = seed, salt = iss \|\| aud, info = sub)` to derive salts deterministically from a master seed. | No per-user storage needed, but the master seed cannot be rotated and the client ID (`aud`) cannot change without deriving a different address. |
@@ -458,8 +458,8 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
    ```
 
 1. The service exposes two endpoints:
-   - `/ping` — health check (returns `pong`)
-   - `/v1` — proof generation (same request/response format as the Mysten Labs service)
+   - `/ping`: health check (returns `pong`)
+   - `/v1`: proof generation (same request/response format as the Mysten Labs service)
 
 :::info Prover resource requirements
 
@@ -516,7 +516,7 @@ const result = await client.executeTransaction({
 });
 ```
 
-### Alternative: Use ZkLoginSigner
+### Alternative: use ZkLoginSigner
 
 Instead of manually assembling signatures in Step 7, you can use the `ZkLoginSigner` class to handle proof wrapping automatically. This is useful when you want to sign multiple transactions without repeating the signature assembly code.
 
