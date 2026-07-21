@@ -183,6 +183,7 @@ export default {
           items: [
             'develop/accessing-data/graphql/graphql-rpc',
             'develop/accessing-data/graphql/query-with-graphql',
+            'develop/accessing-data/graphql/graphql-migration-cookbook',
           ],
         },
         {

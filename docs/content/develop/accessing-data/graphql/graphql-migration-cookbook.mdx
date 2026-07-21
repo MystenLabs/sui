@@ -1,0 +1,1248 @@
+---
+title: GraphQL Migration Cookbook
+description: >-
+  Side-by-side JSON-RPC to GraphQL migration examples for transaction lookups,
+  event queries, checkpoint pagination, balance queries, and common data-access patterns.
+keywords:
+  - graphql
+  - json-rpc
+  - migration
+  - cookbook
+  - events
+  - checkpoint pagination
+  - batch
+  - sui graphql examples
+  - graphql migration examples
+  - replace json-rpc with graphql
+  - graphql event query
+  - graphql transaction query
+  - graphql balance query
+goal:
+  description: >-
+    Reader can replace any JSON-RPC call with the equivalent GraphQL query or
+    mutation, including filtered queries, pagination, and transaction execution
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 500
+      label: Needs more content depth
+    - pattern: '```'
+      min: 6
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 3
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: GraphQL migration
+    stage: History
+    eval: covered
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: GraphQL migration
+    stage: Ship
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: GraphQL migration
+    stage: Ship
+    eval: covered
+questions:
+  - How do I migrate from JSON-RPC to GraphQL on Sui?
+  - How do I query events with GraphQL instead of suix_queryEvents?
+  - How do I look up transactions with GraphQL instead of sui_getTransactionBlock?
+  - How do I get balances with GraphQL instead of suix_getBalance?
+  - What is the GraphQL equivalent of sui_getObject?
+  - How do I list owned coins with GraphQL instead of suix_getCoins?
+  - How do I paginate checkpoints with GraphQL?
+  - How do I execute a transaction with GraphQL?
+answer: >-
+  Replace each JSON-RPC call with the corresponding GraphQL query or mutation:
+  use Query.transaction for transaction lookups, Query.events with EventFilter
+  for event queries, Address.balance for balances, Address.objects for owned
+  objects, and Mutation.executeTransaction for submission. This cookbook provides
+  side-by-side code samples for every common migration path.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+This cookbook gives you side-by-side JSON-RPC and GraphQL code for the most common migration paths. Each recipe shows the old call, its GraphQL replacement, and the key differences. For the full method mapping and decision criteria, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration). For GraphQL concepts, pagination, and scope, see [GraphQL for Sui RPC](/develop/accessing-data/graphql/graphql-rpc).
+
+:::info
+
+<ImportContent source="json-rpc-deprecation" mode="snippet" />
+
+:::
+
+## Before you start
+
+GraphQL queries run against the online IDE or any GraphQL endpoint. Access the service at:
+
+- **Mainnet:** https://graphql.mainnet.sui.io/graphql
+- **Testnet:** https://graphql.testnet.sui.io/graphql
+- **Devnet:** https://graphql.devnet.sui.io/graphql
+
+For `curl` examples, replace `<GRAPHQL_ENDPOINT>` with your provider's GraphQL URL. See [GraphQL for Sui RPC](/develop/accessing-data/graphql/graphql-rpc) for headers, variables, fragments, and pagination details.
+
+```sh
+curl -X POST <GRAPHQL_ENDPOINT> \
+  -H "Content-Type: application/json" \
+  -d '{ "query": "{ epoch { referenceGasPrice } }" }'
+```
+
+## Get a single object
+
+Replace `sui_getObject` with `Query.object`. Select only the fields you need instead of toggling `showContent`, `showOwner` booleans.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getObject",
+    "params": [
+      "0xOBJECT_ID",
+      { "showContent": true, "showOwner": true }
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  object(address: "0xOBJECT_ID") {
+    address
+    owner {
+      ... on AddressOwner {
+        owner { address }
+      }
+      ... on Shared {
+        initialSharedVersion
+      }
+    }
+    asMoveObject {
+      contents {
+        type { repr }
+        json
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- JSON-RPC uses `showContent`, `showOwner` booleans. GraphQL uses field selection: request only the fields you need.
+- GraphQL returns typed owner information. Use inline fragments (`... on AddressOwner`, `... on Shared`) to access owner details.
+- To fetch an object at a specific version, pass `version` as an argument: `object(address: "0x...", version: 42)`.
+
+## Multi-get objects
+
+Replace `sui_multiGetObjects` with `Query.multiGetObjects`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_multiGetObjects",
+    "params": [
+      ["0xOBJECT_A", "0xOBJECT_B", "0xOBJECT_C"],
+      { "showContent": true }
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  multiGetObjects(keys: [
+    { objectId: "0xOBJECT_A" },
+    { objectId: "0xOBJECT_B" },
+    { objectId: "0xOBJECT_C" }
+  ]) {
+    address
+    asMoveObject {
+      contents {
+        type { repr }
+        json
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- GraphQL applies the same field selection to all objects in the batch.
+- Each key can optionally include a `version` to fetch a specific version of that object.
+
+## Get a transaction
+
+Replace `sui_getTransactionBlock` with `Query.transaction`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getTransactionBlock",
+    "params": [
+      "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF",
+      { "showEffects": true, "showEvents": true }
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  transaction(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
+    gasInput {
+      gasSponsor { address }
+      gasPrice
+      gasBudget
+    }
+    effects {
+      status
+      timestamp
+      checkpoint { sequenceNumber }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- JSON-RPC uses `showEffects`, `showEvents` booleans. GraphQL uses field selection — request `effects`, `events`, `gasInput`, or any combination.
+- GraphQL returns structured, typed data. For example, `effects.checkpoint` gives you the checkpoint directly without needing a separate lookup.
+
+## Multi-get transactions
+
+Replace `sui_multiGetTransactionBlocks` with `Query.multiGetTransactions`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_multiGetTransactionBlocks",
+    "params": [
+      ["DIGEST_A", "DIGEST_B"],
+      { "showEffects": true, "showEvents": true }
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  multiGetTransactions(digests: ["DIGEST_A", "DIGEST_B"]) {
+    digest
+    effects {
+      status
+      timestamp
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Get total transactions
+
+Replace `sui_getTotalTransactionBlocks` with `Checkpoint.networkTotalTransactions`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getTotalTransactionBlocks",
+    "params": []
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  checkpoint {
+    networkTotalTransactions
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- Without an argument, `checkpoint` returns the latest checkpoint. Read `networkTotalTransactions` from it for the current total.
+
+## Query filtered transactions
+
+Replace `suix_queryTransactionBlocks` with `Query.transactions` and a `TransactionFilter`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_queryTransactionBlocks",
+    "params": [
+      { "filter": { "FromAddress": "0xADDRESS" } },
+      null, 10, false
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  transactions(
+    first: 10,
+    filter: { sentAddress: "0xADDRESS" }
+  ) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      digest
+      sender { address }
+      effects {
+        status
+        timestamp
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- GraphQL supports rich filters: `sentAddress`, `affectedAddress`, `affectedObject`, `function`, `kind`, and more.
+- Pagination uses `first`/`after` (forward) or `last`/`before` (backward) with cursors from `pageInfo`.
+- JSON-RPC's positional `[filter, cursor, limit, descending]` array is replaced by named arguments.
+
+## Query events
+
+Replace `suix_queryEvents` with `Query.events` and an `EventFilter`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_queryEvents",
+    "params": [
+      { "MoveEventType": "0xPACKAGE::module::MyEvent" },
+      null, 50, false
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  events(
+    first: 50,
+    filter: {
+      type: "0xPACKAGE::module::MyEvent"
+    }
+  ) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      sender { address }
+      timestamp
+      contents {
+        type { repr }
+        json
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- GraphQL supports server-side event filtering by `type`, `module`, `sender`, and `transaction`. No client-side filtering needed.
+- JSON-RPC's `MoveEventType` filter becomes `type` in the GraphQL `EventFilter`.
+- For events from a known transaction, query the transaction directly and select `events`.
+
+### Events from a known transaction
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_queryEvents",
+    "params": [
+      { "Transaction": "8NB8sXb4m9PJhCyLB7eVH4onqQWoFFzVUrqPoYUhcQe2" },
+      null, 50, false
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  transaction(digest: "8NB8sXb4m9PJhCyLB7eVH4onqQWoFFzVUrqPoYUhcQe2") {
+    effects {
+      events {
+        nodes {
+          sender { address }
+          contents {
+            type { repr }
+            json
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Look up a single checkpoint
+
+Replace `sui_getCheckpoint` with `Query.checkpoint`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getCheckpoint",
+    "params": ["164329987"]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  checkpoint(sequenceNumber: 164329987) {
+    digest
+    networkTotalTransactions
+    timestamp
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- Without a `sequenceNumber` argument, `checkpoint` returns the latest.
+- GraphQL can also look up a checkpoint by `digest`.
+
+## Paginate checkpoints
+
+Replace `sui_getCheckpoints` polling with `Query.checkpoints` pagination.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getCheckpoints",
+    "params": [null, 10, false]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query ($after: String) {
+  checkpoints(first: 10, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      sequenceNumber
+      digest
+      timestamp
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- GraphQL uses cursor-based pagination. Pass `pageInfo.endCursor` as the `$after` variable for the next page.
+- For reverse order, use `last` and `before` instead of `first` and `after`.
+- For real-time streaming, use [gRPC `SubscriptionService.SubscribeCheckpoints`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints) instead. GraphQL does not support streaming subscriptions.
+
+## Get balances
+
+Replace `suix_getBalance` and `suix_getAllBalances` with `Address.balance` and `Address.balances`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+# Single coin type
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getBalance",
+    "params": ["0xADDRESS", "0x2::sui::SUI"]
+  }'
+
+# All coin types
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getAllBalances",
+    "params": ["0xADDRESS"]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+# Single coin type
+query {
+  address(address: "0xADDRESS") {
+    balance(coinType: "0x2::sui::SUI") {
+      coinType { repr }
+      totalBalance
+    }
+  }
+}
+```
+
+```graphql
+# All coin types
+query {
+  address(address: "0xADDRESS") {
+    balances {
+      nodes {
+        coinType { repr }
+        totalBalance
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- `balance` returns a single balance for a specific coin type. `balances` returns a paginated list of all coin type balances.
+- The GraphQL balance includes `addressBalance`, `coinBalance`, and `totalBalance` fields. Read `totalBalance` for the combined amount.
+
+## List owned coins
+
+Replace `suix_getCoins` and `suix_getAllCoins` with `Address.objects` filtered by coin type.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getCoins",
+    "params": ["0xADDRESS", "0x2::sui::SUI", null, 50]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  address(address: "0xADDRESS") {
+    objects(
+      first: 50,
+      filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        address
+        asMoveObject {
+          contents { json }
+        }
+      }
+    }
+  }
+}
+```
+
+To list coins of every type, use `filter: { type: "0x2::coin::Coin" }` without a type parameter.
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- There is no dedicated coin-listing query. Use `Address.objects` with a `Coin<T>` type filter.
+- Pagination uses cursor-based `first`/`after` instead of positional `[cursor, limit]` parameters.
+
+## Get coin metadata
+
+Replace `suix_getCoinMetadata` with `Query.coinMetadata`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getCoinMetadata",
+    "params": ["0x2::sui::SUI"]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  coinMetadata(coinType: "0x2::sui::SUI") {
+    name
+    symbol
+    decimals
+    description
+    iconUrl
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## List owned objects
+
+Replace `suix_getOwnedObjects` with `Address.objects`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getOwnedObjects",
+    "params": ["0xADDRESS", null, null, 50]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  address(address: "0xADDRESS") {
+    objects(first: 50) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        address
+        digest
+        asMoveObject {
+          contents {
+            type { repr }
+            json
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- GraphQL supports `filter` on `objects` to narrow by type, such as `filter: { type: "0x2::coin::Coin" }`.
+- Pagination is consistent: cursors encode the checkpoint at which the query was first executed, so later pages reflect the same state.
+
+## List dynamic fields
+
+Replace `suix_getDynamicFields` with `Object.dynamicFields`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getDynamicFields",
+    "params": ["0xPARENT_OBJECT_ID", null, 50]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  object(address: "0xPARENT_OBJECT_ID") {
+    dynamicFields(first: 50) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        name {
+          type { repr }
+          json
+        }
+        value {
+          __typename
+          ... on MoveValue {
+            type { repr }
+            json
+          }
+          ... on MoveObject {
+            contents {
+              type { repr }
+              json
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- GraphQL returns both the name and value of each dynamic field in one query. JSON-RPC required a separate `suix_getDynamicFieldObject` call for each value.
+- For a specific dynamic field by name, use `dynamicField(name: { type: "...", bcs: "..." })` or `dynamicObjectField(name: { type: "...", bcs: "..." })` instead of paginating.
+
+## Get a specific dynamic field object
+
+Replace `suix_getDynamicFieldObject` with `Object.dynamicObjectField`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getDynamicFieldObject",
+    "params": [
+      "0xPARENT_OBJECT_ID",
+      { "type": "0x1::string::String", "value": "my_key" }
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  object(address: "0xPARENT_OBJECT_ID") {
+    dynamicObjectField(
+      name: { type: "0x1::string::String", bcs: "..." }
+    ) {
+      value {
+        ... on MoveObject {
+          address
+          contents {
+            type { repr }
+            json
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Execute a transaction
+
+Replace `sui_executeTransactionBlock` with `Mutation.executeTransaction`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_executeTransactionBlock",
+    "params": [
+      "<BASE64_TX_BYTES>",
+      ["<BASE64_SIGNATURE>"],
+      { "showEffects": true }
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+mutation ($tx: String!, $sigs: [String!]!) {
+  executeTransaction(transactionDataBcs: $tx, signatures: $sigs) {
+    errors
+    effects {
+      status
+      epoch {
+        startTimestamp
+      }
+      gasEffects {
+        gasSummary {
+          computationCost
+        }
+      }
+    }
+  }
+}
+```
+
+**Variables:**
+
+```json
+{
+  "tx": "<BASE64_TX_BYTES>",
+  "sigs": ["<BASE64_SIGNATURE>"]
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- GraphQL uses a mutation, not a query.
+- The `transactionDataBcs` parameter takes the serialized unsigned transaction data. Use the [Sui Client CLI](/references/cli/client) `--serialize-unsigned-transaction` flag or the TypeScript SDK to generate it.
+- Select fields from `effects` in the same mutation to read execution results immediately without waiting for a separate indexed query.
+- The JSON-RPC `unsafe_*` builder methods (`unsafe_moveCall`, `unsafe_transferObject`, and others) have no GraphQL equivalent. Build transactions with [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) using the SDK, then submit the bytes.
+
+## Simulate a transaction (dry run)
+
+Replace `sui_dryRunTransactionBlock` and `sui_devInspectTransactionBlock` with `Query.simulateTransaction`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_dryRunTransactionBlock",
+    "params": ["<BASE64_TX_BYTES>"]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query ($tx: JSON!) {
+  simulateTransaction(
+    transaction: $tx,
+    checksEnabled: true,
+    doGasSelection: true
+  ) {
+    effects {
+      status
+      gasEffects {
+        gasSummary {
+          computationCost
+          storageCost
+        }
+      }
+    }
+    outputs {
+      returnValues {
+        value { json }
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- `simulateTransaction` accepts a JSON transaction matching the Sui gRPC transaction schema, or a BCS-encoded transaction with `{"bcs": {"value": "<base64>"}}`.
+- Set `doGasSelection: true` to have the service automatically select gas coins for the simulation.
+
+## Get reference gas price
+
+Replace `suix_getReferenceGasPrice` with `Epoch.referenceGasPrice`.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getReferenceGasPrice",
+    "params": []
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  epoch {
+    referenceGasPrice
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Get staking positions
+
+Replace `suix_getStakes` and `suix_getStakesByIds` with `Address.objects` filtered by the `StakedSui` type.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getStakes",
+    "params": ["0xADDRESS"]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  address(address: "0xADDRESS") {
+    objects(
+      filter: { type: "0x3::staking_pool::StakedSui" }
+    ) {
+      nodes {
+        address
+        asMoveObject {
+          contents { json }
+        }
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Get Move module information
+
+Replace `sui_getNormalizedMoveModule`, `sui_getNormalizedMoveFunction`, and `sui_getNormalizedMoveStruct` with `Query.package` and nested `module`, `function`, and `struct` fields.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+# Get a normalized Move module
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getNormalizedMoveModule",
+    "params": ["0x2", "coin"]
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+```graphql
+query {
+  package(address: "0x2") {
+    module(name: "coin") {
+      functions {
+        nodes {
+          name
+          parameters {
+            repr
+          }
+          return {
+            repr
+          }
+        }
+      }
+      structs {
+        nodes {
+          name
+          abilities
+          fields {
+            name
+            type { repr }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- GraphQL lets you query modules, functions, and structs in a single request through nested fields.
+- Use `Query.packageVersions` to browse all versions of a package.
+
+## Common patterns
+
+### Paginating through all owned objects
+
+Use the cursor from `pageInfo.endCursor` to fetch subsequent pages:
+
+```graphql
+# First page
+query {
+  address(address: "0xADDRESS") {
+    objects(first: 50) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        address
+      }
+    }
+  }
+}
+
+# Next page — pass endCursor as the $after variable
+query ($after: String!) {
+  address(address: "0xADDRESS") {
+    objects(first: 50, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        address
+      }
+    }
+  }
+}
+```
+
+Cursors for live object queries guarantee **consistent** pagination. They encode the checkpoint at which the query was first executed, so later pages reflect the same snapshot even as new checkpoints arrive.
+
+### Time-travel queries with checkpoint scope
+
+Pin a query to a specific checkpoint to see historical state:
+
+```graphql
+query {
+  checkpoint(sequenceNumber: 164329987) {
+    query {
+      address(address: "0xADDRESS") {
+        balance(coinType: "0x2::sui::SUI") {
+          totalBalance
+        }
+      }
+    }
+  }
+}
+```
+
+### Combining multiple lookups in one request
+
+GraphQL can join data from multiple resources in a single request. For example, fetch a transaction, its events, and an object in one query:
+
+```graphql
+query {
+  transaction(digest: "DIGEST") {
+    effects {
+      status
+      events {
+        nodes {
+          contents { json }
+        }
+      }
+    }
+  }
+  object(address: "0xOBJECT_ID") {
+    asMoveObject {
+      contents { json }
+    }
+  }
+}
+```
+
+### Checking data retention before paginating
+
+Before starting a long pagination run, check the available checkpoint range:
+
+```graphql
+query {
+  serviceConfig {
+    availableRange(
+      type: "Query",
+      field: "transactions",
+      filters: ["affectedAddress"]
+    ) {
+      first { sequenceNumber }
+      last { sequenceNumber }
+    }
+  }
+}
+```
+
+## Migration gotchas
+
+### No streaming subscriptions
+
+GraphQL does not support real-time streaming. For WebSocket-like event subscriptions (`sui_subscribeEvent`, `sui_subscribeTransaction`), use [gRPC `SubscriptionService.SubscribeCheckpoints`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints) instead. For historical event queries, use `Query.events` with an `EventFilter`.
+
+### Pagination uses typed cursors
+
+GraphQL passes cursors through `after` or `before` fields on connections, with page size in `first` or `last`. Do not reuse JSON-RPC `nextCursor` values. Fetch fresh cursors from the GraphQL response's `pageInfo`.
+
+### Retention windows
+
+Different queries hit different data sources with different retention. Live object set queries (balances, owned objects) rely on the Consistent Store with ~1 hour retention. Historical queries (transactions, events) rely on the database with ~30–90 days retention. Point lookups can route to the Archival Service for indefinite retention when configured. Use `serviceConfig.availableRange` to check retention before querying.
+
+### Public endpoints are not production endpoints
+
+The public URLs at `https://graphql.<network>.sui.io/graphql` are rate-limited and intended for development. Production apps should use a provider endpoint or operate their own [GraphQL and Indexer stack](/operators/data-management/indexer-stack-setup).
+
+## Related resources
+
+- [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) — full method mapping and decision criteria
+- [GraphQL for Sui RPC](/develop/accessing-data/graphql/graphql-rpc) — concepts, headers, pagination, scope, and limits
+- [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql) — additional query examples
+- [GraphQL API reference](/references/sui-graphql) — complete schema documentation
+- [gRPC Migration Cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook) — side-by-side gRPC migration examples
+- [Building PTBs](/develop/transactions/ptbs/building-ptb) — transaction construction for the `executeTransaction` path
+- [Emitting Events](/develop/accessing-data/using-events) — event struct definitions, querying, and filtering
