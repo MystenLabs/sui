@@ -49,6 +49,15 @@ pub(crate) struct SeedEntry {
 pub(crate) struct SeedManifest {
     pub(crate) network: String,
     pub(crate) checkpoint: CheckpointSequenceNumber,
+    /// Addresses whose owned objects were enumerated *completely* at the fork
+    /// checkpoint to produce this manifest. Seeding one of these addresses is
+    /// the same full scan the lazy read-time inventory initialization would
+    /// run, so saving the manifest also marks their owner inventories
+    /// complete. Absent in manifests written before this field existed
+    /// (`serde(default)`), in which case reads fall back to lazy
+    /// initialization.
+    #[serde(default)]
+    pub(crate) addresses: Vec<SuiAddress>,
     pub(crate) entries: Vec<SeedEntry>,
 }
 
@@ -57,6 +66,7 @@ impl SeedManifest {
         Self {
             network,
             checkpoint,
+            addresses: Vec::new(),
             entries: Vec::new(),
         }
     }
@@ -145,6 +155,17 @@ pub(crate) async fn prepare_seed_manifest(
     Ok(manifest)
 }
 
+/// Materialize every manifest entry into the rpc-store, then mark the
+/// manifest's fully-scanned addresses as having a complete owner inventory.
+///
+/// An address seed is resolved with the same complete owned-objects scan that
+/// lazy read-time inventory initialization would run, so once its entries are
+/// saved (with index rows) the address's inventory *is* initialized;
+/// recording the marker keeps owner-scoped reads from re-running the
+/// identical remote scan. Markers are written only after every entry is
+/// durably saved — a crash in between simply falls back to lazy
+/// initialization. Explicit object-id seeds never mark their owners: they are
+/// not a complete scan.
 pub(crate) fn save_seed_manifest_objects(
     data_store: &DataStore,
     manifest: &SeedManifest,
@@ -154,7 +175,14 @@ pub(crate) fn save_seed_manifest_objects(
         .iter()
         .map(|entry| entry.object_ref)
         .collect();
-    data_store.save_address_owned_seed_objects(&object_refs)
+    data_store.save_address_owned_seed_objects(&object_refs)?;
+
+    for address in &manifest.addresses {
+        data_store
+            .metadata()
+            .mark_address_owner_inventory_complete(*address)?;
+    }
+    Ok(())
 }
 
 fn dedupe_addresses(addresses: &[SuiAddress]) -> Vec<SuiAddress> {
@@ -246,7 +274,8 @@ async fn resolve_seeds(
         ensure_address_seeding_available(data_store.gql(), checkpoint)?;
     }
 
-    for address in dedupe_addresses(&input.addresses) {
+    let addresses = dedupe_addresses(&input.addresses);
+    for address in addresses.iter().copied() {
         let address_entries = resolve_address_seed(data_store.gql(), address, checkpoint).await?;
         if address_entries.is_empty() {
             warn!(%address, checkpoint, "address seed resolved no owned objects");
@@ -267,6 +296,7 @@ async fn resolve_seeds(
     Ok(SeedManifest {
         network,
         checkpoint,
+        addresses,
         entries: entries.into_values().collect(),
     })
 }
@@ -284,6 +314,7 @@ mod tests {
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;
     use wiremock::matchers::body_partial_json;
+    use wiremock::matchers::body_string_contains;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
 
@@ -395,6 +426,7 @@ mod tests {
             SeedManifest {
                 network: "custom".to_owned(),
                 checkpoint: 11,
+                addresses: Vec::new(),
                 entries: Vec::new(),
             }
         );
@@ -577,6 +609,168 @@ mod tests {
                 .expect("wiremock should record requests")
                 .len(),
             1,
+        );
+    }
+
+    fn address_objects_response(objects: &[&Object]) -> serde_json::Value {
+        json!({
+            "data": {
+                "checkpoint": {
+                    "query": {
+                        "address": {
+                            "objects": {
+                                "nodes": objects
+                                    .iter()
+                                    .map(|object| {
+                                        json!({
+                                            "address": object.id().to_string(),
+                                            "version": object.version().value(),
+                                            "digest": object.digest().to_string(),
+                                        })
+                                    })
+                                    .collect::<Vec<_>>(),
+                                "pageInfo": {
+                                    "hasNextPage": false,
+                                    "endCursor": null,
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    async fn mock_address_objects(
+        server: &MockServer,
+        checkpoint: u64,
+        owner: SuiAddress,
+        objects: &[&Object],
+    ) {
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "sequenceNumber": checkpoint,
+                    "address": owner.to_string(),
+                    "after": null,
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(address_objects_response(objects)),
+            )
+            .mount(server)
+            .await;
+    }
+
+    #[test]
+    fn seed_manifest_without_addresses_field_deserializes_with_empty_addresses() {
+        // Manifests written before the `addresses` field existed must keep
+        // loading; their owners simply fall back to lazy inventory init.
+        let manifest: SeedManifest = serde_json::from_value(json!({
+            "network": "testnet",
+            "checkpoint": 42,
+            "entries": [],
+        }))
+        .expect("pre-addresses manifest should deserialize");
+        assert!(manifest.addresses.is_empty());
+    }
+
+    #[tokio::test]
+    async fn prepare_seed_manifest_records_fully_scanned_addresses() {
+        let server = MockServer::start().await;
+        let owner = SuiAddress::random_for_testing_only();
+        let empty_owner = SuiAddress::random_for_testing_only();
+        let object = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(3),
+            Owner::AddressOwner(owner),
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_string_contains("availableRange"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(available_range_response(0)))
+            .mount(&server)
+            .await;
+        mock_address_objects(&server, 11, owner, &[&object]).await;
+        mock_address_objects(&server, 11, empty_owner, &[]).await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let manifest = prepare_seed_manifest(
+            &store,
+            "custom".to_owned(),
+            &SeedInput {
+                addresses: vec![owner, empty_owner],
+                object_ids: vec![],
+            },
+        )
+        .await
+        .expect("seed manifest should resolve");
+
+        // Both requested addresses are recorded as fully scanned — including
+        // the one that owns nothing — and the manifest round-trips.
+        let mut expected = vec![owner, empty_owner];
+        expected.sort();
+        assert_eq!(manifest.addresses, expected);
+        assert_eq!(manifest.entries.len(), 1);
+        assert_eq!(
+            manifest.entries[0].object_ref,
+            object.compute_object_reference()
+        );
+        assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
+    }
+
+    #[tokio::test]
+    async fn save_seed_manifest_objects_marks_seeded_address_inventories_complete() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (store, _runtime) =
+            test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), 11);
+        let owner = SuiAddress::random_for_testing_only();
+        let empty_owner = SuiAddress::random_for_testing_only();
+        let object = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(3),
+            Owner::AddressOwner(owner),
+        );
+        store.rpc_store().save_object_version_only(&object).unwrap();
+
+        let manifest = SeedManifest {
+            network: "custom".to_owned(),
+            checkpoint: 11,
+            addresses: vec![owner, empty_owner],
+            entries: vec![SeedEntry {
+                object_ref: object.compute_object_reference(),
+            }],
+        };
+        save_seed_manifest_objects(&store, &manifest).expect("seed save should succeed");
+
+        for address in [owner, empty_owner] {
+            assert!(
+                store
+                    .metadata()
+                    .address_owner_inventory_complete(address)
+                    .unwrap(),
+                "seeded address should be marked inventory-complete",
+            );
+        }
+
+        // The GraphQL endpoint is unreachable, so these owner-scoped reads
+        // only succeed if the marker prevents a second full owner scan.
+        let infos: Vec<_> = store
+            .owned_objects_iter(owner, None, None)
+            .expect("seeded owner read should not re-scan the remote")
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].object_id, object.id());
+        assert_eq!(
+            store
+                .owned_objects_iter(empty_owner, None, None)
+                .expect("empty seeded owner read should not re-scan the remote")
+                .count(),
+            0,
         );
     }
 }
