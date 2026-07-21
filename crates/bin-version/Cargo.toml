@@ -5,6 +5,9 @@ version.workspace = true
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 git-version.workspace = true
 const-str.workspace = true

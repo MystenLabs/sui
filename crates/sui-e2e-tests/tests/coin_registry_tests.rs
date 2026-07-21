@@ -26,6 +26,7 @@ async fn test_create_coin_registry_object() {
             config.set_include_cancelled_randomness_txns_in_prologue_for_testing(true);
             config.set_fix_checkpoint_signature_mapping_for_testing(true);
             config.set_merge_randomness_into_checkpoint_for_testing(true);
+            config.set_timestamp_based_epoch_close_for_testing(true);
             config
         });
 

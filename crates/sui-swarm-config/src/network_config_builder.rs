@@ -14,6 +14,7 @@ use sui_config::node::AuthorityOverloadConfig;
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_config::node::FundsWithdrawSchedulerType;
+use sui_config::transaction_deny_config::PeerDenySyncConfig;
 use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
@@ -95,6 +96,13 @@ pub enum FundsWithdrawSchedulerTypeConfig {
     PerValidator(FundsWithdrawSchedulerTypeCallback),
 }
 
+/// Closure for per-validator `peer_deny_sync_config`. Receives this validator's
+/// authority name and the slice of all genesis-committee authority names, so the
+/// caller can compute an allowlist that references peers (e.g. "trust everyone but
+/// myself") without having to predict the keys ahead of time.
+pub type PeerDenySyncConfigCallback =
+    Arc<dyn Fn(AuthorityName, &[AuthorityName]) -> PeerDenySyncConfig + Send + Sync + 'static>;
+
 pub struct ConfigBuilder<R = OsRng> {
     rng: Option<R>,
     config_directory: PathBuf,
@@ -114,6 +122,7 @@ pub struct ConfigBuilder<R = OsRng> {
     global_state_hash_v2_enabled_config: Option<GlobalStateHashV2EnabledConfig>,
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
+    peer_deny_sync_config: Option<PeerDenySyncConfigCallback>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     validator_observer_config: Option<ValidatorObserverConfigCallback>,
@@ -159,6 +168,7 @@ impl ConfigBuilder {
             global_state_hash_v2_enabled_config: None,
             funds_withdraw_scheduler_type_config,
             state_sync_config: None,
+            peer_deny_sync_config: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
             validator_observer_config: None,
@@ -385,6 +395,7 @@ impl<R> ConfigBuilder<R> {
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             state_sync_config: self.state_sync_config,
+            peer_deny_sync_config: self.peer_deny_sync_config,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
             validator_observer_config: self.validator_observer_config,
@@ -393,6 +404,18 @@ impl<R> ConfigBuilder<R> {
 
     pub fn with_state_sync_config(mut self, config: sui_config::p2p::StateSyncConfig) -> Self {
         self.state_sync_config = Some(config);
+        self
+    }
+
+    /// Per-validator hook for `peer_deny_sync_config`. The closure is called once
+    /// per validator after all genesis-committee authority names are known, so the
+    /// caller can compute an allowlist that references peers (e.g. "trust everyone
+    /// but myself").
+    pub fn with_peer_deny_sync_config_per_validator(
+        mut self,
+        f: PeerDenySyncConfigCallback,
+    ) -> Self {
+        self.peer_deny_sync_config = Some(f);
         self
     }
 
@@ -534,6 +557,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             builder.build()
         };
 
+        let all_authority_names: Vec<AuthorityName> = validators
+            .iter()
+            .map(|v| v.key_pair.public().into())
+            .collect();
         let validator_configs = validators
             .into_iter()
             .enumerate()
@@ -611,6 +638,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     && idx < num_unpruned_validators
                 {
                     builder = builder.with_unpruned_checkpoints();
+                }
+                if let Some(peer_deny_sync_cb) = &self.peer_deny_sync_config {
+                    let this_authority: AuthorityName = validator.key_pair.public().into();
+                    builder = builder.with_peer_deny_sync_config(peer_deny_sync_cb(
+                        this_authority,
+                        &all_authority_names,
+                    ));
                 }
                 builder.build(validator, genesis.clone())
             })

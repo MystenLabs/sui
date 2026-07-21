@@ -6,8 +6,12 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
+backoff.workspace = true
 num_cpus.workspace = true
 bcs.workspace = true
 clap = { version = "4.1.4", features = ["derive"] }

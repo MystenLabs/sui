@@ -6,6 +6,9 @@ publish = false
 edition = "2024"
 version.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 # Exposes the in-memory mock BigTable server (`testing::MockBigtableServer`)
 # for cross-crate read/write-path tests without pulling it into normal builds.

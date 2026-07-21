@@ -49,7 +49,6 @@ use sui_core::storage::RestReadStore;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
-use sui_rpc_api::RpcMetrics;
 use sui_rpc_api::ServerVersion;
 use sui_rpc_api::subscription::SubscriptionService;
 use sui_types::base_types::ConciseableName;
@@ -86,7 +85,7 @@ use mysten_metrics::{RegistryService, spawn_monitored_task};
 use mysten_service::server_timing::server_timing_middleware;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
-use sui_config::node_config_metrics::NodeConfigMetrics;
+use sui_config::transaction_deny_config::TransactionDenyRules;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -478,7 +477,6 @@ impl SuiNode {
             prober_config.validate()?;
         }
 
-        NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -1579,7 +1577,6 @@ impl SuiNode {
             state.clone(),
             checkpoint_service.clone(),
             epoch_store.clone(),
-            consensus_adapter.clone(),
             throughput_calculator,
             backpressure_manager,
             config.congestion_log.clone(),
@@ -1659,23 +1656,11 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
     ) -> Arc<CheckpointService> {
-        let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
-        let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
-
-        debug!(
-            "Starting checkpoint service with epoch start timestamp {}
-            and epoch duration {}",
-            epoch_start_timestamp_ms, epoch_duration_ms
-        );
-
         let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.is_validator() {
             Box::new(SubmitCheckpointToConsensus::new(
                 consensus_adapter,
                 state.secret.clone(),
                 config.protocol_public_key(),
-                epoch_start_timestamp_ms
-                    .checked_add(epoch_duration_ms)
-                    .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
                 checkpoint_metrics.clone(),
             ))
         } else {
@@ -1821,6 +1806,18 @@ impl SuiNode {
         self.state.load_epoch_store_one_call_per_task().node_role()
     }
 
+    /// Returns the validator's `ConsensusAdapter` if this node currently has validator
+    /// components running. The Arc is cloned out and the lock is released immediately
+    /// so callers never hold the `validator_components` mutex across consensus
+    /// submission.
+    pub async fn consensus_adapter(&self) -> Option<Arc<ConsensusAdapter>> {
+        self.validator_components
+            .lock()
+            .await
+            .as_ref()
+            .map(|c| c.consensus_adapter.clone())
+    }
+
     // Only used for testing because of how epoch store is loaded.
     pub fn reference_gas_price_for_testing(&self) -> Result<u64, anyhow::Error> {
         self.state.reference_gas_price_for_testing()
@@ -1875,6 +1872,12 @@ impl SuiNode {
     ) -> Result<()> {
         let checkpoint_executor_metrics =
             CheckpointExecutorMetrics::new(&self.registry_service.default_registry());
+
+        // Holds the startup-specific deny-config broadcast setting; consumed by the
+        // first iteration on which deny-config sharing is enabled in the protocol
+        // config. Subsequent iterations fall back to the epoch-change setting.
+        let mut broadcast_on_startup: Option<bool> =
+            Some(self.config.peer_deny_sync_config.broadcast_on_startup);
 
         loop {
             let mut hasher_guard = self.global_state_hasher.lock().await;
@@ -1957,6 +1960,40 @@ impl SuiNode {
                     None,
                     None,
                 )?;
+
+                // Reconcile our shared TransactionDenyConfig vote with the (possibly
+                // restart-edited) local config.
+                if cur_epoch_store
+                    .protocol_config()
+                    .share_transaction_deny_config_in_consensus()
+                {
+                    let sync_cfg = &self.config.peer_deny_sync_config;
+                    let is_startup = broadcast_on_startup.is_some();
+                    let should_broadcast = broadcast_on_startup
+                        .take()
+                        .unwrap_or(sync_cfg.broadcast_on_epoch_change);
+                    let manager = self.state.transaction_deny_config_manager();
+                    let publish = |rules: Option<TransactionDenyRules>| {
+                        if let Err(e) = manager.submit_broadcast(
+                            rules,
+                            &components.consensus_adapter,
+                            &cur_epoch_store,
+                        ) {
+                            warn!("Failed to broadcast transaction deny config: {e:?}");
+                        }
+                    };
+                    let action = deny_config_broadcast_payload(
+                        manager.local().rules(),
+                        should_broadcast,
+                        is_startup,
+                        manager.may_have_outstanding_broadcast(),
+                    );
+                    match action {
+                        DenyConfigBroadcastAction::Skip => {}
+                        DenyConfigBroadcastAction::Broadcast(rules) => publish(Some(rules)),
+                        DenyConfigBroadcastAction::Withdraw => publish(None),
+                    }
+                }
             }
 
             let stop_condition = checkpoint_executor.run_epoch(run_with_range).await;
@@ -2974,7 +3011,7 @@ async fn build_http_servers(
             rpc_service.with_config(config);
         }
 
-        rpc_service.with_metrics(RpcMetrics::new(prometheus_registry));
+        rpc_service.with_metrics(prometheus_registry);
         rpc_service.with_subscription_service(subscription_service_handle);
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
@@ -3063,6 +3100,43 @@ async fn build_http_servers(
     ))
 }
 
+/// Action to take with our deny-config network vote at a startup or epoch-change
+/// transition, after reconciling against the current local config.
+///
+/// An oversized local config can't go on the wire (the consensus validator would reject
+/// it), so it is treated as unshareable: on startup a stale prior vote is withdrawn
+/// rather than left to diverge from the local config.
+#[derive(Debug, PartialEq, Eq)]
+enum DenyConfigBroadcastAction {
+    /// Leave any existing on-network vote untouched.
+    Skip,
+    /// Publish these rules as our current vote.
+    Broadcast(TransactionDenyRules),
+    /// Publish a withdrawal of any prior vote.
+    Withdraw,
+}
+
+fn deny_config_broadcast_payload(
+    local_rules: &TransactionDenyRules,
+    broadcast: bool,
+    is_startup: bool,
+    may_have_prior_broadcast: bool,
+) -> DenyConfigBroadcastAction {
+    let shareable = local_rules.is_empty() || local_rules.check_share_limits().is_ok();
+    if broadcast && shareable {
+        // An empty local config broadcasts a withdrawal.
+        if local_rules.is_empty() {
+            DenyConfigBroadcastAction::Withdraw
+        } else {
+            DenyConfigBroadcastAction::Broadcast(local_rules.clone())
+        }
+    } else if is_startup && may_have_prior_broadcast {
+        DenyConfigBroadcastAction::Withdraw
+    } else {
+        DenyConfigBroadcastAction::Skip
+    }
+}
+
 /// Builds the HTTPS RPC server's rustls config from PEM files, pinning the
 /// ring crypto provider.
 ///
@@ -3106,6 +3180,58 @@ mod tests {
     use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
     use sui_core::checkpoints::{CheckpointMetrics, CheckpointStore};
     use sui_types::digests::{CheckpointDigest, TransactionDigest, TransactionEffectsDigest};
+
+    #[test]
+    fn deny_config_broadcast_payload_decisions() {
+        let empty = TransactionDenyRules::default();
+        let populated = TransactionDenyRules {
+            package_publish_disabled: true,
+            ..Default::default()
+        };
+        let oversized = TransactionDenyRules {
+            zklogin_disabled_providers: std::iter::once(
+                "x".repeat(TransactionDenyRules::MAX_ZKLOGIN_PROVIDER_LENGTH + 1),
+            )
+            .collect(),
+            ..Default::default()
+        };
+
+        // broadcast=true: (re-)broadcast the current local config.
+        assert_eq!(
+            deny_config_broadcast_payload(&populated, true, true, false),
+            DenyConfigBroadcastAction::Broadcast(populated.clone()),
+        );
+        // broadcast=true with an empty local config: broadcast a withdrawal.
+        assert_eq!(
+            deny_config_broadcast_payload(&empty, true, true, false),
+            DenyConfigBroadcastAction::Withdraw,
+        );
+        // Not broadcasting, startup, prior vote -> withdraw it.
+        assert_eq!(
+            deny_config_broadcast_payload(&populated, false, true, true),
+            DenyConfigBroadcastAction::Withdraw,
+        );
+        // Not broadcasting, startup, no prior vote -> nothing.
+        assert_eq!(
+            deny_config_broadcast_payload(&populated, false, true, false),
+            DenyConfigBroadcastAction::Skip,
+        );
+        // Epoch change (not startup) without broadcast -> nothing, even with a prior vote.
+        assert_eq!(
+            deny_config_broadcast_payload(&populated, false, false, true),
+            DenyConfigBroadcastAction::Skip,
+        );
+        // An oversized local config is unshareable: broadcast=true falls back to
+        // withdrawing a prior vote instead of attempting an (oversized) broadcast.
+        assert_eq!(
+            deny_config_broadcast_payload(&oversized, true, true, true),
+            DenyConfigBroadcastAction::Withdraw,
+        );
+        assert_eq!(
+            deny_config_broadcast_payload(&oversized, true, true, false),
+            DenyConfigBroadcastAction::Skip,
+        );
+    }
 
     // A present legacy `rpc-index` directory is removed, while its siblings
     // (notably the still-used jsonrpc `indexes` store) are left untouched, and a

@@ -33,6 +33,18 @@
           "use_line": 10,
           "use_col": 23
         }
+      ],
+      "function_import_convention.move": [
+        // functions are imported through their module and inserted as module-qualified calls
+        {
+          "use_line": 5,
+          "use_col": 9
+        },
+        // types are imported directly and inserted unqualified
+        {
+          "use_line": 10,
+          "use_col": 17
+        }
       ]
     }
   }

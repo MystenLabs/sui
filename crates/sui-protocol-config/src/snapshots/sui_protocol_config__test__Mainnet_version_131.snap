@@ -132,7 +132,6 @@ feature_flags:
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   always_advance_dkg_to_resolution: true
-  allow_dkg_completion_after_timeout: true
   enable_coin_registry: true
   abstract_size_in_object_runtime: true
   object_runtime_charge_cache_load_gas: true
@@ -140,6 +139,7 @@ feature_flags:
   use_new_commit_handler: true
   better_loader_errors: true
   generate_df_type_layouts: true
+  framework_tx_context_mut_restrictions: true
   enable_display_registry: true
   private_generics_verifier_v2: true
   deprecate_global_storage_ops: true
@@ -170,6 +170,7 @@ feature_flags:
   early_return_receive_object_mismatched_type: true
   timestamp_based_epoch_close: true
   limit_groth16_pvk_inputs: true
+  share_transaction_deny_config_in_consensus: true
   granular_post_execution_checks: true
   early_exit_on_iffw: true
   enable_unified_linkage: true

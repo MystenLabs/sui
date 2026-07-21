@@ -47,7 +47,7 @@ async fn transactions(
     before: Option<String>,
 ) -> anyhow::Result<graphql::Connection<TxNode>> {
     let data = graphql::query(
-        cluster,
+        &cluster.graphql_url(),
         TX_QUERY,
         json!({ "first": first, "last": last, "after": after, "before": before }),
     )
@@ -175,17 +175,4 @@ async fn test_transactions_query_cursor_pagination() {
         .unwrap();
     assert!(page.edges.is_empty());
     assert!(!page.page_info.has_next_page);
-
-    // Legacy cursor support -- the service accepts the old Base64-encoded JSON transaction
-    // sequence number format, but outputs the new format only.
-    let after = Base64::encode(serde_json::to_vec(&0u64).unwrap());
-    let before = Base64::encode(serde_json::to_vec(&6u64).unwrap());
-
-    let page = transactions(&cluster, None, Some(2), Some(after), Some(before))
-        .await
-        .unwrap();
-
-    assert_eq!(window(&page.edges), window(&all.edges[4..=5]));
-    assert!(page.page_info.has_previous_page);
-    assert!(page.page_info.has_next_page);
 }

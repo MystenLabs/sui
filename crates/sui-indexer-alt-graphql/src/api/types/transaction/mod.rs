@@ -7,6 +7,7 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use async_graphql::connection::PageInfo;
@@ -16,11 +17,16 @@ use diesel::sql_types::BigInt;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
+use prost_types::FieldMask;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
@@ -32,8 +38,6 @@ use sui_types::transaction::TransactionExpiration;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
-use crate::api::scalars::cursor::JsonCursor;
-use crate::api::scalars::cursor::MultiCursor;
 use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -42,6 +46,7 @@ use crate::api::scalars::json::Json;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas_input::GasInput;
 use crate::api::types::lookups::CheckpointBounds;
@@ -75,7 +80,7 @@ pub(crate) struct TransactionContents {
 }
 
 /// Validated transaction cursor coordinates.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Copy)]
 pub struct TransactionToken {
     /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
     kind: CursorKind,
@@ -83,9 +88,8 @@ pub struct TransactionToken {
     tx_seq: u64,
 }
 
-/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
-/// legacy JSON cursor (secondary).
-pub type CTransaction = MultiCursor<OpaqueCursor<TransactionToken>, JsonCursor<u64>>;
+/// Compatibility dispatch over the on-wire cursor format.
+pub type CTransaction = OpaqueCursor<TransactionToken>;
 
 /// Custom `Connection` for transactions to support partially-filled pages.
 pub(crate) struct TransactionConnection {
@@ -354,6 +358,11 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<TransactionConnection, RpcError> {
+        if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
+            query_limits::rich::debit(ctx)?;
+            return Self::paginate_grpc(reader, scope, page, filter).await;
+        }
+
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -397,6 +406,75 @@ impl Transaction {
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
+    }
+
+    /// Serve transaction pagination by streaming gRPC. Returns pages that may
+    /// be partially filled, with valid cursors if there are more pages to paginate through.
+    async fn paginate_grpc(
+        reader: &AlphaLedgerGrpcReader,
+        scope: Scope,
+        page: Page<CTransaction>,
+        filter: TransactionFilter,
+    ) -> Result<TransactionConnection, RpcError> {
+        if page.limit() == 0 {
+            return Ok(Connection::new(false, false).into());
+        }
+
+        // Consistency upper bound; empty when scope has no checkpoint set.
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false).into());
+        };
+
+        // TODO: LedgerService expose available checkpoint range for `reader_lo`.
+        let reader_lo = 0;
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint().map(u64::from),
+            filter.at_checkpoint().map(u64::from),
+            filter.before_checkpoint().map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(Connection::new(false, false).into());
+        };
+
+        // Extract the cursor and pass through to grpc.
+        let after = page.after().map(|c| CursorToken::from(&**c).encode());
+        // Pg-minted cursors set checkpoint as 0. Substitute the checkpoint with u64::max on the
+        // `before` bound to avoid collapsing the checkpoint window.
+        let before = page.before().map(|c| {
+            let mut token = **c;
+            if token.checkpoint == 0 && token.tx_seq != 0 {
+                token.checkpoint = u64::MAX;
+            }
+            CursorToken::from(&token).encode()
+        });
+
+        let mut options = v2::QueryOptions::default();
+        options.limit = Some(page.limit() as u32);
+        options.after = after;
+        options.before = before;
+        options.ordering = Some(if page.is_from_front() {
+            v2::Ordering::Ascending as i32
+        } else {
+            v2::Ordering::Descending as i32
+        });
+
+        let mut request = v2::ListTransactionsRequest::default();
+        // Digest only — contents hydrate lazily via `KvLoader` on field access.
+        request.read_mask = Some(FieldMask::from_paths(["digest"]));
+        request.start_checkpoint = Some(*cp_bounds.start());
+        // `cp_bounds` end is inclusive; the request bound is exclusive.
+        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.filter = filter.to_grpc_filter();
+        request.options = Some(options);
+
+        let result = reader
+            .list_transactions(request)
+            .await
+            .context("Failed to list transactions")?;
+
+        build_grpc_connection(scope, &page, result)
     }
 }
 
@@ -474,20 +552,17 @@ impl TransactionConnection {
 impl TransactionToken {
     /// Mint the edge cursor for the transaction at the given coordinates.
     pub(crate) fn cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
-        CTransaction::new(OpaqueCursor::new(Self {
+        OpaqueCursor::new(Self {
             kind: CursorKind::Item,
             checkpoint,
             tx_seq,
-        }))
+        })
     }
 }
 
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
-        match self {
-            CTransaction::Primary(c) => c.tx_seq,
-            CTransaction::Secondary(c) => **c,
-        }
+        self.tx_seq
     }
 }
 
@@ -528,10 +603,10 @@ impl TryFrom<CursorToken> for TransactionToken {
     }
 }
 
-impl Eq for CTransaction {}
-impl PartialEq for CTransaction {
+impl Eq for TransactionToken {}
+impl PartialEq for TransactionToken {
     fn eq(&self, other: &Self) -> bool {
-        self.tx_sequence_number() == other.tx_sequence_number()
+        self.tx_seq == other.tx_seq
     }
 }
 
@@ -563,6 +638,67 @@ impl From<Connection<String, Transaction>> for TransactionConnection {
             },
         }
     }
+}
+
+/// Build a `TransactionConnection` from draining a bitmap-scan page.
+///
+/// Edges are returned in ascending order.
+fn build_grpc_connection(
+    scope: Scope,
+    page: &Page<CTransaction>,
+    result: StreamPage<v2::ExecutedTransaction>,
+) -> Result<TransactionConnection, RpcError> {
+    let more = result.has_more();
+    let start = result.first_cursor().cloned();
+    let end = result.last_cursor().cloned();
+    let mut items = result.items;
+
+    let (has_previous_page, has_next_page, start, end) = if page.is_from_front() {
+        (page.after().is_some(), more, start, end)
+    } else {
+        items.reverse();
+        (more, page.before().is_some(), end, start)
+    };
+
+    let mut edges = Vec::with_capacity(items.len());
+    for item in items {
+        let digest = item
+            .payload
+            .digest
+            .as_deref()
+            .context("ListTransactions item missing transaction digest")?
+            .parse::<TransactionDigest>()
+            .context("Failed to parse transaction digest from ListTransactions")?;
+
+        edges.push(Edge::new(
+            encode_grpc_cursor(&item.cursor)?,
+            Transaction::with_digest(scope.clone(), digest),
+        ));
+    }
+
+    let start_cursor = start.map(|b| encode_grpc_cursor(&b)).transpose()?;
+    let end_cursor = end.map(|b| encode_grpc_cursor(&b)).transpose()?;
+
+    Ok(TransactionConnection {
+        edges,
+        page_info: PageInfo {
+            has_previous_page,
+            has_next_page,
+            start_cursor,
+            end_cursor,
+        },
+    })
+}
+
+/// Re-encode a server-minted cursor (raw encoded `CursorToken` bytes from the gRPC stream) as a
+/// GraphQL cursor string.
+fn encode_grpc_cursor(bytes: &[u8]) -> Result<String, RpcError> {
+    let token = CursorToken::decode(bytes).context("Failed to decode ListTransactions cursor")?;
+    let token = token
+        .try_into()
+        .context("Unexpected position in ListTransactions cursor")?;
+    let cursor: CTransaction = OpaqueCursor::new(token);
+    Ok(cursor.encode_cursor())
 }
 
 pub(crate) async fn tx_digests(
@@ -818,6 +954,7 @@ mod tests {
     use super::*;
     use crate::pagination::PageLimits;
     use async_graphql::connection::CursorType;
+    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
     use sui_indexer_alt_reader::kv_loader::ExecutedTransactionData;
     use sui_rpc_cursor::CursorKind;
     use sui_types::base_types::random_object_ref;
@@ -825,6 +962,71 @@ mod tests {
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::TransactionData;
 
+    /// 32-byte zero digest, base58-encoded. Round-trips through `TransactionDigest::parse` so
+    /// `build_grpc_connection` can convert items back into edges in tests.
+    fn zero_digest_b58() -> String {
+        Base58::encode(TransactionDigest::default().inner())
+    }
+
+    /// Build a synthetic `PageItem` whose payload digest is the zero digest and whose resume
+    /// cursor is the provided bytes.
+    fn tx_item(cursor: CursorToken) -> PageItem<v2::ExecutedTransaction> {
+        let mut payload = v2::ExecutedTransaction::default();
+        payload.digest = Some(zero_digest_b58());
+        PageItem {
+            payload,
+            cursor: cursor.encode(),
+        }
+    }
+
+    /// The GraphQL cursor string that `build_grpc_connection` mints for raw server cursor bytes.
+    fn graphql_cursor(token: CursorToken) -> String {
+        let token: TransactionToken = token.try_into().expect("transactions cursor");
+        OpaqueCursor::new(token).encode_cursor()
+    }
+
+    /// Build a `Page<CTransaction>` going forwards (`first: N`, no `after`/`before`).
+    fn forward_page(limit: u64) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(&limits, Some(limit), None, None, None)
+            .expect("constructing forward Page<CTransaction>")
+    }
+
+    /// Build a `Page<CTransaction>` going backwards (`last: N`, no `after`/`before`).
+    fn backward_page(limit: u64) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(&limits, None, None, Some(limit), None)
+            .expect("constructing backward Page<CTransaction>")
+    }
+
+    /// Forward page opened from an `after` cursor (`first: N, after: <cursor>`).
+    fn forward_page_after(limit: u64, after: CTransaction) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(&limits, Some(limit), Some(after), None, None)
+            .expect("constructing forward Page with after")
+    }
+
+    /// Backward page opened from a `before` cursor (`last: N, before: <cursor>`).
+    fn backward_page_before(limit: u64, before: CTransaction) -> Page<CTransaction> {
+        let limits = PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        };
+        Page::from_params(&limits, None, None, Some(limit), Some(before))
+            .expect("constructing backward Page with before")
+    }
+
+    /// The checkpoint the preloaded transactions in these tests were streamed from. Distinct
+    /// from any cursor checkpoint supplied by clients so tests can tell minted cursors apart.
     const STREAMED_CP: u64 = 42;
 
     /// Build a `ProcessedTransaction` with just enough content for `TransactionFilter::matches`
@@ -872,17 +1074,10 @@ mod tests {
         TransactionToken::cursor(checkpoint, position)
     }
 
-    /// Legacy pg-style cursor: a bare JSON-encoded `tx_sequence_number`.
-    fn legacy_cursor(position: u64) -> CTransaction {
-        CTransaction::Secondary(JsonCursor::new(position))
-    }
-
     /// Decode an edge cursor back into its `CursorToken`.
     fn edge_token(cursor: &str) -> CursorToken {
-        match CTransaction::decode_cursor(cursor).expect("decodable edge cursor") {
-            CTransaction::Primary(c) => CursorToken::from(&*c),
-            CTransaction::Secondary(_) => panic!("expected grpc cursor, got legacy"),
-        }
+        let decoded = CTransaction::decode_cursor(cursor).expect("decodable edge cursor");
+        CursorToken::from(&*decoded)
     }
 
     fn edge_positions(conn: &TransactionConnection) -> Vec<u64> {
@@ -949,25 +1144,6 @@ mod tests {
         assert!(conn.page_info.has_next_page);
     }
 
-    /// A legacy pg-style cursor (bare JSON `tx_sequence_number`) resumes the same way as a grpc
-    /// cursor with the same position.
-    #[test]
-    fn paginate_preloaded_resumes_after_legacy_cursor() {
-        let txs = preloaded_txs(10..15);
-        let conn = Transaction::paginate_preloaded_transactions(
-            Scope::for_tests(),
-            STREAMED_CP,
-            &txs,
-            &page_params_for_testing(Some(2), Some(legacy_cursor(11)), None, None),
-            TransactionFilter::default(),
-        )
-        .expect("paginated");
-
-        assert_eq!(edge_positions(&conn), [12, 13]);
-        assert!(conn.page_info.has_previous_page);
-        assert!(conn.page_info.has_next_page);
-    }
-
     /// `last: n` must return the tail of the matching set.
     #[test]
     fn paginate_preloaded_backward_page_returns_tail() {
@@ -1022,5 +1198,342 @@ mod tests {
         assert_eq!(edge_positions(&conn), [10, 11]);
         assert!(!conn.page_info.has_previous_page);
         assert!(!conn.page_info.has_next_page);
+    }
+
+    /// Empty connection surfaces cursors if provided by the streamed page.
+    #[test]
+    fn build_grpc_connection_empty_page_surfaces_boundary_cursors() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            Vec::new(),
+            Some(
+                CursorToken::boundary(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 10,
+                })
+                .encode(),
+            ),
+            Some(
+                CursorToken::boundary(Position::Transactions {
+                    checkpoint: 2,
+                    tx_seq: 20,
+                })
+                .encode(),
+            ),
+            None,
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(conn.edges.is_empty());
+        assert!(!conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
+
+        // Both start and end cursors should be set on the connection
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_ne!(start, end, "start and end cursors should be different");
+    }
+
+    /// Order of cursors on connection should be swapped from streamed page.
+    #[test]
+    fn build_grpc_connection_empty_page_backward_correct_cursors() {
+        let scope = Scope::for_tests();
+        let page = backward_page(10);
+        // Descending stream: the first watermark the stream reports is the high end.
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            Vec::new(),
+            Some(
+                CursorToken::boundary(Position::Transactions {
+                    checkpoint: 2,
+                    tx_seq: 20,
+                })
+                .encode(),
+            ),
+            Some(
+                CursorToken::boundary(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 10,
+                })
+                .encode(),
+            ),
+            None,
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(conn.edges.is_empty());
+        assert!(conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
+
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_eq!(
+            start,
+            graphql_cursor(CursorToken::boundary(Position::Transactions {
+                checkpoint: 1,
+                tx_seq: 10,
+            }))
+        );
+        assert_eq!(
+            end,
+            graphql_cursor(CursorToken::boundary(Position::Transactions {
+                checkpoint: 2,
+                tx_seq: 20,
+            }))
+        );
+    }
+
+    #[test]
+    fn build_grpc_connection_non_empty_page_uses_edge_cursors() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 1,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 2,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 3,
+                })),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        // `CheckpointBound` means the range was exhausted — no forward continuation.
+        assert!(!conn.page_info.has_next_page);
+
+        let start = conn.page_info.start_cursor.expect("start set");
+        let end = conn.page_info.end_cursor.expect("end set");
+        assert_eq!(
+            start, conn.edges[0].cursor,
+            "non-empty page should anchor start_cursor on first edge, not stream watermark"
+        );
+        assert_eq!(
+            end, conn.edges[2].cursor,
+            "non-empty page should anchor end_cursor on last edge, not stream watermark"
+        );
+    }
+
+    #[test]
+    fn build_grpc_connection_full_page_at_item_limit_signals_more() {
+        let scope = Scope::for_tests();
+        let page = forward_page(3);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 1,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 2,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 3,
+                })),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::ItemLimit),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        assert!(
+            conn.page_info.has_next_page,
+            "full page + ItemLimit must report hasNextPage: true (has_more() is true)"
+        );
+    }
+
+    /// If watermark cursors and non-empty, expect watermark cursors on the connection.
+    #[test]
+    fn build_grpc_connection_non_empty_page_and_wm() {
+        let scope = Scope::for_tests();
+        let page = forward_page(3);
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 1,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 2,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 3,
+                })),
+            ],
+            Some(
+                CursorToken::boundary(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 0,
+                })
+                .encode(),
+            ),
+            Some(
+                CursorToken::boundary(Position::Transactions {
+                    checkpoint: 2,
+                    tx_seq: 4,
+                })
+                .encode(),
+            ),
+            None,
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        assert!(conn.page_info.has_next_page,);
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_eq!(
+            start,
+            graphql_cursor(CursorToken::boundary(Position::Transactions {
+                checkpoint: 1,
+                tx_seq: 0,
+            }))
+        );
+        assert_eq!(
+            end,
+            graphql_cursor(CursorToken::boundary(Position::Transactions {
+                checkpoint: 2,
+                tx_seq: 4,
+            }))
+        );
+    }
+
+    #[test]
+    fn build_grpc_connection_descending_page_reverses_to_ascending_edges() {
+        let scope = Scope::for_tests();
+        let page = backward_page(10);
+        // Descending stream order: positions 3, 2, 1 (highest position first).
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 3,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 2,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 1,
+                })),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        // After reversal, the *first* edge corresponds to the *lowest* position from the
+        // stream — i.e. the last item the stream emitted (position 1).
+        let start = conn.page_info.start_cursor.expect("start set");
+        let end = conn.page_info.end_cursor.expect("end set");
+        assert_eq!(
+            start, conn.edges[0].cursor,
+            "descending page's start_cursor anchors on the first ascending edge after reversal"
+        );
+        assert_eq!(
+            start,
+            graphql_cursor(CursorToken::item(Position::Transactions {
+                checkpoint: 1,
+                tx_seq: 1,
+            }))
+        );
+        assert_eq!(
+            end, conn.edges[2].cursor,
+            "descending page's end_cursor anchors on the last ascending edge after reversal"
+        );
+        assert_eq!(
+            end,
+            graphql_cursor(CursorToken::item(Position::Transactions {
+                checkpoint: 1,
+                tx_seq: 3,
+            }))
+        );
+    }
+
+    /// A forward page opened from an `after` cursor reports `hasPreviousPage: true`
+    /// (`page.after().is_some()`). `CheckpointBound` makes `has_more()` false, so the only source
+    /// of a `true` flag is the input cursor — not the stream.
+    #[test]
+    fn build_grpc_connection_forward_after_signals_previous_page() {
+        let scope = Scope::for_tests();
+        let page = forward_page_after(10, primary_cursor(1, 0));
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 1,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 2,
+                })),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(
+            conn.page_info.has_previous_page,
+            "after cursor set → hasPreviousPage"
+        );
+        assert!(
+            !conn.page_info.has_next_page,
+            "CheckpointBound → no hasNextPage"
+        );
+    }
+
+    /// A backward page opened from a `before` cursor reports `hasNextPage: true`
+    /// (`page.before().is_some()`). `CheckpointBound` makes `has_more()` false, so the only source
+    /// of a `true` flag is the input cursor — not the stream.
+    #[test]
+    fn build_grpc_connection_backward_before_signals_next_page() {
+        let scope = Scope::for_tests();
+        let page = backward_page_before(10, primary_cursor(1, 3));
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 2,
+                })),
+                tx_item(CursorToken::item(Position::Transactions {
+                    checkpoint: 1,
+                    tx_seq: 1,
+                })),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(
+            conn.page_info.has_next_page,
+            "before cursor set → hasNextPage"
+        );
+        assert!(
+            !conn.page_info.has_previous_page,
+            "CheckpointBound → no hasPreviousPage"
+        );
     }
 }

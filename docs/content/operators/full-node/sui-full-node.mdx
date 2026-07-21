@@ -144,7 +144,7 @@ The `rpc` configuration block supports additional settings. The most important o
 
 Refer to the [`RpcConfig` source](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) for the complete list of available `rpc` options.
 
-You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
+You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission (including code removal) in mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
 ```sh
 

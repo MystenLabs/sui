@@ -21,6 +21,7 @@ async fn test_create_display_registry_object() {
             config.set_authority_capabilities_v2_for_testing(true);
             config.set_split_checkpoints_in_consensus_handler_for_testing(true);
             config.set_merge_randomness_into_checkpoint_for_testing(true);
+            config.set_timestamp_based_epoch_close_for_testing(true);
             config
         });
 

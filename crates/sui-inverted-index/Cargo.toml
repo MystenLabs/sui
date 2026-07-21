@@ -9,6 +9,9 @@ publish = false
 edition = "2024"
 version.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 path = "src/mod.rs"
 

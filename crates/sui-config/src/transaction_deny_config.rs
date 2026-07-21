@@ -1,88 +1,178 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
+pub use sui_types::transaction_deny_rules::{DenyElementKind, TransactionDenyRules};
 
 use crate::dynamic_transaction_signing_checks::{
     DynamicCheckRunnerContext, DynamicCheckRunnerError,
 };
 
+/// Configuration for activating recommended `TransactionDenyConfig` rules shared by
+/// peers via consensus. The operator pre-defines named rulesets, each gated on a
+/// stake threshold among an eligible set of validators; per-kind "default" buckets
+/// govern individual rule elements peers propose outside of any pre-listed ruleset.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct PeerDenySyncConfig {
+    /// Pre-listed rulesets. Each activates only when eligible voting stake reaches
+    /// its threshold.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rulesets: Vec<SharedDenyRuleset>,
+
+    /// Per-kind default buckets. Each bucket covers a disjoint subset of
+    /// `DenyElementKind` and threshold-gates each proposed element of those kinds
+    /// individually.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub default_buckets: Vec<DefaultDenyBucket>,
+
+    #[serde(default)]
+    pub broadcast_on_startup: bool,
+
+    #[serde(default)]
+    pub broadcast_on_epoch_change: bool,
+}
+
+/// A pre-listed ruleset becomes effective when validators holding at least
+/// `threshold.stake_threshold_percent` of the eligible stake have each proposed a
+/// superset of `rules`.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct SharedDenyRuleset {
+    /// Operator-chosen identifier used in metrics.
+    pub name: String,
+    pub rules: TransactionDenyRules,
+    #[serde(flatten)]
+    pub threshold: SharedDenyRuleThreshold,
+}
+
+/// Eligibility + stake threshold criteria for activating a proposed deny-rule.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct SharedDenyRuleThreshold {
+    pub eligibility: ValidatorEligibility,
+    /// Whole-number percent (1..=100) of eligible stake that must vote to activate.
+    pub stake_threshold_percent: u16,
+}
+
+/// A per-kind default bucket. Each bucket covers a disjoint subset of
+/// `DenyElementKind`; a proposed element of one of `element_kinds` activates when
+/// eligible voting stake reaches `threshold`.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct DefaultDenyBucket {
+    /// Operator-chosen identifier used in metrics and the admin dump.
+    pub name: String,
+    /// Element kinds routed to this bucket. Must be non-empty and disjoint from the
+    /// kinds in every other bucket.
+    pub element_kinds: BTreeSet<DenyElementKind>,
+    #[serde(flatten)]
+    pub threshold: SharedDenyRuleThreshold,
+}
+
+/// Which validators' proposals count toward a deny-rule activation's stake threshold.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ValidatorEligibility {
+    /// Only the listed authorities are eligible.
+    Allowlist(BTreeSet<AuthorityName>),
+    /// All committee members except the listed authorities are eligible.
+    Denylist(BTreeSet<AuthorityName>),
+}
+
+impl ValidatorEligibility {
+    pub fn is_eligible(&self, name: &AuthorityName) -> bool {
+        match self {
+            ValidatorEligibility::Allowlist(set) => set.contains(name),
+            ValidatorEligibility::Denylist(set) => !set.contains(name),
+        }
+    }
+}
+
+impl Default for ValidatorEligibility {
+    fn default() -> Self {
+        // An empty denylist makes every committee member eligible.
+        ValidatorEligibility::Denylist(BTreeSet::new())
+    }
+}
+
+impl PeerDenySyncConfig {
+    /// Validate operator-provided settings. Called at manager construction.
+    pub fn validate(&self) -> Result<(), String> {
+        let mut names = BTreeSet::new();
+        for ruleset in &self.rulesets {
+            if ruleset.name.is_empty() {
+                return Err("rulesets entry has an empty name".to_string());
+            }
+            if !names.insert(ruleset.name.as_str()) {
+                return Err(format!("duplicate rulesets name: {}", ruleset.name));
+            }
+            if ruleset.rules.is_empty() {
+                return Err(format!("rulesets entry {} has empty rules", ruleset.name));
+            }
+            ruleset.threshold.validate(&ruleset.name)?;
+        }
+        let mut seen_kinds = BTreeSet::new();
+        for bucket in &self.default_buckets {
+            if bucket.name.is_empty() {
+                return Err("default_buckets entry has an empty name".to_string());
+            }
+            if !names.insert(bucket.name.as_str()) {
+                return Err(format!(
+                    "default_buckets name collides with another ruleset or bucket: {}",
+                    bucket.name,
+                ));
+            }
+            if bucket.element_kinds.is_empty() {
+                return Err(format!(
+                    "default_buckets entry {} has empty element_kinds",
+                    bucket.name,
+                ));
+            }
+            for kind in &bucket.element_kinds {
+                if !seen_kinds.insert(*kind) {
+                    return Err(format!(
+                        "default_buckets entry {} claims element kind {:?} already \
+                        claimed by another bucket",
+                        bucket.name, kind,
+                    ));
+                }
+            }
+            bucket.threshold.validate(&bucket.name)?;
+        }
+        Ok(())
+    }
+}
+
+impl SharedDenyRuleThreshold {
+    /// Validate this threshold's percent is within 1..=100. `label` is included in the
+    /// error message to identify which threshold failed. 0% is rejected because it
+    /// would degenerate to "always active" — almost certainly not the operator's intent.
+    pub fn validate(&self, label: &str) -> Result<(), String> {
+        if self.stake_threshold_percent == 0 || self.stake_threshold_percent > 100 {
+            return Err(format!(
+                "{label}: stake_threshold_percent must be 1..=100, got {}",
+                self.stake_threshold_percent,
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionDenyConfig {
-    /// A list of object IDs that are not allowed to be accessed/used in transactions.
-    /// Note that since this is checked during transaction signing, only root object ids
-    /// are supported here (i.e. no child-objects).
-    /// Similarly this does not apply to wrapped objects as they are not directly accessible.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    object_deny_list: Vec<ObjectID>,
-
-    /// A list of package object IDs that are not allowed to be called into in transactions,
-    /// either directly or indirectly through transitive dependencies.
-    /// Note that this does not apply to type arguments.
-    /// Also since we only compare the deny list against the upgraded package ID of each dependency
-    /// in the used package, when a package ID is denied, newer versions of that package are
-    /// still allowed. If we want to deny the entire upgrade family of a package, we need to
-    /// explicitly specify all the package IDs in the deny list.
-    /// TODO: We could consider making this more flexible, e.g. whether to check in type args,
-    /// whether to block entire upgrade family, whether to allow upgrade and etc.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    package_deny_list: Vec<ObjectID>,
-
-    /// A list of sui addresses that are not allowed to be used as the sender or sponsor.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    address_deny_list: Vec<SuiAddress>,
-
-    /// Whether publishing new packages is disabled.
-    #[serde(default)]
-    package_publish_disabled: bool,
-
-    /// Whether upgrading existing packages is disabled.
-    #[serde(default)]
-    package_upgrade_disabled: bool,
-
-    /// Whether usage of shared objects is disabled.
-    #[serde(default)]
-    shared_object_disabled: bool,
-
-    /// Whether user transactions are disabled (i.e. only system transactions are allowed).
-    /// This is essentially a kill switch for transactions processing to a degree.
-    #[serde(default)]
-    user_transaction_disabled: bool,
-
-    /// Whether gasless transactions are disabled.
-    #[serde(default)]
-    gasless_disabled: bool,
-
-    /// In-memory maps for faster lookup of various lists.
-    #[serde(skip)]
-    object_deny_set: OnceCell<HashSet<ObjectID>>,
-
-    #[serde(skip)]
-    package_deny_set: OnceCell<HashSet<ObjectID>>,
-
-    #[serde(skip)]
-    address_deny_set: OnceCell<HashSet<SuiAddress>>,
-
-    /// Whether receiving objects transferred to other objects is allowed
-    #[serde(default)]
-    receiving_objects_disabled: bool,
-
-    /// Whether zklogin transaction is disabled
-    #[serde(default)]
-    zklogin_sig_disabled: bool,
-
-    /// A list of disabled OAuth providers for zkLogin
-    #[serde(default)]
-    zklogin_disabled_providers: HashSet<String>,
+    /// All shareable settings live here. Flattened so the YAML schema is unchanged.
+    #[serde(flatten)]
+    rules: TransactionDenyRules,
 
     /// Dynamic transaction checks to run on transactions.
     /// Program is loaded at deserialization time to ensure that any syntactic issues are caught
     /// immediately.
+    /// Local-only: never propagated through the consensus-shared recommendation flow.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -90,60 +180,72 @@ pub struct TransactionDenyConfig {
         deserialize_with = "crate::dynamic_transaction_signing_checks::deserialize_dynamic_transaction_checks"
     )]
     dynamic_transaction_checks: Option<DynamicCheckRunnerContext>,
-    // TODO: We could consider add a deny list for types that we want to disable public transfer.
-    // TODO: We could also consider disable more types of commands, such as transfer, split and etc.
 }
 
 impl TransactionDenyConfig {
-    pub fn get_object_deny_set(&self) -> &HashSet<ObjectID> {
-        self.object_deny_set
-            .get_or_init(|| self.object_deny_list.iter().cloned().collect())
+    pub fn rules(&self) -> &TransactionDenyRules {
+        &self.rules
     }
 
-    pub fn get_package_deny_set(&self) -> &HashSet<ObjectID> {
-        self.package_deny_set
-            .get_or_init(|| self.package_deny_list.iter().cloned().collect())
+    pub fn get_object_deny_set(&self) -> &BTreeSet<ObjectID> {
+        &self.rules.object_deny_list
     }
 
-    pub fn get_address_deny_set(&self) -> &HashSet<SuiAddress> {
-        self.address_deny_set
-            .get_or_init(|| self.address_deny_list.iter().cloned().collect())
+    pub fn get_package_deny_set(&self) -> &BTreeSet<ObjectID> {
+        &self.rules.package_deny_list
+    }
+
+    pub fn get_address_deny_set(&self) -> &BTreeSet<SuiAddress> {
+        &self.rules.address_deny_list
     }
 
     pub fn package_publish_disabled(&self) -> bool {
-        self.package_publish_disabled
+        self.rules.package_publish_disabled
     }
 
     pub fn package_upgrade_disabled(&self) -> bool {
-        self.package_upgrade_disabled
+        self.rules.package_upgrade_disabled
     }
 
     pub fn shared_object_disabled(&self) -> bool {
-        self.shared_object_disabled
+        self.rules.shared_object_disabled
     }
 
     pub fn user_transaction_disabled(&self) -> bool {
-        self.user_transaction_disabled
+        self.rules.user_transaction_disabled
     }
 
     pub fn gasless_disabled(&self) -> bool {
-        self.gasless_disabled
+        self.rules.gasless_disabled
     }
 
     pub fn receiving_objects_disabled(&self) -> bool {
-        self.receiving_objects_disabled
+        self.rules.receiving_objects_disabled
     }
 
     pub fn zklogin_sig_disabled(&self) -> bool {
-        self.zklogin_sig_disabled
+        self.rules.zklogin_sig_disabled
     }
 
-    pub fn zklogin_disabled_providers(&self) -> &HashSet<String> {
-        &self.zklogin_disabled_providers
+    pub fn zklogin_disabled_providers(&self) -> &BTreeSet<String> {
+        &self.rules.zklogin_disabled_providers
     }
 
     pub fn dynamic_transaction_checks(&self) -> &Option<DynamicCheckRunnerContext> {
         &self.dynamic_transaction_checks
+    }
+
+    pub fn has_dynamic_transaction_checks(&self) -> bool {
+        self.dynamic_transaction_checks.is_some()
+    }
+
+    /// Return a copy of this config with `rules` replaced, carrying
+    /// `dynamic_transaction_checks` over verbatim (it is local-only and never shared).
+    pub fn with_rules(&self, rules: TransactionDenyRules) -> Self {
+        Self {
+            rules,
+            dynamic_transaction_checks: self.dynamic_transaction_checks.clone(),
+        }
     }
 }
 
@@ -162,57 +264,60 @@ impl TransactionDenyConfigBuilder {
     }
 
     pub fn disable_user_transaction(mut self) -> Self {
-        self.config.user_transaction_disabled = true;
+        self.config.rules.user_transaction_disabled = true;
         self
     }
 
     pub fn disable_gasless(mut self) -> Self {
-        self.config.gasless_disabled = true;
+        self.config.rules.gasless_disabled = true;
         self
     }
 
     pub fn disable_shared_object_transaction(mut self) -> Self {
-        self.config.shared_object_disabled = true;
+        self.config.rules.shared_object_disabled = true;
         self
     }
 
     pub fn disable_package_publish(mut self) -> Self {
-        self.config.package_publish_disabled = true;
+        self.config.rules.package_publish_disabled = true;
         self
     }
 
     pub fn disable_package_upgrade(mut self) -> Self {
-        self.config.package_upgrade_disabled = true;
+        self.config.rules.package_upgrade_disabled = true;
         self
     }
 
     pub fn disable_receiving_objects(mut self) -> Self {
-        self.config.receiving_objects_disabled = true;
+        self.config.rules.receiving_objects_disabled = true;
         self
     }
 
     pub fn add_denied_object(mut self, id: ObjectID) -> Self {
-        self.config.object_deny_list.push(id);
+        self.config.rules.object_deny_list.insert(id);
         self
     }
 
     pub fn add_denied_address(mut self, address: SuiAddress) -> Self {
-        self.config.address_deny_list.push(address);
+        self.config.rules.address_deny_list.insert(address);
         self
     }
 
     pub fn add_denied_package(mut self, id: ObjectID) -> Self {
-        self.config.package_deny_list.push(id);
+        self.config.rules.package_deny_list.insert(id);
         self
     }
 
     pub fn disable_zklogin_sig(mut self) -> Self {
-        self.config.zklogin_sig_disabled = true;
+        self.config.rules.zklogin_sig_disabled = true;
         self
     }
 
     pub fn add_zklogin_disabled_provider(mut self, provider: String) -> Self {
-        self.config.zklogin_disabled_providers.insert(provider);
+        self.config
+            .rules
+            .zklogin_disabled_providers
+            .insert(provider);
         self
     }
 
@@ -222,5 +327,356 @@ impl TransactionDenyConfigBuilder {
     ) -> Result<Self, DynamicCheckRunnerError> {
         self.config.dynamic_transaction_checks = Some(DynamicCheckRunnerContext::new(checks)?);
         Ok(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::base_types::dbg_addr;
+
+    #[test]
+    fn with_rules_replaces_rules_and_keeps_dynamic_checks() {
+        let starlark =
+            "def predicate(tx_data, tx_signatures, input_objects, receiving_objects):\n    pass\n"
+                .to_string();
+        let local = TransactionDenyConfigBuilder::new()
+            .add_denied_object(ObjectID::from_single_byte(1))
+            .add_dynamic_transaction_checks(starlark)
+            .expect("starlark should parse")
+            .build();
+
+        let mut new_rules = TransactionDenyRules::default();
+        new_rules
+            .object_deny_list
+            .insert(ObjectID::from_single_byte(2));
+        new_rules.user_transaction_disabled = true;
+
+        let updated = local.with_rules(new_rules);
+
+        assert!(
+            !updated
+                .get_object_deny_set()
+                .contains(&ObjectID::from_single_byte(1))
+        );
+        assert!(
+            updated
+                .get_object_deny_set()
+                .contains(&ObjectID::from_single_byte(2))
+        );
+        assert!(updated.user_transaction_disabled());
+        // dynamic_transaction_checks is local-only and carried over verbatim.
+        assert!(updated.has_dynamic_transaction_checks());
+    }
+
+    #[test]
+    fn transaction_deny_config_yaml_preserves_existing_schema() {
+        // Older operator configs use kebab-case fields at the top level of
+        // transaction-deny-config; the flatten attribute must keep that schema.
+        let yaml = r#"
+            package-publish-disabled: true
+            user-transaction-disabled: false
+            object-deny-list:
+              - "0x0101010101010101010101010101010101010101010101010101010101010101"
+        "#;
+        let cfg: TransactionDenyConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(cfg.package_publish_disabled());
+        assert!(!cfg.user_transaction_disabled());
+        assert_eq!(cfg.get_object_deny_set().len(), 1);
+    }
+
+    /// Forward round-trip with every collection field populated. Catches schema drift
+    /// between `#[serde(flatten)] rules` and the custom (de)serializer on
+    /// `dynamic_transaction_checks` — a refactor that touches either is most likely
+    /// to trip here.
+    #[test]
+    fn transaction_deny_config_yaml_round_trip() {
+        let cfg = TransactionDenyConfigBuilder::new()
+            .add_denied_object(ObjectID::from_single_byte(1))
+            .add_denied_object(ObjectID::from_single_byte(2))
+            .add_denied_package(ObjectID::from_single_byte(3))
+            .add_denied_address(dbg_addr(4))
+            .disable_user_transaction()
+            .disable_gasless()
+            .disable_shared_object_transaction()
+            .disable_package_publish()
+            .disable_package_upgrade()
+            .disable_receiving_objects()
+            .disable_zklogin_sig()
+            .add_zklogin_disabled_provider("Google".to_string())
+            .add_zklogin_disabled_provider("Apple".to_string())
+            .build();
+
+        let yaml = serde_yaml::to_string(&cfg).expect("serialize");
+        let parsed: TransactionDenyConfig = serde_yaml::from_str(&yaml).expect("deserialize");
+
+        // Every field round-trips. Compare via the public accessors since
+        // TransactionDenyConfig doesn't derive PartialEq (Starlark context).
+        assert_eq!(cfg.rules(), parsed.rules());
+        assert_eq!(
+            cfg.has_dynamic_transaction_checks(),
+            parsed.has_dynamic_transaction_checks(),
+        );
+    }
+
+    /// The pre-refactor schema used `Vec<ObjectID>` and `HashSet<String>`. On the wire
+    /// (YAML lists), both serialize identically to the new `BTreeSet`-based schema.
+    /// This test pins that backward compatibility down so a future refactor that
+    /// changes the on-wire shape will fail loudly.
+    #[test]
+    fn transaction_deny_config_yaml_pre_refactor_schema_parses() {
+        // Hand-rolled YAML that matches what the old Vec/HashSet code would emit:
+        // sequences for the list fields, with concrete entries (not the empty-list
+        // serialization a fresh BTreeSet would produce).
+        let yaml = r#"
+            object-deny-list:
+              - "0x0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+              - "0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+            package-deny-list:
+              - "0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+            address-deny-list:
+              - "0x0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"
+            package-publish-disabled: true
+            package-upgrade-disabled: true
+            shared-object-disabled: true
+            user-transaction-disabled: true
+            gasless-disabled: true
+            receiving-objects-disabled: true
+            zklogin-sig-disabled: true
+            zklogin-disabled-providers:
+              - Google
+              - Apple
+        "#;
+        let cfg: TransactionDenyConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(cfg.get_object_deny_set().len(), 2);
+        assert_eq!(cfg.get_package_deny_set().len(), 1);
+        assert_eq!(cfg.get_address_deny_set().len(), 1);
+        assert_eq!(cfg.zklogin_disabled_providers().len(), 2);
+        assert!(cfg.user_transaction_disabled());
+        assert!(cfg.zklogin_sig_disabled());
+    }
+
+    /// `#[serde(flatten)]` plus the custom `dynamic_transaction_checks`
+    /// (de)serializer is the trickiest serde combination in this struct. Verify
+    /// they coexist correctly: a config with a populated Starlark program and
+    /// flattened rule fields round-trips without one stomping on the other.
+    #[test]
+    fn transaction_deny_config_yaml_round_trip_with_dynamic_checks() {
+        // A trivially-valid Starlark program that always passes.
+        let starlark =
+            "def predicate(tx_data, tx_signatures, input_objects, receiving_objects):\n    pass\n"
+                .to_string();
+        let cfg = TransactionDenyConfigBuilder::new()
+            .add_denied_object(ObjectID::from_single_byte(1))
+            .disable_package_publish()
+            .add_dynamic_transaction_checks(starlark)
+            .expect("starlark should parse");
+        let cfg = cfg.build();
+
+        let yaml = serde_yaml::to_string(&cfg).expect("serialize");
+        let parsed: TransactionDenyConfig = serde_yaml::from_str(&yaml).expect("deserialize");
+
+        // Both flattened rule fields and the custom-serialized Starlark survive.
+        assert_eq!(cfg.rules(), parsed.rules());
+        assert!(parsed.has_dynamic_transaction_checks());
+    }
+
+    /// A populated `PeerDenySyncConfig` round-trips through YAML — pins down the
+    /// `#[serde(flatten)]` on the ruleset/bucket threshold and the
+    /// `ValidatorEligibility` enum representation, the two serde-fragile parts of the
+    /// schema.
+    #[test]
+    fn peer_deny_sync_config_yaml_round_trip() {
+        let rules = TransactionDenyRules {
+            package_publish_disabled: true,
+            object_deny_list: std::iter::once(ObjectID::from_single_byte(7)).collect(),
+            ..Default::default()
+        };
+        let config = PeerDenySyncConfig {
+            rulesets: vec![SharedDenyRuleset {
+                name: "incident".to_string(),
+                rules,
+                threshold: SharedDenyRuleThreshold {
+                    eligibility: ValidatorEligibility::Denylist(BTreeSet::new()),
+                    stake_threshold_percent: 67,
+                },
+            }],
+            default_buckets: vec![
+                DefaultDenyBucket {
+                    name: "deny-list-entries".to_string(),
+                    element_kinds: [
+                        DenyElementKind::Object,
+                        DenyElementKind::Package,
+                        DenyElementKind::Address,
+                    ]
+                    .into_iter()
+                    .collect(),
+                    threshold: SharedDenyRuleThreshold {
+                        eligibility: ValidatorEligibility::Allowlist(BTreeSet::new()),
+                        stake_threshold_percent: 50,
+                    },
+                },
+                DefaultDenyBucket {
+                    name: "kill-switches".to_string(),
+                    element_kinds: [DenyElementKind::SharedObjectDisabled]
+                        .into_iter()
+                        .collect(),
+                    threshold: SharedDenyRuleThreshold {
+                        eligibility: ValidatorEligibility::Denylist(BTreeSet::new()),
+                        stake_threshold_percent: 90,
+                    },
+                },
+            ],
+            broadcast_on_startup: true,
+            broadcast_on_epoch_change: false,
+        };
+
+        let yaml = serde_yaml::to_string(&config).expect("serialize");
+        let parsed: PeerDenySyncConfig = serde_yaml::from_str(&yaml).expect("deserialize");
+        assert_eq!(config, parsed);
+    }
+
+    #[test]
+    fn validate_rejects_malformed_rulesets() {
+        let nonempty = || TransactionDenyRules {
+            package_publish_disabled: true,
+            ..Default::default()
+        };
+        let ruleset = |name: &str, rules: TransactionDenyRules, percent: u16| SharedDenyRuleset {
+            name: name.to_string(),
+            rules,
+            threshold: SharedDenyRuleThreshold {
+                eligibility: ValidatorEligibility::default(),
+                stake_threshold_percent: percent,
+            },
+        };
+        let bucket = |name: &str, kinds: &[DenyElementKind], percent: u16| DefaultDenyBucket {
+            name: name.to_string(),
+            element_kinds: kinds.iter().copied().collect(),
+            threshold: SharedDenyRuleThreshold {
+                eligibility: ValidatorEligibility::default(),
+                stake_threshold_percent: percent,
+            },
+        };
+        let config = |rulesets, default_buckets| PeerDenySyncConfig {
+            rulesets,
+            default_buckets,
+            ..Default::default()
+        };
+
+        // A well-formed config validates.
+        assert!(
+            config(vec![ruleset("a", nonempty(), 50)], vec![])
+                .validate()
+                .is_ok()
+        );
+        // A config with two default buckets on disjoint kinds validates.
+        assert!(
+            config(
+                vec![],
+                vec![
+                    bucket("objs", &[DenyElementKind::Object], 50),
+                    bucket("kill", &[DenyElementKind::UserTransactionDisabled], 90),
+                ],
+            )
+            .validate()
+            .is_ok()
+        );
+        // Empty ruleset name.
+        assert!(
+            config(vec![ruleset("", nonempty(), 50)], vec![])
+                .validate()
+                .is_err()
+        );
+        // Duplicate ruleset names.
+        assert!(
+            config(
+                vec![
+                    ruleset("dup", nonempty(), 50),
+                    ruleset("dup", nonempty(), 50)
+                ],
+                vec![],
+            )
+            .validate()
+            .is_err()
+        );
+        // Empty ruleset rules.
+        assert!(
+            config(
+                vec![ruleset("a", TransactionDenyRules::default(), 50)],
+                vec![],
+            )
+            .validate()
+            .is_err()
+        );
+        // Threshold above 100 on a pre-listed ruleset.
+        assert!(
+            config(vec![ruleset("a", nonempty(), 101)], vec![])
+                .validate()
+                .is_err()
+        );
+        // Threshold above 100 on a default bucket.
+        assert!(
+            config(vec![], vec![bucket("b", &[DenyElementKind::Object], 101)],)
+                .validate()
+                .is_err()
+        );
+        // 0% threshold rejected on a pre-listed ruleset (would be "always active").
+        assert!(
+            config(vec![ruleset("a", nonempty(), 0)], vec![])
+                .validate()
+                .is_err()
+        );
+        // 0% threshold rejected on a default bucket.
+        assert!(
+            config(vec![], vec![bucket("b", &[DenyElementKind::Object], 0)])
+                .validate()
+                .is_err()
+        );
+        // Empty bucket name.
+        assert!(
+            config(vec![], vec![bucket("", &[DenyElementKind::Object], 50)])
+                .validate()
+                .is_err()
+        );
+        // Duplicate bucket names.
+        assert!(
+            config(
+                vec![],
+                vec![
+                    bucket("dup", &[DenyElementKind::Object], 50),
+                    bucket("dup", &[DenyElementKind::Address], 50),
+                ],
+            )
+            .validate()
+            .is_err()
+        );
+        // Bucket name colliding with a ruleset name.
+        assert!(
+            config(
+                vec![ruleset("shared", nonempty(), 50)],
+                vec![bucket("shared", &[DenyElementKind::Object], 50)],
+            )
+            .validate()
+            .is_err()
+        );
+        // Empty element_kinds.
+        assert!(
+            config(vec![], vec![bucket("b", &[], 50)])
+                .validate()
+                .is_err()
+        );
+        // A DenyElementKind claimed by two buckets.
+        assert!(
+            config(
+                vec![],
+                vec![
+                    bucket("a", &[DenyElementKind::Object], 50),
+                    bucket("b", &[DenyElementKind::Object], 50),
+                ],
+            )
+            .validate()
+            .is_err()
+        );
     }
 }

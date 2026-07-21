@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 131;
+const MAX_PROTOCOL_VERSION: u64 = 132;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -367,7 +367,12 @@ const MAINNET_USDB: &str =
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
 //              Add an epoch close deadline failsafe for deferred transactions.
-// Version 131: Allow random beacon DKG to complete after its timeout.
+// Version 131: Enable sharing transaction deny configs between validators via consensus.
+//              Enable tx_context_restrictions_verifier: reject system-package
+//              function signatures with `&mut TxContext` + any `&mut _` return
+//              that have no non-`TxContext` `&mut U` parameter.
+// Version 132: Enable defer_owned_object_double_spend on devnet.
+//              Allow random beacon DKG to complete after its timeout.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1024,6 +1029,15 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     allow_references_in_ptbs: bool,
 
+    // If true, the tx_context_restrictions_verifier pass runs at Move module
+    // publish time and rejects system-package signatures with `&mut TxContext`
+    // + any `&mut _` return that have no non-`TxContext` `&mut U` parameter.
+    // User packages are exempt: they can express the same shape through
+    // generic instantiation, so PTB arity and auto-injection checks are the
+    // safety mechanism there.
+    #[serde(skip_serializing_if = "is_false")]
+    framework_tx_context_mut_restrictions: bool,
+
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
@@ -1118,6 +1132,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     defer_unpaid_amplification: bool,
 
+    // If true, defer transactions that won an owned object lock when other transactions
+    // in the same commit attempted to lock the same object (double-spend attempt).
+    #[serde(skip_serializing_if = "is_false")]
+    defer_owned_object_double_spend: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
 
@@ -1165,6 +1184,10 @@ struct FeatureFlags {
     // runs but a violation panics so unexpected violations surface during rollout.
     #[serde(skip_serializing_if = "is_false")]
     enforce_address_balance_change_invariant: bool,
+
+    // If true, validators may broadcast `UpdateTransactionDenyConfig` consensus messages.
+    #[serde(skip_serializing_if = "is_false")]
+    share_transaction_deny_config_in_consensus: bool,
 
     // Enables more granular post-execution checks.
     #[serde(skip_serializing_if = "is_false")]
@@ -4535,6 +4558,13 @@ impl ProtocolConfig {
                     }
                 }
                 131 => {
+                    cfg.feature_flags.share_transaction_deny_config_in_consensus = true;
+                    cfg.feature_flags.framework_tx_context_mut_restrictions = true;
+                }
+                132 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.defer_owned_object_double_spend = true;
+                    }
                     cfg.feature_flags.allow_dkg_completion_after_timeout = true;
                 }
                 // Use this template when making changes:
@@ -4647,6 +4677,7 @@ impl ProtocolConfig {
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
             switch_to_regex_reference_safety: false,
+            framework_tx_context_mut_restrictions: self.framework_tx_context_mut_restrictions(),
             disallow_jump_orphans: self.disallow_jump_orphans(),
         }
     }

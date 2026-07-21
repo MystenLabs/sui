@@ -12,6 +12,7 @@ use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::global_state_hash::GlobalStateHash;
+use sui_types::messages_consensus::SharedTransactionDenyConfig;
 use sui_types::storage::MarkerValue;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBBatch, DBMap, MetricConf};
@@ -165,6 +166,16 @@ pub struct AuthorityPerpetualTables {
     /// IMPORTANT: TideHunter keyspaces are order-sensitive once written to disk.
     /// Keep new keyspaces append-only to preserve compatibility with existing DBs.
     pub(crate) highest_committed_checkpoint: DBMap<(), CheckpointSequenceNumber>,
+
+    /// Most recent `UpdateTransactionDenyConfig` consensus message accepted from each
+    /// allowlisted peer authority. Persisted across epochs so we can rebuild the
+    /// merged effective deny config after a node restart. Pruned at epoch transitions
+    /// when a peer is no longer in the active committee.
+    pub(crate) shared_transaction_deny_configs: DBMap<AuthorityName, SharedTransactionDenyConfig>,
+
+    /// Singleton: the highest generation this node has ever broadcast in an
+    /// `UpdateTransactionDenyConfig` message.
+    pub(crate) last_broadcast_deny_generation: DBMap<(), u64>,
 }
 
 impl AuthorityPerpetualTables {
@@ -435,6 +446,17 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "highest_committed_checkpoint".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
+            (
+                "shared_transaction_deny_configs".to_string(),
+                // AuthorityName encodes to 104 bytes via BCS (8-byte tuple-struct
+                // prefix + 96-byte BLS12381 pubkey), matching authority_capabilities_v2.
+                // Tiny table (one row per allowlisted committee member).
+                ThConfig::new(104, 1, KeyType::uniform(1)),
+            ),
+            (
+                "last_broadcast_deny_generation".to_string(),
                 ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
         ];

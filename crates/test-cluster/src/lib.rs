@@ -1098,6 +1098,7 @@ impl TestCluster {
             };
 
             let mut consensus_position = None;
+            let mut rejected_transient = false;
             for result in submit_response.results {
                 match result {
                     SubmitTxResult::Executed { details, .. } => {
@@ -1107,6 +1108,13 @@ impl TestCluster {
                         return Ok((data.effects, events));
                     }
                     SubmitTxResult::Rejected { error } => {
+                        // Mirror the production `TransactionDriver`: a rejection with a
+                        // retriable category (e.g. validator overloaded) is resubmitted.
+                        if error.as_inner().categorize().is_submission_retriable() {
+                            last_transient_err = Some(error.into());
+                            rejected_transient = true;
+                            break;
+                        }
                         return Err(error.into());
                     }
                     SubmitTxResult::Submitted {
@@ -1115,6 +1123,9 @@ impl TestCluster {
                         consensus_position = Some(position);
                     }
                 }
+            }
+            if rejected_transient {
+                continue;
             }
 
             let consensus_position = consensus_position
@@ -1135,16 +1146,34 @@ impl TestCluster {
                     let events = data.events.unwrap_or_default();
                     return Ok((data.effects, events));
                 }
-                Ok(WaitForEffectsResponse::Rejected { error }) => {
-                    return Err(error
-                        .unwrap_or_else(|| {
+                Ok(WaitForEffectsResponse::Rejected { error }) => match error {
+                    // The validator cast a reject vote with a definite cause (e.g. an
+                    // invalid transaction); surface it unless the category is retriable.
+                    Some(err) if !err.as_inner().categorize().is_submission_retriable() => {
+                        return Err(err.into());
+                    }
+                    Some(err) => {
+                        last_transient_err = Some(err.into());
+                    }
+                    // No reject vote was cast locally: the position was indirectly
+                    // rejected at commit time because finalization did not complete
+                    // within INDIRECT_REJECT_DEPTH leader rounds — typically when the
+                    // proposer's block disseminates slowly right after reconfiguration.
+                    // The transaction itself may be perfectly valid, so mirror the
+                    // production `TransactionDriver` (`RejectedByConsensus` maps to the
+                    // retriable `ErrorCategory::Aborted`) and resubmit for a fresh
+                    // position.
+                    None => {
+                        last_transient_err = Some(
                             SuiErrorKind::GenericAuthorityError {
-                                error: "Transaction was rejected".to_string(),
+                                error: "Transaction was rejected by consensus without a \
+                                    reject vote; resubmitting"
+                                    .to_string(),
                             }
-                            .into()
-                        })
-                        .into());
-                }
+                            .into(),
+                        );
+                    }
+                },
                 // The position we waited on was garbage-collected before being sequenced; resubmit
                 // to obtain a fresh position.
                 Ok(WaitForEffectsResponse::Expired { .. }) => {
@@ -1320,6 +1349,9 @@ pub struct TestClusterBuilder {
 
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
 
+    peer_deny_sync_config_callback:
+        Option<sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback>,
+
     #[cfg(msim)]
     inject_synthetic_execution_time: bool,
 }
@@ -1365,6 +1397,7 @@ impl TestClusterBuilder {
             execution_time_observer_config: None,
             validator_observer_config: None,
             state_sync_config: None,
+            peer_deny_sync_config_callback: None,
             #[cfg(msim)]
             inject_synthetic_execution_time: false,
         }
@@ -1372,6 +1405,18 @@ impl TestClusterBuilder {
 
     pub fn with_state_sync_config(mut self, config: sui_config::p2p::StateSyncConfig) -> Self {
         self.state_sync_config = Some(config);
+        self
+    }
+
+    /// Per-validator hook for `peer_deny_sync_config`. The closure receives this
+    /// validator's authority name and the slice of all genesis-committee authority
+    /// names, so callers can compute an allowlist that references peers (e.g.
+    /// "trust everyone but myself").
+    pub fn with_peer_deny_sync_config_per_validator(
+        mut self,
+        f: sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback,
+    ) -> Self {
+        self.peer_deny_sync_config_callback = Some(f);
         self
     }
 
@@ -1753,6 +1798,10 @@ impl TestClusterBuilder {
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {
             builder = builder.with_state_sync_config(state_sync_config);
+        }
+
+        if let Some(cb) = self.peer_deny_sync_config_callback.clone() {
+            builder = builder.with_peer_deny_sync_config_per_validator(cb);
         }
 
         if self.disable_fullnode_pruning {

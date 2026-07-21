@@ -1769,36 +1769,41 @@ mod test {
 
         let target = test_cluster.swarm.validator_nodes().next().unwrap().name();
 
-        let mut load_config = SimulatedLoadConfig::default();
-        load_config.composite_weight = 0;
-
-        // Background load so certified checkpoints carrying user transactions accumulate while the
-        // target is down and during its catch-up.
-        let load_task = tokio::spawn({
-            let test_cluster = test_cluster.clone();
-            async move {
-                test_simulated_load_with_test_config(
-                    test_cluster,
-                    60,
-                    load_config,
-                    None,
-                    None,
-                    None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
-                    false,
-                )
-                .await;
-            }
-        });
-
-        // Let certified checkpoints accumulate, then stop the target so it falls behind the tip.
-        tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+        // Stop the target so it falls behind the tip.
         test_cluster
             .swarm
             .validator_nodes()
             .find(|validator| validator.name() == target)
             .unwrap()
             .stop();
-        tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+
+        // The fork injection skips system transactions, so the target's catch-up must
+        // re-execute a user transaction it has never executed. Land one to checkpoint
+        // finality: submitted after the stop, the target cannot have executed it. Retrying
+        // the same signed transaction on transient failures cannot equivocate the gas object.
+        let tx_data = test_cluster
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1), test_cluster.get_address_1())
+            .build();
+        let tx = test_cluster.sign_transaction(&tx_data).await;
+        while test_cluster
+            .wallet
+            .execute_transaction_may_fail(tx.clone())
+            .await
+            .is_err()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        // Wait for the epoch holding the transfer to close: a closed epoch can only be
+        // replayed through the checkpoint executor (peers tear down its consensus at
+        // reconfig), so the target's catch-up must re-execute the transfer there — and fork.
+        let finality_epoch = test_cluster
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.state().epoch_store_for_testing().epoch());
+        test_cluster.wait_for_epoch(Some(finality_epoch + 1)).await;
 
         // Arm the injection and kill hooks BEFORE restarting the target: its catch-up
         // re-execution can complete inside start()'s internal awaits, so arming afterwards
@@ -1873,7 +1878,6 @@ mod test {
 
         // Corrected binary: stop injecting forks.
         clear_fail_point("simulate_fork_during_execution");
-        load_task.abort();
 
         // Confirm it was a transaction fork: checkpoint_overrides (set only by the checkpoint/split-
         // brain failpoints) is empty even though the target forked.
@@ -2778,6 +2782,7 @@ mod test {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_split_checkpoints_in_consensus_handler_for_testing(true);
             config.set_merge_randomness_into_checkpoint_for_testing(true);
+            config.set_timestamp_based_epoch_close_for_testing(true);
             config
         });
 

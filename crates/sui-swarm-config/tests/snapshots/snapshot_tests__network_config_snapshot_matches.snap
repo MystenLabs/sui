@@ -54,6 +54,9 @@ validator_configs:
       force-disable-state-consistency-check: false
       enable-secondary-index-checks: false
     transaction-deny-config:
+      object-deny-list: []
+      package-deny-list: []
+      address-deny-list: []
       package-publish-disabled: false
       package-upgrade-disabled: false
       shared-object-disabled: false
@@ -62,6 +65,9 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    peer-deny-sync-config:
+      broadcast-on-startup: false
+      broadcast-on-epoch-change: false
     dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
@@ -233,6 +239,9 @@ validator_configs:
       force-disable-state-consistency-check: false
       enable-secondary-index-checks: false
     transaction-deny-config:
+      object-deny-list: []
+      package-deny-list: []
+      address-deny-list: []
       package-publish-disabled: false
       package-upgrade-disabled: false
       shared-object-disabled: false
@@ -241,6 +250,9 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    peer-deny-sync-config:
+      broadcast-on-startup: false
+      broadcast-on-epoch-change: false
     dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
@@ -412,6 +424,9 @@ validator_configs:
       force-disable-state-consistency-check: false
       enable-secondary-index-checks: false
     transaction-deny-config:
+      object-deny-list: []
+      package-deny-list: []
+      address-deny-list: []
       package-publish-disabled: false
       package-upgrade-disabled: false
       shared-object-disabled: false
@@ -420,6 +435,9 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    peer-deny-sync-config:
+      broadcast-on-startup: false
+      broadcast-on-epoch-change: false
     dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
@@ -591,6 +609,9 @@ validator_configs:
       force-disable-state-consistency-check: false
       enable-secondary-index-checks: false
     transaction-deny-config:
+      object-deny-list: []
+      package-deny-list: []
+      address-deny-list: []
       package-publish-disabled: false
       package-upgrade-disabled: false
       shared-object-disabled: false
@@ -599,6 +620,9 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    peer-deny-sync-config:
+      broadcast-on-startup: false
+      broadcast-on-epoch-change: false
     dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
@@ -770,6 +794,9 @@ validator_configs:
       force-disable-state-consistency-check: false
       enable-secondary-index-checks: false
     transaction-deny-config:
+      object-deny-list: []
+      package-deny-list: []
+      address-deny-list: []
       package-publish-disabled: false
       package-upgrade-disabled: false
       shared-object-disabled: false
@@ -778,6 +805,9 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    peer-deny-sync-config:
+      broadcast-on-startup: false
+      broadcast-on-epoch-change: false
     dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
@@ -949,6 +979,9 @@ validator_configs:
       force-disable-state-consistency-check: false
       enable-secondary-index-checks: false
     transaction-deny-config:
+      object-deny-list: []
+      package-deny-list: []
+      address-deny-list: []
       package-publish-disabled: false
       package-upgrade-disabled: false
       shared-object-disabled: false
@@ -957,6 +990,9 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    peer-deny-sync-config:
+      broadcast-on-startup: false
+      broadcast-on-epoch-change: false
     dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
@@ -1128,6 +1164,9 @@ validator_configs:
       force-disable-state-consistency-check: false
       enable-secondary-index-checks: false
     transaction-deny-config:
+      object-deny-list: []
+      package-deny-list: []
+      address-deny-list: []
       package-publish-disabled: false
       package-upgrade-disabled: false
       shared-object-disabled: false
@@ -1136,6 +1175,9 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    peer-deny-sync-config:
+      broadcast-on-startup: false
+      broadcast-on-epoch-change: false
     dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}

@@ -20,6 +20,8 @@
 //! end: when the subscription actor drops a subscriber (lag or backpressure),
 //! the stream simply closes and the client reconnects, backfilling via List.
 
+use std::time::Instant;
+
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
@@ -38,6 +40,7 @@ use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
 use sui_rpc_cursor::Position;
 use sui_types::balance_change::derive_balance_changes_2;
+use sui_types::effects::TransactionEffectsAPI;
 use tokio::sync::mpsc;
 use tonic::codegen::BoxStream;
 
@@ -50,6 +53,8 @@ use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::merge_covered_checkpoint_bound;
+use crate::metrics::SubscriptionFrameKind;
+use crate::metrics::SubscriptionStreamMetrics;
 use crate::read_mask_defaults;
 use crate::subscription::SubscriptionKind;
 use crate::subscription::SubscriptionSpec;
@@ -67,7 +72,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::CHECKPOINT,
         )?;
         let query = compile_transaction_filter(self, request.filter.as_ref())?;
-        let (mut receiver, payload_messages) = register(
+        let (mut receiver, stream_metrics) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Checkpoints,
@@ -79,19 +84,23 @@ impl SubscriptionService for RpcService {
         let response = Box::pin(async_stream::stream! {
             while let Some(update) = receiver.recv().await {
                 let mut response = SubscribeCheckpointsResponse::default();
-                match update {
+                let frame_kind = match update {
                     SubscriptionUpdate::Matched(matched) => {
                         let cp = matched.checkpoint.summary.sequence_number;
                         response.cursor = Some(cp);
                         response.checkpoint =
                             Some(render_checkpoint_message(&matched.checkpoint, &read_mask));
-                        payload_messages.inc();
+                        SubscriptionFrameKind::Payload
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, .. } => {
                         response.cursor = Some(cp);
+                        SubscriptionFrameKind::Watermark
                     }
-                }
+                };
+                stream_metrics.observe_frame(&response, frame_kind);
+                let yielded_at = Instant::now();
                 yield Ok(response);
+                stream_metrics.observe_yield_wait(yielded_at.elapsed());
             }
         });
 
@@ -108,7 +117,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::TRANSACTION,
         )?;
         let query = compile_transaction_filter(self, request.filter.as_ref())?;
-        let (mut receiver, payload_messages) = register(
+        let (mut receiver, stream_metrics) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Transactions,
@@ -158,8 +167,13 @@ impl SubscriptionService for RpcService {
                                 },
                                 boundary,
                             ));
-                            payload_messages.inc();
+                            stream_metrics.observe_frame(
+                                &response,
+                                SubscriptionFrameKind::Payload,
+                            );
+                            let yielded_at = Instant::now();
                             yield Ok(response);
+                            stream_metrics.observe_yield_wait(yielded_at.elapsed());
                         }
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, tx_hi } => {
@@ -180,7 +194,13 @@ impl SubscriptionService for RpcService {
                             },
                             boundary,
                         ));
+                        stream_metrics.observe_frame(
+                            &response,
+                            SubscriptionFrameKind::Watermark,
+                        );
+                        let yielded_at = Instant::now();
                         yield Ok(response);
+                        stream_metrics.observe_yield_wait(yielded_at.elapsed());
                     }
                 }
             }
@@ -199,7 +219,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::EVENT,
         )?;
         let query = compile_event_filter(self, request.filter.as_ref())?;
-        let (mut receiver, payload_messages) = register(
+        let (mut receiver, stream_metrics) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Events,
@@ -248,7 +268,7 @@ impl SubscriptionService for RpcService {
                             }
                             if read_mask.contains(ProtoEvent::TRANSACTION_DIGEST_FIELD.name) {
                                 proto_event.transaction_digest =
-                                    Some(tx.transaction.digest().to_string());
+                                    Some(tx.effects.transaction_digest().base58_encode());
                             }
                             if read_mask.contains(ProtoEvent::TRANSACTION_INDEX_FIELD.name) {
                                 proto_event.transaction_index = Some(tx_idx as u64);
@@ -266,8 +286,13 @@ impl SubscriptionService for RpcService {
                                 },
                                 boundary,
                             ));
-                            payload_messages.inc();
+                            stream_metrics.observe_frame(
+                                &response,
+                                SubscriptionFrameKind::Payload,
+                            );
+                            let yielded_at = Instant::now();
                             yield Ok(response);
+                            stream_metrics.observe_yield_wait(yielded_at.elapsed());
                         }
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, tx_hi } => {
@@ -286,7 +311,13 @@ impl SubscriptionService for RpcService {
                             },
                             boundary,
                         ));
+                        stream_metrics.observe_frame(
+                            &response,
+                            SubscriptionFrameKind::Watermark,
+                        );
+                        let yielded_at = Instant::now();
                         yield Ok(response);
+                        stream_metrics.observe_yield_wait(yielded_at.elapsed());
                     }
                 }
             }
@@ -377,7 +408,13 @@ fn compile_event_filter(
 async fn register(
     service: &RpcService,
     spec: SubscriptionSpec,
-) -> Result<(mpsc::Receiver<SubscriptionUpdate>, prometheus::IntCounter), tonic::Status> {
+) -> Result<
+    (
+        mpsc::Receiver<SubscriptionUpdate>,
+        SubscriptionStreamMetrics,
+    ),
+    tonic::Status,
+> {
     let handle = service
         .subscription_service_handle
         .as_ref()
@@ -387,6 +424,6 @@ async fn register(
         .register_subscription(spec)
         .await
         .ok_or_else(|| tonic::Status::unavailable("too many existing subscriptions"))?;
-    let payload_messages = handle.payload_message_counter(kind);
-    Ok((receiver, payload_messages))
+    let stream_metrics = handle.stream_metrics(kind);
+    Ok((receiver, stream_metrics))
 }

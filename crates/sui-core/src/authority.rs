@@ -20,6 +20,7 @@ use crate::gasless_rate_limiter::ConsensusGaslessCounter;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
+use crate::transaction_deny_config_manager::TransactionDenyConfigManager;
 use crate::transaction_outputs::TransactionOutputs;
 use arc_swap::{ArcSwap, ArcSwapOption, Guard};
 use async_trait::async_trait;
@@ -67,6 +68,7 @@ use std::{
 };
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
@@ -335,6 +337,9 @@ pub struct AuthorityMetrics {
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
+    pub consensus_handler_double_spend_deferrals: IntCounter,
+    pub consensus_handler_double_spend_conflict_count: HistogramVec,
+    pub consensus_handler_double_spend_conflicting_authority: IntCounterVec,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_dropped_transactions: IntCounterVec,
     pub consensus_handler_max_object_costs: IntGaugeVec,
@@ -690,6 +695,26 @@ impl AuthorityMetrics {
                 "Number of transactions deferred due to unpaid consensus amplification",
                 registry,
             ).unwrap(),
+            consensus_handler_double_spend_deferrals: register_int_counter_with_registry!(
+                "consensus_handler_double_spend_deferrals",
+                "Number of transactions deferred due to owned object double-spend contention",
+                registry,
+            ).unwrap(),
+            consensus_handler_double_spend_conflict_count: register_histogram_vec_with_registry!(
+                "consensus_handler_double_spend_conflict_count",
+                "Number of conflicting transactions per double-spend winner, by object type",
+                &["object_type"],
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            consensus_handler_double_spend_conflicting_authority: register_int_counter_vec_with_registry!(
+                "consensus_handler_double_spend_conflicting_authority",
+                "Number of transactions involved in owned object double-spend contention, by the \
+                 block authority that sequenced the transaction and its role in the conflict \
+                 (winner = won the lock, loser = dropped)",
+                &["authority", "role"],
+                registry,
+            ).unwrap(),
             consensus_handler_cancelled_transactions: register_int_counter_with_registry!(
                 "consensus_handler_cancelled_transactions",
                 "Number of transactions cancelled by consensus handler",
@@ -1018,6 +1043,10 @@ pub struct AuthorityState {
     /// Limits the number of concurrent post-processing tasks to avoid overwhelming
     /// the blocking thread pool. Defaults to the number of available CPUs.
     post_processing_semaphore: Arc<tokio::sync::Semaphore>,
+
+    /// Created once per process, then re-attached to each new `AuthorityPerEpochStore`
+    /// at reconfiguration.
+    transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1071,12 +1100,16 @@ impl AuthorityState {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
         // - the loads are cached anyway
+        let deny_config = self
+            .transaction_deny_config_manager
+            .effective_config()
+            .load();
         sui_transaction_checks::deny::check_transaction_for_signing(
             tx_data,
             tx_signatures,
             input_object_kinds,
             receiving_objects_refs,
-            &self.config.transaction_deny_config,
+            &deny_config,
             self.get_backing_package_store().as_ref(),
         )?;
 
@@ -2386,7 +2419,9 @@ impl AuthorityState {
         Option<ObjectID>,
     )> {
         // Route through `simulate_transaction` -- `dry-exec` matches
-        // `simulate_transaction(_, TransactionChecks::Enabled, _)`
+        // `simulate_transaction(_, TransactionChecks::Enabled, _)`. The deny-config
+        // check runs inside `simulate_transaction` via `pre_object_load_checks`, so we
+        // don't need to invoke it directly here.
         let sim = self.simulate_transaction(
             transaction.clone(),
             TransactionChecks::Enabled,
@@ -2829,6 +2864,8 @@ impl AuthorityState {
         // Route through `simulate_transaction`:
         //   skip_checks = true  → TransactionChecks::Disabled
         //   skip_checks = false → TransactionChecks::Enabled
+        // The deny-config check runs inside `simulate_transaction` via
+        // `pre_object_load_checks`, so we don't invoke it directly here.
         let checks = if skip_checks {
             TransactionChecks::Disabled
         } else {
@@ -3737,6 +3774,26 @@ impl AuthorityState {
 
         let object_funds_checker_metrics =
             Arc::new(ObjectFundsCheckerMetrics::new(prometheus_registry));
+
+        let transaction_deny_config_manager = TransactionDenyConfigManager::new(
+            name,
+            config.transaction_deny_config.clone(),
+            config.peer_deny_sync_config.clone(),
+            epoch_store.committee().clone(),
+            store.perpetual_tables.clone(),
+            prometheus_registry,
+        )
+        .expect("Failed to initialize TransactionDenyConfigManager");
+        // Drop any cached entries from peers no longer in the active committee.
+        if let Err(e) =
+            transaction_deny_config_manager.update_for_committee(epoch_store.committee().clone())
+        {
+            warn!(
+                "Initial update_for_committee failed during AuthorityState init: {:?}",
+                e
+            );
+        }
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3767,6 +3824,7 @@ impl AuthorityState {
             object_funds_checker_metrics,
             pending_post_processing: Arc::new(DashMap::new()),
             post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(num_cpus::get())),
+            transaction_deny_config_manager,
         });
         state.init_object_funds_checker().await;
 
@@ -4065,22 +4123,11 @@ impl AuthorityState {
         // Terminate all epoch-specific tasks (those started with within_alive_epoch).
         cur_epoch_store.epoch_terminated().await;
 
-        // Safe to being reconfiguration now. No transactions are being executed,
-        // and no epoch-specific tasks are running.
+        // Record metrics in case the node has not observed epoch close in consensus.
+        cur_epoch_store.record_epoch_close_time_once();
 
-        {
-            let state = cur_epoch_store.get_reconfig_state_write_lock_guard();
-            if state.should_accept_user_certs() {
-                // Need to change this so that consensus adapter do not accept certificates from user.
-                // This can happen if our local validator did not initiate epoch change locally,
-                // but 2f+1 nodes already concluded the epoch.
-                //
-                // This lock is essentially a barrier for
-                // `epoch_store.pending_consensus_certificates` table we are reading on the line after this block
-                cur_epoch_store.close_user_certs(state);
-            }
-            // lock is dropped here
-        }
+        // Safe to begin reconfiguration now. No transactions are being executed,
+        // and no epoch-specific tasks are running.
 
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
@@ -4125,6 +4172,19 @@ impl AuthorityState {
         self.execution_scheduler
             .reconfigure(&new_epoch_store, self.get_account_funds_read());
         self.init_object_funds_checker().await;
+
+        // Update the committee and drop entries for peers no longer in it before tx
+        // processing resumes for the new epoch.
+        if let Err(e) = self
+            .transaction_deny_config_manager
+            .update_for_committee(new_epoch_store.committee().clone())
+        {
+            warn!(
+                "TransactionDenyConfigManager update_for_committee failed at reconfigure: {:?}",
+                e
+            );
+        }
+
         *execution_lock = new_epoch;
 
         self.notify_epoch(new_epoch);
@@ -4503,6 +4563,16 @@ impl AuthorityState {
     // Load the epoch store, should be used in tests only.
     pub fn epoch_store_for_testing(&self) -> Guard<Arc<AuthorityPerEpochStore>> {
         self.load_epoch_store_one_call_per_task()
+    }
+
+    pub fn transaction_deny_config_manager(&self) -> &Arc<TransactionDenyConfigManager> {
+        &self.transaction_deny_config_manager
+    }
+
+    /// The operator-configured local `TransactionDenyConfig` (before any peer
+    /// recommendations are merged).
+    pub fn local_transaction_deny_config(&self) -> &Arc<TransactionDenyConfig> {
+        self.transaction_deny_config_manager.local()
     }
 
     pub fn clone_committee_for_testing(&self) -> Committee {
