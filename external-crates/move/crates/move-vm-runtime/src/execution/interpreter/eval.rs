@@ -557,9 +557,6 @@ fn op_step_impl(
         }
         Bytecode::PackGeneric(struct_inst_ptr) => {
             let field_count = struct_inst_ptr.field_count;
-            // NB: `check_struct_instantiation` checks all of `type_size`, `type_depth`, and
-            // `value_depth` (a value of this type is created right here) by solving the site's
-            // precomputed formulas; the instantiated type is never built.
             run_context.vtables.check_struct_instantiation(
                 struct_inst_ptr,
                 state.call_stack.current_frame.ty_arg_sizes(),
@@ -745,9 +742,7 @@ fn op_step_impl(
                 state.call_stack.current_frame.ty_arg_types(),
                 state.call_stack.current_frame.ty_arg_sizes(),
             )?;
-            // A vector value of this element type is created here: check its `value_depth`,
-            // predicted from the site's term and the frame-cached argument sizes rather than by
-            // walking the instantiated type.
+            // Check value depth via type
             run_context.vtables.check_instantiated_value_depth(
                 ty_ptr,
                 state.call_stack.current_frame.ty_arg_sizes(),
@@ -855,9 +850,6 @@ fn op_step_impl(
         Bytecode::PackVariantGeneric(vinst_ptr) => {
             let variant = &vinst_ptr.variant;
             let (field_count, variant_tag) = (variant.field_count(), variant.variant_tag);
-            // NB: `check_variant_instantiation` checks all of `type_size`, `type_depth`, and
-            // `value_depth` (a value of this type is created right here) by solving the site's
-            // precomputed formulas; the instantiated type is never built.
             run_context.vtables.check_variant_instantiation(
                 vinst_ptr,
                 state.call_stack.current_frame.ty_arg_sizes(),
