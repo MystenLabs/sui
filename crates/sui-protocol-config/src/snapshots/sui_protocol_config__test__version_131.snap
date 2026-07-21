@@ -316,6 +316,7 @@ event_emit_auth_stream_cost: 52
 object_borrow_uid_cost_base: 52
 object_delete_impl_cost_base: 52
 object_record_new_uid_cost_base: 52
+object_record_new_uid_from_hash_cost_base: 1
 transfer_transfer_internal_cost_base: 52
 transfer_party_transfer_internal_cost_base: 52
 transfer_freeze_object_cost_base: 52
