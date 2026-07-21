@@ -99,7 +99,7 @@ The cheat sheet highlights common Sui CLI commands.
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui client balance`</td>
-			<td class="w-1/3">Show total SUI balance for the active address</td>
+			<td class="w-1/3">List all coin balances for the active address</td>
 		</tr>
 	</tbody>
 </table>
@@ -201,19 +201,19 @@ The cheat sheet highlights common Sui CLI commands.
 			<td class="w-1/3">Simulate publish to estimate gas cost without executing</td>
 		</tr>
 		<tr>
-			<td class="w-2/3">`sui client publish --serialize-output`</td>
-			<td class="w-1/3">Output base64 transaction bytes for external or multisig signing</td>
+			<td class="w-2/3">`sui client publish --serialize-unsigned-transaction`</td>
+			<td class="w-1/3">Output unsigned base64 transaction bytes for external or multisig signing</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui client test-publish`</td>
-			<td class="w-1/3">Publish to an ephemeral environment for testing without persisting state</td>
+			<td class="w-1/3">Publish for testing with temporary address handling (transaction still lands on-chain)</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui client upgrade \`<br/>&nbsp;&nbsp;`--upgrade-capability CAP_ID`</td>
 			<td class="w-1/3">Upgrade a previously published package</td>
 		</tr>
 		<tr>
-			<td class="w-2/3">`sui client verify-source \`<br/>&nbsp;&nbsp;`--package-path PATH PACKAGE_ID`</td>
+			<td class="w-2/3">`sui client verify-source PACKAGE_PATH`</td>
 			<td class="w-1/3">Verify on-chain bytecode matches local source code</td>
 		</tr>
 	</tbody>
@@ -232,10 +232,6 @@ The cheat sheet highlights common Sui CLI commands.
 		<tr>
 			<td class="w-2/3">`sui client objects`</td>
 			<td class="w-1/3">List all objects owned by the active address</td>
-		</tr>
-		<tr>
-			<td class="w-2/3">`sui client objects --type TYPE`</td>
-			<td class="w-1/3">List owned objects filtered by type (for example, `0x2::package::UpgradeCap`)</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui client object OBJECT_ID`</td>
