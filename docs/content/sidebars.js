@@ -524,8 +524,29 @@ export default {
         'onchain-finance/kiosk/kiosk-apps',
       ],
     },
-    'onchain-finance/payment-kit',
-	'onchain-finance/payment-intents',
+    {
+      type: 'category',
+      label: 'Payments',
+      link: { type: 'doc', id: 'onchain-finance/payments' },
+      items: [
+        'onchain-finance/choose-payments-model',
+        'onchain-finance/payment-kit',
+        'onchain-finance/payment-intents',
+        'onchain-finance/gas-station',
+        'onchain-finance/p2p-reference-app',
+        {
+          type: 'category',
+          label: 'Agentic Payments',
+          link: { type: 'doc', id: 'onchain-finance/agentic-payments/index' },
+          items: [
+            'onchain-finance/agentic-payments/agent-wallet-setup',
+            'onchain-finance/agentic-payments/spending-policies',
+            'onchain-finance/agentic-payments/settlement-verification',
+            'onchain-finance/agentic-payments/production-hardening',
+          ],
+        },
+      ],
+    },
   ],
 
 suiStackSidebar: [
