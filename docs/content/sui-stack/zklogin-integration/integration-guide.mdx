@@ -101,7 +101,8 @@ import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const FULLNODE_URL = 'https://fullnode.testnet.sui.io:443';
 const suiClient = new SuiGrpcClient({ baseUrl: FULLNODE_URL, network: 'testnet' });
-const { epoch } = await suiClient.core.getLatestSuiSystemState();
+const { systemState } = await suiClient.core.getCurrentSystemState();
+const { epoch } = systemState;
 
 const maxEpoch = Number(epoch) + 2; // ephemeral key valid for 2 epochs from now
 const ephemeralKeyPair = new Ed25519Keypair();
