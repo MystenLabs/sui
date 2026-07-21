@@ -247,26 +247,38 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
         .rng(&mut rng)
         .deterministic_committee_size(NonZeroUsize::MIN)
         .build();
-    let (mut store, _runtime) = test_data_store(temp.path());
-    let written: BTreeMap<ObjectID, Object> = config
-        .genesis
-        .objects()
-        .iter()
-        .map(|object| (object.id(), object.clone()))
-        .collect();
-    store.update_objects(written, vec![]);
 
-    let (checkpoint, contents) = build_checkpoint(5);
-    store.insert_checkpoint(checkpoint.clone());
-    store.insert_checkpoint_contents(contents);
+    // Session 1: persist genesis objects and an advanced local tip, then drop
+    // every handle so the data dir can be reopened like a real restart.
+    let tip = {
+        let (mut store, _runtime) = test_data_store(temp.path());
+        let written: BTreeMap<ObjectID, Object> = config
+            .genesis
+            .objects()
+            .iter()
+            .map(|object| (object.id(), object.clone()))
+            .collect();
+        store.update_objects(written, vec![]);
+
+        let (checkpoint, contents) = build_checkpoint(5);
+        store.insert_checkpoint(checkpoint.clone());
+        store.insert_checkpoint_contents(contents);
+        checkpoint
+    };
+
+    // Session 2: resume from the reopened store. The production base-checkpoint
+    // selection must pick the local tip, not the fork point — re-seeding from
+    // the fork point would rebuild an already-persisted sequence number and
+    // panic the seal.
+    let (store, _runtime) = test_data_store(temp.path());
+    let base = crate::startup::resume_base_checkpoint(&store)
+        .expect("resume base checkpoint should resolve");
+    assert_eq!(base.data().sequence_number, tip.data().sequence_number);
 
     let keystore = KeyStore::from_network_config(&config);
     let mut sim = Simulacrum::new_from_custom_state(
         keystore,
-        store
-            .get_highest_verified_checkpoint()
-            .expect("highest checkpoint lookup should not fail")
-            .expect("highest checkpoint should exist"),
+        base.clone(),
         config.genesis.sui_system_object(),
         &config,
         store,
@@ -274,8 +286,14 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
     );
 
     let next = sim.create_checkpoint();
-    assert_eq!(
-        next.data().sequence_number,
-        checkpoint.data().sequence_number + 1,
+    assert_eq!(next.data().sequence_number, tip.data().sequence_number + 1,);
+    assert_eq!(next.data().previous_digest, Some(*base.digest()));
+    assert!(
+        ReadStore::get_checkpoint_by_sequence_number(
+            sim.store().rpc_store().reader(),
+            next.data().sequence_number,
+        )
+        .is_some(),
+        "resumed checkpoint should seal into the rpc-store",
     );
 }
