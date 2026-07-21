@@ -38,7 +38,7 @@ use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
 use crate::rpc::reader::ForkRpcReader;
 use crate::runtime::ForkRuntime;
-use crate::store::DataStore;
+use crate::store::ForkStore;
 
 /// In-process gRPC harness: builds a fresh Simulacrum from a genesis
 /// `NetworkConfig`, wires up the subscription broker, and starts a tonic
@@ -72,16 +72,16 @@ impl ServerHarness {
             forked_at_checkpoint,
             chain_identifier,
         )?;
-        let mut data_store =
-            DataStore::new_for_testing(temp.path().to_path_buf(), runtime.fork_rpc_store());
-        data_store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
+        let mut store =
+            ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
         let written: BTreeMap<ObjectID, Object> = config
             .genesis
             .objects()
             .iter()
             .map(|o| (o.id(), o.clone()))
             .collect();
-        data_store.update_objects(written, vec![]);
+        store.update_objects(written, vec![]);
 
         let keystore = KeyStore::from_network_config(&config);
         let sim = Simulacrum::new_from_custom_state(
@@ -89,7 +89,7 @@ impl ServerHarness {
             genesis_checkpoint,
             config.genesis.sui_system_object(),
             &config,
-            data_store.clone(),
+            store.clone(),
             rng,
         );
 
@@ -99,8 +99,7 @@ impl ServerHarness {
 
         let context = Arc::new(Context::new(sim, checkpoint_sender));
 
-        let reader: Arc<dyn RpcStateReader> =
-            Arc::new(ForkRpcReader::new(runtime.reader(), data_store));
+        let reader: Arc<dyn RpcStateReader> = Arc::new(ForkRpcReader::new(runtime.reader(), store));
         let mut service = RpcService::new(reader);
         service.with_server_version(ServerVersion::new("sui-fork", "test"));
         service.with_subscription_service(subscription_handle);

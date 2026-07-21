@@ -34,11 +34,11 @@ gRPC clients ──► RpcService (sui-rpc-api)
                    ▼                              ▼
              ForkRpcReader              ForkedTransactionExecutor
              /            \                       │
-   RpcStoreReader      DataStore ◄────── Context (publication lock,
+   RpcStoreReader      ForkStore ◄────── Context (publication lock,
    (stock, direct)      │                      indexer gating)
                         │                         │
                         │                     Simulacrum
-                        │              (SimulatorStore = DataStore)
+                        │              (SimulatorStore = ForkStore)
       ┌─────────────────┼──────────────────┐
       │ remote:         │ inventory:       │ pending:
       │ RemoteSource    │ Inventory-       │ PendingCheckpoint-
@@ -47,7 +47,7 @@ gRPC clients ──► RpcService (sui-rpc-api)
       │                 │  markers)        │
       └────────┬────────┴──────────────────┘
                ▼
-         ForkRpcStore ───── LiveState (own RocksDB:
+         LocalStore ───── LiveState (own RocksDB:
                │             ObjectID → Live(v) | Removed{v, kind})
                ▼
         rpc-store Db (RocksDB, stock RpcStoreSchema)
@@ -64,7 +64,7 @@ Key roles:
   fork-owned `LiveState`, `fork_metadata.json` validation, and the embedded
   indexer (started via `Context::new_with_runtime`; watched by
   `indexer_stopped()`).
-- **`DataStore`** (`store.rs`) is composition + orchestration: local-first
+- **`ForkStore`** (`store.rs`) is composition + orchestration: local-first
   reads with remote fallback and persistence, checkpoint sealing, and the
   `SimulatorStore` surface Simulacrum executes against. Its collaborators:
   - **`RemoteSource`** (`remote.rs`): every GraphQL round-trip and all
@@ -77,14 +77,14 @@ Key roles:
   - **`PendingCheckpointBuffer`** (`pending.rs`): in-memory staging for the
     in-flight checkpoint between Simulacrum's piecemeal inserts and the
     atomic seal.
-- **`ForkRpcStore`** (`fork_rpc_store.rs`) is fork-aware row access to the
+- **`LocalStore`** (`local_store.rs`) is fork-aware row access to the
   rpc-store plus the `LiveState` pointer table: object materialization,
   checkpoint/transaction persistence, and `get_latest_object_status`.
 - **`ForkRpcReader`** (`rpc/reader.rs`) implements the upstream RPC storage
-  traits: stock-reader first, `DataStore` on a miss (which may consult
+  traits: stock-reader first, `ForkStore` on a miss (which may consult
   GraphQL for pre-fork data). Note the deliberate cost: on a miss the
   rpc-store is read twice (once by the stock reader, once inside
-  `DataStore`) before any remote call — a cheap point-get, accepted for the
+  `ForkStore`) before any remote call — a cheap point-get, accepted for the
   simpler layering.
 
 ## Data-dir layout

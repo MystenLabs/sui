@@ -54,7 +54,7 @@ use crate::context::Context;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::reader::ForkRpcReader;
 use crate::runtime::ForkRuntime;
-use crate::store::DataStore;
+use crate::store::ForkStore;
 
 /// Test harness that sets up a Simulacrum and a transaction executor to run transactions. Each test
 /// creates a new harness to ensure isolation and a fresh state.
@@ -90,10 +90,10 @@ impl TestHarness {
             chain_identifier,
         )
         .expect("runtime should open");
-        // Initialize a DataStore with the genesis objects, so the Simulacrum can read them.
-        let mut data_store =
-            DataStore::new_for_testing(temp.path().to_path_buf(), runtime.fork_rpc_store());
-        data_store
+        // Initialize a ForkStore with the genesis objects, so the Simulacrum can read them.
+        let mut store =
+            ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        store
             .save_checkpoint(&genesis_checkpoint, &genesis_contents)
             .expect("genesis checkpoint should be saved");
         let written: BTreeMap<ObjectID, Object> = config
@@ -102,7 +102,7 @@ impl TestHarness {
             .iter()
             .map(|o| (o.id(), o.clone()))
             .collect();
-        data_store.update_objects(written, vec![]);
+        store.update_objects(written, vec![]);
 
         // Create a simulacrum object from the genesis config
         let keystore = KeyStore::from_network_config(&config);
@@ -111,7 +111,7 @@ impl TestHarness {
             config.genesis.checkpoint(),
             config.genesis.sui_system_object(),
             &config,
-            data_store.clone(),
+            store.clone(),
             rng,
         );
         let reference_gas_price = sim.reference_gas_price();
@@ -163,9 +163,9 @@ impl TestHarness {
             chain_identifier,
         )
         .expect("runtime should open");
-        let mut data_store =
-            DataStore::new_for_testing(temp.path().to_path_buf(), runtime.fork_rpc_store());
-        data_store
+        let mut store =
+            ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        store
             .save_checkpoint(&genesis_checkpoint, &genesis_contents)
             .expect("genesis checkpoint should be saved");
         let written: BTreeMap<ObjectID, Object> = config
@@ -174,7 +174,7 @@ impl TestHarness {
             .iter()
             .map(|o| (o.id(), o.clone()))
             .collect();
-        data_store.update_objects(written, vec![]);
+        store.update_objects(written, vec![]);
 
         let keystore = KeyStore::from_network_config(&config);
         let sim = Simulacrum::new_from_custom_state(
@@ -182,7 +182,7 @@ impl TestHarness {
             genesis_checkpoint,
             config.genesis.sui_system_object(),
             &config,
-            data_store.clone(),
+            store.clone(),
             rng,
         );
         let reference_gas_price = sim.reference_gas_price();
@@ -459,9 +459,9 @@ async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
         .expect("timed out waiting for indexed checkpoint broadcast")
         .expect("checkpoint channel closed");
 
-    let empty_store = DataStore::new_for_testing(
+    let empty_store = ForkStore::new_for_testing(
         harness.temp.path().join("empty-rpc-reader-store"),
-        harness.context.runtime().unwrap().fork_rpc_store(),
+        harness.context.runtime().unwrap().local_store(),
     );
     let reader = ForkRpcReader::new(harness.context.runtime().unwrap().reader(), empty_store);
 

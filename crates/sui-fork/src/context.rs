@@ -19,9 +19,9 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::ReadStore as _;
 
 use crate::runtime::ForkRuntime;
-use crate::store::DataStore;
+use crate::store::ForkStore;
 
-type ForkedSimulacrum = Simulacrum<OsRng, DataStore>;
+type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
 
 /// Metadata for a checkpoint created by the forked network.
 ///
@@ -54,7 +54,7 @@ impl Context {
     /// through [`Self::new_with_runtime`].
     #[cfg(test)]
     pub(crate) fn new(
-        simulacrum: Simulacrum<OsRng, DataStore>,
+        simulacrum: Simulacrum<OsRng, ForkStore>,
         checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
     ) -> Self {
         Self {
@@ -71,7 +71,7 @@ impl Context {
     /// before returning, so committed local checkpoints get indexed for RPC reads.
     /// Tests use the runtime-less `Context::new` instead.
     pub(crate) async fn new_with_runtime(
-        simulacrum: Simulacrum<OsRng, DataStore>,
+        simulacrum: Simulacrum<OsRng, ForkStore>,
         mut runtime: ForkRuntime,
         checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
         registry: &Registry,

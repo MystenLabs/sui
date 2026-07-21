@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Checkpoint persistence tests for [`crate::store::DataStore`]. Lives under
+//! Checkpoint persistence tests for [`crate::store::ForkStore`]. Lives under
 //! `src/tests/` but is a child of the `store` module via a `#[path]` wiring
 //! in `store.rs`, so it retains `super::*` access to `pub(crate)` items.
 
@@ -51,9 +51,9 @@ fn open_test_runtime(root: &Path, forked_at_checkpoint: CheckpointSequenceNumber
     .expect("fork runtime should open")
 }
 
-fn test_data_store(root: &Path) -> (DataStore, ForkRuntime) {
+fn test_data_store(root: &Path) -> (ForkStore, ForkRuntime) {
     let runtime = open_test_runtime(root, 0);
-    let store = DataStore::new_for_testing(root.to_path_buf(), runtime.fork_rpc_store());
+    let store = ForkStore::new_for_testing(root.to_path_buf(), runtime.local_store());
     (store, runtime)
 }
 
@@ -61,13 +61,13 @@ fn test_data_store_with_remote(
     root: &Path,
     gql_url: String,
     forked_at_checkpoint: CheckpointSequenceNumber,
-) -> (DataStore, ForkRuntime) {
+) -> (ForkStore, ForkRuntime) {
     let runtime = open_test_runtime(root, forked_at_checkpoint);
-    let store = DataStore::new_for_testing_with_remote(
+    let store = ForkStore::new_for_testing_with_remote(
         root.to_path_buf(),
         gql_url,
         forked_at_checkpoint,
-        runtime.fork_rpc_store(),
+        runtime.local_store(),
     );
     (store, runtime)
 }
@@ -150,7 +150,7 @@ fn post_fork_sequence_miss_returns_none_without_remote() {
     // `new_for_testing` pins `forked_at_checkpoint = 0`, so any positive
     // sequence is "post-fork". The dummy GraphQL endpoint is unreachable,
     // so reaching the network would surface as an error here.
-    let result = DataStore::get_checkpoint_by_sequence_number(&store, 42)
+    let result = ForkStore::get_checkpoint_by_sequence_number(&store, 42)
         .expect("post-fork miss should short-circuit before the remote");
     assert!(result.is_none());
 }
@@ -164,7 +164,7 @@ async fn remote_checkpoint_fetch_saves_into_rpc_store() {
     let temp = tempfile::tempdir().expect("tempdir");
     let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
 
-    let loaded = DataStore::get_checkpoint_by_sequence_number(&store, 11)
+    let loaded = ForkStore::get_checkpoint_by_sequence_number(&store, 11)
         .expect("remote checkpoint fetch should succeed")
         .expect("checkpoint should exist");
     assert_eq!(loaded.data(), checkpoint.data());
@@ -186,25 +186,25 @@ async fn remote_checkpoint_fetch_saves_into_rpc_store() {
     );
 
     let fallback_temp = tempfile::tempdir().expect("tempdir");
-    let fallback_store = DataStore::new_for_testing_with_remote(
+    let fallback_store = ForkStore::new_for_testing_with_remote(
         fallback_temp.path().to_path_buf(),
         "http://localhost:1".to_owned(),
         checkpoint.data().sequence_number,
-        runtime.fork_rpc_store(),
+        runtime.local_store(),
     );
 
-    let fallback_checkpoint = DataStore::get_checkpoint_by_sequence_number(&fallback_store, 11)
+    let fallback_checkpoint = ForkStore::get_checkpoint_by_sequence_number(&fallback_store, 11)
         .expect("rpc-store checkpoint lookup should succeed")
         .expect("checkpoint should be read from rpc store");
     assert_eq!(fallback_checkpoint.data(), checkpoint.data());
     assert!(
-        DataStore::get_checkpoint_by_digest(&fallback_store, checkpoint.digest())
+        ForkStore::get_checkpoint_by_digest(&fallback_store, checkpoint.digest())
             .expect("rpc-store digest lookup should succeed")
             .is_some(),
         "checkpoint digest should be read from rpc store",
     );
     let fallback_contents =
-        DataStore::get_checkpoint_contents_by_sequence_number(&fallback_store, 11)
+        ForkStore::get_checkpoint_contents_by_sequence_number(&fallback_store, 11)
             .expect("rpc-store contents lookup should succeed")
             .expect("contents should be read from rpc store");
     assert_eq!(fallback_contents.digest(), contents.digest());
@@ -289,7 +289,7 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
     assert_eq!(next.data().previous_digest, Some(*base.digest()));
     assert!(
         ReadStore::get_checkpoint_by_sequence_number(
-            sim.store().rpc_store().reader(),
+            sim.store().local_store().reader(),
             next.data().sequence_number,
         )
         .is_some(),
