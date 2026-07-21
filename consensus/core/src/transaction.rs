@@ -88,11 +88,18 @@ impl TransactionConsumer {
             context.protocol_config.max_num_transactions_in_block()
         );
 
+        // Test-only author-local cap on proposed block bytes (protocol-legal: only
+        // lowers this author's own proposals). Set via CONSENSUS_BLOCK_BYTES_CAP.
+        let block_bytes_cap = std::env::var("CONSENSUS_BLOCK_BYTES_CAP")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok());
         Self {
             tx_receiver,
-            max_transactions_in_block_bytes: context
-                .protocol_config
-                .max_transactions_in_block_bytes(),
+            max_transactions_in_block_bytes: block_bytes_cap
+                .map_or(
+                    context.protocol_config.max_transactions_in_block_bytes(),
+                    |cap| cap.min(context.protocol_config.max_transactions_in_block_bytes()),
+                ),
             max_num_transactions_in_block: context.protocol_config.max_num_transactions_in_block(),
             pending_transactions: None,
             block_status_subscribers: Arc::new(Mutex::new(BTreeMap::new())),

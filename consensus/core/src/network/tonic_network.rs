@@ -155,9 +155,22 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     }
                 }
             });
-        let rate_limited_stream =
-            tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
-                .boxed();
+        let throttle_delay_histogram = self
+            .context
+            .metrics
+            .node_metrics
+            .subscription_throttle_delay
+            .clone();
+        let stamped = stream.map(|b| (std::time::Instant::now(), b));
+        let rate_limited_stream = tokio_stream::StreamExt::throttle(
+            stamped,
+            self.context.parameters.min_round_delay / 2,
+        )
+        .map(move |(t0, b)| {
+            throttle_delay_histogram.observe(t0.elapsed().as_secs_f64());
+            b
+        })
+        .boxed();
         Ok(rate_limited_stream)
     }
 

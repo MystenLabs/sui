@@ -111,6 +111,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) handle_send_block_add_blocks_latency: Histogram,
     pub(crate) handle_send_block_block_age: Histogram,
     pub(crate) threshold_clock_round_duration: Histogram,
+    pub(crate) subscription_dispatch_age: Histogram,
+    pub(crate) subscription_throttle_delay: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) proposed_block_size: Histogram,
     pub(crate) proposed_block_transactions: Histogram,
@@ -286,6 +288,18 @@ impl NodeMetrics {
             handle_send_block_add_blocks_latency: register_histogram_with_registry!(
                 "handle_send_block_add_blocks_latency",
                 "The time handle_send_block spends enqueuing a verified block to the Core thread.",
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            subscription_dispatch_age: register_histogram_with_registry!(
+                "subscription_dispatch_age",
+                "Block age when the author's per-peer subscription stream task yields it toward the network stack (fan-out dispatch latency).",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            subscription_throttle_delay: register_histogram_with_registry!(
+                "subscription_throttle_delay",
+                "Delay a received subscription-stream block spends in the min_round_delay/2 rate limiter before the subscriber sees it.",
                 FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
