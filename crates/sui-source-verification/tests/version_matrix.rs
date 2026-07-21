@@ -354,6 +354,7 @@ async fn verify_legacy(config: &Path, sandbox: &Path, chain_id: &str) -> Result<
         Some(config),
     )
     .await
+    .map(|_| ())
     .map_err(|e| e.to_string())
 }
 

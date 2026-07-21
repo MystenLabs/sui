@@ -11,12 +11,22 @@ echo "localnet = \"$chain_id\"" >> b/Move.toml
 
 
 # Publishing records each package's address and toolchain in Published.toml; verify-source reads the
-# address to check against from that metadata, so it needs only the package path.
+# address to check against from that metadata, so it needs only the package path. On success it also
+# reports the metadata it used, but the binary path is machine-specific, so redirect and assert.
 sui client --client.config $CONFIG publish "b" > /dev/null 2>&1
-sui client --client.config $CONFIG verify-source "b"
+if sui client --client.config $CONFIG verify-source "b" > /dev/null 2>&1; then
+  echo "Source verification succeeded!"
+fi
+
+# That metadata is available as parseable JSON through the global --json flag.
+if sui client --client.config $CONFIG --json verify-source "b" 2>/dev/null | grep -q '"toolchainVersion"'; then
+  echo "b: metadata available as json"
+fi
 
 sui client --client.config $CONFIG publish "a" > /dev/null 2>&1
-sui client --client.config $CONFIG verify-source "a"
+if sui client --client.config $CONFIG verify-source "a" > /dev/null 2>&1; then
+  echo "Source verification succeeded!"
+fi
 
 
 # Tampering the source must be detected: the rebuild no longer matches the published bytecode.
