@@ -74,23 +74,52 @@ impl FaucetClient for RemoteFaucetClient {
             _ => "".to_string(),
         };
 
-        let response = reqwest::Client::new()
-            .post(&gas_url)
-            .header("Authorization", auth_header)
-            .json(&map)
-            .send()
-            .await
-            .unwrap_or_else(|e| panic!("Failed to talk to remote faucet {:?}: {:?}", gas_url, e));
-        let full_bytes = response.bytes().await.unwrap();
-        let faucet_response: FaucetResponse = serde_json::from_slice(&full_bytes)
-            .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))
-            .unwrap();
+        // Remote faucets rate-limit per IP with a plain-text 429 that advises
+        // a wait (e.g. "Too Many Requests! Wait for 4s"); honor it with
+        // bounded retries instead of failing the run.
+        const MAX_ATTEMPTS: u32 = 5;
+        for attempt in 1..=MAX_ATTEMPTS {
+            let response = reqwest::Client::new()
+                .post(&gas_url)
+                .header("Authorization", auth_header.clone())
+                .json(&map)
+                .send()
+                .await
+                .unwrap_or_else(|e| {
+                    panic!("Failed to talk to remote faucet {:?}: {:?}", gas_url, e)
+                });
+            let status = response.status();
+            let full_bytes = response.bytes().await.unwrap();
 
-        if let RequestStatus::Failure(error) = &faucet_response.status {
-            panic!("Failed to get gas tokens with error: {}", error)
-        };
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                let body = String::from_utf8_lossy(&full_bytes);
+                let wait_secs = body
+                    .split_whitespace()
+                    .find_map(|tok| tok.strip_suffix('s').and_then(|n| n.parse::<u64>().ok()))
+                    .unwrap_or(5)
+                    .clamp(1, 60);
+                info!(
+                    "Faucet rate-limited (attempt {attempt}/{MAX_ATTEMPTS}): {body}; retrying in {wait_secs}s"
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(wait_secs)).await;
+                continue;
+            }
 
-        faucet_response
+            let faucet_response: FaucetResponse = serde_json::from_slice(&full_bytes)
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "json deser failed with status {status} bytes {full_bytes:?}: {e}"
+                    )
+                })
+                .unwrap();
+
+            if let RequestStatus::Failure(error) = &faucet_response.status {
+                panic!("Failed to get gas tokens with error: {}", error)
+            };
+
+            return faucet_response;
+        }
+        panic!("Faucet {gas_url} still rate-limiting after {MAX_ATTEMPTS} attempts")
     }
 }
 
