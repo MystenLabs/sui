@@ -43,6 +43,11 @@ impl ThresholdClock {
                     self.aggregator.clear();
                     // We have seen 2f+1 blocks for current round, advance
                     self.round = block.round + 1;
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .threshold_clock_round_duration
+                        .observe(now.duration_since(self.quorum_ts).as_secs_f64());
                     // Record the time of last quorum and new round start.
                     self.quorum_ts = now;
                     debug!(

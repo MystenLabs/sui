@@ -171,6 +171,16 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         let signed_block: SignedBlock =
             bcs::from_bytes(&serialized_block.block).map_err(ConsensusError::MalformedBlock)?;
         drop(deserialize_timer);
+        let block_age_ms = self
+            .context
+            .clock
+            .timestamp_utc_ms()
+            .saturating_sub(signed_block.timestamp_ms());
+        self.context
+            .metrics
+            .node_metrics
+            .handle_send_block_block_age
+            .observe(block_age_ms as f64 / 1000.0);
 
         // Reject blocks not produced by the peer.
         if peer != signed_block.author() {

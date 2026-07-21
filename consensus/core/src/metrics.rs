@@ -109,6 +109,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) verify_vote_batch_latency: Histogram,
     pub(crate) handle_send_block_verify_latency: Histogram,
     pub(crate) handle_send_block_add_blocks_latency: Histogram,
+    pub(crate) handle_send_block_block_age: Histogram,
+    pub(crate) threshold_clock_round_duration: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) proposed_block_size: Histogram,
     pub(crate) proposed_block_transactions: Histogram,
@@ -285,6 +287,18 @@ impl NodeMetrics {
                 "handle_send_block_add_blocks_latency",
                 "The time handle_send_block spends enqueuing a verified block to the Core thread.",
                 FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            handle_send_block_block_age: register_histogram_with_registry!(
+                "handle_send_block_block_age",
+                "Age of a received block at handler entry: local receive time minus the author's block timestamp (includes author send queue, wire, h2 and decompression).",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            threshold_clock_round_duration: register_histogram_with_registry!(
+                "threshold_clock_round_duration",
+                "Wall time from round start (previous quorum) to quorum formation advancing the threshold clock.",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             proposed_blocks: register_int_counter_vec_with_registry!(
