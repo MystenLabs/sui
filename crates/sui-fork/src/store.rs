@@ -67,8 +67,8 @@ use crate::metadata::ForkMetadataStore;
 use crate::pending::PendingCheckpointBuffer;
 use crate::remote::RemoteSource;
 
-/// The fork's state store: reads check [`LocalStore`] first and fall back to
-/// [`RemoteSource`] (pinned at the fork checkpoint), persisting fetched
+/// The fork's state store: reads check `LocalStore` first and fall back to
+/// `RemoteSource` (pinned at the fork checkpoint), persisting fetched
 /// pre-fork data back into the local store. The metadata sidecar keeps fork
 /// metadata and completion markers for remote inventory scans.
 ///
