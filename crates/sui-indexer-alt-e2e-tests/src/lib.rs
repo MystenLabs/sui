@@ -358,7 +358,7 @@ impl OffchainCluster {
             consistent_config,
             jsonrpc_config,
             jsonrpc_node_args,
-            graphql_config,
+            mut graphql_config,
             bootstrap_genesis,
             kv_rpc_config,
             experimental_query_apis,
@@ -416,6 +416,20 @@ impl OffchainCluster {
         .context("Failed to setup indexer")?;
 
         let pipelines: Vec<_> = indexer.pipelines().collect();
+
+        // GraphQL only tracks watermarks for pipelines explicitly named in its own config, so
+        // make sure every pipeline this indexer actually populates is represented, without
+        // clobbering any availability the caller already set explicitly (e.g. to test a
+        // pipeline being disabled).
+        let default_availability = graphql_config.pipeline.default_availability;
+        for &pipeline in &pipelines {
+            graphql_config
+                .pipeline
+                .availabilities
+                .entry(pipeline.to_string())
+                .or_insert(default_availability);
+        }
+
         let indexer = indexer.run().await.context("Failed to start indexer")?;
 
         let consistent_store = start_consistent_store(
