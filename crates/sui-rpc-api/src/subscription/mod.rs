@@ -27,6 +27,9 @@ const CHECKPOINT_MAILBOX_SIZE: usize = 1024;
 /// 1 MiB at capacity. A full lane remains explicit, retryable backpressure to
 /// the caller.
 const ADMISSION_MAILBOX_SIZE: usize = 4096;
+/// Amortizes admission select/receive overhead while bounding how many
+/// requests can delay the next checkpoint poll.
+const ADMISSION_TURN_LIMIT: usize = 128;
 const SUBSCRIPTION_CHANNEL_SIZE: usize = 256;
 const DEFAULT_MAX_SUBSCRIBERS: usize = 1024;
 /// Bound on each shard task's mailbox (registrations, checkpoint fan-out,
@@ -537,7 +540,7 @@ impl SubscriptionService {
                     break;
                 }
                 SubscriptionServiceEvent::AdmissionRequest(request) => {
-                    admission_state = self.try_admit(request);
+                    admission_state = self.admit_ready_requests(request);
                 }
                 SubscriptionServiceEvent::AdmissionClosed => {
                     // Established subscribers remain live until the checkpoint
@@ -812,6 +815,33 @@ impl SubscriptionService {
         self.complete_admission(shard, permit, request);
         AdmissionState::Accepting
     }
+
+    fn admit_ready_requests(&mut self, first_request: SubscriptionRequest) -> AdmissionState {
+        let mut request = first_request;
+        let mut remaining_attempts = ADMISSION_TURN_LIMIT;
+
+        loop {
+            match self.try_admit(request) {
+                AdmissionState::Accepting => {}
+                state => return state,
+            }
+
+            remaining_attempts -= 1;
+            if remaining_attempts == 0 {
+                return AdmissionState::Accepting;
+            }
+
+            request = match self.admission_mailbox.try_recv() {
+                Ok(request) => request,
+                Err(mpsc::error::TryRecvError::Empty) => {
+                    return AdmissionState::Accepting;
+                }
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    return AdmissionState::Closed;
+                }
+            };
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1078,6 +1108,54 @@ mod tests {
         .await
         .expect("a full admission queue must not make the caller wait");
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn admission_turn_is_bounded_and_drains_ready_requests() {
+        let (mut service, _checkpoint_sender, request_sender, _shards) =
+            actor_service_with(3, 25, None, 4, ADMISSION_TURN_LIMIT + 1);
+        let mut response_receivers = Vec::with_capacity(ADMISSION_TURN_LIMIT + 1);
+
+        for _ in 0..=ADMISSION_TURN_LIMIT {
+            let (response_sender, response_receiver) = oneshot::channel();
+            assert!(
+                request_sender
+                    .try_send(SubscriptionRequest {
+                        spec: unfiltered(),
+                        response_sender,
+                    })
+                    .is_ok()
+            );
+            response_receivers.push(response_receiver);
+        }
+
+        let first_request = service.admission_mailbox.try_recv().unwrap();
+        assert!(matches!(
+            service.admit_ready_requests(first_request),
+            AdmissionState::Accepting
+        ));
+        assert_eq!(service.admission_mailbox.len(), 1);
+
+        for response_receiver in response_receivers.iter_mut().take(ADMISSION_TURN_LIMIT) {
+            response_receiver
+                .try_recv()
+                .expect("request should be admitted");
+        }
+        assert!(matches!(
+            response_receivers.last_mut().unwrap().try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+
+        let final_request = service.admission_mailbox.try_recv().unwrap();
+        assert!(matches!(
+            service.admit_ready_requests(final_request),
+            AdmissionState::Accepting
+        ));
+        response_receivers
+            .last_mut()
+            .unwrap()
+            .try_recv()
+            .expect("final request should be admitted");
     }
 
     #[tokio::test]
