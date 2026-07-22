@@ -9,6 +9,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{error::SuiResult, metrics::BytecodeVerifierMetrics};
 
 pub use executor::Executor;
+pub use sui_move_natives_latest::object_runtime;
 pub use verifier::Verifier;
 
 pub mod executor;
