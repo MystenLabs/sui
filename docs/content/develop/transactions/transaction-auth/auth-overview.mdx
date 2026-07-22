@@ -181,7 +181,7 @@ An accepted pure Ed25519 signature must follow:
 
 For more information on advanced signature schemes:
 
-- **zkLogin**: See [zkLogin](/sui-stack/zklogin-integration) for details on zero-knowledge login signatures.
+- **zkLogin**: See [zkLogin](/sui-stack/zklogin-integration) for details on zero-knowledge login signatures. The TypeScript SDK provides `ZkLoginSigner` (`@mysten/sui/zklogin`), which wraps an ephemeral signer and automatically produces zkLogin signatures. Its `getKeyScheme()` returns `'ZkLogin'` to distinguish it from other signing schemes.
 
 - **Passkey**: See [SIP-8](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md) for passkey implementation details.
 

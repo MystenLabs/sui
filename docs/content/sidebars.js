@@ -290,6 +290,8 @@ export default {
             'getting-started/examples/lootbox-ctf',
             'getting-started/examples/merchant-ctf',
             'getting-started/examples/staking-ctf',
+            'getting-started/examples/consumer-app-zklogin',
+            'getting-started/examples/defi-trading-zklogin',
           ],
         },
         'getting-started/examples/event-indexer',
@@ -695,9 +697,10 @@ suiStackSidebar: [
       label: 'zkLogin',
       link: { type: 'doc', id: 'sui-stack/zklogin-integration/index' },
       items: [
-        'sui-stack/zklogin-integration/zklogin',
+        'sui-stack/zklogin-integration/integration-guide',
         'sui-stack/zklogin-integration/developer-account',
         'sui-stack/zklogin-integration/zklogin-demo',
+        'sui-stack/zklogin-integration/zklogin',
       ],
     },
     {
