@@ -1,0 +1,24 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 11-45:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6528400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 47-53:
+//# programmable --sender A --dev-inspect --inputs 1
+//> 0: test::m::new();
+//> 1: test::m::borrow_mut(Result(0));
+//> 2: test::m::mut_tx();
+//> 3: test::m::write(Result(1));
+//> 4: test::m::check(Result(1), Input(0));
+//> 5: test::m::delete(Result(0));
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 2
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 2

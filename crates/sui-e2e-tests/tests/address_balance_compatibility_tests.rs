@@ -652,6 +652,49 @@ async fn test_split_from_fake_coin() {
 }
 
 #[sim_test]
+async fn test_fake_coin_conversion_with_references_in_ptbs() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    // The synthesized withdrawal-conversion command injects `&mut TxContext`. With references
+    // allowed in PTBs, the memory-safety checkers root TxContext borrows at the borrowing
+    // command's position in the command list, and the synthesized command is exactly the case
+    // where that position differs from `Command::idx`. This is the only path that produces
+    // synthesized commands, and it is unreachable from the adapter transactional tests (the
+    // simulator never rewrites coin reservations), so it is covered here.
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg.set_allow_references_in_ptbs_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 100);
+
+    let tx = test_env
+        .tx_builder(sender)
+        .split_coin(coin_reservation, vec![100])
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+
+    // Assert that the sender received a new coin with balance 100.
+    let created = effects.created();
+    assert_eq!(created.len(), 1, "Expected one created object");
+    let new_coin_id = created[0].0.0;
+    let new_coin_balance = test_env.get_coin_balance(new_coin_id).await;
+    assert_eq!(new_coin_balance, 100);
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
 async fn test_coin_reservation_enforced_when_not_used() {
     if has_mainnet_protocol_config_override() {
         return;
