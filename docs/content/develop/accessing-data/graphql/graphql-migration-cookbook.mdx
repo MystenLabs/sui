@@ -74,15 +74,13 @@ answer: >-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Each recipe on this page pairs a JSON-RPC call with its gRPC replacement and explains the key differences. For the full method mapping and decision criteria, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration). For gRPC concepts and setup, see [What is gRPC?](/develop/accessing-data/grpc/what-is-grpc) and [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
+Every JSON-RPC method has a gRPC equivalent across four services: `LedgerService` for transaction and checkpoint lookups, `StateService` for balances and owned objects, `SubscriptionService` for streaming, and `TransactionExecutionService` for submission. Each recipe pairs a JSON-RPC call with its replacement and explains the key differences. For the full method mapping and decision criteria, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration). For gRPC concepts and setup, see [What is gRPC?](/develop/accessing-data/grpc/what-is-grpc) and [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
 
 :::info
 
 <ImportContent source="json-rpc-deprecation" mode="snippet" />
 
 :::
-
-## Before you start
 
 All gRPC examples use the `@mysten/sui` TypeScript SDK. Install the SDK with the following command:
 
