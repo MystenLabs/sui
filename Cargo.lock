@@ -16437,7 +16437,6 @@ dependencies = [
  "serde",
  "sui-package-management",
  "sui-protocol-config",
- "sui-rpc-api",
  "sui-sdk",
  "tempfile",
  "tokio",

@@ -68,7 +68,7 @@ impl Build {
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
             environment,
-            flavor: SuiFlavor::with_client(wallet),
+            flavor: SuiFlavor::with_wallet(wallet),
         }
         .build(rerooted_path)?;
 
