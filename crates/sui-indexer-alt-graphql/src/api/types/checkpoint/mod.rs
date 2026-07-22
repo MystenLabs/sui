@@ -7,6 +7,10 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use async_graphql::connection::EmptyFields;
+use async_graphql::connection::PageInfo;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
@@ -42,6 +46,7 @@ use crate::api::types::transaction::filter::TransactionFilterValidator as TFVali
 use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
 use crate::error::RpcError;
 use crate::error::upcast;
+use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
@@ -82,6 +87,13 @@ pub struct CheckpointToken {
     /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
     kind: CursorKind,
     checkpoint: u64,
+}
+
+/// Custom `Connection` for checkpoints to support partially-filled or empty pages that can carry
+/// resume cursors.
+pub(crate) struct CheckpointConnection {
+    pub edges: Vec<Edge<String, Checkpoint, EmptyFields>>,
+    pub page_info: PageInfo,
 }
 
 /// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
@@ -277,6 +289,24 @@ impl CheckpointContents {
     }
 }
 
+#[Object]
+impl CheckpointConnection {
+    /// Information to aid in pagination.
+    async fn page_info(&self) -> &PageInfo {
+        &self.page_info
+    }
+
+    /// A list of edges.
+    async fn edges(&self) -> &[Edge<String, Checkpoint, EmptyFields>] {
+        &self.edges
+    }
+
+    /// A list of nodes.
+    async fn nodes(&self) -> Vec<&Checkpoint> {
+        self.edges.iter().map(|e| &e.node).collect()
+    }
+}
+
 impl Checkpoint {
     /// Construct a checkpoint that is represented by just its identifier (its sequence number).
     ///
@@ -323,7 +353,7 @@ impl Checkpoint {
         scope: Scope,
         page: Page<CCheckpoint>,
         filter: CheckpointFilter,
-    ) -> Result<Connection<String, Checkpoint>, RpcError> {
+    ) -> Result<CheckpointConnection, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -334,7 +364,7 @@ impl Checkpoint {
 
         let Some(cp_hi_inclusive) = scope.checkpoint_viewed_at() else {
             // In execution scope, checkpoint pagination returns empty results
-            return Ok(Connection::new(false, false));
+            return Ok(CheckpointConnection::empty());
         };
 
         let Some(cp_bounds) = checkpoint_bounds(
@@ -344,7 +374,7 @@ impl Checkpoint {
             reader_lo,
             cp_hi_inclusive,
         ) else {
-            return Ok(Connection::new(false, false));
+            return Ok(CheckpointConnection::empty());
         };
 
         let results = if let Some(epoch) = filter.at_epoch {
@@ -358,6 +388,7 @@ impl Checkpoint {
             |c| CheckpointToken::cursor(*c),
             |c| Ok(Self::with_sequence_number(scope.clone(), Some(c)).unwrap()),
         )
+        .map(Into::into)
     }
 }
 
@@ -417,6 +448,31 @@ impl CCheckpoint {
             CCheckpoint::Secondary(c) => **c,
         }
     }
+
+    /// View the cursor as validated checkpoint coordinates, regardless of wire format.
+    fn token(&self) -> CheckpointToken {
+        match self {
+            CCheckpoint::Primary(c) => (**c).clone(),
+            CCheckpoint::Secondary(c) => CheckpointToken {
+                kind: CursorKind::Item,
+                checkpoint: **c,
+            },
+        }
+    }
+}
+
+impl CheckpointConnection {
+    pub(crate) fn empty() -> Self {
+        Self {
+            edges: vec![],
+            page_info: PageInfo {
+                has_previous_page: false,
+                has_next_page: false,
+                start_cursor: None,
+                end_cursor: None,
+            },
+        }
+    }
 }
 
 impl ByteCursor for CheckpointToken {
@@ -461,6 +517,25 @@ impl Eq for CCheckpoint {}
 impl PartialEq for CCheckpoint {
     fn eq(&self, other: &Self) -> bool {
         self.sequence_number() == other.sequence_number()
+    }
+}
+
+impl From<Connection<String, Checkpoint>> for CheckpointConnection {
+    /// Convert a stock async-graphql `Connection` (as produced by the PG path's
+    /// `Page::paginate_results`) into the custom shape. Cursors are derived from edges, matching
+    /// stock semantics.
+    fn from(conn: Connection<String, Checkpoint>) -> Self {
+        let start_cursor = conn.edges.first().map(|e| e.cursor.clone());
+        let end_cursor = conn.edges.last().map(|e| e.cursor.clone());
+        Self {
+            edges: conn.edges,
+            page_info: PageInfo {
+                has_previous_page: conn.has_previous_page,
+                has_next_page: conn.has_next_page,
+                start_cursor,
+                end_cursor,
+            },
+        }
     }
 }
 
